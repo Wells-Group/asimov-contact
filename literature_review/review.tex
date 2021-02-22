@@ -67,8 +67,13 @@
 
 
 %-----------------------------------Introduction-----------------------------------
-In the literature one can find several methods designed for contact problems including penalty methods, Lagrange multiplier methods (LMM), augmented Lagrangian, mortar methods and Nitsche methods. Among these, mortar methods and Nitsche methods stand out due to their applicability to non-matching meshes.
-It should be noted that it is somewhat misleading to list mortar methods separately from LMM since mortar methods are typically a specific realization of the Lagrange multiplier approach (though sometimes an augmented Lagrangian scheme is applied.) Both mortar and Nitsche methods have a long history in the context of finite element methods and have been widely applied in the context of domain decomposition. Even though their theoretical origins are rather different, the resulting methods are surprisingly similar. In fact, in \cite{fritz2004comparison} it is shown in the context of domain decomposition that Nitsche methods can be considered as a special case of mortar methods. In the following we will summarize the basic ideas behind these two methods and then comment on recent developments.
+In the literature one can find several methods designed for contact problems including penalty methods, Lagrange multiplier methods (LMM), augmented Lagrangian, mortar methods and Nitsche methods.
+Among these, mortar methods and Nitsche methods stand out due to their applicability to non-matching meshes.
+It should be noted that it is somewhat misleading to list mortar methods separately from LMM since mortar methods are typically a specific realization of the Lagrange multiplier approach (though sometimes an augmented Lagrangian scheme is applied).
+Both mortar and Nitsche methods have a long history in the context of finite element methods and have been widely applied in the context of domain decomposition.
+Even though their theoretical origins are rather different, the resulting methods are surprisingly similar.
+In fact, in~\cite{fritz2004comparison} it is shown in the context of domain decomposition that Nitsche methods can be considered as a special case of mortar methods.
+In the following we will summarize the basic ideas behind these two methods and then comment on recent developments.
 \section{Contact between bodies}
 \subsection{Problem definition}
 We start by defining our problem
@@ -94,7 +99,11 @@ Ignoring contributions due to contact on the contact surface $\Gamma_C$, the dif
 \begin{alignno}
           l(\mbv)&=\Int{\Gamma_N}{}\mbf{f}_N\cdot \mbv\md \Gamma + \Int{\Omega}{} \mbf{f} \cdot \mbv\mrm{dx}
 \end{alignno}
-There is more than one way to arrive at the above linear and bilinear forms. The most natural approach in the context of Nitsche methods is to multiply the strong form of the PDE by a test function and integrate by parts. Assuming that the spaces are restricted to satisfy Dirichlet boundary conditions, the only non-zero boundary terms stemming from the integration by parts occur on the Neumann part of the boundary $\Gamma_N$ and the contact part of the boundary $\Gamma_C$. The Neumann boundary terms are included in the linear form $l$ but the terms on the contact boundary have been omitted here, since the treatment of the contact conditions is different for mortar and Nitsche methods. The same bilinear form and linear form can be derived as the first variation of the potential energy, where the contact contributions to the energy are omitted. The latter is the most natural approach in the context of mortar methods.
+There is more than one way to arrive at the above linear and bilinear forms. 
+The most natural approach in the context of Nitsche methods is to multiply the strong form of the PDE by a test function and integrate by parts.
+Assuming that the spaces are restricted to satisfy Dirichlet boundary conditions, the only non-zero boundary terms stemming from the integration by parts occur on the Neumann part of the boundary $\Gamma_N$ and the contact part of the boundary $\Gamma_C$.
+The Neumann boundary terms are included in the linear form $l$ but the terms on the contact boundary have been omitted here, since the treatment of the contact conditions is different for mortar and Nitsche methods.
+The same bilinear form and linear form can be derived as the first variation of the potential energy, where the contact contributions to the energy are omitted. The latter is the most natural approach in the context of mortar methods.
 
 %----------------------------------Contact between bodies-----------------------------------------------
 \subsection{Contact constraints}
@@ -193,7 +202,7 @@ Note that with these definitions
 \begin{alignno}
    H(-x)[x]_{\mathbb{R}^-} = [x]_{\mathbb{R}^-}\label{eq:Heavi}
 \end{alignno}
-Using this notation, we can create an equality for the unilateral contact conditions (Similar to Proposition 2.1 in \cite{choly2013unilateral}, but using $\mathbb{R}^+$).
+Using this notation, we can create an equality for the unilateral contact conditions (Similar to Proposition 2.1 in~\cite{choly2013unilateral}, but using $\mathbb{R}^+$).
 \begin{alignno}\label{eq:sigman:equality}
     \sigma_{n}(\mbu_1)&= \left[\sigma_n(\mbu_1) + \gamma_1(g_0- \llbracket \mbu\cdot \mbn \rrbracket)\right]_{\mathbb{R}^-}
 \end{alignno}
@@ -251,24 +260,29 @@ With a similar approach as for Coulomb friction we can convert this to an equali
 
 %-------------------Mortar FEM---------------------------------------------------------
 \section{Mortar Finite Element Methods}
-This brief summary on mortar methods is mainly based on the books \cite{yastrebov2013} and  \cite{wriggers2004}.
+This brief summary on mortar methods is mainly based on the books~\cite{yastrebov2013} and ~\cite{wriggers2004}.
 
 %-------------------Method of Lagrange multipliers-------------------------------------
 
 \subsection{Method of Lagrange multipliers (frictionless case)}
-The method of Lagrange multipliers is a widely applicable approach used in optimization theory in order to find the extremum of  a functional $J(u)$ subject to contstraints of the form $g(u) = 0$, e.g.,
+The method of Lagrange multipliers is a widely applicable approach used in optimization theory in order to find the extremum of a functional $J(u)$ subject to constraints of the form $g(u) = 0$, e.g.,
 \begin{align*}
   \bm u^{\ast} = \mrm{arg}\min_{g(\bm u) = 0}J(\bm u).
 \end{align*}
-In order to transform the contstraint optimization problem into an unconstraint  problem, the so-called Lagrangian $\mcl{L}(\bm u, \lambda) = J(\bm u)+\lambda g(\bm u)$ is introduced. If now the minimum of the constraint optimization problem is attained at $\bm u^{\ast}$, there exists a $\lambda^{\ast}$ such that $\nabla \mcl{L}(\bm u^{\ast}, \lambda^{\ast}) = 0$. This is equivalent to
-$\nabla J(\bm{u}^{\ast}) = -\lambda^{\ast} \nabla g(\bm u^{\ast})$ and $g(\bm{u}^{\ast}) = 0$. However, while every solution to the constraint optimization problem is a stationary point of the Lagrangian, not every stationary point is necessarily a solution to the optimization problem. Moreover, we have increased the number of degrees of freedom by introducing the Lagrange multiplier $\lambda$. Furthermore, it is important to note that if the equality constraint is replaced by an inequality constraint $g(\bm u) \leq 0$, the Lagrange multiplier approach introduces the new constraint $\lambda \leq 0$. The approach can  be extended to multiple equality and inequality constraints as well as inifinite dimensional spaces.
+In order to transform the constraint optimization problem into an unconstrained problem, the so-called Lagrangian $\mcl{L}(\bm u, \lambda) = J(\bm u)+\lambda g(\bm u)$ is introduced. 
+If now the minimum of the constraint optimization problem is attained at $\bm u^{\ast}$, there exists a $\lambda^{\ast}$ such that $\nabla \mcl{L}(\bm u^{\ast}, \lambda^{\ast}) = 0$. This is equivalent to
+$\nabla J(\bm{u}^{\ast}) = -\lambda^{\ast} \nabla g(\bm u^{\ast})$ and $g(\bm{u}^{\ast}) = 0$. 
+However, while every solution to the constraint optimization problem is a stationary point of the Lagrangian, not every stationary point is necessarily a solution to the optimization problem. 
+Moreover, we have increased the number of degrees of freedom by introducing the Lagrange multiplier $\lambda$. 
+Furthermore, it is important to note that if the equality constraint is replaced by an inequality constraint $g(\bm u) \leq 0$, the Lagrange multiplier approach introduces the new constraint $\lambda \leq 0$.
+The approach can be extended to multiple equality and inequality constraints as well as infinite dimensional spaces.
 
 The starting point for the derivation of the Lagrangian for a contact formulation, is
 considering the total energy $J(u) =\frac{1}{2} \int_{\Omega}\sigma(\mbu):\sigma(\mbu)-l(\mbu)$ of the two bodies in contact which is being minimized under
 additional contact constraints.
 
 
-We recall the frictionless contact conditions (also called Hertz-Signorini-Moreau condtions),
+We recall the frictionless contact conditions (also called Hertz-Signorini-Moreau conditions),
 \begin{align*}
     g(\bm u):=  \jump{\bm u \cdot \bm n} -g_0\leq 0 \qquad \sigma_n(\mbu)\leq 0 \qquad \sigma_n(\mbu)g(\mbu) = 0 \qquad \text{on } \Gamma_C.
 \end{align*}
@@ -282,7 +296,8 @@ The gradient of $\mcl{L}$ can be determined using the notion of Gateaux derivati
   \nabla \mcl{L}(\bm u, \lambda)(\bm v, \mu) = a(\bm v, \bm u)-l(v)+ \int_{\Gamma_C}g \mu + \lambda_n \delta g(\bm v) \md \Gamma_C = 0 \qquad \forall (\bm v, \mu).
 \end{align*}
 Since the initial gap is independent of the displacement field $\mbu$, we have that $\delta g(\mbv) =  \jump{\mbv \cdot \mbn}$.
-Note that we still have the additional constraint $\lambda \leq 0$, since we are enforcing an inequality constraint. If the contact surface was known exactly, the inequality constraint $g(\bm u ) \leq 0 $would be an equality constraint and we would simply have to solve a linear saddle point problem:
+Note that we still have the additional constraint $\lambda \leq 0$, since we are enforcing an inequality constraint.
+If the contact surface was known exactly, the inequality constraint $g(\bm u ) \leq 0$ would be an equality constraint and we would simply have to solve a linear saddle point problem:
 \begin{align*}
   a(u,v) + b(\lambda, v) &= l(v)\\
   b(\mu, u)&=0,
@@ -305,40 +320,57 @@ In particular, the resulting discretized linear problem in matrix form
   \end{pmatrix},
 \end{align*}
 where $K$ is the stiffness matrix associated with $a$ and $C$ is the discretized version of the bilinear form $b$.
-It is well known, that systems of this structure must satisfy the Babuska-Brezzi (BB)-condition in order to yield a stable discretization. Whether this condition is satisfied heavily relies on the choice of discrete spaces which becomes particularly difficult if the meshes of the two bodies in contact do not align. Mortar methods are essentially characterized by a  choice of discrete spaces such that the (BB) condition is satisfied for non-matching meshes.
+It is well known, that systems of this structure must satisfy the Babuska-Brezzi (BB)-condition in order to yield a stable discretization.
+Whether this condition is satisfied heavily relies on the choice of discrete spaces which becomes particularly difficult if the meshes of the two bodies in contact do not align.
+Mortar methods are essentially characterized by a  choice of discrete spaces such that the (BB) condition is satisfied for non-matching meshes.
 
-The other challenge that remains at this stage is that the contact surface is not known exactly and hence we have inequality constraints or in other words a non-linear problem. This so-called `active set detection' is often  realised with a semi-smooth Newton algorithm.
+The other challenge that remains at this stage is that the contact surface is not known exactly and hence we have inequality constraints or in other words a non-linear problem.
+This so-called `active set detection' is often  realised with a semi-smooth Newton algorithm.
 % \subsection{Augmented Lagrangian Approach}
 % We shall not go into much detail regarding this approach. Roughly speaking, it is a combination
 % of the penalty methods for enforcing contact and the LMM.
 \subsection{Mortar Methods}
 Mortar finite element methods were originally introduced in the context of domain decomposition.
 They are combined with a  Lagrange multiplier scheme
-enforcing the contact constraints. From the saddle point structure due to the use of Lagrange multipliers, mortar methods inherit the disadvantage of introducing additional degrees of freedom to the system. So-called \emph{dual} mortar approaches allow for the elimination of the additional constraints.
+enforcing the contact constraints. From the saddle point structure due to the use of Lagrange multipliers, mortar methods inherit the disadvantage of introducing additional degrees of freedom to the system.
+So-called \emph{dual} mortar approaches allow for the elimination of the additional constraints.
 
-One aspect in which various mortar approaches differ, is the definition of the contact surface. Some
-approaches introduce an intermediate surface in order to define the Lagrange multipliers on this surface, e.g., \cite{mcdevitt2000mortar}. Others choose one of the surfaces of the two bodies in contact as the mortar or master surface, e.g., \cite{wohlmuth2000mortar,krause2002dirichlet}. Combined with appropriate interpolation functions, i.e., an appropriate choice of the discrete space,  a stable method which also preserves the locality of the support of the nodal basis function can be constructed. However, this approach may not be stable when the contact occurs between curved surfaces. To remedy this so-called dual-mortar methods were designed.
+One aspect in which various mortar approaches differ, is the definition of the contact surface.
+Some approaches introduce an intermediate surface in order to define the Lagrange multipliers on this surface, e.g.,~\cite{mcdevitt2000mortar}.
+Others choose one of the surfaces of the two bodies in contact as the mortar or master surface, e.g.,~\cite{wohlmuth2000mortar,krause2002dirichlet}.
+Combined with appropriate interpolation functions, i.e., an appropriate choice of the discrete space, a stable method which also preserves the locality of the support of the nodal basis function can be constructed.
+However, this approach may not be stable when the contact occurs between curved surfaces. To remedy this so-called dual-mortar methods were designed.
 
 The discrete space for the gap function $g(\mbu) = \jump{\mbu \cdot \mbn} -g_0$ is inherited from the discrete spaces chosen for the displacement $\mbu$.  The space for the Lagrange
-multiplier $\lambda$ is yet to be chosen. In two dimensions, the basis can be chosen to be piecewise linear on the master surface except at the ends of the contacts area, where it is piecewise constant. The integration/quadrature on the slave side is more involved as a result if the meshes are not aligned. \emph{Dual} mortar methods rely on the introduction of an additional orthogonality condition on the basis of the Lagrange multiplier space, namely that the basis functions are orthogonal to the basis functions on the slave surface.
+multiplier $\lambda$ is yet to be chosen. In two dimensions, the basis can be chosen to be piecewise linear on the master surface except at the ends of the contacts area, where it is piecewise constant.
+The integration/quadrature on the slave side is more involved as a result if the meshes are not aligned. 
+\emph{Dual} mortar methods rely on the introduction of an additional orthogonality condition on the basis of the Lagrange multiplier space, namely that the basis functions are orthogonal to the basis functions on the slave surface.
+
 \subsection{Recent results}
 \subsection{Error estimates}
-One can find very little on a priori estimates for frictional contact problems. Most of the literature focuses on the frictionless case (see below). The article \cite{wohlmuth2012abstract} does include Coulomb friction in the formulation but the problem is
-simplified to the frictionless case for the proof of the a priori estimates.
+One can find very little on a priori estimates for frictional contact problems. 
+Most of the literature focuses on the frictionless case (see below).
+The article~\cite{wohlmuth2012abstract} does include Coulomb friction in the formulation but the problem is simplified to the frictionless case for the proof of the a priori estimates.
 \begin{itemize}
-  \item 2019 \cite{antolin2019priori}. Lagrange multipliers, isogeometric analysis (NURBS displacement degree $p$, Lagrange multiplier space degree $p-2$), 2D and 3D, frictionless contact. Optimal $H^1$-error $\mathcal{O}(h^{r-1})$, $r \in (1.5, 2.5)$, $\bm u \in H^r(\Omega)$ for $p \geq 2$.
-  \item 2019 \cite{burman2019augmented}. Augmented Lagrangian method, Signorini/obstacle problem, 2D and 3D, existence \& uniqueness of discrete solutions. Error $\mathcal{O}(h^{r-1})$, $r \in (1.5, k+1)$, $k=1,2$ approximation order. Regularity assumption $\bm u \in H^r(\Omega)$.
-  \item 2015 \cite{drouet2015optimal}. Signorini problem. 2D and 3D. Removes some of the additional assumptions in \cite{hueber2005priori} and \cite{wohlmuth2012abstract}.
+  \item 2019~\cite{antolin2019priori}. Lagrange multipliers, isogeometric analysis (NURBS displacement degree $p$, Lagrange multiplier space degree $p-2$), 2D and 3D, frictionless contact. Optimal $H^1$-error $\mathcal{O}(h^{r-1})$, $r \in (1.5, 2.5)$, $\bm u \in H^r(\Omega)$ for $p \geq 2$.
+  \item 2019~\cite{burman2019augmented}. Augmented Lagrangian method, Signorini/obstacle problem, 2D and 3D, existence \& uniqueness of discrete solutions. Error $\mathcal{O}(h^{r-1})$, $r \in (1.5, k+1)$, $k=1,2$ approximation order. Regularity assumption $\bm u \in H^r(\Omega)$.
+  \item 2015~\cite{drouet2015optimal}. Signorini problem. 2D and 3D. Removes some of the additional assumptions in~\cite{hueber2005priori} and~\cite{wohlmuth2012abstract}.
    Error $\mathcal{O}(h^{\tau-1})$, $\tau \in (1.5, 1.5+k/2)$, $k=1,2$ approximation order. Regularity assumption $\bm u \in H^{\tau}(\Omega)$.
-  \item 2012 \cite{wohlmuth2012abstract} Frictionless contact, abstract framework (adaptable to other Lagrange multiplier methods), 4 choices for Lagrange multiplier spaces as examples, linear and quadratic discretizations, 2D and 3D. Error $\mathcal{O}(h^{t-1})$, $t \in (2,2.5)$. Regularity assumption: $\bm u \in H^t(\Omega^{m/s})$.
-  \item 2005 \cite{hueber2005priori}. Frictionless contact, primal-dual active set strategy, dual Lagrange multipliers, linear and quadratic, 2D. Error $\mathcal{O}(h^{\nu + 0.5})$, $\nu \in (0, 0.5)$, Regularity assumption: $\bm u \in H^{1.5+\nu}(\Omega^{m/s})$.
+  \item 2012~\cite{wohlmuth2012abstract} Frictionless contact, abstract framework (adaptable to other Lagrange multiplier methods), 4 choices for Lagrange multiplier spaces as examples, linear and quadratic discretizations, 2D and 3D. Error $\mathcal{O}(h^{t-1})$, $t \in (2,2.5)$. Regularity assumption: $\bm u \in H^t(\Omega^{m/s})$.
+  \item 2005~\cite{hueber2005priori}. Frictionless contact, primal-dual active set strategy, dual Lagrange multipliers, linear and quadratic, 2D. Error $\mathcal{O}(h^{\nu + 0.5})$, $\nu \in (0, 0.5)$, Regularity assumption: $\bm u \in H^{1.5+\nu}(\Omega^{m/s})$.
 \end{itemize}
 
 \subsection{Approximation order}
-The convergence rate cannot be expected to exceed $\mathcal{O}(h^{1.5})$ due to the fact that one can not expect higher regularity of the displacement than $H^{2.5}(\Omega)$. The maximal rate can be attained by quadratic finite elements and higher order methods are therefore rarely considered. Nonetheless, it may be possible to benefit from hp-techniques, since one can expect higher regularity away from the contact surface. For an h-adaptive approach with possible p-extension see \cite{rachowicz2017h}. For large deformation with frictional sliding, the convergence rate might deterioriate and local oscillations might occur due to the low order of continuity of standard $C^0$ finite elements. In this context, it may be beneficial to apply isogeometric analysis \cite{de2011large,brivadis2015isogeometric}.
+The convergence rate cannot be expected to exceed $\mathcal{O}(h^{1.5})$ due to the fact that one can not expect higher regularity of the displacement than $H^{2.5}(\Omega)$. 
+The maximal rate can be attained by quadratic finite elements and higher order methods are therefore rarely considered. Nonetheless, it may be possible to benefit from hp-techniques, since one can expect higher regularity away from the contact surface.
+For an h-adaptive approach with possible p-extension see~\cite{rachowicz2017h}.
+For large deformation with frictional sliding, the convergence rate might deteriorate and local oscillations might occur due to the low order of continuity of standard $C^0$ finite elements.
+In this context, it may be beneficial to apply isogeometric analysis~\cite{de2011large,brivadis2015isogeometric}.
 
 \subsection{Solution algorithm}
-The inequality constraints modelling the contact of two elastic bodies introduce a non-linearity to the problem that needs to be solved with a suitable algorithm. In the context of mortar methods, one can apply a semi-smooth Newton algorithm or more specifically, a primal-dual active set strategy \cite{hintermuller2002primal} which can be combined with a multigrid preconditioner for efficiency \cite{hueber2005primal,wiesner2018algebraic}. The strategy in \cite{wiesner2018algebraic} is moreover very attractive since the additional degrees of freedom due to introduction of Lagrange multipliers are eliminated locally. The authors also consider the performance of the method in parallel.
+The inequality constraints modelling the contact of two elastic bodies introduce a non-linearity to the problem that needs to be solved with a suitable algorithm.
+In the context of mortar methods, one can apply a semi-smooth Newton algorithm or more specifically, a primal-dual active set strategy~\cite{hintermuller2002primal} which can be combined with a multigrid preconditioner for efficiency~\cite{hueber2005primal,wiesner2018algebraic}.
+The strategy in~\cite{wiesner2018algebraic} is moreover very attractive since the additional degrees of freedom due to introduction of Lagrange multipliers are eliminated locally. The authors also consider the performance of the method in parallel.
 
 \section{Nitsche Methods}
 
@@ -510,14 +542,17 @@ For first order linear elements, second order convergence in ($L^2$) is proven. 
 \item 2013: Convergence proofs extended to the $H^1(\Omega)$ norm in~\cite{choly2013unilateral} (2D), of order $H^{\frac{1}{2}+\nu}$ provided solution regularity of $H^{\frac{3}{2}+\nu}$, $\nu\in(0,\frac{1}{2}]$.
 Linear and quadratic elements considered.
 Shows that their approach can be viewed as a mixed (Lagrange multiplier method) with an additional stabilization term (and a different Lagrange multiplier space).
-\item 2015: Two new methods for apply Nitsche's method to unilateral contact is presented in~\cite{chouly2015symm}. 
+\item 2015: Two new methods for apply Nitsche's method to unilateral contact is presented in~\cite{chouly2015symm}.
 One non-symmetric and one skew-symmetric method, where the latter is quite similar to a penalty approach (2D/3D). Proves similar convergence estimates as~\cite{choly2013unilateral}.
 Skew symmetric case preserves optimal convergence irrespective of the value of the Nitsche parameter.
 \item  2013: Nitsche's method with Coulomb friction is presented and a numerical study is performed~\cite{RENARD201338}. 
 Minimal Nitsche parameter for coercivity estimated by the smallest eigenvalue of tangent matrix. Unsymmetric version shows improved convergence and requires a smaller Nitsche parameter.
 \item 2013: Nitsche's method with Tresca friction~\cite{CHOULY2014TRESCA}. Same $\theta$ strategy as~\cite{chouly2015symm} and optimal convergence results as ~\cite{choly2013unilateral} (2D/3D, piecewise linear and quadratic elements). Claims results can be extended to bilateral contact with Tresca friction.
 \item 2015: Time-marching schemes for unilateral contact with Nitsche's method is introduced in~\cite{chouly2015timedep} ($\theta$ and hybrid schemes). Proves well-posed and conservation of augumented energy. Numerical study and stability estimates in ~\cite{chouly2015timedep2}.
-\item 2017: ~\cite{MLIKA2017selfcontact}
+\item 2016: Penalty-free nonsymmetric Nitsche method for the Signorini problem~\cite{burman2016free}.
+\item 2017: Numerical study of large deformation (hyperelasticity) frictional contact with unbiased approach~\cite{MLIKA2017selfcontact}. Compares element based integration and segment-based integration with same conclusions as~\cite{Farah2015integration}; element based is faster, while segment-based is more accurate for a subset of problems (quadratic elements and/or friction).
+Compares ray-tracing and projection methods, Netwon-solver converging twice as fast as for projection. Uses quadrilateral and hexahedral elements.
+\item 2018: Unbiased Nitsche method with optimal $H^1$ estimates for Tresca friction~\cite{chouly2018unbiased}.
 \end{itemize}
 %-------------------Mortar finite element formulations---------------------------------
 
