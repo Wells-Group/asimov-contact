@@ -535,6 +535,7 @@ Summarizing, we have that
 
 %------------------------ Weak formulation---------------------------------
 \subsection{Recent results}
+Overview of most results regarding Nitsche can be found in~\cite{chouly2017nitsche}.
 \begin{itemize}
 \item 2004: Nitsche method for elasticity problems with strong discontinuity originated in~\cite{HANSBO20043523} (2D/3D). 
 Here elements with internal discontinuities were enriched by "duplicating" the element, having it as part of both sides of the cell/facet integrals.
@@ -552,7 +553,9 @@ Minimal Nitsche parameter for coercivity estimated by the smallest eigenvalue of
 \item 2016: Penalty-free nonsymmetric Nitsche method for the Signorini problem~\cite{burman2016free}.
 \item 2017: Numerical study of large deformation (hyperelasticity) frictional contact with unbiased approach~\cite{MLIKA2017selfcontact}. Compares element based integration and segment-based integration with same conclusions as~\cite{Farah2015integration}; element based is faster, while segment-based is more accurate for a subset of problems (quadratic elements and/or friction).
 Compares ray-tracing and projection methods, Netwon-solver converging twice as fast as for projection. Uses quadrilateral and hexahedral elements.
+\item 2017: Uniqueness and existence for static and dynamic problems with Coulomb friction~\cite{chouly2017coulomb}.
 \item 2018: Unbiased Nitsche method with optimal $H^1$ estimates for Tresca friction~\cite{chouly2018unbiased}.
+\item 2018: Nitsche's method for IGA~\cite{HU2018IGA}, using a skew-symmetric (penalty-free) formulation.
 \end{itemize}
 %-------------------Mortar finite element formulations---------------------------------
 
