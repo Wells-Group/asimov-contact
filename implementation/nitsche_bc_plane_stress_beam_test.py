@@ -105,7 +105,6 @@ def solve_manufactured(nx, ny, theta, gamma):
     E = 1500
     nu = 0.25
     h = ufl.Circumradius(mesh)
-    gamma = 10 / h
     mu = E / (2 * (1 + nu))
     lmbda = E * nu / ((1 + nu) * (1 - 2 * nu))
 
@@ -126,7 +125,8 @@ def solve_manufactured(nx, ny, theta, gamma):
         return (2.0 * mu * epsilon(v) +
                 lmbda * ufl.tr(epsilon(v)) * ufl.Identity(len(v)))
 
-    u = dolfinx.Function(V)
+    u = ufl.TrialFunction(V)
+    # u = ufl.TrialFunction(V)
     v = ufl.TestFunction(V)
     dx = ufl.Measure("dx", domain=mesh)
     ds = ufl.Measure("ds", domain=mesh, subdomain_data=facet_marker)
@@ -141,27 +141,30 @@ def solve_manufactured(nx, ny, theta, gamma):
         - theta * ufl.inner(sigma(v) * n_facet, u - u_D) * ds(left_marker)\
              + gamma / h * ufl.inner(u - u_D, v) * ds(left_marker)
     # Create nonlinear problem
-    problem = NonlinearPDEProblem(F, u, [])
+    # problem = NonlinearPDEProblem(F, u, [])
     # Create Newton solver
-    solver = dolfinx.cpp.nls.NewtonSolver(MPI.COMM_WORLD)
+    # solver = dolfinx.cpp.nls.NewtonSolver(MPI.COMM_WORLD)
+    problem = dolfinx.fem.LinearProblem(ufl.lhs(F), ufl.rhs(F), bcs=[], petsc_options={"ksp_type": "preonly", "pc_type": "lu"})
+    u = problem.solve()
+
 
     # Set Newton solver options
-    solver.atol = 1e-6
-    solver.rtol = 1e-6
-    solver.convergence_criterion = "incremental"
+    # solver.atol = 1e-6
+    # solver.rtol = 1e-6
+    # solver.convergence_criterion = "incremental"
 
-    # Set non-linear problem for Newton solver
-    solver.setF(problem.F, problem.vector)
-    solver.setJ(problem.J, problem.matrix)
-    solver.set_form(problem.form)
+    # # Set non-linear problem for Newton solver
+    # solver.setF(problem.F, problem.vector)
+    # solver.setJ(problem.J, problem.matrix)
+    # solver.set_form(problem.form)
 
     # Solve non-linear problem
-    dolfinx.log.set_log_level(dolfinx.log.LogLevel.INFO)
-    n, converged = solver.solve(u.vector)
+    # dolfinx.log.set_log_level(dolfinx.log.LogLevel.INFO)
+    # n, converged = solver.solve(u.vector)
     u.vector.ghostUpdate(addv=PETSc.InsertMode.INSERT,
                          mode=PETSc.ScatterMode.FORWARD)
-    assert (converged)
-    print(f"Number of interations: {n:d}")
+    # assert (converged)
+    # print(f"Number of interations: {n:d}")
 
     with dolfinx.io.XDMFFile(MPI.COMM_WORLD, f"results/u_{nx}_{ny}.xdmf",
                              "w") as xdmf:
@@ -170,7 +173,7 @@ def solve_manufactured(nx, ny, theta, gamma):
         xdmf.write_meshtags(facet_marker)
     # Error computaion:
     u_ex = (nu + 1) / E * ufl.as_vector((x[1]**4, x[0]**4))
-    error = (u - u_ex)**2 * ufl.dx
+    error = (uh - u_ex)**2 * ufl.dx
     E_L2 = np.sqrt(dolfinx.fem.assemble_scalar(error))
     print(f"{nx} {ny}: L2-error: {E_L2:.2e}")
     return E_L2
@@ -196,8 +199,8 @@ if __name__ == "__main__":
     args = parser.parse_args()
     theta = args.theta
     gamma = args.gamma
-    Nx = np.asarray([5 * 2**i for i in range(1, 4)], dtype=np.int32)
-    Ny = np.asarray([2**i for i in range(1, 4)], dtype=np.int32)
+    Nx = np.asarray([5 * 2**i for i in range(3, 4)], dtype=np.int32)
+    Ny = np.asarray([2**i for i in range(3, 4)], dtype=np.int32)
     for (nx, ny) in zip(Nx, Ny):
         solve_manufactured(nx, ny, theta, gamma)
         break
