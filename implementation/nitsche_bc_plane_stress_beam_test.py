@@ -77,7 +77,6 @@ class NonlinearPDEProblem:
 
 def solve_manufactured(nx, ny, theta, gamma):
     L = 10
-
     mesh = dolfinx.RectangleMesh(
         MPI.COMM_WORLD,
         [np.array([0, -1, 0]), np.array([L, 1, 0])], [nx, ny],
@@ -90,16 +89,17 @@ def solve_manufactured(nx, ny, theta, gamma):
         return np.isclose(x[0], L)
 
     tdim = mesh.topology.dim
-    left_marker = 1
-    right_marker = 2
+    left_marker = int(1)
+    right_marker = int(2)
     left_facets = dolfinx.mesh.locate_entities_boundary(mesh, tdim - 1, left)
     right_facets = dolfinx.mesh.locate_entities_boundary(mesh, tdim - 1, right)
     left_values = np.full(len(left_facets), left_marker, dtype=np.int32)
     right_values = np.full(len(right_facets), right_marker, dtype=np.int32)
     indices = np.concatenate([left_facets, right_facets])
     values = np.hstack([left_values, right_values])
-    # Need to sort indices and values before meshtags
-    facet_marker = dolfinx.MeshTags(mesh, tdim - 1, indices, values)
+    # Sort values to work in parallel
+    sorted = np.argsort(indices)
+    facet_marker = dolfinx.MeshTags(mesh, tdim - 1, indices[sorted], values[sorted])
 
     V = dolfinx.VectorFunctionSpace(mesh, ("CG", 1))
     n = ufl.FacetNormal(mesh)
@@ -107,14 +107,14 @@ def solve_manufactured(nx, ny, theta, gamma):
     nu = 0.25
     h = ufl.Circumradius(mesh)
     mu = E / (2 * (1 + nu))
-    lmbda = E * nu / ((1 + nu) * (1 - 2 * nu))
-
+    # lmbda = E * nu / ((1 + nu) * (1 - 2 * nu)) # Plain strain
+    lmbda = E * nu / ((1 + nu)*(1 - nu)) # Plain stress
     # Problem specific body force and traction
     # from DOI: 10.4208/aamm.2014.m548 (Chapter 5.1)
     x = ufl.SpatialCoordinate(mesh)
-    f = ufl.as_vector((-6 * x[1]**2, 6 * x[0]**2))
+    
+    f = -ufl.as_vector((6 * x[1]**2, 6 * x[0]**2))
     g = ufl.as_vector((0, 2000 + 2 * x[1]**3))
-
     # Body force for example 5.2
     # E * ufl.pi**2 * (ufl.cos(ufl.pi * x[0]) * ufl.sin(ufl.pi * x[1]),
     #  -ufl.sin(ufl.pi * x[0]) * ufl.cos(ufl.pi * x[1])))
@@ -127,25 +127,29 @@ def solve_manufactured(nx, ny, theta, gamma):
                 lmbda * ufl.tr(epsilon(v)) * ufl.Identity(len(v)))
 
     u = ufl.TrialFunction(V)
-    # u = ufl.TrialFunction(V)
     v = ufl.TestFunction(V)
     dx = ufl.Measure("dx", domain=mesh)
     ds = ufl.Measure("ds", domain=mesh, subdomain_data=facet_marker)
     F = ufl.inner(sigma(u), epsilon(v)) * dx - ufl.inner(
         f, v) * dx - ufl.inner(g, v) * ds(right_marker)
-
     # # Nitsche for Dirichlet, theta-scheme.
     # https://www.sciencedirect.com/science/article/pii/S004578251830269X
-    u_D = ufl.as_vector((0, 0))
-    n_facet = ufl.FacetNormal(mesh)
-    F += -ufl.inner(sigma(u) * n_facet, v) * ds(left_marker)\
-        - theta * ufl.inner(sigma(v) * n_facet, u - u_D) * ds(left_marker)\
-             + gamma / h * ufl.inner(u - u_D, v) * ds(left_marker)
+    # u_D = ufl.as_vector((0, 0))
+    # n_facet = ufl.FacetNormal(mesh)
+    # F += -ufl.inner(sigma(u) * n_facet, v) * ds(left_marker)\
+    #     - theta * ufl.inner(sigma(v) * n_facet, u - u_D) * ds(left_marker)\
+    #          + gamma / h * ufl.inner(u - u_D, v) * ds(left_marker)
+
+    u_bc = dolfinx.Function(V)
+    with u_bc.vector.localForm() as loc:
+        loc.set(0)
+    bc = dolfinx.DirichletBC(u_bc, dolfinx.fem.locate_dofs_topological(V, mesh.topology.dim-1, left_facets))
+
     # Create nonlinear problem
     # problem = NonlinearPDEProblem(F, u, [])
     # Create Newton solver
     # solver = dolfinx.cpp.nls.NewtonSolver(MPI.COMM_WORLD)
-    problem = dolfinx.fem.LinearProblem(ufl.lhs(F), ufl.rhs(F), bcs=[], petsc_options={"ksp_type": "preonly", "pc_type": "lu"})
+    problem = dolfinx.fem.LinearProblem(ufl.lhs(F), ufl.rhs(F), bcs=[bc], petsc_options={"ksp_type": "preonly", "pc_type": "lu"})
     u = problem.solve()
 
 
@@ -171,8 +175,8 @@ def solve_manufactured(nx, ny, theta, gamma):
                              "w") as xdmf:
         xdmf.write_mesh(mesh)
         xdmf.write_function(u)
-        xdmf.write_meshtags(facet_marker)
-    # Error computaion:
+
+    # Error computation:
     u_ex = (nu + 1) / E * ufl.as_vector((x[1]**4, x[0]**4))
     error = (u - u_ex)**2 * ufl.dx
     E_L2 = np.sqrt(dolfinx.fem.assemble_scalar(error))
