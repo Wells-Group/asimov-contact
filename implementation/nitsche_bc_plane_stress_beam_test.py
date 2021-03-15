@@ -5,6 +5,7 @@ import dolfinx.io
 import dolfinx.log
 import dolfinx.mesh
 import numpy as np
+import os
 import ufl
 from mpi4py import MPI
 from petsc4py import PETSc
@@ -165,7 +166,7 @@ def solve_manufactured(nx, ny, theta, gamma):
                          mode=PETSc.ScatterMode.FORWARD)
     # assert (converged)
     # print(f"Number of interations: {n:d}")
-
+    os.system("mkdir -p results")
     with dolfinx.io.XDMFFile(MPI.COMM_WORLD, f"results/u_{nx}_{ny}.xdmf",
                              "w") as xdmf:
         xdmf.write_mesh(mesh)
@@ -173,7 +174,7 @@ def solve_manufactured(nx, ny, theta, gamma):
         xdmf.write_meshtags(facet_marker)
     # Error computaion:
     u_ex = (nu + 1) / E * ufl.as_vector((x[1]**4, x[0]**4))
-    error = (uh - u_ex)**2 * ufl.dx
+    error = (u - u_ex)**2 * ufl.dx
     E_L2 = np.sqrt(dolfinx.fem.assemble_scalar(error))
     print(f"{nx} {ny}: L2-error: {E_L2:.2e}")
     return E_L2
