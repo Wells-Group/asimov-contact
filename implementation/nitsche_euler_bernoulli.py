@@ -103,7 +103,7 @@ def solve_manufactured(nx, ny, theta, gamma, linear_solver, plane_strain, nitsch
     sorted = np.argsort(indices)
     facet_marker = dolfinx.MeshTags(mesh, tdim - 1, indices[sorted], values[sorted])
 
-    V = dolfinx.VectorFunctionSpace(mesh, ("CG", 2))
+    V = dolfinx.VectorFunctionSpace(mesh, ("CG", 1))
     n = ufl.FacetNormal(mesh)
     E = 1e5
     nu = 0.3
@@ -114,7 +114,7 @@ def solve_manufactured(nx, ny, theta, gamma, linear_solver, plane_strain, nitsch
     else:
         lmbda = E * nu / ((1 + nu) * (1 - nu))  # Plane stress
 
-    rho_g = 1e-3
+    rho_g = 1e-2
     f = ufl.as_vector((0, 0))
     g = ufl.as_vector((0, -rho_g))
 
