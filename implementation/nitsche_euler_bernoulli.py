@@ -1,83 +1,23 @@
+import argparse
+import os
 from typing import List
+
 import dolfinx
 import dolfinx.fem
+import dolfinx.geometry
 import dolfinx.io
 import dolfinx.log
 import dolfinx.mesh
-import dolfinx.geometry
 import numpy as np
-import os
 import ufl
+from dolfinx.cpp.mesh import CellType
 from mpi4py import MPI
 from petsc4py import PETSc
-from dolfinx.cpp.mesh import CellType
-import argparse
+
+from helpers import NonlinearPDEProblem, epsilon, lame_parameters, sigma_func
 
 
-class NonlinearPDEProblem:
-    """Nonlinear problem class for solving the non-linear problem
-    F(u, v) = 0 for all v in V
-    """
-
-    def __init__(self, F: ufl.form.Form, u: dolfinx.Function,
-                 bcs: List[dolfinx.DirichletBC]):
-        """
-        Input:
-        - F: The PDE residual F(u, v)
-        - u: The unknown
-        - bcs: List of Dirichlet boundary conditions
-        This class set up structures for solving the non-linear problem using Newton's method,
-        dF/du(u) du = -F(u)
-        """
-        V = u.function_space
-        du = ufl.TrialFunction(V)
-        self.L = F
-        # Create the Jacobian matrix, dF/du
-        self.a = ufl.derivative(F, u, du)
-        self.bcs = bcs
-
-        # Create matrix and vector to be used for assembly
-        # of the non-linear problem
-        self.matrix = dolfinx.fem.create_matrix(self.a)
-        self.vector = dolfinx.fem.create_vector(self.L)
-
-    def form(self, x: PETSc.Vec):
-        """
-        This function is called before the residual or Jacobian is computed. This is usually used to update ghost values.
-        Input:
-           x: The vector containing the latest solution
-        """
-        x.ghostUpdate(addv=PETSc.InsertMode.INSERT,
-                      mode=PETSc.ScatterMode.FORWARD)
-
-    def F(self, x: PETSc.Vec, b: PETSc.Vec):
-        """Assemble the residual F into the vector b.
-        Input:
-           x: The vector containing the latest solution
-           b: Vector to assemble the residual into
-        """
-        # Reset the residual vector
-        with b.localForm() as b_local:
-            b_local.set(0.0)
-        dolfinx.fem.assemble_vector(b, self.L)
-        # Apply boundary condition
-        dolfinx.fem.apply_lifting(b, [self.a], [self.bcs], [x], -1.0)
-        b.ghostUpdate(addv=PETSc.InsertMode.ADD,
-                      mode=PETSc.ScatterMode.REVERSE)
-        dolfinx.fem.set_bc(b, self.bcs, x, -1.0)
-
-    def J(self, x: PETSc.Vec, A: PETSc.Mat):
-        """Assemble the Jacobian matrix.
-        Input:
-          - x: The vector containing the latest solution
-          - A: The matrix to assemble the Jacobian into
-        """
-        A.zeroEntries()
-        dolfinx.fem.assemble_matrix(A, self.a, self.bcs)
-        A.assemble()
-
-
-def solve_manufactured(nx, ny, theta, gamma, linear_solver, plane_strain, nitsche):
+def solve_euler_bernoulli(nx, ny, theta, gamma, linear_solver, plane_strain, nitsche):
     L = 47
     H = 2.73
     mesh = dolfinx.RectangleMesh(
@@ -104,25 +44,18 @@ def solve_manufactured(nx, ny, theta, gamma, linear_solver, plane_strain, nitsch
     facet_marker = dolfinx.MeshTags(mesh, tdim - 1, indices[sorted], values[sorted])
 
     V = dolfinx.VectorFunctionSpace(mesh, ("CG", 1))
-    n = ufl.FacetNormal(mesh)
     E = 1e5
     nu = 0.3
     h = 2 * ufl.Circumradius(mesh)
-    mu = E / (2 * (1 + nu))
-    if plane_strain:
-        lmbda = E * nu / ((1 + nu) * (1 - 2 * nu))  # Plane strain
-    else:
-        lmbda = E * nu / ((1 + nu) * (1 - nu))  # Plane stress
+    mu_func, lambda_func = lame_parameters(plane_strain)
+    mu = mu_func(E, nu)
+    lmbda = lambda_func(E, nu)
 
     rho_g = 1e-2
     f = ufl.as_vector((0, 0))
     g = ufl.as_vector((0, -rho_g))
 
-    def epsilon(v):
-        return ufl.sym(ufl.grad(v))
-
-    def sigma(v):
-        return 2.0 * mu * epsilon(v) + lmbda * ufl.tr(epsilon(v)) * ufl.Identity(len(v))
+    sigma = sigma_func(mu, lmbda)
 
     u = ufl.TrialFunction(V) if linear_solver else dolfinx.Function(V)
     v = ufl.TestFunction(V)
@@ -130,12 +63,12 @@ def solve_manufactured(nx, ny, theta, gamma, linear_solver, plane_strain, nitsch
     ds = ufl.Measure("ds", domain=mesh, subdomain_data=facet_marker)
     F = ufl.inner(sigma(u), epsilon(v)) * dx - ufl.inner(f, v) * dx - ufl.inner(g, v) * ds(top_marker)
     if nitsche:
-       # Nitsche for Dirichlet, theta-scheme.
-       # https://www.sciencedirect.com/science/article/pii/S004578251830269X
+        # Nitsche for Dirichlet, theta-scheme.
+        # https://www.sciencedirect.com/science/article/pii/S004578251830269X
         u_D = ufl.as_vector((0, 0))
-        n_facet = ufl.FacetNormal(mesh)
-        F += -ufl.inner(sigma(u) * n_facet, v) * ds(left_marker)\
-            - theta * ufl.inner(sigma(v) * n_facet, u - u_D) * ds(left_marker)\
+        n = ufl.FacetNormal(mesh)
+        F += -ufl.inner(sigma(u) * n, v) * ds(left_marker)\
+            - theta * ufl.inner(sigma(v) * n, u - u_D) * ds(left_marker)\
             + gamma / h * ufl.inner(u - u_D, v) * ds(left_marker)
         bcs = []
     else:
@@ -172,12 +105,11 @@ def solve_manufactured(nx, ny, theta, gamma, linear_solver, plane_strain, nitsch
         n, converged = solver.solve(u.vector)
         assert (converged)
         print(f"Number of interations: {n:d}")
-
     u.vector.ghostUpdate(addv=PETSc.InsertMode.INSERT,
                          mode=PETSc.ScatterMode.FORWARD)
 
     os.system("mkdir -p results")
-    with dolfinx.io.XDMFFile(MPI.COMM_WORLD, f"results/u_{nx}_{ny}.xdmf", "w") as xdmf:
+    with dolfinx.io.XDMFFile(MPI.COMM_WORLD, f"results/u_euler_bernoulli_{nx}_{ny}.xdmf", "w") as xdmf:
         xdmf.write_mesh(mesh)
         xdmf.write_function(u)
 
@@ -230,4 +162,4 @@ if __name__ == "__main__":
     Nx = np.asarray([5 * 2**i for i in range(1, 8)], dtype=np.int32)
     Ny = np.asarray([2**i for i in range(1, 8)], dtype=np.int32)
     for (nx, ny) in zip(Nx, Ny):
-        solve_manufactured(nx, ny, theta, gamma, linear_solver, plane_strain, nitsche)
+        solve_euler_bernoulli(nx, ny, theta, gamma, linear_solver, plane_strain, nitsche)

@@ -1,80 +1,19 @@
-from typing import List
+import argparse
+import os
+
 import dolfinx
 import dolfinx.fem
 import dolfinx.io
 import dolfinx.log
 import dolfinx.mesh
 import numpy as np
-import os
 import ufl
+from dolfinx.cpp.mesh import CellType
 from mpi4py import MPI
 from petsc4py import PETSc
 from ufl.tensors import as_vector
-from dolfinx.cpp.mesh import CellType
-import argparse
 
-
-class NonlinearPDEProblem:
-    """Nonlinear problem class for solving the non-linear problem
-    F(u, v) = 0 for all v in V
-    """
-
-    def __init__(self, F: ufl.form.Form, u: dolfinx.Function,
-                 bcs: List[dolfinx.DirichletBC]):
-        """
-        Input:
-        - F: The PDE residual F(u, v)
-        - u: The unknown
-        - bcs: List of Dirichlet boundary conditions
-        This class set up structures for solving the non-linear problem using Newton's method,
-        dF/du(u) du = -F(u)
-        """
-        V = u.function_space
-        du = ufl.TrialFunction(V)
-        self.L = F
-        # Create the Jacobian matrix, dF/du
-        self.a = ufl.derivative(F, u, du)
-        self.bcs = bcs
-
-        # Create matrix and vector to be used for assembly
-        # of the non-linear problem
-        self.matrix = dolfinx.fem.create_matrix(self.a)
-        self.vector = dolfinx.fem.create_vector(self.L)
-
-    def form(self, x: PETSc.Vec):
-        """
-        This function is called before the residual or Jacobian is computed. This is usually used to update ghost values.
-        Input:
-           x: The vector containing the latest solution
-        """
-        x.ghostUpdate(addv=PETSc.InsertMode.INSERT,
-                      mode=PETSc.ScatterMode.FORWARD)
-
-    def F(self, x: PETSc.Vec, b: PETSc.Vec):
-        """Assemble the residual F into the vector b.
-        Input:
-           x: The vector containing the latest solution
-           b: Vector to assemble the residual into
-        """
-        # Reset the residual vector
-        with b.localForm() as b_local:
-            b_local.set(0.0)
-        dolfinx.fem.assemble_vector(b, self.L)
-        # Apply boundary condition
-        dolfinx.fem.apply_lifting(b, [self.a], [self.bcs], [x], -1.0)
-        b.ghostUpdate(addv=PETSc.InsertMode.ADD,
-                      mode=PETSc.ScatterMode.REVERSE)
-        dolfinx.fem.set_bc(b, self.bcs, x, -1.0)
-
-    def J(self, x: PETSc.Vec, A: PETSc.Mat):
-        """Assemble the Jacobian matrix.
-        Input:
-          - x: The vector containing the latest solution
-          - A: The matrix to assemble the Jacobian into
-        """
-        A.zeroEntries()
-        dolfinx.fem.assemble_matrix(A, self.a, self.bcs)
-        A.assemble()
+from helpers import NonlinearPDEProblem, lame_parameters, epsilon, sigma_func
 
 
 def solve_manufactured(nx, ny, theta, gamma, nitsche, strain, linear_solver):
@@ -101,11 +40,10 @@ def solve_manufactured(nx, ny, theta, gamma, nitsche, strain, linear_solver):
     E = 1500
     nu = 0.25
     h = ufl.Circumradius(mesh)
-    mu = E / (2 * (1 + nu))
-    if strain:
-        lmbda = E * nu / ((1 + nu) * (1 - 2 * nu))  # Plane strain
-    else:
-        lmbda = E * nu / ((1 + nu) * (1 - nu))  # Plane stress
+
+    mu_func, lambda_func = lame_parameters(strain)
+    mu = mu_func(E, nu)
+    lmbda = lambda_func(E, nu)
 
     def _u_ex(x):
         values = np.zeros((mesh.geometry.dim, x.shape[1]))
@@ -117,14 +55,7 @@ def solve_manufactured(nx, ny, theta, gamma, nitsche, strain, linear_solver):
     u_D = dolfinx.Function(V)
     u_D.interpolate(_u_ex)
     u_D.name = "u_exact"
-    u_D.vector.ghostUpdate(addv=PETSc.InsertMode.INSERT,
-                           mode=PETSc.ScatterMode.FORWARD)
-
-    def epsilon(v):
-        return ufl.sym(ufl.grad(v))
-
-    def sigma(v):
-        return (2.0 * mu * epsilon(v) + lmbda * ufl.tr(epsilon(v)) * ufl.Identity(len(v)))
+    u_D.vector.ghostUpdate(addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD)
 
     # Body force for example 5.2
     # E * ufl.pi**2 * (ufl.cos(ufl.pi * x[0]) * ufl.sin(ufl.pi * x[1]),
@@ -136,6 +67,7 @@ def solve_manufactured(nx, ny, theta, gamma, nitsche, strain, linear_solver):
     u_ex = (nu + 1) / E * ufl.as_vector((x[1]**4, x[0]**4))
 
     # Use UFL to derive source and traction
+    sigma = sigma_func(mu, lmbda)
     f = -ufl.div(sigma(u_ex))
     g = ufl.dot(sigma(u_ex), n)
 
@@ -158,8 +90,8 @@ def solve_manufactured(nx, ny, theta, gamma, nitsche, strain, linear_solver):
         bcs = [bc]
 
     if linear_solver:
-        problem = dolfinx.fem.LinearProblem(ufl.lhs(F), ufl.rhs(F), bcs=bcs, petsc_options={
-            "ksp_type": "preonly", "pc_type": "lu"})
+        problem = dolfinx.fem.LinearProblem(ufl.lhs(F), ufl.rhs(F), bcs=bcs,
+                                            petsc_options={"ksp_type": "preonly", "pc_type": "lu"})
         u = problem.solve()
         u.name = "uh"
     else:
@@ -182,13 +114,11 @@ def solve_manufactured(nx, ny, theta, gamma, nitsche, strain, linear_solver):
         n, converged = solver.solve(u.vector)
         assert (converged)
         print(f"Number of interations: {n:d}")
-    u.vector.ghostUpdate(addv=PETSc.InsertMode.INSERT,
-                         mode=PETSc.ScatterMode.FORWARD)
+    u.vector.ghostUpdate(addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD)
 
     os.system("mkdir -p results")
 
-    with dolfinx.io.XDMFFile(MPI.COMM_WORLD, f"results/u_{nx}_{ny}.xdmf",
-                             "w") as xdmf:
+    with dolfinx.io.XDMFFile(MPI.COMM_WORLD, f"results/u_manufactured_{nx}_{ny}.xdmf", "w") as xdmf:
         xdmf.write_mesh(mesh)
         xdmf.write_function(u)
 
@@ -196,9 +126,6 @@ def solve_manufactured(nx, ny, theta, gamma, nitsche, strain, linear_solver):
     error = (u - u_D)**2 * dx
     E_L2 = np.sqrt(dolfinx.fem.assemble_scalar(error))
     print(f"{nx} {ny}: Nitsche={nitsche}, L2-error={E_L2:.2e}")
-    # Compute max area of each cell
-    _DG_0 = dolfinx.FunctionSpace(mesh, ("DG", 0))
-    _v = ufl.TestFunction(_DG_0)
 
     return max(L / nx, 2 / ny), E_L2
 
