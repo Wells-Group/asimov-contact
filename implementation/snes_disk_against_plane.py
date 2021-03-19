@@ -38,18 +38,7 @@ def snes_solver(strain):
         xdmf.write_mesh(mesh)
         xdmf.write_meshtags(facet_marker)
 
-
-    def R_minus(x):
-        abs_x = abs(x)
-        return 0.5 * (x - abs_x)
-
-
-    def ball_projection(x, s):
-        dim = x.geometric_dimension()
-        abs_x = ufl.sqrt(sum([x[i]**2 for i in range(dim)]))
-        return ufl.conditional(ufl.le(abs_x, s), x, s * x / abs_x)
-
-
+    # function space and problem parameters
     V = dolfinx.VectorFunctionSpace(mesh, ("CG", 1)) # function space 
     n = ufl.FacetNormal(mesh) # unit normal 
     E = 1e3   #young's modulus
@@ -63,11 +52,12 @@ def snes_solver(strain):
     # Mimicking the plane y=-g
     g = 0.02
 
-    def gap(u): # Definition of gap function
-        x = ufl.SpatialCoordinate(mesh)
-        return x[1]+u[1]+g
-    def maculay(x): # Definition of Maculay bracket
-        return (x+abs(x))/2
+    # Functions for penalty term. Not used at the moment.
+    # def gap(u): # Definition of gap function
+    #     x = ufl.SpatialCoordinate(mesh)
+    #     return x[1]+u[1]-g
+    # def maculay(x): # Definition of Maculay bracket
+    #     return (x+abs(x))/2
     
 
     # elasticity variational formulation no contact
@@ -75,11 +65,11 @@ def snes_solver(strain):
     v = ufl.TestFunction(V)
     dx = ufl.Measure("dx", domain=mesh)
     ds = ufl.Measure("ds", domain=mesh, subdomain_data=facet_marker)
-    penalty = 10000
+    penalty = 0
     #F = ufl.inner(sigma(u), epsilon(v)) * dx - ufl.inner(dolfinx.Constant(mesh, (0, 0)), v) * dx
     # Stored strain energy density (linear elasticity model)
     psi = 1/2*ufl.inner(sigma(u), epsilon(u))
-    Pi = psi*dx + 1/2*(penalty*E/h)*ufl.inner(maculay(-gap(u)),maculay(-gap(u)))*ds(1)
+    Pi = psi*dx #+ 1/2*(penalty*E/h)*ufl.inner(maculay(-gap(u)),maculay(-gap(u)))*ds(1)
 
     # Compute first variation of Pi (directional derivative about u in the direction of v)
     F = ufl.derivative(Pi, u, v)
@@ -88,18 +78,21 @@ def snes_solver(strain):
     def _u_D(x):
         values = np.zeros((mesh.geometry.dim, x.shape[1]))
         values[0] = 0
-        values[1] = -2*g
+        values[1] = -0.08
         return values
     u_D = dolfinx.Function(V)
     u_D.interpolate(_u_D)
     u_D.name = "u_D"
     u_D.vector.ghostUpdate(addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD)
     bc = dolfinx.DirichletBC(u_D, dolfinx.fem.locate_dofs_topological(V, tdim - 1, top_facets))
-    bcs = [bc]   
+    bcs = [bc] 
+    #create nonlinear problem
+    problem = NonlinearPDE_SNESProblem (F, u, bc)  
 
-    
+    # Inequality constraints (contact constraints)
     # The displacement u must be such that the current configuration x+u
-    # remains in the box [xmin = -inf,xmax = inf] x [ymin = 0,ymax = inf]
+    # remains in the box [xmin = -inf,xmax = inf] x [ymin = -g,ymax = inf]
+    # inf replaced by large number for implementation
     xmax = 1e7
     xmin = -1e7
     ymax = 1e7
@@ -120,7 +113,7 @@ def snes_solver(strain):
     umax.interpolate(_constraint_u)
     umin = dolfinx.Function(V)
     umin.interpolate(_constraint_l)
-    problem = NonlinearPDE_SNESProblem (F, u, bc)
+
 
     # Create semismooth Newton solver (SNES)
     b = dolfinx.cpp.la.create_vector(V.dofmap.index_map, V.dofmap.index_map_bs)
@@ -143,23 +136,21 @@ def snes_solver(strain):
     def _u_initial(x):
         values = np.zeros((mesh.geometry.dim, x.shape[1]))
         values[0] = 0
-        values[1] = -1*g
+        values[1] = -0.01-g
         return values
     u.interpolate(_u_initial)
     dolfinx.log.set_log_level(dolfinx.log.LogLevel.INFO)
     snes.solve(None, u.vector)
     u.vector.ghostUpdate(addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD)
 
-
+    assert(snes.getConvergedReason()>1)
+    assert(snes.getConvergedReason()<4)
     with dolfinx.io.XDMFFile(MPI.COMM_WORLD, "results/u_snes.xdmf", "w") as xdmf:
         xdmf.write_mesh(mesh)
         xdmf.write_function(u)
 
-    print(snes.getIterationNumber())
-    print(snes.getFunctionNorm())
-    print(snes.getConvergedReason())
-
 
 if __name__ == "__main__":
     snes_solver(True)
+    
 
