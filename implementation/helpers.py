@@ -89,3 +89,36 @@ def epsilon(v):
 
 def sigma_func(mu, lmbda):
     return lambda v: (2.0 * mu * epsilon(v) + lmbda * ufl.tr(epsilon(v)) * ufl.Identity(len(v)))
+
+class NonlinearPDE_SNESProblem:
+    def __init__(self, F, u, bc):
+        V = u.function_space
+        du = ufl.TrialFunction(V)
+
+        self.L = F
+        self.a = ufl.derivative(F, u, du)
+        self.a_comp = dolfinx.fem.Form(self.a)
+        self.bc = bc
+        self._F, self._J = None, None
+        self.u = u
+
+
+    def F(self, snes, x, F):
+        """Assemble residual vector."""
+        x.ghostUpdate(addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD)
+        x.copy(self.u.vector)
+        self.u.vector.ghostUpdate(addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD)
+
+        with F.localForm() as f_local:
+            f_local.set(0.0)
+        dolfinx.fem.assemble_vector(F, self.L)
+        dolfinx.fem.apply_lifting(F, [self.a], [[self.bc]], [x], -1.0)
+        F.ghostUpdate(addv=PETSc.InsertMode.ADD, mode=PETSc.ScatterMode.REVERSE)
+        dolfinx.fem.set_bc(F, [self.bc], x, -1.0)
+
+    def J(self, snes, x, J, P):
+        """Assemble Jacobian matrix."""
+        J.zeroEntries()
+        dolfinx.fem.assemble_matrix(J, self.a, [self.bc])
+        J.assemble()
+
