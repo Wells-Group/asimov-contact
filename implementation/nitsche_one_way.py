@@ -11,90 +11,52 @@ from mpi4py import MPI
 from petsc4py import PETSc
 
 
-def nitsche_one_way(mesh = None, strain=True, square = False, refinement = 0):
+def R_minus(x):
+    abs_x = abs(x)
+    return 0.5 * (x - abs_x)
 
-    if square:
-        def top(x):
-            return np.isclose(x[1], 1)
 
-        def bottom(x):
-            return np.isclose(x[1], 0)
+def ball_projection(x, s):
+    dim = x.geometric_dimension()
+    abs_x = ufl.sqrt(sum([x[i]**2 for i in range(dim)]))
+    return ufl.conditional(ufl.le(abs_x, s), x, s * x / abs_x)
 
-        mesh = dolfinx.UnitSquareMesh(MPI.COMM_WORLD, 50, 50)
-        tdim = mesh.topology.dim
-        top_facets = dolfinx.mesh.locate_entities_boundary(mesh, tdim - 1, top)
-        bottom_facets = dolfinx.mesh.locate_entities_boundary(mesh, tdim - 1, bottom)
-        top_values = np.full(len(top_facets), 1, dtype=np.int32)
-        bottom_values = np.full(len(bottom_facets), 2, dtype=np.int32)
-        indices = np.concatenate([top_facets, bottom_facets])
-        values = np.hstack([top_values, bottom_values])
-        facet_marker = dolfinx.MeshTags(mesh, tdim - 1, indices, values)
 
-    else:
-        if mesh is None:
-            with dolfinx.io.XDMFFile(MPI.COMM_WORLD, "disk.xdmf", "r") as xdmf:
-                mesh = xdmf.read_mesh(name="Grid")
+def epsilon(v):
+    return ufl.sym(ufl.grad(v))
 
-        def upper_part(x):
-            return x[1] > 0.9
 
-        def lower_part(x):
-            return x[1] < 0.25
-        tdim = mesh.topology.dim
-        top_facets = dolfinx.mesh.locate_entities_boundary(mesh, tdim - 1, upper_part)
-        bottom_facets = dolfinx.mesh.locate_entities_boundary(mesh, tdim - 1, lower_part)
-        top_values = np.full(len(top_facets), 1, dtype=np.int32)
-        bottom_values = np.full(len(bottom_facets), 2, dtype=np.int32)
-        indices = np.concatenate([top_facets, bottom_facets])
-        values = np.hstack([top_values, bottom_values])
-        facet_marker = dolfinx.MeshTags(mesh, tdim - 1, indices, values)
+def nitsche_one_way(mesh, mesh_data, physical_parameters, strain=True, refinement=0,
+                    nitsche_parameters={"gamma": 1e4, "theta": -1, "s": 0}, g=0.0, vertical_displacement=-0.1):
+    (facet_marker, top_value, bottom_value) = mesh_data
 
-    with dolfinx.io.XDMFFile(MPI.COMM_WORLD, "results/mf.xdmf", "w") as xdmf:
+    with dolfinx.io.XDMFFile(MPI.COMM_WORLD, "results/mf_nitsche.xdmf", "w") as xdmf:
         xdmf.write_mesh(mesh)
         xdmf.write_meshtags(facet_marker)
 
-
-    def R_minus(x):
-        abs_x = abs(x)
-        return 0.5 * (x - abs_x)
-
-
-    def ball_projection(x, s):
-        dim = x.geometric_dimension()
-        abs_x = ufl.sqrt(sum([x[i]**2 for i in range(dim)]))
-        return ufl.conditional(ufl.le(abs_x, s), x, s * x / abs_x)
-
-
-    theta = 0
-    s = 0  # 100e5
-    V = dolfinx.VectorFunctionSpace(mesh, ("CG", 1))
-    n = ufl.FacetNormal(mesh)
-    E = 1e3
-    nu = 0.1
+    # Nitche parameters and variables
+    theta = nitsche_parameters["theta"]
+    s = nitsche_parameters["s"]
     h = ufl.Circumradius(mesh)
-    gamma = 10 / h
+    gamma = nitsche_parameters["gamma"] / h
+    n = ufl.FacetNormal(mesh)
+
+    V = dolfinx.VectorFunctionSpace(mesh, ("CG", 1))
+    E = physical_parameters["E"]
+    nu = physical_parameters["nu"]
     mu = E / (2 * (1 + nu))
     lmbda = E * nu / ((1 + nu) * (1 - 2 * nu))
 
-
     # Mimicking the plane y=-g
     x = ufl.SpatialCoordinate(mesh)
-    g = 0.0
-    gap = g
-
-
-    def epsilon(v):
-        return ufl.sym(ufl.grad(v))
-
+    gap = -x[1]
 
     def sigma(v):
         return (2.0 * mu * epsilon(v)
                 + lmbda * ufl.tr(epsilon(v)) * ufl.Identity(len(v)))
 
-
     def sigma_n(v):
         return ufl.dot(sigma(v) * n, n)
-
 
     def tangential_proj(u):
         """
@@ -103,14 +65,14 @@ def nitsche_one_way(mesh = None, strain=True, square = False, refinement = 0):
         """
         return (ufl.Identity(u.ufl_shape[0]) - ufl.outer(n, n)) * u
 
-
     u = dolfinx.Function(V)
     v = ufl.TestFunction(V)
     dx = ufl.Measure("dx", domain=mesh)
-    ds = ufl.Measure("ds", domain=mesh, subdomain_data=facet_marker)
-    F = ufl.inner(sigma(u), epsilon(v)) * dx - ufl.inner(dolfinx.Constant(mesh, (0, 0)), v) * dx
+    ds = ufl.Measure("ds", domain=mesh, subdomain_data=facet_marker, subdomain_id=bottom_value)
+    a = ufl.inner(sigma(u), epsilon(v)) * dx
+    L = ufl.inner(dolfinx.Constant(mesh, (0, 0)), v) * dx
 
-    # Nitsche for contact (with Friction). 
+    # Nitsche for contact (with Friction).
     # NOTE: Differs from unitlateral contact even in the case of s=0!
     # F -= theta / gamma * sigma_n(u) * sigma_n(v) * ds(2)
     # F += 1 / gamma * R_minus(sigma_n(u) + gamma * (gap - ufl.dot(u, n))) * \
@@ -118,10 +80,13 @@ def nitsche_one_way(mesh = None, strain=True, square = False, refinement = 0):
     # F -= theta / gamma * ufl.dot(tangential_proj(u), tangential_proj(v)) * ds(2)
     # F += 1 / gamma * ufl.dot(ball_projection(tangential_proj(u) - gamma * tangential_proj(u), s),
     #                         theta * tangential_proj(v) - gamma * tangential_proj(v)) * ds(2)
-    #P(v) = theta*sigma_n(v)-gamma*v
-    # P = lambda (v, theta): theta*sigma_n - gamma()
-    F -= theta / gamma * sigma_n(u) * sigma_n(v) * ds(2)
-    F += 1 / gamma * R_minus(sigma_n(u) - gamma * (ufl.dot(u, n) - g))* (theta * sigma_n(v) - gamma * ufl.dot(v, n)) * ds(2)
+
+    def An(theta, gamma): return a - theta / gamma * sigma_n(u) * sigma_n(v) * ds
+    def Pn(v, theta, gamma): return theta * sigma_n(v) - gamma * ufl.dot(v, n)
+    F = An(theta, gamma) + R_minus(theta * sigma_n(u) - gamma
+                                   * ufl.dot(u - ufl.as_vector((0, gap)), n)) * Pn(v, theta, gamma) * ds - L
+    # F -= theta / gamma * sigma_n(u) * sigma_n(v) * ds(2)
+    # F += 1 / gamma * R_minus(sigma_n(u) - gamma * (ufl.dot(u, n) - g))* (theta * sigma_n(v) - gamma * ufl.dot(v, n)) * ds(2)
 
     # Nitsche for Dirichlet, another theta-scheme.
     # https://www.sciencedirect.com/science/article/pii/S004578251830269X
@@ -137,14 +102,17 @@ def nitsche_one_way(mesh = None, strain=True, square = False, refinement = 0):
     def _u_D(x):
         values = np.zeros((mesh.geometry.dim, x.shape[1]))
         values[0] = 0
-        values[1] = -0.1
+        values[1] = vertical_displacement
         return values
     u_D = dolfinx.Function(V)
     u_D.interpolate(_u_D)
     u_D.name = "u_D"
     u_D.vector.ghostUpdate(addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD)
-    bc = dolfinx.DirichletBC(u_D, dolfinx.fem.locate_dofs_topological(V, tdim - 1, top_facets))
-    bcs = [bc] 
+    tdim = mesh.topology.dim
+    dirichlet_dofs = dolfinx.fem.locate_dofs_topological(
+        V, tdim - 1, facet_marker.indices[facet_marker.values == top_value])
+    bc = dolfinx.DirichletBC(u_D, dirichlet_dofs)
+    bcs = [bc]
 
     class NonlinearPDEProblem:
         """Nonlinear problem class for solving the non-linear problem
@@ -205,7 +173,6 @@ def nitsche_one_way(mesh = None, strain=True, square = False, refinement = 0):
             dolfinx.fem.assemble_matrix(A, self.a, self.bcs)
             A.assemble()
 
-
     # Create nonlinear problem
     problem = NonlinearPDEProblem(F, u, bcs)
 
@@ -213,16 +180,22 @@ def nitsche_one_way(mesh = None, strain=True, square = False, refinement = 0):
     solver = dolfinx.cpp.nls.NewtonSolver(MPI.COMM_WORLD)
 
     # Set Newton solver options
-    solver.atol = 1e-6
-    solver.rtol = 1e-6
+    solver.atol = 1e-5
+    solver.rtol = 1e-5
     solver.convergence_criterion = "incremental"
-
+    solver.max_it = 250
     # Set non-linear problem for Newton solver
     solver.setF(problem.F, problem.vector)
     solver.setJ(problem.J, problem.matrix)
     solver.set_form(problem.form)
+    # Set initial_condition:
 
-
+    def _u_initial(x):
+        values = np.zeros((mesh.geometry.dim, x.shape[1]))
+        values[0] = 0
+        values[1] = -0.1 * x[1]
+        return values
+    u.interpolate(_u_initial)
     # Solve non-linear problem
     dolfinx.log.set_log_level(dolfinx.log.LogLevel.INFO)
     n, converged = solver.solve(u.vector)
