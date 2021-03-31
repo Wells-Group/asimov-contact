@@ -9,20 +9,21 @@ from mpi4py import MPI
 from petsc4py import PETSc
 from IPython import embed
 
-from helpers import NonlinearPDEProblem, NonlinearPDE_SNESProblem, lame_parameters, epsilon, sigma_func
+from helpers import NonlinearPDEProblem, NonlinearPDE_SNESProblem #, lame_parameters, epsilon, sigma_func
 
-def snes_solver(strain):
+def snes_solver(mesh = None, strain=True, refinement = 0):
 
     # read in mesh
-    with dolfinx.io.XDMFFile(MPI.COMM_WORLD, "disk.xdmf", "r") as xdmf:
-        mesh = xdmf.read_mesh(name="Grid")
+    if mesh is None:
+        with dolfinx.io.XDMFFile(MPI.COMM_WORLD, "disk.xdmf", "r") as xdmf:
+            mesh = xdmf.read_mesh(name="Grid")
 
     #facet markers for different part of boundary
     def upper_part(x):
         return x[1] > 0.9
 
     def lower_part(x):
-        return x[1] < 0.25
+        return x[1] < 0.25    
 
     tdim = mesh.topology.dim
     top_facets = dolfinx.mesh.locate_entities_boundary(mesh, tdim - 1, upper_part)
@@ -44,13 +45,25 @@ def snes_solver(strain):
     E = 1e3   #young's modulus
     nu = 0.1  #poisson ratio
     h = ufl.Circumradius(mesh) #mesh size
-    mu_func, lambda_func = lame_parameters(strain)
-    mu = mu_func(E, nu)
-    lmbda = lambda_func(E, nu)
-    sigma = sigma_func(mu, lmbda)
+    mu = E / (2 * (1 + nu))
+    lmbda = E * nu / ((1 + nu) * (1 - 2 * nu))
+    # mu_func, lambda_func = lame_parameters(strain)
+    # mu = mu_func(E, nu)
+    # lmbda = lambda_func(E, nu)
+    # sigma = sigma_func(mu, lmbda)
+    def epsilon(v):
+        return ufl.sym(ufl.grad(v))
+
+
+    def sigma(v):
+        return (2.0 * mu * epsilon(v)
+                + lmbda * ufl.tr(epsilon(v)) * ufl.Identity(len(v)))
+
+
+
 
     # Mimicking the plane y=-g
-    g = 0.02
+    g = 0.0
 
     # Functions for penalty term. Not used at the moment.
     # def gap(u): # Definition of gap function
@@ -66,19 +79,19 @@ def snes_solver(strain):
     dx = ufl.Measure("dx", domain=mesh)
     ds = ufl.Measure("ds", domain=mesh, subdomain_data=facet_marker)
     penalty = 0
-    #F = ufl.inner(sigma(u), epsilon(v)) * dx - ufl.inner(dolfinx.Constant(mesh, (0, 0)), v) * dx
+    F = ufl.inner(sigma(u), epsilon(v)) * dx - ufl.inner(dolfinx.Constant(mesh, (0, 0)), v) * dx
     # Stored strain energy density (linear elasticity model)
-    psi = 1/2*ufl.inner(sigma(u), epsilon(u))
-    Pi = psi*dx #+ 1/2*(penalty*E/h)*ufl.inner(maculay(-gap(u)),maculay(-gap(u)))*ds(1)
+    # psi = 1/2*ufl.inner(sigma(u), epsilon(u))
+    # Pi = psi*dx #+ 1/2*(penalty*E/h)*ufl.inner(maculay(-gap(u)),maculay(-gap(u)))*ds(1)
 
-    # Compute first variation of Pi (directional derivative about u in the direction of v)
-    F = ufl.derivative(Pi, u, v)
+    # # Compute first variation of Pi (directional derivative about u in the direction of v)
+    # F = ufl.derivative(Pi, u, v)
 
     # Dirichlet boundary conditions
     def _u_D(x):
         values = np.zeros((mesh.geometry.dim, x.shape[1]))
         values[0] = 0
-        values[1] = -0.08
+        values[1] = -0.1
         return values
     u_D = dolfinx.Function(V)
     u_D.interpolate(_u_D)
@@ -145,12 +158,14 @@ def snes_solver(strain):
 
     assert(snes.getConvergedReason()>1)
     assert(snes.getConvergedReason()<4)
-    with dolfinx.io.XDMFFile(MPI.COMM_WORLD, "results/u_snes.xdmf", "w") as xdmf:
+    with dolfinx.io.XDMFFile(MPI.COMM_WORLD, f"results/u_snes_{refinement}.xdmf", "w") as xdmf:
         xdmf.write_mesh(mesh)
         xdmf.write_function(u)
 
+    return u
+
 
 if __name__ == "__main__":
-    snes_solver(True)
+    snes_solver()
     
 
