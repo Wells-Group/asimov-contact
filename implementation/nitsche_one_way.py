@@ -27,7 +27,7 @@ def epsilon(v):
 
 
 def nitsche_one_way(mesh, mesh_data, physical_parameters, strain=True, refinement=0,
-                    nitsche_parameters={"gamma": 1e4, "theta": -1, "s": 0}, g=0.0, vertical_displacement=-0.1):
+                    nitsche_parameters={"gamma": 1, "theta": 1, "s": 0}, g=0.0, vertical_displacement=-0.1):
     (facet_marker, top_value, bottom_value) = mesh_data
 
     with dolfinx.io.XDMFFile(MPI.COMM_WORLD, "results/mf_nitsche.xdmf", "w") as xdmf:
@@ -38,9 +38,9 @@ def nitsche_one_way(mesh, mesh_data, physical_parameters, strain=True, refinemen
     theta = nitsche_parameters["theta"]
     s = nitsche_parameters["s"]
     h = ufl.Circumradius(mesh)
-    gamma = nitsche_parameters["gamma"] / h
-    n = ufl.FacetNormal(mesh)
-
+    gamma = physical_parameters["E"] * nitsche_parameters["gamma"] / h
+    #n = ufl.FacetNormal(mesh)
+    n = ufl.as_vector((0, -1)) # Normal of plane
     V = dolfinx.VectorFunctionSpace(mesh, ("CG", 1))
     E = physical_parameters["E"]
     nu = physical_parameters["nu"]
@@ -180,10 +180,10 @@ def nitsche_one_way(mesh, mesh_data, physical_parameters, strain=True, refinemen
     solver = dolfinx.cpp.nls.NewtonSolver(MPI.COMM_WORLD)
 
     # Set Newton solver options
-    solver.atol = 1e-5
-    solver.rtol = 1e-5
+    solver.atol = 1e-6
+    solver.rtol = 1e-6
     solver.convergence_criterion = "incremental"
-    solver.max_it = 250
+    solver.max_it = 50
     # Set non-linear problem for Newton solver
     solver.setF(problem.F, problem.vector)
     solver.setJ(problem.J, problem.matrix)

@@ -22,7 +22,7 @@ if disk:
         return x[1] > 0.5
 
     def bottom(x):
-        return x[1] < 0.1
+        return x[1] < 0.2
 else:
     mesh = dolfinx.UnitSquareMesh(MPI.COMM_WORLD, 50, 50)
 
@@ -33,10 +33,10 @@ else:
         return np.isclose(x[1], 0)
 
 physical_parameters = {"E": 1e3, "nu": 0.1, "strain": False}
-vertical_displacement = -0.05
+vertical_displacement = -0.1
 e_abs = []
 e_rel = []
-for i in range(1, 2):
+for i in range(2,3):
     if i > 0:
         mesh.topology.create_entities(mesh.topology.dim - 1)
         mesh = dolfinx.mesh.refine(mesh)
