@@ -10,6 +10,8 @@ import ufl
 from mpi4py import MPI
 from petsc4py import PETSc
 
+from helpers import NonlinearPDEProblem
+
 
 def R_minus(x):
     abs_x = abs(x)
@@ -27,7 +29,8 @@ def epsilon(v):
 
 
 def nitsche_one_way(mesh, mesh_data, physical_parameters, strain=True, refinement=0,
-                    nitsche_parameters={"gamma": 1, "theta": 1, "s": 0}, g=0.0, vertical_displacement=-0.1):
+                    nitsche_parameters={"gamma": 1, "theta": 1, "s": 0}, g=0.0, 
+                    vertical_displacement=-0.1, nitsche_bc = False):
     (facet_marker, top_value, bottom_value) = mesh_data
 
     with dolfinx.io.XDMFFile(MPI.COMM_WORLD, "results/mf_nitsche.xdmf", "w") as xdmf:
@@ -49,7 +52,7 @@ def nitsche_one_way(mesh, mesh_data, physical_parameters, strain=True, refinemen
 
     # Mimicking the plane y=-g
     x = ufl.SpatialCoordinate(mesh)
-    gap = -x[1]
+    gap = -x[1]-g
 
     def sigma(v):
         return (2.0 * mu * epsilon(v)
@@ -83,7 +86,7 @@ def nitsche_one_way(mesh, mesh_data, physical_parameters, strain=True, refinemen
 
     def An(theta, gamma): return a - theta / gamma * sigma_n(u) * sigma_n(v) * ds
     def Pn(v, theta, gamma): return theta * sigma_n(v) - gamma * ufl.dot(v, n)
-    F = An(theta, gamma) + R_minus(theta * sigma_n(u) - gamma
+    F = An(theta, gamma) + 1 / gamma* R_minus( sigma_n(u) - gamma
                                    * ufl.dot(u - ufl.as_vector((0, gap)), n)) * Pn(v, theta, gamma) * ds - L
     # F -= theta / gamma * sigma_n(u) * sigma_n(v) * ds(2)
     # F += 1 / gamma * R_minus(sigma_n(u) - gamma * (ufl.dot(u, n) - g))* (theta * sigma_n(v) - gamma * ufl.dot(v, n)) * ds(2)
@@ -91,87 +94,30 @@ def nitsche_one_way(mesh, mesh_data, physical_parameters, strain=True, refinemen
     # Nitsche for Dirichlet, another theta-scheme.
     # https://www.sciencedirect.com/science/article/pii/S004578251830269X
     # Ultimately, it might make sense to use the same theta as for contact. But we keep things separate for now.
-    # u_D = ufl.as_vector((0, -0.1))
-    # n_facet = ufl.FacetNormal(mesh)
-    # gamma_2 = 1000
-    # theta_2 = 1  # 1 symmetric, -1 skew symmetric
-    # F += -ufl.inner(sigma(u) * n_facet, v) * ds(1)\
-    #     - theta_2 * ufl.inner(sigma(v) * n_facet, u - u_D) * ds(1) + gamma_2 / h * ufl.inner(u - u_D, v) * ds(1)
-
-    # Dirichlet boundary conditions
-    def _u_D(x):
-        values = np.zeros((mesh.geometry.dim, x.shape[1]))
-        values[0] = 0
-        values[1] = vertical_displacement
-        return values
-    u_D = dolfinx.Function(V)
-    u_D.interpolate(_u_D)
-    u_D.name = "u_D"
-    u_D.vector.ghostUpdate(addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD)
-    tdim = mesh.topology.dim
-    dirichlet_dofs = dolfinx.fem.locate_dofs_topological(
-        V, tdim - 1, facet_marker.indices[facet_marker.values == top_value])
-    bc = dolfinx.DirichletBC(u_D, dirichlet_dofs)
-    bcs = [bc]
-
-    class NonlinearPDEProblem:
-        """Nonlinear problem class for solving the non-linear problem
-        F(u, v) = 0 for all v in V
-        """
-
-        def __init__(self, F: ufl.form.Form, u: dolfinx.Function, bcs: List[dolfinx.DirichletBC]):
-            """
-            Input:
-            - F: The PDE residual F(u, v)
-            - u: The unknown
-            - bcs: List of Dirichlet boundary conditions
-            This class set up structures for solving the non-linear problem using Newton's method,
-            dF/du(u) du = -F(u)
-            """
-            V = u.function_space
-            du = ufl.TrialFunction(V)
-            self.L = F
-            # Create the Jacobian matrix, dF/du
-            self.a = ufl.derivative(F, u, du)
-            self.bcs = bcs
-
-            # Create matrix and vector to be used for assembly
-            # of the non-linear problem
-            self.matrix = dolfinx.fem.create_matrix(self.a)
-            self.vector = dolfinx.fem.create_vector(self.L)
-
-        def form(self, x: PETSc.Vec):
-            """
-            This function is called before the residual or Jacobian is computed. This is usually used to update ghost values.
-            Input:
-            x: The vector containing the latest solution
-            """
-            x.ghostUpdate(addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD)
-
-        def F(self, x: PETSc.Vec, b: PETSc.Vec):
-            """Assemble the residual F into the vector b.
-            Input:
-            x: The vector containing the latest solution
-            b: Vector to assemble the residual into
-            """
-            # Reset the residual vector
-            with b.localForm() as b_local:
-                b_local.set(0.0)
-            dolfinx.fem.assemble_vector(b, self.L)
-            # Apply boundary condition
-            dolfinx.fem.apply_lifting(b, [self.a], [self.bcs], [x], -1.0)
-            b.ghostUpdate(addv=PETSc.InsertMode.ADD, mode=PETSc.ScatterMode.REVERSE)
-            dolfinx.fem.set_bc(b, self.bcs, x, -1.0)
-
-        def J(self, x: PETSc.Vec, A: PETSc.Mat):
-            """Assemble the Jacobian matrix.
-            Input:
-            - x: The vector containing the latest solution
-            - A: The matrix to assemble the Jacobian into
-            """
-            A.zeroEntries()
-            dolfinx.fem.assemble_matrix(A, self.a, self.bcs)
-            A.assemble()
+    if nitsche_bc:
+        u_D = ufl.as_vector((0, vertical_displacement))
+        n_facet = ufl.FacetNormal(mesh)
+        gamma_2 = 1000
+        theta_2 = 1  # 1 symmetric, -1 skew symmetric
+        F += - ufl.inner(sigma(u) * n_facet, v) * ds(1)\
+             - theta_2 * ufl.inner(sigma(v) * n_facet, u - u_D) * ds(1) + gamma_2 / h * ufl.inner(u - u_D, v) * ds(1)
+        bcs = []
+    else:
+        #strong Dirichlet boundary conditions
+        def _u_D(x):
+            values = np.zeros((mesh.geometry.dim, x.shape[1]))
+            values[0] = 0
+            values[1] = vertical_displacement
+            return values
+        u_D = dolfinx.Function(V)
+        u_D.interpolate(_u_D)
+        u_D.name = "u_D"
+        u_D.vector.ghostUpdate(addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD)
+        tdim = mesh.topology.dim
+        dirichlet_dofs = dolfinx.fem.locate_dofs_topological(
+            V, tdim - 1, facet_marker.indices[facet_marker.values == top_value])
+        bc = dolfinx.DirichletBC(u_D, dirichlet_dofs)
+        bcs = [bc]
 
     # Create nonlinear problem
     problem = NonlinearPDEProblem(F, u, bcs)

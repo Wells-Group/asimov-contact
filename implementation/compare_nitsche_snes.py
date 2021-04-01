@@ -32,11 +32,11 @@ else:
     def bottom(x):
         return np.isclose(x[1], 0)
 
-physical_parameters = {"E": 1e3, "nu": 0.1, "strain": False}
-vertical_displacement = -0.1
+physical_parameters = {"gamma" : 1 ,"E": 1e3, "nu": 0.1, "strain": False}
+vertical_displacement = -0.08
 e_abs = []
 e_rel = []
-for i in range(2,3):
+for i in range(0,2):
     if i > 0:
         mesh.topology.create_entities(mesh.topology.dim - 1)
         mesh = dolfinx.mesh.refine(mesh)
@@ -51,9 +51,9 @@ for i in range(2,3):
     mesh_data = (facet_marker, top_value, bottom_value)
 
     u1 = nitsche_one_way(mesh=mesh, mesh_data=mesh_data, physical_parameters=physical_parameters,
-                         vertical_displacement=vertical_displacement, refinement=i)
+                         vertical_displacement=vertical_displacement, refinement=i, g=0.02)
     u2 = snes_solver(mesh=mesh, mesh_data=mesh_data, physical_parameters=physical_parameters,
-                     vertical_displacement=vertical_displacement, refinement=i)
+                     vertical_displacement=vertical_displacement, refinement=i, g=0.02)
 
     V = u1.function_space
     dx = ufl.Measure("dx", domain=mesh)
