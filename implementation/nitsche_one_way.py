@@ -29,8 +29,8 @@ def epsilon(v):
 
 
 def nitsche_one_way(mesh, mesh_data, physical_parameters, strain=True, refinement=0,
-                    nitsche_parameters={"gamma": 1, "theta": 1, "s": 0}, g=0.0, 
-                    vertical_displacement=-0.1, nitsche_bc = False):
+                    nitsche_parameters={"gamma": 1, "theta": 1, "s": 0}, g=0.0,
+                    vertical_displacement=-0.1, nitsche_bc=False):
     (facet_marker, top_value, bottom_value) = mesh_data
 
     with dolfinx.io.XDMFFile(MPI.COMM_WORLD, "results/mf_nitsche.xdmf", "w") as xdmf:
@@ -39,11 +39,11 @@ def nitsche_one_way(mesh, mesh_data, physical_parameters, strain=True, refinemen
 
     # Nitche parameters and variables
     theta = nitsche_parameters["theta"]
-    s = nitsche_parameters["s"]
+    # s = nitsche_parameters["s"]
     h = ufl.Circumradius(mesh)
     gamma = physical_parameters["E"] * nitsche_parameters["gamma"] / h
-    #n = ufl.FacetNormal(mesh)
-    n = ufl.as_vector((0, -1)) # Normal of plane
+    # n = ufl.FacetNormal(mesh)
+    n = ufl.as_vector((0, -1))  # Normal of plane
     V = dolfinx.VectorFunctionSpace(mesh, ("CG", 1))
     E = physical_parameters["E"]
     nu = physical_parameters["nu"]
@@ -52,7 +52,7 @@ def nitsche_one_way(mesh, mesh_data, physical_parameters, strain=True, refinemen
 
     # Mimicking the plane y=-g
     x = ufl.SpatialCoordinate(mesh)
-    gap = -x[1]-g
+    gap = -x[1] - g
 
     def sigma(v):
         return (2.0 * mu * epsilon(v)
@@ -86,8 +86,8 @@ def nitsche_one_way(mesh, mesh_data, physical_parameters, strain=True, refinemen
 
     def An(theta, gamma): return a - theta / gamma * sigma_n(u) * sigma_n(v) * ds
     def Pn(v, theta, gamma): return theta * sigma_n(v) - gamma * ufl.dot(v, n)
-    F = An(theta, gamma) + 1 / gamma* R_minus( sigma_n(u) - gamma
-                                   * ufl.dot(u - ufl.as_vector((0, gap)), n)) * Pn(v, theta, gamma) * ds - L
+    F = An(theta, gamma) + 1 / gamma * R_minus(sigma_n(u) - gamma
+                                               * ufl.dot(u - ufl.as_vector((0, gap)), n)) * Pn(v, theta, gamma) * ds - L
     # F -= theta / gamma * sigma_n(u) * sigma_n(v) * ds(2)
     # F += 1 / gamma * R_minus(sigma_n(u) - gamma * (ufl.dot(u, n) - g))* (theta * sigma_n(v) - gamma * ufl.dot(v, n)) * ds(2)
 
@@ -103,7 +103,7 @@ def nitsche_one_way(mesh, mesh_data, physical_parameters, strain=True, refinemen
              - theta_2 * ufl.inner(sigma(v) * n_facet, u - u_D) * ds(1) + gamma_2 / h * ufl.inner(u - u_D, v) * ds(1)
         bcs = []
     else:
-        #strong Dirichlet boundary conditions
+        # strong Dirichlet boundary conditions
         def _u_D(x):
             values = np.zeros((mesh.geometry.dim, x.shape[1]))
             values[0] = 0
@@ -134,14 +134,15 @@ def nitsche_one_way(mesh, mesh_data, physical_parameters, strain=True, refinemen
     solver.setF(problem.F, problem.vector)
     solver.setJ(problem.J, problem.matrix)
     solver.set_form(problem.form)
-    # Set initial_condition:
 
     def _u_initial(x):
         values = np.zeros((mesh.geometry.dim, x.shape[1]))
         values[0] = 0
         values[1] = -0.1 * x[1]
         return values
+    # Set initial_condition:
     u.interpolate(_u_initial)
+
     # Solve non-linear problem
     dolfinx.log.set_log_level(dolfinx.log.LogLevel.INFO)
     n, converged = solver.solve(u.vector)
