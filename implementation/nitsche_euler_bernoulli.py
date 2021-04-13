@@ -3,26 +3,25 @@ import os
 from typing import List
 
 import dolfinx
-import dolfinx.fem
-import dolfinx.geometry
 import dolfinx.io
-import dolfinx.log
-import dolfinx.mesh
+import dolfinx.geometry
 import numpy as np
 import ufl
-from dolfinx.cpp.mesh import CellType
+from dolfinx.cpp.mesh import CellType, GhostMode
 from mpi4py import MPI
-from petsc4py import PETSc
 
 from helpers import NonlinearPDEProblem, epsilon, lame_parameters, sigma_func
 
 
-def solve_euler_bernoulli(nx, ny, theta, gamma, linear_solver, plane_strain, nitsche):
-    L = 47
-    H = 2.73
+def solve_euler_bernoulli(nx, ny, theta, gamma, linear_solver, plane_strain, nitsche, L=47, H=2.73,
+                          E=1e5, nu=0.3, rho_g=1e-2):
+    """
+    Solve the Euler-Bernoulli equations for a (0,0)x(L,H) beam
+    (https://en.wikipedia.org/wiki/Euler%E2%80%93Bernoulli_beam_theory#Cantilever_beams)
+    """
     mesh = dolfinx.RectangleMesh(
         MPI.COMM_WORLD, [np.array([0, 0, 0]), np.array([L, H, 0])], [nx, ny],
-        CellType.triangle, dolfinx.cpp.mesh.GhostMode.none)
+        CellType.triangle, GhostMode.none)
 
     def left(x):
         return np.isclose(x[0], 0)
@@ -30,6 +29,7 @@ def solve_euler_bernoulli(nx, ny, theta, gamma, linear_solver, plane_strain, nit
     def top(x):
         return np.isclose(x[1], H)
 
+    # Locate top and left facets to set Dirichlet condition and load condition
     tdim = mesh.topology.dim
     left_marker = int(1)
     top_marker = int(2)
@@ -41,17 +41,15 @@ def solve_euler_bernoulli(nx, ny, theta, gamma, linear_solver, plane_strain, nit
     values = np.hstack([left_values, top_values])
     # Sort values to work in parallel
     sorted = np.argsort(indices)
-    facet_marker = dolfinx.MeshTags(mesh, tdim - 1, indices[sorted], values[sorted])
+    facet_marker = dolfinx.MeshTags(
+        mesh, tdim - 1, indices[sorted], values[sorted])
 
     V = dolfinx.VectorFunctionSpace(mesh, ("CG", 1))
-    E = 1e5
-    nu = 0.3
     h = 2 * ufl.Circumradius(mesh)
     mu_func, lambda_func = lame_parameters(plane_strain)
     mu = mu_func(E, nu)
     lmbda = lambda_func(E, nu)
 
-    rho_g = 1e-2
     f = ufl.as_vector((0, 0))
     g = ufl.as_vector((0, -rho_g))
 
@@ -61,10 +59,11 @@ def solve_euler_bernoulli(nx, ny, theta, gamma, linear_solver, plane_strain, nit
     v = ufl.TestFunction(V)
     dx = ufl.Measure("dx", domain=mesh)
     ds = ufl.Measure("ds", domain=mesh, subdomain_data=facet_marker)
-    F = ufl.inner(sigma(u), epsilon(v)) * dx - ufl.inner(f, v) * dx - ufl.inner(g, v) * ds(top_marker)
+    F = ufl.inner(sigma(u), epsilon(v)) * dx - ufl.inner(f, v) * \
+        dx - ufl.inner(g, v) * ds(top_marker)
     if nitsche:
         # Nitsche for Dirichlet, theta-scheme.
-        # https://www.sciencedirect.com/science/article/pii/S004578251830269X
+        # https://doi.org/10.1016/j.cma.2018.05.024
         u_D = ufl.as_vector((0, 0))
         n = ufl.FacetNormal(mesh)
         F += -ufl.inner(sigma(u) * n, v) * ds(left_marker)\
@@ -76,7 +75,8 @@ def solve_euler_bernoulli(nx, ny, theta, gamma, linear_solver, plane_strain, nit
         u_bc = dolfinx.Function(V)
         with u_bc.vector.localForm() as loc:
             loc.set(0)
-        bc = dolfinx.DirichletBC(u_bc, dolfinx.fem.locate_dofs_topological(V, mesh.topology.dim - 1, left_facets))
+        bc = dolfinx.DirichletBC(u_bc, dolfinx.fem.locate_dofs_topological(
+            V, mesh.topology.dim - 1, left_facets))
         bcs = [bc]
 
     # Solve as linear problem
@@ -105,8 +105,7 @@ def solve_euler_bernoulli(nx, ny, theta, gamma, linear_solver, plane_strain, nit
         n, converged = solver.solve(u.vector)
         assert (converged)
         print(f"Number of interations: {n:d}")
-    u.vector.ghostUpdate(addv=PETSc.InsertMode.INSERT,
-                         mode=PETSc.ScatterMode.FORWARD)
+    dolfinx.cpp.la.scatter_forward(u.x)
 
     os.system("mkdir -p results")
     with dolfinx.io.XDMFFile(MPI.COMM_WORLD, f"results/u_euler_bernoulli_{nx}_{ny}.xdmf", "w") as xdmf:
@@ -120,7 +119,8 @@ def solve_euler_bernoulli(nx, ny, theta, gamma, linear_solver, plane_strain, nit
     bb_tree = dolfinx.geometry.BoundingBoxTree(mesh, mesh.topology.dim)
     cell_candidates = dolfinx.geometry.compute_collisions_point(bb_tree, point)
     # Choose one of the cells that contains the point
-    cell = dolfinx.geometry.select_colliding_cells(mesh, cell_candidates, point, 1)
+    cell = dolfinx.geometry.select_colliding_cells(
+        mesh, cell_candidates, point, 1)
     # Only use evaluate for points on current processor
     if len(cell) == 1:
         points_on_proc.append(point)
@@ -138,7 +138,9 @@ def solve_euler_bernoulli(nx, ny, theta, gamma, linear_solver, plane_strain, nit
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(
+        description="Verification of Nitsche-Dirichlet boundary conditions for"
+        + "linear elasticity solving the Euler-Bernoulli equiation", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument("--theta", default=1, type=np.float64, dest="theta",
                         help="Theta parameter for Nitsche, 1 symmetric, -1 skew symmetric, 0 Penalty-like")
     parser.add_argument("--gamma", default=1000, type=np.float64, dest="gamma",
@@ -161,5 +163,7 @@ if __name__ == "__main__":
     nitsche = not args.dirichlet
     Nx = np.asarray([5 * 2**i for i in range(1, 8)], dtype=np.int32)
     Ny = np.asarray([2**i for i in range(1, 8)], dtype=np.int32)
+    # FIXME: Add option for L, H, E, nu and rho_g
     for (nx, ny) in zip(Nx, Ny):
-        solve_euler_bernoulli(nx, ny, theta, gamma, linear_solver, plane_strain, nitsche)
+        solve_euler_bernoulli(nx, ny, theta, gamma,
+                              linear_solver, plane_strain, nitsche)

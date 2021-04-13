@@ -11,7 +11,9 @@ from snes_disk_against_plane import snes_solver
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser = argparse.ArgumentParser(description="Compare Nitsche's metood for contact against a straight plane" +
+                                     " with PETSc SNES",
+                                     formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument("--theta", default=1, type=np.float64, dest="theta",
                         help="Theta parameter for Nitsche, 1 symmetric, -1 skew symmetric, 0 Penalty-like")
     parser.add_argument("--gamma", default=1000, type=np.float64, dest="gamma",
@@ -30,12 +32,14 @@ if __name__ == "__main__":
                        help="Use square mesh (instead of circular mesh).")
     _E = parser.add_argument("--E", default=1e3, type=np.float64, dest="E",
                              help="Youngs modulus of material")
-    _nu = parser.add_argument("--nu", default=0.1, type=np.float64, dest="nu", help="Poisson's ratio")
+    _nu = parser.add_argument(
+        "--nu", default=0.1, type=np.float64, dest="nu", help="Poisson's ratio")
     _disp = parser.add_argument("--disp", default=0.08, type=np.float64, dest="disp",
                                 help="Displacement BC in negative y direction")
     _ref = parser.add_argument("--refinements", default=2, type=np.int32,
                                dest="refs", help="Number of mesh refinements")
-    _gap = parser.add_argument("--gap", default=0.02, type=np.float64, dest="gap", help="Gap between plane and y=0")
+    _gap = parser.add_argument(
+        "--gap", default=0.02, type=np.float64, dest="gap", help="Gap between plane and y=0")
     # Parse input arguments or set to defualt values
     args = parser.parse_args()
 
@@ -43,7 +47,8 @@ if __name__ == "__main__":
     nitsche_parameters = {"gamma": args.gamma, "theta": args.theta, "s": 0}
     nitsche_bc = not args.dirichlet
     disk = not args.square
-    physical_parameters = {"E": args.E, "nu": args.nu, "strain": args.plane_strain}
+    physical_parameters = {"E": args.E,
+                           "nu": args.nu, "strain": args.plane_strain}
     vertical_displacement = -args.disp
     num_refs = args.refs
     gap = args.gap
@@ -81,9 +86,11 @@ if __name__ == "__main__":
         # Create meshtag for top and bottom markers
         tdim = mesh.topology.dim
         top_facets = dolfinx.mesh.locate_entities_boundary(mesh, tdim - 1, top)
-        bottom_facets = dolfinx.mesh.locate_entities_boundary(mesh, tdim - 1, bottom)
+        bottom_facets = dolfinx.mesh.locate_entities_boundary(
+            mesh, tdim - 1, bottom)
         top_values = np.full(len(top_facets), top_value, dtype=np.int32)
-        bottom_values = np.full(len(bottom_facets), bottom_value, dtype=np.int32)
+        bottom_values = np.full(
+            len(bottom_facets), bottom_value, dtype=np.int32)
         indices = np.concatenate([top_facets, bottom_facets])
         values = np.hstack([top_values, bottom_values])
         facet_marker = dolfinx.MeshTags(mesh, tdim - 1, indices, values)

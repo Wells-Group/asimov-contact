@@ -1,16 +1,12 @@
 from typing import List
-from IPython import embed
+
 import dolfinx
-import dolfinx.fem
 import dolfinx.io
-import dolfinx.log
-import dolfinx.mesh
 import numpy as np
 import ufl
 from mpi4py import MPI
-from petsc4py import PETSc
 
-from helpers import NonlinearPDEProblem
+from helpers import NonlinearPDEProblem, epsilon, lame_parameters, sigma_func
 
 
 def R_minus(x):
@@ -22,10 +18,6 @@ def ball_projection(x, s):
     dim = x.geometric_dimension()
     abs_x = ufl.sqrt(sum([x[i]**2 for i in range(dim)]))
     return ufl.conditional(ufl.le(abs_x, s), x, s * x / abs_x)
-
-
-def epsilon(v):
-    return ufl.sym(ufl.grad(v))
 
 
 def nitsche_one_way(mesh, mesh_data, physical_parameters, strain=True, refinement=0,
@@ -47,36 +39,35 @@ def nitsche_one_way(mesh, mesh_data, physical_parameters, strain=True, refinemen
     V = dolfinx.VectorFunctionSpace(mesh, ("CG", 1))
     E = physical_parameters["E"]
     nu = physical_parameters["nu"]
-    mu = E / (2 * (1 + nu))
-    lmbda = E * nu / ((1 + nu) * (1 - 2 * nu))
+    mu_func, lambda_func = lame_parameters(strain)
+    mu = mu_func(E, nu)
+    lmbda = lambda_func(E, nu)
+    sigma = sigma_func(mu, lmbda)
+
+    def sigma_n(v):
+        return ufl.dot(sigma(v) * n, n)
+
+    # def tangential_proj(u):
+    #     """
+    #     See for instance:
+    #     https://doi.org/10.1023/A:1022235512626
+    #     """
+    #     return (ufl.Identity(u.ufl_shape[0]) - ufl.outer(n, n)) * u
 
     # Mimicking the plane y=-g
     x = ufl.SpatialCoordinate(mesh)
     gap = -x[1] - g
 
-    def sigma(v):
-        return (2.0 * mu * epsilon(v)
-                + lmbda * ufl.tr(epsilon(v)) * ufl.Identity(len(v)))
-
-    def sigma_n(v):
-        return ufl.dot(sigma(v) * n, n)
-
-    def tangential_proj(u):
-        """
-        See for instance:
-        https://link.springer.com/content/pdf/10.1023/A:1022235512626.pdf
-        """
-        return (ufl.Identity(u.ufl_shape[0]) - ufl.outer(n, n)) * u
-
     u = dolfinx.Function(V)
     v = ufl.TestFunction(V)
     dx = ufl.Measure("dx", domain=mesh)
-    ds = ufl.Measure("ds", domain=mesh, subdomain_data=facet_marker, subdomain_id=bottom_value)
+    ds = ufl.Measure("ds", domain=mesh,
+                     subdomain_data=facet_marker, subdomain_id=bottom_value)
     a = ufl.inner(sigma(u), epsilon(v)) * dx
     L = ufl.inner(dolfinx.Constant(mesh, (0, 0)), v) * dx
 
     # Nitsche for contact (with Friction).
-    # NOTE: Differs from unitlateral contact even in the case of s=0!
+    # NOTE: Differs from unilateral contact even in the case of s=0!
     # F -= theta / gamma * sigma_n(u) * sigma_n(v) * ds(2)
     # F += 1 / gamma * R_minus(sigma_n(u) + gamma * (gap - ufl.dot(u, n))) * \
     #     (theta * sigma_n(v) - gamma * ufl.dot(v, n)) * ds(2)
@@ -84,7 +75,9 @@ def nitsche_one_way(mesh, mesh_data, physical_parameters, strain=True, refinemen
     # F += 1 / gamma * ufl.dot(ball_projection(tangential_proj(u) - gamma * tangential_proj(u), s),
     #                         theta * tangential_proj(v) - gamma * tangential_proj(v)) * ds(2)
 
-    def An(theta, gamma): return a - theta / gamma * sigma_n(u) * sigma_n(v) * ds
+    def An(theta, gamma): return a - theta / \
+        gamma * sigma_n(u) * sigma_n(v) * ds
+
     def Pn(v, theta, gamma): return theta * sigma_n(v) - gamma * ufl.dot(v, n)
     F = An(theta, gamma) + 1 / gamma * R_minus(sigma_n(u) - gamma
                                                * ufl.dot(u - ufl.as_vector((0, gap)), n)) * Pn(v, theta, gamma) * ds - L
@@ -92,7 +85,7 @@ def nitsche_one_way(mesh, mesh_data, physical_parameters, strain=True, refinemen
     # F += 1 / gamma * R_minus(sigma_n(u) - gamma * (ufl.dot(u, n) - g))* (theta * sigma_n(v) - gamma * ufl.dot(v, n)) * ds(2)
 
     # Nitsche for Dirichlet, another theta-scheme.
-    # https://www.sciencedirect.com/science/article/pii/S004578251830269X
+    # https://doi.org/10.1016/j.cma.2018.05.024
     # Ultimately, it might make sense to use the same theta as for contact. But we keep things separate for now.
     if nitsche_bc:
         u_D = ufl.as_vector((0, vertical_displacement))
@@ -100,7 +93,8 @@ def nitsche_one_way(mesh, mesh_data, physical_parameters, strain=True, refinemen
         gamma_2 = 1000
         theta_2 = 1  # 1 symmetric, -1 skew symmetric
         F += - ufl.inner(sigma(u) * n_facet, v) * ds(1)\
-             - theta_2 * ufl.inner(sigma(v) * n_facet, u - u_D) * ds(1) + gamma_2 / h * ufl.inner(u - u_D, v) * ds(1)
+             - theta_2 * ufl.inner(sigma(v) * n_facet, u - u_D) * \
+            ds(1) + gamma_2 / h * ufl.inner(u - u_D, v) * ds(1)
         bcs = []
     else:
         # strong Dirichlet boundary conditions
@@ -112,7 +106,7 @@ def nitsche_one_way(mesh, mesh_data, physical_parameters, strain=True, refinemen
         u_D = dolfinx.Function(V)
         u_D.interpolate(_u_D)
         u_D.name = "u_D"
-        u_D.vector.ghostUpdate(addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD)
+        dolfinx.cpp.la.scatter_forward(u_D.x)
         tdim = mesh.topology.dim
         dirichlet_dofs = dolfinx.fem.locate_dofs_topological(
             V, tdim - 1, facet_marker.indices[facet_marker.values == top_value])
@@ -146,7 +140,7 @@ def nitsche_one_way(mesh, mesh_data, physical_parameters, strain=True, refinemen
     # Solve non-linear problem
     dolfinx.log.set_log_level(dolfinx.log.LogLevel.INFO)
     n, converged = solver.solve(u.vector)
-    u.vector.ghostUpdate(addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD)
+    dolfinx.cpp.la.scatter_forward(u.x)
     assert(converged)
     print(f"Number of interations: {n:d}")
 
