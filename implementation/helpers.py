@@ -5,7 +5,7 @@ import numpy
 import ufl
 from petsc4py import PETSc
 
-__all__ = ["NonlinearPDEProblem", "lame_parameters", "epsilon", "sigma_func"]
+__all__ = ["NonlinearPDEProblem", "lame_parameters", "epsilon", "sigma_func", "convert_mesh"]
 
 
 class NonlinearPDEProblem:

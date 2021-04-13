@@ -1,8 +1,12 @@
 
-from helpers import convert_mesh
-from mpi4py import MPI
-import gmsh
+import argparse
 import warnings
+
+import gmsh
+from mpi4py import MPI
+
+from helpers import convert_mesh
+
 warnings.filterwarnings("ignore")
 
 
@@ -18,7 +22,8 @@ def create_disk_mesh(LcMin=0.005, LcMax=0.015, filename="disk.msh"):
         gmsh.model.occ.synchronize()
         domains = gmsh.model.getEntities(dim=2)
         domain_marker = 11
-        gmsh.model.addPhysicalGroup(domains[0][0], [domains[0][1]], domain_marker)
+        gmsh.model.addPhysicalGroup(
+            domains[0][0], [domains[0][1]], domain_marker)
 
         gmsh.model.occ.synchronize()
         gmsh.model.mesh.field.add("Distance", 1)
@@ -40,6 +45,11 @@ def create_disk_mesh(LcMin=0.005, LcMax=0.015, filename="disk.msh"):
 
 
 if __name__ == "__main__":
-    filename = "disk"
-    create_disk_mesh(filename=f"{filename}.msh")
-    convert_mesh(filename, "triangle")
+    parser = argparse.ArgumentParser(
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+        description='GMSH Python API script for creating a 2D disk mesh ')
+    parser.add_argument("--name", default="disk", type=str, dest="name",
+                        help="Name of file to write the mesh to (without filetype extension)")
+    args = parser.parse_args()
+    create_disk_mesh(filename=f"{args.name}.msh")
+    convert_mesh(args.name, "triangle")

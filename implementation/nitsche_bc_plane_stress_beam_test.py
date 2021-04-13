@@ -2,26 +2,28 @@ import argparse
 import os
 
 import dolfinx
-import dolfinx.fem
 import dolfinx.io
-import dolfinx.log
-import dolfinx.mesh
 import numpy as np
 import ufl
-from dolfinx.cpp.mesh import CellType
+from dolfinx.cpp.mesh import CellType, GhostMode
 from mpi4py import MPI
-from petsc4py import PETSc
-from ufl.tensors import as_vector
 
-from helpers import NonlinearPDEProblem, lame_parameters, epsilon, sigma_func
+from helpers import NonlinearPDEProblem, epsilon, lame_parameters, sigma_func
 
 
-def solve_manufactured(nx, ny, theta, gamma, nitsche, strain, linear_solver):
-    L = 10
-    mesh = dolfinx.RectangleMesh(
-        MPI.COMM_WORLD,
-        [np.array([0, -1, 0]), np.array([L, 1, 0])], [nx, ny],
-        CellType.triangle, dolfinx.cpp.mesh.GhostMode.none)
+def solve_manufactured(nx, ny, theta, gamma, nitsche, strain, linear_solver, L=10):
+    """
+    Solve the manufactured problem 
+    u = [(nu + 1) / E * x[1]**4, (nu + 1) / E * x[0]**4]
+    on the domain [0, -1]x[L, 1]
+    where u solves the linear elasticity equations (plane stress/plane strain) with
+    (strong/Nitsche) Dirichlet condition at (0,y) and Neumann conditions everywhere else.
+    """
+
+    mesh = dolfinx.RectangleMesh(MPI.COMM_WORLD,
+                                 [np.array([0, -1, 0]),
+                                  np.array([L, 1, 0])], [nx, ny],
+                                 CellType.triangle, GhostMode.none)
 
     def left(x):
         return np.isclose(x[0], 0)
@@ -31,9 +33,11 @@ def solve_manufactured(nx, ny, theta, gamma, nitsche, strain, linear_solver):
     left_marker = 1
     left_facets = dolfinx.mesh.locate_entities_boundary(mesh, tdim - 1, left)
     left_values = np.full(len(left_facets), left_marker, dtype=np.int32)
+
     # Sort values to work in parallel
     sorted = np.argsort(left_facets)
-    facet_marker = dolfinx.MeshTags(mesh, tdim - 1, left_facets[sorted], left_values[sorted])
+    facet_marker = dolfinx.MeshTags(
+        mesh, tdim - 1, left_facets[sorted], left_values[sorted])
 
     V = dolfinx.VectorFunctionSpace(mesh, ("CG", 1))
     n = ufl.FacetNormal(mesh)
@@ -45,24 +49,8 @@ def solve_manufactured(nx, ny, theta, gamma, nitsche, strain, linear_solver):
     mu = mu_func(E, nu)
     lmbda = lambda_func(E, nu)
 
-    def _u_ex(x):
-        values = np.zeros((mesh.geometry.dim, x.shape[1]))
-        values[0] = (nu + 1) / E * x[1]**4
-        values[1] = (nu + 1) / E * x[0]**4
-        return values
-
-    # Interpolate exact solution into approximation space
-    u_D = dolfinx.Function(V)
-    u_D.interpolate(_u_ex)
-    u_D.name = "u_exact"
-    u_D.vector.ghostUpdate(addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD)
-
-    # Body force for example 5.2
-    # E * ufl.pi**2 * (ufl.cos(ufl.pi * x[0]) * ufl.sin(ufl.pi * x[1]),
-    #  -ufl.sin(ufl.pi * x[0]) * ufl.cos(ufl.pi * x[1])))
-
     # Problem specific body force and traction
-    # from DOI: 10.4208/aamm.2014.m548 (Chapter 5.1)
+    # https://doi.org/10.4208/aamm.2014.m548 (Chapter 5.1)
     x = ufl.SpatialCoordinate(mesh)
     u_ex = (nu + 1) / E * ufl.as_vector((x[1]**4, x[0]**4))
 
@@ -71,14 +59,28 @@ def solve_manufactured(nx, ny, theta, gamma, nitsche, strain, linear_solver):
     f = -ufl.div(sigma(u_ex))
     g = ufl.dot(sigma(u_ex), n)
 
+    # Interpolate exact solution into approximation space
+    u_D = dolfinx.Function(V)
+
+    def _u_ex(x):
+        values = np.zeros((mesh.geometry.dim, x.shape[1]))
+        values[0] = (nu + 1) / E * x[1]**4
+        values[1] = (nu + 1) / E * x[0]**4
+        return values
+
+    u_D.interpolate(_u_ex)
+    u_D.name = "u_exact"
+    dolfinx.cpp.la.scatter_forward(u_D.x)
+
     u = ufl.TrialFunction(V) if linear_solver else dolfinx.Function(V)
     v = ufl.TestFunction(V)
     dx = ufl.Measure("dx", domain=mesh)
     ds = ufl.Measure("ds", domain=mesh, subdomain_data=facet_marker)
-    F = ufl.inner(sigma(u), epsilon(v)) * dx - ufl.inner(f, v) * dx - ufl.inner(g, v) * ds
+    F = ufl.inner(sigma(u), epsilon(v)) * dx - \
+        ufl.inner(f, v) * dx - ufl.inner(g, v) * ds
 
     # Nitsche for Dirichlet, theta-scheme.
-    # https://www.sciencedirect.com/science/article/pii/S004578251830269X
+    # https://doi.org/10.1016/j.cma.2018.05.024
     if nitsche:
         n = ufl.FacetNormal(mesh)
         F += -ufl.inner(sigma(u) * n, v) * ds(left_marker)\
@@ -86,7 +88,8 @@ def solve_manufactured(nx, ny, theta, gamma, nitsche, strain, linear_solver):
             + gamma / h * ufl.inner(u - u_D, v) * ds(left_marker)
         bcs = []
     else:
-        bc = dolfinx.DirichletBC(u_D, dolfinx.fem.locate_dofs_topological(V, mesh.topology.dim - 1, left_facets))
+        bc = dolfinx.DirichletBC(u_D, dolfinx.fem.locate_dofs_topological(
+            V, mesh.topology.dim - 1, left_facets))
         bcs = [bc]
 
     if linear_solver:
@@ -114,7 +117,7 @@ def solve_manufactured(nx, ny, theta, gamma, nitsche, strain, linear_solver):
         n, converged = solver.solve(u.vector)
         assert (converged)
         print(f"Number of interations: {n:d}")
-    u.vector.ghostUpdate(addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD)
+    dolfinx.cpp.la.scatter_forward(u.x)
 
     os.system("mkdir -p results")
 
@@ -131,7 +134,9 @@ def solve_manufactured(nx, ny, theta, gamma, nitsche, strain, linear_solver):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+                                     description="Manufatured solution test for the linear elasticity equation" +
+                                     " using Nitsche-Dirichlet boundary conditions")
     parser.add_argument("--theta", default=1, type=np.float64, dest="theta",
                         help="Theta parameter for Nitsche, 1 symmetric, -1 skew symmetric, 0 Penalty-like")
     parser.add_argument("--gamma", default=1000, type=np.float64, dest="gamma",
@@ -157,7 +162,9 @@ if __name__ == "__main__":
     errors = np.zeros(len(Nx))
     hs = np.zeros(len(Nx))
     for i, (nx, ny) in enumerate(zip(Nx, Ny)):
-        h, E = solve_manufactured(nx, ny, theta, gamma, nitsche, strain, linear_solver)
+        h, E = solve_manufactured(
+            nx, ny, theta, gamma, nitsche, strain, linear_solver)
         errors[i] = E
         hs[i] = h
-    print(f"Convergence rate: {np.log(errors[:-1]/errors[1:])/np.log(hs[:-1]/hs[1:])}")
+    print(
+        f"Convergence rate: {np.log(errors[:-1]/errors[1:])/np.log(hs[:-1]/hs[1:])}")
