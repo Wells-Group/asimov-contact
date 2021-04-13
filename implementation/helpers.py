@@ -1,6 +1,8 @@
-import dolfinx
-import ufl
 from typing import List
+
+import dolfinx
+import numpy
+import ufl
 from petsc4py import PETSc
 
 __all__ = ["NonlinearPDEProblem", "lame_parameters", "epsilon", "sigma_func"]
@@ -90,6 +92,7 @@ def epsilon(v):
 def sigma_func(mu, lmbda):
     return lambda v: (2.0 * mu * epsilon(v) + lmbda * ufl.tr(epsilon(v)) * ufl.Identity(len(v)))
 
+
 class NonlinearPDE_SNESProblem:
     def __init__(self, F, u, bc):
         V = u.function_space
@@ -101,7 +104,6 @@ class NonlinearPDE_SNESProblem:
         self.bc = bc
         self._F, self._J = None, None
         self.u = u
-
 
     def F(self, snes, x, F):
         """Assemble residual vector."""
@@ -122,3 +124,21 @@ class NonlinearPDE_SNESProblem:
         dolfinx.fem.assemble_matrix(J, self.a, [self.bc])
         J.assemble()
 
+
+def convert_mesh(filename, cell_type):
+    """
+    Given the filename of a msh file, read data and convert to XDMF file containing cells of given cell type
+    """
+    try:
+        import meshio
+    except ImportError:
+        print("Meshio and h5py must be installed to convert meshes."
+              + " Please run `pip3 install --no-binary=h5py h5py meshio`")
+    from mpi4py import MPI
+    if MPI.COMM_WORLD.rank == 0:
+        mesh = meshio.read(f"{filename}.msh")
+        cells = mesh.get_cells_type(cell_type)
+        data = numpy.hstack([mesh.cell_data_dict["gmsh:physical"][key]
+                            for key in mesh.cell_data_dict["gmsh:physical"].keys() if key == cell_type])
+        out_mesh = meshio.Mesh(points=mesh.points[:, :2], cells={cell_type: cells}, cell_data={"name_to_read": [data]})
+        meshio.write(f"{filename}.xdmf", out_mesh)
