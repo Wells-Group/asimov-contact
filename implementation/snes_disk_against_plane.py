@@ -51,6 +51,7 @@ def snes_solver(mesh, mesh_data, physical_parameters, refinement=0, g=0.0, verti
     # Pi = psi*dx #+ 1/2*(penalty*E/h)*ufl.inner(maculay(-gap(u)),maculay(-gap(u)))*ds(1)
 
     # # Compute first variation of Pi (directional derivative about u in the direction of v)
+    # # Yields same F as above if penalty = 0 and body force 0
     # F = ufl.derivative(Pi, u, v)
 
     # Dirichlet boundary conditions
