@@ -6,7 +6,7 @@ Information about input parameters to scripts can be found by running `python3 n
 - `create_circle.py`: GMSH Python API script for creating a 2D disk mesh 
 - `compare_nitsche_snes.py`: Compare Nitsche's method for contact against a straight plane with PETSc SNES
 - `nitsche_bc_plane_stress_beam_test.py`: Testing Nitsche Dirichlet boundary conditions for linear elasticity equation using a manufactured solution.
-- `nitsche_euler_bernoulli.py`: Verification of Nitsche-Dirichlet boundary conditions for linear elasticity solving the Euler-Bernoulli equiation
+- `nitsche_euler_bernoulli.py`: Verification of Nitsche-Dirichlet boundary conditions for linear elasticity solving the Euler-Bernoulli equation
 
 ## Helper files
 - `helpers.py`: Various helpers reused in several other files (should not be executed as a standalone script)
