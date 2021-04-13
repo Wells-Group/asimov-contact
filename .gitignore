@@ -30,3 +30,11 @@
 *.exe
 *.out
 *.app
+
+# IO files
+*.xdmf
+*.h5
+*.msh
+
+# Pyc
+*.pyc
