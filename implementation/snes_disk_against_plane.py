@@ -1,20 +1,19 @@
 import dolfinx
-import dolfinx.fem
 import dolfinx.io
 import dolfinx.log
-import dolfinx.mesh
 import numpy as np
 import ufl
 from mpi4py import MPI
 from petsc4py import PETSc
-from IPython import embed
 
-from helpers import NonlinearPDEProblem, NonlinearPDE_SNESProblem  # , lame_parameters, epsilon, sigma_func
+from helpers import NonlinearPDE_SNESProblem, lame_parameters, epsilon, sigma_func
 
 
 def snes_solver(mesh, mesh_data, physical_parameters, refinement=0, g=0.0, vertical_displacement=-0.1):
     (facet_marker, top_value, bottom_value) = mesh_data
-
+    """
+    Solving contact problem against a rigid plane with gap -g from y=0 using PETSc SNES solver
+    """
     # write mesh and facet markers to xdmf
     with dolfinx.io.XDMFFile(MPI.COMM_WORLD, "results/mf_snes.xdmf", "w") as xdmf:
         xdmf.write_mesh(mesh)
@@ -26,19 +25,10 @@ def snes_solver(mesh, mesh_data, physical_parameters, refinement=0, g=0.0, verti
     E = physical_parameters["E"]  # young's modulus
     nu = physical_parameters["nu"]  # poisson ratio
     h = ufl.Circumradius(mesh)  # mesh size
-    mu = E / (2 * (1 + nu))
-    lmbda = E * nu / ((1 + nu) * (1 - 2 * nu))
-    # mu_func, lambda_func = lame_parameters(physical_parameters["strain"])
-    # mu = mu_func(E, nu)
-    # lmbda = lambda_func(E, nu)
-    # sigma = sigma_func(mu, lmbda)
-
-    def epsilon(v):
-        return ufl.sym(ufl.grad(v))
-
-    def sigma(v):
-        return (2.0 * mu * epsilon(v)
-                + lmbda * ufl.tr(epsilon(v)) * ufl.Identity(len(v)))
+    mu_func, lambda_func = lame_parameters(physical_parameters["strain"])
+    mu = mu_func(E, nu)
+    lmbda = lambda_func(E, nu)
+    sigma = sigma_func(mu, lmbda)
 
     # Functions for penalty term. Not used at the moment.
     # def gap(u): # Definition of gap function
@@ -51,8 +41,10 @@ def snes_solver(mesh, mesh_data, physical_parameters, refinement=0, g=0.0, verti
     u = dolfinx.Function(V)
     v = ufl.TestFunction(V)
     dx = ufl.Measure("dx", domain=mesh)
-    ds = ufl.Measure("ds", domain=mesh, subdomain_data=facet_marker, subdomain_id=bottom_value)
-    F = ufl.inner(sigma(u), epsilon(v)) * dx - ufl.inner(dolfinx.Constant(mesh, (0, 0)), v) * dx
+    ds = ufl.Measure("ds", domain=mesh,
+                     subdomain_data=facet_marker, subdomain_id=bottom_value)
+    F = ufl.inner(sigma(u), epsilon(v)) * dx - \
+        ufl.inner(dolfinx.Constant(mesh, (0, 0)), v) * dx
 
     # Stored strain energy density (linear elasticity model)    # penalty = 0
     # psi = 1/2*ufl.inner(sigma(u), epsilon(u))
@@ -70,7 +62,7 @@ def snes_solver(mesh, mesh_data, physical_parameters, refinement=0, g=0.0, verti
     u_D = dolfinx.Function(V)
     u_D.interpolate(_u_D)
     u_D.name = "u_D"
-    u_D.vector.ghostUpdate(addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD)
+    dolfinx.cpp.la.scatter_forward(u_D.x)
     tdim = mesh.topology.dim
     dirichlet_dofs = dolfinx.fem.locate_dofs_topological(
         V, tdim - 1, facet_marker.indices[facet_marker.values == top_value])
@@ -112,7 +104,7 @@ def snes_solver(mesh, mesh_data, physical_parameters, refinement=0, g=0.0, verti
     snes = PETSc.SNES().create()
     opts = PETSc.Options()
     opts["snes_monitor"] = None
-    #opts["snes_view"] = None
+    # opts["snes_view"] = None
     opts["snes_max_it"] = 50
     opts["snes_no_convergence_test"] = False
     opts["snes_max_fail"] = 10
@@ -130,10 +122,11 @@ def snes_solver(mesh, mesh_data, physical_parameters, refinement=0, g=0.0, verti
         values[0] = 0
         values[1] = -0.01 - g
         return values
+
     u.interpolate(_u_initial)
     dolfinx.log.set_log_level(dolfinx.log.LogLevel.INFO)
     snes.solve(None, u.vector)
-    u.vector.ghostUpdate(addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD)
+    dolfinx.cpp.la.scatter_forward(u.x)
 
     assert(snes.getConvergedReason() > 1)
     assert(snes.getConvergedReason() < 4)

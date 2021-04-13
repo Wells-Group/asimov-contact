@@ -20,7 +20,7 @@ def ball_projection(x, s):
     return ufl.conditional(ufl.le(abs_x, s), x, s * x / abs_x)
 
 
-def nitsche_one_way(mesh, mesh_data, physical_parameters, strain=True, refinement=0,
+def nitsche_one_way(mesh, mesh_data, physical_parameters, refinement=0,
                     nitsche_parameters={"gamma": 1, "theta": 1, "s": 0}, g=0.0,
                     vertical_displacement=-0.1, nitsche_bc=False):
     (facet_marker, top_value, bottom_value) = mesh_data
@@ -39,7 +39,7 @@ def nitsche_one_way(mesh, mesh_data, physical_parameters, strain=True, refinemen
     V = dolfinx.VectorFunctionSpace(mesh, ("CG", 1))
     E = physical_parameters["E"]
     nu = physical_parameters["nu"]
-    mu_func, lambda_func = lame_parameters(strain)
+    mu_func, lambda_func = lame_parameters(physical_parameters["strain"])
     mu = mu_func(E, nu)
     lmbda = lambda_func(E, nu)
     sigma = sigma_func(mu, lmbda)
