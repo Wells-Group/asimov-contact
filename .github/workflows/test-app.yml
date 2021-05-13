@@ -22,8 +22,7 @@ jobs:
 
       - name: Install meshio/h5py
         run: |
-          pip3 install --no-cache-dir --no-binary=h5py h5py
-
+          pip3 install --no-cache-dir --no-binary=h5py h5py meshio
       - name: Run demos
         run: |
           cd implementation
