@@ -26,6 +26,6 @@ jobs:
       - name: Run demos
         run: |
           cd implementation
-          python3 create_circle.py
+          python3 create_mesh.py
           mkdir -p results
           python3 compare_nitsche_snes.py

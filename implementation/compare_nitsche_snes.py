@@ -6,8 +6,9 @@ import numpy as np
 import ufl
 from mpi4py import MPI
 
+from create_mesh import create_disk_mesh, create_sphere_mesh, convert_mesh
 from nitsche_one_way import nitsche_one_way
-from snes_disk_against_plane import snes_solver
+from snes_against_plane import snes_solver
 
 
 if __name__ == "__main__":
@@ -21,15 +22,15 @@ if __name__ == "__main__":
     _solve = parser.add_mutually_exclusive_group(required=False)
     _solve.add_argument('--linear', dest='linear_solver', action='store_true',
                         help="Use linear solver", default=False)
+    _3D = parser.add_mutually_exclusive_group(required=False)
+    _3D.add_argument('--3D', dest='threed', action='store_true',
+                     help="Use 3D mesh", default=False)
     _strain = parser.add_mutually_exclusive_group(required=False)
     _strain.add_argument('--strain', dest='plane_strain', action='store_true',
                          help="Use plane strain formulation", default=False)
     _dirichlet = parser.add_mutually_exclusive_group(required=False)
     _dirichlet.add_argument('--dirichlet', dest='dirichlet', action='store_true',
                             help="Use strong Dirichlet formulation", default=False)
-    _mesh = parser.add_mutually_exclusive_group(required=False)
-    _mesh.add_argument("--square", dest="square", action='store_true',
-                       help="Use square mesh (instead of circular mesh).")
     _E = parser.add_argument("--E", default=1e3, type=np.float64, dest="E",
                              help="Youngs modulus of material")
     _nu = parser.add_argument(
@@ -46,19 +47,34 @@ if __name__ == "__main__":
     # Current formulation uses unilateral contact, i.e. s is unused
     nitsche_parameters = {"gamma": args.gamma, "theta": args.theta, "s": 0}
     nitsche_bc = not args.dirichlet
-    disk = not args.square
-    physical_parameters = {"E": args.E,
-                           "nu": args.nu, "strain": args.plane_strain}
+    physical_parameters = {"E": args.E, "nu": args.nu, "strain": args.plane_strain}
     vertical_displacement = -args.disp
     num_refs = args.refs + 1
     gap = args.gap
     top_value = 1
+    threed = args.threed
     bottom_value = 2
 
     # Load mesh and create identifier functions for the top (Displacement condition)
     # and the bottom (contact condition)
-    if disk:
-        with dolfinx.io.XDMFFile(MPI.COMM_WORLD, "disk.xdmf", "r") as xdmf:
+    if threed:
+        fname = "sphere"
+        create_sphere_mesh(filename=f"{fname}.msh")
+        convert_mesh(fname, "tetra")
+        with dolfinx.io.XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
+            mesh = xdmf.read_mesh(name="Grid")
+
+        def top(x):
+            return x[2] > 0.5
+
+        def bottom(x):
+            return x[2] < 0.2
+
+    else:
+        fname = "disk"
+        create_disk_mesh(filename=f"{fname}.msh")
+        convert_mesh(fname, "triangle", prune_z=True)
+        with dolfinx.io.XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
             mesh = xdmf.read_mesh(name="Grid")
 
         def top(x):
@@ -66,14 +82,6 @@ if __name__ == "__main__":
 
         def bottom(x):
             return x[1] < 0.2
-    else:
-        mesh = dolfinx.UnitSquareMesh(MPI.COMM_WORLD, 50, 50)
-
-        def top(x):
-            return np.isclose(x[1], 1)
-
-        def bottom(x):
-            return np.isclose(x[1], 0)
 
     e_abs = []
     e_rel = []
@@ -100,11 +108,11 @@ if __name__ == "__main__":
 
         # Solve contact problem using Nitsche's method
         u1 = nitsche_one_way(mesh=mesh, mesh_data=mesh_data, physical_parameters=physical_parameters,
-                             vertical_displacement=vertical_displacement, refinement=i, g=gap, nitsche_bc=True)
+                             vertical_displacement=vertical_displacement, refinement=i, g=gap, nitsche_bc=False)
         # Solve contact problem using PETSc SNES
         u2 = snes_solver(mesh=mesh, mesh_data=mesh_data, physical_parameters=physical_parameters,
                          vertical_displacement=vertical_displacement, refinement=i, g=gap)
-
+        exit(1)
         # Compute the difference (error) between Nitsche and SNES
         V = u1.function_space
         dx = ufl.Measure("dx", domain=mesh)
@@ -113,7 +121,6 @@ if __name__ == "__main__":
         u2_norm = ufl.inner(u2, u2) * dx
         u2_L2 = np.sqrt(MPI.COMM_WORLD.allreduce(dolfinx.fem.assemble_scalar(u2_norm), op=MPI.SUM))
         if rank == 0:
-
             print(f"abs. L2-error={E_L2:.2e}")
             print(f"rel. L2-error={E_L2/u2_L2:.2e}")
         e_abs.append(E_L2)

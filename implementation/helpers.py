@@ -62,7 +62,7 @@ class NonlinearPDE_SNESProblem:
         J.assemble()
 
 
-def convert_mesh(filename, cell_type):
+def convert_mesh(filename, cell_type, prune_z=False):
     """
     Given the filename of a msh file, read data and convert to XDMF file containing cells of given cell type
     """
@@ -77,5 +77,6 @@ def convert_mesh(filename, cell_type):
         cells = mesh.get_cells_type(cell_type)
         data = numpy.hstack([mesh.cell_data_dict["gmsh:physical"][key]
                             for key in mesh.cell_data_dict["gmsh:physical"].keys() if key == cell_type])
-        out_mesh = meshio.Mesh(points=mesh.points[:, :2], cells={cell_type: cells}, cell_data={"name_to_read": [data]})
+        pts = mesh.points[:, :2] if prune_z else mesh.points
+        out_mesh = meshio.Mesh(points=pts, cells={cell_type: cells}, cell_data={"name_to_read": [data]})
         meshio.write(f"{filename}.xdmf", out_mesh)

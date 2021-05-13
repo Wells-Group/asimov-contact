@@ -44,7 +44,7 @@ def snes_solver(mesh, mesh_data, physical_parameters, refinement=0, g=0.0, verti
     ds = ufl.Measure("ds", domain=mesh,
                      subdomain_data=facet_marker, subdomain_id=bottom_value)
     F = ufl.inner(sigma(u), epsilon(v)) * dx - \
-        ufl.inner(dolfinx.Constant(mesh, (0, 0)), v) * dx
+        ufl.inner(dolfinx.Constant(mesh, [0, ] * mesh.geometry.dim), v) * dx
 
     # Stored strain energy density (linear elasticity model)    # penalty = 0
     # psi = 1/2*ufl.inner(sigma(u), epsilon(u))
@@ -57,8 +57,7 @@ def snes_solver(mesh, mesh_data, physical_parameters, refinement=0, g=0.0, verti
     # Dirichlet boundary conditions
     def _u_D(x):
         values = np.zeros((mesh.geometry.dim, x.shape[1]))
-        values[0] = 0
-        values[1] = vertical_displacement
+        values[mesh.geometry.dim - 1] = vertical_displacement
         return values
     u_D = dolfinx.Function(V)
     u_D.interpolate(_u_D)
@@ -77,21 +76,22 @@ def snes_solver(mesh, mesh_data, physical_parameters, refinement=0, g=0.0, verti
     # The displacement u must be such that the current configuration x+u
     # remains in the box [xmin = -inf,xmax = inf] x [ymin = -g,ymax = inf]
     # inf replaced by large number for implementation
-    xmax = 1e7
-    xmin = -1e7
-    ymax = 1e7
-    ymin = -g
+    lims = np.zeros(2 * mesh.geometry.dim)
+    for i in range(mesh.geometry.dim):
+        lims[2 * i] = -1e7
+        lims[2 * i + 1] = 1e7
+    lims[-2] = -g
 
     def _constraint_u(x):
         values = np.zeros((mesh.geometry.dim, x.shape[1]))
-        values[0] = xmax - x[0]
-        values[1] = ymax - x[1]
+        for i in range(mesh.geometry.dim):
+            values[i] = lims[2 * i + 1] - x[i]
         return values
 
     def _constraint_l(x):
         values = np.zeros((mesh.geometry.dim, x.shape[1]))
-        values[0] = xmin - x[0]
-        values[1] = ymin - x[1]
+        for i in range(mesh.geometry.dim):
+            values[i] = lims[2 * i] - x[i]
         return values
 
     umax = dolfinx.Function(V)
@@ -128,8 +128,7 @@ def snes_solver(mesh, mesh_data, physical_parameters, refinement=0, g=0.0, verti
 
     def _u_initial(x):
         values = np.zeros((mesh.geometry.dim, x.shape[1]))
-        values[0] = 0
-        values[1] = -0.01 - g
+        values[-1] = -0.01 - g
         return values
 
     u.interpolate(_u_initial)
