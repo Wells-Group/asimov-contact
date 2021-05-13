@@ -2,6 +2,7 @@ import dolfinx
 import dolfinx.io
 import numpy as np
 import ufl
+from petsc4py import PETSc
 from mpi4py import MPI
 
 from helpers import epsilon, lame_parameters, sigma_func
@@ -128,10 +129,24 @@ def nitsche_one_way(mesh, mesh_data, physical_parameters, refinement=0,
         return values
     # Set initial_condition:
     u.interpolate(_u_initial)
+    ksp = solver.krylov_solver
+    opts = PETSc.Options()
+    option_prefix = ksp.getOptionsPrefix()
+    opts[f"{option_prefix}ksp_type"] = "cg"
+    opts[f"{option_prefix}pc_type"] = "gamg"
+    opts[f"{option_prefix}rtol"] = 1.0e-8
+    opts[f"{option_prefix}pc_gamg_coarse_eq_limit"] = 1000
+    opts[f"{option_prefix}mg_levels_ksp_type"] = "chebyshev"
+    opts[f"{option_prefix}mg_levels_pc_type"] = "jacobi"
+    opts[f"{option_prefix}mg_levels_esteig_ksp_type"] = "cg"
+    opts[f"{option_prefix}matptap_via"] = "scalable"
+    opts[f"{option_prefix}ksp_view"] = None
+    ksp.setFromOptions()
 
     # Solve non-linear problem
     dolfinx.log.set_log_level(dolfinx.log.LogLevel.INFO)
-    n, converged = solver.solve(u)
+    with dolfinx.common.Timer(f"{refinement} Solve Nitsche"):
+        n, converged = solver.solve(u)
     dolfinx.cpp.la.scatter_forward(u.x)
     assert(converged)
     print(f"Number of interations: {n:d}")

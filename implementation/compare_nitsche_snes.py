@@ -50,7 +50,7 @@ if __name__ == "__main__":
     physical_parameters = {"E": args.E,
                            "nu": args.nu, "strain": args.plane_strain}
     vertical_displacement = -args.disp
-    num_refs = args.refs
+    num_refs = args.refs + 1
     gap = args.gap
     top_value = 1
     bottom_value = 2
@@ -77,8 +77,10 @@ if __name__ == "__main__":
 
     e_abs = []
     e_rel = []
-
-    for i in range(0, num_refs):
+    dofs_global = []
+    rank = MPI.COMM_WORLD.rank
+    refs = np.arange(0, num_refs)
+    for i in refs:
         if i > 0:
             # Refine mesh
             mesh.topology.create_entities(mesh.topology.dim - 1)
@@ -107,13 +109,25 @@ if __name__ == "__main__":
         V = u1.function_space
         dx = ufl.Measure("dx", domain=mesh)
         error = ufl.inner(u1 - u2, u1 - u2) * dx
-        E_L2 = np.sqrt(dolfinx.fem.assemble_scalar(error))
+        E_L2 = np.sqrt(MPI.COMM_WORLD.allreduce(dolfinx.fem.assemble_scalar(error), op=MPI.SUM))
         u2_norm = ufl.inner(u2, u2) * dx
-        u2_L2 = np.sqrt(dolfinx.fem.assemble_scalar(u2_norm))
-        print(f"abs. L2-error={E_L2:.2e}")
-        print(f"rel. L2-error={E_L2/u2_L2:.2e}")
+        u2_L2 = np.sqrt(MPI.COMM_WORLD.allreduce(dolfinx.fem.assemble_scalar(u2_norm), op=MPI.SUM))
+        if rank == 0:
+
+            print(f"abs. L2-error={E_L2:.2e}")
+            print(f"rel. L2-error={E_L2/u2_L2:.2e}")
         e_abs.append(E_L2)
         e_rel.append(E_L2 / u2_L2)
-    print(f"Absolute error {e_abs}")
-    print(f"Relative error {e_rel}")
-    assert(e_rel[-1] < 1e-4)
+        dofs_global.append(V.dofmap.index_map.size_global * V.dofmap.index_map_bs)
+    if rank == 0:
+        print(f"Num dofs {dofs_global}")
+        print(f"Absolute error {e_abs}")
+        print(f"Relative error {e_rel}")
+    for i in refs:
+        nitsche_timings = dolfinx.cpp.common.timing(f'{i} Solve Nitsche')
+        snes_timings = dolfinx.cpp.common.timing(f'{i} Solve SNES')
+        if rank == 0:
+            print(f"{dofs_global[i]}, Nitsche: {nitsche_timings[1]: 0.2e}"
+                  + f" SNES: {snes_timings[1]:0.2e}")
+    assert(e_rel[-1] < 1e-3)
+    assert(e_abs[-1] < 1e-4)

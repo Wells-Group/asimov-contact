@@ -19,4 +19,6 @@ jobs:
       - name: Run demos
         run: |
           cd implementation
+          python3 create_disk.py
+          mkdir -p results
           python3 compare_nitsche_snes.py

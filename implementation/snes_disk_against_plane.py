@@ -112,11 +112,19 @@ def snes_solver(mesh, mesh_data, physical_parameters, refinement=0, g=0.0, verti
     opts["snes_type"] = "vinewtonrsls"
     opts["snes_rtol"] = 1e-9
     opts["snes_atol"] = 1e-9
-    opts["snes_linear_solver"] = "lu"
     snes.setFromOptions()
     snes.setFunction(problem.F, b)
     snes.setJacobian(problem.J, J)
     snes.setVariableBounds(umin.vector, umax.vector)
+
+    ksp = snes.ksp
+    ksp.setOptionsPrefix("snes_ksp_")
+    opts = PETSc.Options()
+    option_prefix = ksp.getOptionsPrefix()
+    opts[f"{option_prefix}ksp_type"] = "cg"
+    opts[f"{option_prefix}pc_type"] = "lu"
+    opts[f"{option_prefix}ksp_view"] = None
+    ksp.setFromOptions()
 
     def _u_initial(x):
         values = np.zeros((mesh.geometry.dim, x.shape[1]))
@@ -126,7 +134,8 @@ def snes_solver(mesh, mesh_data, physical_parameters, refinement=0, g=0.0, verti
 
     u.interpolate(_u_initial)
     dolfinx.log.set_log_level(dolfinx.log.LogLevel.INFO)
-    snes.solve(None, u.vector)
+    with dolfinx.common.Timer(f"{refinement} Solve SNES"):
+        snes.solve(None, u.vector)
     dolfinx.cpp.la.scatter_forward(u.x)
 
     assert(snes.getConvergedReason() > 1)
