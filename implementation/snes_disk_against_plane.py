@@ -122,7 +122,7 @@ def snes_solver(mesh, mesh_data, physical_parameters, refinement=0, g=0.0, verti
     opts = PETSc.Options()
     option_prefix = ksp.getOptionsPrefix()
     opts[f"{option_prefix}ksp_type"] = "cg"
-    opts[f"{option_prefix}pc_type"] = "lu"
+    opts[f"{option_prefix}pc_type"] = "jacobi"
     # opts[f"{option_prefix}ksp_view"] = None
     ksp.setFromOptions()
 
