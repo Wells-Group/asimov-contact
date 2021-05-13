@@ -123,7 +123,7 @@ def snes_solver(mesh, mesh_data, physical_parameters, refinement=0, g=0.0, verti
     option_prefix = ksp.getOptionsPrefix()
     opts[f"{option_prefix}ksp_type"] = "cg"
     opts[f"{option_prefix}pc_type"] = "lu"
-    opts[f"{option_prefix}ksp_view"] = None
+    # opts[f"{option_prefix}ksp_view"] = None
     ksp.setFromOptions()
 
     def _u_initial(x):
@@ -133,7 +133,7 @@ def snes_solver(mesh, mesh_data, physical_parameters, refinement=0, g=0.0, verti
         return values
 
     u.interpolate(_u_initial)
-    dolfinx.log.set_log_level(dolfinx.log.LogLevel.INFO)
+    # dolfinx.log.set_log_level(dolfinx.log.LogLevel.INFO)
     with dolfinx.common.Timer(f"{refinement} Solve SNES"):
         snes.solve(None, u.vector)
     dolfinx.cpp.la.scatter_forward(u.x)

@@ -140,11 +140,11 @@ def nitsche_one_way(mesh, mesh_data, physical_parameters, refinement=0,
     opts[f"{option_prefix}mg_levels_pc_type"] = "jacobi"
     opts[f"{option_prefix}mg_levels_esteig_ksp_type"] = "cg"
     opts[f"{option_prefix}matptap_via"] = "scalable"
-    opts[f"{option_prefix}ksp_view"] = None
+    # opts[f"{option_prefix}ksp_view"] = None
     ksp.setFromOptions()
 
     # Solve non-linear problem
-    dolfinx.log.set_log_level(dolfinx.log.LogLevel.INFO)
+    # dolfinx.log.set_log_level(dolfinx.log.LogLevel.INFO)
     with dolfinx.common.Timer(f"{refinement} Solve Nitsche"):
         n, converged = solver.solve(u)
     dolfinx.cpp.la.scatter_forward(u.x)
