@@ -11,8 +11,8 @@ from snes_disk_against_plane import snes_solver
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Compare Nitsche's metood for contact against a straight plane" +
-                                     " with PETSc SNES",
+    parser = argparse.ArgumentParser(description="Compare Nitsche's metood for contact against a straight plane"
+                                     + " with PETSc SNES",
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument("--theta", default=1, type=np.float64, dest="theta",
                         help="Theta parameter for Nitsche, 1 symmetric, -1 skew symmetric, 0 Penalty-like")
@@ -98,7 +98,7 @@ if __name__ == "__main__":
 
         # Solve contact problem using Nitsche's method
         u1 = nitsche_one_way(mesh=mesh, mesh_data=mesh_data, physical_parameters=physical_parameters,
-                             vertical_displacement=vertical_displacement, refinement=i, g=gap)
+                             vertical_displacement=vertical_displacement, refinement=i, g=gap, nitsche_bc=True)
         # Solve contact problem using PETSc SNES
         u2 = snes_solver(mesh=mesh, mesh_data=mesh_data, physical_parameters=physical_parameters,
                          vertical_displacement=vertical_displacement, refinement=i, g=gap)
@@ -114,6 +114,6 @@ if __name__ == "__main__":
         print(f"rel. L2-error={E_L2/u2_L2:.2e}")
         e_abs.append(E_L2)
         e_rel.append(E_L2 / u2_L2)
-
     print(f"Absolute error {e_abs}")
     print(f"Relative error {e_rel}")
+    assert(e_rel[-1] < 1e-4)

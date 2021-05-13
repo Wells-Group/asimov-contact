@@ -1,12 +1,10 @@
-from typing import List
-
 import dolfinx
 import dolfinx.io
 import numpy as np
 import ufl
 from mpi4py import MPI
 
-from helpers import NonlinearPDEProblem, epsilon, lame_parameters, sigma_func
+from helpers import epsilon, lame_parameters, sigma_func
 
 
 def R_minus(x):
@@ -113,21 +111,15 @@ def nitsche_one_way(mesh, mesh_data, physical_parameters, refinement=0,
         bc = dolfinx.DirichletBC(u_D, dirichlet_dofs)
         bcs = [bc]
 
-    # Create nonlinear problem
-    problem = NonlinearPDEProblem(F, u, bcs)
-
-    # Create Newton solver
-    solver = dolfinx.cpp.nls.NewtonSolver(MPI.COMM_WORLD)
+    # Create nonlinear problem and Newton solver
+    problem = dolfinx.fem.NonlinearProblem(F, u, bcs)
+    solver = dolfinx.NewtonSolver(MPI.COMM_WORLD, problem)
 
     # Set Newton solver options
     solver.atol = 1e-6
     solver.rtol = 1e-6
     solver.convergence_criterion = "incremental"
     solver.max_it = 50
-    # Set non-linear problem for Newton solver
-    solver.setF(problem.F, problem.vector)
-    solver.setJ(problem.J, problem.matrix)
-    solver.set_form(problem.form)
 
     def _u_initial(x):
         values = np.zeros((mesh.geometry.dim, x.shape[1]))
@@ -139,7 +131,7 @@ def nitsche_one_way(mesh, mesh_data, physical_parameters, refinement=0,
 
     # Solve non-linear problem
     dolfinx.log.set_log_level(dolfinx.log.LogLevel.INFO)
-    n, converged = solver.solve(u.vector)
+    n, converged = solver.solve(u)
     dolfinx.cpp.la.scatter_forward(u.x)
     assert(converged)
     print(f"Number of interations: {n:d}")

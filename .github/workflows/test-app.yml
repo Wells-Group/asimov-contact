@@ -1,0 +1,22 @@
+name: Test Nitsche solver
+
+on:
+  # Trigger tests on push
+  push:
+    branches:
+      - "**"
+  schedule:
+    # '*' is a special character in YAML, so string must be quoted
+    - cron: "0 1 * * *"
+jobs:
+  build:
+    if: "!(contains(github.event.head_commit.message, '[ci skip]') || contains(github.event.head_commit.message, '[skip ci]'))"
+    runs-on: ubuntu-20.04
+    container: dolfinx/dolfinx
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Run demos
+        run: |
+          cd implementation
+          python3 compare_nitsche_snes.py

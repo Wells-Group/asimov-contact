@@ -10,7 +10,7 @@ import ufl
 from dolfinx.cpp.mesh import CellType, GhostMode
 from mpi4py import MPI
 
-from helpers import NonlinearPDEProblem, epsilon, lame_parameters, sigma_func
+from helpers import epsilon, lame_parameters, sigma_func
 
 
 def solve_euler_bernoulli(nx, ny, theta, gamma, linear_solver, plane_strain, nitsche, L=47, H=2.73,
@@ -41,8 +41,7 @@ def solve_euler_bernoulli(nx, ny, theta, gamma, linear_solver, plane_strain, nit
     values = np.hstack([left_values, top_values])
     # Sort values to work in parallel
     sorted = np.argsort(indices)
-    facet_marker = dolfinx.MeshTags(
-        mesh, tdim - 1, indices[sorted], values[sorted])
+    facet_marker = dolfinx.MeshTags(mesh, tdim - 1, indices[sorted], values[sorted])
 
     V = dolfinx.VectorFunctionSpace(mesh, ("CG", 1))
     h = 2 * ufl.Circumradius(mesh)
@@ -59,8 +58,7 @@ def solve_euler_bernoulli(nx, ny, theta, gamma, linear_solver, plane_strain, nit
     v = ufl.TestFunction(V)
     dx = ufl.Measure("dx", domain=mesh)
     ds = ufl.Measure("ds", domain=mesh, subdomain_data=facet_marker)
-    F = ufl.inner(sigma(u), epsilon(v)) * dx - ufl.inner(f, v) * \
-        dx - ufl.inner(g, v) * ds(top_marker)
+    F = ufl.inner(sigma(u), epsilon(v)) * dx - ufl.inner(f, v) * dx - ufl.inner(g, v) * ds(top_marker)
     if nitsche:
         # Nitsche for Dirichlet, theta-scheme.
         # https://doi.org/10.1016/j.cma.2018.05.024
@@ -85,24 +83,17 @@ def solve_euler_bernoulli(nx, ny, theta, gamma, linear_solver, plane_strain, nit
                                             petsc_options={"ksp_type": "preonly", "pc_type": "lu"})
         u = problem.solve()
     else:
-        # Create nonlinear problem
-        problem = NonlinearPDEProblem(F, u, bcs)
-
-        # Create Newton solver
-        solver = dolfinx.cpp.nls.NewtonSolver(MPI.COMM_WORLD)
+        # Create nonlinear problem and Newton solver
+        problem = dolfinx.fem.NonlinearProblem(F, u, bcs)
+        solver = dolfinx.NewtonSolver(MPI.COMM_WORLD, problem)
 
         # Set Newton solver options
         solver.atol = 1e-6
         solver.rtol = 1e-6
         solver.convergence_criterion = "incremental"
 
-        # # Set non-linear problem for Newton solver
-        solver.setF(problem.F, problem.vector)
-        solver.setJ(problem.J, problem.matrix)
-        solver.set_form(problem.form)
-
         # Solve non-linear problem
-        n, converged = solver.solve(u.vector)
+        n, converged = solver.solve(u)
         assert (converged)
         print(f"Number of interations: {n:d}")
     dolfinx.cpp.la.scatter_forward(u.x)
