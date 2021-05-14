@@ -68,8 +68,8 @@ def create_sphere_mesh(LcMin=0.01, LcMax=0.05, filename="disk.msh"):
         gmsh.model.mesh.field.setNumber(2, "IField", 1)
         gmsh.model.mesh.field.setNumber(2, "LcMin", LcMin)
         gmsh.model.mesh.field.setNumber(2, "LcMax", LcMax)
-        gmsh.model.mesh.field.setNumber(2, "DistMin", 0.2)
-        gmsh.model.mesh.field.setNumber(2, "DistMax", 0.5)
+        gmsh.model.mesh.field.setNumber(2, "DistMin", 0.3)
+        gmsh.model.mesh.field.setNumber(2, "DistMax", 0.6)
         gmsh.model.mesh.field.setAsBackgroundMesh(2)
 
         gmsh.model.mesh.generate(3)

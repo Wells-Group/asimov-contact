@@ -87,11 +87,12 @@ if __name__ == "__main__":
     e_rel = []
     dofs_global = []
     rank = MPI.COMM_WORLD.rank
-    refs = np.arange(0, num_refs)
+    #refs = np.arange(0, num_refs)
+    refs = [0]
     for i in refs:
         if i > 0:
             # Refine mesh
-            mesh.topology.create_entities(mesh.topology.dim - 1)
+            mesh.topology.create_entities(mesh.topology.dim - 2)
             mesh = dolfinx.mesh.refine(mesh)
         # Create meshtag for top and bottom markers
         tdim = mesh.topology.dim
@@ -112,7 +113,7 @@ if __name__ == "__main__":
         # Solve contact problem using PETSc SNES
         u2 = snes_solver(mesh=mesh, mesh_data=mesh_data, physical_parameters=physical_parameters,
                          vertical_displacement=vertical_displacement, refinement=i, g=gap)
-        exit(1)
+
         # Compute the difference (error) between Nitsche and SNES
         V = u1.function_space
         dx = ufl.Measure("dx", domain=mesh)

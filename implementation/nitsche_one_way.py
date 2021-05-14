@@ -32,7 +32,7 @@ def nitsche_one_way(mesh, mesh_data, physical_parameters, refinement=0,
     theta = nitsche_parameters["theta"]
     # s = nitsche_parameters["s"]
     h = ufl.Circumradius(mesh)
-    gamma = physical_parameters["E"] * nitsche_parameters["gamma"] / h
+    gamma = nitsche_parameters["gamma"] * physical_parameters["E"] / h
     # n = ufl.FacetNormal(mesh)
     n_vec = np.zeros(mesh.geometry.dim)
     n_vec[mesh.geometry.dim - 1] = -1
@@ -62,8 +62,9 @@ def nitsche_one_way(mesh, mesh_data, physical_parameters, refinement=0,
 
     u = dolfinx.Function(V)
     v = ufl.TestFunction(V)
+    metadata = {"quadrature_degree": 7}
     dx = ufl.Measure("dx", domain=mesh)
-    ds = ufl.Measure("ds", domain=mesh,
+    ds = ufl.Measure("ds", domain=mesh, metadata=metadata,
                      subdomain_data=facet_marker, subdomain_id=bottom_value)
     a = ufl.inner(sigma(u), epsilon(v)) * dx
     L = ufl.inner(dolfinx.Constant(mesh, [0, ] * mesh.geometry.dim), v) * dx
@@ -77,16 +78,23 @@ def nitsche_one_way(mesh, mesh_data, physical_parameters, refinement=0,
     # F += 1 / gamma * ufl.dot(ball_projection(tangential_proj(u) - gamma * tangential_proj(u), s),
     #                         theta * tangential_proj(v) - gamma * tangential_proj(v)) * ds(2)
 
-    def An(theta, gamma): return a - theta / \
-        gamma * sigma_n(u) * sigma_n(v) * ds
+    def An(theta, gamma):
+        return a - theta / gamma * sigma_n(u) * sigma_n(v) * ds
+
+    def Pn(v, theta, gamma):
+        return theta * sigma_n(v) - gamma * ufl.dot(v, n)
+
     g_vec = [i for i in range(mesh.geometry.dim)]
-    g_vec[-1] = gap
-    def Pn(v, theta, gamma): return theta * sigma_n(v) - gamma * ufl.dot(v, n)
+    g_vec[mesh.geometry.dim - 1] = gap
     F = An(theta, gamma) + 1 / gamma * R_minus(sigma_n(u) - gamma
                                                * ufl.dot(u - ufl.as_vector(g_vec), n)) * Pn(v, theta, gamma) * ds - L
     # F -= theta / gamma * sigma_n(u) * sigma_n(v) * ds(2)
     # F += 1 / gamma * R_minus(sigma_n(u) - gamma * (ufl.dot(u, n) - g))* (theta * sigma_n(v) - gamma * ufl.dot(v, n)) * ds(2)
 
+    du = ufl.TrialFunction(V)
+    q = sigma_n(u) - gamma * ufl.dot(u - ufl.as_vector(g_vec), n)
+    J = ufl.inner(sigma(du), epsilon(v)) * ufl.dx - theta / gamma * sigma_n(du) * sigma_n(v) * ds + 1 / \
+        gamma * 0.5 * (1 - q / abs(q)) * (sigma_n(du) - gamma * ufl.dot(du, n)) * Pn(v, theta, gamma) * ds
     # Nitsche for Dirichlet, another theta-scheme.
     # https://doi.org/10.1016/j.cma.2018.05.024
     # Ultimately, it might make sense to use the same theta as for contact. But we keep things separate for now.
@@ -95,7 +103,7 @@ def nitsche_one_way(mesh, mesh_data, physical_parameters, refinement=0,
         disp_vec[mesh.geometry.dim - 1] = vertical_displacement
         u_D = ufl.as_vector(disp_vec)
         n_facet = ufl.FacetNormal(mesh)
-        gamma_2 = 1000
+        gamma_2 = 10000
         theta_2 = 1  # 1 symmetric, -1 skew symmetric
         F += - ufl.inner(sigma(u) * n_facet, v) * ds(1)\
              - theta_2 * ufl.inner(sigma(v) * n_facet, u - u_D) * \
@@ -118,34 +126,37 @@ def nitsche_one_way(mesh, mesh_data, physical_parameters, refinement=0,
         bcs = [bc]
 
     # Create nonlinear problem and Newton solver
-    problem = dolfinx.fem.NonlinearProblem(F, u, bcs)
+    problem = dolfinx.fem.NonlinearProblem(F, u, bcs, J=J)
     solver = dolfinx.NewtonSolver(MPI.COMM_WORLD, problem)
 
     # Set Newton solver options
-    solver.atol = 1e-4
-    solver.rtol = 1e-4
+    solver.atol = 1e-8
+    solver.rtol = 1e-8
     solver.convergence_criterion = "incremental"
-    solver.max_it = 50
+    solver.max_it = 25
     solver.error_on_nonconvergence = False
+    solver.relaxation_parameter = 0.5
 
     def _u_initial(x):
         values = np.zeros((mesh.geometry.dim, x.shape[1]))
         values[mesh.geometry.dim - 1] = -0.1 * x[mesh.geometry.dim - 1]
         return values
     # Set initial_condition:
-    u.interpolate(_u_initial)
+    # u.interpolate(_u_initial)
     ksp = solver.krylov_solver
     opts = PETSc.Options()
     option_prefix = ksp.getOptionsPrefix()
+    opts[f"{option_prefix}ksp_type"] = "preonly"
+    opts[f"{option_prefix}pc_type"] = "lu"
 
-    opts[f"{option_prefix}ksp_type"] = "cg"
-    opts[f"{option_prefix}pc_type"] = "gamg"
-    opts[f"{option_prefix}rtol"] = 1.0e-8
-    opts[f"{option_prefix}pc_gamg_coarse_eq_limit"] = 1000
-    opts[f"{option_prefix}mg_levels_ksp_type"] = "chebyshev"
-    opts[f"{option_prefix}mg_levels_pc_type"] = "jacobi"
-    opts[f"{option_prefix}mg_levels_esteig_ksp_type"] = "cg"
-    opts[f"{option_prefix}matptap_via"] = "scalable"
+    # opts[f"{option_prefix}ksp_type"] = "cg"
+    # opts[f"{option_prefix}pc_type"] = "gamg"
+    # opts[f"{option_prefix}rtol"] = 1.0e-8
+    # opts[f"{option_prefix}pc_gamg_coarse_eq_limit"] = 1000
+    # opts[f"{option_prefix}mg_levels_ksp_type"] = "chebyshev"
+    # opts[f"{option_prefix}mg_levels_pc_type"] = "jacobi"
+    # opts[f"{option_prefix}mg_levels_esteig_ksp_type"] = "cg"
+    # opts[f"{option_prefix}matptap_via"] = "scalable"
     # opts[f"{option_prefix}ksp_view"] = None
     ksp.setFromOptions()
 
