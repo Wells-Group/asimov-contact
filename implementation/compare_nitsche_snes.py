@@ -63,12 +63,18 @@ if __name__ == "__main__":
         convert_mesh(fname, "tetra")
         with dolfinx.io.XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
             mesh = xdmf.read_mesh(name="Grid")
+        #mesh = dolfinx.UnitCubeMesh(MPI.COMM_WORLD, 10, 10, 20)
 
+        # def top(x):
+        #     return x[2] > 0.99
+
+        # def bottom(x):
+        #     return x[2] < 0.5
         def top(x):
-            return x[2] > 0.5
+            return x[2] > 0.8
 
         def bottom(x):
-            return x[2] < 0.2
+            return x[2] < 0.25
 
     else:
         fname = "disk"
@@ -76,6 +82,10 @@ if __name__ == "__main__":
         convert_mesh(fname, "triangle", prune_z=True)
         with dolfinx.io.XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
             mesh = xdmf.read_mesh(name="Grid")
+        # mesh = dolfinx.UnitSquareMesh(MPI.COMM_WORLD, 30, 30)
+
+        # def top(x):
+        #     return x[1] > 0.99
 
         def top(x):
             return x[1] > 0.5
@@ -109,7 +119,8 @@ if __name__ == "__main__":
 
         # Solve contact problem using Nitsche's method
         u1 = nitsche_one_way(mesh=mesh, mesh_data=mesh_data, physical_parameters=physical_parameters,
-                             vertical_displacement=vertical_displacement, refinement=i, g=gap, nitsche_bc=False)
+                             vertical_displacement=vertical_displacement, nitsche_parameters=nitsche_parameters,
+                             refinement=i, g=gap, nitsche_bc=False)
         # Solve contact problem using PETSc SNES
         u2 = snes_solver(mesh=mesh, mesh_data=mesh_data, physical_parameters=physical_parameters,
                          vertical_displacement=vertical_displacement, refinement=i, g=gap)

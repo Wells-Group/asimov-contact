@@ -33,10 +33,10 @@ def nitsche_one_way(mesh, mesh_data, physical_parameters, refinement=0,
     # s = nitsche_parameters["s"]
     h = ufl.Circumradius(mesh)
     gamma = nitsche_parameters["gamma"] * physical_parameters["E"] / h
-    # n = ufl.FacetNormal(mesh)
     n_vec = np.zeros(mesh.geometry.dim)
-    n_vec[mesh.geometry.dim - 1] = -1
-    n = ufl.as_vector(n_vec)  # Normal of plane
+    n_vec[mesh.geometry.dim - 1] = 1
+    n_2 = ufl.as_vector(n_vec)  # Normal of plane (projection onto other body)
+    n = ufl.FacetNormal(mesh)
 
     V = dolfinx.VectorFunctionSpace(mesh, ("CG", 1))
     E = physical_parameters["E"]
@@ -47,7 +47,8 @@ def nitsche_one_way(mesh, mesh_data, physical_parameters, refinement=0,
     sigma = sigma_func(mu, lmbda)
 
     def sigma_n(v):
-        return ufl.dot(sigma(v) * n, n)
+        # NOTE: Different normals, see summary paper
+        return -ufl.dot(sigma(v) * n, n_2)
 
     # def tangential_proj(u):
     #     """
@@ -58,11 +59,13 @@ def nitsche_one_way(mesh, mesh_data, physical_parameters, refinement=0,
 
     # Mimicking the plane y=-g
     x = ufl.SpatialCoordinate(mesh)
-    gap = -x[mesh.geometry.dim - 1] - g
+    gap = x[mesh.geometry.dim - 1] + g
+    g_vec = [i for i in range(mesh.geometry.dim)]
+    g_vec[mesh.geometry.dim - 1] = gap
 
     u = dolfinx.Function(V)
     v = ufl.TestFunction(V)
-    metadata = {"quadrature_degree": 7}
+    metadata = {"quadrature_degree": 5}
     dx = ufl.Measure("dx", domain=mesh)
     ds = ufl.Measure("ds", domain=mesh, metadata=metadata,
                      subdomain_data=facet_marker, subdomain_id=bottom_value)
@@ -78,23 +81,32 @@ def nitsche_one_way(mesh, mesh_data, physical_parameters, refinement=0,
     # F += 1 / gamma * ufl.dot(ball_projection(tangential_proj(u) - gamma * tangential_proj(u), s),
     #                         theta * tangential_proj(v) - gamma * tangential_proj(v)) * ds(2)
 
-    def An(theta, gamma):
-        return a - theta / gamma * sigma_n(u) * sigma_n(v) * ds
+    # def An(theta, gamma):
+    #     return a - theta / gamma * sigma_n(u) * sigma_n(v) * ds
 
-    def Pn(v, theta, gamma):
-        return theta * sigma_n(v) - gamma * ufl.dot(v, n)
+    # def Pn(v, theta, gamma):
+    #     return theta * sigma_n(v) -  gamma * ufl.dot(v, n_2)
 
-    g_vec = [i for i in range(mesh.geometry.dim)]
-    g_vec[mesh.geometry.dim - 1] = gap
-    F = An(theta, gamma) + 1 / gamma * R_minus(sigma_n(u) - gamma
-                                               * ufl.dot(u - ufl.as_vector(g_vec), n)) * Pn(v, theta, gamma) * ds - L
+    # F = An(theta, gamma) + 1 / gamma * R_minus(sigma_n(u) + gamma
+    #                                            * ufl.dot(u + ufl.as_vector(g_vec), n_2)) * Pn(v, theta, gamma) * ds - L
     # F -= theta / gamma * sigma_n(u) * sigma_n(v) * ds(2)
     # F += 1 / gamma * R_minus(sigma_n(u) - gamma * (ufl.dot(u, n) - g))* (theta * sigma_n(v) - gamma * ufl.dot(v, n)) * ds(2)
 
+    # du = ufl.TrialFunction(V)
+    # q = sigma_n(u) - gamma * ufl.dot(u - ufl.as_vector(g_vec), n_2)
+    # J = ufl.inner(sigma(du), epsilon(v)) * ufl.dx - theta / gamma * sigma_n(du) * sigma_n(v) * ds + 1 / \
+    #     gamma * 0.5 * (1 - ufl.sign(q)) * (sigma_n(du) - gamma * ufl.dot(du, n_2)) * Pn(v, theta, gamma) * ds
+
+    # Derivation of one sided Nitsche with gap function
+    F = a - theta / gamma * sigma_n(u) * sigma_n(v) * ds
+    F += 1 / gamma * R_minus(sigma_n(u) + gamma * (gap + ufl.dot(u, n_2))) * \
+        (theta * sigma_n(v) + gamma * ufl.dot(v, n_2)) * ds
     du = ufl.TrialFunction(V)
-    q = sigma_n(u) - gamma * ufl.dot(u - ufl.as_vector(g_vec), n)
-    J = ufl.inner(sigma(du), epsilon(v)) * ufl.dx - theta / gamma * sigma_n(du) * sigma_n(v) * ds + 1 / \
-        gamma * 0.5 * (1 - q / abs(q)) * (sigma_n(du) - gamma * ufl.dot(du, n)) * Pn(v, theta, gamma) * ds
+    q = sigma_n(u) + gamma * (gap + ufl.dot(u, n_2))
+    J = ufl.inner(sigma(du), epsilon(v)) * ufl.dx - theta / gamma * sigma_n(du) * sigma_n(v) * ds
+    J += 1 / gamma * 0.5 * (1 - ufl.sign(q)) * (sigma_n(du) + gamma * ufl.dot(du, n_2)) * \
+        (theta * sigma_n(v) + gamma * ufl.dot(v, n_2)) * ds
+
     # Nitsche for Dirichlet, another theta-scheme.
     # https://doi.org/10.1016/j.cma.2018.05.024
     # Ultimately, it might make sense to use the same theta as for contact. But we keep things separate for now.
@@ -102,11 +114,10 @@ def nitsche_one_way(mesh, mesh_data, physical_parameters, refinement=0,
         disp_vec = np.zeros(mesh.geometry.dim)
         disp_vec[mesh.geometry.dim - 1] = vertical_displacement
         u_D = ufl.as_vector(disp_vec)
-        n_facet = ufl.FacetNormal(mesh)
-        gamma_2 = 10000
+        gamma_2 = 1000
         theta_2 = 1  # 1 symmetric, -1 skew symmetric
-        F += - ufl.inner(sigma(u) * n_facet, v) * ds(1)\
-             - theta_2 * ufl.inner(sigma(v) * n_facet, u - u_D) * \
+        F += - ufl.inner(sigma(u) * n, v) * ds(1)\
+             - theta_2 * ufl.inner(sigma(v) * n, u - u_D) * \
             ds(1) + gamma_2 / h * ufl.inner(u - u_D, v) * ds(1)
         bcs = []
     else:
@@ -126,23 +137,34 @@ def nitsche_one_way(mesh, mesh_data, physical_parameters, refinement=0,
         bcs = [bc]
 
     # Create nonlinear problem and Newton solver
-    problem = dolfinx.fem.NonlinearProblem(F, u, bcs, J=J)
+    def form(self, x: PETSc.Vec):
+        x.ghostUpdate(addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD)
+        self.i += 1
+        xdmf.write_function(u, self.i)
+
+    setattr(dolfinx.fem.NonlinearProblem, "form", form)
+
+    problem = dolfinx.fem.NonlinearProblem(F, u, bcs)  # , J=J)
+    problem.i = 0
+    xdmf = dolfinx.io.XDMFFile(MPI.COMM_WORLD, "results/tmp_sol.xdmf", "w")
+    xdmf.write_mesh(mesh)
+
     solver = dolfinx.NewtonSolver(MPI.COMM_WORLD, problem)
 
     # Set Newton solver options
-    solver.atol = 1e-8
-    solver.rtol = 1e-8
+    solver.atol = 1e-11
+    solver.rtol = 1e-11
     solver.convergence_criterion = "incremental"
-    solver.max_it = 25
+    solver.max_it = 50
     solver.error_on_nonconvergence = False
-    solver.relaxation_parameter = 0.5
+    solver.relaxation_parameter = 0.9
 
     def _u_initial(x):
         values = np.zeros((mesh.geometry.dim, x.shape[1]))
         values[mesh.geometry.dim - 1] = -0.1 * x[mesh.geometry.dim - 1]
         return values
     # Set initial_condition:
-    # u.interpolate(_u_initial)
+    u.interpolate(_u_initial)
     ksp = solver.krylov_solver
     opts = PETSc.Options()
     option_prefix = ksp.getOptionsPrefix()
