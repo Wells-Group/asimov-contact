@@ -6,7 +6,7 @@ import ufl
 from mpi4py import MPI
 from petsc4py import PETSc
 
-from helpers import NonlinearPDE_SNESProblem, lame_parameters, epsilon, sigma_func
+from helpers import NonlinearPDE_SNESProblem, lame_parameters, epsilon, sigma_func, rigid_motions_nullspace
 
 
 def snes_solver(mesh, mesh_data, physical_parameters, refinement=0, g=0.0, vertical_displacement=-0.1):
@@ -116,13 +116,22 @@ def snes_solver(mesh, mesh_data, physical_parameters, refinement=0, g=0.0, verti
     snes.setFunction(problem.F, b)
     snes.setJacobian(problem.J, J)
     snes.setVariableBounds(umin.vector, umax.vector)
-
+    null_space = rigid_motions_nullspace(V)
+    J.setNearNullSpace(null_space)
     ksp = snes.ksp
     ksp.setOptionsPrefix("snes_ksp_")
     opts = PETSc.Options()
     option_prefix = ksp.getOptionsPrefix()
+    # Cannot use GAMG, see: https://gitlab.com/petsc/petsc/-/issues/829
     opts[f"{option_prefix}ksp_type"] = "cg"
+    opts[f"{option_prefix}ksp_rtol"] = 1.0e-5
     opts[f"{option_prefix}pc_type"] = "jacobi"
+
+    # opts[f"{option_prefix}pc_type"] = "hypre"
+    # opts[f"{option_prefix}pc_hypre_type"] = 'boomeramg'
+    # opts[f"{option_prefix}pc_hypre_boomeramg_max_iter"] = 1
+    # opts[f"{option_prefix}pc_hypre_boomeramg_cycle_type"] = "v"
+
     # opts[f"{option_prefix}ksp_view"] = None
     ksp.setFromOptions()
 

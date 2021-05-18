@@ -37,7 +37,7 @@ if __name__ == "__main__":
         "--nu", default=0.1, type=np.float64, dest="nu", help="Poisson's ratio")
     _disp = parser.add_argument("--disp", default=0.08, type=np.float64, dest="disp",
                                 help="Displacement BC in negative y direction")
-    _ref = parser.add_argument("--refinements", default=2, type=np.int32,
+    _ref = parser.add_argument("--refinements", default=1, type=np.int32,
                                dest="refs", help="Number of mesh refinements")
     _gap = parser.add_argument(
         "--gap", default=0.02, type=np.float64, dest="gap", help="Gap between plane and y=0")
@@ -71,10 +71,10 @@ if __name__ == "__main__":
         # def bottom(x):
         #     return x[2] < 0.5
         def top(x):
-            return x[2] > 0.8
+            return x[2] > 0.9
 
         def bottom(x):
-            return x[2] < 0.25
+            return x[2] < 0.15
 
     else:
         fname = "disk"
@@ -97,8 +97,7 @@ if __name__ == "__main__":
     e_rel = []
     dofs_global = []
     rank = MPI.COMM_WORLD.rank
-    #refs = np.arange(0, num_refs)
-    refs = [0]
+    refs = np.arange(0, num_refs)
     for i in refs:
         if i > 0:
             # Refine mesh
@@ -120,7 +119,7 @@ if __name__ == "__main__":
         # Solve contact problem using Nitsche's method
         u1 = nitsche_one_way(mesh=mesh, mesh_data=mesh_data, physical_parameters=physical_parameters,
                              vertical_displacement=vertical_displacement, nitsche_parameters=nitsche_parameters,
-                             refinement=i, g=gap, nitsche_bc=False)
+                             refinement=i, g=gap, nitsche_bc=nitsche_bc)
         # Solve contact problem using PETSc SNES
         u2 = snes_solver(mesh=mesh, mesh_data=mesh_data, physical_parameters=physical_parameters,
                          vertical_displacement=vertical_displacement, refinement=i, g=gap)
