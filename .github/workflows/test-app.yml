@@ -1,0 +1,31 @@
+name: Test Nitsche solver
+
+on:
+  # Trigger tests on push
+  push:
+    branches:
+      - "**"
+  schedule:
+    # '*' is a special character in YAML, so string must be quoted
+    - cron: "0 1 * * *"
+jobs:
+  build:
+    if: "!(contains(github.event.head_commit.message, '[ci skip]') || contains(github.event.head_commit.message, '[skip ci]'))"
+    runs-on: ubuntu-20.04
+    container: dolfinx/dolfinx
+    env:
+      HDF5_MPI: "ON"
+      CC: mpicc
+      HDF5_DIR: "/usr/lib/x86_64-linux-gnu/hdf5/mpich/"
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Install meshio/h5py
+        run: |
+          pip3 install --no-cache-dir --no-binary=h5py h5py meshio
+      - name: Run demos
+        run: |
+          cd implementation
+          python3 create_mesh.py
+          mkdir -p results
+          python3 compare_nitsche_snes.py

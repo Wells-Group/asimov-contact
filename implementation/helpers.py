@@ -1,74 +1,13 @@
 from typing import List
 
 import dolfinx
+import dolfinx.la
 import numpy
 import ufl
+from contextlib import ExitStack
 from petsc4py import PETSc
 
-__all__ = ["NonlinearPDEProblem", "lame_parameters", "epsilon", "sigma_func", "convert_mesh"]
-
-
-class NonlinearPDEProblem:
-    """Nonlinear problem class for solving the non-linear problem
-    F(u, v) = 0 for all v in V
-    """
-
-    def __init__(self, F: ufl.form.Form, u: dolfinx.Function,
-                 bcs: List[dolfinx.DirichletBC]):
-        """
-        Input:
-        - F: The PDE residual F(u, v)
-        - u: The unknown
-        - bcs: List of Dirichlet boundary conditions
-        This class set up structures for solving the non-linear problem using Newton's method,
-        dF/du(u) du = -F(u)
-        """
-        V = u.function_space
-        du = ufl.TrialFunction(V)
-        self.L = F
-        # Create the Jacobian matrix, dF/du
-        self.a = ufl.derivative(F, u, du)
-        self.bcs = bcs
-
-        # Create matrix and vector to be used for assembly
-        # of the non-linear problem
-        self.matrix = dolfinx.fem.create_matrix(self.a)
-        self.vector = dolfinx.fem.create_vector(self.L)
-
-    def form(self, x: PETSc.Vec):
-        """
-        This function is called before the residual or Jacobian is computed. This is usually used to update ghost values.
-        Input:
-           x: The vector containing the latest solution
-        """
-        x.ghostUpdate(addv=PETSc.InsertMode.INSERT,
-                      mode=PETSc.ScatterMode.FORWARD)
-
-    def F(self, x: PETSc.Vec, b: PETSc.Vec):
-        """Assemble the residual F into the vector b.
-        Input:
-           x: The vector containing the latest solution
-           b: Vector to assemble the residual into
-        """
-        # Reset the residual vector
-        with b.localForm() as b_local:
-            b_local.set(0.0)
-        dolfinx.fem.assemble_vector(b, self.L)
-        # Apply boundary condition
-        dolfinx.fem.apply_lifting(b, [self.a], [self.bcs], [x], -1.0)
-        b.ghostUpdate(addv=PETSc.InsertMode.ADD,
-                      mode=PETSc.ScatterMode.REVERSE)
-        dolfinx.fem.set_bc(b, self.bcs, x, -1.0)
-
-    def J(self, x: PETSc.Vec, A: PETSc.Mat):
-        """Assemble the Jacobian matrix.
-        Input:
-          - x: The vector containing the latest solution
-          - A: The matrix to assemble the Jacobian into
-        """
-        A.zeroEntries()
-        dolfinx.fem.assemble_matrix(A, self.a, self.bcs)
-        A.assemble()
+__all__ = ["lame_parameters", "epsilon", "sigma_func", "convert_mesh"]
 
 
 def lame_parameters(plane_strain=False):
@@ -110,7 +49,6 @@ class NonlinearPDE_SNESProblem:
         x.ghostUpdate(addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD)
         x.copy(self.u.vector)
         self.u.vector.ghostUpdate(addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD)
-
         with F.localForm() as f_local:
             f_local.set(0.0)
         dolfinx.fem.assemble_vector(F, self.L)
@@ -125,7 +63,7 @@ class NonlinearPDE_SNESProblem:
         J.assemble()
 
 
-def convert_mesh(filename, cell_type):
+def convert_mesh(filename, cell_type, prune_z=False):
     """
     Given the filename of a msh file, read data and convert to XDMF file containing cells of given cell type
     """
@@ -140,5 +78,53 @@ def convert_mesh(filename, cell_type):
         cells = mesh.get_cells_type(cell_type)
         data = numpy.hstack([mesh.cell_data_dict["gmsh:physical"][key]
                             for key in mesh.cell_data_dict["gmsh:physical"].keys() if key == cell_type])
-        out_mesh = meshio.Mesh(points=mesh.points[:, :2], cells={cell_type: cells}, cell_data={"name_to_read": [data]})
+        pts = mesh.points[:, :2] if prune_z else mesh.points
+        out_mesh = meshio.Mesh(points=pts, cells={cell_type: cells}, cell_data={"name_to_read": [data]})
         meshio.write(f"{filename}.xdmf", out_mesh)
+
+
+def rigid_motions_nullspace(V):
+    """Function to build nullspace for 2D/3D elasticity"""
+
+    # Get geometric dim
+    gdim = V.mesh.geometry.dim
+    assert gdim == 2 or gdim == 3
+
+    # Set dimension of nullspace
+    dim = 3 if gdim == 2 else 6
+
+    # Create list of vectors for null space
+    nullspace_basis = [dolfinx.cpp.la.create_vector(V.dofmap.index_map, V.dofmap.index_map_bs) for i in range(dim)]
+
+    with ExitStack() as stack:
+        vec_local = [stack.enter_context(x.localForm()) for x in nullspace_basis]
+        basis = [numpy.asarray(x) for x in vec_local]
+
+        dofs = [V.sub(i).dofmap.list.array for i in range(gdim)]
+
+        # Build translational null space basis
+        for i in range(gdim):
+            basis[i][dofs[i]] = 1.0
+
+        # Build rotational null space basis
+        x = V.tabulate_dof_coordinates()
+        dofs_block = V.dofmap.list.array
+        x0, x1, x2 = x[dofs_block, 0], x[dofs_block, 1], x[dofs_block, 2]
+        if gdim == 2:
+            basis[2][dofs[0]] = -x1
+            basis[2][dofs[1]] = x0
+        elif gdim == 3:
+            basis[3][dofs[0]] = -x1
+            basis[3][dofs[1]] = x0
+
+            basis[4][dofs[0]] = x2
+            basis[4][dofs[2]] = -x0
+            basis[5][dofs[2]] = x1
+            basis[5][dofs[1]] = -x2
+
+    basis = dolfinx.la.VectorSpaceBasis(nullspace_basis)
+    basis.orthonormalize()
+
+    _x = [basis[i] for i in range(dim)]
+    nsp = PETSc.NullSpace().create(vectors=_x)
+    return nsp

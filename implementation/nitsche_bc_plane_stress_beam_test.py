@@ -6,9 +6,10 @@ import dolfinx.io
 import numpy as np
 import ufl
 from dolfinx.cpp.mesh import CellType, GhostMode
+from dolfinx.fem import NonlinearProblem
 from mpi4py import MPI
 
-from helpers import NonlinearPDEProblem, epsilon, lame_parameters, sigma_func
+from helpers import epsilon, lame_parameters, sigma_func
 
 
 def solve_manufactured(nx, ny, theta, gamma, nitsche, strain, linear_solver, L=10):
@@ -36,8 +37,7 @@ def solve_manufactured(nx, ny, theta, gamma, nitsche, strain, linear_solver, L=1
 
     # Sort values to work in parallel
     sorted = np.argsort(left_facets)
-    facet_marker = dolfinx.MeshTags(
-        mesh, tdim - 1, left_facets[sorted], left_values[sorted])
+    facet_marker = dolfinx.MeshTags(mesh, tdim - 1, left_facets[sorted], left_values[sorted])
 
     V = dolfinx.VectorFunctionSpace(mesh, ("CG", 1))
     n = ufl.FacetNormal(mesh)
@@ -98,23 +98,17 @@ def solve_manufactured(nx, ny, theta, gamma, nitsche, strain, linear_solver, L=1
         u = problem.solve()
         u.name = "uh"
     else:
-        # Create nonlinear problem
-        problem = NonlinearPDEProblem(F, u, bcs)
-        # Create Newton solver
-        solver = dolfinx.cpp.nls.NewtonSolver(MPI.COMM_WORLD)
+        # Create nonlinear problem and Newton solver
+        problem = NonlinearProblem(F, u, bcs)
+        solver = dolfinx.NewtonSolver(MPI.COMM_WORLD, problem)
 
         # Set Newton solver options
         solver.atol = 1e-6
         solver.rtol = 1e-6
         solver.convergence_criterion = "incremental"
 
-        # Set non-linear problem for Newton solver
-        solver.setF(problem.F, problem.vector)
-        solver.setJ(problem.J, problem.matrix)
-        solver.set_form(problem.form)
-
         # Solve non-linear problem
-        n, converged = solver.solve(u.vector)
+        n, converged = solver.solve(u)
         assert (converged)
         print(f"Number of interations: {n:d}")
     dolfinx.cpp.la.scatter_forward(u.x)
@@ -135,8 +129,8 @@ def solve_manufactured(nx, ny, theta, gamma, nitsche, strain, linear_solver, L=1
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-                                     description="Manufatured solution test for the linear elasticity equation" +
-                                     " using Nitsche-Dirichlet boundary conditions")
+                                     description="Manufatured solution test for the linear elasticity equation"
+                                     + " using Nitsche-Dirichlet boundary conditions")
     parser.add_argument("--theta", default=1, type=np.float64, dest="theta",
                         help="Theta parameter for Nitsche, 1 symmetric, -1 skew symmetric, 0 Penalty-like")
     parser.add_argument("--gamma", default=1000, type=np.float64, dest="gamma",
