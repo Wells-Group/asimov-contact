@@ -24,23 +24,26 @@ def ball_projection(x, s):
 def nitsche_one_way(mesh, mesh_data, physical_parameters, refinement=0,
                     nitsche_parameters={"gamma": 1, "theta": 1, "s": 0}, g=0.0,
                     vertical_displacement=-0.1, nitsche_bc=False):
-    (facet_marker, top_value, bottom_value) = mesh_data
+    (facet_marker, top_value, bottom_value, surface_value) = mesh_data
 
-    with dolfinx.io.XDMFFile(MPI.COMM_WORLD, "results/mf_nitsche.xdmf", "w") as xdmf:
-        xdmf.write_mesh(mesh)
-        xdmf.write_meshtags(facet_marker)
+    # with dolfinx.io.XDMFFile(MPI.COMM_WORLD, "results/mf_nitsche.xdmf", "w") as xdmf:
+    #     xdmf.write_mesh(mesh)
+    #     xdmf.write_meshtags(facet_marker)
 
     # Nitche parameters and variables
     theta = nitsche_parameters["theta"]
     # s = nitsche_parameters["s"]
     h = ufl.Circumradius(mesh)
     gamma = nitsche_parameters["gamma"] * physical_parameters["E"] / h
+    print(mesh)
+    exit()
     n_vec = np.zeros(mesh.geometry.dim)
     n_vec[mesh.geometry.dim - 1] = 1
     n_2 = ufl.as_vector(n_vec)  # Normal of plane (projection onto other body)
     n = ufl.FacetNormal(mesh)
 
     V = dolfinx.VectorFunctionSpace(mesh, ("CG", 1))
+
     E = physical_parameters["E"]
     nu = physical_parameters["nu"]
     mu_func, lambda_func = lame_parameters(physical_parameters["strain"])
@@ -67,11 +70,12 @@ def nitsche_one_way(mesh, mesh_data, physical_parameters, refinement=0,
     gdim = mesh.geometry.dim
     fdim = mesh.topology.dim - 1
     mesh_geometry = mesh.geometry.x
+    exit()
     master_bbox = dolfinx.cpp.geometry.BoundingBoxTree(mesh, fdim, bottom_facets)
-    contact = cuas.Contact(facet_marker, bottom_value, top_value)
+    contact = cuas.Contact(facet_marker, bottom_value, surface_value)
     contact.create_distance_map(0)
     lookup = contact.map_0_to_1()
-
+    exit()
     def gap(x):
         # gap = -x[mesh.geometry.dim - 1] - g
         dist_vec_array = np.zeros((x.shape[0], gdim))

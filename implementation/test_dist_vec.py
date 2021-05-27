@@ -57,49 +57,25 @@ if __name__ == "__main__":
 
     # Load mesh and create identifier functions for the top (Displacement condition)
     # and the bottom (contact condition)
-    if threed:
-        fname = "sphere"
-        create_sphere_mesh(filename=f"{fname}.msh")
-        convert_mesh(fname, "tetra")
-        with dolfinx.io.XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
-            mesh = xdmf.read_mesh(name="Grid")
-
-        def top(x):
-            return x[2] > 0.5
-
-        def bottom(x):
-            return x[2] < 0.2
-
-    else:
-        fname = "disk"
-        create_disk_mesh(filename=f"{fname}.msh")
-        convert_mesh(fname, "triangle", prune_z=True)
-        with dolfinx.io.XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
-            mesh = xdmf.read_mesh(name="Grid")
-
-        def top(x):
-            return x[1] > 0.5
-
-        def bottom(x):
-            return x[1] < 0.2
+    fname = "twomeshes"
+    with dolfinx.io.XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
+        mesh = xdmf.read_mesh(name="Grid")
+    with dolfinx.io.XDMFFile(MPI.COMM_WORLD, "test.xdmf", "w") as xdmf:
+        xdmf.write_mesh(mesh)
+    tdim = mesh.topology.dim
+    mesh.topology.create_connectivity(tdim - 1, 0)
+    mesh.topology.create_connectivity(tdim - 1, tdim)
+    with dolfinx.io.XDMFFile(MPI.COMM_WORLD, f"{fname}_facets.xdmf", "r") as xdmf:
+        facet_marker = xdmf.read_meshtags(mesh, name="Grid")
 
     e_abs = []
     e_rel = []
     dofs_global = []
     rank = MPI.COMM_WORLD.rank
-
-    tdim = mesh.topology.dim
-    top_facets = dolfinx.mesh.locate_entities_boundary(mesh, tdim - 1, top)
-    bottom_facets = dolfinx.mesh.locate_entities_boundary(
-        mesh, tdim - 1, bottom)
-    top_values = np.full(len(top_facets), top_value, dtype=np.int32)
-    bottom_values = np.full(
-        len(bottom_facets), bottom_value, dtype=np.int32)
-    indices = np.concatenate([top_facets, bottom_facets])
-    values = np.hstack([top_values, bottom_values])
-    facet_marker = dolfinx.MeshTags(mesh, tdim - 1, indices, values)
-    mesh_data = (facet_marker, top_value, bottom_value)
-
+    top_value = 4
+    bottom_value = 3
+    surface_value = 5
+    mesh_data = (facet_marker, top_value, bottom_value, surface_value)
     # Solve contact problem using Nitsche's method
     u1 = nitsche_one_way(mesh=mesh, mesh_data=mesh_data, physical_parameters=physical_parameters,
                          vertical_displacement=vertical_displacement, refinement=0, g=gap, nitsche_bc=False)
