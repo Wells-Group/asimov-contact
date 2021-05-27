@@ -67,5 +67,5 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     create_circle_plane_mesh(filename=f"{args.name}.msh")
-    convert_mesh(args.name, "triangle")
-    convert_mesh(f"{args.name}", "line", ext="facets")
+    convert_mesh(args.name, "triangle", prune_z=True)
+    convert_mesh(f"{args.name}", "line", ext="facets", prune_z=True)
