@@ -46,14 +46,17 @@ class NonlinearPDE_SNESProblem:
 
     def F(self, snes, x, F):
         """Assemble residual vector."""
-        x.ghostUpdate(addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD)
+        x.ghostUpdate(addv=PETSc.InsertMode.INSERT,
+                      mode=PETSc.ScatterMode.FORWARD)
         x.copy(self.u.vector)
-        self.u.vector.ghostUpdate(addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD)
+        self.u.vector.ghostUpdate(
+            addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD)
         with F.localForm() as f_local:
             f_local.set(0.0)
         dolfinx.fem.assemble_vector(F, self.L)
         dolfinx.fem.apply_lifting(F, [self.a], [[self.bc]], [x], -1.0)
-        F.ghostUpdate(addv=PETSc.InsertMode.ADD, mode=PETSc.ScatterMode.REVERSE)
+        F.ghostUpdate(addv=PETSc.InsertMode.ADD,
+                      mode=PETSc.ScatterMode.REVERSE)
         dolfinx.fem.set_bc(F, [self.bc], x, -1.0)
 
     def J(self, snes, x, J, P):
@@ -63,7 +66,7 @@ class NonlinearPDE_SNESProblem:
         J.assemble()
 
 
-def convert_mesh(filename, cell_type, prune_z=False):
+def convert_mesh(filename, cell_type, prune_z=False, ext=""):
     """
     Given the filename of a msh file, read data and convert to XDMF file containing cells of given cell type
     """
@@ -79,8 +82,9 @@ def convert_mesh(filename, cell_type, prune_z=False):
         data = numpy.hstack([mesh.cell_data_dict["gmsh:physical"][key]
                             for key in mesh.cell_data_dict["gmsh:physical"].keys() if key == cell_type])
         pts = mesh.points[:, :2] if prune_z else mesh.points
-        out_mesh = meshio.Mesh(points=pts, cells={cell_type: cells}, cell_data={"name_to_read": [data]})
-        meshio.write(f"{filename}.xdmf", out_mesh)
+        out_mesh = meshio.Mesh(points=pts, cells={cell_type: cells}, cell_data={
+                               "name_to_read": [data]})
+        meshio.write(f"{filename}_{ext}.xdmf", out_mesh)
 
 
 def rigid_motions_nullspace(V):
@@ -94,10 +98,12 @@ def rigid_motions_nullspace(V):
     dim = 3 if gdim == 2 else 6
 
     # Create list of vectors for null space
-    nullspace_basis = [dolfinx.cpp.la.create_vector(V.dofmap.index_map, V.dofmap.index_map_bs) for i in range(dim)]
+    nullspace_basis = [dolfinx.cpp.la.create_vector(
+        V.dofmap.index_map, V.dofmap.index_map_bs) for i in range(dim)]
 
     with ExitStack() as stack:
-        vec_local = [stack.enter_context(x.localForm()) for x in nullspace_basis]
+        vec_local = [stack.enter_context(x.localForm())
+                     for x in nullspace_basis]
         basis = [numpy.asarray(x) for x in vec_local]
 
         dofs = [V.sub(i).dofmap.list.array for i in range(gdim)]
