@@ -4,6 +4,7 @@ import numpy as np
 import ufl
 from mpi4py import MPI
 from petsc4py import PETSc
+import dolfinx_cuas.cpp as cuas
 
 from helpers import (epsilon, lame_parameters, rigid_motions_nullspace,
                      sigma_func)
@@ -60,133 +61,163 @@ def nitsche_one_way(mesh, mesh_data, physical_parameters, refinement=0,
 
     # Mimicking the plane y=-g
     x = ufl.SpatialCoordinate(mesh)
-    gap = x[mesh.geometry.dim - 1] + g
-    g_vec = [i for i in range(mesh.geometry.dim)]
-    g_vec[mesh.geometry.dim - 1] = gap
+
+
+    bottom_facets = facet_marker.indices[facet_marker.values == bottom_value]
+    gdim = mesh.geometry.dim
+    fdim = mesh.topology.dim - 1
+    mesh_geometry = mesh.geometry.x
+    master_bbox = dolfinx.cpp.geometry.BoundingBoxTree(mesh, fdim, bottom_facets)
+    contact = cuas.Contact(facet_marker, bottom_value, top_value)
+    contact.create_distance_map(0)
+    lookup = contact.map_0_to_1()
+
+    def gap(x):
+        # gap = -x[mesh.geometry.dim - 1] - g
+        dist_vec_array = np.zeros((x.shape[0], gdim))
+        for i in range(x.shape[1]):
+            xi = x[:, i]
+            facet, R = dolfinx.cpp.geometry.compute_closest_entity(master_bbox, xi, mesh)
+            if np.isclose(R, 0):
+                facet_2 = lookup.links(facet)[0]
+                facet2_geometry = dolfinx.cpp.mesh.entities_to_geometry(mesh, fdim, [facet_2], False)
+                coords = mesh_geometry[facet2_geometry][0]
+                point = np.zeros(3)
+                print(gdim)
+                print(xi)
+                point[:gdim] = xi
+                dist_vec = dolfinx.cpp.geometry.compute_distance_gjk(coords, point)
+                dist_vec_array[i, :gdim] = dist_vec[:gdim]
+        return dist_vec_array
+
+    gap(np.zeros((gdim, 1)))
+    # gap = x[mesh.geometry.dim - 1] + g
+    # g_vec = [i for i in range(mesh.geometry.dim)]
+    # g_vec[mesh.geometry.dim - 1] = gap
 
     u = dolfinx.Function(V)
-    v = ufl.TestFunction(V)
-    # metadata = {"quadrature_degree": 5}
-    dx = ufl.Measure("dx", domain=mesh)
-    ds = ufl.Measure("ds", domain=mesh,  # metadata=metadata,
-                     subdomain_data=facet_marker)
-    a = ufl.inner(sigma(u), epsilon(v)) * dx
-    L = ufl.inner(dolfinx.Constant(mesh, [0, ] * mesh.geometry.dim), v) * dx
+    # v = ufl.TestFunction(V)
+    # # metadata = {"quadrature_degree": 5}
+    # dx = ufl.Measure("dx", domain=mesh)
+    # ds = ufl.Measure("ds", domain=mesh,  # metadata=metadata,
+    #                  subdomain_data=facet_marker)
+    # a = ufl.inner(sigma(u), epsilon(v)) * dx
+    # L = ufl.inner(dolfinx.Constant(mesh, [0, ] * mesh.geometry.dim), v) * dx
 
-    # Nitsche for contact (with Friction).
-    # NOTE: Differs from unilateral contact even in the case of s=0!
-    # F -= theta / gamma * sigma_n(u) * sigma_n(v) * ds(bottom_value)
-    # F += 1 / gamma * R_minus(sigma_n(u) + gamma * (gap - ufl.dot(u, n))) * \
-    #     (theta * sigma_n(v) - gamma * ufl.dot(v, n)) * ds(bottom_value)
-    # F -= theta / gamma * ufl.dot(tangential_proj(u), tangential_proj(v)) * ds(bottom_value)
-    # F += 1 / gamma * ufl.dot(ball_projection(tangential_proj(u) - gamma * tangential_proj(u), s),
-    #                         theta * tangential_proj(v) - gamma * tangential_proj(v)) * ds(bottom_value)
+    # # Nitsche for contact (with Friction).
+    # # NOTE: Differs from unilateral contact even in the case of s=0!
+    # # F -= theta / gamma * sigma_n(u) * sigma_n(v) * ds(bottom_value)
+    # # F += 1 / gamma * R_minus(sigma_n(u) + gamma * (gap - ufl.dot(u, n))) * \
+    # #     (theta * sigma_n(v) - gamma * ufl.dot(v, n)) * ds(bottom_value)
+    # # F -= theta / gamma * ufl.dot(tangential_proj(u), tangential_proj(v)) * ds(bottom_value)
+    # # F += 1 / gamma * ufl.dot(ball_projection(tangential_proj(u) - gamma * tangential_proj(u), s),
+    # #                         theta * tangential_proj(v) - gamma * tangential_proj(v)) * ds(bottom_value)
 
-    # Derivation of one sided Nitsche with gap function
-    F = a - theta / gamma * sigma_n(u) * sigma_n(v) * ds(bottom_value)
-    F += 1 / gamma * R_minus(sigma_n(u) + gamma * (gap + ufl.dot(u, n_2))) * \
-        (theta * sigma_n(v) + gamma * ufl.dot(v, n_2)) * ds(bottom_value)
-    du = ufl.TrialFunction(V)
-    q = sigma_n(u) + gamma * (gap + ufl.dot(u, n_2))
-    J = ufl.inner(sigma(du), epsilon(v)) * ufl.dx - theta / gamma * sigma_n(du) * sigma_n(v) * ds(bottom_value)
-    J += 1 / gamma * 0.5 * (1 - ufl.sign(q)) * (sigma_n(du) + gamma * ufl.dot(du, n_2)) * \
-        (theta * sigma_n(v) + gamma * ufl.dot(v, n_2)) * ds(bottom_value)
+    # # Derivation of one sided Nitsche with gap function
+    # F = a - theta / gamma * sigma_n(u) * sigma_n(v) * ds(bottom_value)
+    # F += 1 / gamma * R_minus(sigma_n(u) + gamma * (gap + ufl.dot(u, n_2))) * \
+    #     (theta * sigma_n(v) + gamma * ufl.dot(v, n_2)) * ds(bottom_value)
+    # du = ufl.TrialFunction(V)
+    # q = sigma_n(u) + gamma * (gap + ufl.dot(u, n_2))
+    # J = ufl.inner(sigma(du), epsilon(v)) * ufl.dx - theta / gamma * sigma_n(du) * sigma_n(v) * ds(bottom_value)
+    # J += 1 / gamma * 0.5 * (1 - ufl.sign(q)) * (sigma_n(du) + gamma * ufl.dot(du, n_2)) * \
+    #     (theta * sigma_n(v) + gamma * ufl.dot(v, n_2)) * ds(bottom_value)
 
-    # Nitsche for Dirichlet, another theta-scheme.
-    # https://doi.org/10.1016/j.cma.2018.05.024
-    if nitsche_bc:
-        disp_vec = np.zeros(mesh.geometry.dim)
-        disp_vec[mesh.geometry.dim - 1] = vertical_displacement
-        u_D = ufl.as_vector(disp_vec)
-        F += - ufl.inner(sigma(u) * n, v) * ds(top_value)\
-             - theta * ufl.inner(sigma(v) * n, u - u_D) * \
-            ds(top_value) + gamma / h * ufl.inner(u - u_D, v) * ds(top_value)
-        bcs = []
-        J += - ufl.inner(sigma(du) * n, v) * ds(top_value)\
-            - theta * ufl.inner(sigma(v) * n, du) * \
-            ds(top_value) + gamma / h * ufl.inner(du, v) * ds(top_value)
-    else:
-        # strong Dirichlet boundary conditions
-        def _u_D(x):
-            values = np.zeros((mesh.geometry.dim, x.shape[1]))
-            values[mesh.geometry.dim - 1] = vertical_displacement
-            return values
-        u_D = dolfinx.Function(V)
-        u_D.interpolate(_u_D)
-        u_D.name = "u_D"
-        dolfinx.cpp.la.scatter_forward(u_D.x)
-        tdim = mesh.topology.dim
-        dirichlet_dofs = dolfinx.fem.locate_dofs_topological(
-            V, tdim - 1, facet_marker.indices[facet_marker.values == top_value])
-        bc = dolfinx.DirichletBC(u_D, dirichlet_dofs)
-        bcs = [bc]
+    # # Nitsche for Dirichlet, another theta-scheme.
+    # # https://doi.org/10.1016/j.cma.2018.05.024
+    # if nitsche_bc:
+    #     disp_vec = np.zeros(mesh.geometry.dim)
+    #     disp_vec[mesh.geometry.dim - 1] = vertical_displacement
+    #     u_D = ufl.as_vector(disp_vec)
+    #     F += - ufl.inner(sigma(u) * n, v) * ds(top_value)\
+    #          - theta * ufl.inner(sigma(v) * n, u - u_D) * \
+    #         ds(top_value) + gamma / h * ufl.inner(u - u_D, v) * ds(top_value)
+    #     bcs = []
+    #     J += - ufl.inner(sigma(du) * n, v) * ds(top_value)\
+    #         - theta * ufl.inner(sigma(v) * n, du) * \
+    #         ds(top_value) + gamma / h * ufl.inner(du, v) * ds(top_value)
+    # else:
+    #     # strong Dirichlet boundary conditions
+    #     def _u_D(x):
+    #         values = np.zeros((mesh.geometry.dim, x.shape[1]))
+    #         values[mesh.geometry.dim - 1] = vertical_displacement
+    #         return values
+    #     u_D = dolfinx.Function(V)
+    #     u_D.interpolate(_u_D)
+    #     u_D.name = "u_D"
+    #     dolfinx.cpp.la.scatter_forward(u_D.x)
+    #     tdim = mesh.topology.dim
+    #     dirichlet_dofs = dolfinx.fem.locate_dofs_topological(
+    #         V, tdim - 1, facet_marker.indices[facet_marker.values == top_value])
+    #     bc = dolfinx.DirichletBC(u_D, dirichlet_dofs)
+    #     bcs = [bc]
 
-    # DEBUG: Write each step of Newton iterations
-    # Create nonlinear problem and Newton solver
-    # def form(self, x: PETSc.Vec):
-    #     x.ghostUpdate(addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD)
-    #     self.i += 1
-    #     xdmf.write_function(u, self.i)
+    # # DEBUG: Write each step of Newton iterations
+    # # Create nonlinear problem and Newton solver
+    # # def form(self, x: PETSc.Vec):
+    # #     x.ghostUpdate(addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD)
+    # #     self.i += 1
+    # #     xdmf.write_function(u, self.i)
 
-    # setattr(dolfinx.fem.NonlinearProblem, "form", form)
+    # # setattr(dolfinx.fem.NonlinearProblem, "form", form)
 
-    problem = dolfinx.fem.NonlinearProblem(F, u, bcs, J=J)
-    # DEBUG: Write each step of Newton iterations
-    # problem.i = 0
-    # xdmf = dolfinx.io.XDMFFile(MPI.COMM_WORLD, "results/tmp_sol.xdmf", "w")
-    # xdmf.write_mesh(mesh)
+    # problem = dolfinx.fem.NonlinearProblem(F, u, bcs, J=J)
+    # # DEBUG: Write each step of Newton iterations
+    # # problem.i = 0
+    # # xdmf = dolfinx.io.XDMFFile(MPI.COMM_WORLD, "results/tmp_sol.xdmf", "w")
+    # # xdmf.write_mesh(mesh)
 
-    solver = dolfinx.NewtonSolver(MPI.COMM_WORLD, problem)
-    null_space = rigid_motions_nullspace(V)
-    solver.A.setNearNullSpace(null_space)
+    # solver = dolfinx.NewtonSolver(MPI.COMM_WORLD, problem)
+    # null_space = rigid_motions_nullspace(V)
+    # solver.A.setNearNullSpace(null_space)
 
-    # Set Newton solver options
-    solver.atol = 1e-9
-    solver.rtol = 1e-9
-    solver.convergence_criterion = "incremental"
-    solver.max_it = 50
-    solver.error_on_nonconvergence = True
-    solver.relaxation_parameter = 0.8
+    # # Set Newton solver options
+    # solver.atol = 1e-9
+    # solver.rtol = 1e-9
+    # solver.convergence_criterion = "incremental"
+    # solver.max_it = 50
+    # solver.error_on_nonconvergence = True
+    # solver.relaxation_parameter = 0.8
 
-    def _u_initial(x):
-        values = np.zeros((mesh.geometry.dim, x.shape[1]))
-        values[-1] = -0.01 - g
-        return values
+    # def _u_initial(x):
+    #     values = np.zeros((mesh.geometry.dim, x.shape[1]))
+    #     values[-1] = -0.01 - g
+    #     return values
 
-    # Set initial_condition:
-    u.interpolate(_u_initial)
+    # # Set initial_condition:
+    # u.interpolate(_u_initial)
 
-    # Define solver and options
-    ksp = solver.krylov_solver
-    opts = PETSc.Options()
-    option_prefix = ksp.getOptionsPrefix()
-    # DEBUG: Use linear solver
-    # opts[f"{option_prefix}ksp_type"] = "preonly"
-    # opts[f"{option_prefix}pc_type"] = "lu"
+    # # Define solver and options
+    # ksp = solver.krylov_solver
+    # opts = PETSc.Options()
+    # option_prefix = ksp.getOptionsPrefix()
+    # # DEBUG: Use linear solver
+    # # opts[f"{option_prefix}ksp_type"] = "preonly"
+    # # opts[f"{option_prefix}pc_type"] = "lu"
 
-    opts[f"{option_prefix}ksp_type"] = "cg"
-    opts[f"{option_prefix}pc_type"] = "gamg"
-    opts[f"{option_prefix}rtol"] = 1.0e-6
-    opts[f"{option_prefix}pc_gamg_coarse_eq_limit"] = 1000
-    opts[f"{option_prefix}mg_levels_ksp_type"] = "chebyshev"
-    opts[f"{option_prefix}mg_levels_pc_type"] = "jacobi"
-    opts[f"{option_prefix}mg_levels_esteig_ksp_type"] = "cg"
-    opts[f"{option_prefix}matptap_via"] = "scalable"
-    # View solver options
-    # opts[f"{option_prefix}ksp_view"] = None
-    ksp.setFromOptions()
+    # opts[f"{option_prefix}ksp_type"] = "cg"
+    # opts[f"{option_prefix}pc_type"] = "gamg"
+    # opts[f"{option_prefix}rtol"] = 1.0e-6
+    # opts[f"{option_prefix}pc_gamg_coarse_eq_limit"] = 1000
+    # opts[f"{option_prefix}mg_levels_ksp_type"] = "chebyshev"
+    # opts[f"{option_prefix}mg_levels_pc_type"] = "jacobi"
+    # opts[f"{option_prefix}mg_levels_esteig_ksp_type"] = "cg"
+    # opts[f"{option_prefix}matptap_via"] = "scalable"
+    # # View solver options
+    # # opts[f"{option_prefix}ksp_view"] = None
+    # ksp.setFromOptions()
 
-    # Solve non-linear problem
-    dolfinx.log.set_log_level(dolfinx.log.LogLevel.INFO)
-    with dolfinx.common.Timer(f"{refinement} Solve Nitsche"):
-        n, converged = solver.solve(u)
-    dolfinx.cpp.la.scatter_forward(u.x)
-    if solver.error_on_nonconvergence:
-        assert(converged)
-    print(f"{V.dofmap.index_map_bs*V.dofmap.index_map.size_global}, Number of interations: {n:d}")
+    # # Solve non-linear problem
+    # dolfinx.log.set_log_level(dolfinx.log.LogLevel.INFO)
+    # with dolfinx.common.Timer(f"{refinement} Solve Nitsche"):
+    #     n, converged = solver.solve(u)
+    # dolfinx.cpp.la.scatter_forward(u.x)
+    # if solver.error_on_nonconvergence:
+    #     assert(converged)
+    # print(f"{V.dofmap.index_map_bs*V.dofmap.index_map.size_global}, Number of interations: {n:d}")
 
-    with dolfinx.io.XDMFFile(MPI.COMM_WORLD, f"results/u_nitsche_{refinement}.xdmf", "w") as xdmf:
-        xdmf.write_mesh(mesh)
-        xdmf.write_function(u)
+    # with dolfinx.io.XDMFFile(MPI.COMM_WORLD, f"results/u_nitsche_{refinement}.xdmf", "w") as xdmf:
+    #     xdmf.write_mesh(mesh)
+    #     xdmf.write_function(u)
 
     return u
