@@ -66,7 +66,7 @@ class NonlinearPDE_SNESProblem:
         J.assemble()
 
 
-def convert_mesh(filename, cell_type, prune_z=False, ext=""):
+def convert_mesh(filename, cell_type, prune_z=False, ext=None):
     """
     Given the filename of a msh file, read data and convert to XDMF file containing cells of given cell type
     """
@@ -84,7 +84,11 @@ def convert_mesh(filename, cell_type, prune_z=False, ext=""):
         pts = mesh.points[:, :2] if prune_z else mesh.points
         out_mesh = meshio.Mesh(points=pts, cells={cell_type: cells}, cell_data={
                                "name_to_read": [data]})
-        meshio.write(f"{filename}_{ext}.xdmf", out_mesh)
+        if ext is None:
+            ext = ""
+        else:
+            ext = "_" + ext
+        meshio.write(f"{filename}{ext}.xdmf", out_mesh)
 
 
 def rigid_motions_nullspace(V):
