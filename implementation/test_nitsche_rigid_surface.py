@@ -3,13 +3,9 @@ import argparse
 import dolfinx
 import dolfinx.io
 import numpy as np
-import ufl
 from mpi4py import MPI
 
-from create_mesh import create_disk_mesh, create_sphere_mesh, convert_mesh
-from nitsche_one_way import nitsche_one_way
-from snes_against_plane import snes_solver
-
+from nitsche_rigid_surface import nitsche_rigid_surface
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Compare Nitsche's metood for contact against a straight plane"
@@ -40,7 +36,7 @@ if __name__ == "__main__":
     _ref = parser.add_argument("--refinements", default=2, type=np.int32,
                                dest="refs", help="Number of mesh refinements")
     _gap = parser.add_argument(
-        "--gap", default=0.02, type=np.float64, dest="gap", help="Gap between plane and y=0")
+        "--gap", default=0.0, type=np.float64, dest="gap", help="Gap between plane and y=0")
     # Parse input arguments or set to defualt values
     args = parser.parse_args()
 
@@ -75,7 +71,8 @@ if __name__ == "__main__":
     top_value = 2
     bottom_value = 4
     surface_value = 9
-    mesh_data = (facet_marker, top_value, bottom_value, surface_value)
+    surface_bottom = 7
+    mesh_data = (facet_marker, top_value, bottom_value, surface_value, surface_bottom)
     # Solve contact problem using Nitsche's method
-    u1 = nitsche_one_way(mesh=mesh, mesh_data=mesh_data, physical_parameters=physical_parameters,
-                         vertical_displacement=vertical_displacement, refinement=0, g=gap, nitsche_bc=False)
+    u1 = nitsche_rigid_surface(mesh=mesh, mesh_data=mesh_data, physical_parameters=physical_parameters,
+                               vertical_displacement=vertical_displacement, refinement=0, nitsche_bc=False)

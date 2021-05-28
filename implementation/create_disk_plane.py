@@ -48,6 +48,17 @@ def create_circle_plane_mesh(filename: str):
     bndry2 = gmsh.model.getBoundary((2, surface2))
     [gmsh.model.addPhysicalGroup(b[0], [b[1]]) for b in bndry2]
 
+    gmsh.model.mesh.field.add("Distance", 1)
+    gmsh.model.mesh.field.setNumbers(1, "NodesList", [c])
+
+    gmsh.model.mesh.field.add("Threshold", 2)
+    gmsh.model.mesh.field.setNumber(2, "IField", 1)
+    gmsh.model.mesh.field.setNumber(2, "LcMin", 0.01)
+    gmsh.model.mesh.field.setNumber(2, "LcMax", 0.01)
+    gmsh.model.mesh.field.setNumber(2, "DistMin", 0.3)
+    gmsh.model.mesh.field.setNumber(2, "DistMax", 0.6)
+    gmsh.model.mesh.field.setAsBackgroundMesh(2)
+
     gmsh.model.mesh.generate(2)
     # gmsh.option.setNumber("Mesh.SaveAll", 1)
     gmsh.write(filename)
