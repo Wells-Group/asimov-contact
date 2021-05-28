@@ -72,9 +72,9 @@ if __name__ == "__main__":
     e_rel = []
     dofs_global = []
     rank = MPI.COMM_WORLD.rank
-    top_value = 4
-    bottom_value = 3
-    surface_value = 5
+    top_value = 2
+    bottom_value = 4
+    surface_value = 9
     mesh_data = (facet_marker, top_value, bottom_value, surface_value)
     # Solve contact problem using Nitsche's method
     u1 = nitsche_one_way(mesh=mesh, mesh_data=mesh_data, physical_parameters=physical_parameters,
