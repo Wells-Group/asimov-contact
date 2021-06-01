@@ -44,8 +44,8 @@ if __name__ == "__main__":
     # Parse input arguments or set to defualt values
     args = parser.parse_args()
 
-    # Current formulation uses unilateral contact, i.e. s is unused
-    nitsche_parameters = {"gamma": args.gamma, "theta": args.theta, "s": 0}
+    # Current formulation uses unilateral contact
+    nitsche_parameters = {"gamma": args.gamma, "theta": args.theta}
     nitsche_bc = not args.dirichlet
     physical_parameters = {"E": args.E, "nu": args.nu, "strain": args.plane_strain}
     vertical_displacement = -args.disp

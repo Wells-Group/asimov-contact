@@ -15,12 +15,16 @@ def lame_parameters(plane_strain=False):
     Returns the Lame parameters for plane stress or plane strain.
     Return type is lambda functions
     """
-    def mu(E, nu): return E / (2 * (1 + nu))
+    def mu(E, nu):
+        return E / (2 * (1 + nu))
+
     if plane_strain:
-        def lmbda(E, nu): return E * nu / ((1 + nu) * (1 - 2 * nu))
+        def lmbda(E, nu):
+            return E * nu / ((1 + nu) * (1 - 2 * nu))
         return mu, lmbda
     else:
-        def lmbda(E, nu): return E * nu / ((1 + nu) * (1 - nu))
+        def lmbda(E, nu):
+            return E * nu / ((1 + nu) * (1 - nu))
         return mu, lmbda
 
 
@@ -30,6 +34,27 @@ def epsilon(v):
 
 def sigma_func(mu, lmbda):
     return lambda v: (2.0 * mu * epsilon(v) + lmbda * ufl.tr(epsilon(v)) * ufl.Identity(len(v)))
+
+
+# R_minus(x) returns x if negative zero else
+def R_minus(x):
+    abs_x = abs(x)
+    return 0.5 * (x - abs_x)
+
+
+# ball projection
+def ball_projection(x, s):
+    dim = x.geometric_dimension()
+    abs_x = ufl.sqrt(sum([x[i]**2 for i in range(dim)]))
+    return ufl.conditional(ufl.le(abs_x, s), x, s * x / abs_x)
+
+
+def tangential_proj(u, n):
+    """
+    See for instance:
+    https://doi.org/10.1023/A:1022235512626
+    """
+    return (ufl.Identity(u.ufl_shape[0]) - ufl.outer(n, n)) * u
 
 
 class NonlinearPDE_SNESProblem:

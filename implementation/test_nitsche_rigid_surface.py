@@ -40,8 +40,8 @@ if __name__ == "__main__":
     # Parse input arguments or set to defualt values
     args = parser.parse_args()
 
-    # Current formulation uses unilateral contact, i.e. s is unused
-    nitsche_parameters = {"gamma": args.gamma, "theta": args.theta, "s": 0}
+    # Current formulation uses unilateral contact
+    nitsche_parameters = {"gamma": args.gamma, "theta": args.theta}
     nitsche_bc = not args.dirichlet
     physical_parameters = {"E": args.E, "nu": args.nu, "strain": args.plane_strain}
     vertical_displacement = -args.disp
@@ -75,4 +75,5 @@ if __name__ == "__main__":
     mesh_data = (facet_marker, top_value, bottom_value, surface_value, surface_bottom)
     # Solve contact problem using Nitsche's method
     u1 = nitsche_rigid_surface(mesh=mesh, mesh_data=mesh_data, physical_parameters=physical_parameters,
-                               vertical_displacement=vertical_displacement, refinement=0, nitsche_bc=False)
+                               nitsche_parameters=nitsche_parameters, vertical_displacement=vertical_displacement,
+                               nitsche_bc=nitsche_bc)

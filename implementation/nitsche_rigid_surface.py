@@ -7,32 +7,16 @@ from petsc4py import PETSc
 import dolfinx_cuas.cpp as cuas
 
 from helpers import (epsilon, lame_parameters, rigid_motions_nullspace,
-                     sigma_func)
+                     sigma_func, R_minus)
 
 
-def R_minus(x):
-    abs_x = abs(x)
-    return 0.5 * (x - abs_x)
-
-
-def ball_projection(x, s):
-    dim = x.geometric_dimension()
-    abs_x = ufl.sqrt(sum([x[i]**2 for i in range(dim)]))
-    return ufl.conditional(ufl.le(abs_x, s), x, s * x / abs_x)
-
-
-def nitsche_rigid_surface(mesh, mesh_data, physical_parameters, refinement=0,
-                          nitsche_parameters={"gamma": 1, "theta": 1, "s": 0},
+def nitsche_rigid_surface(mesh, mesh_data, physical_parameters,
+                          nitsche_parameters={"gamma": 1, "theta": 1},
                           vertical_displacement=-0.1, nitsche_bc=False):
     (facet_marker, top_value, bottom_value, surface_value, surface_bottom) = mesh_data
 
-    # with dolfinx.io.XDMFFile(MPI.COMM_WORLD, "results/mf_nitsche.xdmf", "w") as xdmf:
-    #     xdmf.write_mesh(mesh)
-    #     xdmf.write_meshtags(facet_marker)
-
     # Nitche parameters and variables
     theta = nitsche_parameters["theta"]
-    # s = nitsche_parameters["s"]
     h = ufl.Circumradius(mesh)
     gamma = nitsche_parameters["gamma"] * physical_parameters["E"] / h
     n_vec = np.zeros(mesh.geometry.dim)
@@ -53,13 +37,6 @@ def nitsche_rigid_surface(mesh, mesh_data, physical_parameters, refinement=0,
     def sigma_n(v):
         # NOTE: Different normals, see summary paper
         return -ufl.dot(sigma(v) * n, n_2)
-
-    # def tangential_proj(u):
-    #     """
-    #     See for instance:
-    #     https://doi.org/10.1023/A:1022235512626
-    #     """
-    #     return (ufl.Identity(u.ufl_shape[0]) - ufl.outer(n, n)) * u
 
     # Mimicking the plane y=-g
     bottom_facets = facet_marker.indices[facet_marker.values == bottom_value]
@@ -96,19 +73,10 @@ def nitsche_rigid_surface(mesh, mesh_data, physical_parameters, refinement=0,
     ds = ufl.Measure("ds", domain=mesh,  # metadata=metadata,
                      subdomain_data=facet_marker)
     a = ufl.inner(sigma(u), epsilon(v)) * dx
-    # L = ufl.inner(dolfinx.Constant(mesh, [0, ] * mesh.geometry.dim), v) * dx
-
-    # Nitsche for contact (with Friction).
-    # NOTE: Differs from unilateral contact even in the case of s=0!
-    # F -= theta / gamma * sigma_n(u) * sigma_n(v) * ds(bottom_value)
-    # F += 1 / gamma * R_minus(sigma_n(u) + gamma * (gap - ufl.dot(u, n))) * \
-    #     (theta * sigma_n(v) - gamma * ufl.dot(v, n)) * ds(bottom_value)
-    # F -= theta / gamma * ufl.dot(tangential_proj(u), tangential_proj(v)) * ds(bottom_value)
-    # F += 1 / gamma * ufl.dot(ball_projection(tangential_proj(u) - gamma * tangential_proj(u), s),
-    #                         theta * tangential_proj(v) - gamma * tangential_proj(v)) * ds(bottom_value)
+    L = ufl.inner(dolfinx.Constant(mesh, [0, ] * mesh.geometry.dim), v) * dx
 
     # # Derivation of one sided Nitsche with gap function
-    F = a - theta / gamma * sigma_n(u) * sigma_n(v) * ds(bottom_value)
+    F = a - theta / gamma * sigma_n(u) * sigma_n(v) * ds(bottom_value) - L
     F += 1 / gamma * R_minus(sigma_n(u) + gamma * (ufl.dot(g_vec, n_2) + ufl.dot(u, n_2))) * \
         (theta * sigma_n(v) + gamma * ufl.dot(v, n_2)) * ds(bottom_value)
     du = ufl.TrialFunction(V)
@@ -119,7 +87,6 @@ def nitsche_rigid_surface(mesh, mesh_data, physical_parameters, refinement=0,
 
     # # Nitsche for Dirichlet, another theta-scheme.
     # # https://doi.org/10.1016/j.cma.2018.05.024
-    # FIXME: nitsche_bc not working (boundary conditions for rigid surface missing)
     if nitsche_bc:
         disp_vec = np.zeros(mesh.geometry.dim)
         disp_vec[mesh.geometry.dim - 1] = vertical_displacement
@@ -127,27 +94,36 @@ def nitsche_rigid_surface(mesh, mesh_data, physical_parameters, refinement=0,
         F += - ufl.inner(sigma(u) * n, v) * ds(top_value)\
              - theta * ufl.inner(sigma(v) * n, u - u_D) * \
             ds(top_value) + gamma / h * ufl.inner(u - u_D, v) * ds(top_value)
-        bcs = []
         J += - ufl.inner(sigma(du) * n, v) * ds(top_value)\
             - theta * ufl.inner(sigma(v) * n, du) * \
             ds(top_value) + gamma / h * ufl.inner(du, v) * ds(top_value)
+        # Nitsche bc for rigid plane
+        disp_plane = np.zeros(mesh.geometry.dim)
+        u_D_plane = ufl.as_vector(disp_plane)
+        F += - ufl.inner(sigma(u) * n, v) * ds(surface_bottom)\
+             - theta * ufl.inner(sigma(v) * n, u - u_D_plane) * \
+            ds(surface_bottom) + gamma / h * ufl.inner(u - u_D_plane, v) * ds(surface_bottom)
+        J += - ufl.inner(sigma(du) * n, v) * ds(surface_bottom)\
+            - theta * ufl.inner(sigma(v) * n, du) * \
+            ds(surface_bottom) + gamma / h * ufl.inner(du, v) * ds(surface_bottom)
+        bcs = []
     else:
         # strong Dirichlet boundary conditions
         def _u_D(x):
             values = np.zeros((mesh.geometry.dim, x.shape[1]))
             values[mesh.geometry.dim - 1] = vertical_displacement
             return values
+        tdim = mesh.topology.dim
         u_D = dolfinx.Function(V)
         u_D.interpolate(_u_D)
         u_D.name = "u_D"
         dolfinx.cpp.la.scatter_forward(u_D.x)
-        tdim = mesh.topology.dim
         dirichlet_dofs = dolfinx.fem.locate_dofs_topological(
             V, tdim - 1, facet_marker.indices[facet_marker.values == top_value])
         print(dirichlet_dofs)
         print(vertical_displacement)
         bc = dolfinx.DirichletBC(u_D, dirichlet_dofs)
-
+        bcs = [bc]
         # Dirichlet boundary conditions for rigid plane
         dirichlet_dofs_plane = dolfinx.fem.locate_dofs_topological(
             V, tdim - 1, facet_marker.indices[facet_marker.values == surface_bottom])
@@ -155,8 +131,7 @@ def nitsche_rigid_surface(mesh, mesh_data, physical_parameters, refinement=0,
         with u_D_plane.vector.localForm() as loc:
             loc.set(0)
         bc_plane = dolfinx.DirichletBC(u_D_plane, dirichlet_dofs_plane)
-        print(dirichlet_dofs_plane)
-        bcs = [bc, bc_plane]
+        bcs.append(bc_plane)
 
     # DEBUG: Write each step of Newton iterations
     # Create nonlinear problem and Newton solver
@@ -201,6 +176,7 @@ def nitsche_rigid_surface(mesh, mesh_data, physical_parameters, refinement=0,
     opts[f"{option_prefix}ksp_type"] = "preonly"
     opts[f"{option_prefix}pc_type"] = "lu"
 
+    # FIXME: Need to figure out why this is not working
     # opts[f"{option_prefix}ksp_type"] = "cg"
     # opts[f"{option_prefix}pc_type"] = "gamg"
     # opts[f"{option_prefix}rtol"] = 1.0e-6
@@ -215,7 +191,7 @@ def nitsche_rigid_surface(mesh, mesh_data, physical_parameters, refinement=0,
 
     # Solve non-linear problem
     dolfinx.log.set_log_level(dolfinx.log.LogLevel.INFO)
-    with dolfinx.common.Timer(f"{refinement} Solve Nitsche"):
+    with dolfinx.common.Timer("Solve Nitsche"):
         n, converged = solver.solve(u)
     dolfinx.cpp.la.scatter_forward(u.x)
     if solver.error_on_nonconvergence:

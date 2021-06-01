@@ -6,18 +6,7 @@ from mpi4py import MPI
 from petsc4py import PETSc
 
 from helpers import (epsilon, lame_parameters, rigid_motions_nullspace,
-                     sigma_func)
-
-
-def R_minus(x):
-    abs_x = abs(x)
-    return 0.5 * (x - abs_x)
-
-
-def ball_projection(x, s):
-    dim = x.geometric_dimension()
-    abs_x = ufl.sqrt(sum([x[i]**2 for i in range(dim)]))
-    return ufl.conditional(ufl.le(abs_x, s), x, s * x / abs_x)
+                     sigma_func, R_minus)
 
 
 def nitsche_one_way(mesh, mesh_data, physical_parameters, refinement=0,
@@ -51,13 +40,6 @@ def nitsche_one_way(mesh, mesh_data, physical_parameters, refinement=0,
         # NOTE: Different normals, see summary paper
         return -ufl.dot(sigma(v) * n, n_2)
 
-    # def tangential_proj(u):
-    #     """
-    #     See for instance:
-    #     https://doi.org/10.1023/A:1022235512626
-    #     """
-    #     return (ufl.Identity(u.ufl_shape[0]) - ufl.outer(n, n)) * u
-
     # Mimicking the plane y=-g
     x = ufl.SpatialCoordinate(mesh)
     gap = x[mesh.geometry.dim - 1] + g
@@ -73,17 +55,8 @@ def nitsche_one_way(mesh, mesh_data, physical_parameters, refinement=0,
     a = ufl.inner(sigma(u), epsilon(v)) * dx
     L = ufl.inner(dolfinx.Constant(mesh, [0, ] * mesh.geometry.dim), v) * dx
 
-    # Nitsche for contact (with Friction).
-    # NOTE: Differs from unilateral contact even in the case of s=0!
-    # F -= theta / gamma * sigma_n(u) * sigma_n(v) * ds(bottom_value)
-    # F += 1 / gamma * R_minus(sigma_n(u) + gamma * (gap - ufl.dot(u, n))) * \
-    #     (theta * sigma_n(v) - gamma * ufl.dot(v, n)) * ds(bottom_value)
-    # F -= theta / gamma * ufl.dot(tangential_proj(u), tangential_proj(v)) * ds(bottom_value)
-    # F += 1 / gamma * ufl.dot(ball_projection(tangential_proj(u) - gamma * tangential_proj(u), s),
-    #                         theta * tangential_proj(v) - gamma * tangential_proj(v)) * ds(bottom_value)
-
     # Derivation of one sided Nitsche with gap function
-    F = a - theta / gamma * sigma_n(u) * sigma_n(v) * ds(bottom_value)
+    F = a - theta / gamma * sigma_n(u) * sigma_n(v) * ds(bottom_value) - L
     F += 1 / gamma * R_minus(sigma_n(u) + gamma * (gap + ufl.dot(u, n_2))) * \
         (theta * sigma_n(v) + gamma * ufl.dot(v, n_2)) * ds(bottom_value)
     du = ufl.TrialFunction(V)
