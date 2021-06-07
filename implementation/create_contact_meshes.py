@@ -74,7 +74,9 @@ def create_sphere_plane_mesh(filename: str):
     B = 1
     gap = 0.05
     H = 0.05
-    theta = np.pi / 10
+    theta = 0  # np.pi / 10
+    LcMin = 0.05 * r
+    LcMax = 0.2 * r
     gmsh.initialize()
     # Create sphere composed of of two volumes
     sphere_bottom = gmsh.model.occ.addSphere(center[0], center[1], center[2], r, angle1=-np.pi / 2, angle2=-angle)
@@ -101,8 +103,6 @@ def create_sphere_plane_mesh(filename: str):
     gmsh.model.addPhysicalGroup(3, p_v)
     gmsh.model.addPhysicalGroup(3, [box])
 
-    LcMin = 0.1 * r
-    LcMax = 0.3 * r
     gmsh.model.occ.synchronize()
     gmsh.model.mesh.field.add("Distance", 1)
     gmsh.model.mesh.field.setNumbers(1, "NodesList", [p0])

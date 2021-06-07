@@ -35,8 +35,7 @@ if __name__ == "__main__":
                                 help="Displacement BC in negative y direction")
     _ref = parser.add_argument("--refinements", default=2, type=np.int32,
                                dest="refs", help="Number of mesh refinements")
-    _gap = parser.add_argument(
-        "--gap", default=0.0, type=np.float64, dest="gap", help="Gap between plane and y=0")
+
     # Parse input arguments or set to defualt values
     args = parser.parse_args()
 
@@ -46,32 +45,44 @@ if __name__ == "__main__":
     physical_parameters = {"E": args.E, "nu": args.nu, "strain": args.plane_strain}
     vertical_displacement = -args.disp
     num_refs = args.refs + 1
-    gap = args.gap
     top_value = 1
     threed = args.threed
     bottom_value = 2
 
     # Load mesh and create identifier functions for the top (Displacement condition)
     # and the bottom (contact condition)
-    fname = "twomeshes"
-    with dolfinx.io.XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
-        mesh = xdmf.read_mesh(name="Grid")
-    with dolfinx.io.XDMFFile(MPI.COMM_WORLD, "test.xdmf", "w") as xdmf:
-        xdmf.write_mesh(mesh)
-    tdim = mesh.topology.dim
-    mesh.topology.create_connectivity(tdim - 1, 0)
-    mesh.topology.create_connectivity(tdim - 1, tdim)
-    with dolfinx.io.XDMFFile(MPI.COMM_WORLD, f"{fname}_facets.xdmf", "r") as xdmf:
-        facet_marker = xdmf.read_meshtags(mesh, name="Grid")
+    if threed:
+        fname = "sphere"
+        with dolfinx.io.XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
+            mesh = xdmf.read_mesh(name="Grid")
+        tdim = mesh.topology.dim
+        mesh.topology.create_connectivity(tdim - 1, 0)
+        mesh.topology.create_connectivity(tdim - 1, tdim)
+        with dolfinx.io.XDMFFile(MPI.COMM_WORLD, f"{fname}_facets.xdmf", "r") as xdmf:
+            facet_marker = xdmf.read_meshtags(mesh, name="Grid")
+        top_value = 2
+        bottom_value = 1
+        surface_value = 8
+        surface_bottom = 7
+
+    else:
+        fname = "twomeshes"
+        with dolfinx.io.XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
+            mesh = xdmf.read_mesh(name="Grid")
+        tdim = mesh.topology.dim
+        mesh.topology.create_connectivity(tdim - 1, 0)
+        mesh.topology.create_connectivity(tdim - 1, tdim)
+        with dolfinx.io.XDMFFile(MPI.COMM_WORLD, f"{fname}_facets.xdmf", "r") as xdmf:
+            facet_marker = xdmf.read_meshtags(mesh, name="Grid")
+        top_value = 2
+        bottom_value = 4
+        surface_value = 9
+        surface_bottom = 7
 
     e_abs = []
     e_rel = []
     dofs_global = []
     rank = MPI.COMM_WORLD.rank
-    top_value = 2
-    bottom_value = 4
-    surface_value = 9
-    surface_bottom = 7
     mesh_data = (facet_marker, top_value, bottom_value, surface_value, surface_bottom)
     # Solve contact problem using Nitsche's method
     u1 = nitsche_rigid_surface(mesh=mesh, mesh_data=mesh_data, physical_parameters=physical_parameters,
