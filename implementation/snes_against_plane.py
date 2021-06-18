@@ -62,7 +62,7 @@ def snes_solver(mesh, mesh_data, physical_parameters, refinement=0, g=0.0, verti
     u_D = dolfinx.Function(V)
     u_D.interpolate(_u_D)
     u_D.name = "u_D"
-    dolfinx.cpp.la.scatter_forward(u_D.x)
+    u_D.x.scatter_forward()
     tdim = mesh.topology.dim
     dirichlet_dofs = dolfinx.fem.locate_dofs_topological(
         V, tdim - 1, facet_marker.indices[facet_marker.values == top_value])
@@ -144,7 +144,7 @@ def snes_solver(mesh, mesh_data, physical_parameters, refinement=0, g=0.0, verti
     # dolfinx.log.set_log_level(dolfinx.log.LogLevel.INFO)
     with dolfinx.common.Timer(f"{refinement} Solve SNES"):
         snes.solve(None, u.vector)
-    dolfinx.cpp.la.scatter_forward(u.x)
+    u.x.scatter_forward()
 
     assert(snes.getConvergedReason() > 1)
     assert(snes.getConvergedReason() < 4)

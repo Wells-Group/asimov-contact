@@ -70,7 +70,7 @@ def solve_manufactured(nx, ny, theta, gamma, nitsche, strain, linear_solver, L=1
 
     u_D.interpolate(_u_ex)
     u_D.name = "u_exact"
-    dolfinx.cpp.la.scatter_forward(u_D.x)
+    u_D.x.scatter_forward()
 
     u = ufl.TrialFunction(V) if linear_solver else dolfinx.Function(V)
     v = ufl.TestFunction(V)
@@ -111,7 +111,7 @@ def solve_manufactured(nx, ny, theta, gamma, nitsche, strain, linear_solver, L=1
         n, converged = solver.solve(u)
         assert (converged)
         print(f"Number of interations: {n:d}")
-    dolfinx.cpp.la.scatter_forward(u.x)
+    u.x.scatter_forward()
 
     os.system("mkdir -p results")
 

@@ -117,7 +117,7 @@ def nitsche_rigid_surface(mesh, mesh_data, physical_parameters,
         u_D = dolfinx.Function(V)
         u_D.interpolate(_u_D)
         u_D.name = "u_D"
-        dolfinx.cpp.la.scatter_forward(u_D.x)
+        u_D.x.scatter_forward()
         dirichlet_dofs = dolfinx.fem.locate_dofs_topological(
             V, tdim - 1, facet_marker.indices[facet_marker.values == top_value])
         print(dirichlet_dofs)
@@ -193,7 +193,7 @@ def nitsche_rigid_surface(mesh, mesh_data, physical_parameters,
     dolfinx.log.set_log_level(dolfinx.log.LogLevel.INFO)
     with dolfinx.common.Timer("Solve Nitsche"):
         n, converged = solver.solve(u)
-    dolfinx.cpp.la.scatter_forward(u.x)
+    u.x.scatter_forward()
     if solver.error_on_nonconvergence:
         assert(converged)
     print(f"{V.dofmap.index_map_bs*V.dofmap.index_map.size_global}, Number of interations: {n:d}")

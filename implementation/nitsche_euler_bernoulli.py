@@ -96,7 +96,7 @@ def solve_euler_bernoulli(nx, ny, theta, gamma, linear_solver, plane_strain, nit
         n, converged = solver.solve(u)
         assert (converged)
         print(f"Number of interations: {n:d}")
-    dolfinx.cpp.la.scatter_forward(u.x)
+    u.x.scatter_forward()
 
     os.system("mkdir -p results")
     with dolfinx.io.XDMFFile(MPI.COMM_WORLD, f"results/u_euler_bernoulli_{nx}_{ny}.xdmf", "w") as xdmf:

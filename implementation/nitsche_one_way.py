@@ -87,7 +87,7 @@ def nitsche_one_way(mesh, mesh_data, physical_parameters, refinement=0,
         u_D = dolfinx.Function(V)
         u_D.interpolate(_u_D)
         u_D.name = "u_D"
-        dolfinx.cpp.la.scatter_forward(u_D.x)
+        u_D.x.scatter_forward()
         tdim = mesh.topology.dim
         dirichlet_dofs = dolfinx.fem.locate_dofs_topological(
             V, tdim - 1, facet_marker.indices[facet_marker.values == top_value])
@@ -153,7 +153,7 @@ def nitsche_one_way(mesh, mesh_data, physical_parameters, refinement=0,
     dolfinx.log.set_log_level(dolfinx.log.LogLevel.INFO)
     with dolfinx.common.Timer(f"{refinement} Solve Nitsche"):
         n, converged = solver.solve(u)
-    dolfinx.cpp.la.scatter_forward(u.x)
+    u.x.scatter_forward()
     if solver.error_on_nonconvergence:
         assert(converged)
     print(f"{V.dofmap.index_map_bs*V.dofmap.index_map.size_global}, Number of interations: {n:d}")
