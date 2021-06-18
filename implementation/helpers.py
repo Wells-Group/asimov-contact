@@ -100,6 +100,7 @@ def convert_mesh(filename, cell_type, prune_z=False, ext=None):
     except ImportError:
         print("Meshio and h5py must be installed to convert meshes."
               + " Please run `pip3 install --no-binary=h5py h5py meshio`")
+        exit(1)
     from mpi4py import MPI
     if MPI.COMM_WORLD.rank == 0:
         mesh = meshio.read(f"{filename}.msh")
