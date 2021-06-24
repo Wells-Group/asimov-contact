@@ -38,3 +38,15 @@
 
 # Pyc
 *.pyc
+
+#latexmk
+*.aux
+*.bbl
+*.bcf
+*.blg
+*.fdb_latexmk
+*.fls 
+*.log 
+*.pdf 
+*.run.xml 
+*.synctex.gz

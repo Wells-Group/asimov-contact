@@ -1,0 +1,382 @@
+\documentclass[12pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage{csquotes}
+\usepackage{hyperref}
+\usepackage{authblk} % Author affiliation
+\usepackage[usenames,dvipsnames]{xcolor}
+\usepackage{amsfonts} % Required for mathbb
+\usepackage{amsmath} % Required for alignno
+\usepackage[mathlines]{lineno} % Required for line numbering
+\usepackage{doi} % DOI in bibliography
+\usepackage{booktabs} %nicer tables
+\usepackage{placeins}
+% Renaming listing
+\usepackage{cleveref} % Clever referencing
+\Crefname{section}{Section}{Section}
+% Line-numbering
+\usepackage{lineno}
+
+% For llbracket
+\usepackage{stmaryrd}
+
+\usepackage[english]{babel}
+\pagenumbering{arabic}
+
+\newenvironment{alignno}{\linenomath\align}{\endalign\linenomath}
+\newenvironment{alignno*}{\linenomath\align*}{\endalign*\linenomath}
+
+\usepackage{graphicx} % To get scale-box
+% Maths commands
+\usepackage{bm} % Bold maths symbols
+\newcommand{\der}[2]{\frac{\partial #1}{\partial #2}}
+\newcommand{\mbf}[1]{\mathbf{#1}}
+\newcommand{\Int}[1]{\int\limits_{ #1}}
+\newcommand{\mrm}[1]{\mathrm{#1}}
+\newcommand{\mcl}[1]{\mathcal{#1}}
+\newcommand{\mbb}[1]{\mathbb{#1}}
+\newcommand{\mc}[2]{{\color{#1}#2}}
+\newcommand{\scalemath}[2]{\scalebox{#1}{\mbox{\ensuremath{\displaystyle #2}}}}
+\newcommand{\mbn}{\mbf{n}}
+\newcommand{\mbu}{\mbf{u}}
+\newcommand{\mbv}{\mbf{v}}
+\newcommand{\mbx}{\mbf{x}}
+\newcommand{\md}{\mrm{d}}
+\newcommand{\norm}[1]{\left\lVert#1\right\rVert}
+\newcommand{\jump}[1]{\llbracket #1 \rrbracket}
+% Comment command
+\setlength {\marginparwidth }{2cm}
+\usepackage{todonotes}
+\newcommand{\dokken}[1]{\todo[inline,color=red!50, caption={2do}]{
+\begin{minipage}{\textwidth-4pt}
+\underline{Dokken:} #1
+\end{minipage}}}
+\newcommand{\roggendorf}[1]{\todo[inline,color=green!50, caption={2do}]{
+\begin{minipage}{\textwidth-4pt}
+\underline{Roggendorf:} #1
+\end{minipage}}}
+
+% Bibliography imports
+\usepackage[english]{babel}
+\usepackage{biblatex}
+\addbibresource{../literature_review/references.bib}
+
+\title{Numerical Results}
+\author{J\o rgen Schartum Dokken and Sarah Roggendorf}
+\affil{Department of Engineering, University of Cambridge}
+\begin{document}
+\maketitle
+\linenumbers
+In this document, we will detail numerical results related to our implementation of contact conditions.
+\section{Nitsche's Method for Frictionless Contact with a Rigid Surface}
+\subsection{Formulation}
+Here we briefly state the formulation used for the implementation. More details can be found in the literature review and the references therein.
+We are considering the frictionless contact between an elastic body ($B$) and a rigid surface ($S$). The boundary $\Gamma$ of $B$ is split into three parts:
+\begin{itemize}
+    \item $\Gamma_D$ -- the Dirichlet part of the boundary where a displacement condition is imposed.
+    \item $\Gamma_N$ -- the Neumann part of the boundary where we impose zero traction.
+    \item $\Gamma_C$ -- the potential contact boundary. The contact condition is imposed via Nitsche's method and either imposes 
+enforces the contact conditions or zero traction in no-contact areas.
+\end{itemize}
+Denote by $n_S$ the unit normal fo the surface $S$ and by $n_B$ the outward unit normal of the body $B$. We define 
+\begin{align}
+    \sigma_n(v) = \sigma (v) \mbf{n}_B \cdot \mbf{n}_S
+\end{align}
+\begin{align}
+    \begin{split}
+    b(u,v) = &\int_{\Omega} \sigma(u): \varepsilon(v) \md x- \frac{\theta}{\gamma} \int_{\Gamma_C} \sigma_n(u)\sigma_n(v) \md s\\
+     &+ \frac{1}{\gamma} \int_{\Gamma_C} \left[\sigma_n(u) + \gamma(u \cdot \mbf{n}_S - g_0 \cdot  \mbf{n}_S)) \right]_{\mbb{R}_-}(\theta \sigma_n(v) + \gamma v \cdot \mbf{n}_{S})\md s
+    \end{split}
+\end{align}
+Here $g_0$ is the initial distance vector between $\Gamma_C$ and $S$ and hence $g_0 \cdot \mbf{n}_S$ is the inital gap.
+The formulation combines various versions of Nitsche's method depending on the parameter $\theta$, where $\theta = 1$ corresponds to the symmetric version.
+The Nitsche parameter $\gamma$ is of the form 
+\begin{align}
+    \gamma = \gamma_0 \frac{E}{h},
+\end{align}
+where different values for $\gamma_0$ are considered in our tests.
+% \subsection{Test Examples}
+% Example 1: disk (2D) or sphere (3D) with radius $0.5$ and origins $(0.5, 0.5)$ and $(0.5, 0.5, 0.5)$, respectively.
+% Prescribed displacement at $\Gamma_D = \Gamma \cap \{ y \geq 0.5 \}$ or $\Gamma_D = \Gamma \cap \{ z \geq 0.9 \}$
+\subsection{Numerical results}
+The first example we consider is a disk in 2D with radius $0.5$ and origin $(0.5, 0.5)$ 
+and the surface is a horizontal plane at $y = -0.02$. We prescribe a displacement of $-0.08$ in the $y$-direction
+on $\Gamma_D = \Gamma \cap \{y > 0.5 \}$. The contact part of the boundary is 
+$\Gamma_C  = \Gamma \cap \{y < 0.2 \}$. The second example is the 3D analogue of this: a sphere
+with radius $0.5$ and center $(0.5, 0.5, 0.5)$, $\Gamma_D = \Gamma \cap \{z > 0.9\}$, $\Gamma_C = \Gamma \cap \{z< 0.15\}$ and an initial displacement of 
+$-0.08$ in the $z$-direction. The surface is a horizontal plane at $z = -0.02$
+
+We start our investigation with the following set of solver options:
+\begin{verbatim}
+    opts[f"{option_prefix}ksp_type"]                  = "cg"
+    opts[f"{option_prefix}pc_type"]                   = "gamg"
+    opts[f"{option_prefix}rtol"]                      = 1.0e-6
+    opts[f"{option_prefix}pc_gamg_coarse_eq_limit"]   = 1000
+    opts[f"{option_prefix}mg_levels_ksp_type"]        = "chebyshev"
+    opts[f"{option_prefix}mg_levels_pc_type"]         = "jacobi"
+    opts[f"{option_prefix}mg_levels_esteig_ksp_type"] = "cg"
+    opts[f"{option_prefix}matptap_via"]               = "scalable"
+\end{verbatim}
+
+Tables 1-4 show the performance of the solvers for different values of $\gamma_0$ and two different meshes. The finer
+mesh is obtained from the coarser mesh by performing a mesh refinement with dolfinx. The relative error is computed with respect 
+to an approximation computed with SNES by imposing the contact condition as an inequality constraint. We use the following abbrivations:
+\begin{description}
+\item[nodfs] number of degrees of freedom 
+\item[\#N] number of non-linear iterations
+\item[\#L] total number of linear iterations
+\end{description}
+Furthermore, we show the value $\#L/\#N$ in the tables which is essentially the average number of linear iterations per non-linear iteration.
+% gamma = 1
+% Newton solver finished in 14 iterations and 84 linear solver iterations.
+% Newton solver finished in 14 iterations and 98 linear solver iterations.
+% Absolute error [9.989296446823982e-07, 1.0401389117982455e-07]
+% Relative error [1.664480621267261e-05, 1.7323972484175473e-06]
+% 18258, Nitsche:  1.70e+00 SNES: 6.71e-01
+% 72444, Nitsche:  7.06e+00 SNES: 6.09e+00
+% gamma = 10
+% Newton solver finished in 14 iterations and 84 linear solver iterations.
+% Newton solver finished in 15 iterations and 107 linear solver iterations.
+% Num dofs [18258, 72444]
+% Absolute error [1.662024276298456e-07, 4.883334831221595e-08]
+% Relative error [2.7693714113911207e-06, 8.13340961361016e-07]
+% 18258, Nitsche:  1.69e+00 SNES: 6.58e-01
+% 72444, Nitsche:  7.51e+00 SNES: 5.90e+00
+% gamma = 100
+% Newton solver finished in 14 iterations and 111 linear solver iterations.
+% Newton solver finished in 17 iterations and 157 linear solver iterations.
+% Absolute error [1.725121105962722e-08, 1.562053331151776e-08]
+% Relative error [2.874507394489273e-07, 2.6016687406592274e-07]
+% 18258, Nitsche:  1.74e+00 SNES: 6.68e-01
+% 72444, Nitsche:  8.86e+00 SNES: 5.95e+00
+% gamma = 1000
+% Newton solver finished in 17 iterations and 169 linear solver iterations.
+% Newton solver finished in 18 iterations and 213 linear solver iterations.
+% Absolute error [1.7335350068139105e-09, 1.600736333818336e-09]
+% Relative error [2.888527175552553e-08, 2.6660969882903247e-08]
+% 18258, Nitsche:  2.21e+00 SNES: 7.03e-01
+% 72444, Nitsche:  1.00e+01 SNES: 5.95e+00
+\begin{table}[h]
+    \centering
+\begin{tabular}{lcccccccc}\toprule
+    $\gamma_0$ & \multicolumn{4}{c}{ndofs = 18258} & \multicolumn{4}{c}{ndofs = 72444}
+    \\\cmidrule(lr){2-5}\cmidrule(lr){6-9}
+            & Rel.~err &\#N& \#L & \#L/\#N& Rel.~err &\#N& \#L & \#L/\#N\\\midrule
+    1 &$ 1.664 \times 10^{-5}$& 14 & 84 & $6$ &$1.732\times 10^{-6}$ & 14 & 98& 7\\
+    10 & $2.769\times 10^{-6}$ & 14 & 84 & 6 &$8.133\times 10^{-7}$ & 15 & 107 & 7.1\\
+    100  &  $2.875\times 10^{-7}$ & 14 & 111 & 7.9 &  $2.602\times 10^{-7}$ & 17 & 157 & 9.2\\
+    1000 & $2.889\times 10^{-8}$ & 17 & 169 & 9.9 & $2.666 \times 10^{-8}$ & 18 & 213 & 11.8 \\
+    \bottomrule
+    \end{tabular}
+    \caption{2D example, strong Dirichlet boundary conditions}
+\end{table}
+% gamma = 1
+% Newton solver finished in 14 iterations and 126 linear solver iterations.
+% Newton solver finished in 14 iterations and 182 linear solver iterations.
+% Num dofs [18258, 72444]
+% Absolute error [1.0797329720839992e-06, 2.4273937661287977e-07]
+% Relative error [1.799120306163829e-05, 4.04293141384092e-06]
+% 18258, Nitsche:  1.83e+00 SNES: 6.60e-01
+% 72444, Nitsche:  7.79e+00 SNES: 5.72e+00
+% gamma = 10
+% Newton solver finished in 14 iterations and 154 linear solver iterations.
+% Newton solver finished in 15 iterations and 240 linear solver iterations.
+% Num dofs [18258, 72444]
+% Absolute error [1.5571290821047013e-07, 4.5607956890968725e-08]
+% Relative error [2.5945883133731595e-06, 7.596206442008972e-07]
+% 18258, Nitsche:  1.85e+00 SNES: 6.89e-01
+% 72444, Nitsche:  8.86e+00 SNES: 6.15e+00
+% gamma = 100
+% Newton solver finished in 14 iterations and 177 linear solver iterations.
+% Newton solver finished in 17 iterations and 272 linear solver iterations.
+% Num dofs [18258, 72444]
+% Absolute error [1.613850150018103e-08, 1.486693555932855e-08]
+% Relative error [2.6891005934541643e-07, 2.4761537101668896e-07]
+% 18258, Nitsche:  1.87e+00 SNES: 6.54e-01
+% 72444, Nitsche:  9.91e+00 SNES: 5.83e+00
+% gamma = 1000
+% Newton solver finished in 17 iterations and 236 linear solver iterations.
+% Newton solver finished in 18 iterations and 308 linear solver iterations.
+% Num dofs [18258, 72444]
+% Absolute error [1.621291024692811e-09, 1.518863036303805e-09]
+% Relative error [2.7014990559157197e-08, 2.5297333990387416e-08]
+% 18258, Nitsche:  2.33e+00 SNES: 6.50e-01
+% 72444, Nitsche:  1.08e+01 SNES: 5.89e+00
+\begin{table}[h!]
+    \centering
+\begin{tabular}{lcccccccc}\toprule
+$\gamma_0$ & \multicolumn{4}{c}{ndofs = 18258} & \multicolumn{4}{c}{ndofs = 72444}
+\\\cmidrule(lr){2-5}\cmidrule(lr){6-9}
+        & Rel.~err &\#N& \#L & \#L/\#N& Rel.~err &\#N& \#L & \#L/\#N\\\midrule
+1 &$1.799 \times 10^{-5}$& 14 & 126 & 9 &$4.043\times 10^{-6}$ & 14 & 182& 13\\
+10 & $2.595 \times 10^{-6}$ & 14 & 154 & 11 &$7.596\times 10^{-7}$ & 15 & 240 & 16\\
+100  &  $2.689\times 10^{-7}$ & 14 & 177 & 12.6 &  $2.476\times 10^{-7}$ & 17 & 272 & 16\\
+1000 & $2.701\times 10^{-8}$ & 17 & 236 & 13.9 & $2.530 \times 10^{-8}$ & 18 & 308 & 17.1\\
+\bottomrule
+\end{tabular}
+\caption{2D example, Nitsche's method for boundary conditions}
+\end{table}
+% gamma = 1
+% Newton solver finished in 32 iterations and 63 linear solver iterations.
+% Newton solver finished in 31 iterations and 61 linear solver iterations.
+% Absolute error [0.027547863027605868, 0.02696642606892317]
+% Relative error [0.5630054611828422, 0.5504384867466406]
+% 155637, Nitsche:  2.14e+02 SNES: 2.48e+01
+% 1241136, Nitsche:  2.08e+03 SNES: 4.57e+02
+% gamma = 10
+% Newton solver finished in 16 iterations and 127 linear solver iterations.
+% Newton solver finished in 17 iterations and 189 linear solver iterations.
+% Absolute error [5.923436392858583e-07, 2.4306278067537376e-07]
+% Relative error [1.21059373455089e-05, 4.96139565685969e-06]
+% 155637, Nitsche:  1.15e+02 SNES: 2.54e+01
+% 1241136, Nitsche:  1.25e+03 SNES: 4.47e+02
+% gamma = 100 
+% Newton solver finished in 19 iterations and 177 linear solver iterations.
+% Newton solver finished in 22 iterations and 270 linear solver iterations.
+% Absolute error [2.1187853124647913e-07, 4.863456367695342e-08]
+% Relative error [4.3302367983907595e-06, 9.927283491517708e-07]
+% 155637, Nitsche:  1.37e+02 SNES: 2.59e+01
+% 1241136, Nitsche:  1.60e+03 SNES: 4.49e+02
+\begin{table}
+\begin{tabular}{lcccccccc}\toprule
+    $\gamma_0$ & \multicolumn{4}{c}{ndofs = 155637} & \multicolumn{4}{c}{ndofs = 1241136}
+     \\\cmidrule(lr){2-5}\cmidrule(lr){6-9}
+                & Rel.~err &\#N& \#L & \#L/\#N& Rel.~err &\#N& \#L & \#L/\#N\\\midrule
+ 1 &$ 5.630 \times 10^{-1}$& 32 & 63 & $1.96$ &$5.504\times 10^{-1}$ & 31 & 61& 1.97\\
+ 10 & $1.211\times 10^{-5}$ & 16 & 127 & 7.9 &$4.961\times 10^{-6}$ & 17 & 189 & 11.1\\
+ 100  &  $3.321\times 10^{-5}$ & 19 & 177 & 9.3&  $9.724\times 10^{-6}$ & 22 & 530 & 24.1\\
+ 1000 & $3.355\times 10^{-6}$ & 21 & 429 & 20.4 & $9.331 \times 10^{-7}$ & 26 & 840 & 32.3 \\
+     \bottomrule
+     \end{tabular}
+     \caption{3D example, strong Dirichlet boundary conditions}
+    \end{table}
+% gamma = 1
+% Newton solver finished in 39 iterations and 77 linear solver iterations.
+% abs. L2-error=2.80e-02
+% rel. L2-error=5.71e-01
+% Newton solver finished in 34 iterations and 68 linear solver iterations.
+% abs. L2-error=3.41e-02
+% rel. L2-error=6.96e-01
+% Num dofs [155637, 1241136]
+% Absolute error [0.02795308454372289, 0.034110748582159005]
+% Relative error [0.5712871172348579, 0.6962683443245204]
+% 155637, Nitsche:  2.63e+02 SNES: 2.50e+01
+% 1241136, Nitsche:  2.29e+03 SNES: 4.28e+02
+% gamma = 10 
+%compare Nitsche-SNES 
+% Newton solver finished in 16 iterations and 200 linear solver iterations.
+% abs. L2-error=1.56e-05
+% rel. L2-error=3.20e-04
+% Newton solver finished in 17 iterations and 274 linear solver iterations.
+% abs. L2-error=4.68e-06
+% rel. L2-error=9.56e-05
+% Num dofs [155637, 1241136]
+% Absolute error [1.564583861052497e-05, 4.683173806721532e-06]
+% Relative error [0.0003197595607936517, 9.559290863219095e-05]
+% 155637, Nitsche:  1.19e+02 SNES: 2.61e+01
+% 1241136, Nitsche:  1.27e+03 SNES: 4.32e+02
+% gamma = 100
+% Newton solver finished in 19 iterations and 324 linear solver iterations.
+% abs. L2-error=1.63e-06
+% rel. L2-error=3.32e-05
+% Newton solver finished in 22 iterations and 530 linear solver iterations.
+% abs. L2-error=4.76e-07
+% rel. L2-error=9.72e-06
+% Num dofs [155637, 1241136]
+% Absolute error [1.6251902155882933e-06, 4.764095206161511e-07]
+% Relative error [3.3214589673261125e-05, 9.72446756308773e-06]
+% 155637, Nitsche:  1.45e+02 SNES: 2.52e+01
+% 1241136, Nitsche:  1.74e+03 SNES: 4.44e+02
+% gamma = 1000
+% Newton solver finished in 21 iterations and 429 linear solver iterations.
+% abs. L2-error=1.64e-07
+% rel. L2-error=3.35e-06
+% Newton solver finished in 26 iterations and 840 linear solver iterations.
+% abs. L2-error=4.57e-08
+% rel. L2-error=9.33e-07
+% Num dofs [155637, 1241136]
+% Absolute error [1.6415432213177925e-07, 4.5714883725937546e-08]
+% Relative error [3.3548801859637836e-06, 9.331318638810084e-07]
+% 155637, Nitsche:  1.64e+02 SNES: 2.47e+01
+% 1241136, Nitsche:  2.18e+03 SNES: 4.48e+02
+
+
+\begin{table}
+\begin{tabular}{lcccccccc}\toprule
+   $\gamma_0$ & \multicolumn{4}{c}{ndofs = 155637} & \multicolumn{4}{c}{ndofs = 1241136}
+    \\\cmidrule(lr){2-5}\cmidrule(lr){6-9}
+               & Rel.~err &\#N& \#L & \#L/\#N& Rel.~err &\#N& \#L & \#L/\#N\\\midrule
+1 &$ 5.713 \times 10^{-1}$& 39 & 77 & $1.97$ &$6.963\times 10^{-1}$ & 34 & 68& 2\\
+10 & $3.198 \times 10^{-3}$ & 16 & 200 & 12.5 &$9.559\times 10^{-5}$ & 17 & 274 & 16.1\\
+100  &  $3.321\times 10^{-5}$ & 19 & 324 & 17.1&  $9.724\times 10^{-6}$ & 22 & 530 & 24.1\\
+1000 & $3.355\times 10^{-6}$ & 21 & 429 & 20.4 & $9.331 \times 10^{-7}$ & 26 & 840 & 32.3 \\
+    \bottomrule
+    \end{tabular}
+    \caption{3D example, Nitsche's method for boundary conditions}
+\end{table}
+\FloatBarrier
+Next we return to the 2D example and consider the following alternative settings:
+\begin{enumerate}
+    \item All settings as before (Opt 1)
+    \item The following settings are changed to the options listed (Opt 2):
+    \begin{verbatim}
+        opts[f"{option_prefix}pc_type"]            = "hmg"
+        opts[f"{option_prefix}mg_levels_ksp_type"] = "chebyshev"
+        opts[f"{option_prefix}mg_levels_pc_type"]  = "ilu"
+    \end{verbatim}
+%     \item The following settings are changed to the options listed (Opt 3):
+% \begin{verbatim}
+%         opts[f"{option_prefix}pc_type"]            = "hmg"
+%         opts[f"{option_prefix}mg_levels_ksp_type"] = "cg"
+%         opts[f"{option_prefix}mg_levels_pc_type"]  = "ilu"
+%     \end{verbatim}
+    \item The following list of settings (Opt 3):
+    \begin{verbatim}
+        opts["pc_type"]                   = "gamg"
+        opts["pc_gamg_type"]              = "agg"
+        opts["pc_gamg_coarse_eq_limit"]   = 1000
+        opts["pc_gamg_sym_graph"]         = True
+        opts["mg_levels_ksp_type"]        = "chebyshev"
+        opts["mg_levels_pc_type"]         = "jacobi"
+        opts["mg_levels_esteig_ksp_type"] = "cg"
+        opts["matptap_via"]               = "scalable"
+        opts["pc_gamg_square_graph"]      = 2
+        opts["pc_gamg_threshold"]         = 1e-2 
+        \end{verbatim}
+\end{enumerate}
+We consider the performance of the solvers for the three settings (Opt 1, Opt 2, Opt 3) for $\gamma_0 = 1000$ and 
+for $\gamma_0 = 10$. The finer meshes are obtained by repeatedly performing a mesh refinement with dolfinx.\\ 
+% $\gamma_0 = 1000$\\
+\begin{table}
+    \begin{tabular}{lccccccccc}\toprule
+        ndofs & \multicolumn{3}{c}{Opt 1} & \multicolumn{3}{c}{Opt 2}&\multicolumn{3}{c}{Opt 3}
+         \\\cmidrule(lr){2-4}\cmidrule(lr){5-7} \cmidrule(lr){8-10}
+                    & \#N& \#L & \#L/\#N &\#N& \#L & \#L/\#N&\#N& \#L & \#L/\#N\\\midrule
+   18256 & 17 & 236 & 13.88 &17 & 102 & 6.00 & 17 & 17 & 1\\%& 17 & 85 & 5.00\\
+   72444 & 18 & 308 & 17.11 & 18 & 108 & 6.35 & 18 & 18 & 1\\%& 18 & 90 & 5.00\\
+   288606 & 21 & 383 & 18.23 & 21 & 144 & 6.86 & 21 & 21 & 1\\ %& 21 & 125 & 5.95\\
+   1152090 & 23 & 492 & 21.39 & 23 & 157 & 6.82 & 23 & 23 & 1\\%& 23 & 140 &6.09 \\
+   %4603698 & 24 & 564 & 23.50 & 30 & 214 & 7.13 & 30 & 207 & 6.90\\
+         \bottomrule
+         \end{tabular}
+         \caption{$\gamma_0 = 1000$}
+        \end{table}
+
+% $\gamma_0= 10$\\
+\begin{table}
+         \begin{tabular}{lccccccccc}\toprule
+            ndofs & \multicolumn{3}{c}{Opt 1} & \multicolumn{3}{c}{Opt 2}&\multicolumn{3}{c}{Opt 3}
+            \\\cmidrule(lr){2-4}\cmidrule(lr){5-7} \cmidrule(lr){8-10}
+                       & \#N& \#L & \#L/\#N &\#N& \#L & \#L/\#N&\#N& \#L & \#L/\#N\\\midrule
+       18256 & 14 & 154 & 11.00 & 14 & 84 & 6.00 & 14 & 14 & 1\\%&14 & 70 & 5.00\\
+       72444 & 15 & 240 & 16.00 & 15 & 90 & 6.00 & 15 & 15 & 1\\%&15 & 83 & 5.53\\
+       288606 & 16 & 256 & 16.00 & 16 & 112 & 7.00 & 16 & 16 & 1\\%& 16 &95 & 5.94\\
+       1152090 & 18 & 360 & 20.00 & 18 &124 & 6.89 & 18 & 18 & 1\\%& 18 &110 & 6.11\\
+       %4603698 & 19 & 451 & 23.74 & 19 & 137 & 7.21 & 19 &132 &6.95\\
+             \bottomrule
+             \end{tabular}
+             \caption{$ \gamma_0 = 10$}
+            \end{table}
+
+\FloatBarrier
+
+\end{document}
