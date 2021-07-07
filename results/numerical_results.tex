@@ -105,6 +105,80 @@ $\Gamma_C  = \Gamma \cap \{y < 0.2 \}$. The second example is the 3D analogue of
 with radius $0.5$ and center $(0.5, 0.5, 0.5)$, $\Gamma_D = \Gamma \cap \{z > 0.9\}$, $\Gamma_C = \Gamma \cap \{z< 0.15\}$ and an initial displacement of 
 $-0.08$ in the $z$-direction. The surface is a horizontal plane at $z = -0.02$
 
+
+    We start our investigation with the following set of solver options:
+\begin{verbatim}
+    opts[f"{option_prefix}ksp_type"]                  = "cg"
+    opts[f"{option_prefix}pc_type"]                   = "gamg"
+    opts[f"{option_prefix}rtol"]                      = 1.0e-6
+    opts[f"{option_prefix}pc_gamg_coarse_eq_limit"]   = 1000
+    opts[f"{option_prefix}mg_levels_ksp_type"]        = "chebyshev"
+    opts[f"{option_prefix}mg_levels_pc_type"]         = "jacobi"
+    opts[f"{option_prefix}mg_levels_esteig_ksp_type"] = "cg"
+    opts[f"{option_prefix}matptap_via"]               = "scalable"
+\end{verbatim}
+% Step  1, ndofs: 18258, Number of Newton interations:  17, Max number of linear iterations:  12, Average number of linear iterations: 11.529411764705882.
+% Step  1, ndofs: 72444, Number of Newton interations:  18, Max number of linear iterations:  14, Average number of linear iterations: 12.5.
+% Step  1, ndofs: 288606, Number of Newton interations:  21, Max number of linear iterations:  16, Average number of linear iterations: 14.80952380952381.
+% Step  1, ndofs: 1152090, Number of Newton interations:  23, Max number of linear iterations:  16, Average number of linear iterations: 14.217391304347826.
+% Step  1, ndofs: 4603698, Number of Newton interations:  30, Max number of linear iterations:  17, Average number of linear iterations: 14.6.
+
+% Step  1, ndofs: 18258, Number of Newton interations:  17, Max number of linear iterations:  10, Average number of linear iterations: 9.882352941176471.
+% Step  1, ndofs: 72444, Number of Newton interations:  18, Max number of linear iterations:  11, Average number of linear iterations: 10.333333333333334.
+% Step  1, ndofs: 288606, Number of Newton interations:  21, Max number of linear iterations:  12, Average number of linear iterations: 11.523809523809524.
+% Step  1, ndofs: 1152090, Number of Newton interations:  23, Max number of linear iterations:  13, Average number of linear iterations: 11.478260869565217.
+% Step  1, ndofs: 4603698, Number of Newton interations:  30, Max number of linear iterations:  13, Average number of linear iterations: 12.366666666666667.
+\begin{table}
+    \begin{tabular}{lccccccccc}\toprule
+       h & \multicolumn{3}{c}{Opt 1} & \multicolumn{3}{c}{Opt 2}&\multicolumn{3}{c}{Opt 3}
+       \\\cmidrule(lr){2-4}\cmidrule(lr){5-7} \cmidrule(lr){8-10}
+                  & \#N& \#L & \#L/\#N &\#N& \#L & \#L/\#N&\#N& \#L & \#L/\#N\\\midrule
+  $\sim 7.4 \times 10^{-3}$ & 14 & 154 & 11.00 & 14 & 84 & 6.00 & 14 & 14 & 1\\%&14 & 70 & 5.00\\
+  $\sim 3.7 \times 10^{-3}$ & 15 & 240 & 16.00 & 15 & 90 & 6.00 & 15 & 15 & 1\\%&15 & 83 & 5.53\\
+  $\sim 1.8 \times 10^{-3}$ & 16 & 256 & 16.00 & 16 & 112 & 7.00 & 16 & 16 & 1\\%& 16 &95 & 5.94\\
+  $\sim 9.3 \times 10^{-4}$ & 18 & 360 & 20.00 & 18 &124 & 6.89 & 18 & 18 & 1\\%& 18 &110 & 6.11\\
+  %$\sim 4.6 \times 10^{-4}$ & 19 & 451 & 23.74 & 19 & 137 & 7.21 & 19 &132 &6.95\\
+        \bottomrule
+        \end{tabular}
+        \caption{2D example, $ \gamma_0 = 10$}
+       \end{table}
+Tables 1-4 show the performance of the solvers for different values of $\gamma_0$ and two different meshes. The finer
+mesh is obtained from the coarser mesh by performing a mesh refinement with dolfinx. The relative error is computed with respect 
+to an approximation computed with SNES by imposing the contact condition as an inequality constraint. We use the following abbrivations:
+\begin{description}
+\item[nodfs] number of degrees of freedom 
+\item[\#N] number of non-linear iterations
+\item[\#L] total number of linear iterations
+\end{description}
+Furthermore, we show the value $\#L/\#N$ in the tables which is essentially the average number of linear iterations per non-linear iteration.
+\begin{table}   
+\begin{tabular}{lcccccccc}\toprule
+        $\gamma_0$ & \multicolumn{4}{c}{$h \sim 1.8 \times 10^{-2}$} & \multicolumn{4}{c}{$ h\sim9.3\times 10^{-3}$}
+         \\\cmidrule(lr){2-5}\cmidrule(lr){6-9}
+                    & Rel.~err &\#N& \#L & \#L/\#N& Rel.~err &\#N& \#L & \#L/\#N\\\midrule
+     1 &$ 5.630 \times 10^{-1}$& 32 & 63 & $1.96$ &$5.504\times 10^{-1}$ & 31 & 61& 1.97\\
+     10 & $1.211\times 10^{-5}$ & 16 & 127 & 7.9 &$4.961\times 10^{-6}$ & 17 & 189 & 11.1\\
+     100  &  $3.321\times 10^{-5}$ & 19 & 177 & 9.3&  $9.724\times 10^{-6}$ & 22 & 530 & 24.1\\
+     1000 & $3.355\times 10^{-6}$ & 21 & 222 & 10.57 & $9.331 \times 10^{-7}$ & 26 & 334 & 12.85 \\
+         \bottomrule
+         \end{tabular}
+         \caption{3D example, strong Dirichlet boundary conditions}
+        \end{table}
+        \begin{table}   
+            \begin{tabular}{lcccccccc}\toprule
+                    $\gamma_0$ & \multicolumn{4}{c}{$h \sim 1.8 \times 10^{-2}$} & \multicolumn{4}{c}{$ h\sim9.3\times 10^{-3}$}
+                     \\\cmidrule(lr){2-5}\cmidrule(lr){6-9}
+                                & Rel.~err &\#N& \#L & \#L/\#N& Rel.~err &\#N& \#L & \#L/\#N\\\midrule
+                 1 &$ 5.630 \times 10^{-1}$& 32 & 63 & $1.96$ &$5.504\times 10^{-1}$ & 31 & 61& 1.97\\
+                 10 & $1.211\times 10^{-5}$ & 16 & 127 & 7.9 &$4.961\times 10^{-6}$ & 17 & 189 & 11.1\\
+                 100  &  $3.321\times 10^{-5}$ & 19 & 177 & 9.3&  $9.724\times 10^{-6}$ & 22 & 530 & 24.1\\
+                 1000 & $5.14\times 10^{-7}$ & 21 & 276 & 13.14 & $1.33 \times 10^{-7}$ & 26 & 399 & 15.35 \\
+                     \bottomrule
+                     \end{tabular}
+                     \caption{3D example, strong Dirichlet boundary conditions}
+                    \end{table}
+               \FloatBarrier
+\end{document}
 We start our investigation with the following set of solver options:
 \begin{verbatim}
     opts[f"{option_prefix}ksp_type"]                  = "cg"
@@ -378,5 +452,31 @@ for $\gamma_0 = 10$. The finer meshes are obtained by repeatedly performing a me
             \end{table}
 
 \FloatBarrier
+% 2D, gamma = 10, 
+% opts[f"{option_prefix}ksp_type"] = "cg"
+% opts[f"{option_prefix}pc_type"] = "gamg"
+% opts[f"{option_prefix}pc_gamg_type"] = "agg"
+% opts[f"{option_prefix}pc_gamg_coarse_eq_limit"] = 1000
+% opts[f"{option_prefix}pc_gamg_sym_graph"] = True
+% opts[f"{option_prefix}mg_levels_ksp_type"] = "chebyshev"
+% opts[f"{option_prefix}mg_levels_pc_type"] = "sor"
+% opts[f"{option_prefix}mg_levels_esteig_ksp_type"] = "cg"
+% opts[f"{option_prefix}matptap_via"] = "scalable"
+% opts[f"{option_prefix}pc_gamg_square_graph"] = 2
+% opts[f"{option_prefix}pc_gamg_threshold"] = 1e-2
+% Step  1, ndofs: 18258, Number of Newton interations:  14, Max number of linear iterations:  8, Average number of linear iterations: 8.0.
+% Step  1, ndofs: 72444, Number of Newton interations:  15, Max number of linear iterations:  8, Average number of linear iterations: 8.0.
+% Step  1, ndofs: 288606, Number of Newton interations:  16, Max number of linear iterations:  9, Average number of linear iterations: 9.0.
+% Step  1, ndofs: 1152090, Number of Newton interations:  18, Max number of linear iterations:  10, Average number of linear iterations: 9.944444444444445.
+% Step  1, ndofs: 4603698, Number of Newton interations:  19, Max number of linear iterations:  11, Average number of linear iterations: 10.157894736842104.
 
+% Step  0, ndofs: 155637, Number of Newton interations:  21, Max number of linear iterations:  11, Average number of linear iterations: 10.571428571428571.
+% abs. L2-error=2.52e-08
+% rel. L2-error=5.14e-07
+% Step  0, ndofs: 1241136, Number of Newton interations:  26, Max number of linear iterations:  14, Average number of linear iterations: 12.846153846153847.
+% abs. L2-error=6.49e-09
+% rel. L2-error=1.33e-07
+% Num dofs [155637, 1241136]
+% Absolute error [2.51520099400481e-08, 6.494980493636617e-09]
+% Relative error [5.140405606640491e-07, 1.3257553829466196e-07]
 \end{document}

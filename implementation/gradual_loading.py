@@ -8,6 +8,7 @@ from mpi4py import MPI
 
 from create_mesh import create_disk_mesh, create_sphere_mesh, convert_mesh
 from nitsche_one_way import nitsche_one_way
+from penalty import penalty
 from snes_against_plane import snes_solver
 
 
@@ -41,6 +42,9 @@ if __name__ == "__main__":
                                dest="refs", help="Number of mesh refinements")
     _nload_steps = parser.add_argument("--load_steps", default=1, type=np.int32, dest="nload_steps",
                                        help="Number of steps for gradual loading")
+    _dirichlet = parser.add_mutually_exclusive_group(required=False)
+    _dirichlet.add_argument('--penalty', dest='penalty_method', action='store_true',
+                            help="Use penalty method", default=False)
     _gap = parser.add_argument(
         "--gap", default=0.02, type=np.float64, dest="gap", help="Gap between plane and y=0")
     # Parse input arguments or set to defualt values
@@ -57,6 +61,7 @@ if __name__ == "__main__":
     threed = args.threed
     bottom_value = 2
     nload_steps = args.nload_steps
+    penalty_method = args.penalty_method
 
     # Load mesh and create identifier functions for the top (Displacement condition)
     # and the bottom (contact condition)
@@ -124,9 +129,14 @@ if __name__ == "__main__":
         for j in range(nload_steps):
             displacement = (j + 1) * load_increment
             # Solve contact problem using Nitsche's method
-            u1 = nitsche_one_way(mesh=mesh, mesh_data=mesh_data, physical_parameters=physical_parameters,
-                                 vertical_displacement=displacement, nitsche_parameters=nitsche_parameters,
-                                 refinement=i, g=gap, nitsche_bc=nitsche_bc, initGuess=u1, load_step=j + 1)
+            if penalty_method:
+                u1 = penalty(mesh=mesh, mesh_data=mesh_data, physical_parameters=physical_parameters,
+                             vertical_displacement=displacement, nitsche_parameters=nitsche_parameters,
+                             refinement=i, g=gap, nitsche_bc=nitsche_bc, initGuess=u1, load_step=j + 1)
+            else:
+                u1 = nitsche_one_way(mesh=mesh, mesh_data=mesh_data, physical_parameters=physical_parameters,
+                                     vertical_displacement=displacement, nitsche_parameters=nitsche_parameters,
+                                     refinement=i, g=gap, nitsche_bc=nitsche_bc, initGuess=u1, load_step=j + 1)
         V = u1.function_space
         dofs_global.append(V.dofmap.index_map.size_global * V.dofmap.index_map_bs)
 

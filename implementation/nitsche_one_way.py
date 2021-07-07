@@ -116,23 +116,30 @@ def nitsche_one_way(mesh, mesh_data, physical_parameters, refinement=0,
     # Set Newton solver options
     solver.atol = 1e-9
     solver.rtol = 1e-9
-    solver.convergence_criterion = "residual"
+    solver.convergence_criterion = "incremental"
     solver.max_it = 50
     solver.error_on_nonconvergence = True
     solver.relaxation_parameter = 0.8
 
+    its = []
+
+    def update(solver, dx, x):
+        x.axpy(-solver.relaxation_parameter, dx)
+        ksp = solver.krylov_solver
+        its.append(ksp.getIterationNumber())
+    solver.set_update(update)
+
     if initGuess is None:
-        # def _u_initial(x):
-        #     values = np.zeros((mesh.geometry.dim, x.shape[1]))
-        #     values[-1] = -0.01
-        #     return values
-        # # Set initial_condition:
-        # u.interpolate(_u_initial)
-        pass
+        def _u_initial(x):
+            values = np.zeros((mesh.geometry.dim, x.shape[1]))
+            values[-1] = -0.01 - g
+            return values
+        # Set initial_condition:
+        u.interpolate(_u_initial)
     else:
         u.x.array[:] = initGuess.x.array
         # u.x.scatter_forward()
-    print(f"norm of initial guess {np.linalg.norm(u.x.array)}")
+
     # Define solver and options
     ksp = solver.krylov_solver
     opts = PETSc.Options()
@@ -143,22 +150,22 @@ def nitsche_one_way(mesh, mesh_data, physical_parameters, refinement=0,
 
     opts[f"{option_prefix}ksp_type"] = "cg"
     # opts[f"{option_prefix}pc_type"] = "gamg"
-    # opts[f"{option_prefix}rtol"] = 1.0e-6
+    opts[f"{option_prefix}rtol"] = 1.0e-6
     # opts[f"{option_prefix}pc_gamg_coarse_eq_limit"] = 1000
     # opts[f"{option_prefix}mg_levels_ksp_type"] = "chebyshev"
     # opts[f"{option_prefix}mg_levels_pc_type"] = "jacobi"
     # opts[f"{option_prefix}mg_levels_esteig_ksp_type"] = "cg"
     # opts[f"{option_prefix}matptap_via"] = "scalable"
     opts[f"{option_prefix}pc_type"] = "gamg"
-    opts[f"{option_prefix}pc_gamg_type"] = "agg"
+    # opts[f"{option_prefix}pc_gamg_type"] = "agg"
     opts[f"{option_prefix}pc_gamg_coarse_eq_limit"] = 1000
-    opts[f"{option_prefix}pc_gamg_sym_graph"] = True
+    # opts[f"{option_prefix}pc_gamg_sym_graph"] = True
     opts[f"{option_prefix}mg_levels_ksp_type"] = "chebyshev"
-    opts[f"{option_prefix}mg_levels_pc_type"] = "sor"
+    opts[f"{option_prefix}mg_levels_pc_type"] = "jacobi"
     opts[f"{option_prefix}mg_levels_esteig_ksp_type"] = "cg"
     opts[f"{option_prefix}matptap_via"] = "scalable"
-    opts[f"{option_prefix}pc_gamg_square_graph"] = 2
-    opts[f"{option_prefix}pc_gamg_threshold"] = 1e-2
+    # opts[f"{option_prefix}pc_gamg_square_graph"] = 2
+    # opts[f"{option_prefix}pc_gamg_threshold"] = 1e-2
     opts[f"{option_prefix}help"] = None  # List all available options
 
     # View solver options
@@ -172,11 +179,12 @@ def nitsche_one_way(mesh, mesh_data, physical_parameters, refinement=0,
     u.x.scatter_forward()
     if solver.error_on_nonconvergence:
         assert(converged)
-    it = ksp.getIterationNumber()
+
     rank = MPI.COMM_WORLD.rank
     if rank == 0:
         print(f"Step {load_step: d}, ndofs: {V.dofmap.index_map_bs * V.dofmap.index_map.size_global}, "
-              + f"Number of Newton interations: {n: d}, Number of linear iterations: {it: d}")
+              + f"Number of Newton interations: {n: d}, Max number of linear iterations: {np.max(its): d}"
+              + f", Average number of linear iterations: {np.sum(its)/n}.")
 
     with dolfinx.io.XDMFFile(MPI.COMM_WORLD, f"results/u_nitsche_{refinement}_{load_step}.xdmf", "w") as xdmf:
         xdmf.write_mesh(mesh)
