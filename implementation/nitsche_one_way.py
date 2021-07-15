@@ -1,17 +1,20 @@
+# Copyright (C) 2021 Jørgen S. Dokken and Sarah Roggendorf
+#
+# SPDX-License-Identifier:    MIT
+
 import dolfinx
 import dolfinx.io
 import numpy as np
 import ufl
 from mpi4py import MPI
 from petsc4py import PETSc
+from typing import Tuple
+from helpers import (epsilon, lame_parameters, rigid_motions_nullspace, sigma_func, R_minus)
 
-from helpers import (epsilon, lame_parameters, rigid_motions_nullspace,
-                     sigma_func, R_minus)
 
-
-def nitsche_one_way(mesh, mesh_data, physical_parameters, refinement=0,
-                    nitsche_parameters={"gamma": 1, "theta": 1, "s": 0}, g=0.0,
-                    vertical_displacement=-0.1, nitsche_bc=False):
+def nitsche_one_way(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dolfinx.MeshTags, int, int], physical_parameters: dict, refinement: int = 0,
+                    nitsche_parameters: dict = {"gamma": 1, "theta": 1, "s": 0}, g: float = 0.0,
+                    vertical_displacement: float = -0.1, nitsche_bc: bool = False):
     (facet_marker, top_value, bottom_value) = mesh_data
 
     with dolfinx.io.XDMFFile(MPI.COMM_WORLD, "results/mf_nitsche.xdmf", "w") as xdmf:

@@ -1,3 +1,7 @@
+# Copyright (C) 2021 Jørgen S. Dokken and Sarah Roggendorf
+#
+# SPDX-License-Identifier:    MIT
+
 import argparse
 import os
 
@@ -12,7 +16,7 @@ from mpi4py import MPI
 from helpers import epsilon, lame_parameters, sigma_func
 
 
-def solve_manufactured(nx, ny, theta, gamma, nitsche, strain, linear_solver, L=10):
+def solve_manufactured(nx: int, ny: int, theta: float, gamma: float, nitsche: bool, strain: bool, linear_solver: bool, L: float = 10):
     """
     Solve the manufactured problem 
     u = [(nu + 1) / E * x[1]**4, (nu + 1) / E * x[0]**4]
@@ -128,9 +132,9 @@ def solve_manufactured(nx, ny, theta, gamma, nitsche, strain, linear_solver, L=1
 
 
 if __name__ == "__main__":
+    desc = "Manufatured solution test for the linear elasticity equation using Nitsche-Dirichlet boundary conditions"
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-                                     description="Manufatured solution test for the linear elasticity equation"
-                                     + " using Nitsche-Dirichlet boundary conditions")
+                                     description=desc)
     parser.add_argument("--theta", default=1, type=np.float64, dest="theta",
                         help="Theta parameter for Nitsche, 1 symmetric, -1 skew symmetric, 0 Penalty-like")
     parser.add_argument("--gamma", default=1000, type=np.float64, dest="gamma",
@@ -160,5 +164,4 @@ if __name__ == "__main__":
             nx, ny, theta, gamma, nitsche, strain, linear_solver)
         errors[i] = E
         hs[i] = h
-    print(
-        f"Convergence rate: {np.log(errors[:-1]/errors[1:])/np.log(hs[:-1]/hs[1:])}")
+    print(f"Convergence rate: {np.log(errors[:-1]/errors[1:])/np.log(hs[:-1]/hs[1:])}")

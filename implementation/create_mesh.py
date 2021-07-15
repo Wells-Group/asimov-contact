@@ -1,3 +1,6 @@
+# Copyright (C) 2021 Jørgen S. Dokken
+#
+# SPDX-License-Identifier:    MIT
 
 import argparse
 import warnings

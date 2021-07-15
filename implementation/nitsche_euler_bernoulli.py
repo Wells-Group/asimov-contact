@@ -1,3 +1,7 @@
+# Copyright (C) 2021 Jørgen S. Dokken and Sarah Roggendorf
+#
+# SPDX-License-Identifier:    MIT
+
 import argparse
 import os
 from typing import List
@@ -13,15 +17,14 @@ from mpi4py import MPI
 from helpers import epsilon, lame_parameters, sigma_func
 
 
-def solve_euler_bernoulli(nx, ny, theta, gamma, linear_solver, plane_strain, nitsche, L=47, H=2.73,
-                          E=1e5, nu=0.3, rho_g=1e-2):
+def solve_euler_bernoulli(nx: int, ny: int, theta: float, gamma: float, linear_solver: bool, plane_strain: bool, nitsche: bool,
+                          L: float = 47, H: float = 2.73, E: float = 1e5, nu: float = 0.3, rho_g: float = 1e-2):
     """
     Solve the Euler-Bernoulli equations for a (0,0)x(L,H) beam
     (https://en.wikipedia.org/wiki/Euler%E2%80%93Bernoulli_beam_theory#Cantilever_beams)
     """
-    mesh = dolfinx.RectangleMesh(
-        MPI.COMM_WORLD, [np.array([0, 0, 0]), np.array([L, H, 0])], [nx, ny],
-        CellType.triangle, GhostMode.none)
+    mesh = dolfinx.RectangleMesh(MPI.COMM_WORLD, [np.array([0, 0, 0]), np.array([L, H, 0])], [nx, ny],
+                                 CellType.triangle, GhostMode.none)
 
     def left(x):
         return np.isclose(x[0], 0)
@@ -129,9 +132,10 @@ def solve_euler_bernoulli(nx, ny, theta, gamma, linear_solver, plane_strain, nit
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description="Verification of Nitsche-Dirichlet boundary conditions for"
-        + "linear elasticity solving the Euler-Bernoulli equiation", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    desc = description = "Verification of Nitsche-Dirichlet boundary conditions for linear elasticity solving" +\
+        "the Euler-Bernoulli equiation",
+    parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+                                     description=desc)
     parser.add_argument("--theta", default=1, type=np.float64, dest="theta",
                         help="Theta parameter for Nitsche, 1 symmetric, -1 skew symmetric, 0 Penalty-like")
     parser.add_argument("--gamma", default=1000, type=np.float64, dest="gamma",
