@@ -1,3 +1,7 @@
+# Copyright (C) 2021 Jørgen S. Dokken and Sarah Roggendorf
+#
+# SPDX-License-Identifier:    MIT
+
 import argparse
 
 import dolfinx
@@ -12,8 +16,8 @@ from snes_against_plane import snes_solver
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Compare Nitsche's metood for contact against a straight plane"
-                                     + " with PETSc SNES",
+    description = "Compare Nitsche's method for contact against a straight plane with PETSc SNES"
+    parser = argparse.ArgumentParser(description=description,
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument("--theta", default=1, type=np.float64, dest="theta",
                         help="Theta parameter for Nitsche, 1 symmetric, -1 skew symmetric, 0 Penalty-like")
@@ -41,6 +45,7 @@ if __name__ == "__main__":
                                dest="refs", help="Number of mesh refinements")
     _gap = parser.add_argument(
         "--gap", default=0.02, type=np.float64, dest="gap", help="Gap between plane and y=0")
+
     # Parse input arguments or set to defualt values
     args = parser.parse_args()
 
@@ -103,6 +108,7 @@ if __name__ == "__main__":
             # Refine mesh
             mesh.topology.create_entities(mesh.topology.dim - 2)
             mesh = dolfinx.mesh.refine(mesh)
+
         # Create meshtag for top and bottom markers
         tdim = mesh.topology.dim
         top_facets = dolfinx.mesh.locate_entities_boundary(mesh, tdim - 1, top)
@@ -137,6 +143,8 @@ if __name__ == "__main__":
         e_abs.append(E_L2)
         e_rel.append(E_L2 / u2_L2)
         dofs_global.append(V.dofmap.index_map.size_global * V.dofmap.index_map_bs)
+
+    # Output absolute and relative errors of Nitsche compared to SNES
     if rank == 0:
         print(f"Num dofs {dofs_global}")
         print(f"Absolute error {e_abs}")

@@ -1,3 +1,7 @@
+# Copyright (C) 2021 Jørgen S. Dokken and Sarah Roggendorf
+#
+# SPDX-License-Identifier:    MIT
+
 import argparse
 
 import dolfinx
@@ -8,8 +12,8 @@ from mpi4py import MPI
 from nitsche_rigid_surface import nitsche_rigid_surface
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Compare Nitsche's metood for contact against a straight plane"
-                                     + " with PETSc SNES",
+    desc = "Compare Nitsche's metood for contact against a straight plane with PETSc SNES"
+    parser = argparse.ArgumentParser(description=desc,
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument("--theta", default=1, type=np.float64, dest="theta",
                         help="Theta parameter for Nitsche, 1 symmetric, -1 skew symmetric, 0 Penalty-like")
