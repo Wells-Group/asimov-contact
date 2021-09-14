@@ -1,3 +1,7 @@
+# Copyright (C) 2021 Jørgen S. Dokken and Sarah Roggendorf
+#
+# SPDX-License-Identifier:    MIT
+
 import dolfinx
 import dolfinx.io
 import dolfinx.log
@@ -5,11 +9,12 @@ import numpy as np
 import ufl
 from mpi4py import MPI
 from petsc4py import PETSc
-
+from typing import Tuple
 from helpers import NonlinearPDE_SNESProblem, lame_parameters, epsilon, sigma_func, rigid_motions_nullspace
 
 
-def snes_solver(mesh, mesh_data, physical_parameters, refinement=0, g=0.0, vertical_displacement=-0.1):
+def snes_solver(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dolfinx.MeshTags, int, int], physical_parameters: dict,
+                refinement: int = 0, g: float = 0.0, vertical_displacement: float = -0.1):
     (facet_marker, top_value, bottom_value) = mesh_data
     """
     Solving contact problem against a rigid plane with gap -g from y=0 using PETSc SNES solver
@@ -153,7 +158,3 @@ def snes_solver(mesh, mesh_data, physical_parameters, refinement=0, g=0.0, verti
         xdmf.write_function(u)
 
     return u
-
-
-if __name__ == "__main__":
-    snes_solver()

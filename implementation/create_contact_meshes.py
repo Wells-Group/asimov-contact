@@ -1,3 +1,7 @@
+# Copyright (C) 2021 Jørgen S. Dokken
+#
+# SPDX-License-Identifier:    MIT
+
 import argparse
 import warnings
 
@@ -41,11 +45,11 @@ def create_circle_plane_mesh(filename: str):
     # Synchronize and create physical tags
     gmsh.model.occ.synchronize()
     gmsh.model.addPhysicalGroup(2, [surface])
-    bndry = gmsh.model.getBoundary((2, surface))
+    bndry = gmsh.model.getBoundary([(2, surface)])
     [gmsh.model.addPhysicalGroup(b[0], [b[1]]) for b in bndry]
 
     gmsh.model.addPhysicalGroup(2, [surface2], 2)
-    bndry2 = gmsh.model.getBoundary((2, surface2))
+    bndry2 = gmsh.model.getBoundary([(2, surface2)])
     [gmsh.model.addPhysicalGroup(b[0], [b[1]]) for b in bndry2]
 
     gmsh.model.mesh.field.add("Distance", 1)

@@ -1,3 +1,7 @@
+# Copyright (C) 2021 Jørgen S. Dokken and Sarah Roggendorf
+#
+# SPDX-License-Identifier:    MIT
+
 import dolfinx
 import dolfinx.io
 import numpy as np
@@ -6,13 +10,15 @@ from mpi4py import MPI
 from petsc4py import PETSc
 import dolfinx_cuas.cpp as cuas
 
+from typing import Tuple
 from helpers import (epsilon, lame_parameters, rigid_motions_nullspace,
                      sigma_func, R_minus)
 
 
-def nitsche_rigid_surface(mesh, mesh_data, physical_parameters,
-                          nitsche_parameters={"gamma": 1, "theta": 1},
-                          vertical_displacement=-0.1, nitsche_bc=False):
+def nitsche_rigid_surface(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dolfinx.MeshTags, int, int, int, int],
+                          physical_parameters: dict,
+                          nitsche_parameters: dict = {"gamma": 1, "theta": 1},
+                          vertical_displacement: dict = -0.1, nitsche_bc: bool = False):
     (facet_marker, top_value, bottom_value, surface_value, surface_bottom) = mesh_data
 
     # Nitche parameters and variables
@@ -43,7 +49,7 @@ def nitsche_rigid_surface(mesh, mesh_data, physical_parameters,
     gdim = mesh.geometry.dim
     fdim = mesh.topology.dim - 1
     mesh_geometry = mesh.geometry.x
-    contact = cuas.Contact(facet_marker, bottom_value, surface_value)
+    contact = cuas.Contact(facet_marker, bottom_value, surface_value, V._cpp_object)
     contact.create_distance_map(0)
     lookup = contact.map_0_to_1()
     bottom_facets = contact.facet_0()
