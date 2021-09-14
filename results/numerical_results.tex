@@ -128,20 +128,66 @@ $-0.08$ in the $z$-direction. The surface is a horizontal plane at $z = -0.02$
 % Step  1, ndofs: 288606, Number of Newton interations:  21, Max number of linear iterations:  12, Average number of linear iterations: 11.523809523809524.
 % Step  1, ndofs: 1152090, Number of Newton interations:  23, Max number of linear iterations:  13, Average number of linear iterations: 11.478260869565217.
 % Step  1, ndofs: 4603698, Number of Newton interations:  30, Max number of linear iterations:  13, Average number of linear iterations: 12.366666666666667.
+% \begin{table}
+%     \begin{tabular}{lccccccccc}\toprule
+%        h & \multicolumn{3}{c}{Opt 1} & \multicolumn{3}{c}{Opt 2}&\multicolumn{3}{c}{Opt 3}
+%        \\\cmidrule(lr){2-4}\cmidrule(lr){5-7} \cmidrule(lr){8-10}
+%                   & \#N& \#L & \#L/\#N &\#N& \#L & \#L/\#N&\#N& \#L & \#L/\#N\\\midrule
+%   $\sim 7.4 \times 10^{-3}$ & 14 & 154 & 11.00 & 14 & 84 & 6.00 & 14 & 14 & 1\\%&14 & 70 & 5.00\\
+%   $\sim 3.7 \times 10^{-3}$ & 15 & 240 & 16.00 & 15 & 90 & 6.00 & 15 & 15 & 1\\%&15 & 83 & 5.53\\
+%   $\sim 1.8 \times 10^{-3}$ & 16 & 256 & 16.00 & 16 & 112 & 7.00 & 16 & 16 & 1\\%& 16 &95 & 5.94\\
+%   $\sim 9.3 \times 10^{-4}$ & 18 & 360 & 20.00 & 18 &124 & 6.89 & 18 & 18 & 1\\%& 18 &110 & 6.11\\
+%   %$\sim 4.6 \times 10^{-4}$ & 19 & 451 & 23.74 & 19 & 137 & 7.21 & 19 &132 &6.95\\
+%         \bottomrule
+%         \end{tabular}
+%         \caption{2D example, $ \gamma_0 = 10$}
+%        \end{table}
 \begin{table}
-    \begin{tabular}{lccccccccc}\toprule
-       h & \multicolumn{3}{c}{Opt 1} & \multicolumn{3}{c}{Opt 2}&\multicolumn{3}{c}{Opt 3}
-       \\\cmidrule(lr){2-4}\cmidrule(lr){5-7} \cmidrule(lr){8-10}
-                  & \#N& \#L & \#L/\#N &\#N& \#L & \#L/\#N&\#N& \#L & \#L/\#N\\\midrule
-  $\sim 7.4 \times 10^{-3}$ & 14 & 154 & 11.00 & 14 & 84 & 6.00 & 14 & 14 & 1\\%&14 & 70 & 5.00\\
-  $\sim 3.7 \times 10^{-3}$ & 15 & 240 & 16.00 & 15 & 90 & 6.00 & 15 & 15 & 1\\%&15 & 83 & 5.53\\
-  $\sim 1.8 \times 10^{-3}$ & 16 & 256 & 16.00 & 16 & 112 & 7.00 & 16 & 16 & 1\\%& 16 &95 & 5.94\\
-  $\sim 9.3 \times 10^{-4}$ & 18 & 360 & 20.00 & 18 &124 & 6.89 & 18 & 18 & 1\\%& 18 &110 & 6.11\\
-  %$\sim 4.6 \times 10^{-4}$ & 19 & 451 & 23.74 & 19 & 137 & 7.21 & 19 &132 &6.95\\
+\begin{tabular}{lcccr}\toprule 
+   $\gamma_0$ & Rel.~err. & \#N & \#L & \#L/\#N\\
+   \midrule 
+   1 & $6.34 \times 10^{-1}$ &19 & 118 & 6.21 \\
+   10 & $4.96\times 10^{-6}$ & 17 & 156 & 9.18\\
+   100 & $9.93\times 10^{-7}$ & 22 & 220 &10.00 \\
+1000 & $1.33\times 10^{-7}$ & 26 & 339& 13.04\\
+   \bottomrule
+\end{tabular}
+\caption{3D example, $h \sim 9.3 \times 10^{-3}$, \\
+\#N = number of Newton iterations, \\
+\#L = total number of linear iterations}
+\end{table}
+
+\begin{table}
+    \centering
+    \begin{tabular}{lccrccr}\toprule
+       h & \multicolumn{3}{c}{Opt 1} & \multicolumn{3}{c}{Opt 2}
+       \\\cmidrule(lr){2-4}\cmidrule(lr){5-7} 
+                  & \#N& \#L & \#L/\#N &\#N& \#L & \#L/\#N\\\midrule
+  $\sim 1.8 \times 10^{-2}$ & 21& 259 & 12.33 & 21 & 228 & 10.86\\
+  $\sim 9.3 \times 10^{-3}$ & 26 & 502 & 19.31& 26& 339 & 13.04 \\
+  $\sim 4.7 \times 10^{-3}$ & 38 & 753 & 19.81 & 38 & 548 & 14.42 \\
+%   $\sim 9.3 \times 10^{-4}$ & 18 & 360 & 20.00 & 18 &124 & 6.89 \\
         \bottomrule
         \end{tabular}
-        \caption{2D example, $ \gamma_0 = 10$}
+        \caption{3D example, $ \gamma_0 = 1000$ \hfill}
        \end{table}
+
+\begin{table}
+    \centering
+    \begin{tabular}{lccrccr}\toprule
+       h & \multicolumn{3}{c}{Opt 1} & \multicolumn{3}{c}{Opt 2}
+       \\\cmidrule(lr){2-4}\cmidrule(lr){5-7} 
+                  & \#N& \#L & \#L/\#N &\#N& \#L & \#L/\#N\\\midrule
+  $\sim 1.8 \times 10^{-2}$ & 16& 127 & 7.93 & 16 & 128 & 8.00\\
+  $\sim 9.3 \times 10^{-3}$ & 17 & 186 & 10.92& 17& 156 & 9.21 \\
+  $\sim 4.7 \times 10^{-3}$ & 19 & 228 & 12.00 & 19 & 175 & 9.17 \\
+%   $\sim 9.3 \times 10^{-4}$ & 18 & 360 & 20.00 & 18 &124 & 6.89 \\
+        \bottomrule
+        \end{tabular}
+        \caption{3D example, $ \gamma_0 = 10$}
+       \end{table}
+
+
 Tables 1-4 show the performance of the solvers for different values of $\gamma_0$ and two different meshes. The finer
 mesh is obtained from the coarser mesh by performing a mesh refinement with dolfinx. The relative error is computed with respect 
 to an approximation computed with SNES by imposing the contact condition as an inequality constraint. We use the following abbrivations:
@@ -151,33 +197,33 @@ to an approximation computed with SNES by imposing the contact condition as an i
 \item[\#L] total number of linear iterations
 \end{description}
 Furthermore, we show the value $\#L/\#N$ in the tables which is essentially the average number of linear iterations per non-linear iteration.
-\begin{table}   
-\begin{tabular}{lcccccccc}\toprule
-        $\gamma_0$ & \multicolumn{4}{c}{$h \sim 1.8 \times 10^{-2}$} & \multicolumn{4}{c}{$ h\sim9.3\times 10^{-3}$}
-         \\\cmidrule(lr){2-5}\cmidrule(lr){6-9}
-                    & Rel.~err &\#N& \#L & \#L/\#N& Rel.~err &\#N& \#L & \#L/\#N\\\midrule
-     1 &$ 5.630 \times 10^{-1}$& 32 & 63 & $1.96$ &$5.504\times 10^{-1}$ & 31 & 61& 1.97\\
-     10 & $1.211\times 10^{-5}$ & 16 & 127 & 7.9 &$4.961\times 10^{-6}$ & 17 & 189 & 11.1\\
-     100  &  $3.321\times 10^{-5}$ & 19 & 177 & 9.3&  $9.724\times 10^{-6}$ & 22 & 530 & 24.1\\
-     1000 & $3.355\times 10^{-6}$ & 21 & 222 & 10.57 & $9.331 \times 10^{-7}$ & 26 & 334 & 12.85 \\
-         \bottomrule
-         \end{tabular}
-         \caption{3D example, strong Dirichlet boundary conditions}
-        \end{table}
-        \begin{table}   
-            \begin{tabular}{lcccccccc}\toprule
-                    $\gamma_0$ & \multicolumn{4}{c}{$h \sim 1.8 \times 10^{-2}$} & \multicolumn{4}{c}{$ h\sim9.3\times 10^{-3}$}
-                     \\\cmidrule(lr){2-5}\cmidrule(lr){6-9}
-                                & Rel.~err &\#N& \#L & \#L/\#N& Rel.~err &\#N& \#L & \#L/\#N\\\midrule
-                 1 &$ 5.630 \times 10^{-1}$& 32 & 63 & $1.96$ &$5.504\times 10^{-1}$ & 31 & 61& 1.97\\
-                 10 & $1.211\times 10^{-5}$ & 16 & 127 & 7.9 &$4.961\times 10^{-6}$ & 17 & 189 & 11.1\\
-                 100  &  $3.321\times 10^{-5}$ & 19 & 177 & 9.3&  $9.724\times 10^{-6}$ & 22 & 530 & 24.1\\
-                 1000 & $5.14\times 10^{-7}$ & 21 & 276 & 13.14 & $1.33 \times 10^{-7}$ & 26 & 399 & 15.35 \\
-                     \bottomrule
-                     \end{tabular}
-                     \caption{3D example, strong Dirichlet boundary conditions}
-                    \end{table}
-               \FloatBarrier
+% \begin{table}   
+% \begin{tabular}{lcccccccc}\toprule
+%         $\gamma_0$ & \multicolumn{4}{c}{$h \sim 1.8 \times 10^{-2}$} & \multicolumn{4}{c}{$ h\sim9.3\times 10^{-3}$}
+%          \\\cmidrule(lr){2-5}\cmidrule(lr){6-9}
+%                     & Rel.~err &\#N& \#L & \#L/\#N& Rel.~err &\#N& \#L & \#L/\#N\\\midrule
+%      1 &$ 5.630 \times 10^{-1}$& 32 & 63 & $1.96$ &$5.504\times 10^{-1}$ & 31 & 61& 1.97\\
+%      10 & $1.211\times 10^{-5}$ & 16 & 127 & 7.9 &$4.961\times 10^{-6}$ & 17 & 189 & 11.1\\
+%      100  &  $3.321\times 10^{-5}$ & 19 & 177 & 9.3&  $9.724\times 10^{-6}$ & 22 & 530 & 24.1\\
+%      1000 & $3.355\times 10^{-6}$ & 21 & 222 & 10.57 & $9.331 \times 10^{-7}$ & 26 & 334 & 12.85 \\
+%          \bottomrule
+%          \end{tabular}
+%          \caption{3D example, strong Dirichlet boundary conditions}
+%         \end{table}
+        % \begin{table}   
+        %     \begin{tabular}{lcccccccc}\toprule
+        %             $\gamma_0$ & \multicolumn{4}{c}{$h \sim 1.8 \times 10^{-2}$} & \multicolumn{4}{c}{$ h\sim9.3\times 10^{-3}$}
+        %              \\\cmidrule(lr){2-5}\cmidrule(lr){6-9}
+        %                         & Rel.~err &\#N& \#L & \#L/\#N& Rel.~err &\#N& \#L & \#L/\#N\\\midrule
+        %          1 &$ 5.630 \times 10^{-1}$& 32 & 63 & $1.96$ &$5.504\times 10^{-1}$ & 31 & 61& 1.97\\
+        %          10 & $1.211\times 10^{-5}$ & 16 & 127 & 7.9 &$4.961\times 10^{-6}$ & 17 & 189 & 11.1\\
+        %          100  &  $3.321\times 10^{-5}$ & 19 & 177 & 9.3&  $9.724\times 10^{-6}$ & 22 & 530 & 24.1\\
+        %          1000 & $5.14\times 10^{-7}$ & 21 & 276 & 13.14 & $1.33 \times 10^{-7}$ & 26 & 399 & 15.35 \\
+        %              \bottomrule
+        %              \end{tabular}
+        %              \caption{3D example, strong Dirichlet boundary conditions}
+        %             \end{table}
+        %        \FloatBarrier
 \end{document}
 We start our investigation with the following set of solver options:
 \begin{verbatim}
