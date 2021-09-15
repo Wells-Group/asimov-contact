@@ -10,7 +10,7 @@ import ufl
 from mpi4py import MPI
 from petsc4py import PETSc
 from typing import Tuple
-from helpers import NonlinearPDE_SNESProblem, lame_parameters, epsilon, sigma_func, rigid_motions_nullspace
+from dolfinx_contact.helpers import NonlinearPDE_SNESProblem, lame_parameters, epsilon, sigma_func, rigid_motions_nullspace
 
 
 def snes_solver(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dolfinx.MeshTags, int, int], physical_parameters: dict,

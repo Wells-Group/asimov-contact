@@ -8,7 +8,7 @@ import warnings
 import gmsh
 from mpi4py import MPI
 import numpy as np
-from helpers import convert_mesh
+from dolfinx_contact.helpers import convert_mesh
 
 warnings.filterwarnings("ignore")
 

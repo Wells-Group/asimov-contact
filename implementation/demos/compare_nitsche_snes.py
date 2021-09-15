@@ -10,9 +10,9 @@ import numpy as np
 import ufl
 from mpi4py import MPI
 
-from create_mesh import create_disk_mesh, create_sphere_mesh, convert_mesh
-from nitsche_one_way import nitsche_one_way
-from snes_against_plane import snes_solver
+from dolfinx_contact.create_mesh import create_disk_mesh, create_sphere_mesh, convert_mesh
+from dolfinx_contact.nitsche_one_way import nitsche_one_way
+from dolfinx_contact.snes_against_plane import snes_solver
 
 
 if __name__ == "__main__":

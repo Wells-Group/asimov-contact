@@ -14,7 +14,7 @@ import ufl
 from dolfinx.cpp.mesh import CellType, GhostMode
 from mpi4py import MPI
 
-from helpers import epsilon, lame_parameters, sigma_func
+from dolfinx_contact.helpers import epsilon, lame_parameters, sigma_func
 
 
 def solve_euler_bernoulli(nx: int, ny: int, theta: float, gamma: float, linear_solver: bool, plane_strain: bool, nitsche: bool,

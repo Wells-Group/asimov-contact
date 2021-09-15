@@ -13,7 +13,7 @@ from dolfinx.cpp.mesh import CellType, GhostMode
 from dolfinx.fem import NonlinearProblem
 from mpi4py import MPI
 
-from helpers import epsilon, lame_parameters, sigma_func
+from dolfinx_contact.helpers import epsilon, lame_parameters, sigma_func
 
 
 def solve_manufactured(nx: int, ny: int, theta: float, gamma: float, nitsche: bool, strain: bool, linear_solver: bool, L: float = 10):
