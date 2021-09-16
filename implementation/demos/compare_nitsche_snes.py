@@ -68,7 +68,7 @@ if __name__ == "__main__":
         convert_mesh(fname, "tetra")
         with dolfinx.io.XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
             mesh = xdmf.read_mesh(name="Grid")
-        #mesh = dolfinx.UnitCubeMesh(MPI.COMM_WORLD, 10, 10, 20)
+        # mesh = dolfinx.UnitCubeMesh(MPI.COMM_WORLD, 10, 10, 20)
 
         # def top(x):
         #     return x[2] > 0.99

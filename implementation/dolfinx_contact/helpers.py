@@ -2,7 +2,6 @@
 #
 # SPDX-License-Identifier:    MIT
 
-from typing import List
 
 import dolfinx
 import dolfinx.la

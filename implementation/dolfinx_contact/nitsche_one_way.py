@@ -12,7 +12,8 @@ from typing import Tuple
 from dolfinx_contact.helpers import (epsilon, lame_parameters, rigid_motions_nullspace, sigma_func, R_minus)
 
 
-def nitsche_one_way(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dolfinx.MeshTags, int, int], physical_parameters: dict, refinement: int = 0,
+def nitsche_one_way(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dolfinx.MeshTags, int, int],
+                    physical_parameters: dict, refinement: int = 0,
                     nitsche_parameters: dict = {"gamma": 1, "theta": 1, "s": 0}, g: float = 0.0,
                     vertical_displacement: float = -0.1, nitsche_bc: bool = False):
     (facet_marker, top_value, bottom_value) = mesh_data

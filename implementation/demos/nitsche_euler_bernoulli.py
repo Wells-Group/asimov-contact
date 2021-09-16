@@ -4,7 +4,6 @@
 
 import argparse
 import os
-from typing import List
 
 import dolfinx
 import dolfinx.io
@@ -17,8 +16,10 @@ from mpi4py import MPI
 from dolfinx_contact.helpers import epsilon, lame_parameters, sigma_func
 
 
-def solve_euler_bernoulli(nx: int, ny: int, theta: float, gamma: float, linear_solver: bool, plane_strain: bool, nitsche: bool,
-                          L: float = 47, H: float = 2.73, E: float = 1e5, nu: float = 0.3, rho_g: float = 1e-2):
+def solve_euler_bernoulli(nx: int, ny: int, theta: float, gamma: float, linear_solver: bool,
+                          plane_strain: bool, nitsche: bool,
+                          L: float = 47, H: float = 2.73,
+                          E: float = 1e5, nu: float = 0.3, rho_g: float = 1e-2):
     """
     Solve the Euler-Bernoulli equations for a (0,0)x(L,H) beam
     (https://en.wikipedia.org/wiki/Euler%E2%80%93Bernoulli_beam_theory#Cantilever_beams)
@@ -125,10 +126,12 @@ def solve_euler_bernoulli(nx: int, ny: int, theta: float, gamma: float, linear_s
         # Exact solution of Euler Bernoulli:
         # https://en.wikipedia.org/wiki/Euler%E2%80%93Bernoulli_beam_theory#Cantilever_beams
         # Second order moment of area for rectangular beam
-        I = H**3 / (12)
-        uz = (rho_g * L**4) / (8 * E * I)
-        print(f"-----{nx}x{ny}--Nitsche:{nitsche} (gamma: {gamma})----\n", f"Maximal deflection: {u_at_point[mesh.geometry.dim-1]}\n",
-              f"Theoretical deflection: {-uz}\n", f"Error: {100*abs((u_at_point[mesh.geometry.dim-1]+uz)/uz)} %", flush=True)
+        In = H**3 / (12)
+        uz = (rho_g * L**4) / (8 * E * In)
+        print(f"-----{nx}x{ny}--Nitsche:{nitsche} (gamma: {gamma})----\n",
+              f"Maximal deflection: {u_at_point[mesh.geometry.dim-1]}\n",
+              f"Theoretical deflection: {-uz}\n",
+              f"Error: {100*abs((u_at_point[mesh.geometry.dim-1]+uz)/uz)} %", flush=True)
 
 
 if __name__ == "__main__":

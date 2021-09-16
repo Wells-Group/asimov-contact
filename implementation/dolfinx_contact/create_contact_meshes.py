@@ -6,7 +6,7 @@ import argparse
 import warnings
 
 import gmsh
-from mpi4py import MPI
+# from mpi4py import MPI
 import numpy as np
 from dolfinx_contact.helpers import convert_mesh
 
@@ -74,8 +74,8 @@ def create_sphere_plane_mesh(filename: str):
     center = [0.0, 0.0, 0.0]
     r = 0.3
     angle = np.pi / 8
-    L = 1
-    B = 1
+    # L = 1
+    # B = 1
     gap = 0.05
     H = 0.05
     theta = 0  # np.pi / 10

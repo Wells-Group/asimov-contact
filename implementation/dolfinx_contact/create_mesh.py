@@ -22,8 +22,8 @@ def create_disk_mesh(LcMin=0.005, LcMax=0.015, filename="disk.msh"):
     """
     gmsh.initialize()
     if MPI.COMM_WORLD.rank == 0:
-        disk = gmsh.model.occ.addDisk(0.5, 0.5, 0, 0.5, 0.5)
-        p = gmsh.model.occ.addPoint(0.5, 0, 0, tag=5)
+        gmsh.model.occ.addDisk(0.5, 0.5, 0, 0.5, 0.5)
+        gmsh.model.occ.addPoint(0.5, 0, 0, tag=5)
         gmsh.model.occ.synchronize()
         domains = gmsh.model.getEntities(dim=2)
         domain_marker = 11
@@ -56,8 +56,8 @@ def create_sphere_mesh(LcMin=0.01, LcMax=0.05, filename="disk.msh"):
      """
     gmsh.initialize()
     if MPI.COMM_WORLD.rank == 0:
-        disk = gmsh.model.occ.addSphere(0.5, 0.5, 0.5, 0.5)
-        p = gmsh.model.occ.addPoint(0.5, 0.5, 0, tag=19)
+        gmsh.model.occ.addSphere(0.5, 0.5, 0.5, 0.5)
+        gmsh.model.occ.addPoint(0.5, 0.5, 0, tag=19)
         gmsh.model.occ.synchronize()
         domains = gmsh.model.getEntities(dim=3)
         domain_marker = 11
