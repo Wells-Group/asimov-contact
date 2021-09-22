@@ -143,6 +143,11 @@ if __name__ == "__main__":
         e_abs.append(E_L2)
         e_rel.append(E_L2 / u2_L2)
         dofs_global.append(V.dofmap.index_map.size_global * V.dofmap.index_map_bs)
+        error_fn = dolfinx.Function(V)
+        error_fn.vector[:] = u1.x.array - u2.x.array
+        with dolfinx.io.XDMFFile(MPI.COMM_WORLD, f"results/u_error_{i}.xdmf", "w") as xdmf:
+            xdmf.write_mesh(mesh)
+            xdmf.write_function(error_fn)
 
     # Output absolute and relative errors of Nitsche compared to SNES
     if rank == 0:

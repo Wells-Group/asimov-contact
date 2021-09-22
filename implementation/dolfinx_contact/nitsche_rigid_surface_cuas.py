@@ -17,11 +17,11 @@ kt = dolfinx_cuas.cpp.contact.Kernel
 it = dolfinx.cpp.fem.IntegralType
 
 
-def nitsche_cuas(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dolfinx.MeshTags, int, int],
-                 physical_parameters: dict, refinement: int = 0,
-                 nitsche_parameters: dict = {"gamma": 1, "theta": 1, "s": 0}, g: float = 0.0,
-                 vertical_displacement: float = -0.1, nitsche_bc: bool = True):
-    (facet_marker, top_value, bottom_value) = mesh_data
+def nitsche_rigid_surface_cuas(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dolfinx.MeshTags, int, int, int, int],
+                               physical_parameters: dict, refinement: int = 0,
+                               nitsche_parameters: dict = {"gamma": 1, "theta": 1, "s": 0}, g: float = 0.0,
+                               vertical_displacement: float = -0.1, nitsche_bc: bool = True):
+    (facet_marker, top_value, bottom_value, surface_value, surface_bottom) = mesh_data
 
     # quadrature degree
     q_deg = 5
@@ -86,6 +86,15 @@ def nitsche_cuas(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dolfinx.MeshTags,
         a += - ufl.inner(sigma(du) * n, v) * ds(top_value)\
             - theta * ufl.inner(sigma(v) * n, du) * \
             ds(top_value) + gamma / h * ufl.inner(du, v) * ds(top_value)
+        # Nitsche bc for rigid plane
+        disp_plane = np.zeros(mesh.geometry.dim)
+        u_D_plane = ufl.as_vector(disp_plane)
+        L += - ufl.inner(sigma(u) * n, v) * ds(surface_bottom)\
+             - theta * ufl.inner(sigma(v) * n, u - u_D_plane) * \
+            ds(surface_bottom) + gamma / h * ufl.inner(u - u_D_plane, v) * ds(surface_bottom)
+        a += - ufl.inner(sigma(du) * n, v) * ds(surface_bottom)\
+            - theta * ufl.inner(sigma(v) * n, du) * \
+            ds(surface_bottom) + gamma / h * ufl.inner(du, v) * ds(surface_bottom)
     else:
         print("Dirichlet bc not implemented in custom assemblers yet.")
 
@@ -118,9 +127,10 @@ def nitsche_cuas(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dolfinx.MeshTags,
     coeffs = dolfinx_cuas.cpp.pack_coefficients([mu2._cpp_object, lmbda2._cpp_object])
     h_facets = dolfinx_cuas.cpp.pack_circumradius_facet(mesh, bottom_facets)
     h_cells = dolfinx_cuas.cpp.facet_to_cell_data(mesh, bottom_facets, h_facets, 1)
-    contact = dolfinx_cuas.cpp.contact.Contact(facet_marker, bottom_value, top_value, V._cpp_object)
+    contact = dolfinx_cuas.cpp.contact.Contact(facet_marker, bottom_value, surface_value, V._cpp_object)
     contact.set_quadrature_degree(q_deg)
-    g_vec = contact.pack_gap_plane(0, g)
+    contact.create_distance_map(0)
+    g_vec = contact.pack_gap(0)
     g_vec_c = dolfinx_cuas.cpp.facet_to_cell_data(mesh, bottom_facets, g_vec, mesh.geometry.dim * q_rule.weights.size)
     coeffs = np.hstack([coeffs, h_cells, g_vec_c])
 

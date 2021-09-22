@@ -18,13 +18,11 @@ it = dolfinx.cpp.fem.IntegralType
 compare_matrices = dolfinx_cuas.utils.compare_matrices
 
 
-@pytest.mark.parametrize("q_deg", [3])
-@pytest.mark.parametrize("theta", [1])
-@pytest.mark.parametrize("gamma", [10])  # , 100, 1000])
+@pytest.mark.parametrize("theta", [1, -1, 0])
+@pytest.mark.parametrize("gamma", [10, 100, 1000])
 @pytest.mark.parametrize("dim", [2, 3])
-@pytest.mark.parametrize("disp", [0.0])  # , 0.8])  # , 2.0])
-@ pytest.mark.parametrize("gap", [0.02])  # , 0.02, -0.01])
-def test_contact_kernel(theta, gamma, dim, disp, gap, q_deg):
+@ pytest.mark.parametrize("gap", [0.0, 0.02, -0.01])
+def test_contact_kernel(theta, gamma, dim, gap):
     # Problem parameters
     num_refs = 1
     top_value = 1
@@ -32,6 +30,7 @@ def test_contact_kernel(theta, gamma, dim, disp, gap, q_deg):
     E = 1e3
     nu = 0.1
     g = gap
+    q_deg = 2
 
     # Load mesh and create identifier functions for the top (Displacement condition)
     # and the bottom (contact condition)
@@ -109,7 +108,7 @@ def test_contact_kernel(theta, gamma, dim, disp, gap, q_deg):
         # Initial condition
         def _u_initial(x):
             values = np.zeros((mesh.geometry.dim, x.shape[1]))
-            values[-1] = -0.01 - g
+            values[-1] = -0.04
             return values
 
         # Assemble rhs dolfinx
@@ -137,19 +136,17 @@ def test_contact_kernel(theta, gamma, dim, disp, gap, q_deg):
         u = dolfinx.Function(V)
         v = ufl.TestFunction(V)
         u.interpolate(_u_initial)
-        # metadata = {"quadrature_degree": 5}
-        dx = ufl.Measure("dx", domain=mesh)
-        ds = ufl.Measure("ds", domain=mesh,  # metadata=metadata,
+        metadata = {}  # {"quadrature_degree": q_deg}
+        dx = ufl.Measure("dx", domain=mesh, metadata=metadata)
+        ds = ufl.Measure("ds", domain=mesh, metadata=metadata,
                          subdomain_data=facet_marker)
         a = ufl.inner(sigma(u), epsilon(v)) * dx
         # L = ufl.inner(dolfinx.Constant(mesh, [0, ] * mesh.geometry.dim), v) * dx
 
         # Derivation of one sided Nitsche with gap function
         F = a - theta / gammah * sigma_n(u) * sigma_n(v) * ds(bottom_value)
-        F = R_minus(1. / gammah * sigma_n(u) + (gap + ufl.dot(u, n_2))) * \
+        F += 1 / gammah * R_minus(sigma_n(u) + gammah * (gap + ufl.dot(u, n_2))) * \
             (theta * sigma_n(v) + gammah * ufl.dot(v, n_2)) * ds(bottom_value)
-        # F += 1 / gammah * R_minus(sigma_n(u) + gammah * (gap + ufl.dot(u, n_2))) * \
-        #     (theta * sigma_n(v) + gammah * ufl.dot(v, n_2)) * ds(bottom_value)
 
         u.interpolate(_u_initial)
         L = dolfinx.fem.Form(F)
@@ -230,17 +227,7 @@ def test_contact_kernel(theta, gamma, dim, disp, gap, q_deg):
         dolfinx_cuas.assemble_matrix(B, V, bottom_facets, kernel, coeffs, consts, it.exterior_facet)
         dolfinx.fem.assemble_matrix(B, a_cuas)
         B.assemble()
-        print("custom assembly complete")
+        # print("custom assembly complete")
         # Compare matrices, first norm, then entries
-        # assert np.isclose(A.norm(), B.norm())
-        # compare_matrices(A, B, atol=1e-8)
-        error = dolfinx.Function(V)
-        error.x.array[:] = b.array - b2.array
-
-        with dolfinx.io.XDMFFile(MPI.COMM_WORLD, f"test_{dim}.xdmf", "w") as xdmf:
-            xdmf.write_mesh(mesh)
-            xdmf.write_function(error)
-        with dolfinx.io.XDMFFile(MPI.COMM_WORLD, f"test_{dim}_meshtags.xdmf", "w") as xdmf:
-            xdmf.write_mesh(mesh)
-            xdmf.write_meshtags(facet_marker)
-        assert np.allclose(b.array, b2.array)
+        assert np.isclose(A.norm(), B.norm())
+        compare_matrices(A, B, atol=1e-7)

@@ -23,14 +23,9 @@ jobs:
       - name: Install meshio/h5py
         run: |
           pip3 install --no-cache-dir --no-binary=h5py h5py meshio
-
-      - name: Install dolfinx_contact
-        run: |
-          cd implementation
-          pip3 install -e . 
-
       - name: Run demos
         run: |
-          cd ./demos
+          cd implementation
+          python3 create_mesh.py
+          mkdir -p results
           python3 compare_nitsche_snes.py
-          
