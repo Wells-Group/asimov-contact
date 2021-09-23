@@ -10,7 +10,7 @@ import numpy as np
 from mpi4py import MPI
 
 from dolfinx_contact.nitsche_rigid_surface_cuas import nitsche_rigid_surface_cuas
-from dolfinx_contact.create_contact_meshes import create_circle_plane_mesh, create_sphere_plane_mesh
+from dolfinx_contact.create_contact_meshes import create_circle_plane_mesh, create_circle_circle_mesh, create_sphere_plane_mesh
 from dolfinx_contact.helpers import convert_mesh
 
 if __name__ == "__main__":
@@ -37,7 +37,7 @@ if __name__ == "__main__":
                              help="Youngs modulus of material")
     _nu = parser.add_argument(
         "--nu", default=0.1, type=np.float64, dest="nu", help="Poisson's ratio")
-    _disp = parser.add_argument("--disp", default=0.2, type=np.float64, dest="disp",
+    _disp = parser.add_argument("--disp", default=0.3, type=np.float64, dest="disp",
                                 help="Displacement BC in negative y direction")
     _ref = parser.add_argument("--refinements", default=2, type=np.int32,
                                dest="refs", help="Number of mesh refinements")
@@ -76,7 +76,7 @@ if __name__ == "__main__":
 
     else:
         fname = "twomeshes"
-        create_circle_plane_mesh(filename=f"{fname}.msh")
+        create_circle_circle_mesh(filename=f"{fname}.msh")
         convert_mesh(fname, "triangle", prune_z=True)
         convert_mesh(f"{fname}", "line", ext="facets", prune_z=True)
 
@@ -89,8 +89,8 @@ if __name__ == "__main__":
             facet_marker = xdmf.read_meshtags(mesh, name="Grid")
         top_value = 2
         bottom_value = 4
-        surface_value = 9
-        surface_bottom = 7
+        surface_value = 6
+        surface_bottom = 8
 
     e_abs = []
     e_rel = []
