@@ -11,7 +11,7 @@ import ufl
 from mpi4py import MPI
 from petsc4py import PETSc
 from typing import Tuple
-from dolfinx_contact.helpers import (epsilon, lame_parameters, rigid_motions_nullspace, sigma_func, R_minus)
+from dolfinx_contact.helpers import (epsilon, lame_parameters, rigid_motions_nullspace, sigma_func)
 
 kt = dolfinx_cuas.cpp.contact.Kernel
 it = dolfinx.cpp.fem.IntegralType
@@ -82,7 +82,6 @@ def nitsche_cuas(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dolfinx.MeshTags,
         L += - ufl.inner(sigma(u) * n, v) * ds(top_value)\
              - theta * ufl.inner(sigma(v) * n, u - u_D) * \
             ds(top_value) + gamma / h * ufl.inner(u - u_D, v) * ds(top_value)
-        bcs = []
         a += - ufl.inner(sigma(du) * n, v) * ds(top_value)\
             - theta * ufl.inner(sigma(v) * n, du) * \
             ds(top_value) + gamma / h * ufl.inner(du, v) * ds(top_value)

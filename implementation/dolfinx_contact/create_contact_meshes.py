@@ -74,8 +74,6 @@ def create_circle_circle_mesh(filename: str):
     center = [0.5, 0.5, 0]
     r = 0.3
     angle = np.pi / 4
-    L = 1
-    H = 0.1
 
     gmsh.initialize()
     # Create circular mesh (divided into 4 segments)

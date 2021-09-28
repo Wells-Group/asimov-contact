@@ -11,7 +11,7 @@ import ufl
 from mpi4py import MPI
 from petsc4py import PETSc
 from typing import Tuple
-from dolfinx_contact.helpers import (epsilon, lame_parameters, rigid_motions_nullspace, sigma_func, R_minus)
+from dolfinx_contact.helpers import (epsilon, lame_parameters, rigid_motions_nullspace, sigma_func)
 
 kt = dolfinx_cuas.cpp.contact.Kernel
 it = dolfinx.cpp.fem.IntegralType
@@ -31,7 +31,7 @@ def nitsche_rigid_surface_cuas(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dol
     gamma = nitsche_parameters["gamma"] * physical_parameters["E"]
     n_vec = np.zeros(mesh.geometry.dim)
     n_vec[mesh.geometry.dim - 1] = 1
-    n_2 = ufl.as_vector(n_vec)  # Normal of plane (projection onto other body)
+    # n_2 = ufl.as_vector(n_vec)  # Normal of plane (projection onto other body)
     n = ufl.FacetNormal(mesh)
 
     V = dolfinx.VectorFunctionSpace(mesh, ("CG", 1))
@@ -78,7 +78,7 @@ def nitsche_rigid_surface_cuas(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dol
         L += - ufl.inner(sigma(u) * n, v) * ds(top_value)\
              - theta * ufl.inner(sigma(v) * n, u - u_D) * \
             ds(top_value) + gamma / h * ufl.inner(u - u_D, v) * ds(top_value)
-        bcs = []
+
         a += - ufl.inner(sigma(du) * n, v) * ds(top_value)\
             - theta * ufl.inner(sigma(v) * n, du) * \
             ds(top_value) + gamma / h * ufl.inner(du, v) * ds(top_value)
@@ -134,7 +134,8 @@ def nitsche_rigid_surface_cuas(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dol
     # RHS
     L_cuas = dolfinx.fem.Form(L)
     kernel_rhs = dolfinx_cuas.cpp.contact.generate_contact_kernel(V._cpp_object, kt.NitscheRigidSurfaceRhs, q_rule,
-                                                                  [u._cpp_object, mu2._cpp_object, lmbda2._cpp_object], False)
+                                                                  [u._cpp_object, mu2._cpp_object, lmbda2._cpp_object],
+                                                                  False)
 
     def create_b():
         return dolfinx.fem.create_vector(L_cuas)
