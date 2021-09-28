@@ -90,11 +90,11 @@ def create_circle_circle_mesh(filename: str):
     gmsh.model.occ.synchronize()
     surface = gmsh.model.occ.addPlaneSurface([curve])
     # Create 2nd circular mesh (divided into 4 segments)
-    center2 = [0.5, -0.3, 0]
+    center2 = [0.5, -0.5, 0]
     c2 = gmsh.model.occ.addPoint(center2[0], center2[1], center2[2])
     # Add 4 points on circle (clockwise, starting in top left)
-    c_points2 = [gmsh.model.occ.addPoint(center2[0] + r * np.cos(angle), center2[1]
-                                         + r * np.sin(angle), center2[2]) for angle in angles]
+    c_points2 = [gmsh.model.occ.addPoint(center2[0] + 2 * r * np.cos(angle), center2[1]
+                                         + 2 * r * np.sin(angle), center2[2]) for angle in angles]
     arcs2 = [gmsh.model.occ.addCircleArc(
         c_points2[i - 1], c2, c_points2[i]) for i in range(len(c_points2))]
     curve2 = gmsh.model.occ.addCurveLoop(arcs2)
@@ -126,8 +126,8 @@ def create_circle_circle_mesh(filename: str):
 
     gmsh.model.mesh.field.add("Threshold", 2)
     gmsh.model.mesh.field.setNumber(2, "IField", 1)
-    gmsh.model.mesh.field.setNumber(2, "LcMin", 0.01)
-    gmsh.model.mesh.field.setNumber(2, "LcMax", 0.01)
+    gmsh.model.mesh.field.setNumber(2, "LcMin", 0.005)
+    gmsh.model.mesh.field.setNumber(2, "LcMax", 0.015)
     gmsh.model.mesh.field.setNumber(2, "DistMin", 0.3)
     gmsh.model.mesh.field.setNumber(2, "DistMax", 0.6)
     gmsh.model.mesh.field.setAsBackgroundMesh(2)

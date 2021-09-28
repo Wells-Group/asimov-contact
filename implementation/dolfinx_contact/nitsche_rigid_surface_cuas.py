@@ -24,7 +24,7 @@ def nitsche_rigid_surface_cuas(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dol
     (facet_marker, top_value, bottom_value, surface_value, surface_bottom) = mesh_data
 
     # quadrature degree
-    q_deg = 1
+    q_deg = 3
     # Nitche parameters and variables
     theta = nitsche_parameters["theta"]
     # s = nitsche_parameters["s"]
@@ -126,12 +126,10 @@ def nitsche_rigid_surface_cuas(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dol
     contact = dolfinx_cuas.cpp.contact.Contact(facet_marker, bottom_value, surface_value, V._cpp_object)
     contact.set_quadrature_degree(q_deg)
     contact.create_distance_map(0)
-    normals = contact.pack_normals(0)
-    normals_c = dolfinx_cuas.cpp.facet_to_cell_data(
-        mesh, bottom_facets, normals, mesh.geometry.dim * q_rule.weights.size)
     g_vec = contact.pack_gap(0)
+    print(g_vec)
     g_vec_c = dolfinx_cuas.cpp.facet_to_cell_data(mesh, bottom_facets, g_vec, mesh.geometry.dim * q_rule.weights.size)
-    coeffs = np.hstack([coeffs, h_cells, g_vec_c, normals_c])
+    coeffs = np.hstack([coeffs, h_cells, g_vec_c])
 
     # RHS
     L_cuas = dolfinx.fem.Form(L)
@@ -175,12 +173,12 @@ def nitsche_rigid_surface_cuas(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dol
     solver.A.setNearNullSpace(null_space)
 
     # Set Newton solver options
-    solver.atol = 1e-9
-    solver.rtol = 1e-9
+    solver.atol = 1e-4
+    solver.rtol = 1e-4
     solver.convergence_criterion = "incremental"
     solver.max_it = 200
     solver.error_on_nonconvergence = True
-    solver.relaxation_parameter = 1.0
+    solver.relaxation_parameter = 0.6
 
     def _u_initial(x):
         values = np.zeros((mesh.geometry.dim, x.shape[1]))
