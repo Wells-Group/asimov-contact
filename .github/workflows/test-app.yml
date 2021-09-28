@@ -96,4 +96,5 @@ jobs:
       - name: Run tests
         run: |
           cd implementation/tests
+          python3 create_test_meshes.py
           python3 -m pytest . -vs
