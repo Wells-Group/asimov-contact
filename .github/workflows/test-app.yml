@@ -92,7 +92,8 @@ jobs:
           cd implementation/demos
           mkdir -p results
           python3 compare_nitsche_snes.py
-          
+
       - name: Run tests
+        run: |
           cd implementation/tests
           python3 -m pytest . -vs
