@@ -70,7 +70,7 @@ jobs:
         uses: actions/checkout@v2
         with:
           path: ./asimov-custom-assemblers
-          repositiory: Wells-Group/asimov-custom-assemblers
+          repository: Wells-Group/asimov-custom-assemblers
           ref: sarah/contact_experimental
 
       - name: Install custom assemblers (C++)
