@@ -6,7 +6,6 @@ import argparse
 import warnings
 
 import gmsh
-# from mpi4py import MPI
 import numpy as np
 from dolfinx_contact.helpers import convert_mesh
 
@@ -98,15 +97,6 @@ def create_circle_circle_mesh(filename: str):
     curve2 = gmsh.model.occ.addCurveLoop(arcs2)
     gmsh.model.occ.synchronize()
     surface2 = gmsh.model.occ.addPlaneSurface([curve, curve2])
-    # # Create box
-    # p0 = gmsh.model.occ.addPoint(0, 0, 0)
-    # p1 = gmsh.model.occ.addPoint(L, 0, 0)
-    # p2 = gmsh.model.occ.addPoint(L, H, 0)
-    # p3 = gmsh.model.occ.addPoint(0, H, 0)
-    # ps = [p0, p1, p2, p3]
-    # lines = [gmsh.model.occ.addLine(ps[i - 1], ps[i]) for i in range(len(ps))]
-    # curve2 = gmsh.model.occ.addCurveLoop(lines)
-    # surface2 = gmsh.model.occ.addPlaneSurface([curve, curve2])
 
     # Synchronize and create physical tags
     gmsh.model.occ.addPoint(0.5, 0.2, 0, tag=17)
@@ -141,8 +131,6 @@ def create_sphere_plane_mesh(filename: str):
     center = [0.0, 0.0, 0.0]
     r = 0.3
     angle = np.pi / 8
-    # L = 1
-    # B = 1
     gap = 0.05
     H = 0.05
     theta = 0  # np.pi / 10

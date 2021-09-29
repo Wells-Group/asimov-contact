@@ -29,6 +29,9 @@ if __name__ == "__main__":
     _3D = parser.add_mutually_exclusive_group(required=False)
     _3D.add_argument('--3D', dest='threed', action='store_true',
                      help="Use 3D mesh", default=False)
+    _cube = parser.add_mutually_exclusive_group(required=False)
+    _cube.add_argument('--cube', dest='cube', action='store_true',
+                       help="Use Cube/Square", default=False)
     _strain = parser.add_mutually_exclusive_group(required=False)
     _strain.add_argument('--strain', dest='plane_strain', action='store_true',
                          help="Use plane strain formulation", default=False)
@@ -59,22 +62,20 @@ if __name__ == "__main__":
     top_value = 1
     threed = args.threed
     bottom_value = 2
+    cube = args.cube
 
     # Load mesh and create identifier functions for the top (Displacement condition)
     # and the bottom (contact condition)
     if threed:
-        fname = "sphere"
-        create_sphere_mesh(filename=f"{fname}.msh")
-        convert_mesh(fname, "tetra")
-        with dolfinx.io.XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
-            mesh = xdmf.read_mesh(name="Grid")
-        # mesh = dolfinx.UnitCubeMesh(MPI.COMM_WORLD, 10, 10, 20)
+        if cube:
+            mesh = dolfinx.UnitCubeMesh(MPI.COMM_WORLD, 10, 10, 20)
+        else:
+            fname = "sphere"
+            create_sphere_mesh(filename=f"{fname}.msh")
+            convert_mesh(fname, "tetra")
+            with dolfinx.io.XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
+                mesh = xdmf.read_mesh(name="Grid")
 
-        # def top(x):
-        #     return x[2] > 0.99
-
-        # def bottom(x):
-        #     return x[2] < 0.5
         def top(x):
             return x[2] > 0.9
 
@@ -82,15 +83,14 @@ if __name__ == "__main__":
             return x[2] < 0.15
 
     else:
-        fname = "disk"
-        create_disk_mesh(filename=f"{fname}.msh")
-        convert_mesh(fname, "triangle", prune_z=True)
-        with dolfinx.io.XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
-            mesh = xdmf.read_mesh(name="Grid")
-        # mesh = dolfinx.UnitSquareMesh(MPI.COMM_WORLD, 30, 30)
-
-        # def top(x):
-        #     return x[1] > 0.99
+        if cube:
+            mesh = dolfinx.UnitSquareMesh(MPI.COMM_WORLD, 30, 30)
+        else:
+            fname = "disk"
+            create_disk_mesh(filename=f"{fname}.msh")
+            convert_mesh(fname, "triangle", prune_z=True)
+            with dolfinx.io.XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
+                mesh = xdmf.read_mesh(name="Grid")
 
         def top(x):
             return x[1] > 0.5
@@ -119,7 +119,8 @@ if __name__ == "__main__":
             len(bottom_facets), bottom_value, dtype=np.int32)
         indices = np.concatenate([top_facets, bottom_facets])
         values = np.hstack([top_values, bottom_values])
-        facet_marker = dolfinx.MeshTags(mesh, tdim - 1, indices, values)
+        sorted_facets = np.argsort(indices)
+        facet_marker = dolfinx.MeshTags(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
         mesh_data = (facet_marker, top_value, bottom_value)
 
         # Solve contact problem using Nitsche's method

@@ -18,10 +18,13 @@ it = dolfinx.cpp.fem.IntegralType
 compare_matrices = dolfinx_cuas.utils.compare_matrices
 
 
+# This tests compares custom assembly and ufl based assembly
+# of the rhs and jacobi matrix for contact
+# with a rigid surface for a given initial value
 @pytest.mark.parametrize("theta", [1, -1, 0])
 @pytest.mark.parametrize("gamma", [10, 100, 1000])
 @pytest.mark.parametrize("dim", [2, 3])
-@ pytest.mark.parametrize("gap", [0.0, 0.02, -0.01])
+@pytest.mark.parametrize("gap", [0.0, 0.02, -0.01])
 def test_contact_kernel(theta, gamma, dim, gap):
     # Problem parameters
     num_refs = 1
@@ -38,13 +41,7 @@ def test_contact_kernel(theta, gamma, dim, gap):
         fname = "sphere"
         with dolfinx.io.XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
             mesh = xdmf.read_mesh(name="Grid")
-        # mesh = dolfinx.UnitCubeMesh(MPI.COMM_WORLD, 10, 10, 20)
 
-        # def top(x):
-        #     return x[2] > 0.99
-
-        # def bottom(x):
-        #     return x[2] < 0.5
         def top(x):
             return x[2] > 0.9
 
@@ -55,10 +52,6 @@ def test_contact_kernel(theta, gamma, dim, gap):
         fname = "disk"
         with dolfinx.io.XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
             mesh = xdmf.read_mesh(name="Grid")
-        # mesh = dolfinx.UnitSquareMesh(MPI.COMM_WORLD, 30, 30)
-
-        # def top(x):
-        #     return x[1] > 0.99
 
         def top(x):
             return x[1] > 0.5
@@ -83,27 +76,14 @@ def test_contact_kernel(theta, gamma, dim, gap):
             len(bottom_facets), bottom_value, dtype=np.int32)
         indices = np.concatenate([top_facets, bottom_facets])
         values = np.hstack([top_values, bottom_values])
-        facet_marker = dolfinx.MeshTags(mesh, tdim - 1, indices, values)
+        sorted_facets = np.argsort(indices)
+        facet_marker = dolfinx.MeshTags(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
+        bottom_facets = np.sort(bottom_facets)
 
         V = dolfinx.VectorFunctionSpace(mesh, ("CG", 1))
         u = dolfinx.Function(V)
         v = ufl.TestFunction(V)
         du = ufl.TrialFunction(V)
-
-        # # Dirichlet boundary conditions
-        # def _u_D(x):
-        #     values = np.zeros((mesh.geometry.dim, x.shape[1]))
-        #     values[mesh.geometry.dim - 1] = disp
-        #     return values
-        # u_D = dolfinx.Function(V)
-        # u_D.interpolate(_u_D)
-        # u_D.name = "u_D"
-        # u_D.x.scatter_forward()
-        # tdim = mesh.topology.dim
-        # dirichlet_dofs = dolfinx.fem.locate_dofs_topological(
-        #     V, tdim - 1, facet_marker.indices[facet_marker.values == top_value])
-        # bc = dolfinx.DirichletBC(u_D, dirichlet_dofs)
-        # bcs = [bc]
 
         # Initial condition
         def _u_initial(x):
@@ -155,10 +135,6 @@ def test_contact_kernel(theta, gamma, dim, gap):
         # Normal assembly
         b.zeroEntries()
         dolfinx.fem.assemble_vector(b, L)
-        # # Apply boundary conditions to the rhs
-        # dolfinx.fem.apply_lifting(b, [self._a], [self.bcs])
-        # self._b.ghostUpdate(addv=PETSc.InsertMode.ADD, mode=PETSc.ScatterMode.REVERSE)
-        # fem.set_bc(self._b, self.bcs)
         b.assemble()
 
         q = sigma_n(u) + gammah * (gap + ufl.dot(u, n_2))
@@ -227,7 +203,7 @@ def test_contact_kernel(theta, gamma, dim, gap):
         dolfinx_cuas.assemble_matrix(B, V, bottom_facets, kernel, coeffs, consts, it.exterior_facet)
         dolfinx.fem.assemble_matrix(B, a_cuas)
         B.assemble()
-        # print("custom assembly complete")
+
         # Compare matrices, first norm, then entries
         assert np.isclose(A.norm(), B.norm())
         compare_matrices(A, B, atol=1e-7)

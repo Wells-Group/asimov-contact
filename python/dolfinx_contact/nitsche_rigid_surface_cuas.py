@@ -127,7 +127,6 @@ def nitsche_rigid_surface_cuas(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dol
     contact.set_quadrature_degree(q_deg)
     contact.create_distance_map(0)
     g_vec = contact.pack_gap(0)
-    print(g_vec)
     g_vec_c = dolfinx_cuas.cpp.facet_to_cell_data(mesh, bottom_facets, g_vec, mesh.geometry.dim * q_rule.weights.size)
     coeffs = np.hstack([coeffs, h_cells, g_vec_c])
 

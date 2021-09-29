@@ -126,8 +126,6 @@ def nitsche_rigid_surface(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dolfinx.
         u_D.x.scatter_forward()
         dirichlet_dofs = dolfinx.fem.locate_dofs_topological(
             V, tdim - 1, facet_marker.indices[facet_marker.values == top_value])
-        print(dirichlet_dofs)
-        print(vertical_displacement)
         bc = dolfinx.DirichletBC(u_D, dirichlet_dofs)
         bcs = [bc]
         # Dirichlet boundary conditions for rigid plane

@@ -10,7 +10,7 @@ import numpy as np
 from mpi4py import MPI
 
 from dolfinx_contact.nitsche_rigid_surface_cuas import nitsche_rigid_surface_cuas
-from dolfinx_contact.create_contact_meshes import create_circle_circle_mesh, create_sphere_plane_mesh
+from dolfinx_contact.create_contact_meshes import create_circle_plane_mesh, create_circle_circle_mesh, create_sphere_plane_mesh
 from dolfinx_contact.helpers import convert_mesh
 
 if __name__ == "__main__":
@@ -27,6 +27,9 @@ if __name__ == "__main__":
     _3D = parser.add_mutually_exclusive_group(required=False)
     _3D.add_argument('--3D', dest='threed', action='store_true',
                      help="Use 3D mesh", default=False)
+    _curved = parser.add_mutually_exclusive_group(required=False)
+    _curved.add_argument('--curved', dest='curved', action='store_true',
+                         help="Use curved rigid surface", default=False)
     _strain = parser.add_mutually_exclusive_group(required=False)
     _strain.add_argument('--strain', dest='plane_strain', action='store_true',
                          help="Use plane strain formulation", default=False)
@@ -54,6 +57,7 @@ if __name__ == "__main__":
     top_value = 1
     threed = args.threed
     bottom_value = 2
+    curved = args.curved
 
     # Load mesh and create identifier functions for the top (Displacement condition)
     # and the bottom (contact condition)
@@ -75,67 +79,69 @@ if __name__ == "__main__":
         surface_bottom = 7
 
     else:
-        # fname = "twomeshes"
-        # create_circle_plane_mesh(filename=f"{fname}.msh")
-        # convert_mesh(fname, "triangle", prune_z=True)
-        # convert_mesh(f"{fname}", "line", ext="facets", prune_z=True)
+        if curved:
+            fname = "two_disks"
+            create_circle_circle_mesh(filename=f"{fname}.msh")
+            convert_mesh(fname, "triangle", prune_z=True)
+            convert_mesh(f"{fname}", "line", ext="facets", prune_z=True)
 
-        # with dolfinx.io.XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
-        #     mesh = xdmf.read_mesh(name="Grid")
-        # tdim = mesh.topology.dim
-        # mesh.topology.create_connectivity(tdim - 1, 0)
-        # mesh.topology.create_connectivity(tdim - 1, tdim)
-        # with dolfinx.io.XDMFFile(MPI.COMM_WORLD, f"{fname}_facets.xdmf", "r") as xdmf:
-        #     facet_marker = xdmf.read_meshtags(mesh, name="Grid")
-        # top_value = 2
-        # bottom_value = 4
-        # surface_value = 9
-        # surface_bottom = 7
+            with dolfinx.io.XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
+                mesh = xdmf.read_mesh(name="Grid")
+            tdim = mesh.topology.dim
+            mesh.topology.create_connectivity(tdim - 1, 0)
+            mesh.topology.create_connectivity(tdim - 1, tdim)
 
-        fname = "two_disks"
-        create_circle_circle_mesh(filename=f"{fname}.msh")
-        convert_mesh(fname, "triangle", prune_z=True)
-        convert_mesh(f"{fname}", "line", ext="facets", prune_z=True)
+            def top1(x):
+                return x[1] > 0.55
 
-        with dolfinx.io.XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
-            mesh = xdmf.read_mesh(name="Grid")
-        tdim = mesh.topology.dim
-        mesh.topology.create_connectivity(tdim - 1, 0)
-        mesh.topology.create_connectivity(tdim - 1, tdim)
+            def bottom1(x):
+                return np.logical_and(x[1] < 0.5, x[1] > 0.15)
 
-        def top1(x):
-            return x[1] > 0.55
+            def top2(x):
+                return np.logical_and(x[1] > -0.3, x[1] < 0.15)
 
-        def bottom1(x):
-            return np.logical_and(x[1] < 0.5, x[1] > 0.15)
+            def bottom2(x):
+                return x[1] < -0.35
 
-        def top2(x):
-            return np.logical_and(x[1] > -0.3, x[1] < 0.15)
+            top_value = 1
+            bottom_value = 2
+            surface_value = 3
+            surface_bottom = 4
+            # Create meshtag for top and bottom markers
+            top_facets1 = dolfinx.mesh.locate_entities_boundary(mesh, tdim - 1, top1)
+            bottom_facets1 = dolfinx.mesh.locate_entities_boundary(
+                mesh, tdim - 1, bottom1)
+            top_facets2 = dolfinx.mesh.locate_entities_boundary(mesh, tdim - 1, top2)
+            bottom_facets2 = dolfinx.mesh.locate_entities_boundary(
+                mesh, tdim - 1, bottom2)
+            top_values = np.full(len(top_facets1), top_value, dtype=np.int32)
+            bottom_values = np.full(
+                len(bottom_facets1), bottom_value, dtype=np.int32)
 
-        def bottom2(x):
-            return x[1] < -0.35
+            surface_values = np.full(len(top_facets2), surface_value, dtype=np.int32)
+            sbottom_values = np.full(
+                len(bottom_facets2), surface_bottom, dtype=np.int32)
+            indices = np.concatenate([top_facets1, bottom_facets1, top_facets2, bottom_facets2])
+            values = np.hstack([top_values, bottom_values, surface_values, sbottom_values])
+            sorted_facets = np.argsort(indices)
+            facet_marker = dolfinx.MeshTags(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
+        else:
+            fname = "twomeshes"
+            create_circle_plane_mesh(filename=f"{fname}.msh")
+            convert_mesh(fname, "triangle", prune_z=True)
+            convert_mesh(f"{fname}", "line", ext="facets", prune_z=True)
 
-        top_value = 1
-        bottom_value = 2
-        surface_value = 3
-        surface_bottom = 4
-        # Create meshtag for top and bottom markers
-        top_facets1 = dolfinx.mesh.locate_entities_boundary(mesh, tdim - 1, top1)
-        bottom_facets1 = dolfinx.mesh.locate_entities_boundary(
-            mesh, tdim - 1, bottom1)
-        top_facets2 = dolfinx.mesh.locate_entities_boundary(mesh, tdim - 1, top2)
-        bottom_facets2 = dolfinx.mesh.locate_entities_boundary(
-            mesh, tdim - 1, bottom2)
-        top_values = np.full(len(top_facets1), top_value, dtype=np.int32)
-        bottom_values = np.full(
-            len(bottom_facets1), bottom_value, dtype=np.int32)
-
-        surface_values = np.full(len(top_facets2), surface_value, dtype=np.int32)
-        sbottom_values = np.full(
-            len(bottom_facets2), surface_bottom, dtype=np.int32)
-        indices = np.concatenate([top_facets1, bottom_facets1, top_facets2, bottom_facets2])
-        values = np.hstack([top_values, bottom_values, surface_values, sbottom_values])
-        facet_marker = dolfinx.MeshTags(mesh, tdim - 1, indices, values)
+            with dolfinx.io.XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
+                mesh = xdmf.read_mesh(name="Grid")
+            tdim = mesh.topology.dim
+            mesh.topology.create_connectivity(tdim - 1, 0)
+            mesh.topology.create_connectivity(tdim - 1, tdim)
+            with dolfinx.io.XDMFFile(MPI.COMM_WORLD, f"{fname}_facets.xdmf", "r") as xdmf:
+                facet_marker = xdmf.read_meshtags(mesh, name="Grid")
+            top_value = 2
+            bottom_value = 4
+            surface_value = 9
+            surface_bottom = 7
 
     e_abs = []
     e_rel = []
