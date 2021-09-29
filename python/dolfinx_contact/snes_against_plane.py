@@ -10,7 +10,8 @@ import ufl
 from mpi4py import MPI
 from petsc4py import PETSc
 from typing import Tuple
-from helpers import NonlinearPDE_SNESProblem, lame_parameters, epsilon, sigma_func, rigid_motions_nullspace
+from dolfinx_contact.helpers import NonlinearPDE_SNESProblem, lame_parameters,\
+    epsilon, sigma_func, rigid_motions_nullspace
 
 
 def snes_solver(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dolfinx.MeshTags, int, int], physical_parameters: dict,
@@ -26,10 +27,8 @@ def snes_solver(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dolfinx.MeshTags, 
 
     # function space and problem parameters
     V = dolfinx.VectorFunctionSpace(mesh, ("CG", 1))  # function space
-    n = ufl.FacetNormal(mesh)  # unit normal
     E = physical_parameters["E"]  # young's modulus
     nu = physical_parameters["nu"]  # poisson ratio
-    h = ufl.Circumradius(mesh)  # mesh size
     mu_func, lambda_func = lame_parameters(physical_parameters["strain"])
     mu = mu_func(E, nu)
     lmbda = lambda_func(E, nu)
@@ -46,8 +45,6 @@ def snes_solver(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dolfinx.MeshTags, 
     u = dolfinx.Function(V)
     v = ufl.TestFunction(V)
     dx = ufl.Measure("dx", domain=mesh)
-    ds = ufl.Measure("ds", domain=mesh,
-                     subdomain_data=facet_marker, subdomain_id=bottom_value)
     F = ufl.inner(sigma(u), epsilon(v)) * dx - \
         ufl.inner(dolfinx.Constant(mesh, [0, ] * mesh.geometry.dim), v) * dx
 
@@ -72,7 +69,7 @@ def snes_solver(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dolfinx.MeshTags, 
     dirichlet_dofs = dolfinx.fem.locate_dofs_topological(
         V, tdim - 1, facet_marker.indices[facet_marker.values == top_value])
     bc = dolfinx.DirichletBC(u_D, dirichlet_dofs)
-    bcs = [bc]
+    # bcs = [bc]
 
     # create nonlinear problem
     problem = NonlinearPDE_SNESProblem(F, u, bc)
