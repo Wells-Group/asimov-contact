@@ -82,19 +82,19 @@ jobs:
         run: python3 -m pip -v install ./asimov-custom-assemblers/python/
 
       - name: Install contact 
-        run: python3 -m pip -v install implementation/
+        run: python3 -m pip -v install python/
 
       - name: Flake8 code
-        run: flake8 implementation/
+        run: flake8 python/
 
       - name: Run demos
         run: |
-          cd implementation/demos
+          cd python/demos
           mkdir -p results
           python3 compare_nitsche_snes.py
 
       - name: Run tests
         run: |
-          cd implementation/tests
+          cd python/tests
           python3 create_test_meshes.py
           python3 -m pytest . -vs
