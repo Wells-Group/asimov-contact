@@ -8,7 +8,6 @@ import dolfinx_contact.cpp
 import dolfinx_cuas.cpp
 import numpy as np
 import pytest
-import ufl
 from mpi4py import MPI
 
 
