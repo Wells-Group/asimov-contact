@@ -4,8 +4,8 @@
 
 import dolfinx
 import dolfinx.io
-import dolfinx_cuas
-import dolfinx_cuas.cpp
+import dolfinx_contact
+import dolfinx_contact.cpp
 import numpy as np
 import ufl
 from mpi4py import MPI
@@ -13,7 +13,7 @@ from petsc4py import PETSc
 from typing import Tuple
 from dolfinx_contact.helpers import (epsilon, lame_parameters, rigid_motions_nullspace, sigma_func)
 
-kt = dolfinx_cuas.cpp.contact.Kernel
+kt = dolfinx_contact.cpp.Kernel
 it = dolfinx.cpp.fem.IntegralType
 
 
@@ -117,7 +117,7 @@ def nitsche_cuas(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dolfinx.MeshTags,
     coeffs = dolfinx_cuas.cpp.pack_coefficients([mu2._cpp_object, lmbda2._cpp_object])
     h_facets = dolfinx_cuas.cpp.pack_circumradius_facet(mesh, bottom_facets)
     h_cells = dolfinx_cuas.cpp.facet_to_cell_data(mesh, bottom_facets, h_facets, 1)
-    contact = dolfinx_cuas.cpp.contact.Contact(facet_marker, bottom_value, top_value, V._cpp_object)
+    contact = dolfinx_contact.cpp.Contact(facet_marker, bottom_value, top_value, V._cpp_object)
     contact.set_quadrature_degree(q_deg)
     g_vec = contact.pack_gap_plane(0, g)
     g_vec_c = dolfinx_cuas.cpp.facet_to_cell_data(mesh, bottom_facets, g_vec, mesh.geometry.dim * q_rule.weights.size)
@@ -125,8 +125,8 @@ def nitsche_cuas(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dolfinx.MeshTags,
 
     # RHS
     L_cuas = dolfinx.fem.Form(L)
-    kernel_rhs = dolfinx_cuas.cpp.contact.generate_contact_kernel(V._cpp_object, kt.NitscheRigidSurfaceRhs, q_rule,
-                                                                  [u._cpp_object, mu2._cpp_object, lmbda2._cpp_object])
+    kernel_rhs = dolfinx_contact.cpp.generate_contact_kernel(V._cpp_object, kt.NitscheRigidSurfaceRhs, q_rule,
+                                                             [u._cpp_object, mu2._cpp_object, lmbda2._cpp_object])
 
     def create_b():
         return dolfinx.fem.create_vector(L_cuas)
@@ -141,7 +141,7 @@ def nitsche_cuas(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dolfinx.MeshTags,
 
     # Jacobian
     a_cuas = dolfinx.fem.Form(a)
-    kernel_J = dolfinx_cuas.cpp.contact.generate_contact_kernel(
+    kernel_J = dolfinx_contact.cpp.generate_contact_kernel(
         V._cpp_object, kt.NitscheRigidSurfaceJac, q_rule, [u._cpp_object, mu2._cpp_object, lmbda2._cpp_object])
 
     def create_A():
