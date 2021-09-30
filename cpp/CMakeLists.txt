@@ -35,7 +35,7 @@ set(CMAKE_PREFIX_PATH ${CMAKE_PREFIX_PATH} ${CMAKE_CURRENT_BINARY_DIR}/dolfinx_c
 include(FeatureSummary)
 
 option(BUILD_SHARED_LIBS "Build DOLFINX_CONTACT with shared libraries." ON)
-add_feature_info(BUILD_SHARED_LIBS BUILD_SHARED_LIBS "Build DOLFINX_CUAS with shared libraries.")
+add_feature_info(BUILD_SHARED_LIBS BUILD_SHARED_LIBS "Build DOLFINX_CONTACT with shared libraries.")
 
 option(CMAKE_INSTALL_RPATH_USE_LINK_PATH "Add paths to linker search and installed rpath." ON)
 add_feature_info(CMAKE_INSTALL_RPATH_USE_LINK_PATH CMAKE_INSTALL_RPATH_USE_LINK_PATH "Add paths to linker search and installed rpath.")
@@ -55,4 +55,4 @@ target_link_libraries(dolfinx_contact INTERFACE Basix::basix)
 
 # Installation of header-only DOLFINX_CUAS Library
 include(GNUInstallDirs)
-install(FILES Contact.hpp contact_kernels.hpp DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/dolfinx_contact COMPONENT Development)
+install(FILES Contact.hpp contact_kernels.hpp utils.hpp DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/dolfinx_contact COMPONENT Development)

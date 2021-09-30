@@ -8,12 +8,14 @@ import dolfinx
 import dolfinx.io
 import dolfinx_cuas
 import dolfinx_cuas.cpp
+import dolfinx_contact
+import dolfinx_contact.cpp
 import numpy as np
 import ufl
 import pytest
 from mpi4py import MPI
 
-kt = dolfinx_cuas.cpp.contact.Kernel
+kt = dolfinx_contact.cpp.Kernel
 it = dolfinx.cpp.fem.IntegralType
 compare_matrices = dolfinx_cuas.utils.compare_matrices
 
@@ -176,19 +178,19 @@ def test_contact_kernel(theta, gamma, dim, gap):
         mu2.interpolate(mu_func2)
         u.interpolate(_u_initial)
         coeffs = dolfinx_cuas.cpp.pack_coefficients([u._cpp_object, mu2._cpp_object, lmbda2._cpp_object])
-        h_facets = dolfinx_cuas.cpp.pack_circumradius_facet(mesh, bottom_facets)
-        h_cells = dolfinx_cuas.cpp.facet_to_cell_data(mesh, bottom_facets, h_facets, 1)
-        contact = dolfinx_cuas.cpp.contact.Contact(facet_marker, bottom_value, top_value, V._cpp_object)
+        h_facets = dolfinx_contact.cpp.pack_circumradius_facet(mesh, bottom_facets)
+        h_cells = dolfinx_contact.cpp.facet_to_cell_data(mesh, bottom_facets, h_facets, 1)
+        contact = dolfinx_contact.cpp.Contact(facet_marker, bottom_value, top_value, V._cpp_object)
         contact.set_quadrature_degree(q_deg)
         g_vec = contact.pack_gap_plane(0, g)
-        g_vec_c = dolfinx_cuas.cpp.facet_to_cell_data(mesh, bottom_facets, g_vec, dim * q_rule.weights.size)
+        g_vec_c = dolfinx_contact.cpp.facet_to_cell_data(mesh, bottom_facets, g_vec, dim * q_rule.weights.size)
         coeffs = np.hstack([coeffs, h_cells, g_vec_c])
         # RHS
         L_cuas = ufl.inner(sigma(u), epsilon(v)) * dx
         L_cuas = dolfinx.fem.Form(L_cuas)
         b2 = dolfinx.fem.create_vector(L_cuas)
-        kernel = dolfinx_cuas.cpp.contact.generate_contact_kernel(V._cpp_object, kt.NitscheRigidSurfaceRhs, q_rule,
-                                                                  [u._cpp_object, mu2._cpp_object, lmbda2._cpp_object])
+        kernel = dolfinx_contact.cpp.generate_contact_kernel(V._cpp_object, kt.NitscheRigidSurfaceRhs, q_rule,
+                                                             [u._cpp_object, mu2._cpp_object, lmbda2._cpp_object])
         b2.zeroEntries()
         dolfinx_cuas.assemble_vector(b2, V, bottom_facets, kernel, coeffs, consts, it.exterior_facet)
         dolfinx.fem.assemble_vector(b2, L_cuas)
@@ -197,7 +199,7 @@ def test_contact_kernel(theta, gamma, dim, gap):
         a_cuas = ufl.inner(sigma(du), epsilon(v)) * dx
         a_cuas = dolfinx.fem.Form(a_cuas)
         B = dolfinx.fem.create_matrix(a_cuas)
-        kernel = dolfinx_cuas.cpp.contact.generate_contact_kernel(
+        kernel = dolfinx_contact.cpp.generate_contact_kernel(
             V._cpp_object, kt.NitscheRigidSurfaceJac, q_rule, [u._cpp_object, mu2._cpp_object, lmbda2._cpp_object])
         B.zeroEntries()
         dolfinx_cuas.assemble_matrix(B, V, bottom_facets, kernel, coeffs, consts, it.exterior_facet)

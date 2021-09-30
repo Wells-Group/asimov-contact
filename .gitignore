@@ -1,3 +1,7 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
 # Prerequisites
 *.d
 
@@ -50,3 +54,12 @@
 *.pdf 
 *.run.xml 
 *.synctex.gz
+
+.vscode
+
+**/build-dir
+core
+*.xdmf
+*.h5
+**/CMakeFiles
+CMakeCache.txt

@@ -7,10 +7,10 @@ import dolfinx.geometry
 import dolfinx.io
 import gmsh
 import numpy as np
-from dolfinx_cuas.contact import facet_master_puppet_relation
+from dolfinx_contact import facet_master_puppet_relation
 from dolfinx.cpp.io import perm_gmsh
 from dolfinx.cpp.mesh import to_type
-import dolfinx_cuas.cpp as cuas
+import dolfinx_contact.cpp
 from dolfinx.io import (extract_gmsh_geometry,
                         extract_gmsh_topology_and_markers, ufl_mesh_from_gmsh)
 from dolfinx.mesh import create_mesh
@@ -180,7 +180,7 @@ values = np.asarray(values, dtype=np.int32)
 sorted = np.argsort(indices)
 mt = dolfinx.MeshTags(mesh, mesh.topology.dim - 1, indices[sorted], values[sorted])
 V = dolfinx.VectorFunctionSpace(mesh, ("CG", 1))
-contact = cuas.contact.Contact(mt, 1, 2, V._cpp_object)
+contact = dolfinx_contact.cpp.Contact(mt, 1, 2, V._cpp_object)
 contact.create_distance_map(1)
 circ_to_rect = facet_master_puppet_relation(mesh, rect_facets, circ_facets, quadrature_degree=2)
 

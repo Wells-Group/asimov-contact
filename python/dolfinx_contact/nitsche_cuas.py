@@ -5,7 +5,9 @@
 import dolfinx
 import dolfinx.io
 import dolfinx_contact
+import dolfinx_cuas
 import dolfinx_contact.cpp
+import dolfinx_cuas.cpp
 import numpy as np
 import ufl
 from mpi4py import MPI
@@ -115,12 +117,13 @@ def nitsche_cuas(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dolfinx.MeshTags,
     mu2.interpolate(mu_func2)
     u.interpolate(_u_initial)
     coeffs = dolfinx_cuas.cpp.pack_coefficients([mu2._cpp_object, lmbda2._cpp_object])
-    h_facets = dolfinx_cuas.cpp.pack_circumradius_facet(mesh, bottom_facets)
-    h_cells = dolfinx_cuas.cpp.facet_to_cell_data(mesh, bottom_facets, h_facets, 1)
+    h_facets = dolfinx_contact.cpp.pack_circumradius_facet(mesh, bottom_facets)
+    h_cells = dolfinx_contact.cpp.facet_to_cell_data(mesh, bottom_facets, h_facets, 1)
     contact = dolfinx_contact.cpp.Contact(facet_marker, bottom_value, top_value, V._cpp_object)
     contact.set_quadrature_degree(q_deg)
     g_vec = contact.pack_gap_plane(0, g)
-    g_vec_c = dolfinx_cuas.cpp.facet_to_cell_data(mesh, bottom_facets, g_vec, mesh.geometry.dim * q_rule.weights.size)
+    g_vec_c = dolfinx_contact.cpp.facet_to_cell_data(
+        mesh, bottom_facets, g_vec, mesh.geometry.dim * q_rule.weights.size)
     coeffs = np.hstack([coeffs, h_cells, g_vec_c])
 
     # RHS
