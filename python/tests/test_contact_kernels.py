@@ -130,10 +130,9 @@ def test_vector_surface_kernel(dim, kernel_type, P, Q):
     L_cuas = ufl.inner(sigma(u), epsilon(v)) * dx
     L_cuas = dolfinx.fem.Form(L_cuas)
     b2 = dolfinx.fem.create_vector(L_cuas)
-    from IPython import embed
-    embed()
     kernel = dolfinx_contact.cpp.generate_contact_kernel(V._cpp_object, kernel_type, q_rule,
                                                          [u._cpp_object, mu._cpp_object, lmbda._cpp_object])
+
     b2.zeroEntries()
     dolfinx_cuas.assemble_vector(b2, V, ft.indices, kernel, coeffs, consts, it.exterior_facet)
     dolfinx.fem.assemble_vector(b2, L_cuas)
@@ -234,9 +233,7 @@ def test_matrix_surface_kernel(dim, kernel_type, P, Q):
     A.assemble()
 
     # Custom assembly
-    # FIXME: assuming all facets are the same type
-    facet_type = dolfinx.cpp.mesh.cell_entity_type(mesh.topology.cell_type, mesh.topology.dim - 1, 0)
-    q_rule = dolfinx_cuas.cpp.QuadratureRule(facet_type, 2 * P + Q + 1, "default")
+    q_rule = dolfinx_cuas.cpp.QuadratureRule(mesh.topology.cell_type, 2 * P + Q + 1, mesh.topology.dim - 1, "default")
     consts = np.array([gamma, theta])
     consts = np.hstack((consts, n_vec))
     coeffs = dolfinx_cuas.cpp.pack_coefficients([u._cpp_object, mu._cpp_object, lmbda._cpp_object])
@@ -245,7 +242,8 @@ def test_matrix_surface_kernel(dim, kernel_type, P, Q):
     contact = dolfinx_contact.cpp.Contact(ft, 1, 1, V._cpp_object)
     contact.set_quadrature_degree(2 * P + Q + 1)
     g_vec = contact.pack_gap_plane(0, g)
-    g_vec_c = dolfinx_contact.cpp.facet_to_cell_data(mesh, facets, g_vec, dim * q_rule.weights.size)
+    # FIXME: Assumption of constant facet will break on prisms
+    g_vec_c = dolfinx_contact.cpp.facet_to_cell_data(mesh, facets, g_vec, dim * q_rule.weights(0).size)
     coeffs = np.hstack([coeffs, h_cells, g_vec_c])
     a_cuas = ufl.inner(sigma(du), epsilon(v)) * dx
     a_cuas = dolfinx.fem.Form(a_cuas)

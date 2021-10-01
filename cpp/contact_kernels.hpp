@@ -68,8 +68,6 @@ namespace dolfinx_contact
       std::shared_ptr<const dolfinx::fem::FiniteElement> coeff_element = coeffs[i - 1]->function_space()->element();
       offsets[i] = offsets[i - 1] + coeff_element->space_dimension() / coeff_element->block_size();
     }
-    std::cout << "HERE"
-              << "\n";
     // FIXME: This will not work for prism meshes
     const std::uint32_t num_quadrature_pts = q_points[0].shape(0);
     offsets[num_coeffs + 1] = offsets[num_coeffs] + num_facets;
@@ -85,6 +83,21 @@ namespace dolfinx_contact
       auto facet = facets[i];
       auto q_facet = q_points[i];
 
+      // Tabulate at quadrature points on facet
+      const int num_quadrature_points = q_facet.shape(0);
+
+      xt::xtensor<double, 4> cell_tab({tdim + 1, num_quadrature_points, ndofs_cell, bs});
+      element->tabulate(cell_tab, q_facet, 1);
+      xt::xtensor<double, 2> phi_i = xt::view(cell_tab, 0, xt::all(), xt::all(), 0);
+      phi.push_back(phi_i);
+      xt::xtensor<double, 3> dphi_i = xt::view(cell_tab, xt::range(1, tdim + 1), xt::all(), xt::all(), 0);
+      dphi.push_back(dphi_i);
+
+      // Tabulate coordinate element of reference cell
+      auto c_tab = basix_element.tabulate(1, q_facet);
+      xt::xtensor<double, 3> dphi_ci = xt::view(c_tab, xt::range(1, tdim + 1), xt::all(), xt::all(), 0);
+      dphi_c.push_back(dphi_ci);
+
       // Create Finite elements for coefficient functions and tabulate shape functions
       for (int j = 0; j < num_coeffs; j++)
       {
@@ -92,7 +105,6 @@ namespace dolfinx_contact
         xt::xtensor<double, 4> coeff_basis(
             {tdim + 1, q_facet.shape(0),
              coeff_element->space_dimension() / coeff_element->block_size(), 1});
-        std::cout << coeff_basis.shape(0) << coeff_basis.shape(1) << coeff_basis.shape(2) << coeff_basis.shape(3) << "\n";
         coeff_element->tabulate(coeff_basis, q_facet, 1);
         auto phi_ij = xt::view(phi_coeffs, i, xt::all(), xt::range(offsets[j], offsets[j + 1]));
         phi_ij = xt::view(coeff_basis, 0, xt::all(), xt::all(), 0);
@@ -119,7 +131,6 @@ namespace dolfinx_contact
       // FIXME: This assumption does not work on prism meshes
       // assumption that u lives in the same space as v
       assert(phi[0].shape(1) == offsets[1] - offsets[0]);
-
       std::size_t facet_index = size_t(*entity_local_index);
 
       // Reshape coordinate dofs to two dimensional array
@@ -186,7 +197,6 @@ namespace dolfinx_contact
       // Temporary variable for grad(phi) on physical cell
       xt::xtensor<double, 2> dphi_phys({bs, ndofs_cell});
 
-      std::cout << "QUAD LOOOP\n";
       // Loop over quadrature points
       const int num_points = phi[*entity_local_index].shape(0);
       for (std::size_t q = 0; q < num_points; q++)
