@@ -153,8 +153,7 @@ def test_contact_kernel(theta, gamma, dim, gap):
 
         # Custom assembly
         # FIXME: assuming all facets are the same type
-        facet_type = dolfinx.cpp.mesh.cell_entity_type(mesh.topology.cell_type, mesh.topology.dim - 1, 0)
-        q_rule = dolfinx_cuas.cpp.QuadratureRule(facet_type, q_deg, "default")
+        q_rule = dolfinx_cuas.cpp.QuadratureRule(mesh.topology.cell_type, q_deg, mesh.topology.dim - 1, "default")
         consts = np.array([gamma * E, theta])
         consts = np.hstack((consts, n_vec))
 
@@ -183,7 +182,8 @@ def test_contact_kernel(theta, gamma, dim, gap):
         contact = dolfinx_contact.cpp.Contact(facet_marker, bottom_value, top_value, V._cpp_object)
         contact.set_quadrature_degree(q_deg)
         g_vec = contact.pack_gap_plane(0, g)
-        g_vec_c = dolfinx_contact.cpp.facet_to_cell_data(mesh, bottom_facets, g_vec, dim * q_rule.weights.size)
+        # FIXME: Assumptions that does not work for prisms
+        g_vec_c = dolfinx_contact.cpp.facet_to_cell_data(mesh, bottom_facets, g_vec, dim * q_rule.weights(0).size)
         coeffs = np.hstack([coeffs, h_cells, g_vec_c])
         # RHS
         L_cuas = ufl.inner(sigma(u), epsilon(v)) * dx
