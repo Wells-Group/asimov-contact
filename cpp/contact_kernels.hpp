@@ -38,7 +38,6 @@ namespace dolfinx_contact
     const int fdim = tdim - 1;                         // topological dimension of facet
 
     // Create coordinate elements (for facet and cell) _marker->mesh()
-    const basix::FiniteElement surface_element = dolfinx_cuas::mesh_to_basix_element(mesh, fdim);
     const basix::FiniteElement basix_element = dolfinx_cuas::mesh_to_basix_element(mesh, tdim);
     const int num_coordinate_dofs = basix_element.dim();
 
@@ -69,13 +68,16 @@ namespace dolfinx_contact
       std::shared_ptr<const dolfinx::fem::FiniteElement> coeff_element = coeffs[i - 1]->function_space()->element();
       offsets[i] = offsets[i - 1] + coeff_element->space_dimension() / coeff_element->block_size();
     }
+    std::cout << "HERE"
+              << "\n";
     // FIXME: This will not work for prism meshes
     const std::uint32_t num_quadrature_pts = q_points[0].shape(0);
     offsets[num_coeffs + 1] = offsets[num_coeffs] + num_facets;
     offsets[num_coeffs + 2] = offsets[num_coeffs + 1] + gdim * num_quadrature_pts * num_facets;
     // Pack coefficients for functions and gradients of functions (untested)
-    xt::xtensor<double, 3> phi_coeffs({num_facets, q_weights.size(), offsets[num_coeffs]});
-    xt::xtensor<double, 4> dphi_coeffs({num_facets, tdim, q_weights.size(), offsets[num_coeffs]});
+    // FIXME: This assumption would fail for prisms
+    xt::xtensor<double, 3> phi_coeffs({num_facets, q_weights[0].size(), offsets[num_coeffs]});
+    xt::xtensor<double, 4> dphi_coeffs({num_facets, tdim, q_weights[0].size(), offsets[num_coeffs]});
 
     for (int i = 0; i < num_facets; ++i)
     {
@@ -87,10 +89,10 @@ namespace dolfinx_contact
       for (int j = 0; j < num_coeffs; j++)
       {
         std::shared_ptr<const dolfinx::fem::FiniteElement> coeff_element = coeffs[j]->function_space()->element();
-        // FIXME: This assumption does not work for prisms
         xt::xtensor<double, 4> coeff_basis(
-            {tdim + 1, q_weights[0].size(),
+            {tdim + 1, q_facet.shape(0),
              coeff_element->space_dimension() / coeff_element->block_size(), 1});
+        std::cout << coeff_basis.shape(0) << coeff_basis.shape(1) << coeff_basis.shape(2) << coeff_basis.shape(3) << "\n";
         coeff_element->tabulate(coeff_basis, q_facet, 1);
         auto phi_ij = xt::view(phi_coeffs, i, xt::all(), xt::range(offsets[j], offsets[j + 1]));
         phi_ij = xt::view(coeff_basis, 0, xt::all(), xt::all(), 0);
@@ -105,7 +107,6 @@ namespace dolfinx_contact
 
     // Get facet normals on reference cell
     auto facet_normals = basix::cell::facet_outward_normals(basix_element.cell_type());
-
     // Define kernels
     // RHS for contact with rigid surface
     // =====================================================================================
@@ -185,6 +186,7 @@ namespace dolfinx_contact
       // Temporary variable for grad(phi) on physical cell
       xt::xtensor<double, 2> dphi_phys({bs, ndofs_cell});
 
+      std::cout << "QUAD LOOOP\n";
       // Loop over quadrature points
       const int num_points = phi[*entity_local_index].shape(0);
       for (std::size_t q = 0; q < num_points; q++)
