@@ -71,8 +71,7 @@ jobs:
         with:
           path: ./asimov-custom-assemblers
           repository: Wells-Group/asimov-custom-assemblers
-          ref: main
-
+          ref: sarah/move_cuas_contact
       - name: Install custom assemblers (C++)
         run: |
           cmake -G Ninja -DCMAKE_BUILD_TYPE=Developer -B build-cuas -S ./asimov-custom-assemblers/cpp
@@ -80,6 +79,11 @@ jobs:
 
       - name: Install custom assemblers
         run: python3 -m pip -v install ./asimov-custom-assemblers/python/
+
+      - name: Install contact (C++)
+        run: |
+          cmake -G Ninja -DCMAKE_BUILD_TYPE=Developer -B build-contact -S cpp/
+          ninja -C build-contact install
 
       - name: Install contact 
         run: python3 -m pip -v install python/

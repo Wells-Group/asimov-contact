@@ -8,7 +8,7 @@ import numpy as np
 import ufl
 from mpi4py import MPI
 from petsc4py import PETSc
-import dolfinx_cuas.cpp as cuas
+import dolfinx_contact.cpp
 
 from typing import Tuple
 from dolfinx_contact.helpers import (epsilon, lame_parameters, rigid_motions_nullspace,
@@ -49,7 +49,7 @@ def nitsche_rigid_surface(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dolfinx.
     gdim = mesh.geometry.dim
     fdim = mesh.topology.dim - 1
     mesh_geometry = mesh.geometry.x
-    contact = cuas.contact.Contact(facet_marker, bottom_value, surface_value, V._cpp_object)
+    contact = dolfinx_contact.cpp.Contact(facet_marker, bottom_value, surface_value, V._cpp_object)
     contact.create_distance_map(0)
     lookup = contact.map_0_to_1()
     bottom_facets = contact.facet_0()
