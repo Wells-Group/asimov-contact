@@ -102,7 +102,7 @@ def test_pack_coeff_on_facet(quadrature_degree, space, degree):
         # find local index of facet
         cell_facets = c_to_f.links(cell)
         local_index = np.where(cell_facets == facet)[0]
-        quadrature_points = qp = q_rule.points(local_index)
+        quadrature_points = q_rule.points(local_index)
         x = mesh.geometry.cmap.push_forward(quadrature_points, xg)
         v_ex = v.eval(x, np.full(x.shape[0], cell))
 
