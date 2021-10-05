@@ -71,7 +71,7 @@ jobs:
         with:
           path: ./asimov-custom-assemblers
           repository: Wells-Group/asimov-custom-assemblers
-          ref:  main
+          ref: main
 
       - name: Install custom assemblers (C++)
         run: |
