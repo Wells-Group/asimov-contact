@@ -8,11 +8,11 @@ import numpy as np
 import ufl
 from mpi4py import MPI
 from petsc4py import PETSc
-import dolfinx_cuas.cpp as cuas
+import dolfinx_contact.cpp
 
 from typing import Tuple
-from helpers import (epsilon, lame_parameters, rigid_motions_nullspace,
-                     sigma_func, R_minus)
+from dolfinx_contact.helpers import (epsilon, lame_parameters, rigid_motions_nullspace,
+                                     sigma_func, R_minus)
 
 
 def nitsche_rigid_surface(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dolfinx.MeshTags, int, int, int, int],
@@ -49,7 +49,7 @@ def nitsche_rigid_surface(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dolfinx.
     gdim = mesh.geometry.dim
     fdim = mesh.topology.dim - 1
     mesh_geometry = mesh.geometry.x
-    contact = cuas.Contact(facet_marker, bottom_value, surface_value, V._cpp_object)
+    contact = dolfinx_contact.cpp.Contact(facet_marker, bottom_value, surface_value, V._cpp_object)
     contact.create_distance_map(0)
     lookup = contact.map_0_to_1()
     bottom_facets = contact.facet_0()
@@ -126,8 +126,6 @@ def nitsche_rigid_surface(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dolfinx.
         u_D.x.scatter_forward()
         dirichlet_dofs = dolfinx.fem.locate_dofs_topological(
             V, tdim - 1, facet_marker.indices[facet_marker.values == top_value])
-        print(dirichlet_dofs)
-        print(vertical_displacement)
         bc = dolfinx.DirichletBC(u_D, dirichlet_dofs)
         bcs = [bc]
         # Dirichlet boundary conditions for rigid plane

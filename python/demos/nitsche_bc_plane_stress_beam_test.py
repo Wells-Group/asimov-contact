@@ -13,12 +13,13 @@ from dolfinx.cpp.mesh import CellType, GhostMode
 from dolfinx.fem import NonlinearProblem
 from mpi4py import MPI
 
-from helpers import epsilon, lame_parameters, sigma_func
+from dolfinx_contact.helpers import epsilon, lame_parameters, sigma_func
 
 
-def solve_manufactured(nx: int, ny: int, theta: float, gamma: float, nitsche: bool, strain: bool, linear_solver: bool, L: float = 10):
+def solve_manufactured(nx: int, ny: int, theta: float, gamma: float, nitsche: bool,
+                       strain: bool, linear_solver: bool, L: float = 10):
     """
-    Solve the manufactured problem 
+    Solve the manufactured problem
     u = [(nu + 1) / E * x[1]**4, (nu + 1) / E * x[0]**4]
     on the domain [0, -1]x[L, 1]
     where u solves the linear elasticity equations (plane stress/plane strain) with

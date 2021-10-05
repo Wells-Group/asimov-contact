@@ -9,7 +9,9 @@ import dolfinx.io
 import numpy as np
 from mpi4py import MPI
 
-from nitsche_rigid_surface import nitsche_rigid_surface
+from dolfinx_contact.nitsche_rigid_surface import nitsche_rigid_surface
+from dolfinx_contact.create_contact_meshes import create_circle_plane_mesh, create_sphere_plane_mesh
+from dolfinx_contact.helpers import convert_mesh
 
 if __name__ == "__main__":
     desc = "Compare Nitsche's metood for contact against a straight plane with PETSc SNES"
@@ -57,6 +59,9 @@ if __name__ == "__main__":
     # and the bottom (contact condition)
     if threed:
         fname = "sphere"
+        create_sphere_plane_mesh(filename=f"{fname}.msh")
+        convert_mesh(fname, "tetra")
+        convert_mesh(f"{fname}", "triangle", ext="facets")
         with dolfinx.io.XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
             mesh = xdmf.read_mesh(name="Grid")
         tdim = mesh.topology.dim
@@ -71,6 +76,10 @@ if __name__ == "__main__":
 
     else:
         fname = "twomeshes"
+        create_circle_plane_mesh(filename=f"{fname}.msh")
+        convert_mesh(fname, "triangle", prune_z=True)
+        convert_mesh(f"{fname}", "line", ext="facets", prune_z=True)
+
         with dolfinx.io.XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
             mesh = xdmf.read_mesh(name="Grid")
         tdim = mesh.topology.dim
