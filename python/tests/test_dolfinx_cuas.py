@@ -24,9 +24,9 @@ compare_matrices = dolfinx_cuas.utils.compare_matrices
 # of the rhs and jacobi matrix for contact
 # with a rigid surface for a given initial value
 @pytest.mark.parametrize("theta", [1, -1, 0])
-@pytest.mark.parametrize("gamma", [10, 100, 1000])
+@pytest.mark.parametrize("gamma", [10, 1000])
 @pytest.mark.parametrize("dim", [2, 3])
-@pytest.mark.parametrize("gap", [0.0, 0.02, -0.01])
+@pytest.mark.parametrize("gap", [0.02, -0.01])
 def test_contact_kernel(theta, gamma, dim, gap):
     # Problem parameters
     num_refs = 1
