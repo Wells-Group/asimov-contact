@@ -139,6 +139,7 @@ namespace dolfinx_contact
 
       // FIXME: These array should be views (when compute_jacobian doesn't use xtensor)
       const xt::xtensor<double, 2> &coord = xt::adapt(coordinate_dofs, num_coordinate_dofs * 3, xt::no_ownership(), shape);
+      auto c_view = xt::view(coord, xt::all(), xt::range(0, gdim));
 
       // Extract the first derivative of the coordinate element (cell) of degrees of freedom on
       // the facet
@@ -150,7 +151,8 @@ namespace dolfinx_contact
       // Compute Jacobian and determinant at first quadrature point
       xt::xtensor<double, 2> J = xt::zeros<double>({gdim, tdim});
       xt::xtensor<double, 2> K = xt::zeros<double>({tdim, gdim});
-      dolfinx_cuas::math::compute_jacobian(dphi0_c, coord, J);
+
+      dolfinx_cuas::math::compute_jacobian(dphi0_c, c_view, J);
       dolfinx_cuas::math::compute_inv(J, K);
 
       // Compute normal of physical facet using a normalized covariant Piola transform
@@ -161,7 +163,10 @@ namespace dolfinx_contact
       for (std::size_t i = 0; i < gdim; i++)
         for (std::size_t j = 0; j < tdim; j++)
           n_phys[i] += K(j, i) * facet_normal[j];
-      n_phys /= xt::linalg::norm(n_phys);
+      double n_norm = 0;
+      for (std::size_t i = 0; i < gdim; i++)
+        n_norm += n_phys[i] * n_phys[i];
+      n_phys /= std::sqrt(n_norm);
 
       // Retrieve normal of rigid surface if constant
       xt::xarray<double> n_surf = xt::zeros<double>({gdim});
@@ -184,7 +189,8 @@ namespace dolfinx_contact
 
       // Compute det(J_C J_f) as it is the mapping to the reference facet
       const xt::xtensor<double, 2> &J_f = xt::view(ref_jacobians, facet_index, xt::all(), xt::all());
-      const xt::xtensor<double, 2> &J_tot = xt::linalg::dot(J, J_f);
+      xt::xtensor<double, 2> J_tot = xt::zeros<double>({J.shape(0), J_f.shape(1)});
+      dolfinx::math::dot(J, J_f, J_tot);
       double detJ = std::fabs(dolfinx_cuas::math::compute_determinant(J_tot));
 
       const xt::xtensor<double, 3> &dphi_f = dphi[facet_index];
@@ -325,7 +331,8 @@ namespace dolfinx_contact
       // Compute Jacobian and determinant at first quadrature point
       xt::xtensor<double, 2> J = xt::zeros<double>({gdim, tdim});
       xt::xtensor<double, 2> K = xt::zeros<double>({tdim, gdim});
-      dolfinx_cuas::math::compute_jacobian(dphi0_c, coord, J);
+      auto c_view = xt::view(coord, xt::all(), xt::range(0, gdim));
+      dolfinx_cuas::math::compute_jacobian(dphi0_c, c_view, J);
       dolfinx_cuas::math::compute_inv(J, K);
 
       // Compute normal of physical facet using a normalized covariant Piola transform
@@ -336,7 +343,10 @@ namespace dolfinx_contact
       for (std::size_t i = 0; i < gdim; i++)
         for (std::size_t j = 0; j < tdim; j++)
           n_phys[i] += K(j, i) * facet_normal[j];
-      n_phys /= xt::linalg::norm(n_phys);
+      double n_norm = 0;
+      for (std::size_t i = 0; i < gdim; i++)
+        n_norm += n_phys[i] * n_phys[i];
+      n_phys /= std::sqrt(n_norm);
 
       // Retrieve normal of rigid surface if constant
       xt::xarray<double> n_surf = xt::zeros<double>({gdim});
@@ -360,7 +370,8 @@ namespace dolfinx_contact
 
       // Compute det(J_C J_f) as it is the mapping to the reference facet
       xt::xtensor<double, 2> J_f = xt::view(ref_jacobians, facet_index, xt::all(), xt::all());
-      xt::xtensor<double, 2> J_tot = xt::linalg::dot(J, J_f);
+      xt::xtensor<double, 2> J_tot = xt::zeros<double>({J.shape(0), J_f.shape(1)});
+      dolfinx::math::dot(J, J_f, J_tot);
       double detJ = std::fabs(dolfinx_cuas::math::compute_determinant(J_tot));
 
       const xt::xtensor<double, 3> &dphi_f = dphi[facet_index];

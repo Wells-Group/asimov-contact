@@ -20,7 +20,6 @@
 #include <dolfinx_cuas/utils.hpp>
 #include <dolfinx_cuas/QuadratureRule.hpp>
 #include <iostream>
-#include <xtensor-blas/xlinalg.hpp>
 #include <xtensor/xindex_view.hpp>
 #include <xtl/xspan.hpp>
 

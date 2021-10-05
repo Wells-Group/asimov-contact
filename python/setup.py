@@ -7,7 +7,7 @@ from setuptools import Extension, setup
 from setuptools.command.build_ext import build_ext
 
 
-VERSION = "0.1.0"
+VERSION = "0.3.1"
 
 REQUIREMENTS = []
 
