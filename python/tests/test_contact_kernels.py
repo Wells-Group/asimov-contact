@@ -25,10 +25,10 @@ def R_minus(x):
 
 @pytest.mark.parametrize("kernel_type", [kt.NitscheRigidSurfaceRhs])
 @pytest.mark.parametrize("dim", [2, 3])
-@pytest.mark.parametrize("P", [1, 2, 3, 4, 5])
+@pytest.mark.parametrize("P", [1, 2, 3, 4])
 @pytest.mark.parametrize("Q", [0, 1, 2])
 def test_vector_surface_kernel(dim, kernel_type, P, Q):
-    N = 30 if dim == 2 else 10
+    N = 20 if dim == 2 else 5
     mesh = dolfinx.UnitSquareMesh(MPI.COMM_WORLD, N, N) if dim == 2 else dolfinx.UnitCubeMesh(MPI.COMM_WORLD, N, N, N)
 
     # Find facets on boundary to integrate over
@@ -140,12 +140,12 @@ def test_vector_surface_kernel(dim, kernel_type, P, Q):
     assert np.allclose(b.array, b2.array)
 
 
-@ pytest.mark.parametrize("kernel_type", [kt.NitscheRigidSurfaceJac])
-@ pytest.mark.parametrize("dim", [2, 3])
-@ pytest.mark.parametrize("P", [1, 2, 3, 4, 5])
-@ pytest.mark.parametrize("Q", [0, 1, 2])
+@pytest.mark.parametrize("kernel_type", [kt.NitscheRigidSurfaceJac])
+@pytest.mark.parametrize("dim", [2, 3])
+@pytest.mark.parametrize("P", [1, 2, 3, 4])
+@pytest.mark.parametrize("Q", [0, 1, 2])
 def test_matrix_surface_kernel(dim, kernel_type, P, Q):
-    N = 30 if dim == 2 else 10
+    N = 20 if dim == 2 else 5
     mesh = dolfinx.UnitSquareMesh(MPI.COMM_WORLD, N, N) if dim == 2 else dolfinx.UnitCubeMesh(MPI.COMM_WORLD, N, N, N)
 
     # Find facets on boundary to integrate over
