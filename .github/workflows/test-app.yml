@@ -72,6 +72,7 @@ jobs:
           path: ./asimov-custom-assemblers
           repository: Wells-Group/asimov-custom-assemblers
           ref:  dokken/rewrite_quadraturerule
+
       - name: Install custom assemblers (C++)
         run: |
           cmake -G Ninja -DCMAKE_BUILD_TYPE=Developer -B build-cuas -S ./asimov-custom-assemblers/cpp
