@@ -94,17 +94,15 @@ def test_pack_coeff_on_facet(quadrature_degree, space, degree):
     mesh.topology.create_connectivity(tdim, fdim)
     c_to_f = mesh.topology.connectivity(tdim, fdim)
 
-    qp, w = dolfinx_cuas.cpp.create_reference_facet_qp(mesh, quadrature_degree)
-
+    q_rule = dolfinx_cuas.cpp.QuadratureRule(mesh.topology.cell_type, quadrature_degree, mesh.topology.dim - 1)
     # Eval for each cell
     for index, facet in enumerate(facets):
         cell = f_to_c.links(facet)[0]
         xg = x_g[coord_dofs.links(cell)]
         # find local index of facet
         cell_facets = c_to_f.links(cell)
-        local_index = np.where(cell_facets == facet)
-        quadrature_points = np.zeros((qp.shape[1], qp.shape[2]))
-        quadrature_points[:, :] = qp[local_index[0], :, :]
+        local_index = np.where(cell_facets == facet)[0]
+        quadrature_points = q_rule.points(local_index)
         x = mesh.geometry.cmap.push_forward(quadrature_points, xg)
         v_ex = v.eval(x, np.full(x.shape[0], cell))
 
