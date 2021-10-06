@@ -97,9 +97,7 @@ def nitsche_rigid_surface_cuas(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dol
         print("Dirichlet bc not implemented in custom assemblers yet.")
 
     # Custom assembly
-    # FIXME: assuming all facets are the same type
-    facet_type = dolfinx.cpp.mesh.cell_entity_type(mesh.topology.cell_type, mesh.topology.dim - 1, 0)
-    q_rule = dolfinx_cuas.cpp.QuadratureRule(facet_type, q_deg, "default")
+    q_rule = dolfinx_cuas.cpp.QuadratureRule(mesh.topology.cell_type, q_deg, mesh.topology.dim - 1, "default")
     consts = np.array([gamma * E, theta])
     consts = np.hstack((consts, n_vec))
 
@@ -130,7 +128,7 @@ def nitsche_rigid_surface_cuas(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dol
     contact.create_distance_map(0)
     g_vec = contact.pack_gap(0)
     g_vec_c = dolfinx_contact.cpp.facet_to_cell_data(
-        mesh, bottom_facets, g_vec, mesh.geometry.dim * q_rule.weights.size)
+        mesh, bottom_facets, g_vec, mesh.geometry.dim * q_rule.weights(0).size)
     coeffs = np.hstack([coeffs, h_cells, g_vec_c])
 
     # RHS

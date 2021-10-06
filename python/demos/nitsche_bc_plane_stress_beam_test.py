@@ -138,7 +138,7 @@ if __name__ == "__main__":
                                      description=desc)
     parser.add_argument("--theta", default=1, type=np.float64, dest="theta",
                         help="Theta parameter for Nitsche, 1 symmetric, -1 skew symmetric, 0 Penalty-like")
-    parser.add_argument("--gamma", default=1000, type=np.float64, dest="gamma",
+    parser.add_argument("--gamma", default=10, type=np.float64, dest="gamma",
                         help="Coercivity/Stabilization parameter for Nitsche condition")
     _dirichlet = parser.add_mutually_exclusive_group(required=False)
     _dirichlet.add_argument('--dirichlet', dest='dirichlet', action='store_true',
