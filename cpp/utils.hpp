@@ -225,7 +225,7 @@ namespace dolfinx_contact
 
     for (int i = 0; i < num_local_facets; i++)
     {
-      auto q_facet = xt::view(points[i], xt::all(), xt::all());
+      const xt::xarray<double> &q_facet = points[i];
       element->tabulate(coeff_basis, q_facet, 0);
       auto basis_ref = xt::view(basis_reference_values, i, xt::all(), xt::all(), xt::all());
       basis_ref = xt::view(coeff_basis, 0, xt::all(), xt::all(), xt::all());
@@ -259,7 +259,7 @@ namespace dolfinx_contact
       xt::xtensor<double, 5> dphi_c({num_local_facets, int(tdim), num_points, num_dofs_g / bs, 1});
       for (int i = 0; i < num_local_facets; i++)
       {
-        auto q_facet = xt::view(points[i], xt::all(), xt::all());
+        const xt::xarray<double> &q_facet = points[i];
         xt::xtensor<double, 4> cmap_basis_functions = cmap.tabulate(1, q_facet);
         auto dphi_ci = xt::view(dphi_c, i, xt::all(), xt::all(), xt::all(), xt::all());
         dphi_ci = xt::view(cmap_basis_functions, xt::xrange(1, int(tdim) + 1), xt::all(), xt::all(),
@@ -417,7 +417,7 @@ namespace dolfinx_contact
     xt::xtensor<double, 5> dphi_c({num_local_facets, int(tdim), num_points, num_dofs_g, 1});
     for (int i = 0; i < num_local_facets; i++)
     {
-      auto q_facet = xt::view(points[i], xt::all(), xt::all());
+      const xt::xarray<double> &q_facet = points[i];
       xt::xtensor<double, 4> cmap_basis_functions = cmap.tabulate(1, q_facet);
       auto dphi_ci = xt::view(dphi_c, i, xt::all(), xt::all(), xt::all(), xt::all());
       dphi_ci = xt::view(cmap_basis_functions, xt::xrange(1, int(tdim) + 1), xt::all(), xt::all(),
