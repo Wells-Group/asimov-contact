@@ -42,8 +42,8 @@ namespace dolfinx_contact
     const int num_coordinate_dofs = basix_element.dim();
 
     // Create quadrature points on reference facet
-    std::vector<std::vector<double>> &q_weights = quadrature_rule.weights_ref();
-    std::vector<xt::xarray<double>> &q_points = quadrature_rule.points_ref();
+    const std::vector<std::vector<double>> &q_weights = quadrature_rule.weights_ref();
+    const std::vector<xt::xarray<double>> &q_points = quadrature_rule.points_ref();
 
     // Structures needed for basis function tabulation
     // phi and grad(phi) at quadrature points
@@ -81,7 +81,7 @@ namespace dolfinx_contact
     {
       // Push quadrature points forward
       auto facet = facets[i];
-      auto q_facet = q_points[i];
+      const xt::xarray<double> &q_facet = q_points[i];
 
       // Tabulate at quadrature points on facet
       const int num_quadrature_points = q_facet.shape(0);

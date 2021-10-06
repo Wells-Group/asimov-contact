@@ -97,6 +97,9 @@ jobs:
           cd python/demos
           mkdir -p results
           python3 compare_nitsche_snes.py
+          python3 compare_cuas_snes.py
+          python3 test_nitsche_rigid_surface.py
+          python3 test_nitsche_rigid_surface_cuas.py
 
       - name: Run tests
         run: |
