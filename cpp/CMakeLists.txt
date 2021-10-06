@@ -54,4 +54,4 @@ target_link_libraries(dolfinx_contact INTERFACE Basix::basix)
 
 # Installation of header-only DOLFINX_CUAS Library
 include(GNUInstallDirs)
-install(FILES Contact.hpp contact_kernels.hpp utils.hpp DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/dolfinx_contact COMPONENT Development)
+install(FILES Contact.hpp NewContact.hpp contact_kernels.hpp utils.hpp DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/dolfinx_contact COMPONENT Development)

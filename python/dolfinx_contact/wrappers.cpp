@@ -10,6 +10,7 @@
 #include <dolfinx/la/PETScMatrix.h>
 #include <dolfinx/mesh/MeshTags.h>
 #include <dolfinx_contact/Contact.hpp>
+#include <dolfinx_contact/NewContact.hpp>
 #include <dolfinx_contact/contact_kernels.hpp>
 #include <dolfinx_contact/utils.hpp>
 #include <iostream>
@@ -17,6 +18,7 @@
 #include <pybind11/operators.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
+#include <dolfinx/graph/AdjacencyList.h>
 #include <xtl/xspan.hpp>
 #define STRINGIFY(x) #x
 #define MACRO_STRINGIFY(x) STRINGIFY(x)
@@ -72,41 +74,54 @@ PYBIND11_MODULE(cpp, m)
      py::enum_<dolfinx_contact::Kernel>(m, "Kernel")
          .value("NitscheRigidSurfaceRhs", dolfinx_contact::Kernel::NitscheRigidSurfaceRhs)
          .value("NitscheRigidSurfaceJac", dolfinx_contact::Kernel::NitscheRigidSurfaceJac);
-       m.def("pack_coefficient_quadrature",
-        [](std::shared_ptr<const dolfinx::fem::Function<PetscScalar>> coeff, int q)
-        {
-          auto [coeffs, cstride] = dolfinx_contact::pack_coefficient_quadrature(coeff, q);
-          int shape0 = cstride == 0 ? 0 : coeffs.size() / cstride;
-          return dolfinx_contact_wrappers::as_pyarray(std::move(coeffs), std::array{shape0, cstride});
-        });
-  m.def("pack_coefficient_facet",
-        [](std::shared_ptr<const dolfinx::fem::Function<PetscScalar>> coeff, int q,
-           const py::array_t<std::int32_t, py::array::c_style>& active_facets)
-        {
-          auto [coeffs, cstride] = dolfinx_contact::pack_coefficient_facet(
-              coeff, q, xtl::span<const std::int32_t>(active_facets.data(), active_facets.size()));
-          int shape0 = cstride == 0 ? 0 : coeffs.size() / cstride;
-          return dolfinx_contact_wrappers::as_pyarray(std::move(coeffs), std::array{shape0, cstride});
-        });
+     m.def("pack_coefficient_quadrature",
+           [](std::shared_ptr<const dolfinx::fem::Function<PetscScalar>> coeff, int q)
+           {
+                auto [coeffs, cstride] = dolfinx_contact::pack_coefficient_quadrature(coeff, q);
+                int shape0 = cstride == 0 ? 0 : coeffs.size() / cstride;
+                return dolfinx_contact_wrappers::as_pyarray(std::move(coeffs), std::array{shape0, cstride});
+           });
+     m.def("pack_coefficient_facet",
+           [](std::shared_ptr<const dolfinx::fem::Function<PetscScalar>> coeff, int q,
+              const py::array_t<std::int32_t, py::array::c_style> &active_facets)
+           {
+                auto [coeffs, cstride] = dolfinx_contact::pack_coefficient_facet(
+                    coeff, q, xtl::span<const std::int32_t>(active_facets.data(), active_facets.size()));
+                int shape0 = cstride == 0 ? 0 : coeffs.size() / cstride;
+                return dolfinx_contact_wrappers::as_pyarray(std::move(coeffs), std::array{shape0, cstride});
+           });
 
-  m.def("pack_circumradius_facet",
-        [](std::shared_ptr<const dolfinx::mesh::Mesh> mesh,
-           const py::array_t<std::int32_t, py::array::c_style>& active_facets)
-        {
-          auto [coeffs, cstride] = dolfinx_contact::pack_circumradius_facet(
-              mesh, xtl::span<const std::int32_t>(active_facets.data(), active_facets.size()));
-          int shape0 = cstride == 0 ? 0 : coeffs.size() / cstride;
-          return dolfinx_contact_wrappers::as_pyarray(std::move(coeffs), std::array{shape0, cstride});
-        });
-  m.def("facet_to_cell_data",
-        [](std::shared_ptr<const dolfinx::mesh::Mesh> mesh,
-           const py::array_t<std::int32_t, py::array::c_style>& active_facets,
-           const py::array_t<PetscScalar, py::array::c_style>& data, int num_cols)
-        {
-          auto [coeffs, cstride] = dolfinx_contact::facet_to_cell_data(
-              mesh, xtl::span<const std::int32_t>(active_facets.data(), active_facets.size()),
-              xtl::span<const PetscScalar>(data.data(), data.size()), num_cols);
-          int shape0 = cstride == 0 ? 0 : coeffs.size() / cstride;
-          return dolfinx_contact_wrappers::as_pyarray(std::move(coeffs), std::array{shape0, cstride});
-        });
+     m.def("pack_circumradius_facet",
+           [](std::shared_ptr<const dolfinx::mesh::Mesh> mesh,
+              const py::array_t<std::int32_t, py::array::c_style> &active_facets)
+           {
+                auto [coeffs, cstride] = dolfinx_contact::pack_circumradius_facet(
+                    mesh, xtl::span<const std::int32_t>(active_facets.data(), active_facets.size()));
+                int shape0 = cstride == 0 ? 0 : coeffs.size() / cstride;
+                return dolfinx_contact_wrappers::as_pyarray(std::move(coeffs), std::array{shape0, cstride});
+           });
+     m.def("facet_to_cell_data",
+           [](std::shared_ptr<const dolfinx::mesh::Mesh> mesh,
+              const py::array_t<std::int32_t, py::array::c_style> &active_facets,
+              const py::array_t<PetscScalar, py::array::c_style> &data, int num_cols)
+           {
+                auto [coeffs, cstride] = dolfinx_contact::facet_to_cell_data(
+                    mesh, xtl::span<const std::int32_t>(active_facets.data(), active_facets.size()),
+                    xtl::span<const PetscScalar>(data.data(), data.size()), num_cols);
+                int shape0 = cstride == 0 ? 0 : coeffs.size() / cstride;
+                return dolfinx_contact_wrappers::as_pyarray(std::move(coeffs), std::array{shape0, cstride});
+           });
+
+     py::class_<dolfinx_contact::ContactInterface,
+                std::shared_ptr<dolfinx_contact::ContactInterface>>(m, "ContactInterface",
+                                                                    "Contact object")
+         .def(py::init<std::shared_ptr<dolfinx::mesh::MeshTags<std::int32_t>>, int, int>(),
+              py::arg("marker"), py::arg("surface_0"), py::arg("surface_1"))
+         .def_property_readonly("surface_0",
+                                &dolfinx_contact::ContactInterface::surface_0)
+
+         .def_property_readonly("surface_1",
+                                &dolfinx_contact::ContactInterface::surface_1);
+
+     //     .def("compute_projection_surface_0", &dolfinx_contact::ContactInterface::compute_projection_surface_0);
 }
