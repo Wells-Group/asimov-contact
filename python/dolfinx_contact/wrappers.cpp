@@ -121,7 +121,6 @@ PYBIND11_MODULE(cpp, m)
                                 &dolfinx_contact::ContactInterface::surface_0)
 
          .def_property_readonly("surface_1",
-                                &dolfinx_contact::ContactInterface::surface_1);
-
-     //     .def("compute_projection_surface_0", &dolfinx_contact::ContactInterface::compute_projection_surface_0);
+                                &dolfinx_contact::ContactInterface::surface_1)
+         .def("create_cell_map", &dolfinx_contact::ContactInterface::create_cell_map);
 }

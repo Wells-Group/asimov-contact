@@ -39,9 +39,11 @@ ct = dolfinx.cpp.mesh.to_string(mesh.topology.cell_type)
 degree = 1
 el = basix.create_element(basix.finite_element.string_to_family(
     family, ct), basix.cell.string_to_type(ct), degree, basix.LagrangeVariant.equispaced)
+
+cell_map = ci.create_cell_map(q_rule, el)
 # with dolfinx.io.XDMFFile(MPI.COMM_WORLD, "test_mesh.xdmf", "w") as xdmf:
 #     xdmf.write_mesh(mesh)
 #     xdmf.write_meshtags(mt)
-# ci.compute_projection_surface_0(q_rule, el)
+
 embed()
 # embed()
