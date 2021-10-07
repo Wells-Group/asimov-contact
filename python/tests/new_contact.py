@@ -35,15 +35,14 @@ ci = contact.ContactInterface(mt, 1, 2)
 q_rule = dolfinx_cuas.cpp.QuadratureRule(mesh.topology.cell_type, 2, mesh.topology.dim - 1)
 
 family = "Lagrange"
-ct = dolfinx.cpp.mesh.to_string(mesh.topology.cell_type)
-degree = 1
-el = basix.create_element(basix.finite_element.string_to_family(
-    family, ct), basix.cell.string_to_type(ct), degree, basix.LagrangeVariant.equispaced)
+# ct = dolfinx.cpp.mesh.to_string(mesh.topology.cell_type)
+# degree = 1
+# el = basix.create_element(basix.finite_element.string_to_family(
+#     family, ct), basix.cell.string_to_type(ct), degree, basix.LagrangeVariant.equispaced)
 
-cell_map = ci.create_cell_map(q_rule, el)
+ci.update_cell_maps(q_rule)
 # with dolfinx.io.XDMFFile(MPI.COMM_WORLD, "test_mesh.xdmf", "w") as xdmf:
 #     xdmf.write_mesh(mesh)
 #     xdmf.write_meshtags(mt)
 
-embed()
 # embed()
