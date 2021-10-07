@@ -118,8 +118,8 @@ public:
   // For each facet on surface 0, find the closest cell for each quadrature
   // point on surface 1
   std::shared_ptr<dolfinx::graph::AdjacencyList<std::int32_t>>
-  create_cell_maps(dolfinx_cuas::QuadratureRule& q_rule,
-                   const basix::FiniteElement& element)
+  create_cell_map(dolfinx_cuas::QuadratureRule& q_rule,
+                  const basix::FiniteElement& element)
   {
     auto mesh_geometry = _mesh->geometry().x();
     auto x_dofmap = _mesh->geometry().dofmap();
