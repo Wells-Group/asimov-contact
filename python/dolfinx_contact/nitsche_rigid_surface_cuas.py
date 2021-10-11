@@ -22,8 +22,7 @@ it = dolfinx.cpp.fem.IntegralType
 def nitsche_rigid_surface_cuas(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dolfinx.MeshTags, int, int, int, int],
                                physical_parameters: dict, refinement: int = 0,
                                nitsche_parameters: dict = {"gamma": 1, "theta": 1, "s": 0}, g: float = 0.0,
-                               vertical_displacement: float = -0.1, nitsche_bc: bool = True, initGuess=None,
-                               update_gap=False):
+                               vertical_displacement: float = -0.1, nitsche_bc: bool = True, initGuess=None):
     (facet_marker, top_value, bottom_value, surface_value, surface_bottom) = mesh_data
     # write mesh and facet markers to xdmf
     with dolfinx.io.XDMFFile(MPI.COMM_WORLD, f"results/mf_cuas_{refinement}.xdmf", "w") as xdmf:
@@ -129,16 +128,10 @@ def nitsche_rigid_surface_cuas(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dol
     h_cells = dolfinx_contact.cpp.facet_to_cell_data(mesh, bottom_facets, h_facets, 1)
     contact = dolfinx_contact.cpp.Contact(facet_marker, bottom_value, surface_value, V._cpp_object)
     contact.set_quadrature_degree(q_deg)
-    if update_gap:
-        u_facet = dolfinx_contact.cpp.pack_coefficient_facet(u._cpp_object, q_deg, bottom_facets)
-        g_vec = contact.pack_gap_update(0, u_facet)
-        g_vec_c = dolfinx_contact.cpp.facet_to_cell_data(
-            mesh, bottom_facets, g_vec, gdim * q_rule.weights(0).size)
-    else:
-        contact.create_distance_map(0)
-        g_vec = contact.pack_gap(0)
-        g_vec_c = dolfinx_contact.cpp.facet_to_cell_data(
-            mesh, bottom_facets, g_vec, gdim * q_rule.weights(0).size)
+    contact.create_distance_map(0)
+    g_vec = contact.pack_gap(0)
+    g_vec_c = dolfinx_contact.cpp.facet_to_cell_data(
+        mesh, bottom_facets, g_vec, gdim * q_rule.weights(0).size)
     coeffs = np.hstack([coeffs, h_cells, g_vec_c])
 
     # RHS

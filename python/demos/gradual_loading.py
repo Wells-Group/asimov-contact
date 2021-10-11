@@ -6,7 +6,6 @@ import dolfinx_contact
 import dolfinx_contact.cpp
 import numpy as np
 from mpi4py import MPI
-from matplotlib import pyplot as plt
 
 from dolfinx_contact.nitsche_rigid_surface_cuas import nitsche_rigid_surface_cuas
 from dolfinx_contact.create_contact_meshes import create_circle_plane_mesh, create_circle_circle_mesh,\
@@ -179,38 +178,14 @@ if __name__ == "__main__":
     mesh_data = (facet_marker, top_value, bottom_value, surface_value, surface_bottom)
     load_increment = vertical_displacement / nload_steps
     u1 = None
-    update_gap = False
     for j in range(nload_steps):
         displacement = load_increment
-        if j > 0:
-            update_gap = True
         # Solve contact problem using Nitsche's method
         u1 = nitsche_rigid_surface_cuas(mesh=mesh, mesh_data=mesh_data, physical_parameters=physical_parameters,
                                         nitsche_parameters=nitsche_parameters, vertical_displacement=displacement,
-                                        nitsche_bc=True, initGuess=u1, update_gap=False, refinement=j)
+                                        nitsche_bc=True, initGuess=u1, refinement=j)
         delta_x = u1.compute_point_values()
         if delta_x.shape[1] < 3:
             delta_x = np.hstack([delta_x, np.zeros((delta_x.shape[0], 3 - delta_x.shape[1]))])
         mesh.geometry.x[:] += delta_x
         facet_marker = dolfinx.MeshTags(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
-        if j == 1:
-            V = dolfinx.VectorFunctionSpace(mesh, ("CG", 1))
-            contact = dolfinx_contact.cpp.Contact(facet_marker, bottom_value, surface_value, V._cpp_object)
-            contact.set_quadrature_degree(3)
-            contact.create_distance_map(0)
-            g_vec = contact.pack_gap(0)
-            bottom_facets = facet_marker.indices[facet_marker.values == bottom_value]
-            qp = contact.qp_phys_0(0)
-            q, d = qp.shape
-            gx = np.zeros(len(bottom_facets) * 2)
-            gy = np.zeros(len(bottom_facets) * 2)
-            qx = np.zeros(len(bottom_facets) * 2)
-            for i in range(len(bottom_facets)):
-                qp = contact.qp_phys_0(i)
-                for k in range(q):
-                    qx[i * q + k] = qp[k, 0]
-                    gx[i * q + k] = g_vec[i, k * d]
-                    gy[i * q + k] = np.sqrt(g_vec[i, k * d + 1]**2 + g_vec[i, k * d]**2)
-            plt.figure()
-            plt.plot(qx, gy, "o")
-            plt.savefig("test.png")

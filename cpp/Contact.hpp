@@ -244,8 +244,6 @@ public:
       }
       offset.push_back(data.size());
     }
-    const std::int32_t num_facets = (*puppet_facets).size();
-    const std::int32_t num_q_point = _qp_ref_facet[0].shape(1);
 
     // save as an adjacency list _map_0_to_1 or _map_1_to_0
     if (origin_meshtag == 0)
@@ -327,6 +325,7 @@ public:
     }
     return {std::move(c), cstride};
   }
+
   /// Pack gap with rigid surface defined by x[gdim-1] = -g.
   /// g_vec = zeros(gdim), g_vec[gdim-1] = -g
   /// Gap = x - g_vec
