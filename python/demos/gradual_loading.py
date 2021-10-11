@@ -2,8 +2,6 @@ import argparse
 
 import dolfinx
 import dolfinx.io
-import dolfinx_contact
-import dolfinx_contact.cpp
 import numpy as np
 from mpi4py import MPI
 
