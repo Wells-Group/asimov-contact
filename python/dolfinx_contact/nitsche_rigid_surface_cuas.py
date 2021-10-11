@@ -181,7 +181,7 @@ def nitsche_rigid_surface_cuas(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dol
     solver.convergence_criterion = "incremental"
     solver.max_it = 200
     solver.error_on_nonconvergence = True
-    solver.relaxation_parameter = 0.9
+    solver.relaxation_parameter = 0.6
 
     def _u_initial(x):
         values = np.zeros((gdim, x.shape[1]))
@@ -212,7 +212,7 @@ def nitsche_rigid_surface_cuas(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dol
     ksp.setFromOptions()
 
     # Solve non-linear problem
-    dolfinx.log.set_log_level(dolfinx.log.LogLevel.OFF)
+    dolfinx.log.set_log_level(dolfinx.log.LogLevel.INFO)
     with dolfinx.common.Timer(f"{refinement} Solve Nitsche"):
         n, converged = solver.solve(u)
     u.x.scatter_forward()
