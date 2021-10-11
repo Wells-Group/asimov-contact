@@ -32,23 +32,26 @@ public:
   /// @param[in] marker The meshtags defining the contact surfaces
   /// @param[in] surface_0 Value of the meshtag marking the first surface
   /// @param[in] surface_1 Value of the meshtag marking the first surface
-  Contact(std::shared_ptr<dolfinx::mesh::MeshTags<std::int32_t>> marker, int surface_0,
-          int surface_1, std::shared_ptr<dolfinx::fem::FunctionSpace> V)
+  Contact(std::shared_ptr<dolfinx::mesh::MeshTags<std::int32_t>> marker,
+          int surface_0, int surface_1,
+          std::shared_ptr<dolfinx::fem::FunctionSpace> V)
       : _marker(marker), _surface_0(surface_0), _surface_1(surface_1), _V(V)
   {
     _facet_0 = marker->find(_surface_0);
     _facet_1 = marker->find(_surface_1);
   }
 
-  // Return Adjacency list of closest facet on surface_1 for every quadrature point in _qp_phys_0
-  // (quadrature points on every facet of surface_0)
-  const std::shared_ptr<dolfinx::graph::AdjacencyList<std::int32_t>> map_0_to_1() const
+  // Return Adjacency list of closest facet on surface_1 for every quadrature
+  // point in _qp_phys_0 (quadrature points on every facet of surface_0)
+  const std::shared_ptr<dolfinx::graph::AdjacencyList<std::int32_t>>
+  map_0_to_1() const
   {
     return _map_0_to_1;
   }
-  // Return Adjacency list of closest facet on surface_0 for every quadrature point in _qp_phys_1
-  // (quadrature points on every facet of surface_1)
-  const std::shared_ptr<dolfinx::graph::AdjacencyList<std::int32_t>> map_1_to_0() const
+  // Return Adjacency list of closest facet on surface_0 for every quadrature
+  // point in _qp_phys_1 (quadrature points on every facet of surface_1)
+  const std::shared_ptr<dolfinx::graph::AdjacencyList<std::int32_t>>
+  map_1_to_0() const
   {
     return _map_1_to_0;
   }
@@ -68,11 +71,15 @@ public:
   std::vector<xt::xtensor<double, 2>> qp_phys_1() { return _qp_phys_1; }
 
   // Return meshtags
-  std::shared_ptr<dolfinx::mesh::MeshTags<std::int32_t>> meshtags() const { return _marker; }
+  std::shared_ptr<dolfinx::mesh::MeshTags<std::int32_t>> meshtags() const
+  {
+    return _marker;
+  }
 
   /// Tabulate the basis function at the quadrature points _qp_ref_facet
   /// creates and fills _phi_ref_facets
-  std::vector<xt::xtensor<double, 2>> tabulate_on_ref_cell(basix::FiniteElement element)
+  std::vector<xt::xtensor<double, 2>>
+  tabulate_on_ref_cell(basix::FiniteElement element)
   {
 
     // Create _phi_ref_facets
@@ -81,19 +88,21 @@ public:
     std::vector<xt::xtensor<double, 2>> phi;
     phi.reserve(num_facets);
 
-    // Tabulate basis functions at quadrature points _qp_ref_facet for each facet of the reference
-    // cell. Fill _phi_ref_facets
+    // Tabulate basis functions at quadrature points _qp_ref_facet for each
+    // facet of the reference cell. Fill _phi_ref_facets
     for (int i = 0; i < num_facets; ++i)
     {
       auto cell_tab = element.tabulate(0, _qp_ref_facet[i]);
-      const xt::xtensor<double, 2> _phi_i = xt::view(cell_tab, 0, xt::all(), xt::all(), 0);
+      const xt::xtensor<double, 2> _phi_i
+          = xt::view(cell_tab, 0, xt::all(), xt::all(), 0);
       phi.push_back(_phi_i);
     }
     return phi;
   }
 
-  /// Compute push forward of quadrature points _qp_ref_facet to the physical facet for
-  /// each facet in _facet_"origin_meshtag" Creates and fills _qp_phys_"origin_meshtag"
+  /// Compute push forward of quadrature points _qp_ref_facet to the physical
+  /// facet for each facet in _facet_"origin_meshtag" Creates and fills
+  /// _qp_phys_"origin_meshtag"
   /// @param[in] origin_meshtag flag to choose between surface_0 and  surface_1
   void create_q_phys(int origin_meshtag)
   {
@@ -127,8 +136,8 @@ public:
       q_phys_pt = &_qp_phys_1;
     }
     q_phys_pt->clear();
-    // push forward of quadrature points _qp_ref_facet to physical facet for each facet in
-    // _facet_"origin_meshtag"
+    // push forward of quadrature points _qp_ref_facet to physical facet for
+    // each facet in _facet_"origin_meshtag"
     for (int i = 0; i < (*puppet_facets).size(); ++i)
     {
       int facet = (*puppet_facets)[i]; // extract facet
@@ -140,13 +149,15 @@ public:
       // find local index of facet
       auto facets = c_to_f->links(cell);
       auto local_facet = std::find(facets.begin(), facets.end(), facet);
-      const std::int32_t local_index = std::distance(facets.data(), local_facet);
+      const std::int32_t local_index
+          = std::distance(facets.data(), local_facet);
 
       // extract local dofs
       auto x_dofs = x_dofmap.links(cell);
-      auto coordinate_dofs = xt::view(mesh_geometry, xt::keep(x_dofs), xt::range(0, gdim));
-      xt::xtensor<double, 2> q_phys(
-          {_qp_ref_facet[local_index].shape(0), _qp_ref_facet[local_index].shape(1)});
+      auto coordinate_dofs
+          = xt::view(mesh_geometry, xt::keep(x_dofs), xt::range(0, gdim));
+      xt::xtensor<double, 2> q_phys({_qp_ref_facet[local_index].shape(0),
+                                     _qp_ref_facet[local_index].shape(1)});
 
       // push forward of quadrature points _qp_ref_facet to the physical facet
       cmap.push_forward(q_phys, coordinate_dofs, _phi_ref_facets[local_index]);
@@ -154,8 +165,9 @@ public:
     }
   }
 
-  /// Compute closest candidate_facet for each quadrature point in _qp_phys_"origin_meshtag"
-  /// This is saved as an adjacency list _map_0_to_1 or _map_1_to_0
+  /// Compute closest candidate_facet for each quadrature point in
+  /// _qp_phys_"origin_meshtag" This is saved as an adjacency list _map_0_to_1
+  /// or _map_1_to_0
   void create_distance_map(int origin_meshtag)
   {
 
@@ -166,16 +178,19 @@ public:
     const int fdim = tdim - 1;
 
     // Create _qp_ref_facet (quadrature points on reference facet)
-    dolfinx_cuas::QuadratureRule q_rule(mesh->topology().cell_type(), _quadrature_degree, fdim);
+    dolfinx_cuas::QuadratureRule q_rule(mesh->topology().cell_type(),
+                                        _quadrature_degree, fdim);
     _qp_ref_facet = q_rule.points();
 
-    // Tabulate basis function on reference cell (_phi_ref_facets)// Create coordinate element
+    // Tabulate basis function on reference cell (_phi_ref_facets)// Create
+    // coordinate element
     // FIXME: For higher order geometry need basix element public in mesh
     // auto degree = mesh->geometry().cmap()._element->degree;
     int degree = 1;
     auto dolfinx_cell = mesh->topology().cell_type();
     auto coordinate_element = basix::create_element(
-        basix::element::family::P, dolfinx::mesh::cell_type_to_basix_type(dolfinx_cell), degree,
+        basix::element::family::P,
+        dolfinx::mesh::cell_type_to_basix_type(dolfinx_cell), degree,
         basix::element::lagrange_variant::equispaced);
     _phi_ref_facets = tabulate_on_ref_cell(coordinate_element);
 
@@ -202,9 +217,10 @@ public:
       q_phys_pt = &_qp_phys_1;
     }
     // Create midpoint tree as compute_closest_entity will be called many times
-    dolfinx::geometry::BoundingBoxTree master_bbox(*mesh, fdim, (*candidate_facets));
-    auto master_midpoint_tree
-        = dolfinx::geometry::create_midpoint_tree(*mesh, fdim, (*candidate_facets));
+    dolfinx::geometry::BoundingBoxTree master_bbox(*mesh, fdim,
+                                                   (*candidate_facets));
+    auto master_midpoint_tree = dolfinx::geometry::create_midpoint_tree(
+        *mesh, fdim, (*candidate_facets));
 
     std::vector<std::int32_t> data; // will contain closest candidate facet
     std::vector<std::int32_t> offset(1);
@@ -218,106 +234,37 @@ public:
           point[k] = (*q_phys_pt)[i](j, k);
         // Find initial search radius R = intermediate_result.second
         std::pair<int, double> intermediate_result
-            = dolfinx::geometry::compute_closest_entity(master_midpoint_tree, point, *mesh);
+            = dolfinx::geometry::compute_closest_entity(master_midpoint_tree,
+                                                        point, *mesh);
         // Find closest facet to point
-        std::pair<int, double> search_result = dolfinx::geometry::compute_closest_entity(
-            master_bbox, point, *mesh, intermediate_result.second);
+        std::pair<int, double> search_result
+            = dolfinx::geometry::compute_closest_entity(
+                master_bbox, point, *mesh, intermediate_result.second);
         data.push_back(search_result.first);
       }
       offset.push_back(data.size());
     }
+    const std::int32_t num_facets = (*puppet_facets).size();
+    const std::int32_t num_q_point = _qp_ref_facet[0].shape(1);
 
     // save as an adjacency list _map_0_to_1 or _map_1_to_0
     if (origin_meshtag == 0)
-      _map_0_to_1 = std::make_shared<dolfinx::graph::AdjacencyList<std::int32_t>>(data, offset);
+      _map_0_to_1
+          = std::make_shared<dolfinx::graph::AdjacencyList<std::int32_t>>(
+              data, offset);
     else
-      _map_1_to_0 = std::make_shared<dolfinx::graph::AdjacencyList<std::int32_t>>(data, offset);
+      _map_1_to_0
+          = std::make_shared<dolfinx::graph::AdjacencyList<std::int32_t>>(
+              data, offset);
   }
 
-  /// Compute closest candidate_facet for each quadrature point in _qp_phys_"origin_meshtag"
-  /// This is saved as an adjacency list _map_0_to_1 or _map_1_to_0
-  std::shared_ptr<dolfinx::graph::AdjacencyList<std::int32_t>>
-  update_distance_map(int origin_meshtag, const xtl::span<const PetscScalar> du)
-  {
-
-    // Mesh info
-    auto mesh = _marker->mesh();
-    const int gdim = mesh->geometry().dim();
-    const int tdim = mesh->topology().dim();
-    const int fdim = tdim - 1;
-
-    // Create _qp_ref_facet (quadrature points on reference facet)
-    dolfinx_cuas::QuadratureRule q_rule(mesh->topology().cell_type(), _quadrature_degree, fdim);
-    _qp_ref_facet = q_rule.points();
-
-    // Tabulate basis function on reference cell (_phi_ref_facets)// Create coordinate element
-    // FIXME: For higher order geometry need basix element public in mesh
-    // auto degree = mesh->geometry().cmap()._element->degree;
-    int degree = 1;
-    auto dolfinx_cell = mesh->topology().cell_type();
-    auto coordinate_element = basix::create_element(
-        basix::element::family::P, dolfinx::mesh::cell_type_to_basix_type(dolfinx_cell), degree,
-        basix::element::lagrange_variant::equispaced);
-    _phi_ref_facets = tabulate_on_ref_cell(coordinate_element);
-
-    // Compute quadrature points on physical facet _qp_phys_"origin_meshtag"
-    create_q_phys(origin_meshtag);
-
-    std::array<double, 3> point;
-    point[2] = 0;
-
-    // assign puppet_ and candidate_facets
-    std::vector<int32_t>* candidate_facets;
-    std::vector<int32_t>* puppet_facets;
-    std::vector<xt::xtensor<double, 2>>* q_phys_pt;
-    if (origin_meshtag == 0)
-    {
-      puppet_facets = &_facet_0;
-      candidate_facets = &_facet_1;
-      q_phys_pt = &_qp_phys_0;
-    }
-    else
-    {
-      puppet_facets = &_facet_1;
-      candidate_facets = &_facet_0;
-      q_phys_pt = &_qp_phys_1;
-    }
-    // Create midpoint tree as compute_closest_entity will be called many times
-    dolfinx::geometry::BoundingBoxTree master_bbox(*mesh, fdim, (*candidate_facets));
-    auto master_midpoint_tree
-        = dolfinx::geometry::create_midpoint_tree(*mesh, fdim, (*candidate_facets));
-
-    std::vector<std::int32_t> data; // will contain closest candidate facet
-    std::vector<std::int32_t> offset(1);
-    offset[0] = 0;
-    for (int i = 0; i < (*puppet_facets).size(); ++i)
-    {
-      // FIXME: This does not work for prism meshes
-      for (int j = 0; j < (*q_phys_pt)[0].shape(0); ++j)
-      {
-        for (int k = 0; k < gdim; ++k)
-          point[k] = (*q_phys_pt)[i](j, k) + du[i * (*q_phys_pt)[0].shape(0) * gdim + j * gdim + k];
-        // Find initial search radius R = intermediate_result.second
-        std::pair<int, double> intermediate_result
-            = dolfinx::geometry::compute_closest_entity(master_midpoint_tree, point, *mesh);
-        // Find closest facet to point
-        std::pair<int, double> search_result = dolfinx::geometry::compute_closest_entity(
-            master_bbox, point, *mesh, intermediate_result.second);
-        data.push_back(search_result.first);
-      }
-      offset.push_back(data.size());
-    }
-
-    // save as an adjacency list _map_0_to_1 or _map_1_to_0
-    return std::make_shared<dolfinx::graph::AdjacencyList<std::int32_t>>(data, offset);
-  }
-
-  /// Compute and pack the gap function for each quadrature point the set of facets.
-  /// For a set of facets; go through the quadrature points on each facet find the closest facet on
-  /// the other surface and compute the distance vector
+  /// Compute and pack the gap function for each quadrature point the set of
+  /// facets. For a set of facets; go through the quadrature points on each
+  /// facet find the closest facet on the other surface and compute the distance
+  /// vector
   /// @param[in] orgin_meshtag - surface on which to integrate
-  /// @param[out] c - gap packed on facets. c[i*cstride +  gdim * k+ j] contains the jth component
-  /// of the Gap on the ith facet at kth quadrature point
+  /// @param[out] c - gap packed on facets. c[i*cstride +  gdim * k+ j] contains
+  /// the jth component of the Gap on the ith facet at kth quadrature point
   std::pair<std::vector<PetscScalar>, int> pack_gap(int origin_meshtag)
   {
     // Mesh info
@@ -330,7 +277,8 @@ public:
     std::shared_ptr<dolfinx::graph::AdjacencyList<std::int32_t>> map;
     std::vector<xt::xtensor<double, 2>>* q_phys_pt;
 
-    // Select which side of the contact interface to loop from and get the correct map
+    // Select which side of the contact interface to loop from and get the
+    // correct map
     if (origin_meshtag == 0)
     {
       puppet_facets = &_facet_0;
@@ -354,87 +302,23 @@ public:
     for (int i = 0; i < num_facets; ++i)
     {
       auto master_facets = map->links(i);
-      auto master_facet_geometry
-          = dolfinx::mesh::entities_to_geometry(*mesh, fdim, master_facets, false);
+      auto master_facet_geometry = dolfinx::mesh::entities_to_geometry(
+          *mesh, fdim, master_facets, false);
       int offset = i * cstride;
       for (int j = 0; j < map->num_links(i); ++j)
       {
-        // Get quadrature points in physical space for the ith facet, jth quadrature point
+        // Get quadrature points in physical space for the ith facet, jth
+        // quadrature point
         for (int k = 0; k < gdim; k++)
           point(0, k) = (*q_phys_pt)[i](j, k);
 
-        // Get the coordinates of the geometry on the other interface, and compute the distance of
-        // the convex hull created by the points
+        // Get the coordinates of the geometry on the other interface, and
+        // compute the distance of the convex hull created by the points
         auto master_facet = xt::view(master_facet_geometry, j, xt::all());
-        auto master_coords = xt::view(mesh_geometry, xt::keep(master_facet), xt::all());
-        auto dist_vec = dolfinx::geometry::compute_distance_gjk(master_coords, point);
-
-        // Add distance vector to coefficient array
-        for (int k = 0; k < gdim; k++)
-          c[offset + j * gdim + k] -= dist_vec(k);
-      }
-    }
-    return {std::move(c), cstride};
-  }
-
-  /// Compute and pack the gap function for each quadrature point the set of facets.
-  /// For a set of facets; go through the quadrature points on each facet find the closest facet on
-  /// the other surface and compute the distance vector
-  /// @param[in] orgin_meshtag - surface on which to integrate
-  /// @param[in] du - displacement applied to contact surface before computing distance, assumes
-  /// that du and c are the same size/structure
-  /// @param[out] c - gap packed on facets. c[i*cstride +  gdim * k+ j] contains the jth component
-  /// of the Gap on the ith facet at kth quadrature point
-  std::pair<std::vector<PetscScalar>, int> pack_gap_update(int origin_meshtag,
-                                                           const xtl::span<const PetscScalar> du)
-  {
-    // Mesh info
-    auto mesh = _marker->mesh();             // mesh
-    const int gdim = mesh->geometry().dim(); // geometrical dimension
-    const int tdim = mesh->topology().dim();
-    const int fdim = tdim - 1;
-    const xt::xtensor<double, 2>& mesh_geometry = mesh->geometry().x();
-    std::vector<int32_t>* puppet_facets;
-    std::shared_ptr<dolfinx::graph::AdjacencyList<std::int32_t>> map
-        = update_distance_map(origin_meshtag, du);
-    std::vector<xt::xtensor<double, 2>>* q_phys_pt;
-
-    // Select which side of the contact interface to loop from and get the correct map
-    if (origin_meshtag == 0)
-    {
-      puppet_facets = &_facet_0;
-      q_phys_pt = &_qp_phys_0;
-    }
-    else
-    {
-      puppet_facets = &_facet_1;
-      q_phys_pt = &_qp_phys_1;
-    }
-    const std::int32_t num_facets = (*puppet_facets).size();
-    const std::int32_t num_q_point = _qp_ref_facet[0].shape(1);
-
-    // Pack gap function for each quadrature point on each facet
-    std::vector<PetscScalar> c(num_facets * num_q_point * gdim, 0.0);
-    const int cstride = num_q_point * gdim;
-    xt::xtensor<double, 2> point = {{0, 0, 0}};
-    for (int i = 0; i < num_facets; ++i)
-    {
-      auto master_facets = map->links(i);
-      auto master_facet_geometry
-          = dolfinx::mesh::entities_to_geometry(*mesh, fdim, master_facets, false);
-      int offset = i * cstride;
-      for (int j = 0; j < map->num_links(i); ++j)
-      {
-
-        // Get quadrature points in physical space for the ith facet, jth quadrature point
-        for (int k = 0; k < gdim; k++)
-          point(0, k) = (*q_phys_pt)[i](j, k) + du[offset + j * gdim + k];
-
-        // Get the coordinates of the geometry on the other interface, and compute the distance of
-        // the convex hull created by the points
-        auto master_facet = xt::view(master_facet_geometry, j, xt::all());
-        auto master_coords = xt::view(mesh_geometry, xt::keep(master_facet), xt::all());
-        auto dist_vec = dolfinx::geometry::compute_distance_gjk(master_coords, point);
+        auto master_coords
+            = xt::view(mesh_geometry, xt::keep(master_facet), xt::all());
+        auto dist_vec
+            = dolfinx::geometry::compute_distance_gjk(master_coords, point);
 
         // Add distance vector to coefficient array
         for (int k = 0; k < gdim; k++)
@@ -448,9 +332,10 @@ public:
   /// Gap = x - g_vec
   /// @param[in] orgin_meshtag - surface on which to integrate
   /// @param[in] g - defines location of plane
-  /// @param[out] c - gap packed on facets. c[i, gdim * k+ j] contains the jth component of the Gap
-  /// on the ith facet at kth quadrature point
-  std::pair<std::vector<PetscScalar>, int> pack_gap_plane(int origin_meshtag, double g)
+  /// @param[out] c - gap packed on facets. c[i, gdim * k+ j] contains the jth
+  /// component of the Gap on the ith facet at kth quadrature point
+  std::pair<std::vector<PetscScalar>, int> pack_gap_plane(int origin_meshtag,
+                                                          double g)
   {
     // Mesh info
     auto mesh = _marker->mesh();             // mesh
@@ -459,18 +344,20 @@ public:
     const int fdim = tdim - 1;
     auto mesh_geometry = mesh->geometry().x();
     // Create _qp_ref_facet (quadrature points on reference facet)
-    dolfinx_cuas::QuadratureRule facet_quadrature(_marker->mesh()->topology().cell_type(),
-                                                  _quadrature_degree, fdim);
+    dolfinx_cuas::QuadratureRule facet_quadrature(
+        _marker->mesh()->topology().cell_type(), _quadrature_degree, fdim);
     _qp_ref_facet = facet_quadrature.points();
     _qw_ref_facet = facet_quadrature.weights();
 
-    // Tabulate basis function on reference cell (_phi_ref_facets)// Create coordinate element
+    // Tabulate basis function on reference cell (_phi_ref_facets)// Create
+    // coordinate element
     // FIXME: For higher order geometry need basix element public in mesh
     // auto degree = mesh->geometry().cmap()._element->degree;
     int degree = 1;
     auto dolfinx_cell = _marker->mesh()->topology().cell_type();
     auto coordinate_element = basix::create_element(
-        basix::element::family::P, dolfinx::mesh::cell_type_to_basix_type(dolfinx_cell), degree,
+        basix::element::family::P,
+        dolfinx::mesh::cell_type_to_basix_type(dolfinx_cell), degree,
         basix::element::lagrange_variant::equispaced);
 
     _phi_ref_facets = tabulate_on_ref_cell(coordinate_element);
@@ -511,15 +398,15 @@ public:
 private:
   int _quadrature_degree = 3;
   std::shared_ptr<dolfinx::mesh::MeshTags<std::int32_t>> _marker;
-  int _surface_0;                                  // meshtag value for surface 0
-  int _surface_1;                                  // meshtag value for surface 1
+  int _surface_0; // meshtag value for surface 0
+  int _surface_1; // meshtag value for surface 1
   std::shared_ptr<dolfinx::fem::FunctionSpace> _V; // Function space
 
-  // Adjacency list of closest facet on surface_1 for every quadrature point in _qp_phys_0
-  // (quadrature points on every facet of surface_0)
+  // Adjacency list of closest facet on surface_1 for every quadrature point in
+  // _qp_phys_0 (quadrature points on every facet of surface_0)
   std::shared_ptr<dolfinx::graph::AdjacencyList<std::int32_t>> _map_0_to_1;
-  // Adjacency list of closest facet on surface_0 for every quadrature point in _qp_phys_1
-  // (quadrature points on every facet of surface_1)
+  // Adjacency list of closest facet on surface_0 for every quadrature point in
+  // _qp_phys_1 (quadrature points on every facet of surface_1)
   std::shared_ptr<dolfinx::graph::AdjacencyList<std::int32_t>> _map_1_to_0;
   // quadrature points on physical facet for each facet on surface 0
   std::vector<xt::xtensor<double, 2>> _qp_phys_0;
