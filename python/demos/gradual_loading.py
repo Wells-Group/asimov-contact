@@ -1,21 +1,21 @@
-# Copyright (C) 2021 Jørgen S. Dokken and Sarah Roggendorf
-#
-# SPDX-License-Identifier:    MIT
-
 import argparse
 
 import dolfinx
 import dolfinx.io
+import dolfinx_contact
+import dolfinx_contact.cpp
 import numpy as np
 from mpi4py import MPI
+from matplotlib import pyplot as plt
 
 from dolfinx_contact.nitsche_rigid_surface_cuas import nitsche_rigid_surface_cuas
 from dolfinx_contact.create_contact_meshes import create_circle_plane_mesh, create_circle_circle_mesh,\
     create_sphere_plane_mesh
 from dolfinx_contact.helpers import convert_mesh
 
+
 if __name__ == "__main__":
-    desc = "Nitsche's method with rigid surface using custom assemblers"
+    desc = "Nitsche's method with rigid surface using custom assemblers and apply gradual loading in non-linear solve"
     parser = argparse.ArgumentParser(description=desc,
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument("--theta", default=1, type=np.float64, dest="theta",
@@ -41,10 +41,10 @@ if __name__ == "__main__":
                              help="Youngs modulus of material")
     _nu = parser.add_argument(
         "--nu", default=0.1, type=np.float64, dest="nu", help="Poisson's ratio")
-    _disp = parser.add_argument("--disp", default=0.3, type=np.float64, dest="disp",
+    _disp = parser.add_argument("--disp", default=0.08, type=np.float64, dest="disp",
                                 help="Displacement BC in negative y direction")
-    _ref = parser.add_argument("--refinements", default=2, type=np.int32,
-                               dest="refs", help="Number of mesh refinements")
+    _nload_steps = parser.add_argument("--load_steps", default=1, type=np.int32, dest="nload_steps",
+                                       help="Number of steps for gradual loading")
 
     # Parse input arguments or set to defualt values
     args = parser.parse_args()
@@ -54,12 +54,11 @@ if __name__ == "__main__":
     nitsche_bc = not args.dirichlet
     physical_parameters = {"E": args.E, "nu": args.nu, "strain": args.plane_strain}
     vertical_displacement = -args.disp
-    num_refs = args.refs + 1
     top_value = 1
     threed = args.threed
     bottom_value = 2
+    nload_steps = args.nload_steps
     curved = args.curved
-
     # Load mesh and create identifier functions for the top (Displacement condition)
     # and the bottom (contact condition)
     if threed:
@@ -135,7 +134,6 @@ if __name__ == "__main__":
             with dolfinx.io.XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
                 mesh = xdmf.read_mesh(name="Grid")
             tdim = mesh.topology.dim
-            gdim = mesh.geometry.dim
             mesh.topology.create_connectivity(tdim - 1, 0)
             mesh.topology.create_connectivity(tdim - 1, tdim)
             with dolfinx.io.XDMFFile(MPI.COMM_WORLD, f"{fname}_facets.xdmf", "r") as xdmf:
@@ -149,7 +147,7 @@ if __name__ == "__main__":
                 return x[1] > 0.5
 
             def bottom(x):
-                return x[1] < 0.45
+                return np.logical_and(x[1] < 0.45, x[1] > 0.15)
 
             top_value = 1
             bottom_value = 2
@@ -173,12 +171,46 @@ if __name__ == "__main__":
             values = np.hstack([top_values, bottom_values, surface_values, sbottom_values])
             sorted_facets = np.argsort(indices)
             facet_marker = dolfinx.MeshTags(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
+
     e_abs = []
     e_rel = []
     dofs_global = []
     rank = MPI.COMM_WORLD.rank
     mesh_data = (facet_marker, top_value, bottom_value, surface_value, surface_bottom)
-    # Solve contact problem using Nitsche's method
-    u1 = nitsche_rigid_surface_cuas(mesh=mesh, mesh_data=mesh_data, physical_parameters=physical_parameters,
-                                    nitsche_parameters=nitsche_parameters, vertical_displacement=vertical_displacement,
-                                    nitsche_bc=True)
+    load_increment = vertical_displacement / nload_steps
+    u1 = None
+    update_gap = False
+    for j in range(nload_steps):
+        displacement = load_increment
+        if j > 0:
+            update_gap = True
+        # Solve contact problem using Nitsche's method
+        u1 = nitsche_rigid_surface_cuas(mesh=mesh, mesh_data=mesh_data, physical_parameters=physical_parameters,
+                                        nitsche_parameters=nitsche_parameters, vertical_displacement=displacement,
+                                        nitsche_bc=True, initGuess=u1, update_gap=False, refinement=j)
+        delta_x = u1.compute_point_values()
+        if delta_x.shape[1] < 3:
+            delta_x = np.hstack([delta_x, np.zeros((delta_x.shape[0], 3 - delta_x.shape[1]))])
+        mesh.geometry.x[:] += delta_x
+        facet_marker = dolfinx.MeshTags(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
+        if j == 1:
+            V = dolfinx.VectorFunctionSpace(mesh, ("CG", 1))
+            contact = dolfinx_contact.cpp.Contact(facet_marker, bottom_value, surface_value, V._cpp_object)
+            contact.set_quadrature_degree(3)
+            contact.create_distance_map(0)
+            g_vec = contact.pack_gap(0)
+            bottom_facets = facet_marker.indices[facet_marker.values == bottom_value]
+            qp = contact.qp_phys_0(0)
+            q, d = qp.shape
+            gx = np.zeros(len(bottom_facets) * 2)
+            gy = np.zeros(len(bottom_facets) * 2)
+            qx = np.zeros(len(bottom_facets) * 2)
+            for i in range(len(bottom_facets)):
+                qp = contact.qp_phys_0(i)
+                for k in range(q):
+                    qx[i * q + k] = qp[k, 0]
+                    gx[i * q + k] = g_vec[i, k * d]
+                    gy[i * q + k] = np.sqrt(g_vec[i, k * d + 1]**2 + g_vec[i, k * d]**2)
+            plt.figure()
+            plt.plot(qx, gy, "o")
+            plt.savefig("test.png")
