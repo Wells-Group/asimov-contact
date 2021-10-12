@@ -65,6 +65,11 @@ public:
   const int quadrature_degree() const { return _quadrature_degree; }
   void set_quadrature_degree(int deg) { _quadrature_degree = deg; }
 
+  // quadrature points on physical facet for each facet on surface 0
+  std::vector<xt::xtensor<double, 2>> qp_phys_0() { return _qp_phys_0; }
+  // quadrature points on physical facet for each facet on surface 1
+  std::vector<xt::xtensor<double, 2>> qp_phys_1() { return _qp_phys_1; }
+
   // Return meshtags
   std::shared_ptr<dolfinx::mesh::MeshTags<std::int32_t>> meshtags() const
   {
