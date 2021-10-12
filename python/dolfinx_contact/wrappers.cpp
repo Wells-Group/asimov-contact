@@ -57,26 +57,6 @@ PYBIND11_MODULE(cpp, m)
            })
       .def("map_0_to_1", &dolfinx_contact::Contact::map_0_to_1)
       .def("map_1_to_0", &dolfinx_contact::Contact::map_1_to_0)
-      .def("qp_phys_0",
-           [](dolfinx_contact::Contact& self, int i)
-           {
-             if (i >= self.qp_phys_0().size())
-               throw std::runtime_error("Entity index out of range");
-             std::array<std::size_t, 2> shape
-                 = {self.qp_phys_0()[i].shape(0), self.qp_phys_0()[i].shape(1)};
-             return dolfinx_contact_wrappers::xt_as_pyarray(
-                 std::move(self.qp_phys_0()[i]));
-           })
-      .def("qp_phys_1",
-           [](dolfinx_contact::Contact& self, int i)
-           {
-             if (i >= self.qp_phys_1().size())
-               throw std::runtime_error("Entity index out of range");
-             std::array<std::size_t, 2> shape
-                 = {self.qp_phys_1()[i].shape(0), self.qp_phys_1()[i].shape(1)};
-             return dolfinx_contact_wrappers::xt_as_pyarray(
-                 std::move(self.qp_phys_1()[i]));
-           })
       .def("facet_0", &dolfinx_contact::Contact::facet_0)
       .def("facet_1", &dolfinx_contact::Contact::facet_1)
       .def("set_quadrature_degree",

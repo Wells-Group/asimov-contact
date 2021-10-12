@@ -54,14 +54,11 @@ def nitsche_rigid_surface_cuas(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dol
     du = ufl.TrialFunction(V)
 
     # Initial condition
-
     def _u_initial(x):
         values = np.zeros((gdim, x.shape[1]))
-        # values[-1] = -0.01 - g
+        values[-1] = -vertical_displacement
         return values
 
-    u = dolfinx.Function(V)
-    v = ufl.TestFunction(V)
     if initGuess is None:
         u.interpolate(_u_initial)
     else:
@@ -100,6 +97,7 @@ def nitsche_rigid_surface_cuas(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dol
         print("Dirichlet bc not implemented in custom assemblers yet.")
 
     # Custom assembly
+    dolfinx.log.set_log_level(dolfinx.log.LogLevel.OFF)
     q_rule = dolfinx_cuas.cpp.QuadratureRule(mesh.topology.cell_type, q_deg, mesh.topology.dim - 1, "default")
     consts = np.array([gamma * E, theta])
     consts = np.hstack((consts, n_vec))
@@ -122,7 +120,6 @@ def nitsche_rigid_surface_cuas(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dol
     lmbda2.interpolate(lmbda_func2)
     mu2 = dolfinx.Function(V2)
     mu2.interpolate(mu_func2)
-    u.interpolate(_u_initial)
     coeffs = dolfinx_cuas.cpp.pack_coefficients([mu2._cpp_object, lmbda2._cpp_object])
     h_facets = dolfinx_contact.cpp.pack_circumradius_facet(mesh, bottom_facets)
     h_cells = dolfinx_contact.cpp.facet_to_cell_data(mesh, bottom_facets, h_facets, 1)
@@ -182,14 +179,6 @@ def nitsche_rigid_surface_cuas(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dol
     solver.max_it = 200
     solver.error_on_nonconvergence = True
     solver.relaxation_parameter = 0.6
-
-    def _u_initial(x):
-        values = np.zeros((gdim, x.shape[1]))
-        values[-1] = -vertical_displacement
-        return values
-
-    # Set initial_condition:
-    u.interpolate(_u_initial)
 
     # Define solver and options
     ksp = solver.krylov_solver

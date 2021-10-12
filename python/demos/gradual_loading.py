@@ -181,7 +181,7 @@ if __name__ == "__main__":
         # Solve contact problem using Nitsche's method
         u1 = nitsche_rigid_surface_cuas(mesh=mesh, mesh_data=mesh_data, physical_parameters=physical_parameters,
                                         nitsche_parameters=nitsche_parameters, vertical_displacement=displacement,
-                                        nitsche_bc=True, initGuess=u1, refinement=j)
+                                        nitsche_bc=True, initGuess=None, refinement=j)
         delta_x = u1.compute_point_values()
         if delta_x.shape[1] < 3:
             delta_x = np.hstack([delta_x, np.zeros((delta_x.shape[0], 3 - delta_x.shape[1]))])
