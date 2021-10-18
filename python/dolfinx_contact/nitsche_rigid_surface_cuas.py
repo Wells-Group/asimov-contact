@@ -14,6 +14,8 @@ from mpi4py import MPI
 from petsc4py import PETSc
 from typing import Tuple
 from dolfinx_contact.helpers import (epsilon, lame_parameters, rigid_motions_nullspace, sigma_func)
+import scipy.sparse
+import matplotlib.pylab as plt
 
 kt = dolfinx_contact.cpp.Kernel
 it = dolfinx.cpp.fem.IntegralType
@@ -126,6 +128,8 @@ def nitsche_rigid_surface_cuas(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dol
     contact = dolfinx_contact.cpp.Contact(facet_marker, bottom_value, surface_value, V._cpp_object)
     contact.set_quadrature_degree(q_deg)
     contact.create_distance_map(0)
+    contact.create_distance_map(1)
+    print("distance map backwards")
     g_vec = contact.pack_gap(0)
     g_vec_c = dolfinx_contact.cpp.facet_to_cell_data(
         mesh, bottom_facets, g_vec, gdim * q_rule.weights(0).size)
@@ -151,6 +155,24 @@ def nitsche_rigid_surface_cuas(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dol
     a_cuas = dolfinx.fem.Form(a)
     kernel_J = dolfinx_contact.cpp.generate_contact_kernel(
         V._cpp_object, kt.NitscheRigidSurfaceJac, q_rule, [u._cpp_object, mu2._cpp_object, lmbda2._cpp_object], False)
+
+    print("calling create matrix")
+    C = contact.create_matrix(a_cuas._cpp_object)
+    dolfinx.fem.assemble_matrix(C, a_cuas)
+    kernel = contact.generate_kernel()
+    contact.assemble_matrix(C, [], 0, kernel, [[]], [])
+    contact.assemble_matrix(C, [], 1, kernel, [[]], [])
+    C.assemble()
+    # Create scipy CSR matrices
+    ai, aj, av = C.getValuesCSR()
+    A_sp = scipy.sparse.csr_matrix((av, aj, ai), shape=C.getSize())
+    print("number of actual nonzeros")
+    print(A_sp.count_nonzero())
+    plt.spy(A_sp)
+    plt.savefig("test.pdf")
+    # 145329
+    # 22772
+    # 132257
 
     def create_A():
         return dolfinx.fem.create_matrix(a_cuas)
