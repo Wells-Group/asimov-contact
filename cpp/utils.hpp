@@ -36,7 +36,7 @@ std::pair<std::vector<PetscScalar>, int> pack_coefficient_quadrature(
   const dolfinx::fem::DofMap* dofmap = coeff->function_space()->dofmap().get();
   const dolfinx::fem::FiniteElement* element
       = coeff->function_space()->element().get();
-  const std::vector<double>& data = coeff->x()->array();
+  const xtl::span<const double>& data = coeff->x()->array();
 
   // Get mesh
   std::shared_ptr<const dolfinx::mesh::Mesh> mesh
@@ -194,7 +194,7 @@ std::pair<std::vector<PetscScalar>, int> pack_coefficient_facet(
   const dolfinx::fem::DofMap* dofmap = coeff->function_space()->dofmap().get();
   const dolfinx::fem::FiniteElement* element
       = coeff->function_space()->element().get();
-  const std::vector<double>& data = coeff->x()->array();
+  const xtl::span<const double> data = coeff->x()->array();
 
   // Get mesh
   std::shared_ptr<const dolfinx::mesh::Mesh> mesh
