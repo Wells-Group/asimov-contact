@@ -136,13 +136,9 @@ PYBIND11_MODULE(cpp, m)
              std::shared_ptr<dolfinx_contact::ContactInterface>>(
       m, "ContactInterface", "Contact object")
       .def(py::init<std::shared_ptr<dolfinx::mesh::MeshTags<std::int32_t>>, int,
-                    int>(),
-           py::arg("marker"), py::arg("surface_0"), py::arg("surface_1"))
-      .def_property_readonly("surface_0",
-                             &dolfinx_contact::ContactInterface::surface_0)
-
-      .def_property_readonly("surface_1",
-                             &dolfinx_contact::ContactInterface::surface_1)
-      .def("update_cell_maps",
-           &dolfinx_contact::ContactInterface::update_cell_maps);
+                    int, dolfinx_cuas::QuadratureRule>(),
+           py::arg("marker"), py::arg("surface_0"), py::arg("surface_1"),
+           py::arg("q_rule"));
+  // .def("compute_gap_function",
+  //      &dolfinx_contact::ContactInterface::compute_gap_function);
 }

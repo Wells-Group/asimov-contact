@@ -227,21 +227,10 @@ public:
     offset[0] = 0;
     for (int i = 0; i < (*puppet_facets).size(); ++i)
     {
-      // FIXME: This does not work for prism meshes
-      for (int j = 0; j < (*q_phys_pt)[0].shape(0); ++j)
-      {
-        for (int k = 0; k < gdim; ++k)
-          point[k] = (*q_phys_pt)[i](j, k);
-        // Find initial search radius R = intermediate_result.second
-        std::pair<int, double> intermediate_result
-            = dolfinx::geometry::compute_closest_entity(master_midpoint_tree,
-                                                        point, *mesh);
-        // Find closest facet to point
-        std::pair<int, double> search_result
-            = dolfinx::geometry::compute_closest_entity(
-                master_bbox, point, *mesh, intermediate_result.second);
-        data.push_back(search_result.first);
-      }
+      std::vector<std::int32_t> closest_facets
+          = dolfinx::geometry::compute_closest_entity(
+              master_bbox, master_midpoint_tree, (*q_phys_pt)[i], *mesh);
+      data.insert(data.end(), closest_facets.begin(), closest_facets.end());
       offset.push_back(data.size());
     }
 

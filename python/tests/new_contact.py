@@ -31,8 +31,8 @@ values = np.hstack([np.full(len(facets_0), 1, dtype=np.int32),
 indices = np.argsort(facets)
 mt = dolfinx.MeshTags(mesh, tdim - 1, facets[indices], values[indices])
 
-ci = contact.ContactInterface(mt, 1, 2)
-q_rule = dolfinx_cuas.cpp.QuadratureRule(mesh.topology.cell_type, 2, mesh.topology.dim - 1)
+q_rule = dolfinx_cuas.cpp.QuadratureRule(mesh.topology.cell_type, 3, mesh.topology.dim - 1)
+ci = contact.ContactInterface(mt, 1, 2, q_rule)
 
 family = "Lagrange"
 # ct = dolfinx.cpp.mesh.to_string(mesh.topology.cell_type)
@@ -40,9 +40,10 @@ family = "Lagrange"
 # el = basix.create_element(basix.finite_element.string_to_family(
 #     family, ct), basix.cell.string_to_type(ct), degree, basix.LagrangeVariant.equispaced)
 
-ci.update_cell_maps(q_rule)
+# ci.update_cell_maps()
+
 # with dolfinx.io.XDMFFile(MPI.COMM_WORLD, "test_mesh.xdmf", "w") as xdmf:
 #     xdmf.write_mesh(mesh)
 #     xdmf.write_meshtags(mt)
 
-# embed()
+embed()
