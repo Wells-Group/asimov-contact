@@ -156,24 +156,6 @@ def nitsche_rigid_surface_cuas(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dol
     kernel_J = dolfinx_contact.cpp.generate_contact_kernel(
         V._cpp_object, kt.NitscheRigidSurfaceJac, q_rule, [u._cpp_object, mu2._cpp_object, lmbda2._cpp_object], False)
 
-    print("calling create matrix")
-    C = contact.create_matrix(a_cuas._cpp_object)
-    dolfinx.fem.assemble_matrix(C, a_cuas)
-    kernel = contact.generate_kernel()
-    contact.assemble_matrix(C, [], 0, kernel, [[]], [])
-    contact.assemble_matrix(C, [], 1, kernel, [[]], [])
-    C.assemble()
-    # Create scipy CSR matrices
-    ai, aj, av = C.getValuesCSR()
-    A_sp = scipy.sparse.csr_matrix((av, aj, ai), shape=C.getSize())
-    print("number of actual nonzeros")
-    print(A_sp.count_nonzero())
-    plt.spy(A_sp)
-    plt.savefig("test.pdf")
-    # 145329
-    # 22772
-    # 132257
-
     def create_A():
         return dolfinx.fem.create_matrix(a_cuas)
 
