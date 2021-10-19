@@ -22,17 +22,21 @@ it = dolfinx.cpp.fem.IntegralType
 def nitsche_rigid_surface_cuas(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dolfinx.MeshTags, int, int, int, int],
                                physical_parameters: dict, refinement: int = 0,
                                nitsche_parameters: dict = {"gamma": 1, "theta": 1, "s": 0}, g: float = 0.0,
-                               vertical_displacement: float = -0.1, nitsche_bc: bool = True):
+                               vertical_displacement: float = -0.1, nitsche_bc: bool = True, initGuess=None):
     (facet_marker, top_value, bottom_value, surface_value, surface_bottom) = mesh_data
-
+    # write mesh and facet markers to xdmf
+    with dolfinx.io.XDMFFile(MPI.COMM_WORLD, f"results/mf_cuas_{refinement}.xdmf", "w") as xdmf:
+        xdmf.write_mesh(mesh)
+        xdmf.write_meshtags(facet_marker)
     # quadrature degree
     q_deg = 3
     # Nitche parameters and variables
     theta = nitsche_parameters["theta"]
     # s = nitsche_parameters["s"]
     gamma = nitsche_parameters["gamma"] * physical_parameters["E"]
-    n_vec = np.zeros(mesh.geometry.dim)
-    n_vec[mesh.geometry.dim - 1] = 1
+    gdim = mesh.geometry.dim
+    n_vec = np.zeros(gdim)
+    n_vec[gdim - 1] = 1
     # n_2 = ufl.as_vector(n_vec)  # Normal of plane (projection onto other body)
     n = ufl.FacetNormal(mesh)
 
@@ -48,21 +52,17 @@ def nitsche_rigid_surface_cuas(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dol
     u = dolfinx.Function(V)
     v = ufl.TestFunction(V)
     du = ufl.TrialFunction(V)
-    # Mimicking the plane y=-g
-    x = ufl.SpatialCoordinate(mesh)
-    gap = x[mesh.geometry.dim - 1] + g
-    g_vec = [i for i in range(mesh.geometry.dim)]
-    g_vec[mesh.geometry.dim - 1] = gap
 
     # Initial condition
     def _u_initial(x):
-        values = np.zeros((mesh.geometry.dim, x.shape[1]))
-        values[-1] = -0.01 - g
+        values = np.zeros((gdim, x.shape[1]))
+        values[-1] = -vertical_displacement
         return values
 
-    u = dolfinx.Function(V)
-    v = ufl.TestFunction(V)
-    u.interpolate(_u_initial)
+    if initGuess is None:
+        u.interpolate(_u_initial)
+    else:
+        u.x.array[:] = initGuess.x.array[:]
 
     dx = ufl.Measure("dx", domain=mesh)
     ds = ufl.Measure("ds", domain=mesh,  # metadata=metadata,
@@ -74,8 +74,8 @@ def nitsche_rigid_surface_cuas(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dol
     # Nitsche for Dirichlet, another theta-scheme.
     # https://doi.org/10.1016/j.cma.2018.05.024
     if nitsche_bc:
-        disp_vec = np.zeros(mesh.geometry.dim)
-        disp_vec[mesh.geometry.dim - 1] = vertical_displacement
+        disp_vec = np.zeros(gdim)
+        disp_vec[gdim - 1] = vertical_displacement
         u_D = ufl.as_vector(disp_vec)
         L += - ufl.inner(sigma(u) * n, v) * ds(top_value)\
              - theta * ufl.inner(sigma(v) * n, u - u_D) * \
@@ -85,7 +85,7 @@ def nitsche_rigid_surface_cuas(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dol
             - theta * ufl.inner(sigma(v) * n, du) * \
             ds(top_value) + gamma / h * ufl.inner(du, v) * ds(top_value)
         # Nitsche bc for rigid plane
-        disp_plane = np.zeros(mesh.geometry.dim)
+        disp_plane = np.zeros(gdim)
         u_D_plane = ufl.as_vector(disp_plane)
         L += - ufl.inner(sigma(u) * n, v) * ds(surface_bottom)\
              - theta * ufl.inner(sigma(v) * n, u - u_D_plane) * \
@@ -97,6 +97,7 @@ def nitsche_rigid_surface_cuas(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dol
         print("Dirichlet bc not implemented in custom assemblers yet.")
 
     # Custom assembly
+    dolfinx.log.set_log_level(dolfinx.log.LogLevel.OFF)
     q_rule = dolfinx_cuas.cpp.QuadratureRule(mesh.topology.cell_type, q_deg, mesh.topology.dim - 1, "default")
     consts = np.array([gamma * E, theta])
     consts = np.hstack((consts, n_vec))
@@ -119,7 +120,6 @@ def nitsche_rigid_surface_cuas(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dol
     lmbda2.interpolate(lmbda_func2)
     mu2 = dolfinx.Function(V2)
     mu2.interpolate(mu_func2)
-    u.interpolate(_u_initial)
     coeffs = dolfinx_cuas.cpp.pack_coefficients([mu2._cpp_object, lmbda2._cpp_object])
     h_facets = dolfinx_contact.cpp.pack_circumradius_facet(mesh, bottom_facets)
     h_cells = dolfinx_contact.cpp.facet_to_cell_data(mesh, bottom_facets, h_facets, 1)
@@ -128,7 +128,7 @@ def nitsche_rigid_surface_cuas(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dol
     contact.create_distance_map(0)
     g_vec = contact.pack_gap(0)
     g_vec_c = dolfinx_contact.cpp.facet_to_cell_data(
-        mesh, bottom_facets, g_vec, mesh.geometry.dim * q_rule.weights(0).size)
+        mesh, bottom_facets, g_vec, gdim * q_rule.weights(0).size)
     coeffs = np.hstack([coeffs, h_cells, g_vec_c])
 
     # RHS
@@ -144,7 +144,6 @@ def nitsche_rigid_surface_cuas(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dol
         u.vector[:] = x.array
         u_packed = dolfinx_cuas.cpp.pack_coefficients([u._cpp_object])
         c = np.hstack([u_packed, coeffs])
-
         dolfinx_cuas.assemble_vector(b, V, bottom_facets, kernel_rhs, c, consts, it.exterior_facet)
         dolfinx.fem.assemble_vector(b, L_cuas)
 
@@ -174,20 +173,12 @@ def nitsche_rigid_surface_cuas(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dol
     solver.A.setNearNullSpace(null_space)
 
     # Set Newton solver options
-    solver.atol = 1e-4
-    solver.rtol = 1e-4
+    solver.atol = 1e-9
+    solver.rtol = 1e-9
     solver.convergence_criterion = "incremental"
     solver.max_it = 200
     solver.error_on_nonconvergence = True
     solver.relaxation_parameter = 0.6
-
-    def _u_initial(x):
-        values = np.zeros((mesh.geometry.dim, x.shape[1]))
-        values[-1] = -vertical_displacement
-        return values
-
-    # Set initial_condition:
-    u.interpolate(_u_initial)
 
     # Define solver and options
     ksp = solver.krylov_solver
@@ -220,6 +211,7 @@ def nitsche_rigid_surface_cuas(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dol
 
     with dolfinx.io.XDMFFile(MPI.COMM_WORLD, f"results/u_cuas_{refinement}.xdmf", "w") as xdmf:
         xdmf.write_mesh(mesh)
+        u.name = "u"
         xdmf.write_function(u)
 
     return u
