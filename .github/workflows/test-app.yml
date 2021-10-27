@@ -17,7 +17,7 @@ jobs:
       HDF5_MPI: "ON"
       CC: mpicc
       HDF5_DIR: "/usr/lib/x86_64-linux-gnu/hdf5/mpich/"
-      CXX: clang++-12
+      CXX: clang++
       PETSC_ARCH: linux-gnu-real-32
       OMPI_ALLOW_RUN_AS_ROOT: 1
       OMPI_ALLOW_RUN_AS_ROOT_CONFIRM: 1

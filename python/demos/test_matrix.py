@@ -50,6 +50,14 @@ A = contact.create_matrix(a_cuas._cpp_object)
 kernel = contact.generate_kernel()
 contact.assemble_matrix(A, [], 0, kernel, [[]], [])
 contact.assemble_matrix(A, [], 1, kernel, [[]], [])
+gap = contact.pack_gap(0)
+test_fn = contact.pack_test_functions(0, gap)
+gap1 = contact.pack_gap(1)
+test_fn1 = contact.pack_test_functions(1, gap1)
+
+print(test_fn)
+print(test_fn1)
+
 
 A.assemble()
 # Create scipy CSR matrices
@@ -58,6 +66,31 @@ A_sp = scipy.sparse.csr_matrix((av, aj, ai), shape=A.getSize())
 plt.spy(A_sp)
 plt.savefig("test.pdf")
 
+
+def f(x):
+    values = np.zeros((1, x.shape[1]))
+    for i in range(x.shape[1]):
+        values[0, i] = np.max(np.abs(x[:, i]))
+    return values
+
+
+# Interpolate some function and pack
+u_D = dolfinx.Function(V)
+
+nu = 0.5
+E = 20
+
+
+def _u_ex(x):
+    values = np.zeros((mesh.geometry.dim, x.shape[1]))
+    values[0] = (nu + 1) / E * x[1]**4
+    values[1] = (nu + 1) / E * x[0]**4
+    return values
+
+
+u_D.interpolate(_u_ex)
+print(contact.pack_u_contact(0, u_D._cpp_object, gap))
+print(contact.pack_u_contact(1, u_D._cpp_object, gap1))
 # nnz form only: 23
 # 1st insert 32 = 23 + 9 (3x3)
 # 2nd insert 41 = 32 + 9
