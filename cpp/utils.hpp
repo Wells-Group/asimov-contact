@@ -412,9 +412,58 @@ std::pair<std::vector<PetscScalar>, int> pack_coefficient_facet(
   return {std::move(c), cstride};
 }
 
-/// Prepare circumradii of triangle/tetrahedron for assembly with custom kernels
-/// by packing them as an array, where the j*cstride to the ith facet int
-/// active_facets.
+std::pair<std::vector<PetscScalar>, int> pack_coefficient_dofs(
+    std::shared_ptr<const dolfinx::fem::Function<PetscScalar>> coeff,
+    xt::xtensor<std::int32_t, 2>& active_facets)
+{
+
+  auto element = coeff->function_space()->element().get();
+  auto dofmap = coeff->function_space()->dofmap().get();
+  auto v = coeff->x()->array();
+  // Get mesh
+  auto mesh = coeff->function_space()->mesh();
+  assert(mesh);
+  const std::size_t num_facets = active_facets.shape(0);
+  std::size_t bs = dofmap->bs();
+  std::size_t ndofs = dofmap->cell_dofs(0).size();
+  std::vector<PetscScalar> c(num_facets * ndofs * bs);
+  const int cstride = ndofs * bs;
+
+  bool needs_dof_transformations = false;
+  xtl::span<const std::uint32_t> cell_info;
+  if (element->needs_dof_transformations())
+  {
+    needs_dof_transformations = true;
+    mesh->topology_mutable().create_entity_permutations();
+    cell_info = xtl::span(mesh->topology().get_cell_permutation_info());
+  }
+  const std::function<void(const xtl::span<PetscScalar>&,
+                           const xtl::span<const std::uint32_t>&, std::int32_t,
+                           int)>
+      transformation
+      = element->get_dof_transformation_function<PetscScalar>(false, true);
+
+  for (std::size_t facet = 0; facet < num_facets; ++facet)
+  {
+    std::int32_t cell = active_facets(facet, 0);
+    auto dofs = dofmap->cell_dofs(cell);
+    for (std::size_t i = 0; i < dofs.size(); ++i)
+    {
+      for (std::size_t k = 0; k < bs; ++k)
+      {
+        c[facet * cstride + bs * i + k] = v[bs * dofs[i] + k];
+      }
+    }
+    transformation(
+        xtl::span(c.data() + facet * cstride, element->space_dimension()),
+        cell_info, cell, 1);
+  }
+  return {std::move(c), cstride};
+}
+
+/// Prepare circumradii of triangle/tetrahedron for assembly with custom
+/// kernels by packing them as an array, where the j*cstride to the ith facet
+/// int active_facets.
 /// @param[in] mesh
 /// @param[in] active_facets List of active facets
 /// @param[out] c The packed coefficients and the number of coeffs per facet
@@ -489,7 +538,8 @@ pack_circumradius_facet(std::shared_ptr<const dolfinx::mesh::Mesh> mesh,
   for (int facet = 0; facet < num_facets; facet++)
   {
 
-    // NOTE Add two separate loops here, one for and one without dof transforms
+    // NOTE Add two separate loops here, one for and one without dof
+    // transforms
 
     // FIXME: Assuming exterior facets
     // get cell/local facet index
@@ -576,7 +626,8 @@ pack_circumradius_facet(std::shared_ptr<const dolfinx::mesh::Mesh> mesh,
   return {std::move(c), cstride};
 }
 // helper functiion for pack_coefficients_facet and pack_circumradius_facet to
-// work with dolfinx assembly routines should be made reduntant at a later stage
+// work with dolfinx assembly routines should be made reduntant at a later
+// stage
 /// @param[in] mesh - the mesh
 /// @param[in] active_facets - facet indices
 /// @param[in] data - data to be converted
@@ -741,5 +792,13 @@ get_basis_functions(xt::xtensor<double, 3>& J, xt::xtensor<double, 3>& K,
     }
   }
   return basis_array;
+}
+double R_plus(double x) { return 0.5 * (std::abs(x) + x); }
+double dR_plus(double x)
+{
+  if (x > 0)
+    return 1.0;
+  else
+    return 0;
 }
 } // namespace dolfinx_contact

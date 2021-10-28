@@ -8,7 +8,7 @@ import dolfinx_contact.cpp
 import numpy as np
 import ufl
 from mpi4py import MPI
-from petsc4py import PETSc
+# from petsc4py import PETSc
 import scipy.sparse
 import matplotlib.pylab as plt
 
@@ -39,8 +39,7 @@ contact = dolfinx_contact.cpp.Contact(facet_marker, 0, 1, V._cpp_object)
 contact.set_quadrature_degree(q_deg)
 contact.create_distance_map(0)
 contact.create_distance_map(1)
-print(facets_0)
-print(facets_1)
+
 v = ufl.TestFunction(V)
 u = ufl.TrialFunction(V)
 dx = ufl.Measure("dx", domain=mesh)
@@ -48,26 +47,12 @@ a = ufl.inner(u, v) * dx
 a_cuas = dolfinx.fem.Form(a)
 A = contact.create_matrix(a_cuas._cpp_object)
 kernel = contact.generate_kernel(0, kt.Jac)
-print("kernel generated")
-contact.assemble_matrix(A, [], 0, kernel, [[]], [])
-contact.assemble_matrix(A, [], 1, kernel, [[]], [])
 gap = contact.pack_gap(0)
-print("gap_packed")
 test_fn = contact.pack_test_functions(0, gap)
-print("test functions packed")
 gap1 = contact.pack_gap(1)
 test_fn1 = contact.pack_test_functions(1, gap1)
 
-print(test_fn)
-print(test_fn1)
-
-
-A.assemble()
-# Create scipy CSR matrices
-ai, aj, av = A.getValuesCSR()
-A_sp = scipy.sparse.csr_matrix((av, aj, ai), shape=A.getSize())
-plt.spy(A_sp)
-plt.savefig("test.pdf")
+# Interpolate some function and pack
 
 
 def f(x):
@@ -77,9 +62,9 @@ def f(x):
     return values
 
 
-# Interpolate some function and pack
-u_D = dolfinx.Function(V)
-
+V2 = dolfinx.FunctionSpace(mesh, ("DG", 0))
+mufunc = dolfinx.Function(V2)
+mufunc.interpolate(f)
 nu = 0.5
 E = 20
 
@@ -91,10 +76,33 @@ def _u_ex(x):
     return values
 
 
+u_D = dolfinx.Function(V)
 u_D.interpolate(_u_ex)
-print(contact.pack_u_contact(0, u_D._cpp_object, gap))
-print(contact.pack_u_contact(1, u_D._cpp_object, gap1))
-# nnz form only: 23
-# 1st insert 32 = 23 + 9 (3x3)
-# 2nd insert 41 = 32 + 9
-# Final:44
+consts = [1, 1]
+coeff_0 = contact.pack_coefficient_dofs(0, mufunc._cpp_object)
+# dummy mu, lmbda, h
+coeff_0 = np.hstack([coeff_0, coeff_0, coeff_0])
+coeff_0 = np.hstack([coeff_0, gap, test_fn])
+# dummy u
+coeff_0 = np.hstack([coeff_0, contact.pack_u_contact(0, u_D._cpp_object, gap)])
+# dummy u opposite
+coeff_0 = np.hstack([coeff_0, contact.pack_coefficient_dofs(0, u_D._cpp_object)])
+
+
+coeff_1 = contact.pack_coefficient_dofs(1, mufunc._cpp_object)
+# dummy mu, lmbda, h
+coeff_1 = np.hstack([coeff_1, coeff_1, coeff_1])
+coeff_1 = np.hstack([coeff_1, gap1, test_fn1])
+# dummy u
+coeff_1 = np.hstack([coeff_1, contact.pack_u_contact(1, u_D._cpp_object, gap)])
+# dummy u opposite
+coeff_1 = np.hstack([coeff_1, contact.pack_coefficient_dofs(1, u_D._cpp_object)])
+
+contact.assemble_matrix(A, [], 0, kernel, coeff_0, consts)
+contact.assemble_matrix(A, [], 1, kernel, coeff_1, consts)
+A.assemble()
+# Create scipy CSR matrices
+ai, aj, av = A.getValuesCSR()
+A_sp = scipy.sparse.csr_matrix((av, aj, ai), shape=A.getSize())
+plt.spy(A_sp)
+plt.savefig("test.pdf")

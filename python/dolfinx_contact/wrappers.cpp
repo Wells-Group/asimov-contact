@@ -125,6 +125,16 @@ PYBIND11_MODULE(cpp, m)
              int shape0 = cstride == 0 ? 0 : coeffs.size() / cstride;
              return dolfinx_contact_wrappers::as_pyarray(
                  std::move(coeffs), std::array{shape0, cstride});
+           })
+      .def("pack_coefficient_dofs",
+           [](dolfinx_contact::Contact& self, int origin_meshtag,
+              std::shared_ptr<dolfinx::fem::Function<PetscScalar>> coeff)
+           {
+             auto [coeffs, cstride]
+                 = self.pack_coefficient_dofs(origin_meshtag, coeff);
+             int shape0 = cstride == 0 ? 0 : coeffs.size() / cstride;
+             return dolfinx_contact_wrappers::as_pyarray(
+                 std::move(coeffs), std::array{shape0, cstride});
            });
 
   m.def(

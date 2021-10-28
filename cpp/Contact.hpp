@@ -320,45 +320,231 @@ public:
 
     const std::size_t num_q_points = _qp_ref_facet[0].shape(0);
 
+    // Create coordinate elements (for facet and cell) _marker->mesh()
+    const basix::FiniteElement basix_element
+        = dolfinx_cuas::mesh_to_basix_element(mesh, tdim);
+    const int num_coordinate_dofs = basix_element.dim();
+    // Structures needed for basis function tabulation
+    // phi and grad(phi) at quadrature points
+    std::shared_ptr<const dolfinx::fem::FiniteElement> element = _V->element();
+    auto facets = basix::cell::topology(
+        basix_element.cell_type())[tdim - 1]; // Topology of basix facets
+    const std::uint32_t num_facets = facets.size();
+    std::vector<xt::xtensor<double, 2>> phi;
+    phi.reserve(num_facets);
+    std::vector<xt::xtensor<double, 3>> dphi;
+    phi.reserve(num_facets);
+    std::vector<xt ::xtensor<double, 3>> dphi_c;
+    dphi_c.reserve(num_facets);
+
+    for (std::size_t i = 0; i < num_facets; ++i)
+    {
+      // Push quadrature points forward
+      auto facet = facets[i];
+      const xt::xarray<double>& q_facet = _qp_ref_facet[i];
+
+      xt::xtensor<double, 4> cell_tab({tdim + 1, num_q_points, ndofs_cell, bs});
+      element->tabulate(cell_tab, q_facet, 1);
+      xt::xtensor<double, 2> phi_i
+          = xt::view(cell_tab, 0, xt::all(), xt::all(), 0);
+      phi.push_back(phi_i);
+      xt::xtensor<double, 3> dphi_i
+          = xt::view(cell_tab, xt::range(1, tdim + 1), xt::all(), xt::all(), 0);
+      dphi.push_back(dphi_i);
+
+      // Tabulate coordinate element of reference cell
+      auto c_tab = basix_element.tabulate(1, q_facet);
+      xt::xtensor<double, 3> dphi_ci
+          = xt::view(c_tab, xt::range(1, tdim + 1), xt::all(), xt::all(), 0);
+      dphi_c.push_back(dphi_ci);
+    }
     // coefficient offsets
     // expecting coefficients in following order:
     // mu, lmbda, h, gap, test_fn, u, u_opposite
+    // mu, lmbda, h - DG0 one value per  facet
+    // gap, test_fn,  u_opposite
     // packed at quadrature points
+    // u packed at dofs
     // mu, lmbda, h scalar
     // gap vector valued gdim
     // test_fn, u, u_opposite vector valued bs (should be bs = gdim)
     const std::size_t num_coeffs = 7;
     std::vector<std::size_t> cstrides
-        = {num_q_points,
-           num_q_points,
-           num_q_points,
+        = {1,
+           1,
+           1,
            num_q_points * gdim,
            num_q_points * ndofs_cell * bs * max_links,
-           num_q_points * bs,
+           ndofs_cell * bs,
            num_q_points * bs};
+    // As reference facet and reference cell are affine, we do not need to
+    // compute this per quadrature point
+    auto ref_jacobians
+        = basix::cell::facet_jacobians(basix_element.cell_type());
 
+    // Get facet normals on reference cell
+    auto facet_normals
+        = basix::cell::facet_outward_normals(basix_element.cell_type());
     contact_kernel_fn unbiased_jac
-        = [ndofs_cell, bs, cstrides](std::vector<std::vector<PetscScalar>>& A,
-                                     const double* c, const double* w,
-                                     const double* coordinate_dofs,
-                                     const int* entity_local_index,
-                                     const std::uint8_t* quadrature_permutation,
-                                     const std::int32_t num_links)
+        = [=](std::vector<std::vector<PetscScalar>>& A, const double* c,
+              const double* w, const double* coordinate_dofs,
+              const int* entity_local_index,
+              const std::uint8_t* quadrature_permutation,
+              const std::int32_t num_links)
     {
-      // Fill contributions of facet with itself
-      for (int j = 0; j < ndofs_cell; j++)
+      // assumption that the vector function space has block size tdim
+      assert(bs == gdim);
+      std::size_t facet_index = size_t(*entity_local_index);
+
+      // Reshape coordinate dofs to two dimensional array
+      // NOTE: DOLFINx has 3D input coordinate dofs
+      std::array<std::size_t, 2> shape = {num_coordinate_dofs, 3};
+
+      // FIXME: These array should be views (when compute_jacobian doesn't use
+      // xtensor)
+      xt::xtensor<double, 2> coord = xt::adapt(
+          coordinate_dofs, num_coordinate_dofs * 3, xt::no_ownership(), shape);
+
+      // Extract the first derivative of the coordinate element (cell) of
+      // degrees of freedom on the facet
+      const xt::xtensor<double, 3>& dphi_fc = dphi_c[facet_index];
+      const xt::xtensor<double, 2>& dphi0_c = xt::view(
+          dphi_fc, xt::all(), 0,
+          xt::all()); // FIXME: Assumed constant, i.e. only works for simplices
+      // NOTE: Affine cell assumption
+      // Compute Jacobian and determinant at first quadrature point
+      xt::xtensor<double, 2> J = xt::zeros<double>({gdim, tdim});
+      xt::xtensor<double, 2> K = xt::zeros<double>({tdim, gdim});
+      auto c_view = xt::view(coord, xt::all(), xt::range(0, gdim));
+      dolfinx_cuas::math::compute_jacobian(dphi0_c, c_view, J);
+      dolfinx_cuas::math::compute_inv(J, K);
+
+      // Compute normal of physical facet using a normalized covariant Piola
+      // transform n_phys = J^{-T} n_ref / ||J^{-T} n_ref|| See for instance
+      // DOI: 10.1137/08073901X
+      xt::xarray<double> n_phys = xt::zeros<double>({gdim});
+      auto facet_normal = xt::row(facet_normals, facet_index);
+      for (std::size_t i = 0; i < gdim; i++)
+        for (std::size_t j = 0; j < tdim; j++)
+          n_phys[i] += K(j, i) * facet_normal[j];
+      double n_norm = 0;
+      for (std::size_t i = 0; i < gdim; i++)
+        n_norm += n_phys[i] * n_phys[i];
+      n_phys /= std::sqrt(n_norm);
+
+      double gamma = w[0] / c[2]; // This is gamma/h,  gamma = w[0];
+      double theta = w[1];
+      double mu = c[0];
+      double lmbda = c[1];
+
+      // Compute det(J_C J_f) as it is the mapping to the reference facet
+      xt::xtensor<double, 2> J_f
+          = xt::view(ref_jacobians, facet_index, xt::all(), xt::all());
+      xt::xtensor<double, 2> J_tot
+          = xt::zeros<double>({J.shape(0), J_f.shape(1)});
+      dolfinx::math::dot(J, J_f, J_tot);
+      double detJ = std::fabs(dolfinx_cuas::math::compute_determinant(J_tot));
+
+      const xt::xtensor<double, 3>& dphi_f = dphi[facet_index];
+      const xt::xtensor<double, 2>& phi_f = phi[facet_index];
+      // const std::vector<double>& weights = _qw_ref_facet[facet_index];
+      xt::xarray<double> n_surf = xt::zeros<double>({gdim});
+      std::size_t num_points = _qw_ref_facet[facet_index].size();
+      for (std::size_t q = 0; q < num_points; q++)
       {
-        for (int l = 0; l < bs; l++)
+        double n_dot = 0;
+        double gap = 0;
+        const std::size_t gap_offset = 3;
+        for (int i = 0; i < gdim; i++)
         {
-          for (int i = 0; i < ndofs_cell; i++)
+          gap += c[gap_offset + q * gdim + i] * c[gap_offset + q * gdim + i];
+          n_surf(i) = c[gap_offset + q * gdim + i];
+          n_dot += n_phys(i) * n_surf(i);
+        }
+        gap = std::sqrt(gap);
+        // NOTE: when n_dot is positive, there is some penetration at the
+        // contact surface in the mesh. This can be the case if there is already
+        // some contact in the mesh, i.e., for zero displacement, and only up to
+        // the precision of the meshing of the contact surfaces. This in
+        // particular occurs if the mesh was generated by moving some initial
+        // mesh according to the solution of a contact problem in which case the
+        // penetration can be up to the precision of the solver.
+        if (gap > 1e-13 && n_dot < 0)
+        {
+          n_surf /= gap;
+          n_dot /= gap;
+        }
+        else
+        {
+          n_surf = -n_phys;
+          n_dot = -1;
+        }
+        xt::xtensor<double, 2> tr = xt::zeros<double>({ndofs_cell, gdim});
+        xt::xtensor<double, 2> epsn = xt::zeros<double>({ndofs_cell, gdim});
+        // precompute tr(eps(phi_j e_l)), eps(phi^j e_l)n*n2
+        for (int j = 0; j < ndofs_cell; j++)
+        {
+          for (int l = 0; l < bs; l++)
           {
-            for (int b = 0; b < bs; b++)
+            for (int k = 0; k < tdim; k++)
             {
-              A[0][(b + i * bs) * ndofs_cell * bs + l + j * bs] += 1;
+              tr(j, l) += K(k, l) * dphi_f(k, q, j);
+              for (int s = 0; s < gdim; s++)
+              {
+                epsn(j, l) += K(k, s) * dphi_f(k, q, j)
+                              * (n_phys(s) * n_surf(l) + n_phys(l) * n_surf(s));
+              }
+            }
+          }
+        }
+        // compute tr(eps(u)), epsn at q
+        double tr_u = 0;
+        double epsn_u = 0;
+        double jump_un = 0;
+        const std::size_t offset_u = cstrides[0] + cstrides[1] + cstrides[2]
+                                     + cstrides[3] + cstrides[4];
+        const std::size_t offset_u_opp = offset_u + cstrides[5] + q * bs;
+        for (int i = 0; i < ndofs_cell; i++)
+        {
+          const std::size_t block_index = offset_u + i * bs;
+          for (int j = 0; j < bs; j++)
+          {
+            tr_u += c[block_index + j] * tr(i, j);
+            epsn_u += c[block_index + j] * epsn(i, j);
+            jump_un += (c[block_index + j] * phi_f(q, i) - c[offset_u_opp + j])
+                       * n_surf(j);
+          }
+        }
+        double sign_u = lmbda * tr_u * n_dot + mu * epsn_u;
+        double Pn_u = dolfinx_contact::dR_plus(jump_un - gamma * sign_u - gap);
+
+        // Fill contributions of facet with itself
+        const double w0 = _qw_ref_facet[facet_index][q] * detJ;
+        for (int j = 0; j < ndofs_cell; j++)
+        {
+          for (int l = 0; l < bs; l++)
+          {
+            double sign_du = (lmbda * tr(j, l) * n_dot + mu * epsn(j, l));
+            double Pn_du = 1. / gamma
+                           * (phi_f(q, j) * n_surf(l) - gamma * sign_du) * Pn_u
+                           * w0;
+            sign_u *= w0;
+            for (int i = 0; i < ndofs_cell; i++)
+            {
+              for (int b = 0; b < bs; b++)
+              {
+                double v_dot_nsurf = n_surf(b) * phi_f(q, i);
+                double sign_v = (lmbda * tr(i, b) * n_dot + mu * epsn(i, b));
+                double Pn_v = v_dot_nsurf - theta * gamma * sign_v;
+                A[0][(b + i * bs) * ndofs_cell * bs + l + j * bs]
+                    -= theta * gamma * sign_du * sign_v
+                       + (1. / gamma) * Pn_du * Pn_v;
+              }
             }
           }
         }
       }
+
       // Fill contributions of facet with contact facet
       for (int k = 0; k < num_links; k++)
       {
@@ -523,6 +709,7 @@ public:
     dolfinx_cuas::QuadratureRule q_rule(mesh->topology().cell_type(),
                                         _quadrature_degree, fdim);
     _qp_ref_facet = q_rule.points();
+    _qw_ref_facet = q_rule.weights();
 
     // Tabulate basis function on reference cell (_phi_ref_facets)// Create
     // coordinate element
@@ -807,7 +994,6 @@ public:
             J, K, detJ, qp, coordinate_dofs, linked_cell,
             permutation_info[linked_cell], element, cmap);
 
-        std::cout << "get basis functions works \n";
         for (std::size_t k = 0; k < ndofs; k++)
         {
           for (std::size_t q = 0; q < test_fn.shape(0); ++q)
@@ -959,6 +1145,15 @@ public:
       }
     }
     return {std::move(c), cstride};
+  }
+  std::pair<std::vector<PetscScalar>, int> pack_coefficient_dofs(
+      int origin_meshtag,
+      std::shared_ptr<const dolfinx::fem::Function<PetscScalar>> coeff)
+  {
+    if (origin_meshtag == 0)
+      return dolfinx_contact::pack_coefficient_dofs(coeff, _cell_facet_pairs_0);
+    else
+      return dolfinx_contact::pack_coefficient_dofs(coeff, _cell_facet_pairs_1);
   }
 
 private:

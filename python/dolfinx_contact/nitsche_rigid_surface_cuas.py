@@ -14,8 +14,8 @@ from mpi4py import MPI
 from petsc4py import PETSc
 from typing import Tuple
 from dolfinx_contact.helpers import (epsilon, lame_parameters, rigid_motions_nullspace, sigma_func)
-import scipy.sparse
-import matplotlib.pylab as plt
+# import scipy.sparse
+# import matplotlib.pylab as plt
 
 kt = dolfinx_contact.cpp.Kernel
 it = dolfinx.cpp.fem.IntegralType
