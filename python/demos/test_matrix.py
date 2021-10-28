@@ -12,7 +12,7 @@ from petsc4py import PETSc
 import scipy.sparse
 import matplotlib.pylab as plt
 
-
+kt = dolfinx_contact.cpp.Kernel
 q_deg = 6
 x = np.array([[-0.5, 0], [0.5, 0], [0, 1], [-0.7, -0.2], [-0.2, -0.2], [-0.2, -0.9], [0.6, -0.2]])
 cells = np.array([[0, 1, 2], [3, 4, 5], [4, 5, 6]])
@@ -47,11 +47,14 @@ dx = ufl.Measure("dx", domain=mesh)
 a = ufl.inner(u, v) * dx
 a_cuas = dolfinx.fem.Form(a)
 A = contact.create_matrix(a_cuas._cpp_object)
-kernel = contact.generate_kernel()
+kernel = contact.generate_kernel(0, kt.Jac)
+print("kernel generated")
 contact.assemble_matrix(A, [], 0, kernel, [[]], [])
 contact.assemble_matrix(A, [], 1, kernel, [[]], [])
 gap = contact.pack_gap(0)
+print("gap_packed")
 test_fn = contact.pack_test_functions(0, gap)
+print("test functions packed")
 gap1 = contact.pack_gap(1)
 test_fn1 = contact.pack_test_functions(1, gap1)
 

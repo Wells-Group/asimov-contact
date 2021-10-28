@@ -18,6 +18,7 @@
 #include <dolfinx/mesh/Mesh.h>
 #include <dolfinx/mesh/MeshTags.h>
 #include <dolfinx/mesh/cell_types.h>
+#include <dolfinx_contact/utils.hpp>
 #include <dolfinx_cuas/QuadratureRule.hpp>
 #include <dolfinx_cuas/math.hpp>
 #include <dolfinx_cuas/utils.hpp>
@@ -31,6 +32,11 @@ using contact_kernel_fn = std::function<void(
     const double*, const int*, const std::uint8_t*, const std::int32_t)>;
 namespace dolfinx_contact
 {
+enum Kernel
+{
+  Rhs,
+  Jac
+};
 class Contact
 {
 public:
@@ -281,25 +287,63 @@ public:
     }
   }
 
-  contact_kernel_fn generate_kernel()
+  contact_kernel_fn generate_kernel(int origin_meshtag,
+                                    dolfinx_contact::Kernel type)
   {
     // mesh data
     auto mesh = _marker->mesh();
-    const int gdim = mesh->geometry().dim(); // geometrical dimension
-    const int tdim = mesh->topology().dim(); // topological dimension
-    const int fdim = tdim - 1;
+    const std::size_t gdim = mesh->geometry().dim(); // geometrical dimension
+    const std::size_t tdim = mesh->topology().dim(); // topological dimension
+    const std::size_t fdim = tdim - 1;
     // Extract function space data (assuming same test and trial space)
     std::shared_ptr<const dolfinx::fem::DofMap> dofmap = _V->dofmap();
-    const std::int32_t ndofs_cell = dofmap->cell_dofs(0).size();
-    const int bs = dofmap->bs();
+    const std::size_t ndofs_cell = dofmap->cell_dofs(0).size();
+    const std::size_t bs = dofmap->bs();
+
+    // Select which side of the contact interface to loop from and get the
+    // correct map
+    xt::xtensor<std::int32_t, 2>* active_facets;
+    xt::xtensor<std::int32_t, 3>* map;
+    std::size_t max_links = 0;
+    if (origin_meshtag == 0)
+    {
+      active_facets = &_cell_facet_pairs_0;
+      map = &_map_0_to_1;
+      max_links = _max_links_0;
+    }
+    else
+    {
+      active_facets = &_cell_facet_pairs_1;
+      map = &_map_1_to_0;
+      max_links = _max_links_1;
+    }
+
+    const std::size_t num_q_points = _qp_ref_facet[0].shape(0);
+
+    // coefficient offsets
+    // expecting coefficients in following order:
+    // mu, lmbda, h, gap, test_fn, u, u_opposite
+    // packed at quadrature points
+    // mu, lmbda, h scalar
+    // gap vector valued gdim
+    // test_fn, u, u_opposite vector valued bs (should be bs = gdim)
+    const std::size_t num_coeffs = 7;
+    std::vector<std::size_t> cstrides
+        = {num_q_points,
+           num_q_points,
+           num_q_points,
+           num_q_points * gdim,
+           num_q_points * ndofs_cell * bs * max_links,
+           num_q_points * bs,
+           num_q_points * bs};
 
     contact_kernel_fn unbiased_jac
-        = [ndofs_cell, bs](std::vector<std::vector<PetscScalar>>& A,
-                           const double* c, const double* w,
-                           const double* coordinate_dofs,
-                           const int* entity_local_index,
-                           const std::uint8_t* quadrature_permutation,
-                           const std::int32_t num_links)
+        = [ndofs_cell, bs, cstrides](std::vector<std::vector<PetscScalar>>& A,
+                                     const double* c, const double* w,
+                                     const double* coordinate_dofs,
+                                     const int* entity_local_index,
+                                     const std::uint8_t* quadrature_permutation,
+                                     const std::int32_t num_links)
     {
       // Fill contributions of facet with itself
       for (int j = 0; j < ndofs_cell; j++)
@@ -335,7 +379,13 @@ public:
         }
       }
     };
-    return unbiased_jac;
+    switch (type)
+    {
+    case dolfinx_contact::Kernel::Jac:
+      return unbiased_jac;
+    default:
+      throw std::runtime_error("Unrecognized kernel");
+    }
   }
   /// Tabulate the basis function at the quadrature points _qp_ref_facet
   /// creates and fills _phi_ref_facets
@@ -678,6 +728,10 @@ public:
     std::size_t max_links = 0;
     auto element = _V->element();
     const std::uint32_t bs = element->block_size();
+    mesh->topology_mutable().create_entity_permutations();
+
+    const std::vector<std::uint32_t> permutation_info
+        = mesh->topology().get_cell_permutation_info();
 
     // Select which side of the contact interface to loop from and get the
     // correct map
@@ -749,53 +803,22 @@ public:
         const xt::xtensor<double, 2> coordinate_dofs
             = xt::view(mesh_geometry, xt::keep(x_dofs), xt::range(0, gdim));
         auto qp = xt::view(q_points, xt::keep(indices), xt::all());
-        xt::xtensor<double, 2> qp_ref(
-            {std::size_t(qp.shape(0)), std::size_t(tdim)});
+        auto test_fn = dolfinx_contact::get_basis_functions(
+            J, K, detJ, qp, coordinate_dofs, linked_cell,
+            permutation_info[linked_cell], element, cmap);
 
-        // -- Lambda function for affine pull-backs
-        auto pull_back_affine
-            = [&cmap, tdim,
-               X0 = xt::xtensor<double, 2>(
-                   xt::zeros<double>({std::size_t(1), std::size_t(tdim)})),
-               data = xt::xtensor<double, 4>(cmap.tabulate_shape(1, 1)),
-               dphi
-               = xt::xtensor<double, 2>({tdim, cmap.tabulate_shape(1, 1)[2]})](
-                  auto&& X, const auto& cell_geometry, auto&& J, auto&& K,
-                  const auto& x) mutable
+        std::cout << "get basis functions works \n";
+        for (std::size_t k = 0; k < ndofs; k++)
         {
-          cmap.tabulate(1, X0, data);
-          dphi = xt::view(data, xt::range(1, tdim + 1), 0, xt::all(), 0);
-          cmap.compute_jacobian(dphi, cell_geometry, J);
-          cmap.compute_jacobian_inverse(J, K);
-          cmap.pull_back_affine(X, K, cmap.x0(cell_geometry), x);
-        };
-        if (cmap.is_affine())
-        {
-          J.fill(0);
-          pull_back_affine(qp_ref, coordinate_dofs,
-                           xt::view(J, 0, xt::all(), xt::all()),
-                           xt::view(K, 0, xt::all(), xt::all()), qp);
-          xt::xtensor<double, 4> test_fn({1, qp.shape(0), ndofs, 1});
-
-          element->tabulate(test_fn, qp_ref, 0);
-          for (std::size_t k = 0; k < ndofs; k++)
+          for (std::size_t q = 0; q < test_fn.shape(0); ++q)
           {
-            for (std::size_t q = 0; q < test_fn.shape(1); ++q)
+            for (std::size_t l = 0; l < bs; l++)
             {
-              for (std::size_t l = 0; l < bs; l++)
-              {
-                c[i * cstride + link * ndofs * bs * num_q_points
-                  + k * bs * num_q_points + +indices[q] * bs + l]
-                    = test_fn(0, q, k, 0);
-              }
+              c[i * cstride + link * ndofs * bs * num_q_points
+                + k * bs * num_q_points + indices[q] * bs + l]
+                  = test_fn(q, k * bs + l, l);
             }
           }
-        }
-        else
-        {
-          cmap.pull_back_nonaffine(qp_ref, qp, coordinate_dofs);
-          // FIXME: non-affine meshes not fully implemented
-          throw std::runtime_error("Non-affine meshes not implemented yet.");
         }
 
         it = upper;

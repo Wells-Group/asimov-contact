@@ -620,4 +620,126 @@ facet_to_cell_data(std::shared_ptr<const dolfinx::mesh::Mesh> mesh,
   }
   return {std::move(c), cstride};
 }
+
+//-----------------------------------------------------------------------------
+xt::xtensor<double, 3>
+get_basis_functions(xt::xtensor<double, 3>& J, xt::xtensor<double, 3>& K,
+                    xt::xtensor<double, 1>& detJ,
+                    const xt::xtensor<double, 2>& x,
+                    xt::xtensor<double, 2> coordinate_dofs,
+                    const std::int32_t index, const std::int32_t perm,
+                    std::shared_ptr<const dolfinx::fem::FiniteElement> element,
+                    const dolfinx::fem::CoordinateElement& cmap)
+{
+
+  // number of points
+  const std::size_t num_points = x.shape(0);
+  assert(J.shape(0) == num_points);
+  assert(K.shape(0) == num_points);
+  assert(detJ.shape(0) == num_points);
+
+  // Get mesh data from input
+  const size_t gdim = coordinate_dofs.shape(1);
+  const size_t num_dofs_g = coordinate_dofs.shape(0);
+  const size_t tdim = K.shape(1);
+
+  // Get element data
+  const size_t block_size = element->block_size();
+  const size_t reference_value_size
+      = element->reference_value_size() / block_size;
+  const size_t value_size = element->value_size() / block_size;
+  const size_t space_dimension = element->space_dimension() / block_size;
+
+  // Prepare basis function data structures
+  xt::xtensor<double, 4> tabulated_data(
+      {1, num_points, space_dimension, reference_value_size});
+  auto reference_basis_values
+      = xt::view(tabulated_data, 0, xt::all(), xt::all(), xt::all());
+  xt::xtensor<double, 3> basis_values(
+      {num_points, space_dimension, value_size});
+
+  // Skip negative cell indices
+  xt::xtensor<double, 3> basis_array = xt::zeros<double>(
+      {num_points, space_dimension * block_size, value_size * block_size});
+  if (index < 0)
+    return basis_array;
+
+  // -- Lambda function for affine pull-backs
+  auto pull_back_affine
+      = [&cmap, tdim,
+         X0 = xt::xtensor<double, 2>(xt::zeros<double>({std::size_t(1), tdim})),
+         data = xt::xtensor<double, 4>(cmap.tabulate_shape(1, 1)),
+         dphi = xt::xtensor<double, 2>({tdim, cmap.tabulate_shape(1, 1)[2]})](
+            auto&& X, const auto& cell_geometry, auto&& J, auto&& K,
+            const auto& x) mutable
+  {
+    cmap.tabulate(1, X0, data);
+    dphi = xt::view(data, xt::range(1, tdim + 1), 0, xt::all(), 0);
+    cmap.compute_jacobian(dphi, cell_geometry, J);
+    cmap.compute_jacobian_inverse(J, K);
+    cmap.pull_back_affine(X, K, cmap.x0(cell_geometry), x);
+  };
+  // FIXME: Move initialization out of J, detJ, K out of function
+  xt::xtensor<double, 2> dphi;
+  xt::xtensor<double, 2> X({x.shape(0), tdim});
+  xt::xtensor<double, 4> phi(cmap.tabulate_shape(1, 1));
+  if (cmap.is_affine())
+  {
+    J.fill(0);
+    pull_back_affine(X, coordinate_dofs, xt::view(J, 0, xt::all(), xt::all()),
+                     xt::view(K, 0, xt::all(), xt::all()), x);
+    detJ[0] = cmap.compute_jacobian_determinant(
+        xt::view(J, 0, xt::all(), xt::all()));
+    for (std::size_t p = 1; p < num_points; ++p)
+    {
+      xt::view(J, p, xt::all(), xt::all())
+          = xt::view(J, 0, xt::all(), xt::all());
+      xt::view(K, p, xt::all(), xt::all())
+          = xt::view(K, 0, xt::all(), xt::all());
+      detJ[p] = detJ[0];
+    }
+  }
+  else
+  {
+    cmap.pull_back_nonaffine(X, x, coordinate_dofs);
+    cmap.tabulate(1, X, phi);
+    dphi = xt::view(phi, xt::range(1, tdim + 1), 0, xt::all(), 0);
+    J.fill(0);
+    for (std::size_t p = 0; p < X.shape(0); ++p)
+    {
+      auto _J = xt::view(J, p, xt::all(), xt::all());
+      cmap.compute_jacobian(dphi, coordinate_dofs, _J);
+      cmap.compute_jacobian_inverse(_J, xt::view(K, p, xt::all(), xt::all()));
+      detJ[p] = cmap.compute_jacobian_determinant(_J);
+    }
+  }
+
+  // Compute basis on reference element
+  element->tabulate(tabulated_data, X, 0);
+
+  element->apply_dof_transformation(
+      xtl::span<double>(tabulated_data.data(), tabulated_data.size()), perm,
+      reference_value_size);
+
+  // Push basis forward to physical element
+  element->transform_reference_basis(basis_values, reference_basis_values, J,
+                                     detJ, K);
+
+  // Expand basis values for each dof
+  for (std::size_t p = 0; p < num_points; ++p)
+  {
+    for (int block = 0; block < block_size; ++block)
+    {
+      for (int i = 0; i < space_dimension; ++i)
+      {
+        for (int j = 0; j < value_size; ++j)
+        {
+          basis_array(p, i * block_size + block, j * block_size + block)
+              = basis_values(p, i, j);
+        }
+      }
+    }
+  }
+  return basis_array;
+}
 } // namespace dolfinx_contact

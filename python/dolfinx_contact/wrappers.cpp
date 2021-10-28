@@ -79,8 +79,13 @@ PYBIND11_MODULE(cpp, m)
       .def("facet_1", &dolfinx_contact::Contact::facet_1)
       .def("set_quadrature_degree",
            &dolfinx_contact::Contact::set_quadrature_degree)
-      .def("generate_kernel", [](dolfinx_contact::Contact& self)
-           { return contact_wrappers::KernelWrapper(self.generate_kernel()); })
+      .def("generate_kernel",
+           [](dolfinx_contact::Contact& self, int origin_meshtag,
+              dolfinx_contact::Kernel type)
+           {
+             return contact_wrappers::KernelWrapper(
+                 self.generate_kernel(origin_meshtag, type));
+           })
 
       .def("assemble_matrix",
            [](dolfinx_contact::Contact& self, Mat A,
@@ -137,10 +142,8 @@ PYBIND11_MODULE(cpp, m)
       py::arg("V"), py::arg("kernel_type"), py::arg("quadrature_rule"),
       py::arg("coeffs"), py::arg("constant_normal") = true);
   py::enum_<dolfinx_contact::Kernel>(m, "Kernel")
-      .value("NitscheRigidSurfaceRhs",
-             dolfinx_contact::Kernel::NitscheRigidSurfaceRhs)
-      .value("NitscheRigidSurfaceJac",
-             dolfinx_contact::Kernel::NitscheRigidSurfaceJac);
+      .value("Rhs", dolfinx_contact::Kernel::Rhs)
+      .value("Jac", dolfinx_contact::Kernel::Jac);
   m.def("pack_coefficient_quadrature",
         [](std::shared_ptr<const dolfinx::fem::Function<PetscScalar>> coeff,
            int q)

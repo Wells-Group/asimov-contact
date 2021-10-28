@@ -8,6 +8,7 @@
 
 #include <dolfinx/fem/FiniteElement.h>
 #include <dolfinx/fem/FunctionSpace.h>
+#include <dolfinx_contact/Contact.hpp>
 #include <dolfinx_cuas/QuadratureRule.hpp>
 #include <dolfinx_cuas/math.hpp>
 #include <dolfinx_cuas/utils.hpp>
@@ -18,11 +19,6 @@ using kernel_fn
 
 namespace dolfinx_contact
 {
-enum Kernel
-{
-  NitscheRigidSurfaceRhs,
-  NitscheRigidSurfaceJac
-};
 
 kernel_fn generate_contact_kernel(
     std::shared_ptr<const dolfinx::fem::FunctionSpace> V, Kernel type,
@@ -547,9 +543,9 @@ kernel_fn generate_contact_kernel(
   };
   switch (type)
   {
-  case dolfinx_contact::Kernel::NitscheRigidSurfaceRhs:
+  case dolfinx_contact::Kernel::Rhs:
     return nitsche_rigid_rhs;
-  case dolfinx_contact::Kernel::NitscheRigidSurfaceJac:
+  case dolfinx_contact::Kernel::Jac:
     return nitsche_rigid_jacobian;
   default:
     throw std::runtime_error("Unrecognized kernel");
