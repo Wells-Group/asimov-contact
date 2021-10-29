@@ -189,7 +189,7 @@ def test_contact_kernel(theta, gamma, dim, gap):
         L_cuas = ufl.inner(sigma(u), epsilon(v)) * dx
         L_cuas = dolfinx.fem.Form(L_cuas)
         b2 = dolfinx.fem.create_vector(L_cuas)
-        kernel = dolfinx_contact.cpp.generate_contact_kernel(V._cpp_object, kt.NitscheRigidSurfaceRhs, q_rule,
+        kernel = dolfinx_contact.cpp.generate_contact_kernel(V._cpp_object, kt.Rhs, q_rule,
                                                              [u._cpp_object, mu2._cpp_object, lmbda2._cpp_object])
         b2.zeroEntries()
         dolfinx_cuas.assemble_vector(b2, V, bottom_facets, kernel, coeffs, consts, it.exterior_facet)
@@ -200,7 +200,7 @@ def test_contact_kernel(theta, gamma, dim, gap):
         a_cuas = dolfinx.fem.Form(a_cuas)
         B = dolfinx.fem.create_matrix(a_cuas)
         kernel = dolfinx_contact.cpp.generate_contact_kernel(
-            V._cpp_object, kt.NitscheRigidSurfaceJac, q_rule, [u._cpp_object, mu2._cpp_object, lmbda2._cpp_object])
+            V._cpp_object, kt.Jac, q_rule, [u._cpp_object, mu2._cpp_object, lmbda2._cpp_object])
         B.zeroEntries()
         dolfinx_cuas.assemble_matrix(B, V, bottom_facets, kernel, coeffs, consts, it.exterior_facet)
         dolfinx.fem.assemble_matrix(B, a_cuas)

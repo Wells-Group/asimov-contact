@@ -237,7 +237,7 @@ public:
     std::vector<double> coordinate_dofs(3 * num_dofs_g);
     std::vector<std::int32_t> dmapjoint;
     std::vector<std::vector<PetscScalar>> Ae_vec(
-        2 * max_links + 1,
+        3 * max_links + 1,
         std::vector<PetscScalar>(bs * ndofs_cell * bs * ndofs_cell));
     for (int i = 0; i < (*active_facets).shape(0); i++)
     {
@@ -265,8 +265,9 @@ public:
       std::fill(Ae_vec[0].begin(), Ae_vec[0].end(), 0);
       for (std::int32_t j = 0; j < num_linked_cells; j++)
       {
-        std::fill(Ae_vec[2 * j + 1].begin(), Ae_vec[2 * j + 1].end(), 0);
-        std::fill(Ae_vec[2 * (j + 1)].begin(), Ae_vec[2 * (j + 1)].end(), 0);
+        std::fill(Ae_vec[3 * j + 1].begin(), Ae_vec[3 * j + 1].end(), 0);
+        std::fill(Ae_vec[3 * j + 2].begin(), Ae_vec[3 * j + 2].end(), 0);
+        std::fill(Ae_vec[3 * j + 3].begin(), Ae_vec[3 * j + 3].end(), 0);
       }
 
       kernel(Ae_vec, coeffs.data() + i * cstride, constants.data(),
@@ -280,9 +281,11 @@ public:
       {
         auto dmap_linked = dofmap->cell_dofs(linked_cells[j]);
         mat_set(dmap_cell.size(), dmap_cell.data(), dmap_linked.size(),
-                dmap_linked.data(), Ae_vec[2 * j + 1].data());
+                dmap_linked.data(), Ae_vec[3 * j + 1].data());
         mat_set(dmap_linked.size(), dmap_linked.data(), dmap_cell.size(),
-                dmap_cell.data(), Ae_vec[2 * (j + 1)].data());
+                dmap_cell.data(), Ae_vec[3 * j + 2].data());
+        mat_set(dmap_linked.size(), dmap_linked.data(), dmap_linked.size(),
+                dmap_linked.data(), Ae_vec[3 * j + 3].data());
       }
     }
   }
@@ -528,6 +531,7 @@ public:
             double Pn_du = 1. / gamma
                            * (phi_f(q, j) * n_surf(l) - gamma * sign_du) * Pn_u
                            * w0;
+
             sign_u *= w0;
             for (int i = 0; i < ndofs_cell; i++)
             {
@@ -537,28 +541,26 @@ public:
                 double sign_v = (lmbda * tr(i, b) * n_dot + mu * epsn(i, b));
                 double Pn_v = v_dot_nsurf - theta * gamma * sign_v;
                 A[0][(b + i * bs) * ndofs_cell * bs + l + j * bs]
-                    -= theta * gamma * sign_du * sign_v
-                       + (1. / gamma) * Pn_du * Pn_v;
-              }
-            }
-          }
-        }
-      }
+                    -= 0.5
+                       * (theta * gamma * sign_du * sign_v
+                          + (1. / gamma) * Pn_du * Pn_v);
 
-      // Fill contributions of facet with contact facet
-      for (int k = 0; k < num_links; k++)
-      {
-        for (int j = 0; j < ndofs_cell; j++)
-        {
-          for (int l = 0; l < bs; l++)
-          {
-            for (int i = 0; i < ndofs_cell; i++)
-            {
-              for (int b = 0; b < bs; b++)
-              {
-                A[2 * k + 1][(b + i * bs) * ndofs_cell * bs + l + j * bs] += 1;
-                A[2 * (k + 1)][(b + i * bs) * ndofs_cell * bs + l + j * bs]
-                    += 1;
+                for (int k = 0; k < num_links; k++)
+                {
+                  int index = offset_u_opp + k * num_q_points * ndofs_cell * bs
+                              + j * num_q_points * bs + q * bs + l;
+                  double du_n_opp = c[index] * n_surf(l) * w0;
+                  index = offset_u_opp + k * num_q_points * ndofs_cell * bs
+                          + i * num_q_points * bs + q * bs + b;
+                  double v_n_opp = c[index] * n_surf(b);
+
+                  A[3 * k + 1][(b + i * bs) * ndofs_cell * bs + l + j * bs]
+                      += 0.5 * (1. / gamma) * du_n_opp * Pn_v;
+                  A[3 * k + 2][(b + i * bs) * ndofs_cell * bs + l + j * bs]
+                      += 0.5 * (1. / gamma) * Pn_du * v_n_opp;
+                  A[3 * k + 3][(b + i * bs) * ndofs_cell * bs + l + j * bs]
+                      -= 0.5 * (1. / gamma) * du_n_opp * v_n_opp;
+                }
               }
             }
           }

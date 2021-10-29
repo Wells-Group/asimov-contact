@@ -23,7 +23,7 @@ def R_minus(x):
     return 0.5 * (x - abs_x)
 
 
-@pytest.mark.parametrize("kernel_type", [kt.NitscheRigidSurfaceRhs])
+@pytest.mark.parametrize("kernel_type", [kt.Rhs])
 @pytest.mark.parametrize("dim", [2, 3])
 @pytest.mark.parametrize("P", [1, 2, 3, 4])
 @pytest.mark.parametrize("Q", [0, 1, 2])
@@ -140,7 +140,7 @@ def test_vector_surface_kernel(dim, kernel_type, P, Q):
     assert np.allclose(b.array, b2.array)
 
 
-@pytest.mark.parametrize("kernel_type", [kt.NitscheRigidSurfaceJac])
+@pytest.mark.parametrize("kernel_type", [kt.Jac])
 @pytest.mark.parametrize("dim", [2, 3])
 @pytest.mark.parametrize("P", [1, 2, 3, 4])
 @pytest.mark.parametrize("Q", [0, 1, 2])
