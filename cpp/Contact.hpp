@@ -549,7 +549,7 @@ public:
                 {
                   int index = offset_u_opp + k * num_q_points * ndofs_cell * bs
                               + j * num_q_points * bs + q * bs + l;
-                  double du_n_opp = c[index] * n_surf(l) * w0;
+                  double du_n_opp = c[index] * n_surf(l) * w0 * Pn_u;
                   index = offset_u_opp + k * num_q_points * ndofs_cell * bs
                           + i * num_q_points * bs + q * bs + b;
                   double v_n_opp = c[index] * n_surf(b);
