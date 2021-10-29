@@ -4,15 +4,16 @@
 
 import dolfinx
 import dolfinx.io
+import dolfinx_cuas
 import dolfinx_contact
 import dolfinx_contact.cpp
 import numpy as np
 import ufl
 from typing import Tuple
-from dolfinx_contact.helpers import (epsilon, lame_parameters, sigma_func)
+from dolfinx_contact.helpers import (epsilon, lame_parameters, rigid_motions_nullspace, sigma_func)
+from petsc4py import PETSc
+from mpi4py import MPI
 
-import scipy.sparse
-import matplotlib.pylab as plt
 
 kt = dolfinx_contact.cpp.Kernel
 
@@ -139,26 +140,96 @@ def nitsche_unbiased(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dolfinx.MeshT
     gap_1 = contact.pack_gap(1)
     test_fn_1 = contact.pack_test_functions(1, gap_1)
 
-    u_opp_0 = contact.pack_u_contact(0, u._cpp_object, gap_0)
-    u_opp_1 = contact.pack_u_contact(1, u._cpp_object, gap_1)
-    u_0 = contact.pack_coefficient_dofs(0, u._cpp_object)
-    u_1 = contact.pack_coefficient_dofs(1, u._cpp_object)
-
-    coeff_0 = np.hstack([mu_packed_0, lmbda_packed_0, h_0, gap_0, test_fn_0, u_0, u_opp_0])
-    coeff_1 = np.hstack([mu_packed_1, lmbda_packed_1, h_1, gap_1, test_fn_1, u_1, u_opp_1])
+    coeff_0 = np.hstack([mu_packed_0, lmbda_packed_0, h_0, gap_0, test_fn_0])
+    coeff_1 = np.hstack([mu_packed_1, lmbda_packed_1, h_1, gap_1, test_fn_1])
 
     # assemble jacobian
     a_cuas = dolfinx.fem.Form(a)
-    A = contact.create_matrix(a_cuas._cpp_object)
-    kernel_0 = contact.generate_kernel(0, kt.Jac)
-    kernel_1 = contact.generate_kernel(1, kt.Jac)
+    kernel_jac = contact.generate_kernel(kt.Jac)
 
-    contact.assemble_matrix(A, [], 0, kernel_0, coeff_0, consts)
-    contact.assemble_matrix(A, [], 1, kernel_1, coeff_1, consts)
-    A.assemble()
+    def create_A():
+        return contact.create_matrix(a_cuas._cpp_object)
 
-    # Create scipy CSR matrices
-    ai, aj, av = A.getValuesCSR()
-    A_sp = scipy.sparse.csr_matrix((av, aj, ai), shape=A.getSize())
-    plt.spy(A_sp)
-    plt.savefig("test.png")
+    def A(x, A):
+        u.vector[:] = x.array
+        u_opp_0 = contact.pack_u_contact(0, u._cpp_object, gap_0)
+        u_opp_1 = contact.pack_u_contact(1, u._cpp_object, gap_1)
+        u_0 = contact.pack_coefficient_dofs(0, u._cpp_object)
+        u_1 = contact.pack_coefficient_dofs(1, u._cpp_object)
+        c_0 = np.hstack([coeff_0, u_0, u_opp_0])
+        c_1 = np.hstack([coeff_1, u_1, u_opp_1])
+        contact.assemble_matrix(A, [], 0, kernel_jac, c_0, consts)
+        contact.assemble_matrix(A, [], 1, kernel_jac, c_1, consts)
+        dolfinx.fem.assemble_matrix(A, a_cuas)
+
+    # assemble rhs
+    L_cuas = dolfinx.fem.Form(L)
+    kernel_rhs = contact.generate_kernel(kt.Rhs)
+
+    def create_b():
+        return dolfinx.fem.create_vector(L_cuas)
+
+    def F(x, b):
+        u.vector[:] = x.array
+        u_opp_0 = contact.pack_u_contact(0, u._cpp_object, gap_0)
+        u_opp_1 = contact.pack_u_contact(1, u._cpp_object, gap_1)
+        u_0 = contact.pack_coefficient_dofs(0, u._cpp_object)
+        u_1 = contact.pack_coefficient_dofs(1, u._cpp_object)
+        c_0 = np.hstack([coeff_0, u_0, u_opp_0])
+        c_1 = np.hstack([coeff_1, u_1, u_opp_1])
+        contact.assemble_vector(b, 0, kernel_rhs, c_0, consts)
+        contact.assemble_vector(b, 1, kernel_rhs, c_1, consts)
+        dolfinx.fem.assemble_vector(b, L_cuas)
+
+    problem = dolfinx_cuas.NonlinearProblemCUAS(F, A, create_b, create_A)
+    # DEBUG: Write each step of Newton iterations
+    # problem.i = 0
+    # xdmf = dolfinx.io.XDMFFile(MPI.COMM_WORLD, "results/tmp_sol.xdmf", "w")
+    # xdmf.write_mesh(mesh)
+
+    solver = dolfinx_cuas.NewtonSolver(MPI.COMM_WORLD, problem)
+    null_space = rigid_motions_nullspace(V)
+    solver.A.setNearNullSpace(null_space)
+    # Set Newton solver options
+    solver.atol = 1e-9
+    solver.rtol = 1e-9
+    solver.convergence_criterion = "incremental"
+    solver.max_it = 200
+    solver.error_on_nonconvergence = True
+    solver.relaxation_parameter = 0.6
+
+    # Define solver and options
+    ksp = solver.krylov_solver
+    opts = PETSc.Options()
+    option_prefix = ksp.getOptionsPrefix()
+    # DEBUG: Use linear solver
+    opts[f"{option_prefix}ksp_type"] = "preonly"
+    opts[f"{option_prefix}pc_type"] = "lu"
+
+    # opts[f"{option_prefix}ksp_type"] = "cg"
+    # opts[f"{option_prefix}pc_type"] = "gamg"
+    # opts[f"{option_prefix}rtol"] = 1.0e-6
+    # opts[f"{option_prefix}pc_gamg_coarse_eq_limit"] = 1000
+    # opts[f"{option_prefix}mg_levels_ksp_type"] = "chebyshev"
+    # opts[f"{option_prefix}mg_levels_pc_type"] = "jacobi"
+    # opts[f"{option_prefix}mg_levels_esteig_ksp_type"] = "cg"
+    # opts[f"{option_prefix}matptap_via"] = "scalable"
+    # View solver options
+    # opts[f"{option_prefix}ksp_view"] = None
+    ksp.setFromOptions()
+
+    # Solve non-linear problem
+    dolfinx.log.set_log_level(dolfinx.log.LogLevel.INFO)
+    with dolfinx.common.Timer(f"{refinement} Solve Nitsche"):
+        n, converged = solver.solve(u)
+    u.x.scatter_forward()
+    if solver.error_on_nonconvergence:
+        assert(converged)
+    print(f"{V.dofmap.index_map_bs*V.dofmap.index_map.size_global}, Number of interations: {n:d}")
+
+    with dolfinx.io.XDMFFile(MPI.COMM_WORLD, f"results/u_unbiased_{refinement}.xdmf", "w") as xdmf:
+        xdmf.write_mesh(mesh)
+        u.name = "u"
+        xdmf.write_function(u)
+
+    return u

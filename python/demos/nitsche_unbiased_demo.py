@@ -41,7 +41,7 @@ if __name__ == "__main__":
                              help="Youngs modulus of material")
     _nu = parser.add_argument(
         "--nu", default=0.1, type=np.float64, dest="nu", help="Poisson's ratio")
-    _disp = parser.add_argument("--disp", default=0.3, type=np.float64, dest="disp",
+    _disp = parser.add_argument("--disp", default=0.12, type=np.float64, dest="disp",
                                 help="Displacement BC in negative y direction")
     _ref = parser.add_argument("--refinements", default=2, type=np.int32,
                                dest="refs", help="Number of mesh refinements")
@@ -179,6 +179,6 @@ if __name__ == "__main__":
     rank = MPI.COMM_WORLD.rank
     mesh_data = (facet_marker, top_value, bottom_value, surface_value, surface_bottom)
     # Solve contact problem using Nitsche's method
-    nitsche_unbiased(mesh=mesh, mesh_data=mesh_data, physical_parameters=physical_parameters,
-                     nitsche_parameters=nitsche_parameters, vertical_displacement=vertical_displacement,
-                     nitsche_bc=True)
+    u1 = nitsche_unbiased(mesh=mesh, mesh_data=mesh_data, physical_parameters=physical_parameters,
+                          nitsche_parameters=nitsche_parameters, vertical_displacement=vertical_displacement,
+                          nitsche_bc=True)

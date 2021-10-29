@@ -80,11 +80,8 @@ PYBIND11_MODULE(cpp, m)
       .def("set_quadrature_degree",
            &dolfinx_contact::Contact::set_quadrature_degree)
       .def("generate_kernel",
-           [](dolfinx_contact::Contact& self, int origin_meshtag,
-              dolfinx_contact::Kernel type)
-           {
-             return contact_wrappers::KernelWrapper(
-                 self.generate_kernel(origin_meshtag, type));
+           [](dolfinx_contact::Contact& self, dolfinx_contact::Kernel type) {
+             return contact_wrappers::KernelWrapper(self.generate_kernel(type));
            })
 
       .def("assemble_matrix",
@@ -99,6 +96,20 @@ PYBIND11_MODULE(cpp, m)
              self.assemble_matrix(
                  dolfinx::la::PETScMatrix::set_block_fn(A, ADD_VALUES), bcs,
                  origin_meshtag, ker,
+                 xtl::span<const PetscScalar>(coeffs.data(), coeffs.size()),
+                 coeffs.shape(1),
+                 xtl::span(constants.data(), constants.shape(0)));
+           })
+      .def("assemble_vector",
+           [](dolfinx_contact::Contact& self,
+              py::array_t<PetscScalar, py::array::c_style>& b,
+              int origin_meshtag, contact_wrappers::KernelWrapper& kernel,
+              const py::array_t<PetscScalar, py::array::c_style>& coeffs,
+              const py::array_t<PetscScalar, py::array::c_style>& constants)
+           {
+             auto ker = kernel.get();
+             self.assemble_vector(
+                 xtl::span(b.mutable_data(), b.shape(0)), origin_meshtag, ker,
                  xtl::span<const PetscScalar>(coeffs.data(), coeffs.size()),
                  coeffs.shape(1),
                  xtl::span(constants.data(), constants.shape(0)));
