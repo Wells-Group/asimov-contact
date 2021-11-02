@@ -310,7 +310,7 @@ kernel_fn generate_contact_kernel(
         for (int j = 0; j < bs; j++)
         {
           tr_u += c[block_index + j] * tr(i, j);
-          epsn_u += c[block_index + +j] * epsn(i, j);
+          epsn_u += c[block_index + j] * epsn(i, j);
           u_dot_nsurf += c[block_index + j] * n_surf(j) * phi_f(q, i);
         }
       }
@@ -509,7 +509,7 @@ kernel_fn generate_contact_kernel(
         for (int j = 0; j < bs; j++)
         {
           tr_u += c[block_index + j] * tr(i, j);
-          epsn_u += c[block_index +j] * epsn(i, j);
+          epsn_u += c[block_index + j] * epsn(i, j);
           u_dot_nsurf += c[block_index + j] * n_surf(j) * phi_f(q, i);
         }
       }

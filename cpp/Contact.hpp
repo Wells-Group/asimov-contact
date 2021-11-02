@@ -224,15 +224,15 @@ public:
     {
       active_facets = &_cell_facet_pairs_0;
       map = &_map_0_to_1;
-      max_links = _max_links_0;
+      // max_links = _max_links_0;
     }
     else
     {
       active_facets = &_cell_facet_pairs_1;
       map = &_map_1_to_0;
-      max_links = _max_links_1;
+      // max_links = _max_links_1;
     }
-
+    max_links = std::max(_max_links_0, _max_links_1);
     // Data structures used in assembly
     std::vector<double> coordinate_dofs(3 * num_dofs_g);
     std::vector<std::vector<PetscScalar>> Ae_vec(
@@ -248,7 +248,7 @@ public:
         std::copy_n(xt::row(x_g, x_dofs[i]).begin(), 3,
                     std::next(coordinate_dofs.begin(), 3 * i));
       }
-      const std::int32_t local_index = (*active_facets)(i, 1);
+      std::int32_t local_index = (*active_facets)(i, 1);
       std::vector<std::int32_t> linked_cells;
       std::int32_t num_qp = (*map).shape(1);
       for (std::int32_t j = 0; j < num_qp; j++)
@@ -275,7 +275,6 @@ public:
       // NOTE: Normally dof transform needs to be applied to the elements in
       // Ae_vec at this stage This is not need for the function spaces we
       // currently consider
-
       auto dmap_cell = dofmap->cell_dofs(cell);
       mat_set(dmap_cell.size(), dmap_cell.data(), dmap_cell.size(),
               dmap_cell.data(), Ae_vec[0].data());
@@ -329,15 +328,15 @@ public:
     {
       active_facets = &_cell_facet_pairs_0;
       map = &_map_0_to_1;
-      max_links = _max_links_0;
+      // max_links = _max_links_0;
     }
     else
     {
       active_facets = &_cell_facet_pairs_1;
       map = &_map_1_to_0;
-      max_links = _max_links_1;
+      // max_links = _max_links_1;
     }
-
+    max_links = std::max(_max_links_0, _max_links_1);
     // Data structures used in assembly
     std::vector<double> coordinate_dofs(3 * num_dofs_g);
     std::vector<std::vector<PetscScalar>> be_vec(
@@ -353,7 +352,7 @@ public:
         std::copy_n(xt::row(x_g, x_dofs[i]).begin(), 3,
                     std::next(coordinate_dofs.begin(), 3 * i));
       }
-      const std::int32_t local_index = (*active_facets)(i, 1);
+      std::int32_t local_index = (*active_facets)(i, 1);
       std::vector<std::int32_t> linked_cells;
       std::int32_t num_qp = (*map).shape(1);
       for (std::int32_t j = 0; j < num_qp; j++)
@@ -520,7 +519,7 @@ public:
         n_norm += n_phys[i] * n_phys[i];
       n_phys /= std::sqrt(n_norm);
 
-      double gamma = c[2] / w[0]; // This is h/gamma,  gamma = w[0];
+      double gamma = w[0] / c[2]; // This is gamma/h,  gamma = w[0];
       double theta = w[1];
       double mu = c[0];
       double lmbda = c[1];
@@ -589,12 +588,13 @@ public:
         double tr_u = 0;
         double epsn_u = 0;
         double jump_un = 0;
-        const std::size_t offset_u = cstrides[0] + cstrides[1] + cstrides[2]
-                                     + cstrides[3] + cstrides[4];
-        const std::size_t offset_u_opp = offset_u + cstrides[5] + q * bs;
+        std::size_t offset_u = cstrides[0] + cstrides[1] + cstrides[2]
+                               + cstrides[3] + cstrides[4];
+
+        std::size_t offset_u_opp = offset_u + cstrides[5] + q * bs;
         for (int i = 0; i < ndofs_cell; i++)
         {
-          const std::size_t block_index = offset_u + i * bs;
+          std::size_t block_index = offset_u + i * bs;
           for (int j = 0; j < bs; j++)
           {
             tr_u += c[block_index + j] * tr(i, j);
@@ -606,25 +606,32 @@ public:
         }
         double sign_u = lmbda * tr_u * n_dot + mu * epsn_u;
         const double w0 = _qw_ref_facet[facet_index][q] * detJ;
-        double Pn_u
-            = dolfinx_contact::R_plus(jump_un - gamma * sign_u - gap) * w0;
+        // double Pn_u
+        //     = dolfinx_contact::R_plus(jump_un - (1. / gamma) * sign_u - gap)
+        //       * w0;
+
+        double R_minus = 1. / gamma * sign_u + (gap + jump_un);
+        if (R_minus > 0)
+          R_minus = 0;
+        else
+          R_minus = R_minus * w0;
+        sign_u *= -theta / gamma * w0;
         // Fill contributions of facet with itself
 
-        sign_u *= w0;
         for (int i = 0; i < ndofs_cell; i++)
         {
           for (int n = 0; n < bs; n++)
           {
             double v_dot_nsurf = n_surf(n) * phi_f(q, i);
             double sign_v = (lmbda * tr(i, n) * n_dot + mu * epsn(i, n));
-            double Pn_v = v_dot_nsurf - theta * gamma * sign_v;
-            b[0][n + i * bs] -= 0.5
-                                * (theta * gamma * sign_u * sign_v
-                                   + (1. / gamma) * Pn_u * Pn_v);
+            double Pn_v = gamma * v_dot_nsurf - theta * sign_v;
+            b[0][n + i * bs]
+                += sign_v * sign_u
+                   + R_minus * (theta * sign_v + gamma * v_dot_nsurf);
 
             for (int k = 0; k < num_links; k++)
             {
-              int index = offset_u_opp + k * num_q_points * ndofs_cell * bs
+              int index = 3 + cstrides[3] + k * num_q_points * ndofs_cell * bs
                           + i * num_q_points * bs + q * bs + n;
               double v_n_opp = c[index] * n_surf(n);
 
@@ -683,7 +690,7 @@ public:
         n_norm += n_phys[i] * n_phys[i];
       n_phys /= std::sqrt(n_norm);
 
-      double gamma = c[2] / w[0]; // This is h/gamma,  gamma = w[0];
+      double gamma = w[0] / c[2]; // This is gamma/h,  gamma = w[0];
       double theta = w[1];
       double mu = c[0];
       double lmbda = c[1];
@@ -730,6 +737,7 @@ public:
           n_surf = -n_phys;
           n_dot = -1;
         }
+
         xt::xtensor<double, 2> tr = xt::zeros<double>({ndofs_cell, gdim});
         xt::xtensor<double, 2> epsn = xt::zeros<double>({ndofs_cell, gdim});
         // precompute tr(eps(phi_j e_l)), eps(phi^j e_l)n*n2
@@ -748,16 +756,17 @@ public:
             }
           }
         }
+
         // compute tr(eps(u)), epsn at q
         double tr_u = 0;
         double epsn_u = 0;
         double jump_un = 0;
-        const std::size_t offset_u = cstrides[0] + cstrides[1] + cstrides[2]
-                                     + cstrides[3] + cstrides[4];
-        const std::size_t offset_u_opp = offset_u + cstrides[5] + q * bs;
+        std::size_t offset_u = cstrides[0] + cstrides[1] + cstrides[2]
+                               + cstrides[3] + cstrides[4];
+        std::size_t offset_u_opp = offset_u + cstrides[5] + q * bs;
         for (int i = 0; i < ndofs_cell; i++)
         {
-          const std::size_t block_index = offset_u + i * bs;
+          std::size_t block_index = offset_u + i * bs;
           for (int j = 0; j < bs; j++)
           {
             tr_u += c[block_index + j] * tr(i, j);
@@ -767,19 +776,29 @@ public:
                    * n_surf(j);
           }
         }
-        double sign_u = lmbda * tr_u * n_dot + mu * epsn_u;
-        double Pn_u = dolfinx_contact::dR_plus(jump_un - gamma * sign_u - gap);
 
-        // Fill contributions of facet with itself
+        // double sign_u = lmbda * tr_u * n_dot + mu * epsn_u;
+        // double Pn_u = dolfinx_contact::dR_plus(jump_un - gamma * sign_u -
+        // gap);
         const double w0 = _qw_ref_facet[facet_index][q] * detJ;
+
+        double temp
+            = (lmbda * n_dot * tr_u + mu * epsn_u) + gamma * (gap + jump_un);
+
+        // sign_u *= -theta / gamma * w0;
+        // Fill contributions of facet with itself
         for (int j = 0; j < ndofs_cell; j++)
         {
           for (int l = 0; l < bs; l++)
           {
-            double sign_du = (lmbda * tr(j, l) * n_dot + mu * epsn(j, l))*w0;
-            double Pn_du
-                = (phi_f(q, j) * n_surf(l) - gamma * sign_du) * Pn_u * w0;
-
+            // double sign_du = (lmbda * tr(j, l) * n_dot + mu * epsn(j, l));
+            // double Pn_du
+            //     = (phi_f(q, j) * n_surf(l) - (1. / gamma) * sign_du) * Pn_u;
+            double sign_u = (lmbda * tr(j, l) * n_dot + mu * epsn(j, l));
+            double term2 = 0;
+            if (temp < 0)
+              term2 = 1. / gamma * (sign_u + gamma * n_surf(l) * phi_f(q, j))
+                      * w0;
             sign_u *= w0;
             for (int i = 0; i < ndofs_cell; i++)
             {
@@ -787,23 +806,23 @@ public:
               {
                 double v_dot_nsurf = n_surf(b) * phi_f(q, i);
                 double sign_v = (lmbda * tr(i, b) * n_dot + mu * epsn(i, b));
-                double Pn_v = v_dot_nsurf - theta * gamma * sign_v;
+                double Pn_v = gamma * v_dot_nsurf - theta * sign_v;
                 A[0][(b + i * bs) * ndofs_cell * bs + l + j * bs]
-                    -= 0.5
-                       * (theta * gamma * sign_du * sign_v
-                          + (1. / gamma) * Pn_du * Pn_v);
-
+                    += -theta / gamma * sign_u * sign_v
+                       + term2 * (theta * sign_v + gamma * v_dot_nsurf);
                 for (int k = 0; k < num_links; k++)
                 {
-                  int index = offset_u_opp + k * num_q_points * ndofs_cell * bs
-                              + j * num_q_points * bs + q * bs + l;
-                  double du_n_opp = c[index] * n_surf(l) * w0 * Pn_u;
-                  index = offset_u_opp + k * num_q_points * ndofs_cell * bs
-                          + i * num_q_points * bs + q * bs + b;
-                  double v_n_opp = c[index] * n_surf(b);
+                  // int index = 3 + cstrides[3]
+                  //             + k * num_q_points * ndofs_cell * bs
+                  //             + j * num_q_points * bs + q * bs + l;
+                  // double du_n_opp = c[index] * n_surf(l) * w0 * Pn_u;
+                  // index = 3 + cstrides[3] + k * num_q_points * ndofs_cell *
+                  // bs
+                  //         + i * num_q_points * bs + q * bs + b;
+                  // double v_n_opp = c[index] * n_surf(b);
 
                   // A[3 * k + 1][(b + i * bs) * ndofs_cell * bs + l + j * bs]
-                  //     += 0.5 * (1. / gamma) * du_n_opp * Pn_v;
+                  //+= 0.5 * (1. / gamma) * du_n_opp * Pn_v;
                   // A[3 * k + 2][(b + i * bs) * ndofs_cell * bs + l + j * bs]
                   //     += 0.5 * (1. / gamma) * Pn_du * v_n_opp;
                   // A[3 * k + 3][(b + i * bs) * ndofs_cell * bs + l + j * bs]
@@ -1178,16 +1197,17 @@ public:
     {
       map = &_map_0_to_1;
       q_phys_pt = &_qp_phys_0;
-      max_links = _max_links_0;
+      // max_links = _max_links_0;
       puppet_facets = &_cell_facet_pairs_0;
     }
     else
     {
       map = &_map_1_to_0;
       q_phys_pt = &_qp_phys_1;
-      max_links = _max_links_1;
+      // max_links = _max_links_1;
       puppet_facets = &_cell_facet_pairs_1;
     }
+    max_links = std::max(_max_links_0, _max_links_1);
     const std::int32_t num_facets = (*map).shape(0);
     const std::int32_t num_q_points = _qp_ref_facet[0].shape(0);
     const std::int32_t ndofs = _V->dofmap()->cell_dofs(0).size();
@@ -1406,6 +1426,57 @@ public:
       return dolfinx_contact::pack_coefficient_dofs(coeff, _cell_facet_pairs_0);
     else
       return dolfinx_contact::pack_coefficient_dofs(coeff, _cell_facet_pairs_1);
+  }
+  std::pair<std::vector<PetscScalar>, int> pack_coeffs_const(
+      int origin_meshtag,
+      std::shared_ptr<const dolfinx::fem::Function<PetscScalar>> mu,
+      std::shared_ptr<const dolfinx::fem::Function<PetscScalar>> lmbda)
+  {
+    std::vector<int32_t>* active_facets;
+    if (origin_meshtag == 0)
+      active_facets = &_facet_0;
+    else
+      active_facets = &_facet_1;
+    auto mu_packed = pack_coefficient_dofs(origin_meshtag, mu);
+    auto lmbda_packed = pack_coefficient_dofs(origin_meshtag, lmbda);
+    auto h = dolfinx_contact::pack_circumradius_facet(_marker->mesh(),
+                                                      (*active_facets));
+    auto gap = pack_gap(origin_meshtag);
+    auto test_fn = pack_test_functions(origin_meshtag, gap.first);
+
+    std::vector<PetscScalar> c(mu_packed.first.size()
+                               + lmbda_packed.first.size() + h.first.size()
+                               + gap.first.size() + test_fn.first.size());
+    const int cstride = mu_packed.second + lmbda_packed.second + h.second
+                        + gap.second + test_fn.second;
+
+    const int num_facets = (*active_facets).size();
+    int offset;
+    int stride;
+    for (int i = 0; i < num_facets; i++)
+    {
+      offset = 0;
+      stride = mu_packed.second;
+      for (int j = 0; j < stride; j++)
+        c[i * cstride + offset + j] = mu_packed.first[i * stride + j];
+      offset += stride;
+      stride = lmbda_packed.second;
+      for (int j = 0; j < stride; j++)
+        c[i * cstride + offset + j] = lmbda_packed.first[i * stride + j];
+      offset += stride;
+      stride = h.second;
+      for (int j = 0; j < stride; j++)
+        c[i * cstride + offset + j] = h.first[i * stride + j];
+      offset += stride;
+      stride = gap.second;
+      for (int j = 0; j < stride; j++)
+        c[i * cstride + offset + j] = gap.first[i * stride + j];
+      offset += stride;
+      stride = test_fn.second;
+      for (int j = 0; j < stride; j++)
+        c[i * cstride + offset + j] = test_fn.first[i * stride + j];
+    }
+    return {std::move(c), cstride};
   }
 
 private:

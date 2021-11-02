@@ -47,11 +47,12 @@ def nitsche_unbiased(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dolfinx.MeshT
     # Initial condition
     def _u_initial(x):
         values = np.zeros((gdim, x.shape[1]))
-        for i in range(x.shape[1]):
-            if x[-1, i] > 0:
-                values[-1, i] = -vertical_displacement
-            else:
-                values[-1, i] = vertical_displacement
+        values[-1] = -vertical_displacement
+        # for i in range(x.shape[1]):
+        #     if x[-1, i] > 0:
+        #         values[-1, i] = -vertical_displacement
+        #     else:
+        #         values[-1, i] = vertical_displacement
         return values
 
     if initGuess is None:
@@ -72,7 +73,7 @@ def nitsche_unbiased(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dolfinx.MeshT
     # https://doi.org/10.1016/j.cma.2018.05.024
     if nitsche_bc:
         disp_vec = np.zeros(gdim)
-        disp_vec[gdim - 1] = 0.5 * vertical_displacement
+        disp_vec[gdim - 1] = vertical_displacement
         u_D = ufl.as_vector(disp_vec)
         L += - ufl.inner(sigma(u) * n, v) * ds(top_value)\
              - theta * ufl.inner(sigma(v) * n, u - u_D) * \
@@ -83,7 +84,7 @@ def nitsche_unbiased(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dolfinx.MeshT
             ds(top_value) + gamma / h * ufl.inner(du, v) * ds(top_value)
         # Nitsche bc for rigid plane
         disp_plane = np.zeros(gdim)
-        disp_plane[gdim - 1] = - 0.5 * vertical_displacement
+        #disp_plane[gdim - 1] = - 0.5 * vertical_displacement
         u_D_plane = ufl.as_vector(disp_plane)
         L += - ufl.inner(sigma(u) * n, v) * ds(surface_bottom)\
              - theta * ufl.inner(sigma(v) * n, u - u_D_plane) * \
@@ -159,7 +160,7 @@ def nitsche_unbiased(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dolfinx.MeshT
         c_0 = np.hstack([coeff_0, u_0, u_opp_0])
         c_1 = np.hstack([coeff_1, u_1, u_opp_1])
         contact.assemble_matrix(A, [], 0, kernel_jac, c_0, consts)
-        contact.assemble_matrix(A, [], 1, kernel_jac, c_1, consts)
+        #contact.assemble_matrix(A, [], 1, kernel_jac, c_1, consts)
         dolfinx.fem.assemble_matrix(A, a_cuas)
 
     # assemble rhs
@@ -178,7 +179,7 @@ def nitsche_unbiased(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dolfinx.MeshT
         c_0 = np.hstack([coeff_0, u_0, u_opp_0])
         c_1 = np.hstack([coeff_1, u_1, u_opp_1])
         contact.assemble_vector(b, 0, kernel_rhs, c_0, consts)
-        contact.assemble_vector(b, 1, kernel_rhs, c_1, consts)
+        #contact.assemble_vector(b, 1, kernel_rhs, c_1, consts)
         dolfinx.fem.assemble_vector(b, L_cuas)
 
     problem = dolfinx_cuas.NonlinearProblemCUAS(F, A, create_b, create_A)
