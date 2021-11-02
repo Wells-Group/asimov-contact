@@ -3,6 +3,7 @@
 # SPDX-License-Identifier:    MIT
 
 import dolfinx
+import basix
 import dolfinx.io
 import dolfinx_cuas
 import dolfinx_cuas.cpp
@@ -100,7 +101,8 @@ def nitsche_rigid_surface_cuas(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dol
 
     # Custom assembly
     dolfinx.log.set_log_level(dolfinx.log.LogLevel.OFF)
-    q_rule = dolfinx_cuas.cpp.QuadratureRule(mesh.topology.cell_type, q_deg, mesh.topology.dim - 1, "default")
+    q_rule = dolfinx_cuas.cpp.QuadratureRule(mesh.topology.cell_type, q_deg,
+                                             mesh.topology.dim - 1, basix.quadrature.string_to_type("default"))
     consts = np.array([gamma * E, theta])
     consts = np.hstack((consts, n_vec))
 

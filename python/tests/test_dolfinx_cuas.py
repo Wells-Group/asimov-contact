@@ -5,6 +5,7 @@
 from dolfinx_contact.helpers import (epsilon, lame_parameters, sigma_func, R_minus)
 
 import dolfinx
+import basix
 import dolfinx.io
 import dolfinx_cuas
 import dolfinx_cuas.cpp
@@ -153,7 +154,8 @@ def test_contact_kernel(theta, gamma, dim, gap):
 
         # Custom assembly
         # FIXME: assuming all facets are the same type
-        q_rule = dolfinx_cuas.cpp.QuadratureRule(mesh.topology.cell_type, q_deg, mesh.topology.dim - 1, "default")
+        q_rule = dolfinx_cuas.cpp.QuadratureRule(mesh.topology.cell_type, q_deg,
+                                                 mesh.topology.dim - 1, basix.quadrature.string_to_type("default"))
         consts = np.array([gamma * E, theta])
         consts = np.hstack((consts, n_vec))
 

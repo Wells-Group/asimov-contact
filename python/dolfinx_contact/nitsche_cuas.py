@@ -3,6 +3,7 @@
 # SPDX-License-Identifier:    MIT
 
 import dolfinx
+import basix
 import dolfinx.io
 import dolfinx_contact
 import dolfinx_cuas
@@ -91,7 +92,8 @@ def nitsche_cuas(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dolfinx.MeshTags,
         print("Dirichlet bc not implemented in custom assemblers yet.")
 
     # Custom assembly
-    q_rule = dolfinx_cuas.cpp.QuadratureRule(mesh.topology.cell_type, q_deg, mesh.topology.dim - 1, "default")
+    q_rule = dolfinx_cuas.cpp.QuadratureRule(mesh.topology.cell_type, q_deg,
+                                             mesh.topology.dim - 1, basix.quadrature.string_to_type("default"))
     consts = np.array([gamma * E, theta])
     consts = np.hstack((consts, n_vec))
 
