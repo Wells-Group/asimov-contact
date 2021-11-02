@@ -3,6 +3,7 @@
 # SPDX-License-Identifier:   MIT
 
 import dolfinx
+import basix
 import dolfinx_contact
 import dolfinx_contact.cpp
 import dolfinx_cuas
@@ -118,7 +119,8 @@ ai, aj, av = A.getValuesCSR()
 A_sp = scipy.sparse.csr_matrix((av, aj, ai), shape=A.getSize())
 plt.spy(A_sp)
 plt.savefig("test.pdf")
-q_rule = dolfinx_cuas.cpp.QuadratureRule(mesh.topology.cell_type, q_deg, mesh.topology.dim - 1, "default")
+q_rule = dolfinx_cuas.cpp.QuadratureRule(mesh.topology.cell_type, q_deg,
+                                         mesh.topology.dim - 1, basix.quadrature.string_to_type("default"))
 
 h_cells = dolfinx_contact.cpp.facet_to_cell_data(mesh, np.sort(facets_1), h_facets_1, 1)
 coeffs = dolfinx_cuas.cpp.pack_coefficients([mufunc._cpp_object, mufunc._cpp_object])

@@ -130,7 +130,7 @@ def nitsche_rigid_surface_cuas(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dol
     contact = dolfinx_contact.cpp.Contact(facet_marker, bottom_value, surface_value, V._cpp_object)
     contact.set_quadrature_degree(q_deg)
     contact.create_distance_map(0)
-    contact.create_distance_map(1)
+    # contact.create_distance_map(1)
     print("distance map backwards")
     g_vec = contact.pack_gap(0)
     g_vec_c = dolfinx_contact.cpp.facet_to_cell_data(

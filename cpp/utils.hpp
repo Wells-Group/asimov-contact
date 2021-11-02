@@ -341,8 +341,10 @@ std::pair<std::vector<PetscScalar>, int> pack_coefficient_facet(
         J.fill(0);
         auto _J = xt::view(J, q, xt::all(), xt::all());
         xt::xtensor<double, 2> dphi
-            = xt::view(dphi_c, local_index, xt::all(), q, xt::all(), 0);
+            = xt::view(dphi_ci, xt::all(), q, xt::all(), 0);
+        cmap.compute_jacobian(dphi, coordinate_dofs, _J);
         cmap.compute_jacobian_inverse(_J, xt::view(K, q, xt::all(), xt::all()));
+        detJ[q] = cmap.compute_jacobian_determinant(_J);
       }
 
       // Permute the reference values to account for the cell's orientation

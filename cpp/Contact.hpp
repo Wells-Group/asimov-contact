@@ -1048,9 +1048,12 @@ public:
       }
       return cell_facet_pairs;
     };
+    std::vector<std::int32_t> data; // will contain closest candidate facet
+    std::vector<std::int32_t> offset(1);
+    offset[0] = 0;
     const int num_qp = (*q_phys_pt)[0].shape(0);
     const int num_facets = (*puppet_facets).size();
-    std::vector<std::int32_t> data(
+    std::vector<std::int32_t> data2(
         num_qp); // will contain closest candidate facet
     xt::xtensor<std::int32_t, 3> map
         = xt::zeros<std::int32_t>({num_facets, num_qp, 2});
@@ -1071,23 +1074,26 @@ public:
         std::pair<int, double> search_result
             = dolfinx::geometry::compute_closest_entity(
                 master_bbox, point, *mesh, intermediate_result.second);
-        data[j] = search_result.first;
-        old_map(i, j) = search_result.first;
+        data2[j] = search_result.first;
+        data.push_back(search_result.first);
       }
-
-      xt::view(map, i, xt::all(), xt::all()) = get_cell_indices(data);
+      offset.push_back(data.size());
+      xt::view(map, i, xt::all(), xt::all()) = get_cell_indices(data2);
     }
-
     // save as an adjacency list _map_0_to_1 or _map_1_to_0
     if (origin_meshtag == 0)
     {
       _map_0_to_1 = map;
-      _map_0_to_1_facet = old_map;
+      _map_0_to_1_facet
+          = std::make_shared<dolfinx::graph::AdjacencyList<std::int32_t>>(
+              data, offset);
     }
     else
     {
       _map_1_to_0 = map;
-      _map_1_to_0_facet = old_map;
+      _map_1_to_0_facet
+          = std::make_shared<dolfinx::graph::AdjacencyList<std::int32_t>>(
+              data, offset);
     }
     max_links(origin_meshtag);
   }
@@ -1109,7 +1115,7 @@ public:
     const int fdim = tdim - 1;
     const xt::xtensor<double, 2>& mesh_geometry = mesh->geometry().x();
     std::vector<int32_t>* puppet_facets;
-    xt::xtensor<std::int32_t, 2>* map;
+    std::shared_ptr<dolfinx::graph::AdjacencyList<std::int32_t>> map;
     std::vector<xt::xtensor<double, 2>>* q_phys_pt;
 
     // Select which side of the contact interface to loop from and get the
@@ -1117,13 +1123,13 @@ public:
     if (origin_meshtag == 0)
     {
       puppet_facets = &_facet_0;
-      map = &_map_0_to_1_facet;
+      map = _map_0_to_1_facet;
       q_phys_pt = &_qp_phys_0;
     }
     else
     {
       puppet_facets = &_facet_1;
-      map = &_map_1_to_0_facet;
+      map = _map_1_to_0_facet;
       q_phys_pt = &_qp_phys_1;
     }
     const std::int32_t num_facets = (*puppet_facets).size();
@@ -1136,11 +1142,11 @@ public:
 
     for (int i = 0; i < num_facets; ++i)
     {
-      auto master_facets = xt::view((*map), i, xt::all());
+      auto master_facets = map->links(i);
       auto master_facet_geometry = dolfinx::mesh::entities_to_geometry(
           *mesh, fdim, master_facets, false);
       int offset = i * cstride;
-      for (int j = 0; j < (*map).shape(1); ++j)
+      for (int j = 0; j < map->num_links(i); ++j)
       {
         // Get quadrature points in physical space for the ith facet, jth
         // quadrature point
@@ -1494,8 +1500,10 @@ private:
   xt::xtensor<std::int32_t, 3> _map_1_to_0;
 
   // should be made redundant
-  xt::xtensor<std::int32_t, 2> _map_0_to_1_facet;
-  xt::xtensor<std::int32_t, 2> _map_1_to_0_facet;
+  std::shared_ptr<dolfinx::graph::AdjacencyList<std::int32_t>>
+      _map_0_to_1_facet;
+  std::shared_ptr<dolfinx::graph::AdjacencyList<std::int32_t>>
+      _map_1_to_0_facet;
   // quadrature points on physical facet for each facet on surface 0
   std::vector<xt::xtensor<double, 2>> _qp_phys_0;
   // quadrature points on physical facet for each facet on surface 1
