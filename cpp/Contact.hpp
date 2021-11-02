@@ -191,7 +191,7 @@ public:
     auto coordinate_element = basix::create_element(
         basix::element::family::P,
         dolfinx::mesh::cell_type_to_basix_type(dolfinx_cell), degree,
-        basix::element::lagrange_variant::equispaced);
+        basix::element::lagrange_variant::gll_warped);
     _phi_ref_facets = tabulate_on_ref_cell(coordinate_element);
 
     // Compute quadrature points on physical facet _qp_phys_"origin_meshtag"
@@ -357,7 +357,7 @@ public:
     auto coordinate_element = basix::create_element(
         basix::element::family::P,
         dolfinx::mesh::cell_type_to_basix_type(dolfinx_cell), degree,
-        basix::element::lagrange_variant::equispaced);
+        basix::element::lagrange_variant::gll_warped);
 
     _phi_ref_facets = tabulate_on_ref_cell(coordinate_element);
     // Compute quadrature points on physical facet _qp_phys_"origin_meshtag"
