@@ -16,7 +16,8 @@ jobs:
 
     strategy:
       matrix:
-        # Complex mode not working due to CUAS
+        # Complex mode not working in CUAS
+        petsc_mode: [real]
         petsc_int_type: [32, 64]
         CXX: [c++, clang++]
         CC: [c, clang]
@@ -27,10 +28,10 @@ jobs:
             CXX: c++
     env:
       CC: ${{ matrix.CC }}
-      CXX : ${{ matrix.CXX }
+      CXX : ${{ matrix.CXX }}
       HDF5_MPI: "ON"
       HDF5_DIR: "/usr/lib/x86_64-linux-gnu/hdf5/mpich/"
-      PETSC_ARCH: linux-gnu-real-${{ matrix.petsc_int_type }}
+      PETSC_ARCH: linux-gnu-${{ matrix.petsc_mode }}-${{ matrix.petsc_int_type }}
       OMPI_ALLOW_RUN_AS_ROOT: 1
       OMPI_ALLOW_RUN_AS_ROOT_CONFIRM: 1
       OMPI_MCA_rmaps_base_oversubscribe: 1
