@@ -16,16 +16,15 @@ jobs:
 
     strategy:
       matrix:
-       include:
         petsc_mode: [real, complex]
         petsc_int_type: [32, 64]
         CXX: [c++, clang++]
         CC: [c, clang]
-       exclude:
-        - CC: c
-          CXX: clang++
-        - CC: clang
-          C: c++
+        exclude:
+          - CC: c
+            CXX: clang++
+          - CC: clang
+            C: c++
     env:
       HDF5_MPI: "ON"
       HDF5_DIR: "/usr/lib/x86_64-linux-gnu/hdf5/mpich/"
