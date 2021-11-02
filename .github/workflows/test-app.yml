@@ -24,7 +24,7 @@ jobs:
           - CC: c
             CXX: clang++
           - CC: clang
-            C: c++
+            CC: c++
     env:
       HDF5_MPI: "ON"
       HDF5_DIR: "/usr/lib/x86_64-linux-gnu/hdf5/mpich/"
