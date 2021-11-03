@@ -317,7 +317,7 @@ kernel_fn generate_contact_kernel(
 
       // Multiply  by weight
       double sign_u = (lmbda * n_dot * tr_u + mu * epsn_u);
-      double R_minus = 1. / gamma * sign_u + (gap + u_dot_nsurf);
+      double R_minus = double(1) / gamma * sign_u + (gap + u_dot_nsurf);
       if (R_minus > 0)
         R_minus = 0;
       else
@@ -401,10 +401,15 @@ kernel_fn generate_contact_kernel(
         n_surf(i) = w[i + 2];
     }
     int c_offset = (bs - 1) * offsets[1];
-    double gamma = w[0]
-                   / c[c_offset + offsets[3]
-                       + facet_index]; // This is gamma/hdouble gamma = w[0];
+    double gamma
+        = double(w[0])
+          / double(c[c_offset + offsets[3]
+                     + facet_index]); // This is gamma/hdouble gamma = w[0];
     double theta = w[1];
+    std::cout << "w[0] old " << w[0] << "c "
+              << c[c_offset + offsets[3] + facet_index] << "gamma " << gamma
+              << "1./gamma" << c[c_offset + offsets[3] + facet_index] / w[0]
+              << " " << 1. / gamma << "\n";
 
     // If surface normal constant precompute (n_phys * n_surf)
     double n_dot = 0;
@@ -523,8 +528,8 @@ kernel_fn generate_contact_kernel(
           double sign_u = (lmbda * tr(j, l) * n_dot + mu * epsn(j, l));
           double term2 = 0;
           if (temp < 0)
-            term2
-                = 1. / gamma * (sign_u + gamma * n_surf(l) * phi_f(q, j)) * w0;
+            term2 = double(1) / gamma
+                    * (sign_u + gamma * n_surf(l) * phi_f(q, j)) * w0;
           sign_u *= w0;
           for (int i = 0; i < ndofs_cell; i++)
           { // Insert over block size in matrix

@@ -3,6 +3,7 @@
 # SPDX-License-Identifier:    MIT
 
 import dolfinx
+import basix
 import dolfinx.io
 import dolfinx_cuas
 import dolfinx_contact
@@ -16,6 +17,8 @@ from mpi4py import MPI
 
 
 kt = dolfinx_contact.cpp.Kernel
+# For debugging
+it = dolfinx.cpp.fem.IntegralType
 
 
 def nitsche_unbiased(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dolfinx.MeshTags, int, int, int, int],
@@ -103,7 +106,7 @@ def nitsche_unbiased(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dolfinx.MeshT
     contact.create_distance_map(0)
     contact.create_distance_map(1)
     # pack constants
-    consts = np.array([gamma * E, theta])
+    consts = np.array([gamma, theta])
 
     # Pack all coefficients
     def lmbda_func2(x):
@@ -144,6 +147,19 @@ def nitsche_unbiased(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dolfinx.MeshT
     coeff_0 = np.hstack([mu_packed_0, lmbda_packed_0, h_0, gap_0, test_fn_0])
     coeff_1 = np.hstack([mu_packed_1, lmbda_packed_1, h_1, gap_1, test_fn_1])
 
+    # For debugging
+    q_rule = dolfinx_cuas.cpp.QuadratureRule(mesh.topology.cell_type, q_deg,
+                                             mesh.topology.dim - 1, basix.quadrature.string_to_type("default"))
+    coeffs = dolfinx_cuas.cpp.pack_coefficients([mu2._cpp_object, lmbda2._cpp_object])
+    g_vec_c = dolfinx_contact.cpp.facet_to_cell_data(
+        mesh, bottom_facets, gap_0, gdim * q_rule.weights(0).size)
+    h_cells = dolfinx_contact.cpp.facet_to_cell_data(mesh, bottom_facets, h_0, 1)
+    coeffs = np.hstack([coeffs, h_cells, g_vec_c])
+    kernel_J = dolfinx_contact.cpp.generate_contact_kernel(
+        V._cpp_object, kt.Jac, q_rule, [u._cpp_object, mu2._cpp_object, lmbda2._cpp_object], False)
+    kernel_rhs2 = dolfinx_contact.cpp.generate_contact_kernel(V._cpp_object, kt.Rhs, q_rule,
+                                                              [u._cpp_object, mu2._cpp_object, lmbda2._cpp_object],
+                                                              False)
     # assemble jacobian
     a_cuas = dolfinx.fem.Form(a)
     kernel_jac = contact.generate_kernel(kt.Jac)
@@ -158,10 +174,17 @@ def nitsche_unbiased(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dolfinx.MeshT
         u_0 = contact.pack_coefficient_dofs(0, u._cpp_object)
         u_1 = contact.pack_coefficient_dofs(1, u._cpp_object)
         c_0 = np.hstack([coeff_0, u_0, u_opp_0])
-        c_1 = np.hstack([coeff_1, u_1, u_opp_1])
+        # c_1 = np.hstack([coeff_1, u_1, u_opp_1])
         contact.assemble_matrix(A, [], 0, kernel_jac, c_0, consts)
-        #contact.assemble_matrix(A, [], 1, kernel_jac, c_1, consts)
+        # contact.assemble_matrix(A, [], 1, kernel_jac, c_1, consts)
         dolfinx.fem.assemble_matrix(A, a_cuas)
+        u_packed = dolfinx_cuas.cpp.pack_coefficients([u._cpp_object])
+        c = np.hstack([u_packed, coeffs])
+        B = dolfinx.fem.create_matrix(a_cuas)
+        B.zeroEntries()
+        dolfinx_cuas.assemble_matrix(B, V, bottom_facets, kernel_J, c, consts, it.exterior_facet)
+        dolfinx.fem.assemble_matrix(B, a_cuas)
+        return B
 
     # assemble rhs
     L_cuas = dolfinx.fem.Form(L)
@@ -181,6 +204,14 @@ def nitsche_unbiased(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dolfinx.MeshT
         contact.assemble_vector(b, 0, kernel_rhs, c_0, consts)
         #contact.assemble_vector(b, 1, kernel_rhs, c_1, consts)
         dolfinx.fem.assemble_vector(b, L_cuas)
+        u_packed = dolfinx_cuas.cpp.pack_coefficients([u._cpp_object])
+        c = np.hstack([u_packed, coeffs])
+        b2 = dolfinx.fem.create_vector(L_cuas)
+        with b2.localForm() as b_local:
+            b_local.set(0.0)
+        dolfinx_cuas.assemble_vector(b2, V, bottom_facets, kernel_rhs2, c, consts, it.exterior_facet)
+        dolfinx.fem.assemble_vector(b2, L_cuas)
+        return b2
 
     problem = dolfinx_cuas.NonlinearProblemCUAS(F, A, create_b, create_A)
     # DEBUG: Write each step of Newton iterations
@@ -195,7 +226,7 @@ def nitsche_unbiased(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dolfinx.MeshT
     solver.atol = 1e-9
     solver.rtol = 1e-9
     solver.convergence_criterion = "incremental"
-    solver.max_it = 200
+    solver.max_it = 5
     solver.error_on_nonconvergence = True
     solver.relaxation_parameter = 0.6
 

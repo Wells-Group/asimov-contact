@@ -690,7 +690,9 @@ public:
         n_norm += n_phys[i] * n_phys[i];
       n_phys /= std::sqrt(n_norm);
 
-      double gamma = w[0] / c[2]; // This is gamma/h,  gamma = w[0];
+      double gamma = c[2] / w[0]; // This is h/gamma,  gamma = w[0];
+      std::cout << "w[0] " << w[0] << "c[2] " << c[2] << "\n";
+
       double theta = w[1];
       double mu = c[0];
       double lmbda = c[1];
@@ -777,13 +779,13 @@ public:
           }
         }
 
-        // double sign_u = lmbda * tr_u * n_dot + mu * epsn_u;
+        double sign_u = lmbda * tr_u * n_dot + mu * epsn_u;
         // double Pn_u = dolfinx_contact::dR_plus(jump_un - gamma * sign_u -
         // gap);
         const double w0 = _qw_ref_facet[facet_index][q] * detJ;
 
-        double temp
-            = (lmbda * n_dot * tr_u + mu * epsn_u) + gamma * (gap + jump_un);
+        double temp = (lmbda * n_dot * tr_u + mu * epsn_u)
+                      + (double(1) / gamma) * (gap + jump_un);
 
         // sign_u *= -theta / gamma * w0;
         // Fill contributions of facet with itself
@@ -794,22 +796,27 @@ public:
             // double sign_du = (lmbda * tr(j, l) * n_dot + mu * epsn(j, l));
             // double Pn_du
             //     = (phi_f(q, j) * n_surf(l) - (1. / gamma) * sign_du) * Pn_u;
-            double sign_u = (lmbda * tr(j, l) * n_dot + mu * epsn(j, l));
+            double sign_du = (lmbda * tr(j, l) * n_dot + mu * epsn(j, l));
             double term2 = 0;
             if (temp < 0)
-              term2 = 1. / gamma * (sign_u + gamma * n_surf(l) * phi_f(q, j))
-                      * w0;
-            sign_u *= w0;
+              term2
+                  = gamma
+                    * (sign_du + (double(1) / gamma) * n_surf(l) * phi_f(q, j))
+                    * w0;
+            sign_du *= w0;
             for (int i = 0; i < ndofs_cell; i++)
             {
               for (int b = 0; b < bs; b++)
               {
                 double v_dot_nsurf = n_surf(b) * phi_f(q, i);
                 double sign_v = (lmbda * tr(i, b) * n_dot + mu * epsn(i, b));
-                double Pn_v = gamma * v_dot_nsurf - theta * sign_v;
+                double Pn_v
+                    = (double(1) / gamma) * v_dot_nsurf - theta * sign_v;
                 A[0][(b + i * bs) * ndofs_cell * bs + l + j * bs]
-                    += -theta / gamma * sign_u * sign_v
-                       + term2 * (theta * sign_v + gamma * v_dot_nsurf);
+                    += -theta * gamma * sign_du * sign_v
+                       + term2
+                             * (theta * sign_v
+                                + (double(1) / gamma) * v_dot_nsurf);
                 for (int k = 0; k < num_links; k++)
                 {
                   // int index = 3 + cstrides[3]
