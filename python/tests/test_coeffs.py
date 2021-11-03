@@ -83,7 +83,7 @@ def test_pack_coeff_on_facet(quadrature_degree, space, degree):
     coeffs_cuas = dolfinx_contact.cpp.pack_coefficient_facet(v._cpp_object, quadrature_degree, facets)
 
     # Use prepare quadrature points and geometry for eval
-    qp_test, wts = basix.make_quadrature(basix.QuadratureRule.Default,
+    qp_test, wts = basix.make_quadrature(basix.QuadratureType.Default,
                                          basix.CellType.triangle, quadrature_degree)
     x_g = mesh.geometry.x
     tdim = mesh.topology.dim
