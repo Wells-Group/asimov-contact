@@ -128,7 +128,7 @@ def nitsche_cuas(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dolfinx.MeshTags,
 
     # RHS
     L_cuas = dolfinx.fem.Form(L)
-    kernel_rhs = dolfinx_contact.cpp.generate_contact_kernel(V._cpp_object, kt.NitscheRigidSurfaceRhs, q_rule,
+    kernel_rhs = dolfinx_contact.cpp.generate_contact_kernel(V._cpp_object, kt.Rhs, q_rule,
                                                              [u._cpp_object, mu2._cpp_object, lmbda2._cpp_object])
 
     def create_b():
@@ -145,7 +145,7 @@ def nitsche_cuas(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dolfinx.MeshTags,
     # Jacobian
     a_cuas = dolfinx.fem.Form(a)
     kernel_J = dolfinx_contact.cpp.generate_contact_kernel(
-        V._cpp_object, kt.NitscheRigidSurfaceJac, q_rule, [u._cpp_object, mu2._cpp_object, lmbda2._cpp_object])
+        V._cpp_object, kt.Jac, q_rule, [u._cpp_object, mu2._cpp_object, lmbda2._cpp_object])
 
     def create_A():
         return dolfinx.fem.create_matrix(a_cuas)

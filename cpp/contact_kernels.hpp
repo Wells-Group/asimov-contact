@@ -8,6 +8,7 @@
 
 #include <dolfinx/fem/FiniteElement.h>
 #include <dolfinx/fem/FunctionSpace.h>
+#include <dolfinx_contact/Contact.hpp>
 #include <dolfinx_cuas/QuadratureRule.hpp>
 #include <dolfinx_cuas/math.hpp>
 #include <dolfinx_cuas/utils.hpp>
@@ -18,11 +19,6 @@ using kernel_fn
 
 namespace dolfinx_contact
 {
-enum Kernel
-{
-  NitscheRigidSurfaceRhs,
-  NitscheRigidSurfaceJac
-};
 
 kernel_fn generate_contact_kernel(
     std::shared_ptr<const dolfinx::fem::FunctionSpace> V, Kernel type,
@@ -204,6 +200,7 @@ kernel_fn generate_contact_kernel(
     int c_offset = (bs - 1) * offsets[1];
     double gamma
         = w[0] / c[c_offset + offsets[3] + facet_index]; // This is gamma/h
+    std::cout << "gamma rhs " << gamma << "\n";
     double theta = w[1];
 
     // If surface normal constant precompute (n_phys * n_surf)
@@ -408,6 +405,7 @@ kernel_fn generate_contact_kernel(
     double gamma = w[0]
                    / c[c_offset + offsets[3]
                        + facet_index]; // This is gamma/hdouble gamma = w[0];
+    std::cout << "gamma jac " << gamma << "\n";
     double theta = w[1];
 
     // If surface normal constant precompute (n_phys * n_surf)
@@ -513,7 +511,7 @@ kernel_fn generate_contact_kernel(
         for (int j = 0; j < bs; j++)
         {
           tr_u += c[block_index + j] * tr(i, j);
-          epsn_u += c[block_index + +j] * epsn(i, j);
+          epsn_u += c[block_index + j] * epsn(i, j);
           u_dot_nsurf += c[block_index + j] * n_surf(j) * phi_f(q, i);
         }
       }
@@ -547,9 +545,9 @@ kernel_fn generate_contact_kernel(
   };
   switch (type)
   {
-  case dolfinx_contact::Kernel::NitscheRigidSurfaceRhs:
+  case dolfinx_contact::Kernel::Rhs:
     return nitsche_rigid_rhs;
-  case dolfinx_contact::Kernel::NitscheRigidSurfaceJac:
+  case dolfinx_contact::Kernel::Jac:
     return nitsche_rigid_jacobian;
   default:
     throw std::runtime_error("Unrecognized kernel");
