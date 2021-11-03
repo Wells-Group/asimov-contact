@@ -20,9 +20,9 @@ jobs:
         petsc_mode: [real]
         petsc_int_type: [32, 64]
         CXX: [c++, clang++]
-        CC: [c, clang]
+        CC: [cc, clang]
         exclude:
-          - CC: c
+          - CC: cc
             CXX: clang++
           - CC: clang
             CXX: c++
