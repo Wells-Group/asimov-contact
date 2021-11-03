@@ -155,7 +155,7 @@ def test_contact_kernel(theta, gamma, dim, gap):
         # Custom assembly
         # FIXME: assuming all facets are the same type
         q_rule = dolfinx_cuas.cpp.QuadratureRule(mesh.topology.cell_type, q_deg,
-                                                 mesh.topology.dim - 1, basix.quadrature.string_to_type("default"))
+                                                 mesh.topology.dim - 1, basix.QuadratureRule.Default)
         consts = np.array([gamma * E, theta])
         consts = np.hstack((consts, n_vec))
 
