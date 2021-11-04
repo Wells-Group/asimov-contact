@@ -128,8 +128,8 @@ g_vec_c = dolfinx_contact.cpp.facet_to_cell_data(
     mesh, np.sort(facets_1), gap1, gdim * q_rule.weights(0).size)
 
 kernel_one_sided = dolfinx_contact.cpp.generate_contact_kernel(V._cpp_object, kt.Jac, q_rule,
-                                                               [u_D._cpp_object, mufunc._cpp_object, mufunc._cpp_object],
-                                                               False)
+                                                               [u_D._cpp_object, mufunc._cpp_object,
+                                                                mufunc._cpp_object], False)
 B = dolfinx.fem.create_matrix(a_cuas)
 u_packed = dolfinx_cuas.cpp.pack_coefficients([u_D._cpp_object])
 
@@ -151,8 +151,8 @@ contact.assemble_vector(b1, 1, kernel_rhs, coeff_1, consts)
 
 
 kernel_one_sided_rhs = dolfinx_contact.cpp.generate_contact_kernel(V._cpp_object, kt.Rhs, q_rule,
-                                                                   [u_D._cpp_object, mufunc._cpp_object, mufunc._cpp_object],
-                                                                   False)
+                                                                   [u_D._cpp_object, mufunc._cpp_object,
+                                                                    mufunc._cpp_object], False)
 b2 = dolfinx.fem.create_vector(L_cuas)
 
 dolfinx_cuas.assemble_vector(b2, V, np.sort(facets_1), kernel_one_sided_rhs, c, consts, it.exterior_facet)

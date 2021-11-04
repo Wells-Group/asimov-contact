@@ -87,7 +87,7 @@ def nitsche_unbiased(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dolfinx.MeshT
             ds(top_value) + gamma / h * ufl.inner(du, v) * ds(top_value)
         # Nitsche bc for rigid plane
         disp_plane = np.zeros(gdim)
-        #disp_plane[gdim - 1] = - 0.5 * vertical_displacement
+        # disp_plane[gdim - 1] = - 0.5 * vertical_displacement
         u_D_plane = ufl.as_vector(disp_plane)
         L += - ufl.inner(sigma(u) * n, v) * ds(surface_bottom)\
              - theta * ufl.inner(sigma(v) * n, u - u_D_plane) * \
@@ -130,22 +130,22 @@ def nitsche_unbiased(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dolfinx.MeshT
     mu2.interpolate(mu_func2)
 
     mu_packed_0 = contact.pack_coefficient_dofs(0, mu2._cpp_object)
-    mu_packed_1 = contact.pack_coefficient_dofs(1, mu2._cpp_object)
+    # mu_packed_1 = contact.pack_coefficient_dofs(1, mu2._cpp_object)
     lmbda_packed_0 = contact.pack_coefficient_dofs(0, lmbda2._cpp_object)
-    lmbda_packed_1 = contact.pack_coefficient_dofs(1, lmbda2._cpp_object)
+    # lmbda_packed_1 = contact.pack_coefficient_dofs(1, lmbda2._cpp_object)
 
     bottom_facets = facet_marker.indices[facet_marker.values == bottom_value]
-    surface_facets = facet_marker.indices[facet_marker.values == surface_value]
+    # surface_facets = facet_marker.indices[facet_marker.values == surface_value]
     h_0 = dolfinx_contact.cpp.pack_circumradius_facet(mesh, bottom_facets)
-    h_1 = dolfinx_contact.cpp.pack_circumradius_facet(mesh, surface_facets)
+    # h_1 = dolfinx_contact.cpp.pack_circumradius_facet(mesh, surface_facets)
 
     gap_0 = contact.pack_gap(0)
     test_fn_0 = contact.pack_test_functions(0, gap_0)
-    gap_1 = contact.pack_gap(1)
-    test_fn_1 = contact.pack_test_functions(1, gap_1)
+    # gap_1 = contact.pack_gap(1)
+    # test_fn_1 = contact.pack_test_functions(1, gap_1)
 
     coeff_0 = np.hstack([mu_packed_0, lmbda_packed_0, h_0, gap_0, test_fn_0])
-    coeff_1 = np.hstack([mu_packed_1, lmbda_packed_1, h_1, gap_1, test_fn_1])
+    # coeff_1 = np.hstack([mu_packed_1, lmbda_packed_1, h_1, gap_1, test_fn_1])
 
     # For debugging
     q_rule = dolfinx_cuas.cpp.QuadratureRule(mesh.topology.cell_type, q_deg,
@@ -170,9 +170,9 @@ def nitsche_unbiased(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dolfinx.MeshT
     def A(x, A):
         u.vector[:] = x.array
         u_opp_0 = contact.pack_u_contact(0, u._cpp_object, gap_0)
-        u_opp_1 = contact.pack_u_contact(1, u._cpp_object, gap_1)
+        # u_opp_1 = contact.pack_u_contact(1, u._cpp_object, gap_1)
         u_0 = contact.pack_coefficient_dofs(0, u._cpp_object)
-        u_1 = contact.pack_coefficient_dofs(1, u._cpp_object)
+        # u_1 = contact.pack_coefficient_dofs(1, u._cpp_object)
         c_0 = np.hstack([coeff_0, u_0, u_opp_0])
         # c_1 = np.hstack([coeff_1, u_1, u_opp_1])
         contact.assemble_matrix(A, [], 0, kernel_jac, c_0, consts)
@@ -196,13 +196,13 @@ def nitsche_unbiased(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dolfinx.MeshT
     def F(x, b):
         u.vector[:] = x.array
         u_opp_0 = contact.pack_u_contact(0, u._cpp_object, gap_0)
-        u_opp_1 = contact.pack_u_contact(1, u._cpp_object, gap_1)
+        # u_opp_1 = contact.pack_u_contact(1, u._cpp_object, gap_1)
         u_0 = contact.pack_coefficient_dofs(0, u._cpp_object)
-        u_1 = contact.pack_coefficient_dofs(1, u._cpp_object)
+        # u_1 = contact.pack_coefficient_dofs(1, u._cpp_object)
         c_0 = np.hstack([coeff_0, u_0, u_opp_0])
-        c_1 = np.hstack([coeff_1, u_1, u_opp_1])
+        # c_1 = np.hstack([coeff_1, u_1, u_opp_1])
         contact.assemble_vector(b, 0, kernel_rhs, c_0, consts)
-        #contact.assemble_vector(b, 1, kernel_rhs, c_1, consts)
+        # contact.assemble_vector(b, 1, kernel_rhs, c_1, consts)
         dolfinx.fem.assemble_vector(b, L_cuas)
         u_packed = dolfinx_cuas.cpp.pack_coefficients([u._cpp_object])
         c = np.hstack([u_packed, coeffs])
