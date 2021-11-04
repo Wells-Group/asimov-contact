@@ -202,6 +202,7 @@ def nitsche_unbiased(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dolfinx.MeshT
         c_0 = np.hstack([coeff_0, u_0, u_opp_0])
         c_1 = np.hstack([coeff_1, u_1, u_opp_1])
         contact.assemble_vector(b, 0, kernel_rhs, c_0, consts)
+        # contact.assemble_vector(b, 0, kernel_rhs, c_0, consts)
         #contact.assemble_vector(b, 1, kernel_rhs, c_1, consts)
         dolfinx.fem.assemble_vector(b, L_cuas)
         u_packed = dolfinx_cuas.cpp.pack_coefficients([u._cpp_object])
@@ -226,7 +227,7 @@ def nitsche_unbiased(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dolfinx.MeshT
     solver.atol = 1e-9
     solver.rtol = 1e-9
     solver.convergence_criterion = "incremental"
-    solver.max_it = 5
+    solver.max_it = 200
     solver.error_on_nonconvergence = True
     solver.relaxation_parameter = 0.6
 
