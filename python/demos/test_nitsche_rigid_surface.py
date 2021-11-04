@@ -37,7 +37,7 @@ if __name__ == "__main__":
                              help="Youngs modulus of material")
     _nu = parser.add_argument(
         "--nu", default=0.1, type=np.float64, dest="nu", help="Poisson's ratio")
-    _disp = parser.add_argument("--disp", default=0.08, type=np.float64, dest="disp",
+    _disp = parser.add_argument("--disp", default=0.3, type=np.float64, dest="disp",
                                 help="Displacement BC in negative y direction")
     _ref = parser.add_argument("--refinements", default=2, type=np.int32,
                                dest="refs", help="Number of mesh refinements")

@@ -26,7 +26,7 @@ def nitsche_rigid_surface(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dolfinx.
     h = ufl.Circumradius(mesh)
     gamma = nitsche_parameters["gamma"] * physical_parameters["E"] / h
     n_vec = np.zeros(mesh.geometry.dim)
-    n_vec[mesh.geometry.dim - 1] = 1
+    n_vec[mesh.geometry.dim - 1] = -1
     # FIXME: more general definition of n_2 needed for surface that is not a horizontal rectangular box.
     n_2 = ufl.as_vector(n_vec)  # Normal of plane (projection onto other body)
     n = ufl.FacetNormal(mesh)
@@ -42,7 +42,7 @@ def nitsche_rigid_surface(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dolfinx.
 
     def sigma_n(v):
         # NOTE: Different normals, see summary paper
-        return -ufl.dot(sigma(v) * n, n_2)
+        return ufl.dot(sigma(v) * n, n_2)
 
     # Mimicking the plane y=-g
     bottom_facets = facet_marker.indices[facet_marker.values == bottom_value]
@@ -67,7 +67,7 @@ def nitsche_rigid_surface(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dolfinx.
                 facet2_geometry = dolfinx.cpp.mesh.entities_to_geometry(mesh, fdim, [facet_2], False)
                 coords = mesh_geometry[facet2_geometry][0]
                 dist_vec = dolfinx.cpp.geometry.compute_distance_gjk(coords, xi)
-                dist_vec_array[:gdim, i] = -dist_vec[:gdim]
+                dist_vec_array[:gdim, i] = dist_vec[:gdim]
         return dist_vec_array
 
     g_vec = dolfinx.Function(V)
@@ -83,13 +83,13 @@ def nitsche_rigid_surface(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dolfinx.
 
     # # Derivation of one sided Nitsche with gap function
     F = a - theta / gamma * sigma_n(u) * sigma_n(v) * ds(bottom_value) - L
-    F += 1 / gamma * R_minus(sigma_n(u) + gamma * (ufl.dot(g_vec, n_2) + ufl.dot(u, n_2))) * \
-        (theta * sigma_n(v) + gamma * ufl.dot(v, n_2)) * ds(bottom_value)
+    F += 1 / gamma * R_minus(sigma_n(u) + gamma * (ufl.dot(g_vec, n_2) - ufl.dot(u, n_2))) * \
+        (theta * sigma_n(v) - gamma * ufl.dot(v, n_2)) * ds(bottom_value)
     du = ufl.TrialFunction(V)
-    q = sigma_n(u) + gamma * (ufl.dot(g_vec, n_2) + ufl.dot(u, n_2))
+    q = sigma_n(u) + gamma * (ufl.dot(g_vec, n_2) - ufl.dot(u, n_2))
     J = ufl.inner(sigma(du), epsilon(v)) * ufl.dx - theta / gamma * sigma_n(du) * sigma_n(v) * ds(bottom_value)
-    J += 1 / gamma * 0.5 * (1 - ufl.sign(q)) * (sigma_n(du) + gamma * ufl.dot(du, n_2)) * \
-        (theta * sigma_n(v) + gamma * ufl.dot(v, n_2)) * ds(bottom_value)
+    J += 1 / gamma * 0.5 * (1 - ufl.sign(q)) * (sigma_n(du) - gamma * ufl.dot(du, n_2)) * \
+        (theta * sigma_n(v) - gamma * ufl.dot(v, n_2)) * ds(bottom_value)
 
     # # Nitsche for Dirichlet, another theta-scheme.
     # # https://doi.org/10.1016/j.cma.2018.05.024

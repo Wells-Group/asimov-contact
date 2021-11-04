@@ -320,7 +320,7 @@ public:
 
         // Add distance vector to coefficient array
         for (int k = 0; k < gdim; k++)
-          c[offset + j * gdim + k] -= dist_vec(k);
+          c[offset + j * gdim + k] += dist_vec(k);
       }
     }
     return {std::move(c), cstride};
@@ -386,7 +386,7 @@ public:
       {
         for (int j = 0; j < gdim; j++)
         {
-          c[offset + k * gdim + j] += (*q_phys_pt)[i](k, j);
+          c[offset + k * gdim + j] -= (*q_phys_pt)[i](k, j);
         }
         c[offset + (k + 1) * gdim - 1] += g;
       }
