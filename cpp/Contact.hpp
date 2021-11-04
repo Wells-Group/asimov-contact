@@ -791,7 +791,7 @@ public:
             double sign_du = (lmbda * tr(j, l) * n_dot + mu * epsn(j, l));
             double term2 = 0;
             if (temp < 0)
-              term2 = (gamma * sign_du - n_surf(l) * phi_f(q, j)) * w0;
+              term2 = -(gamma * sign_du - n_surf(l) * phi_f(q, j)) * w0;
 
             sign_du *= w0;
             for (int i = 0; i < ndofs_cell; i++)
@@ -802,8 +802,7 @@ public:
                 double sign_v = (lmbda * tr(i, b) * n_dot + mu * epsn(i, b));
                 double Pn_v = gamma_inv * v_dot_nsurf - theta * sign_v;
                 A[0][(b + i * bs) * ndofs_cell * bs + l + j * bs]
-                    += -theta * gamma * sign_du * sign_v
-                       + term2 * (theta * sign_v - gamma_inv * v_dot_nsurf);
+                    += -theta * gamma * sign_du * sign_v + term2 * Pn_v;
                 for (int k = 0; k < num_links; k++)
                 {
                   // int index = 3 + cstrides[3]
