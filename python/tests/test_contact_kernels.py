@@ -80,7 +80,7 @@ def test_vector_surface_kernel(dim, kernel_type, P, Q):
     gamma = 20
 
     n_vec = np.zeros(mesh.geometry.dim)
-    n_vec[mesh.geometry.dim - 1] = 1
+    n_vec[mesh.geometry.dim - 1] = -1
     # FIXME: more general definition of n_2 needed for surface that is not a horizontal rectangular box.
     n_2 = ufl.as_vector(n_vec)  # Normal of plane (projection onto other body)
     n = ufl.FacetNormal(mesh)
@@ -102,8 +102,8 @@ def test_vector_surface_kernel(dim, kernel_type, P, Q):
     gap = x[mesh.geometry.dim - 1] + g
     L = ufl.inner(sigma(u), epsilon(v)) * dx
     L += - h * theta / gamma * sigma_n(u) * sigma_n(v) * ds(1)
-    L += h / gamma * R_minus(sigma_n(u) + (gamma / h) * (gap + ufl.dot(u, n_2))) * \
-        (theta * sigma_n(v) + (gamma / h) * ufl.dot(v, n_2)) * ds(1)
+    L += h / gamma * R_minus(sigma_n(u) + (gamma / h) * (gap - ufl.dot(u, n_2))) * \
+        (theta * sigma_n(v) - (gamma / h) * ufl.dot(v, n_2)) * ds(1)
     # Compile UFL form
     cffi_options = ["-O2", "-march=native"]
     L = dolfinx.fem.Form(L, jit_parameters={"cffi_extra_compile_args": cffi_options, "cffi_libraries": ["m"]})
@@ -123,10 +123,10 @@ def test_vector_surface_kernel(dim, kernel_type, P, Q):
     h_cells = dolfinx_contact.cpp.facet_to_cell_data(mesh, facets, h_facets, 1)
     contact = dolfinx_contact.cpp.Contact(ft, 1, 1, V._cpp_object)
     contact.set_quadrature_degree(2 * P + Q + 1)
-    g_vec = contact.pack_gap_plane(0, g)
+    g_vec = contact.pack_gap_plane(0, -g)
     # FIXME: assuming all facets are the same type
     q_rule = dolfinx_cuas.cpp.QuadratureRule(mesh.topology.cell_type, 2 * P
-                                             + Q + 1, mesh.topology.dim - 1, basix.quadrature.string_to_type("default"))
+                                             + Q + 1, mesh.topology.dim - 1, basix.QuadratureType.Default)
     g_vec_c = dolfinx_contact.cpp.facet_to_cell_data(mesh, facets, g_vec, dim * q_rule.weights(0).size)
     coeffs = np.hstack([coeffs, h_cells, g_vec_c])
     L_cuas = ufl.inner(sigma(u), epsilon(v)) * dx
@@ -198,7 +198,7 @@ def test_matrix_surface_kernel(dim, kernel_type, P, Q):
     gamma = 20
 
     n_vec = np.zeros(mesh.geometry.dim)
-    n_vec[mesh.geometry.dim - 1] = 1
+    n_vec[mesh.geometry.dim - 1] = -1
     # FIXME: more general definition of n_2 needed for surface that is not a horizontal rectangular box.
     n_2 = ufl.as_vector(n_vec)  # Normal of plane (projection onto other body)
     n = ufl.FacetNormal(mesh)
@@ -219,11 +219,11 @@ def test_matrix_surface_kernel(dim, kernel_type, P, Q):
     x = ufl.SpatialCoordinate(mesh)
     gap = x[mesh.geometry.dim - 1] + g
     h = ufl.Circumradius(mesh)
-    q = sigma_n(u) + gamma / h * (gap + ufl.dot(u, n_2))
+    q = sigma_n(u) + gamma / h * (gap - ufl.dot(u, n_2))
     a = ufl.inner(sigma(du), epsilon(v)) * dx
     a += - h * theta / gamma * sigma_n(du) * sigma_n(v) * ds(1)
-    a += h / gamma * 0.5 * (1 - ufl.sign(q)) * (sigma_n(du) + gamma / h * ufl.dot(du, n_2)) * \
-        (theta * sigma_n(v) + gamma / h * ufl.dot(v, n_2)) * ds(1)
+    a += h / gamma * 0.5 * (1 - ufl.sign(q)) * (sigma_n(du) - gamma / h * ufl.dot(du, n_2)) * \
+        (theta * sigma_n(v) - gamma / h * ufl.dot(v, n_2)) * ds(1)
     # Compile UFL form
     cffi_options = ["-O2", "-march=native"]
     a = dolfinx.fem.Form(a, jit_parameters={"cffi_extra_compile_args": cffi_options, "cffi_libraries": ["m"]})
@@ -236,7 +236,7 @@ def test_matrix_surface_kernel(dim, kernel_type, P, Q):
 
     # Custom assembly
     q_rule = dolfinx_cuas.cpp.QuadratureRule(mesh.topology.cell_type, 2 * P
-                                             + Q + 1, mesh.topology.dim - 1, basix.quadrature.string_to_type("default"))
+                                             + Q + 1, mesh.topology.dim - 1, basix.QuadratureType.Default)
     consts = np.array([gamma, theta])
     consts = np.hstack((consts, n_vec))
     coeffs = dolfinx_cuas.cpp.pack_coefficients([u._cpp_object, mu._cpp_object, lmbda._cpp_object])
@@ -244,7 +244,7 @@ def test_matrix_surface_kernel(dim, kernel_type, P, Q):
     h_cells = dolfinx_contact.cpp.facet_to_cell_data(mesh, facets, h_facets, 1)
     contact = dolfinx_contact.cpp.Contact(ft, 1, 1, V._cpp_object)
     contact.set_quadrature_degree(2 * P + Q + 1)
-    g_vec = contact.pack_gap_plane(0, g)
+    g_vec = contact.pack_gap_plane(0, -g)
     # FIXME: Assumption of constant facet will break on prisms
     g_vec_c = dolfinx_contact.cpp.facet_to_cell_data(mesh, facets, g_vec, dim * q_rule.weights(0).size)
     coeffs = np.hstack([coeffs, h_cells, g_vec_c])

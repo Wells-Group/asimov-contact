@@ -17,7 +17,6 @@
 #include <dolfinx/fem/utils.h>
 #include <dolfinx/mesh/Mesh.h>
 #include <dolfinx_cuas/QuadratureRule.hpp>
-#include <xtensor/xio.hpp>
 
 namespace dolfinx_contact
 {

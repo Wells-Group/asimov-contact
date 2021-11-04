@@ -226,7 +226,7 @@ def nitsche_unbiased(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dolfinx.MeshT
     solver.atol = 1e-9
     solver.rtol = 1e-9
     solver.convergence_criterion = "incremental"
-    solver.max_it = 5
+    solver.max_it = 200
     solver.error_on_nonconvergence = True
     solver.relaxation_parameter = 0.6
 
