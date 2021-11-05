@@ -23,6 +23,7 @@
 #include <dolfinx_cuas/utils.hpp>
 #include <iostream>
 #include <xtensor/xindex_view.hpp>
+#include <xtensor/xio.hpp>
 #include <xtl/xspan.hpp>
 
 using contact_kernel_fn = std::function<void(
@@ -512,8 +513,8 @@ public:
         n_norm += n_phys[i] * n_phys[i];
       n_phys /= std::sqrt(n_norm);
 
-      double gamma = w[0] / c[2]; // This is gamma/h,  gamma = w[0];
-      double gamma_inv = c[2] / w[0];
+      double gamma = c[2] / w[0]; // This is h/gamma,  gamma = w[0];
+      double gamma_inv = w[0] / c[2];
       double theta = w[1];
       double mu = c[0];
       double lmbda = c[1];
@@ -600,13 +601,8 @@ public:
         }
         double sign_u = lmbda * tr_u * n_dot + mu * epsn_u;
         const double w0 = _qw_ref_facet[facet_index][q] * detJ;
-        // double Pn_u
-        //     = dolfinx_contact::R_plus(jump_un - (1. / gamma) * sign_u - gap)
-        //       * w0;
-
         double Pn_u
-            = dolfinx_contact::R_plus((jump_un - gap) - gamma_inv * sign_u)
-              * w0;
+            = dolfinx_contact::R_plus((jump_un - gap) - gamma * sign_u) * w0;
         sign_u *= w0;
         // Fill contributions of facet with itself
 
@@ -617,17 +613,17 @@ public:
             double v_dot_nsurf = n_surf(n) * phi_f(q, i);
             double sign_v = (lmbda * tr(i, n) * n_dot + mu * epsn(i, n));
             // This is (1./gamma)*Pn_v to avoid the product gamma*(1./gamma)
-            double Pn_v = gamma * v_dot_nsurf - theta * sign_v;
+            double Pn_v = gamma_inv * v_dot_nsurf - theta * sign_v;
             b[0][n + i * bs]
-                += -theta * gamma_inv * sign_v * sign_u + Pn_u * Pn_v;
+                += 0.5 * (-theta * gamma * sign_v * sign_u + Pn_u * Pn_v);
 
             for (int k = 0; k < num_links; k++)
             {
               int index = 3 + cstrides[3] + k * num_q_points * ndofs_cell * bs
-                          + i * num_q_points * bs + q * bs + n;
+                          + i * num_q_points * bs + q * bs;
               double v_n_opp = c[index] * n_surf(n);
 
-              // b[k][n + i * bs] += 0.5 * (1. / gamma) * v_n_opp * Pn_u;
+              // b[k + 1][n + i * bs] -= 0.5 * gamma_inv * v_n_opp * Pn_u;
             }
           }
         }
@@ -770,28 +766,19 @@ public:
                    * n_surf(j);
           }
         }
-
         double sign_u = lmbda * tr_u * n_dot + mu * epsn_u;
-        // double Pn_u = dolfinx_contact::dR_plus(jump_un - gamma * sign_u -
-        // gap);
-        const double w0 = _qw_ref_facet[facet_index][q] * detJ;
+        double Pn_u
+            = dolfinx_contact::dR_plus((jump_un - gap) - gamma * sign_u);
 
-        double temp = (lmbda * n_dot * tr_u + mu * epsn_u)
-                      + gamma_inv * (gap - jump_un);
-
-        // sign_u *= -theta / gamma * w0;
         // Fill contributions of facet with itself
+        const double w0 = _qw_ref_facet[facet_index][q] * detJ;
         for (int j = 0; j < ndofs_cell; j++)
         {
           for (int l = 0; l < bs; l++)
           {
-            // double sign_du = (lmbda * tr(j, l) * n_dot + mu * epsn(j, l));
-            // double Pn_du
-            //     = (phi_f(q, j) * n_surf(l) - (1. / gamma) * sign_du) * Pn_u;
             double sign_du = (lmbda * tr(j, l) * n_dot + mu * epsn(j, l));
-            double term2 = 0;
-            if (temp < 0)
-              term2 = -(gamma * sign_du - n_surf(l) * phi_f(q, j)) * w0;
+            double Pn_du
+                = (phi_f(q, j) * n_surf(l) - gamma * sign_du) * Pn_u * w0;
 
             sign_du *= w0;
             for (int i = 0; i < ndofs_cell; i++)
@@ -802,24 +789,24 @@ public:
                 double sign_v = (lmbda * tr(i, b) * n_dot + mu * epsn(i, b));
                 double Pn_v = gamma_inv * v_dot_nsurf - theta * sign_v;
                 A[0][(b + i * bs) * ndofs_cell * bs + l + j * bs]
-                    += -theta * gamma * sign_du * sign_v + term2 * Pn_v;
+                    += 0.5 * (-theta * gamma * sign_du * sign_v + Pn_du * Pn_v);
                 for (int k = 0; k < num_links; k++)
                 {
-                  // int index = 3 + cstrides[3]
-                  //             + k * num_q_points * ndofs_cell * bs
-                  //             + j * num_q_points * bs + q * bs + l;
-                  // double du_n_opp = c[index] * n_surf(l) * w0 * Pn_u;
-                  // index = 3 + cstrides[3] + k * num_q_points * ndofs_cell *
-                  // bs
-                  //         + i * num_q_points * bs + q * bs + b;
-                  // double v_n_opp = c[index] * n_surf(b);
+                  int index = 3 + cstrides[3]
+                              + k * num_q_points * ndofs_cell * bs
+                              + j * num_q_points * bs + q * bs + l;
+                  double du_n_opp = c[index] * n_surf(l);
 
+                  du_n_opp *= w0 * Pn_u;
+                  index = 3 + cstrides[3] + k * num_q_points * ndofs_cell * bs
+                          + i * num_q_points * bs + q * bs + b;
+                  double v_n_opp = c[index] * n_surf(b);
                   // A[3 * k + 1][(b + i * bs) * ndofs_cell * bs + l + j * bs]
-                  //+= 0.5 * (1. / gamma) * du_n_opp * Pn_v;
+                  //     -= 0.5 * du_n_opp * Pn_v;
                   // A[3 * k + 2][(b + i * bs) * ndofs_cell * bs + l + j * bs]
-                  //     += 0.5 * (1. / gamma) * Pn_du * v_n_opp;
+                  //     -= 0.5 * gamma_inv * Pn_du * v_n_opp;
                   // A[3 * k + 3][(b + i * bs) * ndofs_cell * bs + l + j * bs]
-                  //     -= 0.5 * (1. / gamma) * du_n_opp * v_n_opp;
+                  //     += 0.5 * gamma_inv * du_n_opp * v_n_opp;
                 }
               }
             }
@@ -1232,7 +1219,7 @@ public:
         for (int k = 0; k < gdim; k++)
         {
           q_points(j, k) = (*q_phys_pt)[i](j, k)
-                           - gap[i * gdim * num_q_points + j * gdim + k];
+                           + gap[i * gdim * num_q_points + j * gdim + k];
         }
       }
       std::iota(perm.begin(), perm.end(), 0);
@@ -1329,7 +1316,7 @@ public:
         for (std::size_t j = 0; j < gdim; ++j)
         {
           points(q, j) = (*q_phys_pt)[i](q, j)
-                         - gap[i * gdim * num_q_points + q * gdim + j];
+                         + gap[i * gdim * num_q_points + q * gdim + j];
           cells[q] = (*map)(i, q, 0);
         }
       }
