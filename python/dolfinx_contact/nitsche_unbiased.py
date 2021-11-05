@@ -3,7 +3,6 @@
 # SPDX-License-Identifier:    MIT
 
 import dolfinx
-import basix
 import dolfinx.io
 import dolfinx_cuas
 import dolfinx_contact
@@ -11,7 +10,7 @@ import dolfinx_contact.cpp
 import numpy as np
 import ufl
 from typing import Tuple
-from dolfinx_contact.helpers import (epsilon, lame_parameters, rigid_motions_nullspace, sigma_func)
+from dolfinx_contact.helpers import (epsilon, lame_parameters, sigma_func)
 from petsc4py import PETSc
 from mpi4py import MPI
 
