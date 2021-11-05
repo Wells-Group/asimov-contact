@@ -77,6 +77,21 @@ PYBIND11_MODULE(cpp, m)
           "Create a PETSc Mat for two-sided contact.")
       .def("facet_0", &dolfinx_contact::Contact::facet_0)
       .def("facet_1", &dolfinx_contact::Contact::facet_1)
+      .def("qp_phys",
+           [](dolfinx_contact::Contact& self, int origin_meshtag, int facet)
+           {
+             if (origin_meshtag == 0)
+             {
+
+               auto qp = self.qp_phys_0()[facet];
+               return dolfinx_contact_wrappers::xt_as_pyarray(std::move(qp));
+             }
+             else
+             {
+               auto qp = self.qp_phys_1()[facet];
+               return dolfinx_contact_wrappers::xt_as_pyarray(std::move(qp));
+             }
+           })
       .def("set_quadrature_degree",
            &dolfinx_contact::Contact::set_quadrature_degree)
       .def("generate_kernel",

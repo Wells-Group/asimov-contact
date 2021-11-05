@@ -586,7 +586,6 @@ public:
         std::size_t offset_u = cstrides[0] + cstrides[1] + cstrides[2]
                                + cstrides[3] + cstrides[4];
 
-        std::size_t offset_u_opp = offset_u + cstrides[5] + q * bs;
         for (int i = 0; i < ndofs_cell; i++)
         {
           std::size_t block_index = offset_u + i * bs;
@@ -594,11 +593,12 @@ public:
           {
             tr_u += c[block_index + j] * tr(i, j);
             epsn_u += c[block_index + j] * epsn(i, j);
-            jump_un
-                += (c[block_index + j] * phi_f(q, i)) // - c[offset_u_opp + j])
-                   * n_surf(j);
+            jump_un += c[block_index + j] * phi_f(q, i) * n_surf(j);
           }
         }
+        std::size_t offset_u_opp = offset_u + cstrides[5] + q * bs;
+        for (int j = 0; j < bs; ++j)
+          jump_un += -c[offset_u_opp + j] * n_surf(j);
         double sign_u = lmbda * tr_u * n_dot + mu * epsn_u;
         const double w0 = _qw_ref_facet[facet_index][q] * detJ;
         double Pn_u
@@ -620,10 +620,10 @@ public:
             for (int k = 0; k < num_links; k++)
             {
               int index = 3 + cstrides[3] + k * num_q_points * ndofs_cell * bs
-                          + i * num_q_points * bs + q * bs;
+                          + i * num_q_points * bs + q * bs + n;
               double v_n_opp = c[index] * n_surf(n);
 
-              // b[k + 1][n + i * bs] -= 0.5 * gamma_inv * v_n_opp * Pn_u;
+              b[k + 1][n + i * bs] -= 0.5 * gamma_inv * v_n_opp * Pn_u;
             }
           }
         }
@@ -753,7 +753,6 @@ public:
         double jump_un = 0;
         std::size_t offset_u = cstrides[0] + cstrides[1] + cstrides[2]
                                + cstrides[3] + cstrides[4];
-        std::size_t offset_u_opp = offset_u + cstrides[5] + q * bs;
         for (int i = 0; i < ndofs_cell; i++)
         {
           std::size_t block_index = offset_u + i * bs;
@@ -761,11 +760,12 @@ public:
           {
             tr_u += c[block_index + j] * tr(i, j);
             epsn_u += c[block_index + j] * epsn(i, j);
-            jump_un
-                += (c[block_index + j] * phi_f(q, i)) // - c[offset_u_opp + j])
-                   * n_surf(j);
+            jump_un += c[block_index + j] * phi_f(q, i) * n_surf(j);
           }
         }
+        std::size_t offset_u_opp = offset_u + cstrides[5] + q * bs;
+        for (int j = 0; j < bs; ++j)
+          jump_un += -c[offset_u_opp + j] * n_surf(j);
         double sign_u = lmbda * tr_u * n_dot + mu * epsn_u;
         double Pn_u
             = dolfinx_contact::dR_plus((jump_un - gap) - gamma * sign_u);
@@ -801,12 +801,12 @@ public:
                   index = 3 + cstrides[3] + k * num_q_points * ndofs_cell * bs
                           + i * num_q_points * bs + q * bs + b;
                   double v_n_opp = c[index] * n_surf(b);
-                  // A[3 * k + 1][(b + i * bs) * ndofs_cell * bs + l + j * bs]
-                  //     -= 0.5 * du_n_opp * Pn_v;
-                  // A[3 * k + 2][(b + i * bs) * ndofs_cell * bs + l + j * bs]
-                  //     -= 0.5 * gamma_inv * Pn_du * v_n_opp;
-                  // A[3 * k + 3][(b + i * bs) * ndofs_cell * bs + l + j * bs]
-                  //     += 0.5 * gamma_inv * du_n_opp * v_n_opp;
+                  A[3 * k + 1][(b + i * bs) * ndofs_cell * bs + l + j * bs]
+                      -= 0.5 * du_n_opp * Pn_v;
+                  A[3 * k + 2][(b + i * bs) * ndofs_cell * bs + l + j * bs]
+                      -= 0.5 * gamma_inv * Pn_du * v_n_opp;
+                  A[3 * k + 3][(b + i * bs) * ndofs_cell * bs + l + j * bs]
+                      += 0.5 * gamma_inv * du_n_opp * v_n_opp;
                 }
               }
             }
