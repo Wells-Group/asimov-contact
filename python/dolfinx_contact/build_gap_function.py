@@ -61,7 +61,7 @@ def facet_master_puppet_relation(mesh, puppet_facets, candidate_facets, quadratu
     if quadrature_degree is not None:
         # FIXME: Does not work for prism meshes
         basix_facet = _dolfinx_to_basix_celltype[dolfinx.cpp.mesh.cell_entity_type(cell_type, fdim, 0)]
-        quadrature_points, _ = basix.make_quadrature("default", basix_facet, quadrature_degree)
+        quadrature_points, _ = basix.make_quadrature(basix.QuadratureType.Default, basix_facet, quadrature_degree)
 
         # Tabulate basis functions at quadrature points
         # FIXME: Does not work for prism meshes
@@ -71,8 +71,8 @@ def facet_master_puppet_relation(mesh, puppet_facets, candidate_facets, quadratu
         # Push forward quadrature points on reference facet to reference cell
         surface_element = basix.create_element(basix.finite_element.string_to_family("Lagrange", surface_str),
                                                basix.cell.string_to_type(surface_str),
-                                               degree, basix.LagrangeVariant.equispaced)
-        c_tab = surface_element.tabulate_x(0, quadrature_points)
+                                               degree, basix.LagrangeVariant.gll_warped)
+        c_tab = surface_element.tabulate(0, quadrature_points)
         phi_s = c_tab[0, :, :, 0]  # Assuming value_size == 1 for coordinate element
         q_cell = {}
         for i, facet in enumerate(facet_topology):

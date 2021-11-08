@@ -3,6 +3,7 @@
 # SPDX-License-Identifier:    MIT
 
 import dolfinx
+import basix
 import dolfinx.io
 import dolfinx_cuas
 import dolfinx_cuas.cpp
@@ -14,8 +15,6 @@ from mpi4py import MPI
 from petsc4py import PETSc
 from typing import Tuple
 from dolfinx_contact.helpers import (epsilon, lame_parameters, rigid_motions_nullspace, sigma_func)
-# import scipy.sparse
-# import matplotlib.pylab as plt
 
 kt = dolfinx_contact.cpp.Kernel
 it = dolfinx.cpp.fem.IntegralType
@@ -100,7 +99,8 @@ def nitsche_rigid_surface_cuas(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dol
 
     # Custom assembly
     dolfinx.log.set_log_level(dolfinx.log.LogLevel.OFF)
-    q_rule = dolfinx_cuas.cpp.QuadratureRule(mesh.topology.cell_type, q_deg, mesh.topology.dim - 1, "default")
+    q_rule = dolfinx_cuas.cpp.QuadratureRule(mesh.topology.cell_type, q_deg,
+                                             mesh.topology.dim - 1, basix.QuadratureType.Default)
     consts = np.array([gamma * E, theta])
     consts = np.hstack((consts, n_vec))
 
@@ -128,8 +128,6 @@ def nitsche_rigid_surface_cuas(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dol
     contact = dolfinx_contact.cpp.Contact(facet_marker, bottom_value, surface_value, V._cpp_object)
     contact.set_quadrature_degree(q_deg)
     contact.create_distance_map(0)
-    contact.create_distance_map(1)
-    print("distance map backwards")
     g_vec = contact.pack_gap(0)
     g_vec_c = dolfinx_contact.cpp.facet_to_cell_data(
         mesh, bottom_facets, g_vec, gdim * q_rule.weights(0).size)

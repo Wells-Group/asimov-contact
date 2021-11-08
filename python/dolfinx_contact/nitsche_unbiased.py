@@ -10,7 +10,7 @@ import dolfinx_contact.cpp
 import numpy as np
 import ufl
 from typing import Tuple
-from dolfinx_contact.helpers import (epsilon, lame_parameters, rigid_motions_nullspace, sigma_func)
+from dolfinx_contact.helpers import (epsilon, lame_parameters, sigma_func)
 from petsc4py import PETSc
 from mpi4py import MPI
 
@@ -24,7 +24,7 @@ def nitsche_unbiased(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dolfinx.MeshT
                      vertical_displacement: float = -0.1, nitsche_bc: bool = True, initGuess=None):
     (facet_marker, top_value, bottom_value, surface_value, surface_bottom) = mesh_data
     # quadrature degree
-    q_deg = 3
+    q_deg = 10
     # Nitche parameters and variables
     theta = nitsche_parameters["theta"]
     gamma = nitsche_parameters["gamma"] * physical_parameters["E"]
@@ -47,8 +47,9 @@ def nitsche_unbiased(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dolfinx.MeshT
     # Initial condition
     def _u_initial(x):
         values = np.zeros((gdim, x.shape[1]))
+        # values[-1] = -vertical_displacement
         for i in range(x.shape[1]):
-            if x[-1, i] > 0:
+            if x[-1, i] > 0.1:
                 values[-1, i] = -vertical_displacement
             else:
                 values[-1, i] = vertical_displacement
@@ -83,7 +84,7 @@ def nitsche_unbiased(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dolfinx.MeshT
             ds(top_value) + gamma / h * ufl.inner(du, v) * ds(top_value)
         # Nitsche bc for rigid plane
         disp_plane = np.zeros(gdim)
-        disp_plane[gdim - 1] = - 0.5 * vertical_displacement
+        disp_plane[gdim - 1] = -0.5 * vertical_displacement
         u_D_plane = ufl.as_vector(disp_plane)
         L += - ufl.inner(sigma(u) * n, v) * ds(surface_bottom)\
              - theta * ufl.inner(sigma(v) * n, u - u_D_plane) * \
@@ -102,7 +103,7 @@ def nitsche_unbiased(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dolfinx.MeshT
     contact.create_distance_map(0)
     contact.create_distance_map(1)
     # pack constants
-    consts = np.array([gamma * E, theta])
+    consts = np.array([gamma, theta])
 
     # Pack all coefficients
     def lmbda_func2(x):
@@ -188,8 +189,8 @@ def nitsche_unbiased(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dolfinx.MeshT
     # xdmf.write_mesh(mesh)
 
     solver = dolfinx_cuas.NewtonSolver(MPI.COMM_WORLD, problem)
-    null_space = rigid_motions_nullspace(V)
-    solver.A.setNearNullSpace(null_space)
+    # null_space = rigid_motions_nullspace(V)
+    # solver.A.setNearNullSpace(null_space)
     # Set Newton solver options
     solver.atol = 1e-9
     solver.rtol = 1e-9

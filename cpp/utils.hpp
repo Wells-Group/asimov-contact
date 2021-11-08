@@ -17,7 +17,6 @@
 #include <dolfinx/fem/utils.h>
 #include <dolfinx/mesh/Mesh.h>
 #include <dolfinx_cuas/QuadratureRule.hpp>
-#include <xtensor/xio.hpp>
 
 namespace dolfinx_contact
 {
@@ -72,7 +71,8 @@ std::pair<std::vector<PetscScalar>, int> pack_coefficient_quadrature(
 
   // Tabulate function at quadrature points
   auto [points, weights] = basix::quadrature::make_quadrature(
-      "default", dolfinx::mesh::cell_type_to_basix_type(cell_type), q);
+      basix::quadrature::type::Default,
+      dolfinx::mesh::cell_type_to_basix_type(cell_type), q);
   const std::size_t num_points = weights.size();
   xt::xtensor<double, 4> coeff_basis({1, num_points, num_dofs, vs});
   element->tabulate(coeff_basis, points, 0);
@@ -331,13 +331,16 @@ std::pair<std::vector<PetscScalar>, int> pack_coefficient_facet(
         for (std::size_t j = 0; j < gdim; ++j)
           coordinate_dofs(i, j) = x_g(x_dofs[i], j);
 
+      auto dphi_ci = xt::view(dphi_c, local_index, xt::all(), xt::all(),
+                              xt::all(), xt::all());
+
       // NOTE: This can be simplified in affine case
       for (std::size_t q = 0; q < num_points; ++q)
       {
         J.fill(0);
         auto _J = xt::view(J, q, xt::all(), xt::all());
         xt::xtensor<double, 2> dphi
-            = xt::view(dphi_c, local_index, xt::all(), q, xt::all(), 0);
+            = xt::view(dphi_ci, xt::all(), q, xt::all(), 0);
         cmap.compute_jacobian(dphi, coordinate_dofs, _J);
         cmap.compute_jacobian_inverse(_J, xt::view(K, q, xt::all(), xt::all()));
         detJ[q] = cmap.compute_jacobian_determinant(_J);
@@ -561,6 +564,9 @@ pack_circumradius_facet(std::shared_ptr<const dolfinx::mesh::Mesh> mesh,
     for (std::size_t i = 0; i < num_dofs_g; ++i)
       for (std::size_t j = 0; j < gdim; ++j)
         coordinate_dofs(i, j) = x_g(x_dofs[i], j);
+
+    auto dphi_ci = xt::view(dphi_c, local_index, xt::all(), xt::all(),
+                            xt::all(), xt::all());
 
     J.fill(0);
     auto _J = xt::view(J, 0, xt::all(), xt::all());

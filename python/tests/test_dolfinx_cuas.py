@@ -5,6 +5,7 @@
 from dolfinx_contact.helpers import (epsilon, lame_parameters, sigma_func, R_minus)
 
 import dolfinx
+import basix
 import dolfinx.io
 import dolfinx_cuas
 import dolfinx_cuas.cpp
@@ -97,7 +98,7 @@ def test_contact_kernel(theta, gamma, dim, gap):
         h = ufl.Circumradius(mesh)
         gammah = gamma * E / h
         n_vec = np.zeros(mesh.geometry.dim)
-        n_vec[mesh.geometry.dim - 1] = 1
+        n_vec[mesh.geometry.dim - 1] = -1
         n_2 = ufl.as_vector(n_vec)  # Normal of plane (projection onto other body)
         n = ufl.FacetNormal(mesh)
         mu_func, lambda_func = lame_parameters(False)
@@ -109,9 +110,9 @@ def test_contact_kernel(theta, gamma, dim, gap):
             # NOTE: Different normals, see summary paper
             return ufl.dot(sigma(v) * n, n_2)
 
-        # Mimicking the plane y=-g
+        # Mimicking the plane y=g
         x = ufl.SpatialCoordinate(mesh)
-        gap = x[mesh.geometry.dim - 1] + g
+        gap = x[mesh.geometry.dim - 1] - g
         g_vec = [i for i in range(mesh.geometry.dim)]
         g_vec[mesh.geometry.dim - 1] = gap
 
@@ -127,8 +128,8 @@ def test_contact_kernel(theta, gamma, dim, gap):
 
         # Derivation of one sided Nitsche with gap function
         F = a - theta / gammah * sigma_n(u) * sigma_n(v) * ds(bottom_value)
-        F += 1 / gammah * R_minus(sigma_n(u) + gammah * (gap + ufl.dot(u, n_2))) * \
-            (theta * sigma_n(v) + gammah * ufl.dot(v, n_2)) * ds(bottom_value)
+        F += 1 / gammah * R_minus(sigma_n(u) + gammah * (gap - ufl.dot(u, n_2))) * \
+            (theta * sigma_n(v) - gammah * ufl.dot(v, n_2)) * ds(bottom_value)
 
         u.interpolate(_u_initial)
         L = dolfinx.fem.Form(F)
@@ -139,10 +140,10 @@ def test_contact_kernel(theta, gamma, dim, gap):
         dolfinx.fem.assemble_vector(b, L)
         b.assemble()
 
-        q = sigma_n(u) + gammah * (gap + ufl.dot(u, n_2))
+        q = sigma_n(u) + gammah * (gap - ufl.dot(u, n_2))
         J = ufl.inner(sigma(du), epsilon(v)) * ufl.dx - theta / gammah * sigma_n(du) * sigma_n(v) * ds(bottom_value)
-        J += 1 / gammah * 0.5 * (1 - ufl.sign(q)) * (sigma_n(du) + gammah * ufl.dot(du, n_2)) * \
-            (theta * sigma_n(v) + gammah * ufl.dot(v, n_2)) * ds(bottom_value)
+        J += 1 / gammah * 0.5 * (1 - ufl.sign(q)) * (sigma_n(du) - gammah * ufl.dot(du, n_2)) * \
+            (theta * sigma_n(v) - gammah * ufl.dot(v, n_2)) * ds(bottom_value)
         a = dolfinx.fem.Form(J)
         A = dolfinx.fem.create_matrix(a)
 
@@ -153,7 +154,8 @@ def test_contact_kernel(theta, gamma, dim, gap):
 
         # Custom assembly
         # FIXME: assuming all facets are the same type
-        q_rule = dolfinx_cuas.cpp.QuadratureRule(mesh.topology.cell_type, q_deg, mesh.topology.dim - 1, "default")
+        q_rule = dolfinx_cuas.cpp.QuadratureRule(mesh.topology.cell_type, q_deg,
+                                                 mesh.topology.dim - 1, basix.QuadratureType.Default)
         consts = np.array([gamma * E, theta])
         consts = np.hstack((consts, n_vec))
 
@@ -205,7 +207,7 @@ def test_contact_kernel(theta, gamma, dim, gap):
         dolfinx_cuas.assemble_matrix(B, V, bottom_facets, kernel, coeffs, consts, it.exterior_facet)
         dolfinx.fem.assemble_matrix(B, a_cuas)
         B.assemble()
-
+        assert(np.allclose(b.array, b2.array))
         # Compare matrices, first norm, then entries
         assert np.isclose(A.norm(), B.norm())
         compare_matrices(A, B, atol=1e-7)
