@@ -92,6 +92,8 @@ PYBIND11_MODULE(cpp, m)
                return dolfinx_contact_wrappers::xt_as_pyarray(std::move(qp));
              }
            })
+      .def("map_0_to_1", &dolfinx_contact::Contact::map_0_to_1_facet)
+      .def("map_1_to_0", &dolfinx_contact::Contact::map_1_to_0_facet)
       .def("set_quadrature_degree",
            &dolfinx_contact::Contact::set_quadrature_degree)
       .def("generate_kernel",
