@@ -59,9 +59,10 @@ def nitsche_rigid_surface(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dolfinx.
     def gap(x):
         # gap = -x[mesh.geometry.dim - 1] - g
         dist_vec_array = np.zeros((gdim, x.shape[1]))
+        facets = dolfinx.cpp.geometry.compute_closest_entity(master_bbox, midpoint_tree, mesh, np.transpose(x))
         for i in range(x.shape[1]):
             xi = x[:, i]
-            facet = dolfinx.cpp.geometry.compute_closest_entity(master_bbox, midpoint_tree, mesh, xi)[0]
+            facet = facets[i]
             if (np.argwhere(np.array(bottom_facets) == facet)).shape[0] > 0:
                 index = np.argwhere(np.array(bottom_facets) == facet)[0, 0]
                 facet_geometry = dolfinx.cpp.mesh.entities_to_geometry(mesh, fdim, [facet], False)
