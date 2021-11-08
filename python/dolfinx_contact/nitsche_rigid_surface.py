@@ -54,20 +54,25 @@ def nitsche_rigid_surface(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dolfinx.
     lookup = contact.map_0_to_1()
     bottom_facets = contact.facet_0()
     master_bbox = dolfinx.cpp.geometry.BoundingBoxTree(mesh, fdim, bottom_facets)
+    midpoint_tree = dolfinx.cpp.geometry.create_midpoint_tree(mesh, fdim, bottom_facets)
 
     def gap(x):
         # gap = -x[mesh.geometry.dim - 1] - g
         dist_vec_array = np.zeros((gdim, x.shape[1]))
         for i in range(x.shape[1]):
             xi = x[:, i]
-            facet, R = dolfinx.cpp.geometry.compute_closest_entity(master_bbox, xi, mesh, R=10)
-            index = np.argwhere(np.array(bottom_facets) == facet)[0, 0]
-            if np.isclose(R, 0):
-                facet_2 = lookup.links(index)[0]
-                facet2_geometry = dolfinx.cpp.mesh.entities_to_geometry(mesh, fdim, [facet_2], False)
-                coords = mesh_geometry[facet2_geometry][0]
-                dist_vec = dolfinx.cpp.geometry.compute_distance_gjk(coords, xi)
-                dist_vec_array[:gdim, i] = dist_vec[:gdim]
+            facet = dolfinx.cpp.geometry.compute_closest_entity(master_bbox, midpoint_tree, mesh, xi)[0]
+            if (np.argwhere(np.array(bottom_facets) == facet)).shape[0] > 0:
+                index = np.argwhere(np.array(bottom_facets) == facet)[0, 0]
+                facet_geometry = dolfinx.cpp.mesh.entities_to_geometry(mesh, fdim, [facet], False)
+                coords0 = mesh_geometry[facet_geometry][0]
+                R = np.linalg.norm(dolfinx.cpp.geometry.compute_distance_gjk(coords0, xi))
+                if np.isclose(R, 0):
+                    facet_2 = lookup.links(index)[0]
+                    facet2_geometry = dolfinx.cpp.mesh.entities_to_geometry(mesh, fdim, [facet_2], False)
+                    coords = mesh_geometry[facet2_geometry][0]
+                    dist_vec = dolfinx.cpp.geometry.compute_distance_gjk(coords, xi)
+                    dist_vec_array[: gdim, i] = dist_vec[: gdim]
         return dist_vec_array
 
     g_vec = dolfinx.Function(V)

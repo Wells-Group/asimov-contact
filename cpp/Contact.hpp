@@ -197,7 +197,7 @@ public:
     // Compute quadrature points on physical facet _qp_phys_"origin_meshtag"
     create_q_phys(origin_meshtag);
 
-    std::array<double, 3> point;
+    xt::xtensor<double, 2> point = xt::zeros<double>({1, 3});
     point[2] = 0;
 
     // assign puppet_ and candidate_facets
@@ -231,16 +231,13 @@ public:
       for (int j = 0; j < (*q_phys_pt)[0].shape(0); ++j)
       {
         for (int k = 0; k < gdim; ++k)
-          point[k] = (*q_phys_pt)[i](j, k);
-        // Find initial search radius R = intermediate_result.second
-        std::pair<int, double> intermediate_result
-            = dolfinx::geometry::compute_closest_entity(master_midpoint_tree,
-                                                        point, *mesh);
+          point(0, k) = (*q_phys_pt)[i](j, k);
+
         // Find closest facet to point
-        std::pair<int, double> search_result
+        std::vector<std::int32_t> search_result
             = dolfinx::geometry::compute_closest_entity(
-                master_bbox, point, *mesh, intermediate_result.second);
-        data.push_back(search_result.first);
+                master_bbox, master_midpoint_tree, *mesh, point);
+        data.push_back(search_result[0]);
       }
       offset.push_back(data.size());
     }
