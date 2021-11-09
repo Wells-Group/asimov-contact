@@ -572,6 +572,7 @@ public:
         {
           n_surf = n_phys;
           n_dot = 1;
+          gap = -gap;
         }
         xt::xtensor<double, 2> tr = xt::zeros<double>({ndofs_cell, gdim});
         xt::xtensor<double, 2> epsn = xt::zeros<double>({ndofs_cell, gdim});
@@ -738,6 +739,7 @@ public:
         {
           n_surf = n_phys;
           n_dot = 1;
+          gap = -gap;
         }
 
         xt::xtensor<double, 2> tr = xt::zeros<double>({ndofs_cell, gdim});

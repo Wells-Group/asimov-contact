@@ -10,7 +10,7 @@ import dolfinx_contact.cpp
 import numpy as np
 import ufl
 from typing import Tuple
-from dolfinx_contact.helpers import (epsilon, lame_parameters, sigma_func)
+from dolfinx_contact.helpers import (epsilon, lame_parameters, sigma_func, plot_gap)
 from petsc4py import PETSc
 from mpi4py import MPI
 
@@ -24,7 +24,7 @@ def nitsche_unbiased(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dolfinx.MeshT
                      vertical_displacement: float = -0.1, nitsche_bc: bool = True, initGuess=None):
     (facet_marker, top_value, bottom_value, surface_value, surface_bottom) = mesh_data
     # quadrature degree
-    q_deg = 10
+    q_deg = 3
     # Nitche parameters and variables
     theta = nitsche_parameters["theta"]
     gamma = nitsche_parameters["gamma"] * physical_parameters["E"]
@@ -73,7 +73,7 @@ def nitsche_unbiased(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dolfinx.MeshT
     # https://doi.org/10.1016/j.cma.2018.05.024
     if nitsche_bc:
         disp_vec = np.zeros(gdim)
-        disp_vec[gdim - 1] = 0.5 * vertical_displacement
+        disp_vec[gdim - 1] = vertical_displacement
         u_D = ufl.as_vector(disp_vec)
         L += - ufl.inner(sigma(u) * n, v) * ds(top_value)\
              - theta * ufl.inner(sigma(v) * n, u - u_D) * \
@@ -84,7 +84,7 @@ def nitsche_unbiased(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dolfinx.MeshT
             ds(top_value) + gamma / h * ufl.inner(du, v) * ds(top_value)
         # Nitsche bc for rigid plane
         disp_plane = np.zeros(gdim)
-        disp_plane[gdim - 1] = -0.5 * vertical_displacement
+        # disp_plane[gdim - 1] = -0.5 * vertical_displacement
         u_D_plane = ufl.as_vector(disp_plane)
         L += - ufl.inner(sigma(u) * n, v) * ds(surface_bottom)\
              - theta * ufl.inner(sigma(v) * n, u - u_D_plane) * \
@@ -137,8 +137,10 @@ def nitsche_unbiased(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dolfinx.MeshT
     h_1 = dolfinx_contact.cpp.pack_circumradius_facet(mesh, surface_facets)
 
     gap_0 = contact.pack_gap(0)
+    plot_gap(mesh, contact, 0, gap_0)
     test_fn_0 = contact.pack_test_functions(0, gap_0)
     gap_1 = contact.pack_gap(1)
+    plot_gap(mesh, contact, 1, gap_1)
     test_fn_1 = contact.pack_test_functions(1, gap_1)
 
     coeff_0 = np.hstack([mu_packed_0, lmbda_packed_0, h_0, gap_0, test_fn_0])
@@ -232,5 +234,9 @@ def nitsche_unbiased(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dolfinx.MeshT
         xdmf.write_mesh(mesh)
         u.name = "u"
         xdmf.write_function(u)
+    facet_marker.name = "Contact facets"
+    with dolfinx.io.XDMFFile(MPI.COMM_WORLD, "mt_unbiased.xdmf", "w") as xdmf:
+        xdmf.write_mesh(mesh)
+        xdmf.write_meshtags(facet_marker)
 
     return u
