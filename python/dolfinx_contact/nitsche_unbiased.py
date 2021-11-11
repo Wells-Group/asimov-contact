@@ -10,7 +10,7 @@ import dolfinx_contact.cpp
 import numpy as np
 import ufl
 from typing import Tuple
-from dolfinx_contact.helpers import (epsilon, lame_parameters, sigma_func, plot_gap)
+from dolfinx_contact.helpers import (epsilon, lame_parameters, sigma_func)
 from petsc4py import PETSc
 from mpi4py import MPI
 
@@ -60,15 +60,17 @@ def nitsche_unbiased(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dolfinx.MeshT
     else:
         u.x.array[:] = initGuess.x.array[:]
 
+    h = ufl.Circumradius(mesh)
+    n = ufl.FacetNormal(mesh)
     # integration measure and ufl part of linear/bilinear form
     dx = ufl.Measure("dx", domain=mesh)
     ds = ufl.Measure("ds", domain=mesh,  # metadata=metadata,
                      subdomain_data=facet_marker)
-    a = ufl.inner(sigma(du), epsilon(v)) * dx
-    L = ufl.inner(sigma(u), epsilon(v)) * dx
+    a = ufl.inner(sigma(du), epsilon(v)) * dx - 0.5 * theta * h / gamma * ufl.inner(sigma(du) * n, sigma(v) * n) * \
+        ds(bottom_value) - 0.5 * theta * h / gamma * ufl.inner(sigma(du) * n, sigma(v) * n) * ds(surface_value)
+    L = ufl.inner(sigma(u), epsilon(v)) * dx - 0.5 * theta * h / gamma * ufl.inner(sigma(u) * n, sigma(v) * n) * \
+        ds(bottom_value) - 0.5 * theta * h / gamma * ufl.inner(sigma(u) * n, sigma(v) * n) * ds(surface_value)
 
-    h = ufl.Circumradius(mesh)
-    n = ufl.FacetNormal(mesh)
     # Nitsche for Dirichlet, another theta-scheme.
     # https://doi.org/10.1016/j.cma.2018.05.024
     if nitsche_bc:
@@ -137,10 +139,8 @@ def nitsche_unbiased(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dolfinx.MeshT
     h_1 = dolfinx_contact.cpp.pack_circumradius_facet(mesh, surface_facets)
 
     gap_0 = contact.pack_gap(0)
-    plot_gap(mesh, contact, 0, gap_0)
     test_fn_0 = contact.pack_test_functions(0, gap_0)
     gap_1 = contact.pack_gap(1)
-    plot_gap(mesh, contact, 1, gap_1)
     test_fn_1 = contact.pack_test_functions(1, gap_1)
 
     coeff_0 = np.hstack([mu_packed_0, lmbda_packed_0, h_0, gap_0, test_fn_0])

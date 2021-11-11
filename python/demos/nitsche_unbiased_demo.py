@@ -180,30 +180,13 @@ if __name__ == "__main__":
             gdim = mesh.geometry.dim
             mesh.topology.create_connectivity(tdim - 1, 0)
             mesh.topology.create_connectivity(tdim - 1, tdim)
-
-            top_value = 1
-            bottom_value = 2
-            surface_value = 3
-            surface_bottom = 4
-            # Create meshtag for top and bottom markers
-            top_facets1 = dolfinx.mesh.locate_entities_boundary(mesh, tdim - 1, lambda x: np.isclose(x[1], 0.5))
-            bottom_facets1 = dolfinx.mesh.locate_entities_boundary(
-                mesh, tdim - 1, lambda x: np.isclose(x[1], 0.0))
-            top_facets2 = dolfinx.mesh.locate_entities_boundary(mesh, tdim - 1, lambda x: np.isclose(x[1], -0.5))
-            bottom_facets2 = dolfinx.mesh.locate_entities_boundary(
-                mesh, tdim - 1, lambda x: np.isclose(x[1], -1.0))
-            top_values = np.full(len(top_facets1), top_value, dtype=np.int32)
-            bottom_values = np.full(
-                len(bottom_facets1), bottom_value, dtype=np.int32)
-
-            surface_values = np.full(len(top_facets2), surface_value, dtype=np.int32)
-            sbottom_values = np.full(
-                len(bottom_facets2), surface_bottom, dtype=np.int32)
-            indices = np.concatenate([top_facets1, bottom_facets1, top_facets2, bottom_facets2])
-            values = np.hstack([top_values, bottom_values, surface_values, sbottom_values])
-            sorted_facets = np.argsort(indices)
-            facet_marker = dolfinx.MeshTags(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
-
+            with dolfinx.io.XDMFFile(MPI.COMM_WORLD, f"{fname}_facets.xdmf", "r") as xdmf:
+                facet_marker = xdmf.read_meshtags(mesh, name="Grid")
+            top_value = 5
+            bottom_value = 3
+            surface_value = 9
+            surface_bottom = 7
+     
         else:
             fname = "twomeshes"
             create_circle_plane_mesh(filename=f"{fname}.msh")
@@ -260,11 +243,11 @@ if __name__ == "__main__":
     load_increment = vertical_displacement / nload_steps
     u1 = None
 
-    mesh2 = mesh
-    V = dolfinx.VectorFunctionSpace(mesh2, ("CG", 1))
+    
+    V = dolfinx.VectorFunctionSpace(mesh, ("CG", 1))
     u = dolfinx.Function(V)
     u.x.array[:] = np.zeros(u.x.array[:].shape)
-    geometry = mesh2.geometry.x[:].copy()
+    geometry = mesh.geometry.x[:].copy()
     for j in range(nload_steps):
         displacement = load_increment
         # Solve contact problem using Nitsche's method
@@ -276,9 +259,8 @@ if __name__ == "__main__":
         if delta_x.shape[1] < 3:
             delta_x = np.hstack([delta_x, np.zeros((delta_x.shape[0], 3 - delta_x.shape[1]))])
         mesh.geometry.x[:] += delta_x
-        facet_marker = dolfinx.MeshTags(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
-    mesh2.geometry.x[:] = geometry
+    mesh.geometry.x[:] = geometry
     with dolfinx.io.XDMFFile(MPI.COMM_WORLD, "results/u_unbiased_total.xdmf", "w") as xdmf:
-        xdmf.write_mesh(mesh2)
+        xdmf.write_mesh(mesh)
         u.name = "u"
         xdmf.write_function(u)

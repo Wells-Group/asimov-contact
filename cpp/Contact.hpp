@@ -627,8 +627,8 @@ public:
             double sign_v = (lmbda * tr(i, n) * n_dot + mu * epsn(i, n));
             // This is (1./gamma)*Pn_v to avoid the product gamma*(1./gamma)
             double Pn_v = gamma_inv * v_dot_nsurf - theta * sign_v;
-            b[0][n + i * bs]
-                += 0.5 * (-theta * gamma * sign_v * sign_u + Pn_u * Pn_v);
+            b[0][n + i * bs] += 0.5 * Pn_u * Pn_v;
+            // 0.5 * (-theta * gamma * sign_v * sign_u + Pn_u * Pn_v);
 
             for (int k = 0; k < num_links; k++)
             {
@@ -803,7 +803,8 @@ public:
                 double sign_v = (lmbda * tr(i, b) * n_dot + mu * epsn(i, b));
                 double Pn_v = gamma_inv * v_dot_nsurf - theta * sign_v;
                 A[0][(b + i * bs) * ndofs_cell * bs + l + j * bs]
-                    += 0.5 * (-theta * gamma * sign_du * sign_v + Pn_du * Pn_v);
+                    += 0.5 * Pn_du * Pn_v;
+                // 0.5 * (-theta * gamma * sign_du * sign_v + Pn_du * Pn_v);
                 for (int k = 0; k < num_links; k++)
                 {
                   int index = 3 + cstrides[3]

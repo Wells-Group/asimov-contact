@@ -131,13 +131,14 @@ def create_box_mesh_2D(filename: str):
     L = 0.5
     H = 0.5
 
-    disp = -1
+    disp = -0.6
     gmsh.initialize()
+    delta = 0.1
     # Create box
-    p0 = gmsh.model.occ.addPoint(0, 0, 0)
-    p1 = gmsh.model.occ.addPoint(L, 0, 0)
-    p2 = gmsh.model.occ.addPoint(L, H, 0)
-    p3 = gmsh.model.occ.addPoint(0, H, 0)
+    p0 = gmsh.model.occ.addPoint(-delta, 0, 0)
+    p1 = gmsh.model.occ.addPoint(L - delta, delta, 0)
+    p2 = gmsh.model.occ.addPoint(L - delta, H + delta, 0)
+    p3 = gmsh.model.occ.addPoint(-delta, H, 0)
     ps = [p0, p1, p2, p3]
     lines = [gmsh.model.occ.addLine(ps[i - 1], ps[i]) for i in range(len(ps))]
     curve = gmsh.model.occ.addCurveLoop(lines)
