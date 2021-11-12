@@ -186,7 +186,7 @@ if __name__ == "__main__":
             bottom_value = 3
             surface_value = 9
             surface_bottom = 7
-     
+
         else:
             fname = "twomeshes"
             create_circle_plane_mesh(filename=f"{fname}.msh")
@@ -243,7 +243,6 @@ if __name__ == "__main__":
     load_increment = vertical_displacement / nload_steps
     u1 = None
 
-    
     V = dolfinx.VectorFunctionSpace(mesh, ("CG", 1))
     u = dolfinx.Function(V)
     u.x.array[:] = np.zeros(u.x.array[:].shape)

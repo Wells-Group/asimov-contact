@@ -10,7 +10,7 @@ import ufl
 from contextlib import ExitStack
 from petsc4py import PETSc
 
-__all__ = ["lame_parameters", "epsilon", "sigma_func", "convert_mesh", "plot_gap"]
+__all__ = ["lame_parameters", "epsilon", "sigma_func", "convert_mesh"]
 
 
 def lame_parameters(plane_strain=False):
