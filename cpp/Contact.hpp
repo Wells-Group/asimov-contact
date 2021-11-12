@@ -630,6 +630,7 @@ public:
             b[0][n + i * bs] += 0.5 * Pn_u * Pn_v;
             // 0.5 * (-theta * gamma * sign_v * sign_u + Pn_u * Pn_v);
 
+            // entries corresponding to v on the other surface
             for (int k = 0; k < num_links; k++)
             {
               int index = 3 + cstrides[3] + k * num_q_points * ndofs_cell * bs
@@ -805,6 +806,8 @@ public:
                 A[0][(b + i * bs) * ndofs_cell * bs + l + j * bs]
                     += 0.5 * Pn_du * Pn_v;
                 // 0.5 * (-theta * gamma * sign_du * sign_v + Pn_du * Pn_v);
+
+                // entries corresponding to u and v on the other surface
                 for (int k = 0; k < num_links; k++)
                 {
                   int index = 3 + cstrides[3]
