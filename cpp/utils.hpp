@@ -145,8 +145,7 @@ std::pair<std::vector<PetscScalar>, int> pack_coefficient_quadrature(
             cell_info, cell, vs);
       }
       // Push basis forward to physical element
-      element->transform_reference_basis(basis_values, cell_basis_values, J,
-                                         detJ, K);
+      element->push_forward(basis_values, cell_basis_values, J, detJ, K);
 
       // Sum up quadrature contributions
       int offset = cstride * cell;
@@ -357,8 +356,7 @@ std::pair<std::vector<PetscScalar>, int> pack_coefficient_facet(
             cell_info, cell, vs);
       }
       // Push basis forward to physical element
-      element->transform_reference_basis(basis_values, cell_basis_values, J,
-                                         detJ, K);
+      element->push_forward(basis_values, cell_basis_values, J, detJ, K);
 
       // Sum up quadrature contributions
       int offset = cstride * facet;
@@ -779,8 +777,7 @@ get_basis_functions(xt::xtensor<double, 3>& J, xt::xtensor<double, 3>& K,
       reference_value_size);
 
   // Push basis forward to physical element
-  element->transform_reference_basis(basis_values, reference_basis_values, J,
-                                     detJ, K);
+  element->push_forward(basis_values, reference_basis_values, J, detJ, K);
 
   // Expand basis values for each dof
   for (std::size_t p = 0; p < num_points; ++p)
