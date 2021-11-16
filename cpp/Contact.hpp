@@ -565,19 +565,15 @@ public:
         // penetration can be up to the precision of the solver.
         if (gap > 1e-13)
         {
+          gap = dolfinx_contact::sgn(n_dot) * gap;
           n_surf /= gap;
           n_dot /= gap;
-          if (n_dot < 0)
-          {
-            n_surf = -n_surf;
-            n_dot = -n_dot;
-            gap = -gap;
-          }
         }
         else
         {
           n_surf = n_phys;
           n_dot = 1;
+          gap = 0.0;
         }
         xt::xtensor<double, 2> tr = xt::zeros<double>({ndofs_cell, gdim});
         xt::xtensor<double, 2> epsn = xt::zeros<double>({ndofs_cell, gdim});
@@ -738,17 +734,13 @@ public:
         // penetration can be up to the precision of the solver.
         if (gap > 1e-13)
         {
+          gap = dolfinx_contact::sgn(n_dot) * gap;
           n_surf /= gap;
           n_dot /= gap;
-          if (n_dot < 0)
-          {
-            n_surf = -n_surf;
-            n_dot = -n_dot;
-            gap = -gap;
-          }
         }
         else
         {
+          gap = 0.0;
           n_surf = n_phys;
           n_dot = 1;
         }

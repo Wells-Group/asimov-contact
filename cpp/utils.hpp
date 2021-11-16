@@ -797,11 +797,13 @@ get_basis_functions(xt::xtensor<double, 3>& J, xt::xtensor<double, 3>& K,
   return basis_array;
 }
 double R_plus(double x) { return 0.5 * (std::abs(x) + x); }
-double dR_plus(double x)
+double dR_plus(double x) { return double(x > 0); }
+
+/// See
+/// https://stackoverflow.com/questions/1903954/is-there-a-standard-sign-function-signum-sgn-in-c-c/10133700
+template <typename T>
+int sgn(T val)
 {
-  if (x > 0)
-    return 1.0;
-  else
-    return 0;
+  return (T(0) < val) - (val < T(0));
 }
 } // namespace dolfinx_contact
