@@ -145,8 +145,7 @@ std::pair<std::vector<PetscScalar>, int> pack_coefficient_quadrature(
             cell_info, cell, vs);
       }
       // Push basis forward to physical element
-      element->transform_reference_basis(basis_values, cell_basis_values, J,
-                                         detJ, K);
+      element->push_forward(basis_values, cell_basis_values, J, detJ, K);
 
       // Sum up quadrature contributions
       int offset = cstride * cell;
@@ -357,8 +356,7 @@ std::pair<std::vector<PetscScalar>, int> pack_coefficient_facet(
             cell_info, cell, vs);
       }
       // Push basis forward to physical element
-      element->transform_reference_basis(basis_values, cell_basis_values, J,
-                                         detJ, K);
+      element->push_forward(basis_values, cell_basis_values, J, detJ, K);
 
       // Sum up quadrature contributions
       int offset = cstride * facet;
@@ -415,9 +413,58 @@ std::pair<std::vector<PetscScalar>, int> pack_coefficient_facet(
   return {std::move(c), cstride};
 }
 
-/// Prepare circumradii of triangle/tetrahedron for assembly with custom kernels
-/// by packing them as an array, where the j*cstride to the ith facet int
-/// active_facets.
+std::pair<std::vector<PetscScalar>, int> pack_coefficient_dofs(
+    std::shared_ptr<const dolfinx::fem::Function<PetscScalar>> coeff,
+    xt::xtensor<std::int32_t, 2>& active_facets)
+{
+
+  auto element = coeff->function_space()->element().get();
+  auto dofmap = coeff->function_space()->dofmap().get();
+  auto v = coeff->x()->array();
+  // Get mesh
+  auto mesh = coeff->function_space()->mesh();
+  assert(mesh);
+  const std::size_t num_facets = active_facets.shape(0);
+  std::size_t bs = dofmap->bs();
+  std::size_t ndofs = dofmap->cell_dofs(0).size();
+  std::vector<PetscScalar> c(num_facets * ndofs * bs);
+  const int cstride = ndofs * bs;
+
+  bool needs_dof_transformations = false;
+  xtl::span<const std::uint32_t> cell_info;
+  if (element->needs_dof_transformations())
+  {
+    needs_dof_transformations = true;
+    mesh->topology_mutable().create_entity_permutations();
+    cell_info = xtl::span(mesh->topology().get_cell_permutation_info());
+  }
+  const std::function<void(const xtl::span<PetscScalar>&,
+                           const xtl::span<const std::uint32_t>&, std::int32_t,
+                           int)>
+      transformation
+      = element->get_dof_transformation_function<PetscScalar>(false, true);
+
+  for (std::size_t facet = 0; facet < num_facets; ++facet)
+  {
+    std::int32_t cell = active_facets(facet, 0);
+    auto dofs = dofmap->cell_dofs(cell);
+    for (std::size_t i = 0; i < dofs.size(); ++i)
+    {
+      for (std::size_t k = 0; k < bs; ++k)
+      {
+        c[facet * cstride + bs * i + k] = v[bs * dofs[i] + k];
+      }
+    }
+    transformation(
+        xtl::span(c.data() + facet * cstride, element->space_dimension()),
+        cell_info, cell, 1);
+  }
+  return {std::move(c), cstride};
+}
+
+/// Prepare circumradii of triangle/tetrahedron for assembly with custom
+/// kernels by packing them as an array, where the j*cstride to the ith facet
+/// int active_facets.
 /// @param[in] mesh
 /// @param[in] active_facets List of active facets
 /// @param[out] c The packed coefficients and the number of coeffs per facet
@@ -492,7 +539,8 @@ pack_circumradius_facet(std::shared_ptr<const dolfinx::mesh::Mesh> mesh,
   for (int facet = 0; facet < num_facets; facet++)
   {
 
-    // NOTE Add two separate loops here, one for and one without dof transforms
+    // NOTE Add two separate loops here, one for and one without dof
+    // transforms
 
     // FIXME: Assuming exterior facets
     // get cell/local facet index
@@ -525,7 +573,6 @@ pack_circumradius_facet(std::shared_ptr<const dolfinx::mesh::Mesh> mesh,
     cmap.compute_jacobian(dphi, coordinate_dofs, _J);
     cmap.compute_jacobian_inverse(_J, xt::view(K, 0, xt::all(), xt::all()));
     detJ[0] = cmap.compute_jacobian_determinant(_J);
-
     double h = 0;
     if (cell_type == "triangle")
     {
@@ -583,7 +630,8 @@ pack_circumradius_facet(std::shared_ptr<const dolfinx::mesh::Mesh> mesh,
   return {std::move(c), cstride};
 }
 // helper functiion for pack_coefficients_facet and pack_circumradius_facet to
-// work with dolfinx assembly routines should be made reduntant at a later stage
+// work with dolfinx assembly routines should be made reduntant at a later
+// stage
 /// @param[in] mesh - the mesh
 /// @param[in] active_facets - facet indices
 /// @param[in] data - data to be converted
@@ -626,5 +674,136 @@ facet_to_cell_data(std::shared_ptr<const dolfinx::mesh::Mesh> mesh,
     }
   }
   return {std::move(c), cstride};
+}
+
+//-----------------------------------------------------------------------------
+xt::xtensor<double, 3>
+get_basis_functions(xt::xtensor<double, 3>& J, xt::xtensor<double, 3>& K,
+                    xt::xtensor<double, 1>& detJ,
+                    const xt::xtensor<double, 2>& x,
+                    xt::xtensor<double, 2> coordinate_dofs,
+                    const std::int32_t index, const std::int32_t perm,
+                    std::shared_ptr<const dolfinx::fem::FiniteElement> element,
+                    const dolfinx::fem::CoordinateElement& cmap)
+{
+
+  // number of points
+  const std::size_t num_points = x.shape(0);
+  assert(J.shape(0) == num_points);
+  assert(K.shape(0) == num_points);
+  assert(detJ.shape(0) == num_points);
+
+  // Get mesh data from input
+  const size_t gdim = coordinate_dofs.shape(1);
+  const size_t num_dofs_g = coordinate_dofs.shape(0);
+  const size_t tdim = K.shape(1);
+
+  // Get element data
+  const size_t block_size = element->block_size();
+  const size_t reference_value_size
+      = element->reference_value_size() / block_size;
+  const size_t value_size = element->value_size() / block_size;
+  const size_t space_dimension = element->space_dimension() / block_size;
+
+  // Prepare basis function data structures
+  xt::xtensor<double, 4> tabulated_data(
+      {1, num_points, space_dimension, reference_value_size});
+  auto reference_basis_values
+      = xt::view(tabulated_data, 0, xt::all(), xt::all(), xt::all());
+  xt::xtensor<double, 3> basis_values(
+      {num_points, space_dimension, value_size});
+
+  // Skip negative cell indices
+  xt::xtensor<double, 3> basis_array = xt::zeros<double>(
+      {num_points, space_dimension * block_size, value_size * block_size});
+  if (index < 0)
+    return basis_array;
+
+  // -- Lambda function for affine pull-backs
+  auto pull_back_affine
+      = [&cmap, tdim,
+         X0 = xt::xtensor<double, 2>(xt::zeros<double>({std::size_t(1), tdim})),
+         data = xt::xtensor<double, 4>(cmap.tabulate_shape(1, 1)),
+         dphi = xt::xtensor<double, 2>({tdim, cmap.tabulate_shape(1, 1)[2]})](
+            auto&& X, const auto& cell_geometry, auto&& J, auto&& K,
+            const auto& x) mutable
+  {
+    cmap.tabulate(1, X0, data);
+    dphi = xt::view(data, xt::range(1, tdim + 1), 0, xt::all(), 0);
+    cmap.compute_jacobian(dphi, cell_geometry, J);
+    cmap.compute_jacobian_inverse(J, K);
+    cmap.pull_back_affine(X, K, cmap.x0(cell_geometry), x);
+  };
+  // FIXME: Move initialization out of J, detJ, K out of function
+  xt::xtensor<double, 2> dphi;
+  xt::xtensor<double, 2> X({x.shape(0), tdim});
+  xt::xtensor<double, 4> phi(cmap.tabulate_shape(1, 1));
+  if (cmap.is_affine())
+  {
+    J.fill(0);
+    pull_back_affine(X, coordinate_dofs, xt::view(J, 0, xt::all(), xt::all()),
+                     xt::view(K, 0, xt::all(), xt::all()), x);
+    detJ[0] = cmap.compute_jacobian_determinant(
+        xt::view(J, 0, xt::all(), xt::all()));
+    for (std::size_t p = 1; p < num_points; ++p)
+    {
+      xt::view(J, p, xt::all(), xt::all())
+          = xt::view(J, 0, xt::all(), xt::all());
+      xt::view(K, p, xt::all(), xt::all())
+          = xt::view(K, 0, xt::all(), xt::all());
+      detJ[p] = detJ[0];
+    }
+  }
+  else
+  {
+    cmap.pull_back_nonaffine(X, x, coordinate_dofs);
+    cmap.tabulate(1, X, phi);
+    dphi = xt::view(phi, xt::range(1, tdim + 1), 0, xt::all(), 0);
+    J.fill(0);
+    for (std::size_t p = 0; p < X.shape(0); ++p)
+    {
+      auto _J = xt::view(J, p, xt::all(), xt::all());
+      cmap.compute_jacobian(dphi, coordinate_dofs, _J);
+      cmap.compute_jacobian_inverse(_J, xt::view(K, p, xt::all(), xt::all()));
+      detJ[p] = cmap.compute_jacobian_determinant(_J);
+    }
+  }
+
+  // Compute basis on reference element
+  element->tabulate(tabulated_data, X, 0);
+
+  element->apply_dof_transformation(
+      xtl::span<double>(tabulated_data.data(), tabulated_data.size()), perm,
+      reference_value_size);
+
+  // Push basis forward to physical element
+  element->push_forward(basis_values, reference_basis_values, J, detJ, K);
+
+  // Expand basis values for each dof
+  for (std::size_t p = 0; p < num_points; ++p)
+  {
+    for (int block = 0; block < block_size; ++block)
+    {
+      for (int i = 0; i < space_dimension; ++i)
+      {
+        for (int j = 0; j < value_size; ++j)
+        {
+          basis_array(p, i * block_size + block, j * block_size + block)
+              = basis_values(p, i, j);
+        }
+      }
+    }
+  }
+  return basis_array;
+}
+double R_plus(double x) { return 0.5 * (std::abs(x) + x); }
+double dR_plus(double x) { return double(x > 0); }
+
+/// See
+/// https://stackoverflow.com/questions/1903954/is-there-a-standard-sign-function-signum-sgn-in-c-c/10133700
+template <typename T>
+int sgn(T val)
+{
+  return (T(0) < val) - (val < T(0));
 }
 } // namespace dolfinx_contact
