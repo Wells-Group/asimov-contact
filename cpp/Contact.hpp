@@ -180,8 +180,7 @@ public:
     // Finalise communication
     pattern.assemble();
 
-    return dolfinx::la::create_petsc_matrix(a.mesh()->mpi_comm(), pattern,
-                                            type);
+    return dolfinx::la::create_petsc_matrix(a.mesh()->comm(), pattern, type);
   }
 
   /// Assemble matrix over exterior facets

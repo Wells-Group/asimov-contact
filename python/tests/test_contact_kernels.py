@@ -2,19 +2,22 @@
 #
 # SPDX-License-Identifier:   LGPL-3.0-or-later
 
-import dolfinx
 import basix
-import dolfinx_cuas
-import dolfinx_cuas.cpp
 import dolfinx_contact
 import dolfinx_contact.cpp
+import dolfinx_cuas
+import dolfinx_cuas.cpp
 import numpy as np
 import pytest
 import ufl
+from dolfinx.fem import (Function, FunctionSpace, IntegralType,
+                         VectorFunctionSpace, assemble_matrix, assemble_vector,
+                         create_matrix, create_vector, Form)
+from dolfinx.generation import UnitCubeMesh, UnitSquareMesh
+from dolfinx.mesh import Mesh, locate_entities_boundary, MeshTags
 from mpi4py import MPI
 
 kt = dolfinx_contact.cpp.Kernel
-it = dolfinx.cpp.fem.IntegralType
 compare_matrices = dolfinx_cuas.utils.compare_matrices
 
 
@@ -30,17 +33,17 @@ def R_minus(x):
 @pytest.mark.parametrize("Q", [0, 1, 2])
 def test_vector_surface_kernel(dim, kernel_type, P, Q):
     N = 20 if dim == 2 else 5
-    mesh = dolfinx.UnitSquareMesh(MPI.COMM_WORLD, N, N) if dim == 2 else dolfinx.UnitCubeMesh(MPI.COMM_WORLD, N, N, N)
+    mesh = UnitSquareMesh(MPI.COMM_WORLD, N, N) if dim == 2 else UnitCubeMesh(MPI.COMM_WORLD, N, N, N)
 
     # Find facets on boundary to integrate over
-    facets = dolfinx.mesh.locate_entities_boundary(mesh, mesh.topology.dim - 1,
-                                                   lambda x: np.logical_or(np.isclose(x[0], 0.0),
-                                                                           np.isclose(x[0], 1.0)))
+    facets = locate_entities_boundary(mesh, mesh.topology.dim - 1,
+                                      lambda x: np.logical_or(np.isclose(x[0], 0.0),
+                                                              np.isclose(x[0], 1.0)))
     values = np.ones(len(facets), dtype=np.int32)
-    ft = dolfinx.MeshTags(mesh, mesh.topology.dim - 1, facets, values)
+    ft = MeshTags(mesh, mesh.topology.dim - 1, facets, values)
 
     # Define variational form
-    V = dolfinx.VectorFunctionSpace(mesh, ("CG", P))
+    V = VectorFunctionSpace(mesh, ("CG", P))
 
     def f(x):
         values = np.zeros((mesh.geometry.dim, x.shape[1]))
@@ -62,17 +65,17 @@ def test_vector_surface_kernel(dim, kernel_type, P, Q):
                 values[j, i] = np.sin(x[j, i]) + 2
         return values
 
-    u = dolfinx.Function(V)
+    u = Function(V)
     u.interpolate(f)
     h = ufl.Circumradius(mesh)
     v = ufl.TestFunction(V)
     ds = ufl.Measure("ds", domain=mesh, subdomain_data=ft)
     dx = ufl.Measure("dx", domain=mesh)
 
-    V2 = dolfinx.FunctionSpace(mesh, ("DG", Q))
-    lmbda = dolfinx.Function(V2)
+    V2 = FunctionSpace(mesh, ("DG", Q))
+    lmbda = Function(V2)
     lmbda.interpolate(lmbda_func)
-    mu = dolfinx.Function(V2)
+    mu = Function(V2)
     mu.interpolate(mu_func)
 
     # Nitsche parameters
@@ -106,12 +109,12 @@ def test_vector_surface_kernel(dim, kernel_type, P, Q):
         (theta * sigma_n(v) - (gamma / h) * ufl.dot(v, n_2)) * ds(1)
     # Compile UFL form
     cffi_options = ["-O2", "-march=native"]
-    L = dolfinx.fem.Form(L, jit_parameters={"cffi_extra_compile_args": cffi_options, "cffi_libraries": ["m"]})
-    b = dolfinx.fem.create_vector(L)
+    L = Form(L, jit_parameters={"cffi_extra_compile_args": cffi_options, "cffi_libraries": ["m"]})
+    b = create_vector(L)
 
     # Normal assembly
     b.zeroEntries()
-    dolfinx.fem.assemble_vector(b, L)
+    assemble_vector(b, L)
     b.assemble()
 
     # Custom assembly
@@ -130,14 +133,14 @@ def test_vector_surface_kernel(dim, kernel_type, P, Q):
     g_vec_c = dolfinx_contact.cpp.facet_to_cell_data(mesh, facets, g_vec, dim * q_rule.weights(0).size)
     coeffs = np.hstack([coeffs, h_cells, g_vec_c])
     L_cuas = ufl.inner(sigma(u), epsilon(v)) * dx
-    L_cuas = dolfinx.fem.Form(L_cuas)
-    b2 = dolfinx.fem.create_vector(L_cuas)
+    L_cuas = Form(L_cuas)
+    b2 = create_vector(L_cuas)
     kernel = dolfinx_contact.cpp.generate_contact_kernel(V._cpp_object, kernel_type, q_rule,
                                                          [u._cpp_object, mu._cpp_object, lmbda._cpp_object])
 
     b2.zeroEntries()
-    dolfinx_cuas.assemble_vector(b2, V, ft.indices, kernel, coeffs, consts, it.exterior_facet)
-    dolfinx.fem.assemble_vector(b2, L_cuas)
+    dolfinx_cuas.assemble_vector(b2, V, ft.indices, kernel, coeffs, consts, IntegralType.exterior_facet)
+    assemble_vector(b2, L_cuas)
     b2.assemble()
     assert np.allclose(b.array, b2.array)
 
@@ -148,17 +151,17 @@ def test_vector_surface_kernel(dim, kernel_type, P, Q):
 @pytest.mark.parametrize("Q", [0, 1, 2])
 def test_matrix_surface_kernel(dim, kernel_type, P, Q):
     N = 20 if dim == 2 else 5
-    mesh = dolfinx.UnitSquareMesh(MPI.COMM_WORLD, N, N) if dim == 2 else dolfinx.UnitCubeMesh(MPI.COMM_WORLD, N, N, N)
+    mesh = UnitSquareMesh(MPI.COMM_WORLD, N, N) if dim == 2 else UnitCubeMesh(MPI.COMM_WORLD, N, N, N)
 
     # Find facets on boundary to integrate over
-    facets = dolfinx.mesh.locate_entities_boundary(mesh, mesh.topology.dim - 1,
-                                                   lambda x: np.logical_or(np.isclose(x[0], 0.0),
-                                                                           np.isclose(x[0], 1.0)))
+    facets = mesh.locate_entities_boundary(mesh, mesh.topology.dim - 1,
+                                           lambda x: np.logical_or(np.isclose(x[0], 0.0),
+                                                                   np.isclose(x[0], 1.0)))
     values = np.ones(len(facets), dtype=np.int32)
-    ft = dolfinx.MeshTags(mesh, mesh.topology.dim - 1, facets, values)
+    ft = MeshTags(mesh, mesh.topology.dim - 1, facets, values)
 
     # Define variational form
-    V = dolfinx.VectorFunctionSpace(mesh, ("CG", P))
+    V = VectorFunctionSpace(mesh, ("CG", P))
     du = ufl.TrialFunction(V)
     v = ufl.TestFunction(V)
     ds = ufl.Measure("ds", domain=mesh, subdomain_data=ft)
@@ -185,12 +188,12 @@ def test_matrix_surface_kernel(dim, kernel_type, P, Q):
                 values[j, i] = np.sin(x[j, i])
         return values
 
-    u = dolfinx.Function(V)
+    u = Function(V)
     u.interpolate(f)
-    V2 = dolfinx.FunctionSpace(mesh, ("DG", Q))
-    lmbda = dolfinx.Function(V2)
+    V2 = FunctionSpace(mesh, ("DG", Q))
+    lmbda = Function(V2)
     lmbda.interpolate(lmbda_func)
-    mu = dolfinx.Function(V2)
+    mu = Function(V2)
     mu.interpolate(mu_func)
 
     # Nitsche parameters
@@ -226,12 +229,12 @@ def test_matrix_surface_kernel(dim, kernel_type, P, Q):
         (theta * sigma_n(v) - gamma / h * ufl.dot(v, n_2)) * ds(1)
     # Compile UFL form
     cffi_options = ["-O2", "-march=native"]
-    a = dolfinx.fem.Form(a, jit_parameters={"cffi_extra_compile_args": cffi_options, "cffi_libraries": ["m"]})
-    A = dolfinx.fem.create_matrix(a)
+    a = Form(a, jit_parameters={"cffi_extra_compile_args": cffi_options, "cffi_libraries": ["m"]})
+    A = create_matrix(a)
 
     # Normal assembly
     A.zeroEntries()
-    dolfinx.fem.assemble_matrix(A, a)
+    assemble_matrix(A, a)
     A.assemble()
 
     # Custom assembly
@@ -249,13 +252,13 @@ def test_matrix_surface_kernel(dim, kernel_type, P, Q):
     g_vec_c = dolfinx_contact.cpp.facet_to_cell_data(mesh, facets, g_vec, dim * q_rule.weights(0).size)
     coeffs = np.hstack([coeffs, h_cells, g_vec_c])
     a_cuas = ufl.inner(sigma(du), epsilon(v)) * dx
-    a_cuas = dolfinx.fem.Form(a_cuas)
-    B = dolfinx.fem.create_matrix(a_cuas)
+    a_cuas = Form(a_cuas)
+    B = create_matrix(a_cuas)
     kernel = dolfinx_contact.cpp.generate_contact_kernel(
         V._cpp_object, kernel_type, q_rule, [u._cpp_object, mu._cpp_object, lmbda._cpp_object])
     B.zeroEntries()
-    dolfinx_cuas.assemble_matrix(B, V, ft.indices, kernel, coeffs, consts, it.exterior_facet)
-    dolfinx.fem.assemble_matrix(B, a_cuas)
+    dolfinx_cuas.assemble_matrix(B, V, ft.indices, kernel, coeffs, consts, IntegralType.exterior_facet)
+    assemble_matrix(B, a_cuas)
     B.assemble()
 
     # Compare matrices, first norm, then entries
