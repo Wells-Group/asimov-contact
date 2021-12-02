@@ -649,53 +649,6 @@ pack_circumradius_facet(std::shared_ptr<const dolfinx::mesh::Mesh> mesh,
 
   return {std::move(c), cstride};
 }
-// helper functiion for pack_coefficients_facet and pack_circumradius_facet to
-// work with dolfinx assembly routines should be made reduntant at a later
-// stage
-/// @param[in] mesh - the mesh
-/// @param[in] active_facets - facet indices
-/// @param[in] data - data to be converted
-/// @param[in] num_cols - number of columns per facet
-std::pair<std::vector<PetscScalar>, int>
-facet_to_cell_data(std::shared_ptr<const dolfinx::mesh::Mesh> mesh,
-                   const xtl::span<const std::int32_t>& active_facets,
-                   const xtl::span<const PetscScalar> data, int num_cols)
-{
-  const std::size_t tdim = mesh->topology().dim();
-  const std::size_t gdim = mesh->geometry().dim();
-  const std::size_t fdim = tdim - 1;
-  const std::int32_t num_facets = active_facets.size();
-  const std::int32_t num_cells
-      = mesh->topology().index_map(tdim)->size_local()
-        + mesh->topology().index_map(tdim)->num_ghosts();
-  // Connectivity to evaluate at quadrature points
-  // Assumes connectivity already created
-  auto f_to_c = mesh->topology().connectivity(fdim, tdim);
-  auto c_to_f = mesh->topology().connectivity(tdim, fdim);
-  // get number of facets per cell. Assuming all cells are the same
-  const std::size_t num_facets_c = c_to_f->num_links(0);
-
-  std::vector<PetscScalar> c(num_cells * num_cols * num_facets_c, 0.0);
-  const int cstride = num_cols * num_facets_c;
-  for (int i = 0; i < num_facets; i++)
-  {
-    auto facet = active_facets[i];
-    // assuming exterior facets
-    auto cell = f_to_c->links(facet)[0];
-    // find local index of facet
-    auto cell_facets = c_to_f->links(cell);
-    auto local_facet = std::find(cell_facets.begin(), cell_facets.end(), facet);
-    const std::int32_t local_index
-        = std::distance(cell_facets.data(), local_facet);
-    int offset = cell * cstride;
-    for (int j = 0; j < num_cols; j++)
-    {
-      c[offset + local_index * num_cols + j] = data[i * num_cols + j];
-    }
-  }
-  return {std::move(c), cstride};
-}
-
 //-----------------------------------------------------------------------------
 xt::xtensor<double, 3>
 get_basis_functions(xt::xtensor<double, 3>& J, xt::xtensor<double, 3>& K,

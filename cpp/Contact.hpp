@@ -180,7 +180,7 @@ public:
     // Finalise communication
     pattern.assemble();
 
-    return dolfinx::la::create_petsc_matrix(a.mesh()->comm(), pattern, type);
+    return dolfinx::la::petsc::create_matrix(a.mesh()->comm(), pattern, type);
   }
 
   /// Assemble matrix over exterior facets

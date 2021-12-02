@@ -4,8 +4,9 @@
 
 from dolfinx_contact.helpers import (epsilon, lame_parameters, sigma_func, R_minus)
 
-import dolfinx
+import dolfinx.fem
 import basix
+import dolfinx.mesh
 import dolfinx.io
 import dolfinx_cuas
 import dolfinx_cuas.cpp
@@ -17,7 +18,6 @@ import pytest
 from mpi4py import MPI
 
 kt = dolfinx_contact.cpp.Kernel
-it = dolfinx.cpp.fem.IntegralType
 compare_matrices = dolfinx_cuas.utils.compare_matrices
 
 
@@ -80,11 +80,11 @@ def test_contact_kernel(theta, gamma, dim, gap):
         indices = np.concatenate([top_facets, bottom_facets])
         values = np.hstack([top_values, bottom_values])
         sorted_facets = np.argsort(indices)
-        facet_marker = dolfinx.MeshTags(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
+        facet_marker = dolfinx.mesh.MeshTags(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
         bottom_facets = np.sort(bottom_facets)
 
-        V = dolfinx.VectorFunctionSpace(mesh, ("CG", 1))
-        u = dolfinx.Function(V)
+        V = dolfinx.fem.VectorFunctionSpace(mesh, ("CG", 1))
+        u = dolfinx.fem.Function(V)
         v = ufl.TestFunction(V)
         du = ufl.TrialFunction(V)
 
@@ -116,7 +116,7 @@ def test_contact_kernel(theta, gamma, dim, gap):
         g_vec = [i for i in range(mesh.geometry.dim)]
         g_vec[mesh.geometry.dim - 1] = gap
 
-        u = dolfinx.Function(V)
+        u = dolfinx.fem.Function(V)
         v = ufl.TestFunction(V)
         u.interpolate(_u_initial)
         metadata = {}  # {"quadrature_degree": q_deg}
@@ -172,21 +172,22 @@ def test_contact_kernel(theta, gamma, dim, gap):
                 for j in range(1):
                     values[j, i] = mu
             return values
-        V2 = dolfinx.FunctionSpace(mesh, ("DG", 0))
-        lmbda2 = dolfinx.Function(V2)
+        V2 = dolfinx.fem.FunctionSpace(mesh, ("DG", 0))
+        lmbda2 = dolfinx.fem.Function(V2)
         lmbda2.interpolate(lmbda_func2)
-        mu2 = dolfinx.Function(V2)
+        mu2 = dolfinx.fem.Function(V2)
         mu2.interpolate(mu_func2)
         u.interpolate(_u_initial)
-        coeffs = dolfinx_cuas.cpp.pack_coefficients([u._cpp_object, mu2._cpp_object, lmbda2._cpp_object])
+
+        integral_entities = dolfinx_cuas.cpp.compute_active_entities(
+            mesh, bottom_facets, dolfinx.fem.IntegralType.exterior_facet)
+        coeffs = dolfinx_cuas.cpp.pack_coefficients(
+            [u._cpp_object, mu2._cpp_object, lmbda2._cpp_object], integral_entities)
         h_facets = dolfinx_contact.cpp.pack_circumradius_facet(mesh, bottom_facets)
-        h_cells = dolfinx_contact.cpp.facet_to_cell_data(mesh, bottom_facets, h_facets, 1)
         contact = dolfinx_contact.cpp.Contact(facet_marker, bottom_value, top_value, V._cpp_object)
         contact.set_quadrature_degree(q_deg)
         g_vec = contact.pack_gap_plane(0, g)
-        # FIXME: Assumptions that does not work for prisms
-        g_vec_c = dolfinx_contact.cpp.facet_to_cell_data(mesh, bottom_facets, g_vec, dim * q_rule.weights(0).size)
-        coeffs = np.hstack([coeffs, h_cells, g_vec_c])
+        coeffs = np.hstack([coeffs, h_facets, g_vec])
         # RHS
         L_cuas = ufl.inner(sigma(u), epsilon(v)) * dx
         L_cuas = dolfinx.fem.Form(L_cuas)
@@ -194,7 +195,8 @@ def test_contact_kernel(theta, gamma, dim, gap):
         kernel = dolfinx_contact.cpp.generate_contact_kernel(V._cpp_object, kt.Rhs, q_rule,
                                                              [u._cpp_object, mu2._cpp_object, lmbda2._cpp_object])
         b2.zeroEntries()
-        dolfinx_cuas.assemble_vector(b2, V, bottom_facets, kernel, coeffs, consts, it.exterior_facet)
+        dolfinx_cuas.assemble_vector(b2, V, bottom_facets, kernel, coeffs, consts,
+                                     dolfinx.fem.IntegralType.exterior_facet)
         dolfinx.fem.assemble_vector(b2, L_cuas)
         b2.assemble()
         # Jacobian
@@ -204,7 +206,8 @@ def test_contact_kernel(theta, gamma, dim, gap):
         kernel = dolfinx_contact.cpp.generate_contact_kernel(
             V._cpp_object, kt.Jac, q_rule, [u._cpp_object, mu2._cpp_object, lmbda2._cpp_object])
         B.zeroEntries()
-        dolfinx_cuas.assemble_matrix(B, V, bottom_facets, kernel, coeffs, consts, it.exterior_facet)
+        dolfinx_cuas.assemble_matrix(B, V, bottom_facets, kernel, coeffs, consts,
+                                     dolfinx.fem.IntegralType.exterior_facet)
         dolfinx.fem.assemble_matrix(B, a_cuas)
         B.assemble()
         assert(np.allclose(b.array, b2.array))

@@ -57,9 +57,11 @@ __pycache__/
 
 .vscode
 
-**/build-dir
+**/build**/**
+**/*.egg-info/**
 core
 *.xdmf
 *.h5
+*.png
 **/CMakeFiles
 CMakeCache.txt

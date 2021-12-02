@@ -6,6 +6,7 @@ import basix
 import dolfinx_contact
 import dolfinx_contact.cpp
 import dolfinx_cuas
+import dolfinx.mesh
 import dolfinx_cuas.cpp
 import numpy as np
 import pytest
@@ -121,17 +122,17 @@ def test_vector_surface_kernel(dim, kernel_type, P, Q):
     # num_local_cells = mesh.topology.index_map(mesh.topology.dim).size_local
     consts = np.array([gamma, theta])
     consts = np.hstack((consts, n_vec))
-    coeffs = dolfinx_cuas.cpp.pack_coefficients([u._cpp_object, mu._cpp_object, lmbda._cpp_object])
+    integral_entities = dolfinx_cuas.cpp.compute_active_entities(mesh, ft.indices, IntegralType.exterior_facet)
+    coeffs = dolfinx_cuas.cpp.pack_coefficients([u._cpp_object, mu._cpp_object, lmbda._cpp_object], integral_entities)
     h_facets = dolfinx_contact.cpp.pack_circumradius_facet(mesh, facets)
-    h_cells = dolfinx_contact.cpp.facet_to_cell_data(mesh, facets, h_facets, 1)
     contact = dolfinx_contact.cpp.Contact(ft, 1, 1, V._cpp_object)
     contact.set_quadrature_degree(2 * P + Q + 1)
     g_vec = contact.pack_gap_plane(0, -g)
     # FIXME: assuming all facets are the same type
     q_rule = dolfinx_cuas.cpp.QuadratureRule(mesh.topology.cell_type, 2 * P
                                              + Q + 1, mesh.topology.dim - 1, basix.QuadratureType.Default)
-    g_vec_c = dolfinx_contact.cpp.facet_to_cell_data(mesh, facets, g_vec, dim * q_rule.weights(0).size)
-    coeffs = np.hstack([coeffs, h_cells, g_vec_c])
+    coeffs = np.hstack([coeffs, h_facets, g_vec])
+
     L_cuas = ufl.inner(sigma(u), epsilon(v)) * dx
     L_cuas = Form(L_cuas)
     b2 = create_vector(L_cuas)
@@ -154,9 +155,9 @@ def test_matrix_surface_kernel(dim, kernel_type, P, Q):
     mesh = UnitSquareMesh(MPI.COMM_WORLD, N, N) if dim == 2 else UnitCubeMesh(MPI.COMM_WORLD, N, N, N)
 
     # Find facets on boundary to integrate over
-    facets = mesh.locate_entities_boundary(mesh, mesh.topology.dim - 1,
-                                           lambda x: np.logical_or(np.isclose(x[0], 0.0),
-                                                                   np.isclose(x[0], 1.0)))
+    facets = dolfinx.mesh.locate_entities_boundary(mesh, mesh.topology.dim - 1,
+                                                   lambda x: np.logical_or(np.isclose(x[0], 0.0),
+                                                                           np.isclose(x[0], 1.0)))
     values = np.ones(len(facets), dtype=np.int32)
     ft = MeshTags(mesh, mesh.topology.dim - 1, facets, values)
 
@@ -242,15 +243,13 @@ def test_matrix_surface_kernel(dim, kernel_type, P, Q):
                                              + Q + 1, mesh.topology.dim - 1, basix.QuadratureType.Default)
     consts = np.array([gamma, theta])
     consts = np.hstack((consts, n_vec))
-    coeffs = dolfinx_cuas.cpp.pack_coefficients([u._cpp_object, mu._cpp_object, lmbda._cpp_object])
+    integral_entities = dolfinx_cuas.cpp.compute_active_entities(mesh, facets, IntegralType.exterior_facet)
+    coeffs = dolfinx_cuas.cpp.pack_coefficients([u._cpp_object, mu._cpp_object, lmbda._cpp_object], integral_entities)
     h_facets = dolfinx_contact.cpp.pack_circumradius_facet(mesh, facets)
-    h_cells = dolfinx_contact.cpp.facet_to_cell_data(mesh, facets, h_facets, 1)
     contact = dolfinx_contact.cpp.Contact(ft, 1, 1, V._cpp_object)
     contact.set_quadrature_degree(2 * P + Q + 1)
     g_vec = contact.pack_gap_plane(0, -g)
-    # FIXME: Assumption of constant facet will break on prisms
-    g_vec_c = dolfinx_contact.cpp.facet_to_cell_data(mesh, facets, g_vec, dim * q_rule.weights(0).size)
-    coeffs = np.hstack([coeffs, h_cells, g_vec_c])
+    coeffs = np.hstack([coeffs, h_facets, g_vec])
     a_cuas = ufl.inner(sigma(du), epsilon(v)) * dx
     a_cuas = Form(a_cuas)
     B = create_matrix(a_cuas)

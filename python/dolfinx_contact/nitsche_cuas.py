@@ -2,25 +2,28 @@
 #
 # SPDX-License-Identifier:    MIT
 
-import dolfinx
+from typing import Tuple
+
 import basix
-import dolfinx.io
-import dolfinx_contact
 import dolfinx_cuas
-import dolfinx_contact.cpp
 import dolfinx_cuas.cpp
 import numpy as np
 import ufl
+from dolfinx import common, fem, io, log
+from dolfinx import mesh as dmesh
 from mpi4py import MPI
 from petsc4py import PETSc
-from typing import Tuple
-from dolfinx_contact.helpers import (epsilon, lame_parameters, rigid_motions_nullspace, sigma_func)
+
+import dolfinx_contact
+import dolfinx_contact.cpp
+from dolfinx_contact.helpers import (epsilon, lame_parameters,
+                                     rigid_motions_nullspace, sigma_func)
 
 kt = dolfinx_contact.cpp.Kernel
 it = dolfinx.cpp.fem.IntegralType
 
 
-def nitsche_cuas(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dolfinx.MeshTags, int, int],
+def nitsche_cuas(mesh: dmesh.Mesh, mesh_data: Tuple[dmesh.MeshTags, int, int],
                  physical_parameters: dict, refinement: int = 0,
                  nitsche_parameters: dict = {"gamma": 1, "theta": 1, "s": 0}, g: float = 0.0,
                  vertical_displacement: float = -0.1, nitsche_bc: bool = True):
@@ -37,7 +40,7 @@ def nitsche_cuas(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dolfinx.MeshTags,
     n_2 = ufl.as_vector(n_vec)  # Normal of plane (projection onto other body)
     n = ufl.FacetNormal(mesh)
 
-    V = dolfinx.VectorFunctionSpace(mesh, ("CG", 1))
+    V = fem.VectorFunctionSpace(mesh, ("CG", 1))
     E = physical_parameters["E"]
     nu = physical_parameters["nu"]
     mu_func, lambda_func = lame_parameters(physical_parameters["strain"])
@@ -50,7 +53,7 @@ def nitsche_cuas(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dolfinx.MeshTags,
         # NOTE: Different normals, see summary paper
         return ufl.dot(sigma(v) * n, n_2)
 
-    u = dolfinx.Function(V)
+    u = fem.Function(V)
     v = ufl.TestFunction(V)
     du = ufl.TrialFunction(V)
 
@@ -60,7 +63,7 @@ def nitsche_cuas(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dolfinx.MeshTags,
         values[-1] = -0.01 - g
         return values
 
-    u = dolfinx.Function(V)
+    u = fem.Function(V)
     v = ufl.TestFunction(V)
     u.interpolate(_u_initial)
 
@@ -105,52 +108,50 @@ def nitsche_cuas(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dolfinx.MeshTags,
             for j in range(1):
                 values[j, i] = mu
         return values
-    V2 = dolfinx.FunctionSpace(mesh, ("DG", 0))
-    lmbda2 = dolfinx.Function(V2)
+    V2 = fem.FunctionSpace(mesh, ("DG", 0))
+    lmbda2 = fem.Function(V2)
     lmbda2.interpolate(lmbda_func2)
-    mu2 = dolfinx.Function(V2)
+    mu2 = fem.Function(V2)
     mu2.interpolate(mu_func2)
     u.interpolate(_u_initial)
-    coeffs = dolfinx_cuas.cpp.pack_coefficients([mu2._cpp_object, lmbda2._cpp_object])
+    integral_entities = dolfinx_cuas.cpp.compute_active_entities(mesh, bottom_facets, it.exterior_facet)
+    coeffs = dolfinx_cuas.cpp.pack_coefficients([mu2._cpp_object, lmbda2._cpp_object], integral_entities)
     h_facets = dolfinx_contact.cpp.pack_circumradius_facet(mesh, bottom_facets)
-    h_cells = dolfinx_contact.cpp.facet_to_cell_data(mesh, bottom_facets, h_facets, 1)
     contact = dolfinx_contact.cpp.Contact(facet_marker, bottom_value, top_value, V._cpp_object)
     contact.set_quadrature_degree(q_deg)
     g_vec = contact.pack_gap_plane(0, -g)
-    g_vec_c = dolfinx_contact.cpp.facet_to_cell_data(
-        mesh, bottom_facets, g_vec, mesh.geometry.dim * q_rule.weights(0).size)
-    coeffs = np.hstack([coeffs, h_cells, g_vec_c])
+    coeffs = np.hstack([coeffs, h_facets, g_vec])
 
     # RHS
-    L_cuas = dolfinx.fem.Form(L)
+    L_cuas = fem.Form(L)
     kernel_rhs = dolfinx_contact.cpp.generate_contact_kernel(V._cpp_object, kt.Rhs, q_rule,
                                                              [u._cpp_object, mu2._cpp_object, lmbda2._cpp_object])
 
     def create_b():
-        return dolfinx.fem.create_vector(L_cuas)
+        return fem.create_vector(L_cuas)
 
     def F(x, b):
         u.vector[:] = x.array
-        u_packed = dolfinx_cuas.cpp.pack_coefficients([u._cpp_object])
+        u_packed = dolfinx_cuas.cpp.pack_coefficients([u._cpp_object], integral_entities)
         c = np.hstack([u_packed, coeffs])
 
         dolfinx_cuas.assemble_vector(b, V, bottom_facets, kernel_rhs, c, consts, it.exterior_facet)
-        dolfinx.fem.assemble_vector(b, L_cuas)
+        fem.assemble_vector(b, L_cuas)
 
     # Jacobian
-    a_cuas = dolfinx.fem.Form(a)
+    a_cuas = fem.Form(a)
     kernel_J = dolfinx_contact.cpp.generate_contact_kernel(
         V._cpp_object, kt.Jac, q_rule, [u._cpp_object, mu2._cpp_object, lmbda2._cpp_object])
 
     def create_A():
-        return dolfinx.fem.create_matrix(a_cuas)
+        return fem.create_matrix(a_cuas)
 
     def A(x, A):
         u.vector[:] = x.array
         u_packed = dolfinx_cuas.cpp.pack_coefficients([u._cpp_object])
         c = np.hstack([u_packed, coeffs])
         dolfinx_cuas.assemble_matrix(A, V, bottom_facets, kernel_J, c, consts, it.exterior_facet)
-        dolfinx.fem.assemble_matrix(A, a_cuas)
+        fem.assemble_matrix(A, a_cuas)
 
     problem = dolfinx_cuas.NonlinearProblemCUAS(F, A, create_b, create_A)
     # DEBUG: Write each step of Newton iterations
@@ -199,15 +200,15 @@ def nitsche_cuas(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dolfinx.MeshTags,
     ksp.setFromOptions()
 
     # Solve non-linear problem
-    dolfinx.log.set_log_level(dolfinx.log.LogLevel.INFO)
-    with dolfinx.common.Timer(f"{refinement} Solve Nitsche"):
+    log.set_log_level(log.LogLevel.INFO)
+    with common.Timer(f"{refinement} Solve Nitsche"):
         n, converged = solver.solve(u)
     u.x.scatter_forward()
     if solver.error_on_nonconvergence:
         assert(converged)
     print(f"{V.dofmap.index_map_bs*V.dofmap.index_map.size_global}, Number of interations: {n:d}")
 
-    with dolfinx.io.XDMFFile(MPI.COMM_WORLD, f"results/u_cuas_{refinement}.xdmf", "w") as xdmf:
+    with io.XDMFFile(MPI.COMM_WORLD, f"results/u_cuas_{refinement}.xdmf", "w") as xdmf:
         xdmf.write_mesh(mesh)
         xdmf.write_function(u)
 

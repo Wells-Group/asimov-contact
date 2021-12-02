@@ -3,8 +3,8 @@
 # SPDX-License-Identifier:    MIT
 
 
-import dolfinx
-import dolfinx.la
+import dolfinx.la as _la
+import dolfinx.fem as _fem
 import numpy
 import ufl
 from contextlib import ExitStack
@@ -13,7 +13,7 @@ from petsc4py import PETSc
 __all__ = ["lame_parameters", "epsilon", "sigma_func", "convert_mesh"]
 
 
-def lame_parameters(plane_strain=False):
+def lame_parameters(plane_strain: bool = False):
     """
     Returns the Lame parameters for plane stress or plane strain.
     Return type is lambda functions
@@ -67,34 +67,32 @@ class NonlinearPDE_SNESProblem:
 
         self.L = F
         self.a = ufl.derivative(F, u, du)
-        self.a_comp = dolfinx.fem.Form(self.a)
+        self.a_comp = _fem.Form(self.a)
         self.bc = bc
         self._F, self._J = None, None
         self.u = u
 
     def F(self, snes, x, F):
         """Assemble residual vector."""
-        x.ghostUpdate(addv=PETSc.InsertMode.INSERT,
-                      mode=PETSc.ScatterMode.FORWARD)
+        x.ghostUpdate(addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD)
         x.copy(self.u.vector)
         self.u.vector.ghostUpdate(
             addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD)
         with F.localForm() as f_local:
             f_local.set(0.0)
-        dolfinx.fem.assemble_vector(F, self.L)
-        dolfinx.fem.apply_lifting(F, [self.a], [[self.bc]], [x], -1.0)
-        F.ghostUpdate(addv=PETSc.InsertMode.ADD,
-                      mode=PETSc.ScatterMode.REVERSE)
-        dolfinx.fem.set_bc(F, [self.bc], x, -1.0)
+        _fem.assemble_vector(F, self.L)
+        _fem.apply_lifting(F, [self.a], [[self.bc]], [x], -1.0)
+        F.ghostUpdate(addv=PETSc.InsertMode.ADD, mode=PETSc.ScatterMode.REVERSE)
+        _fem.set_bc(F, [self.bc], x, -1.0)
 
     def J(self, snes, x, J, P):
         """Assemble Jacobian matrix."""
         J.zeroEntries()
-        dolfinx.fem.assemble_matrix(J, self.a, [self.bc])
+        _fem.assemble_matrix(J, self.a, [self.bc])
         J.assemble()
 
 
-def convert_mesh(filename, cell_type, prune_z=False, ext=None):
+def convert_mesh(filename: str, cell_type: str, prune_z: bool = False, ext: str = None, cell_data: str = "gmsh:physical"):
     """
     Given the filename of a msh file, read data and convert to XDMF file containing cells of given cell type
     """
@@ -108,11 +106,9 @@ def convert_mesh(filename, cell_type, prune_z=False, ext=None):
     if MPI.COMM_WORLD.rank == 0:
         mesh = meshio.read(f"{filename}.msh")
         cells = mesh.get_cells_type(cell_type)
-        data = numpy.hstack([mesh.cell_data_dict["gmsh:physical"][key]
-                            for key in mesh.cell_data_dict["gmsh:physical"].keys() if key == cell_type])
+        data = mesh.get_cell_data(cell_data, cell_type)
         pts = mesh.points[:, :2] if prune_z else mesh.points
-        out_mesh = meshio.Mesh(points=pts, cells={cell_type: cells}, cell_data={
-                               "name_to_read": [data]})
+        out_mesh = meshio.Mesh(points=pts, cells={cell_type: cells}, cell_data={"name_to_read": [data]})
         if ext is None:
             ext = ""
         else:
@@ -120,9 +116,16 @@ def convert_mesh(filename, cell_type, prune_z=False, ext=None):
         meshio.write(f"{filename}{ext}.xdmf", out_mesh)
 
 
-def rigid_motions_nullspace(V):
-    """Function to build nullspace for 2D/3D elasticity"""
+def rigid_motions_nullspace(V: _fem.FunctionSpace):
+    """
+    Function to build nullspace for 2D/3D elasticity.
 
+    Parameters:
+    ===========
+    V
+        The function space
+    """
+    _x = _fem.Function(V)
     # Get geometric dim
     gdim = V.mesh.geometry.dim
     assert gdim == 2 or gdim == 3
@@ -131,12 +134,10 @@ def rigid_motions_nullspace(V):
     dim = 3 if gdim == 2 else 6
 
     # Create list of vectors for null space
-    nullspace_basis = [dolfinx.cpp.la.create_vector(
-        V.dofmap.index_map, V.dofmap.index_map_bs) for i in range(dim)]
+    nullspace_basis = [_x.vector.copy() for i in range(dim)]
 
     with ExitStack() as stack:
-        vec_local = [stack.enter_context(x.localForm())
-                     for x in nullspace_basis]
+        vec_local = [stack.enter_context(x.localForm()) for x in nullspace_basis]
         basis = [numpy.asarray(x) for x in vec_local]
 
         dofs = [V.sub(i).dofmap.list.array for i in range(gdim)]
@@ -161,9 +162,6 @@ def rigid_motions_nullspace(V):
             basis[5][dofs[2]] = x1
             basis[5][dofs[1]] = -x2
 
-    basis = dolfinx.la.VectorSpaceBasis(nullspace_basis)
-    basis.orthonormalize()
-
-    _x = [basis[i] for i in range(dim)]
-    nsp = PETSc.NullSpace().create(vectors=_x)
-    return nsp
+    _la.orthonormalize(nullspace_basis)
+    assert _la.is_orthonormal(nullspace_basis)
+    return PETSc.NullSpace().create(vectors=nullspace_basis)

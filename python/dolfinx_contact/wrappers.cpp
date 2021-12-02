@@ -228,19 +228,4 @@ PYBIND11_MODULE(cpp, m)
           return dolfinx_contact_wrappers::as_pyarray(
               std::move(coeffs), std::array{shape0, cstride});
         });
-  m.def("facet_to_cell_data",
-        [](std::shared_ptr<const dolfinx::mesh::Mesh> mesh,
-           const py::array_t<std::int32_t, py::array::c_style>& active_facets,
-           const py::array_t<PetscScalar, py::array::c_style>& data,
-           int num_cols)
-        {
-          auto [coeffs, cstride] = dolfinx_contact::facet_to_cell_data(
-              mesh,
-              xtl::span<const std::int32_t>(active_facets.data(),
-                                            active_facets.size()),
-              xtl::span<const PetscScalar>(data.data(), data.size()), num_cols);
-          int shape0 = cstride == 0 ? 0 : coeffs.size() / cstride;
-          return dolfinx_contact_wrappers::as_pyarray(
-              std::move(coeffs), std::array{shape0, cstride});
-        });
 }
