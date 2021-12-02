@@ -762,7 +762,7 @@ get_basis_functions(xt::xtensor<double, 3>& J, xt::xtensor<double, 3>& K,
   for (std::size_t q = 0; q < num_points; ++q)
   {
     // Permute the reference values to account for the cell's orientation
-    point_basis_values = xt::view(tabulated_data, q, xt::all(), xt::all());
+    point_basis_values = xt::view(tabulated_data, 0, q, xt::all(), xt::all());
     element->apply_dof_transformation(
         xtl::span<double>(point_basis_values.data(), point_basis_values.size()),
         perm, 1);
