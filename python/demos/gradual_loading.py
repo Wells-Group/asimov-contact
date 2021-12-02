@@ -165,11 +165,12 @@ if __name__ == "__main__":
     e_rel = []
     dofs_global = []
     rank = MPI.COMM_WORLD.rank
-    mesh_data = (facet_marker, top_value, bottom_value, surface_value, surface_bottom)
     load_increment = vertical_displacement / nload_steps
     u1 = None
     for j in range(nload_steps):
         displacement = load_increment
+        mesh_data = (facet_marker, top_value, bottom_value, surface_value, surface_bottom)
+
         # Solve contact problem using Nitsche's method
         u1 = nitsche_rigid_surface_cuas(mesh=mesh, mesh_data=mesh_data, physical_parameters=physical_parameters,
                                         nitsche_parameters=nitsche_parameters, vertical_displacement=displacement,

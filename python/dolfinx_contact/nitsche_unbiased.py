@@ -2,23 +2,26 @@
 #
 # SPDX-License-Identifier:    MIT
 
-import dolfinx
-import dolfinx.io
-import dolfinx_cuas
-import dolfinx_contact
-import dolfinx_contact.cpp
-import numpy as np
-import ufl
-from typing import Tuple
-from dolfinx_contact.helpers import (epsilon, lame_parameters, sigma_func)
-from petsc4py import PETSc
 from mpi4py import MPI
+from petsc4py import PETSc
+from dolfinx_contact.helpers import (epsilon, lame_parameters, sigma_func)
+from typing import Tuple
+import ufl
+import numpy as np
+import dolfinx_contact.cpp
+import dolfinx_contact
+import dolfinx_cuas
+import dolfinx.mesh as _mesh
+import dolfinx.io as _io
+import dolfinx.fem as _fem
+import dolfinx.log as _log
+import dolfinx.common as _common
 
 
 kt = dolfinx_contact.cpp.Kernel
 
 
-def nitsche_unbiased(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dolfinx.MeshTags, int, int, int, int],
+def nitsche_unbiased(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTags, int, int, int, int],
                      physical_parameters: dict, refinement: int = 0,
                      nitsche_parameters: dict = {"gamma": 1, "theta": 1},
                      vertical_displacement: float = -0.1, nitsche_bc: bool = True, initGuess=None):
@@ -38,9 +41,9 @@ def nitsche_unbiased(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dolfinx.MeshT
     sigma = sigma_func(mu, lmbda)
 
     # Functions space and FEM functions
-    V = dolfinx.VectorFunctionSpace(mesh, ("CG", 1))
+    V = _fem.VectorFunctionSpace(mesh, ("CG", 1))
     gdim = mesh.geometry.dim
-    u = dolfinx.Function(V)
+    u = _fem.Function(V)
     v = ufl.TestFunction(V)
     du = ufl.TrialFunction(V)
 
@@ -98,7 +101,7 @@ def nitsche_unbiased(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dolfinx.MeshT
         print("Dirichlet bc not implemented in custom assemblers yet.")
 
     # Custom assembly
-    dolfinx.log.set_log_level(dolfinx.log.LogLevel.OFF)
+    _log.set_log_level(_log.LogLevel.OFF)
     # create contact class
     contact = dolfinx_contact.cpp.Contact(facet_marker, bottom_value, surface_value, V._cpp_object)
     contact.set_quadrature_degree(q_deg)
@@ -122,10 +125,10 @@ def nitsche_unbiased(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dolfinx.MeshT
                 values[j, i] = mu
         return values
 
-    V2 = dolfinx.FunctionSpace(mesh, ("DG", 0))
-    lmbda2 = dolfinx.Function(V2)
+    V2 = _fem.FunctionSpace(mesh, ("DG", 0))
+    lmbda2 = _fem.Function(V2)
     lmbda2.interpolate(lmbda_func2)
-    mu2 = dolfinx.Function(V2)
+    mu2 = _fem.Function(V2)
     mu2.interpolate(mu_func2)
 
     mu_packed_0 = contact.pack_coefficient_dofs(0, mu2._cpp_object)
@@ -147,7 +150,7 @@ def nitsche_unbiased(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dolfinx.MeshT
     coeff_1 = np.hstack([mu_packed_1, lmbda_packed_1, h_1, gap_1, test_fn_1])
 
     # assemble jacobian
-    a_cuas = dolfinx.fem.Form(a)
+    a_cuas = _fem.Form(a)
     kernel_jac = contact.generate_kernel(kt.Jac)
 
     def create_A():
@@ -162,15 +165,16 @@ def nitsche_unbiased(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dolfinx.MeshT
         c_0 = np.hstack([coeff_0, u_0, u_opp_0])
         c_1 = np.hstack([coeff_1, u_1, u_opp_1])
         contact.assemble_matrix(A, [], 0, kernel_jac, c_0, consts)
-        contact.assemble_matrix(A, [], 1, kernel_jac, c_1, consts)
-        dolfinx.fem.assemble_matrix(A, a_cuas)
+        contact.assemble_matrix(A, [], 0, kernel_jac, c_0, consts)
+        #contact.assemble_matrix(A, [], 1, kernel_jac, c_1, consts)
+        _fem.assemble_matrix(A, a_cuas)
 
     # assemble rhs
-    L_cuas = dolfinx.fem.Form(L)
+    L_cuas = _fem.Form(L)
     kernel_rhs = contact.generate_kernel(kt.Rhs)
 
     def create_b():
-        return dolfinx.fem.create_vector(L_cuas)
+        return _fem.create_vector(L_cuas)
 
     def F(x, b):
         u.vector[:] = x.array
@@ -181,8 +185,9 @@ def nitsche_unbiased(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dolfinx.MeshT
         c_0 = np.hstack([coeff_0, u_0, u_opp_0])
         c_1 = np.hstack([coeff_1, u_1, u_opp_1])
         contact.assemble_vector(b, 0, kernel_rhs, c_0, consts)
-        contact.assemble_vector(b, 1, kernel_rhs, c_1, consts)
-        dolfinx.fem.assemble_vector(b, L_cuas)
+        contact.assemble_vector(b, 0, kernel_rhs, c_0, consts)
+        # contact.assemble_vector(b, 1, kernel_rhs, c_1, consts)
+        _fem.assemble_vector(b, L_cuas)
 
     problem = dolfinx_cuas.NonlinearProblemCUAS(F, A, create_b, create_A)
     # DEBUG: Write each step of Newton iterations
@@ -222,20 +227,20 @@ def nitsche_unbiased(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dolfinx.MeshT
     ksp.setFromOptions()
 
     # Solve non-linear problem
-    dolfinx.log.set_log_level(dolfinx.log.LogLevel.INFO)
-    with dolfinx.common.Timer(f"{refinement} Solve Nitsche"):
+    _log.set_log_level(_log.LogLevel.INFO)
+    with _common.Timer(f"{refinement} Solve Nitsche"):
         n, converged = solver.solve(u)
     u.x.scatter_forward()
     if solver.error_on_nonconvergence:
         assert(converged)
     print(f"{V.dofmap.index_map_bs*V.dofmap.index_map.size_global}, Number of interations: {n:d}")
 
-    with dolfinx.io.XDMFFile(MPI.COMM_WORLD, f"results/u_unbiased_{refinement}.xdmf", "w") as xdmf:
+    with _io.XDMFFile(MPI.COMM_WORLD, f"results/u_unbiased_{refinement}.xdmf", "w") as xdmf:
         xdmf.write_mesh(mesh)
         u.name = "u"
         xdmf.write_function(u)
     facet_marker.name = "Contact facets"
-    with dolfinx.io.XDMFFile(MPI.COMM_WORLD, "mt_unbiased.xdmf", "w") as xdmf:
+    with _io.XDMFFile(MPI.COMM_WORLD, "mt_unbiased.xdmf", "w") as xdmf:
         xdmf.write_mesh(mesh)
         xdmf.write_meshtags(facet_marker)
 
