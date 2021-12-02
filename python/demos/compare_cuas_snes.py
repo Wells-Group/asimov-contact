@@ -1,19 +1,26 @@
 # Copyright (C) 2021 Jørgen S. Dokken and Sarah Roggendorf
 #
 # SPDX-License-Identifier:    MIT
+#
+# Compare our own Nitsche implementation using dolfinx_cuas with SNES
 
 import argparse
 
-import dolfinx
-import dolfinx.io
 import numpy as np
 import ufl
-from mpi4py import MPI
 
-from dolfinx_contact.create_mesh import create_disk_mesh, create_sphere_mesh, convert_mesh
+from dolfinx.common import timing
+from dolfinx.fem import Function, assemble_scalar
+from dolfinx.generation import UnitCubeMesh, UnitSquareMesh
+from dolfinx.io import XDMFFile
+from dolfinx.mesh import MeshTags, locate_entities_boundary, refine
+
+from dolfinx_contact.create_mesh import (convert_mesh, create_disk_mesh,
+                                         create_sphere_mesh)
 from dolfinx_contact.nitsche_cuas import nitsche_cuas
 from dolfinx_contact.snes_against_plane import snes_solver
 
+from mpi4py import MPI
 
 if __name__ == "__main__":
     description = "Compare Nitsche's method for contact against a straight plane with PETSc SNES"
@@ -68,12 +75,12 @@ if __name__ == "__main__":
     # and the bottom (contact condition)
     if threed:
         if cube:
-            mesh = dolfinx.UnitCubeMesh(MPI.COMM_WORLD, 10, 10, 20)
+            mesh = UnitCubeMesh(MPI.COMM_WORLD, 10, 10, 20)
         else:
             fname = "sphere"
             create_sphere_mesh(filename=f"{fname}.msh")
             convert_mesh(fname, "tetra")
-            with dolfinx.io.XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
+            with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
                 mesh = xdmf.read_mesh(name="Grid")
 
         def top(x):
@@ -84,12 +91,12 @@ if __name__ == "__main__":
 
     else:
         if cube:
-            mesh = dolfinx.UnitSquareMesh(MPI.COMM_WORLD, 30, 30)
+            mesh = UnitSquareMesh(MPI.COMM_WORLD, 30, 30)
         else:
             fname = "disk"
             create_disk_mesh(filename=f"{fname}.msh")
             convert_mesh(fname, "triangle", prune_z=True)
-            with dolfinx.io.XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
+            with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
                 mesh = xdmf.read_mesh(name="Grid")
 
         def top(x):
@@ -107,20 +114,18 @@ if __name__ == "__main__":
         if i > 0:
             # Refine mesh
             mesh.topology.create_entities(mesh.topology.dim - 2)
-            mesh = dolfinx.mesh.refine(mesh)
+            mesh = refine(mesh)
 
         # Create meshtag for top and bottom markers
         tdim = mesh.topology.dim
-        top_facets = dolfinx.mesh.locate_entities_boundary(mesh, tdim - 1, top)
-        bottom_facets = dolfinx.mesh.locate_entities_boundary(
-            mesh, tdim - 1, bottom)
+        top_facets = locate_entities_boundary(mesh, tdim - 1, top)
+        bottom_facets = locate_entities_boundary(mesh, tdim - 1, bottom)
         top_values = np.full(len(top_facets), top_value, dtype=np.int32)
-        bottom_values = np.full(
-            len(bottom_facets), bottom_value, dtype=np.int32)
+        bottom_values = np.full(len(bottom_facets), bottom_value, dtype=np.int32)
         indices = np.concatenate([top_facets, bottom_facets])
         values = np.hstack([top_values, bottom_values])
         sorted_facets = np.argsort(indices)
-        facet_marker = dolfinx.MeshTags(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
+        facet_marker = MeshTags(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
         mesh_data = (facet_marker, top_value, bottom_value)
 
         # Solve contact problem using Nitsche's method
@@ -135,18 +140,18 @@ if __name__ == "__main__":
         V = u1.function_space
         dx = ufl.Measure("dx", domain=mesh)
         error = ufl.inner(u1 - u2, u1 - u2) * dx
-        E_L2 = np.sqrt(MPI.COMM_WORLD.allreduce(dolfinx.fem.assemble_scalar(error), op=MPI.SUM))
+        E_L2 = np.sqrt(mesh.comm.allreduce(assemble_scalar(error), op=MPI.SUM))
         u2_norm = ufl.inner(u2, u2) * dx
-        u2_L2 = np.sqrt(MPI.COMM_WORLD.allreduce(dolfinx.fem.assemble_scalar(u2_norm), op=MPI.SUM))
+        u2_L2 = np.sqrt(mesh.comm.allreduce(assemble_scalar(u2_norm), op=MPI.SUM))
         if rank == 0:
             print(f"abs. L2-error={E_L2:.2e}")
             print(f"rel. L2-error={E_L2/u2_L2:.2e}")
         e_abs.append(E_L2)
         e_rel.append(E_L2 / u2_L2)
         dofs_global.append(V.dofmap.index_map.size_global * V.dofmap.index_map_bs)
-        error_fn = dolfinx.Function(V)
+        error_fn = Function(V)
         error_fn.vector[:] = u1.x.array - u2.x.array
-        with dolfinx.io.XDMFFile(MPI.COMM_WORLD, f"results/u_error_{i}.xdmf", "w") as xdmf:
+        with XDMFFile(MPI.COMM_WORLD, f"results/u_error_{i}.xdmf", "w") as xdmf:
             xdmf.write_mesh(mesh)
             xdmf.write_function(error_fn)
 
@@ -156,8 +161,8 @@ if __name__ == "__main__":
         print(f"Absolute error {e_abs}")
         print(f"Relative error {e_rel}")
     for i in refs:
-        nitsche_timings = dolfinx.cpp.common.timing(f'{i} Solve Nitsche')
-        snes_timings = dolfinx.cpp.common.timing(f'{i} Solve SNES')
+        nitsche_timings = timing(f'{i} Solve Nitsche')
+        snes_timings = timing(f'{i} Solve SNES')
         if rank == 0:
             print(f"{dofs_global[i]}, Nitsche: {nitsche_timings[1]: 0.2e}"
                   + f" SNES: {snes_timings[1]:0.2e}")

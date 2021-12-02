@@ -8,4 +8,3 @@
 
 from .create_mesh import create_disk_mesh, create_sphere_mesh
 from .helpers import lame_parameters, epsilon, sigma_func, convert_mesh
-from .build_gap_function import facet_master_puppet_relation
