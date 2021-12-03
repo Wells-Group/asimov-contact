@@ -114,6 +114,7 @@ jobs:
           python3 compare_nitsche_snes.py
           python3 demo_nitsche_rigid_surface_ufl.py
           python3 demo_nitsche_rigid_surface_cuas.py
+          python3 nitsche_euler_bernoulli.py
 
       - name: Run tests
         run: |
