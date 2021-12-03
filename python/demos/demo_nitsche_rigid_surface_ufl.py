@@ -6,7 +6,6 @@ import argparse
 
 import numpy as np
 from dolfinx.io import XDMFFile
-from dolfinx.mesh import MeshTags
 from mpi4py import MPI
 
 from dolfinx_contact.create_contact_meshes import (create_circle_plane_mesh,
