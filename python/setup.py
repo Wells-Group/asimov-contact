@@ -79,4 +79,5 @@ setup(name='dolfinx_contact',
       license='MIT',
       cmdclass=dict(build_ext=CMakeBuild),
       install_requires=REQUIREMENTS,
+      dependency_links=["http://packages.fenicsproject.org/simple"],
       zip_safe=False)
