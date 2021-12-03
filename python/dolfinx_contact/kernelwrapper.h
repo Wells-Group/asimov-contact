@@ -2,7 +2,9 @@
 //
 // This file is part of DOLFINx_CONTACT
 //
-// SPDX-License-Identifier:    LMIT
+// SPDX-License-Identifier:    MIT
+#include <caster_petsc.h>
+#include <functional>
 
 using contact_kernel_fn = std::function<void(
     std::vector<std::vector<PetscScalar>>&, const double*, const double*,

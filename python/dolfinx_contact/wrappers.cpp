@@ -1,12 +1,12 @@
 // Copyright (C) 2021 Sarah Roggendorf
 //
-// This file is part of DOLFINx_CUAS
+// This file is part of DOLFINx_CONTACT
 //
-// SPDX-License-Identifier:    LGPL-3.0-or-later
+// SPDX-License-Identifier:    MIT
 
-#include "array.h"
-#include "caster_petsc.h"
 #include "kernelwrapper.h"
+#include <array.h>
+#include <caster_petsc.h>
 #include <dolfinx/la/PETScMatrix.h>
 #include <dolfinx/mesh/MeshTags.h>
 #include <dolfinx_contact/Contact.hpp>
@@ -57,16 +57,16 @@ PYBIND11_MODULE(cpp, m)
            {
              auto [coeffs, cstride] = self.pack_gap_plane(origin_meshtag, g);
              int shape0 = cstride == 0 ? 0 : coeffs.size() / cstride;
-             return dolfinx_contact_wrappers::as_pyarray(
-                 std::move(coeffs), std::array{shape0, cstride});
+             return dolfinx_wrappers::as_pyarray(std::move(coeffs),
+                                                 std::array{shape0, cstride});
            })
       .def("pack_gap",
            [](dolfinx_contact::Contact& self, int origin_meshtag)
            {
              auto [coeffs, cstride] = self.pack_gap(origin_meshtag);
              int shape0 = cstride == 0 ? 0 : coeffs.size() / cstride;
-             return dolfinx_contact_wrappers::as_pyarray(
-                 std::move(coeffs), std::array{shape0, cstride});
+             return dolfinx_wrappers::as_pyarray(std::move(coeffs),
+                                                 std::array{shape0, cstride});
            })
       .def(
           "create_matrix",
@@ -84,12 +84,12 @@ PYBIND11_MODULE(cpp, m)
              {
 
                auto qp = self.qp_phys_0()[facet];
-               return dolfinx_contact_wrappers::xt_as_pyarray(std::move(qp));
+               return dolfinx_wrappers::xt_as_pyarray(std::move(qp));
              }
              else
              {
                auto qp = self.qp_phys_1()[facet];
-               return dolfinx_contact_wrappers::xt_as_pyarray(std::move(qp));
+               return dolfinx_wrappers::xt_as_pyarray(std::move(qp));
              }
            })
       .def("map_0_to_1", &dolfinx_contact::Contact::map_0_to_1_facet)
@@ -139,8 +139,8 @@ PYBIND11_MODULE(cpp, m)
                  origin_meshtag,
                  xtl::span<const PetscScalar>(gap.data(), gap.size()));
              int shape0 = cstride == 0 ? 0 : coeffs.size() / cstride;
-             return dolfinx_contact_wrappers::as_pyarray(
-                 std::move(coeffs), std::array{shape0, cstride});
+             return dolfinx_wrappers::as_pyarray(std::move(coeffs),
+                                                 std::array{shape0, cstride});
            })
       .def("pack_u_contact",
            [](dolfinx_contact::Contact& self, int origin_meshtag,
@@ -151,8 +151,8 @@ PYBIND11_MODULE(cpp, m)
                  origin_meshtag, u,
                  xtl::span<const PetscScalar>(gap.data(), gap.size()));
              int shape0 = cstride == 0 ? 0 : coeffs.size() / cstride;
-             return dolfinx_contact_wrappers::as_pyarray(
-                 std::move(coeffs), std::array{shape0, cstride});
+             return dolfinx_wrappers::as_pyarray(std::move(coeffs),
+                                                 std::array{shape0, cstride});
            })
       .def("pack_coefficient_dofs",
            [](dolfinx_contact::Contact& self, int origin_meshtag,
@@ -161,8 +161,8 @@ PYBIND11_MODULE(cpp, m)
              auto [coeffs, cstride]
                  = self.pack_coefficient_dofs(origin_meshtag, coeff);
              int shape0 = cstride == 0 ? 0 : coeffs.size() / cstride;
-             return dolfinx_contact_wrappers::as_pyarray(
-                 std::move(coeffs), std::array{shape0, cstride});
+             return dolfinx_wrappers::as_pyarray(std::move(coeffs),
+                                                 std::array{shape0, cstride});
            })
       .def("pack_coeffs_const",
            [](dolfinx_contact::Contact& self, int origin_meshtag,
@@ -172,8 +172,8 @@ PYBIND11_MODULE(cpp, m)
              auto [coeffs, cstride]
                  = self.pack_coeffs_const(origin_meshtag, mu, lmbda);
              int shape0 = cstride == 0 ? 0 : coeffs.size() / cstride;
-             return dolfinx_contact_wrappers::as_pyarray(
-                 std::move(coeffs), std::array{shape0, cstride});
+             return dolfinx_wrappers::as_pyarray(std::move(coeffs),
+                                                 std::array{shape0, cstride});
            });
 
   m.def(
@@ -200,8 +200,8 @@ PYBIND11_MODULE(cpp, m)
           auto [coeffs, cstride]
               = dolfinx_contact::pack_coefficient_quadrature(coeff, q);
           int shape0 = cstride == 0 ? 0 : coeffs.size() / cstride;
-          return dolfinx_contact_wrappers::as_pyarray(
-              std::move(coeffs), std::array{shape0, cstride});
+          return dolfinx_wrappers::as_pyarray(std::move(coeffs),
+                                              std::array{shape0, cstride});
         });
   m.def("pack_coefficient_facet",
         [](std::shared_ptr<const dolfinx::fem::Function<PetscScalar>> coeff,
@@ -213,8 +213,8 @@ PYBIND11_MODULE(cpp, m)
               xtl::span<const std::int32_t>(active_facets.data(),
                                             active_facets.size()));
           int shape0 = cstride == 0 ? 0 : coeffs.size() / cstride;
-          return dolfinx_contact_wrappers::as_pyarray(
-              std::move(coeffs), std::array{shape0, cstride});
+          return dolfinx_wrappers::as_pyarray(std::move(coeffs),
+                                              std::array{shape0, cstride});
         });
 
   m.def("pack_circumradius_facet",
@@ -225,7 +225,7 @@ PYBIND11_MODULE(cpp, m)
               mesh, xtl::span<const std::int32_t>(active_facets.data(),
                                                   active_facets.size()));
           int shape0 = cstride == 0 ? 0 : coeffs.size() / cstride;
-          return dolfinx_contact_wrappers::as_pyarray(
-              std::move(coeffs), std::array{shape0, cstride});
+          return dolfinx_wrappers::as_pyarray(std::move(coeffs),
+                                              std::array{shape0, cstride});
         });
 }
