@@ -9,7 +9,8 @@ from setuptools.command.build_ext import build_ext
 
 VERSION = "0.3.1"
 
-REQUIREMENTS = ["fenics-dolfinx>0.3.0@https://github.com/FEniCS/dolfinx/"]
+REQUIREMENTS = ["fenics-dolfinx>0.3.0@https://github.com/FEniCS/dolfinx/",
+                "dolfinx-cuas>0.3.0@https://github.com/Wells-Group/asimov-custom-assemblers/"]
 
 
 class CMakeExtension(Extension):
