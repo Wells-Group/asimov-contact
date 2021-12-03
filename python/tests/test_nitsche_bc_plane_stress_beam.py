@@ -132,7 +132,7 @@ def solve_manufactured(nx: int, ny: int, theta: float, gamma: float,
 @pytest.mark.parametrize("linear_solver", [True, False])
 def test_nitsche_dirichlet(theta, gamma, strain, linear_solver):
     """
-    Manufatured solution test for the linear elasticity equation using Nitsche-Dirichlet 
+    Manufatured solution test for the linear elasticity equation using Nitsche-Dirichlet
     boundary conditions.
 
     Parameters

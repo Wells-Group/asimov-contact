@@ -15,7 +15,7 @@ from dolfinx.fem import (Function, FunctionSpace, IntegralType,
                          VectorFunctionSpace, assemble_matrix, assemble_vector,
                          create_matrix, create_vector, Form)
 from dolfinx.generation import UnitCubeMesh, UnitSquareMesh
-from dolfinx.mesh import Mesh, locate_entities_boundary, MeshTags
+from dolfinx.mesh import locate_entities_boundary, MeshTags
 from mpi4py import MPI
 
 kt = dolfinx_contact.cpp.Kernel

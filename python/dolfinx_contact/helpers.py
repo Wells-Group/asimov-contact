@@ -92,7 +92,8 @@ class NonlinearPDE_SNESProblem:
         J.assemble()
 
 
-def convert_mesh(filename: str, cell_type: str, prune_z: bool = False, ext: str = None, cell_data: str = "gmsh:physical"):
+def convert_mesh(filename: str, cell_type: str, prune_z: bool = False, ext: str = None,
+                 cell_data: str = "gmsh:physical"):
     """
     Given the filename of a msh file, read data and convert to XDMF file containing cells of given cell type
     """

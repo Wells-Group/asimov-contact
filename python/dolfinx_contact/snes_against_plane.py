@@ -9,9 +9,7 @@ import dolfinx.cpp.fem as _cpp_fem
 import dolfinx.fem as _fem
 import dolfinx.io as _io
 import dolfinx.la as _la
-import dolfinx.log as _log
 import dolfinx.mesh as _mesh
-import dolfinx.nls as _nls
 import numpy as np
 import ufl
 from petsc4py import PETSc as _PETSc
