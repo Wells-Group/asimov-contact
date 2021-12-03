@@ -3,18 +3,20 @@
 # SPDX-License-Identifier:    MIT
 
 import os
-import pytest
+
 import numpy as np
+import pytest
 import ufl
-from dolfinx.fem import (Function, NonlinearProblem,
-                         VectorFunctionSpace, LinearProblem, assemble_scalar)
-from dolfinx.nls import NewtonSolver
+from dolfinx.fem import (Function, LinearProblem, NonlinearProblem,
+                         VectorFunctionSpace, assemble_scalar)
 from dolfinx.generation import RectangleMesh
+from dolfinx.io import XDMFFile
 from dolfinx.mesh import (CellType, GhostMode, MeshTags,
                           locate_entities_boundary)
-from dolfinx.io import XDMFFile
-from dolfinx_contact.helpers import epsilon, lame_parameters, sigma_func
+from dolfinx.nls import NewtonSolver
 from mpi4py import MPI
+
+from dolfinx_contact.helpers import epsilon, lame_parameters, sigma_func
 
 
 def solve_manufactured(nx: int, ny: int, theta: float, gamma: float,

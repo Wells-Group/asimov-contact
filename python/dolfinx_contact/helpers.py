@@ -3,11 +3,12 @@
 # SPDX-License-Identifier:    MIT
 
 
-import dolfinx.la as _la
+from contextlib import ExitStack
+
 import dolfinx.fem as _fem
+import dolfinx.la as _la
 import numpy
 import ufl
-from contextlib import ExitStack
 from petsc4py import PETSc
 
 __all__ = ["lame_parameters", "epsilon", "sigma_func", "convert_mesh"]

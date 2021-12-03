@@ -3,20 +3,21 @@
 # SPDX-License-Identifier:   LGPL-3.0-or-later
 
 import basix
-import dolfinx_contact
-import dolfinx_contact.cpp
-import dolfinx_cuas
 import dolfinx.mesh
+import dolfinx_cuas
 import dolfinx_cuas.cpp
 import numpy as np
 import pytest
 import ufl
-from dolfinx.fem import (Function, FunctionSpace, IntegralType,
+from dolfinx.fem import (Form, Function, FunctionSpace, IntegralType,
                          VectorFunctionSpace, assemble_matrix, assemble_vector,
-                         create_matrix, create_vector, Form)
+                         create_matrix, create_vector)
 from dolfinx.generation import UnitCubeMesh, UnitSquareMesh
-from dolfinx.mesh import locate_entities_boundary, MeshTags
+from dolfinx.mesh import MeshTags, locate_entities_boundary
 from mpi4py import MPI
+
+import dolfinx_contact
+import dolfinx_contact.cpp
 
 kt = dolfinx_contact.cpp.Kernel
 compare_matrices = dolfinx_cuas.utils.compare_matrices

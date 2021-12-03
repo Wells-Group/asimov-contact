@@ -1,7 +1,6 @@
 # Copyright (C) 2021 Sarah Roggendorf
 # SPDX-License-Identifier:   LGPL-3.0-or-later
 
-import dolfinx_contact.cpp
 import numpy as np
 import pytest
 import ufl
@@ -9,6 +8,8 @@ from dolfinx.fem import FunctionSpace, LinearProblem
 from dolfinx.generation import UnitCubeMesh, UnitSquareMesh
 from dolfinx.mesh import locate_entities_boundary
 from mpi4py import MPI
+
+import dolfinx_contact.cpp
 
 
 @pytest.mark.parametrize("dim", [2, 3])

@@ -3,14 +3,15 @@
 # SPDX-License-Identifier:   LGPL-3.0-or-later
 
 import basix
-from dolfinx.generation import UnitSquareMesh
-from dolfinx.fem import FunctionSpace, VectorFunctionSpace, Function
-from dolfinx.mesh import locate_entities_boundary
-import dolfinx_contact.cpp
 import dolfinx_cuas.cpp
 import numpy as np
 import pytest
+from dolfinx.fem import Function, FunctionSpace, VectorFunctionSpace
+from dolfinx.generation import UnitSquareMesh
+from dolfinx.mesh import locate_entities_boundary
 from mpi4py import MPI
+
+import dolfinx_contact.cpp
 
 
 @pytest.mark.parametrize("quadrature_degree", range(1, 6))

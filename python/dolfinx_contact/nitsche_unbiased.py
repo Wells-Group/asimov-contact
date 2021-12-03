@@ -2,21 +2,22 @@
 #
 # SPDX-License-Identifier:    MIT
 
+from typing import Tuple
+
+import dolfinx.common as _common
+import dolfinx.fem as _fem
+import dolfinx.io as _io
+import dolfinx.log as _log
+import dolfinx.mesh as _mesh
+import dolfinx_cuas
+import numpy as np
+import ufl
 from mpi4py import MPI
 from petsc4py import PETSc
-from dolfinx_contact.helpers import (epsilon, lame_parameters, sigma_func)
-from typing import Tuple
-import ufl
-import numpy as np
-import dolfinx_contact.cpp
-import dolfinx_contact
-import dolfinx_cuas
-import dolfinx.mesh as _mesh
-import dolfinx.io as _io
-import dolfinx.fem as _fem
-import dolfinx.log as _log
-import dolfinx.common as _common
 
+import dolfinx_contact
+import dolfinx_contact.cpp
+from dolfinx_contact.helpers import epsilon, lame_parameters, sigma_func
 
 kt = dolfinx_contact.cpp.Kernel
 

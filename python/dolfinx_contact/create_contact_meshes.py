@@ -7,6 +7,7 @@ import warnings
 
 import gmsh
 import numpy as np
+
 from dolfinx_contact.helpers import convert_mesh
 
 warnings.filterwarnings("ignore")

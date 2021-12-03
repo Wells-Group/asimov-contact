@@ -2,17 +2,18 @@
 #
 # SPDX-License-Identifier:    MIT
 
+from typing import Tuple
+
 import dolfinx
 import dolfinx.io
 import numpy as np
 import ufl
 from mpi4py import MPI
 from petsc4py import PETSc
-import dolfinx_contact.cpp
 
-from typing import Tuple
-from dolfinx_contact.helpers import (epsilon, lame_parameters, rigid_motions_nullspace,
-                                     sigma_func, R_minus)
+import dolfinx_contact.cpp
+from dolfinx_contact.helpers import (R_minus, epsilon, lame_parameters,
+                                     rigid_motions_nullspace, sigma_func)
 
 
 def nitsche_rigid_surface(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dolfinx.MeshTags, int, int, int, int],

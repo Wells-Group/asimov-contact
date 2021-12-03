@@ -2,20 +2,21 @@
 #
 # SPDX-License-Identifier:    MIT
 
-from dolfinx_contact.helpers import (epsilon, lame_parameters, sigma_func, R_minus)
-
-import dolfinx.fem
 import basix
-import dolfinx.mesh
+import dolfinx.fem
 import dolfinx.io
+import dolfinx.mesh
 import dolfinx_cuas
 import dolfinx_cuas.cpp
+import numpy as np
+import pytest
+import ufl
+from mpi4py import MPI
+
 import dolfinx_contact
 import dolfinx_contact.cpp
-import numpy as np
-import ufl
-import pytest
-from mpi4py import MPI
+from dolfinx_contact.helpers import (R_minus, epsilon, lame_parameters,
+                                     sigma_func)
 
 kt = dolfinx_contact.cpp.Kernel
 compare_matrices = dolfinx_cuas.utils.compare_matrices
