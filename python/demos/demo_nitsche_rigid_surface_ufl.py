@@ -4,14 +4,15 @@
 
 import argparse
 
-import dolfinx
-import dolfinx.io
 import numpy as np
+from dolfinx.io import XDMFFile
+from dolfinx.mesh import MeshTags
 from mpi4py import MPI
 
-from dolfinx_contact.nitsche_rigid_surface import nitsche_rigid_surface
-from dolfinx_contact.create_contact_meshes import create_circle_plane_mesh, create_sphere_plane_mesh
+from dolfinx_contact.create_contact_meshes import (create_circle_plane_mesh,
+                                                   create_sphere_plane_mesh)
 from dolfinx_contact.helpers import convert_mesh
+from dolfinx_contact.nitsche_rigid_surface import nitsche_rigid_surface
 
 if __name__ == "__main__":
     desc = "Compare Nitsche's metood for contact against a straight plane with PETSc SNES"
@@ -62,12 +63,12 @@ if __name__ == "__main__":
         create_sphere_plane_mesh(filename=f"{fname}.msh")
         convert_mesh(fname, "tetra")
         convert_mesh(f"{fname}", "triangle", ext="facets")
-        with dolfinx.io.XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
+        with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
             mesh = xdmf.read_mesh(name="Grid")
         tdim = mesh.topology.dim
         mesh.topology.create_connectivity(tdim - 1, 0)
         mesh.topology.create_connectivity(tdim - 1, tdim)
-        with dolfinx.io.XDMFFile(MPI.COMM_WORLD, f"{fname}_facets.xdmf", "r") as xdmf:
+        with XDMFFile(MPI.COMM_WORLD, f"{fname}_facets.xdmf", "r") as xdmf:
             facet_marker = xdmf.read_meshtags(mesh, name="Grid")
         top_value = 2
         bottom_value = 1
@@ -80,12 +81,12 @@ if __name__ == "__main__":
         convert_mesh(fname, "triangle", prune_z=True)
         convert_mesh(f"{fname}", "line", ext="facets", prune_z=True)
 
-        with dolfinx.io.XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
+        with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
             mesh = xdmf.read_mesh(name="Grid")
         tdim = mesh.topology.dim
         mesh.topology.create_connectivity(tdim - 1, 0)
         mesh.topology.create_connectivity(tdim - 1, tdim)
-        with dolfinx.io.XDMFFile(MPI.COMM_WORLD, f"{fname}_facets.xdmf", "r") as xdmf:
+        with XDMFFile(MPI.COMM_WORLD, f"{fname}_facets.xdmf", "r") as xdmf:
             facet_marker = xdmf.read_meshtags(mesh, name="Grid")
         top_value = 2
         bottom_value = 4
@@ -95,7 +96,6 @@ if __name__ == "__main__":
     e_abs = []
     e_rel = []
     dofs_global = []
-    rank = MPI.COMM_WORLD.rank
     mesh_data = (facet_marker, top_value, bottom_value, surface_value, surface_bottom)
     # Solve contact problem using Nitsche's method
     u1 = nitsche_rigid_surface(mesh=mesh, mesh_data=mesh_data, physical_parameters=physical_parameters,
