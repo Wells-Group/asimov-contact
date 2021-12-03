@@ -17,7 +17,7 @@ from dolfinx.mesh import MeshTags, locate_entities_boundary, refine
 
 from dolfinx_contact.create_mesh import (convert_mesh, create_disk_mesh,
                                          create_sphere_mesh)
-from dolfinx_contact.nitsche_cuas import nitsche_cuas
+from dolfinx_contact.one_sided.nitsche_cuas import nitsche_cuas
 from dolfinx_contact.snes_against_plane import snes_solver
 
 from mpi4py import MPI
@@ -26,8 +26,8 @@ if __name__ == "__main__":
     description = "Compare Nitsche's method for contact against a straight plane with PETSc SNES"
     parser = argparse.ArgumentParser(description=description,
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument("--theta", default=1, type=np.float64, dest="theta",
-                        help="Theta parameter for Nitsche, 1 symmetric, -1 skew symmetric, 0 Penalty-like")
+    parser.add_argument("--theta", default=1, type=np.float64, dest="theta", choices=[-1, 0, 1],
+                        help="Theta parameter for Nitsche: skew symmetric (-1), Penalty-like (0), symmetric (1)")
     parser.add_argument("--gamma", default=10, type=np.float64, dest="gamma",
                         help="Coercivity/Stabilization parameter for Nitsche condition")
     _solve = parser.add_mutually_exclusive_group(required=False)
@@ -70,6 +70,11 @@ if __name__ == "__main__":
     threed = args.threed
     bottom_value = 2
     cube = args.cube
+
+    petsc_options = {"ksp_type": "preonly", "pc_type": "lu"}
+    # petsc_options = {"ksp_type": "cg", "pc_type": "gamg", "rtol": 1e-6, "pc_gamg_coarse_eq_limit": 1000,
+    #                  "mg_levels_ksp_type": "chebyshev", "mg_levels_pc_type": "jacobi",
+    #                  "mg_levels_esteig_ksp_type": "cg", "matptap_via": "scalable", "ksp_view": None}
 
     # Load mesh and create identifier functions for the top (Displacement condition)
     # and the bottom (contact condition)
@@ -131,7 +136,11 @@ if __name__ == "__main__":
         # Solve contact problem using Nitsche's method
         u1 = nitsche_cuas(mesh=mesh, mesh_data=mesh_data, physical_parameters=physical_parameters,
                           vertical_displacement=vertical_displacement, nitsche_parameters=nitsche_parameters,
-                          refinement=i, g=gap, nitsche_bc=nitsche_bc)
+                          plane_loc=gap, nitsche_bc=nitsche_bc, petsc_options=petsc_options)
+        with XDMFFile(mesh.comm, f"results/u_cuas_{i}.xdmf", "w") as xdmf:
+            xdmf.write_mesh(mesh)
+            xdmf.write_function(u1)
+
         # Solve contact problem using PETSc SNES
         u2 = snes_solver(mesh=mesh, mesh_data=mesh_data, physical_parameters=physical_parameters,
                          vertical_displacement=vertical_displacement, refinement=i, g=gap)
@@ -161,7 +170,7 @@ if __name__ == "__main__":
         print(f"Absolute error {e_abs}")
         print(f"Relative error {e_rel}")
     for i in refs:
-        nitsche_timings = timing(f'{i} Solve Nitsche')
+        nitsche_timings = timing(f'{dofs_global[i]} Solve Nitsche')
         snes_timings = timing(f'{i} Solve SNES')
         if rank == 0:
             print(f"{dofs_global[i]}, Nitsche: {nitsche_timings[1]: 0.2e}"

@@ -139,8 +139,8 @@ def nitsche_unbiased(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTags, int, int
 
     bottom_facets = facet_marker.indices[facet_marker.values == bottom_value]
     surface_facets = facet_marker.indices[facet_marker.values == surface_value]
-    h_0 = dolfinx_contact.cpp.pack_circumradius_facet(mesh, bottom_facets)
-    h_1 = dolfinx_contact.cpp.pack_circumradius_facet(mesh, surface_facets)
+    h_0 = dolfinx_contact.pack_circumradius_facet(mesh, bottom_facets)
+    h_1 = dolfinx_contact.pack_circumradius_facet(mesh, surface_facets)
 
     gap_0 = contact.pack_gap(0)
     test_fn_0 = contact.pack_test_functions(0, gap_0)

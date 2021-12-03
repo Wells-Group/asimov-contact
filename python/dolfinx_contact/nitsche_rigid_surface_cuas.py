@@ -132,7 +132,7 @@ def nitsche_rigid_surface_cuas(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTags
     integral_entities = dolfinx_cuas.cpp.compute_active_entities(mesh, bottom_facets, integral)
 
     coeffs = dolfinx_cuas.cpp.pack_coefficients([mu2._cpp_object, lmbda2._cpp_object], integral_entities)
-    h_facets = dolfinx_contact.cpp.pack_circumradius_facet(mesh, bottom_facets)
+    h_facets = dolfinx_contact.pack_circumradius_facet(mesh, bottom_facets)
     contact = dolfinx_contact.cpp.Contact(facet_marker, bottom_value, surface_value, V._cpp_object)
     contact.set_quadrature_degree(q_deg)
     contact.create_distance_map(0)

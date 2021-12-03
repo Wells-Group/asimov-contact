@@ -45,5 +45,5 @@ def test_circumradius(dim):
         cell = f_to_c.links(facet)[0]
         h2[i] = uh.vector[cell]
 
-    h = dolfinx_contact.cpp.pack_circumradius_facet(mesh, facets)
+    h = dolfinx_contact.pack_circumradius_facet(mesh, facets)
     assert np.allclose(h, h2)
