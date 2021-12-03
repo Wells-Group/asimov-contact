@@ -24,7 +24,19 @@ pybind11_add_module(cpp SHARED
 target_link_libraries(cpp PUBLIC pybind11::module)
 target_link_libraries(cpp PUBLIC dolfinx)
 
-   
+
+
+# Get python include-dirs
+execute_process(
+  COMMAND ${Python3_EXECUTABLE} -c "import dolfinx.wrappers, sys; sys.stdout.write(str(dolfinx.wrappers.get_include_path()))"
+  OUTPUT_VARIABLE DOLFINX_PY_DIR
+  RESULT_VARIABLE DOLFINX_PY_COMMAND_RESULT OUTPUT_STRIP_TRAILING_WHITESPACE)
+
+if (DOLFINX_PY_DIR)
+  message(STATUS "Adding ${DOLFINX_PY_DIR} to include directories")
+  target_include_directories(cpp PRIVATE ${DOLFINX_PY_DIR})
+endif()
+
 # Find petsc4py through python
 execute_process(
   COMMAND ${PYTHON_EXECUTABLE} -c "import petsc4py; print(petsc4py.get_include())"

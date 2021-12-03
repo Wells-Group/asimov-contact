@@ -75,9 +75,8 @@ kernel_fn generate_contact_kernel(
   }
   // FIXME: This will not work for prism meshes
   const std::uint32_t num_quadrature_pts = q_points[0].shape(0);
-  offsets[num_coeffs + 1] = offsets[num_coeffs] + num_facets;
-  offsets[num_coeffs + 2]
-      = offsets[num_coeffs + 1] + gdim * num_quadrature_pts * num_facets;
+  offsets[num_coeffs + 1] = offsets[num_coeffs] + 1;
+  offsets[num_coeffs + 2] = offsets[num_coeffs + 1] + gdim * num_quadrature_pts;
   // Pack coefficients for functions and gradients of functions (untested)
   // FIXME: This assumption would fail for prisms
   xt::xtensor<double, 3> phi_coeffs(
@@ -198,9 +197,8 @@ kernel_fn generate_contact_kernel(
         n_surf(i) = w[i + 2];
     }
     int c_offset = (bs - 1) * offsets[1];
-    double gamma
-        = w[0] / c[c_offset + offsets[3] + facet_index]; // This is gamma/h
-    double gamma_inv = c[c_offset + offsets[3] + facet_index] / w[0];
+    double gamma = w[0] / c[c_offset + offsets[3]]; // This is gamma/h
+    double gamma_inv = c[c_offset + offsets[3]] / w[0];
     double theta = w[1];
     // If surface normal constant precompute (n_phys * n_surf)
     double n_dot = 0;
@@ -240,7 +238,7 @@ kernel_fn generate_contact_kernel(
       for (int j = offsets[2]; j < offsets[3]; j++)
         lmbda += c[j + c_offset] * phi_coeffs(facet_index, q, j);
       double gap = 0;
-      int gap_offset = c_offset + offsets[4] + facet_index * num_points * gdim;
+      int gap_offset = c_offset + offsets[4];
       // if normal not constant, get surface normal at current quadrature point
       if (!constant_normal)
       {
@@ -401,10 +399,10 @@ kernel_fn generate_contact_kernel(
         n_surf(i) = w[i + 2];
     }
     int c_offset = (bs - 1) * offsets[1];
-    double gamma = w[0]
-                   / c[c_offset + offsets[3]
-                       + facet_index]; // This is gamma/hdouble gamma = w[0];
-    double gamma_inv = c[c_offset + offsets[3] + facet_index] / w[0];
+    double gamma
+        = w[0]
+          / c[c_offset + offsets[3]]; // This is gamma/hdouble gamma = w[0];
+    double gamma_inv = c[c_offset + offsets[3]] / w[0];
     double theta = w[1];
     // If surface normal constant precompute (n_phys * n_surf)
     double n_dot = 0;
@@ -436,7 +434,7 @@ kernel_fn generate_contact_kernel(
     for (std::size_t q = 0; q < num_points; q++)
     {
       double gap = 0;
-      int gap_offset = c_offset + offsets[4] + facet_index * num_points * gdim;
+      int gap_offset = c_offset + offsets[4];
       // if normal not constant, get surface normal at current quadrature point
       if (!constant_normal)
       {

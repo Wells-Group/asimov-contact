@@ -5,12 +5,18 @@
 import argparse
 import os
 
-import dolfinx
-import dolfinx.io
-import dolfinx.geometry
 import numpy as np
 import ufl
-from dolfinx.cpp.mesh import CellType, GhostMode
+from dolfinx.fem import (DirichletBC, Function, LinearProblem,
+                         NonlinearProblem, VectorFunctionSpace,
+                         locate_dofs_topological)
+from dolfinx.generation import RectangleMesh
+from dolfinx.geometry import (BoundingBoxTree, compute_colliding_cells,
+                              compute_collisions)
+from dolfinx.io import XDMFFile
+from dolfinx.mesh import (CellType, GhostMode, MeshTags,
+                          locate_entities_boundary)
+from dolfinx.nls import NewtonSolver
 from mpi4py import MPI
 
 from dolfinx_contact.helpers import epsilon, lame_parameters, sigma_func
@@ -24,8 +30,8 @@ def solve_euler_bernoulli(nx: int, ny: int, theta: float, gamma: float, linear_s
     Solve the Euler-Bernoulli equations for a (0,0)x(L,H) beam
     (https://en.wikipedia.org/wiki/Euler%E2%80%93Bernoulli_beam_theory#Cantilever_beams)
     """
-    mesh = dolfinx.RectangleMesh(MPI.COMM_WORLD, [np.array([0, 0, 0]), np.array([L, H, 0])], [nx, ny],
-                                 CellType.triangle, GhostMode.none)
+    mesh = RectangleMesh(MPI.COMM_WORLD, [np.array([0, 0, 0]), np.array([L, H, 0])], [nx, ny],
+                         CellType.triangle, GhostMode.none)
 
     def left(x):
         return np.isclose(x[0], 0)
@@ -37,17 +43,17 @@ def solve_euler_bernoulli(nx: int, ny: int, theta: float, gamma: float, linear_s
     tdim = mesh.topology.dim
     left_marker = int(1)
     top_marker = int(2)
-    left_facets = dolfinx.mesh.locate_entities_boundary(mesh, tdim - 1, left)
-    top_facets = dolfinx.mesh.locate_entities_boundary(mesh, tdim - 1, top)
+    left_facets = locate_entities_boundary(mesh, tdim - 1, left)
+    top_facets = locate_entities_boundary(mesh, tdim - 1, top)
     left_values = np.full(len(left_facets), left_marker, dtype=np.int32)
     top_values = np.full(len(top_facets), top_marker, dtype=np.int32)
     indices = np.concatenate([left_facets, top_facets])
     values = np.hstack([left_values, top_values])
     # Sort values to work in parallel
     sorted = np.argsort(indices)
-    facet_marker = dolfinx.MeshTags(mesh, tdim - 1, indices[sorted], values[sorted])
+    facet_marker = MeshTags(mesh, tdim - 1, indices[sorted], values[sorted])
 
-    V = dolfinx.VectorFunctionSpace(mesh, ("CG", 1))
+    V = VectorFunctionSpace(mesh, ("CG", 1))
     h = 2 * ufl.Circumradius(mesh)
     mu_func, lambda_func = lame_parameters(plane_strain)
     mu = mu_func(E, nu)
@@ -58,7 +64,7 @@ def solve_euler_bernoulli(nx: int, ny: int, theta: float, gamma: float, linear_s
 
     sigma = sigma_func(mu, lmbda)
 
-    u = ufl.TrialFunction(V) if linear_solver else dolfinx.Function(V)
+    u = ufl.TrialFunction(V) if linear_solver else Function(V)
     v = ufl.TestFunction(V)
     dx = ufl.Measure("dx", domain=mesh)
     ds = ufl.Measure("ds", domain=mesh, subdomain_data=facet_marker)
@@ -70,26 +76,26 @@ def solve_euler_bernoulli(nx: int, ny: int, theta: float, gamma: float, linear_s
         n = ufl.FacetNormal(mesh)
         F += -ufl.inner(sigma(u) * n, v) * ds(left_marker)\
             - theta * ufl.inner(sigma(v) * n, u - u_D) * ds(left_marker)\
-            + gamma / h * ufl.inner(u - u_D, v) * ds(left_marker)
+            + E * gamma / h * ufl.inner(u - u_D, v) * ds(left_marker)
         bcs = []
     else:
         # Strong Dirichlet enforcement via lifting
-        u_bc = dolfinx.Function(V)
+        u_bc = Function(V)
         with u_bc.vector.localForm() as loc:
             loc.set(0)
-        bc = dolfinx.DirichletBC(u_bc, dolfinx.fem.locate_dofs_topological(
+        bc = DirichletBC(u_bc, locate_dofs_topological(
             V, mesh.topology.dim - 1, left_facets))
         bcs = [bc]
 
     # Solve as linear problem
     if linear_solver:
-        problem = dolfinx.fem.LinearProblem(ufl.lhs(F), ufl.rhs(F), bcs=bcs,
-                                            petsc_options={"ksp_type": "preonly", "pc_type": "lu"})
+        problem = LinearProblem(ufl.lhs(F), ufl.rhs(F), bcs=bcs,
+                                petsc_options={"ksp_type": "preonly", "pc_type": "lu"})
         u = problem.solve()
     else:
         # Create nonlinear problem and Newton solver
-        problem = dolfinx.fem.NonlinearProblem(F, u, bcs)
-        solver = dolfinx.NewtonSolver(MPI.COMM_WORLD, problem)
+        problem = NonlinearProblem(F, u, bcs)
+        solver = NewtonSolver(mesh.comm, problem)
 
         # Set Newton solver options
         solver.atol = 1e-6
@@ -103,22 +109,23 @@ def solve_euler_bernoulli(nx: int, ny: int, theta: float, gamma: float, linear_s
     u.x.scatter_forward()
 
     os.system("mkdir -p results")
-    with dolfinx.io.XDMFFile(MPI.COMM_WORLD, f"results/u_euler_bernoulli_{nx}_{ny}.xdmf", "w") as xdmf:
+    with XDMFFile(mesh.comm, f"results/u_euler_bernoulli_{nx}_{ny}.xdmf", "w") as xdmf:
         xdmf.write_mesh(mesh)
         xdmf.write_function(u)
 
     # Evaluate deflection at L, H/2
     cells = []
-    points_on_proc = []
-    point = np.array([L, H / 2, 0])
-    bb_tree = dolfinx.geometry.BoundingBoxTree(mesh, mesh.topology.dim)
-    cell_candidates = dolfinx.geometry.compute_collisions_point(bb_tree, point)
-    # Choose one of the cells that contains the point
-    cell = dolfinx.geometry.select_colliding_cells(
-        mesh, cell_candidates, point, 1)
+    points_on_proc = np.empty((0, 3), dtype=np.float64)
+    point = np.array([[L, H / 2, 0]])
+
+    # Find cell colliding with point. Use boundingbox tree to get a list of candidates,
+    # then GJK for exact collision detection
+    bb_tree = BoundingBoxTree(mesh, mesh.topology.dim)
+    cell_candidates = compute_collisions(bb_tree, point)
+    cell = compute_colliding_cells(mesh, cell_candidates, point).links(0)
     # Only use evaluate for points on current processor
-    if len(cell) == 1:
-        points_on_proc.append(point)
+    if len(cell) > 0:
+        points_on_proc = point
         cells.append(cell[0])
     if len(points_on_proc) > 0:
         u_at_point = u.eval(points_on_proc, cells)
@@ -140,7 +147,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
                                      description=desc)
     parser.add_argument("--theta", default=1, type=np.float64, dest="theta",
-                        help="Theta parameter for Nitsche, 1 symmetric, -1 skew symmetric, 0 Penalty-like")
+                        help="Theta parameter for Nitsche, 1 symmetric, -1 skew symmetric, 0 Penalty-like",
+                        choices=[-1, 0, 1])
     parser.add_argument("--gamma", default=10, type=np.float64, dest="gamma",
                         help="Coercivity/Stabilization parameter for Nitsche condition")
     _solve = parser.add_mutually_exclusive_group(required=False)

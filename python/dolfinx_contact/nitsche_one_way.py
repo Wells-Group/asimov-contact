@@ -2,23 +2,29 @@
 #
 # SPDX-License-Identifier:    MIT
 
-import dolfinx
-import dolfinx.io
+from typing import Tuple
+
+import dolfinx.common as _common
+import dolfinx.fem as _fem
+import dolfinx.io as _io
+import dolfinx.log as _log
+import dolfinx.mesh as _mesh
+import dolfinx.nls as _nls
 import numpy as np
 import ufl
-from mpi4py import MPI
-from petsc4py import PETSc
-from typing import Tuple
-from dolfinx_contact.helpers import (epsilon, lame_parameters, rigid_motions_nullspace, sigma_func, R_minus)
+from petsc4py import PETSc as _PETSc
+
+from dolfinx_contact.helpers import (R_minus, epsilon, lame_parameters,
+                                     rigid_motions_nullspace, sigma_func)
 
 
-def nitsche_one_way(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dolfinx.MeshTags, int, int],
+def nitsche_one_way(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTags, int, int],
                     physical_parameters: dict, refinement: int = 0,
                     nitsche_parameters: dict = {"gamma": 1, "theta": 1, "s": 0}, g: float = 0.0,
                     vertical_displacement: float = -0.1, nitsche_bc: bool = False):
     (facet_marker, top_value, bottom_value) = mesh_data
 
-    with dolfinx.io.XDMFFile(MPI.COMM_WORLD, "results/mf_nitsche.xdmf", "w") as xdmf:
+    with _io.XDMFFile(mesh.comm, "results/mf_nitsche.xdmf", "w") as xdmf:
         xdmf.write_mesh(mesh)
         xdmf.write_meshtags(facet_marker)
 
@@ -32,7 +38,7 @@ def nitsche_one_way(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dolfinx.MeshTa
     n_2 = ufl.as_vector(n_vec)  # Normal of plane (projection onto other body)
     n = ufl.FacetNormal(mesh)
 
-    V = dolfinx.VectorFunctionSpace(mesh, ("CG", 1))
+    V = _fem.VectorFunctionSpace(mesh, ("CG", 1))
     E = physical_parameters["E"]
     nu = physical_parameters["nu"]
     mu_func, lambda_func = lame_parameters(physical_parameters["strain"])
@@ -50,14 +56,14 @@ def nitsche_one_way(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dolfinx.MeshTa
     g_vec = [i for i in range(mesh.geometry.dim)]
     g_vec[mesh.geometry.dim - 1] = gap
 
-    u = dolfinx.Function(V)
+    u = _fem.Function(V)
     v = ufl.TestFunction(V)
     # metadata = {"quadrature_degree": 5}
     dx = ufl.Measure("dx", domain=mesh)
     ds = ufl.Measure("ds", domain=mesh,  # metadata=metadata,
                      subdomain_data=facet_marker)
     a = ufl.inner(sigma(u), epsilon(v)) * dx
-    L = ufl.inner(dolfinx.Constant(mesh, [0, ] * mesh.geometry.dim), v) * dx
+    L = ufl.inner(_fem.Constant(mesh, [0, ] * mesh.geometry.dim), v) * dx
 
     # Derivation of one sided Nitsche with gap function
     F = a - theta / gamma * sigma_n(u) * sigma_n(v) * ds(bottom_value) - L
@@ -88,32 +94,32 @@ def nitsche_one_way(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dolfinx.MeshTa
             values = np.zeros((mesh.geometry.dim, x.shape[1]))
             values[mesh.geometry.dim - 1] = vertical_displacement
             return values
-        u_D = dolfinx.Function(V)
+        u_D = _fem.Function(V)
         u_D.interpolate(_u_D)
         u_D.name = "u_D"
         u_D.x.scatter_forward()
         tdim = mesh.topology.dim
-        dirichlet_dofs = dolfinx.fem.locate_dofs_topological(
+        dirichlet_dofs = _fem.locate_dofs_topological(
             V, tdim - 1, facet_marker.indices[facet_marker.values == top_value])
-        bc = dolfinx.DirichletBC(u_D, dirichlet_dofs)
+        bc = _fem.DirichletBC(u_D, dirichlet_dofs)
         bcs = [bc]
 
     # DEBUG: Write each step of Newton iterations
     # Create nonlinear problem and Newton solver
-    # def form(self, x: PETSc.Vec):
-    #     x.ghostUpdate(addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD)
+    # def form(self, x: _PETSc.Vec):
+    #     x.ghostUpdate(addv=_PETSc.InsertMode.INSERT, mode=_PETSc.ScatterMode.FORWARD)
     #     self.i += 1
     #     xdmf.write_function(u, self.i)
 
-    # setattr(dolfinx.fem.NonlinearProblem, "form", form)
+    # setattr(_fem.NonlinearProblem, "form", form)
 
-    problem = dolfinx.fem.NonlinearProblem(F, u, bcs, J=J)
+    problem = _fem.NonlinearProblem(F, u, bcs, J=J)
     # DEBUG: Write each step of Newton iterations
     # problem.i = 0
-    # xdmf = dolfinx.io.XDMFFile(MPI.COMM_WORLD, "results/tmp_sol.xdmf", "w")
+    # xdmf = _io.XDMFFile(mesh.comm, "results/tmp_sol.xdmf", "w")
     # xdmf.write_mesh(mesh)
 
-    solver = dolfinx.NewtonSolver(MPI.COMM_WORLD, problem)
+    solver = _nls.NewtonSolver(mesh.comm, problem)
     null_space = rigid_motions_nullspace(V)
     solver.A.setNearNullSpace(null_space)
 
@@ -135,7 +141,7 @@ def nitsche_one_way(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dolfinx.MeshTa
 
     # Define solver and options
     ksp = solver.krylov_solver
-    opts = PETSc.Options()
+    opts = _PETSc.Options()
     option_prefix = ksp.getOptionsPrefix()
     # DEBUG: Use linear solver
     # opts[f"{option_prefix}ksp_type"] = "preonly"
@@ -154,15 +160,15 @@ def nitsche_one_way(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dolfinx.MeshTa
     ksp.setFromOptions()
 
     # Solve non-linear problem
-    dolfinx.log.set_log_level(dolfinx.log.LogLevel.INFO)
-    with dolfinx.common.Timer(f"{refinement} Solve Nitsche"):
+    _log.set_log_level(_log.LogLevel.INFO)
+    with _common.Timer(f"{refinement} Solve Nitsche"):
         n, converged = solver.solve(u)
     u.x.scatter_forward()
     if solver.error_on_nonconvergence:
         assert(converged)
     print(f"{V.dofmap.index_map_bs*V.dofmap.index_map.size_global}, Number of interations: {n:d}")
 
-    with dolfinx.io.XDMFFile(MPI.COMM_WORLD, f"results/u_nitsche_{refinement}.xdmf", "w") as xdmf:
+    with _io.XDMFFile(mesh.comm, f"results/u_nitsche_{refinement}.xdmf", "w") as xdmf:
         xdmf.write_mesh(mesh)
         xdmf.write_function(u)
 

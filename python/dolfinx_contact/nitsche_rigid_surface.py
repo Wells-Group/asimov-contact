@@ -2,20 +2,27 @@
 #
 # SPDX-License-Identifier:    MIT
 
-import dolfinx
-import dolfinx.io
+from typing import Tuple
+
+import dolfinx.common as _common
+import dolfinx.cpp as _cpp
+import dolfinx.fem as _fem
+import dolfinx.geometry as _geometry
+import dolfinx.io as _io
+import dolfinx.log as _log
+import dolfinx.mesh as _mesh
+import dolfinx.nls as _nls
 import numpy as np
 import ufl
 from mpi4py import MPI
 from petsc4py import PETSc
+
 import dolfinx_contact.cpp
-
-from typing import Tuple
-from dolfinx_contact.helpers import (epsilon, lame_parameters, rigid_motions_nullspace,
-                                     sigma_func, R_minus)
+from dolfinx_contact.helpers import (R_minus, epsilon, lame_parameters,
+                                     rigid_motions_nullspace, sigma_func)
 
 
-def nitsche_rigid_surface(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dolfinx.MeshTags, int, int, int, int],
+def nitsche_rigid_surface(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTags, int, int, int, int],
                           physical_parameters: dict,
                           nitsche_parameters: dict = {"gamma": 1, "theta": 1},
                           vertical_displacement: dict = -0.1, nitsche_bc: bool = False):
@@ -31,7 +38,7 @@ def nitsche_rigid_surface(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dolfinx.
     n_2 = ufl.as_vector(n_vec)  # Normal of plane (projection onto other body)
     n = ufl.FacetNormal(mesh)
 
-    V = dolfinx.VectorFunctionSpace(mesh, ("CG", 1))
+    V = _fem.VectorFunctionSpace(mesh, ("CG", 1))
 
     E = physical_parameters["E"]
     nu = physical_parameters["nu"]
@@ -53,39 +60,39 @@ def nitsche_rigid_surface(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dolfinx.
     contact.create_distance_map(0)
     lookup = contact.map_0_to_1()
     bottom_facets = contact.facet_0()
-    master_bbox = dolfinx.cpp.geometry.BoundingBoxTree(mesh, fdim, bottom_facets)
-    midpoint_tree = dolfinx.cpp.geometry.create_midpoint_tree(mesh, fdim, bottom_facets)
+    master_bbox = _geometry.BoundingBoxTree(mesh, fdim, bottom_facets)
+    midpoint_tree = _geometry.create_midpoint_tree(mesh, fdim, bottom_facets)
 
     def gap(x):
         # gap = -x[mesh.geometry.dim - 1] - g
         dist_vec_array = np.zeros((gdim, x.shape[1]))
-        facets = dolfinx.cpp.geometry.compute_closest_entity(master_bbox, midpoint_tree, mesh, np.transpose(x))
+        facets = _geometry.compute_closest_entity(master_bbox, midpoint_tree, mesh, np.transpose(x))
         for i in range(x.shape[1]):
             xi = x[:, i]
             facet = facets[i]
             if (np.argwhere(np.array(bottom_facets) == facet)).shape[0] > 0:
                 index = np.argwhere(np.array(bottom_facets) == facet)[0, 0]
-                facet_geometry = dolfinx.cpp.mesh.entities_to_geometry(mesh, fdim, [facet], False)
+                facet_geometry = _cpp.mesh.entities_to_geometry(mesh, fdim, [facet], False)
                 coords0 = mesh_geometry[facet_geometry][0]
-                R = np.linalg.norm(dolfinx.cpp.geometry.compute_distance_gjk(coords0, xi))
+                R = np.linalg.norm(_cpp.geometry.compute_distance_gjk(coords0, xi))
                 if np.isclose(R, 0):
                     facet_2 = lookup.links(index)[0]
-                    facet2_geometry = dolfinx.cpp.mesh.entities_to_geometry(mesh, fdim, [facet_2], False)
+                    facet2_geometry = _cpp.mesh.entities_to_geometry(mesh, fdim, [facet_2], False)
                     coords = mesh_geometry[facet2_geometry][0]
-                    dist_vec = dolfinx.cpp.geometry.compute_distance_gjk(coords, xi)
+                    dist_vec = _cpp.geometry.compute_distance_gjk(coords, xi)
                     dist_vec_array[: gdim, i] = dist_vec[: gdim]
         return dist_vec_array
 
-    g_vec = dolfinx.Function(V)
+    g_vec = _fem.Function(V)
     g_vec.interpolate(gap)
-    u = dolfinx.Function(V)
+    u = _fem.Function(V)
     v = ufl.TestFunction(V)
     # metadata = {"quadrature_degree": 5}
     dx = ufl.Measure("dx", domain=mesh)
     ds = ufl.Measure("ds", domain=mesh,  # metadata=metadata,
                      subdomain_data=facet_marker)
     a = ufl.inner(sigma(u), epsilon(v)) * dx
-    L = ufl.inner(dolfinx.Constant(mesh, [0, ] * mesh.geometry.dim), v) * dx
+    L = ufl.inner(_fem.Constant(mesh, [0, ] * mesh.geometry.dim), v) * dx
 
     # # Derivation of one sided Nitsche with gap function
     F = a - theta / gamma * sigma_n(u) * sigma_n(v) * ds(bottom_value) - L
@@ -126,21 +133,21 @@ def nitsche_rigid_surface(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dolfinx.
             values[mesh.geometry.dim - 1] = vertical_displacement
             return values
         tdim = mesh.topology.dim
-        u_D = dolfinx.Function(V)
+        u_D = _fem.Function(V)
         u_D.interpolate(_u_D)
         u_D.name = "u_D"
         u_D.x.scatter_forward()
-        dirichlet_dofs = dolfinx.fem.locate_dofs_topological(
+        dirichlet_dofs = _fem.locate_dofs_topological(
             V, tdim - 1, facet_marker.indices[facet_marker.values == top_value])
-        bc = dolfinx.DirichletBC(u_D, dirichlet_dofs)
+        bc = _fem.DirichletBC(u_D, dirichlet_dofs)
         bcs = [bc]
         # Dirichlet boundary conditions for rigid plane
-        dirichlet_dofs_plane = dolfinx.fem.locate_dofs_topological(
+        dirichlet_dofs_plane = _fem.locate_dofs_topological(
             V, tdim - 1, facet_marker.indices[facet_marker.values == surface_bottom])
-        u_D_plane = dolfinx.Function(V)
+        u_D_plane = _fem.Function(V)
         with u_D_plane.vector.localForm() as loc:
             loc.set(0)
-        bc_plane = dolfinx.DirichletBC(u_D_plane, dirichlet_dofs_plane)
+        bc_plane = _fem.DirichletBC(u_D_plane, dirichlet_dofs_plane)
         bcs.append(bc_plane)
 
     # DEBUG: Write each step of Newton iterations
@@ -152,13 +159,13 @@ def nitsche_rigid_surface(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dolfinx.
 
     # setattr(dolfinx.fem.NonlinearProblem, "form", form)
 
-    problem = dolfinx.fem.NonlinearProblem(F, u, bcs, J=J)
+    problem = _fem.NonlinearProblem(F, u, bcs, J=J)
     # DEBUG: Write each step of Newton iterations
     # problem.i = 0
     # xdmf = dolfinx.io.XDMFFile(MPI.COMM_WORLD, "results/tmp_sol.xdmf", "w")
     # xdmf.write_mesh(mesh)
 
-    solver = dolfinx.NewtonSolver(MPI.COMM_WORLD, problem)
+    solver = _nls.NewtonSolver(MPI.COMM_WORLD, problem)
     null_space = rigid_motions_nullspace(V)
     solver.A.setNearNullSpace(null_space)
 
@@ -200,15 +207,15 @@ def nitsche_rigid_surface(mesh: dolfinx.cpp.mesh.Mesh, mesh_data: Tuple[dolfinx.
     ksp.setFromOptions()
 
     # Solve non-linear problem
-    dolfinx.log.set_log_level(dolfinx.log.LogLevel.INFO)
-    with dolfinx.common.Timer("Solve Nitsche"):
+    _log.set_log_level(_log.LogLevel.INFO)
+    with _common.Timer("Solve Nitsche"):
         n, converged = solver.solve(u)
     u.x.scatter_forward()
     if solver.error_on_nonconvergence:
         assert(converged)
     print(f"{V.dofmap.index_map_bs*V.dofmap.index_map.size_global}, Number of interations: {n:d}")
 
-    with dolfinx.io.XDMFFile(MPI.COMM_WORLD, "results/test_dist_vec.xdmf", "w") as xdmf:
+    with _io.XDMFFile(MPI.COMM_WORLD, "results/test_dist_vec.xdmf", "w") as xdmf:
         xdmf.write_mesh(mesh)
         xdmf.write_function(u)
 

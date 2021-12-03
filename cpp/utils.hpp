@@ -78,14 +78,14 @@ std::pair<std::vector<PetscScalar>, int> pack_coefficient_quadrature(
   element->tabulate(coeff_basis, points, 0);
   std::vector<PetscScalar> c(num_cells * vs * bs * num_points, 0.0);
   const int cstride = vs * bs * num_points;
-  auto basis_reference_values
+  auto reference_basis_values
       = xt::view(coeff_basis, 0, xt::all(), xt::all(), xt::all());
 
   if (needs_dof_transformations)
   {
     // Prepare basis function data structures
     xt::xtensor<double, 3> basis_values({num_points, num_dofs / bs, vs});
-    xt::xtensor<double, 3> cell_basis_values({num_points, num_dofs / bs, vs});
+    xt::xtensor<double, 2> point_basis_values({num_dofs / bs, vs});
 
     // Get geometry data
     const dolfinx::graph::AdjacencyList<std::int32_t>& x_dofmap
@@ -112,6 +112,17 @@ std::pair<std::vector<PetscScalar>, int> pack_coefficient_quadrature(
         = xt::view(cmap_basis_functions, xt::xrange(1, int(tdim) + 1),
                    xt::all(), xt::all(), xt::all());
 
+    // Get push forward function
+    using u_t = xt::xview<decltype(basis_values)&, std::size_t,
+                          xt::xall<std::size_t>, xt::xall<std::size_t>>;
+    using U_t = xt::xview<decltype(point_basis_values)&, xt::xall<std::size_t>,
+                          xt::xall<std::size_t>>;
+    using J_t = xt::xview<decltype(J)&, std::size_t, xt::xall<std::size_t>,
+                          xt::xall<std::size_t>>;
+    using K_t = xt::xview<decltype(K)&, std::size_t, xt::xall<std::size_t>,
+                          xt::xall<std::size_t>>;
+    auto push_forward_fn = element->map_fn<u_t, U_t, J_t, K_t>();
+
     for (std::int32_t cell = 0; cell < num_cells; ++cell)
     {
 
@@ -127,25 +138,25 @@ std::pair<std::vector<PetscScalar>, int> pack_coefficient_quadrature(
       for (std::size_t q = 0; q < num_points; ++q)
       {
         J.fill(0);
-        auto _J = xt::view(J, q, xt::all(), xt::all());
         xt::xtensor<double, 2> dphi
             = xt::view(dphi_c, xt::all(), q, xt::all(), 0);
+        auto _J = xt::view(J, q, xt::all(), xt::all());
         cmap.compute_jacobian(dphi, coordinate_dofs, _J);
-        cmap.compute_jacobian_inverse(_J, xt::view(K, q, xt::all(), xt::all()));
+        auto _K = xt::view(K, q, xt::all(), xt::all());
+        cmap.compute_jacobian_inverse(_J, _K);
         detJ[q] = cmap.compute_jacobian_determinant(_J);
-      }
 
-      // Permute the reference values to account for the cell's orientation
-      cell_basis_values = basis_reference_values;
-      for (std::size_t q = 0; q < num_points; ++q)
-      {
-        transformation(
-            xtl::span(cell_basis_values.data() + q * num_dofs / bs * vs,
-                      num_dofs / bs * vs),
-            cell_info, cell, vs);
+        // Permute the reference values to account for the cell's orientation
+        point_basis_values
+            = xt::view(reference_basis_values, q, xt::all(), xt::all());
+        transformation(xtl::span(point_basis_values.data(), num_dofs / bs * vs),
+                       cell_info, cell, vs);
+
+        // Push basis forward to physical element
+        auto _u = xt::view(basis_values, q, xt::all(), xt::all());
+        auto _U = xt::view(point_basis_values, xt::all(), xt::all());
+        push_forward_fn(_u, _U, _J, detJ[q], _K);
       }
-      // Push basis forward to physical element
-      element->push_forward(basis_values, cell_basis_values, J, detJ, K);
 
       // Sum up quadrature contributions
       int offset = cstride * cell;
@@ -178,7 +189,7 @@ std::pair<std::vector<PetscScalar>, int> pack_coefficient_quadrature(
           for (int k = 0; k < bs; ++k)
             for (int j = 0; j < vs; j++)
               c[offset + q * (bs * vs) + k + j]
-                  += basis_reference_values(q, i, j) * data[pos_v + k];
+                  += reference_basis_values(q, i, j) * data[pos_v + k];
       }
     }
   }
@@ -252,7 +263,7 @@ std::pair<std::vector<PetscScalar>, int> pack_coefficient_facet(
   const std::size_t num_points = weights.size();
   const std::size_t num_local_facets = points.size();
   xt::xtensor<double, 4> coeff_basis({1, num_points, num_dofs / bs, vs});
-  xt::xtensor<double, 4> basis_reference_values(
+  xt::xtensor<double, 4> reference_basis_values(
       {num_local_facets, num_points, num_dofs / bs, vs});
 
   for (int i = 0; i < num_local_facets; i++)
@@ -260,7 +271,7 @@ std::pair<std::vector<PetscScalar>, int> pack_coefficient_facet(
     const xt::xarray<double>& q_facet = points[i];
     element->tabulate(coeff_basis, q_facet, 0);
     auto basis_ref
-        = xt::view(basis_reference_values, i, xt::all(), xt::all(), xt::all());
+        = xt::view(reference_basis_values, i, xt::all(), xt::all(), xt::all());
     basis_ref = xt::view(coeff_basis, 0, xt::all(), xt::all(), xt::all());
   }
 
@@ -270,7 +281,7 @@ std::pair<std::vector<PetscScalar>, int> pack_coefficient_facet(
   {
     // Prepare basis function data structures
     xt::xtensor<double, 3> basis_values({num_points, num_dofs / bs, vs});
-    xt::xtensor<double, 3> cell_basis_values({num_points, num_dofs / bs, vs});
+    xt::xtensor<double, 2> point_basis_values({num_dofs / bs, vs});
 
     // Get geometry data
     const dolfinx::graph::AdjacencyList<std::int32_t>& x_dofmap
@@ -292,7 +303,7 @@ std::pair<std::vector<PetscScalar>, int> pack_coefficient_facet(
     const dolfinx::fem::CoordinateElement& cmap = mesh->geometry().cmap();
 
     xt::xtensor<double, 5> dphi_c(
-        {num_local_facets, int(tdim), num_points, num_dofs_g / bs, 1});
+        {num_local_facets, tdim, num_points, num_dofs_g / bs, 1});
     for (int i = 0; i < num_local_facets; i++)
     {
       const xt::xarray<double>& q_facet = points[i];
@@ -302,6 +313,17 @@ std::pair<std::vector<PetscScalar>, int> pack_coefficient_facet(
       dphi_ci = xt::view(cmap_basis_functions, xt::xrange(1, int(tdim) + 1),
                          xt::all(), xt::all(), xt::all());
     }
+
+    // Get push forward function
+    using u_t = xt::xview<decltype(basis_values)&, std::size_t,
+                          xt::xall<std::size_t>, xt::xall<std::size_t>>;
+    using U_t = xt::xview<decltype(point_basis_values)&, xt::xall<std::size_t>,
+                          xt::xall<std::size_t>>;
+    using J_t = xt::xview<decltype(J)&, std::size_t, xt::xall<std::size_t>,
+                          xt::xall<std::size_t>>;
+    using K_t = xt::xview<decltype(K)&, std::size_t, xt::xall<std::size_t>,
+                          xt::xall<std::size_t>>;
+    auto push_forward_fn = element->map_fn<u_t, U_t, J_t, K_t>();
 
     for (int facet = 0; facet < num_facets; facet++)
     {
@@ -337,26 +359,24 @@ std::pair<std::vector<PetscScalar>, int> pack_coefficient_facet(
       for (std::size_t q = 0; q < num_points; ++q)
       {
         J.fill(0);
-        auto _J = xt::view(J, q, xt::all(), xt::all());
         xt::xtensor<double, 2> dphi
             = xt::view(dphi_ci, xt::all(), q, xt::all(), 0);
+        auto _J = xt::view(J, q, xt::all(), xt::all());
         cmap.compute_jacobian(dphi, coordinate_dofs, _J);
-        cmap.compute_jacobian_inverse(_J, xt::view(K, q, xt::all(), xt::all()));
+        auto _K = xt::view(K, q, xt::all(), xt::all());
+        cmap.compute_jacobian_inverse(_J, _K);
         detJ[q] = cmap.compute_jacobian_determinant(_J);
-      }
+        // Permute the reference values to account for the cell's orientation
+        point_basis_values = xt::view(reference_basis_values, local_index, q,
+                                      xt::all(), xt::all());
+        transformation(xtl::span(point_basis_values.data(), num_dofs / bs * vs),
+                       cell_info, cell, vs);
 
-      // Permute the reference values to account for the cell's orientation
-      cell_basis_values = xt::view(basis_reference_values, local_index,
-                                   xt::all(), xt::all(), xt::all());
-      for (std::size_t q = 0; q < num_points; ++q)
-      {
-        transformation(
-            xtl::span(cell_basis_values.data() + q * num_dofs / bs * vs,
-                      num_dofs / bs * vs),
-            cell_info, cell, vs);
+        // Push basis forward to physical element
+        auto _u = xt::view(basis_values, q, xt::all(), xt::all());
+        auto _U = xt::view(point_basis_values, xt::all(), xt::all());
+        push_forward_fn(_u, _U, _J, detJ[q], _K);
       }
-      // Push basis forward to physical element
-      element->push_forward(basis_values, cell_basis_values, J, detJ, K);
 
       // Sum up quadrature contributions
       int offset = cstride * facet;
@@ -404,7 +424,7 @@ std::pair<std::vector<PetscScalar>, int> pack_coefficient_facet(
             for (int l = 0; l < vs; l++)
             {
               c[offset + q * (bs * vs) + k + l]
-                  += basis_reference_values(local_index, q, i, l)
+                  += reference_basis_values(local_index, q, i, l)
                      * data[pos_v + k];
             }
       }
@@ -629,53 +649,6 @@ pack_circumradius_facet(std::shared_ptr<const dolfinx::mesh::Mesh> mesh,
 
   return {std::move(c), cstride};
 }
-// helper functiion for pack_coefficients_facet and pack_circumradius_facet to
-// work with dolfinx assembly routines should be made reduntant at a later
-// stage
-/// @param[in] mesh - the mesh
-/// @param[in] active_facets - facet indices
-/// @param[in] data - data to be converted
-/// @param[in] num_cols - number of columns per facet
-std::pair<std::vector<PetscScalar>, int>
-facet_to_cell_data(std::shared_ptr<const dolfinx::mesh::Mesh> mesh,
-                   const xtl::span<const std::int32_t>& active_facets,
-                   const xtl::span<const PetscScalar> data, int num_cols)
-{
-  const std::size_t tdim = mesh->topology().dim();
-  const std::size_t gdim = mesh->geometry().dim();
-  const std::size_t fdim = tdim - 1;
-  const std::int32_t num_facets = active_facets.size();
-  const std::int32_t num_cells
-      = mesh->topology().index_map(tdim)->size_local()
-        + mesh->topology().index_map(tdim)->num_ghosts();
-  // Connectivity to evaluate at quadrature points
-  // Assumes connectivity already created
-  auto f_to_c = mesh->topology().connectivity(fdim, tdim);
-  auto c_to_f = mesh->topology().connectivity(tdim, fdim);
-  // get number of facets per cell. Assuming all cells are the same
-  const std::size_t num_facets_c = c_to_f->num_links(0);
-
-  std::vector<PetscScalar> c(num_cells * num_cols * num_facets_c, 0.0);
-  const int cstride = num_cols * num_facets_c;
-  for (int i = 0; i < num_facets; i++)
-  {
-    auto facet = active_facets[i];
-    // assuming exterior facets
-    auto cell = f_to_c->links(facet)[0];
-    // find local index of facet
-    auto cell_facets = c_to_f->links(cell);
-    auto local_facet = std::find(cell_facets.begin(), cell_facets.end(), facet);
-    const std::int32_t local_index
-        = std::distance(cell_facets.data(), local_facet);
-    int offset = cell * cstride;
-    for (int j = 0; j < num_cols; j++)
-    {
-      c[offset + local_index * num_cols + j] = data[i * num_cols + j];
-    }
-  }
-  return {std::move(c), cstride};
-}
-
 //-----------------------------------------------------------------------------
 xt::xtensor<double, 3>
 get_basis_functions(xt::xtensor<double, 3>& J, xt::xtensor<double, 3>& K,
@@ -708,8 +681,6 @@ get_basis_functions(xt::xtensor<double, 3>& J, xt::xtensor<double, 3>& K,
   // Prepare basis function data structures
   xt::xtensor<double, 4> tabulated_data(
       {1, num_points, space_dimension, reference_value_size});
-  auto reference_basis_values
-      = xt::view(tabulated_data, 0, xt::all(), xt::all(), xt::all());
   xt::xtensor<double, 3> basis_values(
       {num_points, space_dimension, value_size});
 
@@ -734,7 +705,7 @@ get_basis_functions(xt::xtensor<double, 3>& J, xt::xtensor<double, 3>& K,
     cmap.compute_jacobian_inverse(J, K);
     cmap.pull_back_affine(X, K, cmap.x0(cell_geometry), x);
   };
-  // FIXME: Move initialization out of J, detJ, K out of function
+
   xt::xtensor<double, 2> dphi;
   xt::xtensor<double, 2> X({x.shape(0), tdim});
   xt::xtensor<double, 4> phi(cmap.tabulate_shape(1, 1));
@@ -769,15 +740,39 @@ get_basis_functions(xt::xtensor<double, 3>& J, xt::xtensor<double, 3>& K,
     }
   }
 
+  // Get push forward function
+  xt::xtensor<double, 2> point_basis_values({space_dimension, value_size});
+  using u_t = xt::xview<decltype(basis_values)&, std::size_t,
+                        xt::xall<std::size_t>, xt::xall<std::size_t>>;
+  using U_t = xt::xview<decltype(point_basis_values)&, xt::xall<std::size_t>,
+                        xt::xall<std::size_t>>;
+  using J_t = xt::xview<decltype(J)&, std::size_t, xt::xall<std::size_t>,
+                        xt::xall<std::size_t>>;
+  using K_t = xt::xview<decltype(K)&, std::size_t, xt::xall<std::size_t>,
+                        xt::xall<std::size_t>>;
+  // FIXME: These should be moved out of this function
+  auto push_forward_fn = element->map_fn<u_t, U_t, J_t, K_t>();
+  const std::function<void(const xtl::span<PetscScalar>&,
+                           const xtl::span<const std::uint32_t>&, std::int32_t,
+                           int)>
+      transformation = element->get_dof_transformation_function<PetscScalar>();
+
   // Compute basis on reference element
   element->tabulate(tabulated_data, X, 0);
-
-  element->apply_dof_transformation(
-      xtl::span<double>(tabulated_data.data(), tabulated_data.size()), perm,
-      reference_value_size);
-
-  // Push basis forward to physical element
-  element->push_forward(basis_values, reference_basis_values, J, detJ, K);
+  for (std::size_t q = 0; q < num_points; ++q)
+  {
+    // Permute the reference values to account for the cell's orientation
+    point_basis_values = xt::view(tabulated_data, 0, q, xt::all(), xt::all());
+    element->apply_dof_transformation(
+        xtl::span<double>(point_basis_values.data(), point_basis_values.size()),
+        perm, 1);
+    // Push basis forward to physical element
+    auto _J = xt::view(J, q, xt::all(), xt::all());
+    auto _K = xt::view(K, q, xt::all(), xt::all());
+    auto _u = xt::view(basis_values, q, xt::all(), xt::all());
+    auto _U = xt::view(point_basis_values, xt::all(), xt::all());
+    push_forward_fn(_u, _U, _J, detJ[q], _K);
+  }
 
   // Expand basis values for each dof
   for (std::size_t p = 0; p < num_points; ++p)

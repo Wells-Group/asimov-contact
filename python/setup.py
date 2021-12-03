@@ -9,7 +9,7 @@ from setuptools.command.build_ext import build_ext
 
 VERSION = "0.3.1"
 
-REQUIREMENTS = []
+REQUIREMENTS = ["fenics-dolfinx>0.3.0"]
 
 
 class CMakeExtension(Extension):
@@ -72,7 +72,7 @@ setup(name='dolfinx_contact',
 
       author='Sarah Roggendorf',
       python_requires='>3.6.0',
-      packages=['dolfinx_contact'],
+      packages=['dolfinx_contact', "dolfinx_contact.one_sided"],
       ext_modules=[CMakeExtension('dolfinx_contact.cpp')],
       cmdclass=dict(build_ext=CMakeBuild),
       install_requires=REQUIREMENTS,

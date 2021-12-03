@@ -2,7 +2,8 @@
 #
 # SPDX-License-Identifier:    MIT
 
-from dolfinx_contact.create_mesh import create_disk_mesh, create_sphere_mesh, convert_mesh
+from dolfinx_contact.create_mesh import (convert_mesh, create_disk_mesh,
+                                         create_sphere_mesh)
 
 # This script creates the test meshes used in test_dolfinx_cuas.py
 # run before running pytest

@@ -1,15 +1,15 @@
 import argparse
 
-import dolfinx
-import dolfinx.io
 import numpy as np
-from mpi4py import MPI
-
-from dolfinx_contact.nitsche_rigid_surface_cuas import nitsche_rigid_surface_cuas
-from dolfinx_contact.create_contact_meshes import create_circle_plane_mesh, create_circle_circle_mesh,\
-    create_sphere_plane_mesh
+from dolfinx.io import XDMFFile
+from dolfinx.mesh import MeshTags, locate_entities_boundary
+from dolfinx_contact.create_contact_meshes import (create_circle_circle_mesh,
+                                                   create_circle_plane_mesh,
+                                                   create_sphere_plane_mesh)
 from dolfinx_contact.helpers import convert_mesh
-
+from dolfinx_contact.nitsche_rigid_surface_cuas import \
+    nitsche_rigid_surface_cuas
+from mpi4py import MPI
 
 if __name__ == "__main__":
     desc = "Nitsche's method with rigid surface using custom assemblers and apply gradual loading in non-linear solve"
@@ -63,12 +63,12 @@ if __name__ == "__main__":
         create_sphere_plane_mesh(filename=f"{fname}.msh")
         convert_mesh(fname, "tetra")
         convert_mesh(f"{fname}", "triangle", ext="facets")
-        with dolfinx.io.XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
+        with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
             mesh = xdmf.read_mesh(name="Grid")
         tdim = mesh.topology.dim
         mesh.topology.create_connectivity(tdim - 1, 0)
         mesh.topology.create_connectivity(tdim - 1, tdim)
-        with dolfinx.io.XDMFFile(MPI.COMM_WORLD, f"{fname}_facets.xdmf", "r") as xdmf:
+        with XDMFFile(MPI.COMM_WORLD, f"{fname}_facets.xdmf", "r") as xdmf:
             facet_marker = xdmf.read_meshtags(mesh, name="Grid")
         top_value = 2
         bottom_value = 1
@@ -82,7 +82,7 @@ if __name__ == "__main__":
             convert_mesh(fname, "triangle", prune_z=True)
             convert_mesh(f"{fname}", "line", ext="facets", prune_z=True)
 
-            with dolfinx.io.XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
+            with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
                 mesh = xdmf.read_mesh(name="Grid")
             tdim = mesh.topology.dim
             mesh.topology.create_connectivity(tdim - 1, 0)
@@ -105,35 +105,31 @@ if __name__ == "__main__":
             surface_value = 3
             surface_bottom = 4
             # Create meshtag for top and bottom markers
-            top_facets1 = dolfinx.mesh.locate_entities_boundary(mesh, tdim - 1, top1)
-            bottom_facets1 = dolfinx.mesh.locate_entities_boundary(
-                mesh, tdim - 1, bottom1)
-            top_facets2 = dolfinx.mesh.locate_entities_boundary(mesh, tdim - 1, top2)
-            bottom_facets2 = dolfinx.mesh.locate_entities_boundary(
-                mesh, tdim - 1, bottom2)
+            top_facets1 = locate_entities_boundary(mesh, tdim - 1, top1)
+            bottom_facets1 = locate_entities_boundary(mesh, tdim - 1, bottom1)
+            top_facets2 = locate_entities_boundary(mesh, tdim - 1, top2)
+            bottom_facets2 = locate_entities_boundary(mesh, tdim - 1, bottom2)
             top_values = np.full(len(top_facets1), top_value, dtype=np.int32)
-            bottom_values = np.full(
-                len(bottom_facets1), bottom_value, dtype=np.int32)
+            bottom_values = np.full(len(bottom_facets1), bottom_value, dtype=np.int32)
 
             surface_values = np.full(len(top_facets2), surface_value, dtype=np.int32)
-            sbottom_values = np.full(
-                len(bottom_facets2), surface_bottom, dtype=np.int32)
+            sbottom_values = np.full(len(bottom_facets2), surface_bottom, dtype=np.int32)
             indices = np.concatenate([top_facets1, bottom_facets1, top_facets2, bottom_facets2])
             values = np.hstack([top_values, bottom_values, surface_values, sbottom_values])
             sorted_facets = np.argsort(indices)
-            facet_marker = dolfinx.MeshTags(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
+            facet_marker = MeshTags(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
         else:
             fname = "twomeshes"
             create_circle_plane_mesh(filename=f"{fname}.msh")
             convert_mesh(fname, "triangle", prune_z=True)
             convert_mesh(f"{fname}", "line", ext="facets", prune_z=True)
 
-            with dolfinx.io.XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
+            with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
                 mesh = xdmf.read_mesh(name="Grid")
             tdim = mesh.topology.dim
             mesh.topology.create_connectivity(tdim - 1, 0)
             mesh.topology.create_connectivity(tdim - 1, tdim)
-            with dolfinx.io.XDMFFile(MPI.COMM_WORLD, f"{fname}_facets.xdmf", "r") as xdmf:
+            with XDMFFile(MPI.COMM_WORLD, f"{fname}_facets.xdmf", "r") as xdmf:
                 facet_marker = xdmf.read_meshtags(mesh, name="Grid")
             top_value = 2
             bottom_value = 4
@@ -151,33 +147,30 @@ if __name__ == "__main__":
             surface_value = 3
             surface_bottom = 4
             # Create meshtag for top and bottom markers
-            top_facets1 = dolfinx.mesh.locate_entities_boundary(mesh, tdim - 1, top)
-            bottom_facets1 = dolfinx.mesh.locate_entities_boundary(
-                mesh, tdim - 1, bottom)
-            top_facets2 = dolfinx.mesh.locate_entities_boundary(mesh, tdim - 1, lambda x: np.isclose(x[1], 0.1))
-            bottom_facets2 = dolfinx.mesh.locate_entities_boundary(
-                mesh, tdim - 1, lambda x: np.isclose(x[1], 0.0))
+            top_facets1 = locate_entities_boundary(mesh, tdim - 1, top)
+            bottom_facets1 = locate_entities_boundary(mesh, tdim - 1, bottom)
+            top_facets2 = locate_entities_boundary(mesh, tdim - 1, lambda x: np.isclose(x[1], 0.1))
+            bottom_facets2 = locate_entities_boundary(mesh, tdim - 1, lambda x: np.isclose(x[1], 0.0))
             top_values = np.full(len(top_facets1), top_value, dtype=np.int32)
-            bottom_values = np.full(
-                len(bottom_facets1), bottom_value, dtype=np.int32)
+            bottom_values = np.full(len(bottom_facets1), bottom_value, dtype=np.int32)
 
             surface_values = np.full(len(top_facets2), surface_value, dtype=np.int32)
-            sbottom_values = np.full(
-                len(bottom_facets2), surface_bottom, dtype=np.int32)
+            sbottom_values = np.full(len(bottom_facets2), surface_bottom, dtype=np.int32)
             indices = np.concatenate([top_facets1, bottom_facets1, top_facets2, bottom_facets2])
             values = np.hstack([top_values, bottom_values, surface_values, sbottom_values])
             sorted_facets = np.argsort(indices)
-            facet_marker = dolfinx.MeshTags(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
+            facet_marker = MeshTags(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
 
     e_abs = []
     e_rel = []
     dofs_global = []
     rank = MPI.COMM_WORLD.rank
-    mesh_data = (facet_marker, top_value, bottom_value, surface_value, surface_bottom)
     load_increment = vertical_displacement / nload_steps
     u1 = None
     for j in range(nload_steps):
         displacement = load_increment
+        mesh_data = (facet_marker, top_value, bottom_value, surface_value, surface_bottom)
+
         # Solve contact problem using Nitsche's method
         u1 = nitsche_rigid_surface_cuas(mesh=mesh, mesh_data=mesh_data, physical_parameters=physical_parameters,
                                         nitsche_parameters=nitsche_parameters, vertical_displacement=displacement,
@@ -186,4 +179,4 @@ if __name__ == "__main__":
         if delta_x.shape[1] < 3:
             delta_x = np.hstack([delta_x, np.zeros((delta_x.shape[0], 3 - delta_x.shape[1]))])
         mesh.geometry.x[:] += delta_x
-        facet_marker = dolfinx.MeshTags(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
+        facet_marker = MeshTags(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
