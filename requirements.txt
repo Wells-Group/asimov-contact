@@ -1,0 +1,6 @@
+http://packages.fenicsproject.org/simple/fenics_ufl-2021.1.0-py3-none-any.whl#sha256=2ce5bf0cd733a810b2f3de53a402d924d6bbcbaab8c2095293b4283262dc05c2
+http://packages.fenicsproject.org/simple/fenics_basix-0.3.1.dev0-cp39-cp39-manylinux_2_17_x86_64.manylinux2014_x86_64.whl#sha256=c6055f663adf6e2f7b6c95ec3434894243deddc63598dcb6e8450bd6d176ee6c
+http://packages.fenicsproject.org/simple/fenics_ffcx-0.3.1.dev0-py3-none-any.whl#sha256=a0b4b754732e52286f82f6dadbd7ab7031c0a03de50664950f50d0576ac2da7c
+http://packages.fenicsproject.org/simple/petsc4py-3.16.1-cp39-cp39-manylinux_2_17_x86_64.manylinux2014_x86_64.whl#sha256=14c23d2401a0cb80eeac37981a63aa72e0931ed2f6062a24c8275ca49c063e89
+http://packages.fenicsproject.org/simple/mpi4py-3.1.2-cp39-cp39-manylinux_2_17_x86_64.manylinux2014_x86_64.whl#sha256=ed935cfc6e590b4f5eda4902c3e836d36379f3b67e78f6726b2655b108dcf6df
+http://packages.fenicsproject.org/simple/fenics_dolfinx-0.3.1.dev0-cp39-cp39-manylinux_2_17_x86_64.manylinux2014_x86_64.whl#sha256=83b699ffc304df09d45498318df5fc337f9a336b8b5f7f5cb4a9edff24763221

@@ -9,7 +9,7 @@ from setuptools.command.build_ext import build_ext
 
 VERSION = "0.3.1"
 
-REQUIREMENTS = ["fenics-dolfinx>0.3.0"]
+REQUIREMENTS = ["fenics-dolfinx>0.3.0@https://github.com/FEniCS/dolfinx/"]
 
 
 class CMakeExtension(Extension):
@@ -71,9 +71,12 @@ setup(name='dolfinx_contact',
       description='Contact custom assemblers using DOLFINx and Basix',
 
       author='Sarah Roggendorf',
+      maintainer="Jørgen S. Dokken",
+      maintainer_email="dokken92@gmail.com",
       python_requires='>3.6.0',
       packages=['dolfinx_contact', "dolfinx_contact.one_sided"],
       ext_modules=[CMakeExtension('dolfinx_contact.cpp')],
+      license='MIT',
       cmdclass=dict(build_ext=CMakeBuild),
       install_requires=REQUIREMENTS,
       zip_safe=False)
