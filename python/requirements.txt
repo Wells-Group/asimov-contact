@@ -1,0 +1,4 @@
+
+--extra-index-url http://packages.fenicsproject.org/simple --trusted-host packages.fenicsproject.org
+fenics-dolfinx
+numpy
