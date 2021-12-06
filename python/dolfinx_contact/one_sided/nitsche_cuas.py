@@ -68,7 +68,7 @@ def nitsche_cuas(mesh: dmesh.Mesh, mesh_data: Tuple[dmesh.MeshTags, int, int],
         Parameters that is passed to the linear algebra backend
         PETSc. For available choices for the 'petsc_options' kwarg,
         see the `PETSc-documentation
-        <https://www.mcs.anl.gov/petsc/documentation/index.html>`
+        <https://petsc4py.readthedocs.io/en/stable/manual/ksp/>`
     newton_options
         Dictionary with Newton-solver options. Valid (key, item) tuples are:
         ("atol", float), ("rtol", float), ("convergence_criterion", "str"),
