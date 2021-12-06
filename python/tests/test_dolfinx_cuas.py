@@ -17,6 +17,8 @@ import dolfinx_contact
 import dolfinx_contact.cpp
 from dolfinx_contact.helpers import (R_minus, epsilon, lame_parameters,
                                      sigma_func)
+from dolfinx_contact.meshing import (convert_mesh, create_disk_mesh,
+                                     create_sphere_mesh)
 
 kt = dolfinx_contact.cpp.Kernel
 compare_matrices = dolfinx_cuas.utils.compare_matrices
@@ -43,6 +45,9 @@ def test_contact_kernel(theta, gamma, dim, gap):
     # and the bottom (contact condition)
     if dim == 3:
         fname = "sphere"
+        create_sphere_mesh(filename=f"{fname}.msh")
+        convert_mesh(fname, "tetra")
+
         with dolfinx.io.XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
             mesh = xdmf.read_mesh(name="Grid")
 
@@ -54,6 +59,8 @@ def test_contact_kernel(theta, gamma, dim, gap):
 
     else:
         fname = "disk"
+        create_disk_mesh(filename=f"{fname}.msh")
+        convert_mesh(fname, "triangle", prune_z=True)
         with dolfinx.io.XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
             mesh = xdmf.read_mesh(name="Grid")
 

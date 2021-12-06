@@ -28,7 +28,7 @@ jobs:
             CXX: c++
     env:
       CC: ${{ matrix.CC }}
-      CXX : ${{ matrix.CXX }}
+      CXX: ${{ matrix.CXX }}
       HDF5_MPI: "ON"
       HDF5_DIR: "/usr/lib/x86_64-linux-gnu/hdf5/mpich/"
       PETSC_ARCH: linux-gnu-${{ matrix.petsc_mode }}-${{ matrix.petsc_int_type }}
@@ -100,7 +100,7 @@ jobs:
           cmake -G Ninja -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_FLAGS="${CONTACT_CMAKE_CXX_FLAGS}" -B build-contact -S cpp/
           ninja -C build-contact install
 
-      - name: Install contact 
+      - name: Install contact
         run: BUILD_TYPE="Debug" python3 -m pip -v install python/
 
       - name: Flake8 code
@@ -119,5 +119,4 @@ jobs:
       - name: Run tests
         run: |
           cd python/tests
-          python3 create_test_meshes.py
           python3 -m pytest . -vs
