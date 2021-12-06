@@ -3,9 +3,9 @@ import argparse
 import numpy as np
 from dolfinx.io import XDMFFile
 from dolfinx.mesh import MeshTags, locate_entities_boundary
-from dolfinx_contact.create_contact_meshes import (create_circle_circle_mesh,
-                                                   create_circle_plane_mesh,
-                                                   create_sphere_plane_mesh)
+from dolfinx_contact.meshing import (create_circle_circle_mesh,
+                                     create_circle_plane_mesh,
+                                     create_sphere_plane_mesh)
 from dolfinx_contact.helpers import convert_mesh
 from dolfinx_contact.nitsche_rigid_surface_cuas import \
     nitsche_rigid_surface_cuas

@@ -11,7 +11,7 @@ import numpy as np
 from mpi4py import MPI
 
 from dolfinx_contact.nitsche_unbiased import nitsche_unbiased
-from dolfinx_contact.create_contact_meshes import create_circle_plane_mesh, create_circle_circle_mesh,\
+from dolfinx_contact.meshing import create_circle_plane_mesh, create_circle_circle_mesh,\
     create_sphere_plane_mesh, create_box_mesh_2D, create_box_mesh_3D
 from dolfinx_contact.helpers import convert_mesh
 

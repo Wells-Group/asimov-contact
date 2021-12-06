@@ -15,8 +15,8 @@ from dolfinx.generation import UnitCubeMesh, UnitSquareMesh
 from dolfinx.io import XDMFFile
 from dolfinx.mesh import MeshTags, locate_entities_boundary, refine
 
-from dolfinx_contact.create_mesh import (convert_mesh, create_disk_mesh,
-                                         create_sphere_mesh)
+from dolfinx_contact.meshing import (convert_mesh, create_disk_mesh,
+                                     create_sphere_mesh)
 from dolfinx_contact.one_sided.nitsche_cuas import nitsche_cuas
 from dolfinx_contact.snes_against_plane import snes_solver
 
@@ -100,7 +100,7 @@ if __name__ == "__main__":
         else:
             fname = "disk"
             create_disk_mesh(filename=f"{fname}.msh")
-            convert_mesh(fname, "triangle", prune_z=True)
+            convert_mesh(fname, fname, "triangle", prune_z=True)
             with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
                 mesh = xdmf.read_mesh(name="Grid")
 
