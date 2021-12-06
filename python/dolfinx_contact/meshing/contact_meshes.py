@@ -2,8 +2,6 @@
 #
 # SPDX-License-Identifier:    MIT
 
-import warnings
-
 import gmsh
 import numpy as np
 from mpi4py import MPI
@@ -243,8 +241,8 @@ def create_box_mesh_3D(filename: str):
 
 def create_sphere_plane_mesh(filename: str):
     """
-    Create a 3D sphere with center (0,0,0), r=0.3 
-    with a box at [-0.3, 0.6] x [-0.3, 0.6] x [ -0.1, -0.5]   
+    Create a 3D sphere with center (0,0,0), r=0.3
+    with a box at [-0.3, 0.6] x [-0.3, 0.6] x [ -0.1, -0.5]
     """
     center = [0.0, 0.0, 0.0]
     r = 0.3
