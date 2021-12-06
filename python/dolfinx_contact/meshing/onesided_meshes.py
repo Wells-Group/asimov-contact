@@ -7,8 +7,6 @@ import warnings
 import gmsh
 from mpi4py import MPI
 
-from .utils import convert_mesh
-
 warnings.filterwarnings("ignore")
 
 __all__ = ["create_disk_mesh", "create_sphere_mesh"]

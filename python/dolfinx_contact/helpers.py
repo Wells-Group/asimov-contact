@@ -11,7 +11,7 @@ import numpy
 import ufl
 from petsc4py import PETSc
 
-__all__ = ["lame_parameters", "epsilon", "sigma_func", "convert_mesh"]
+__all__ = ["lame_parameters", "epsilon", "sigma_func"]
 
 
 def lame_parameters(plane_strain: bool = False):
