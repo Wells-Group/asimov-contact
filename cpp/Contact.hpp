@@ -1417,66 +1417,6 @@ public:
     }
     return {std::move(c), cstride};
   }
-  std::pair<std::vector<PetscScalar>, int> pack_coefficient_dofs(
-      int origin_meshtag,
-      std::shared_ptr<const dolfinx::fem::Function<PetscScalar>> coeff)
-  {
-    if (origin_meshtag == 0)
-      return dolfinx_contact::pack_coefficient_dofs(coeff, _cell_facet_pairs_0);
-    else
-      return dolfinx_contact::pack_coefficient_dofs(coeff, _cell_facet_pairs_1);
-  }
-  std::pair<std::vector<PetscScalar>, int> pack_coeffs_const(
-      int origin_meshtag,
-      std::shared_ptr<const dolfinx::fem::Function<PetscScalar>> mu,
-      std::shared_ptr<const dolfinx::fem::Function<PetscScalar>> lmbda)
-  {
-    std::vector<int32_t>* active_facets;
-    if (origin_meshtag == 0)
-      active_facets = &_facet_0;
-    else
-      active_facets = &_facet_1;
-    auto mu_packed = pack_coefficient_dofs(origin_meshtag, mu);
-    auto lmbda_packed = pack_coefficient_dofs(origin_meshtag, lmbda);
-    auto h = dolfinx_contact::pack_circumradius_facet(_marker->mesh(),
-                                                      (*active_facets));
-    auto gap = pack_gap(origin_meshtag);
-    auto test_fn = pack_test_functions(origin_meshtag, gap.first);
-
-    std::vector<PetscScalar> c(mu_packed.first.size()
-                               + lmbda_packed.first.size() + h.first.size()
-                               + gap.first.size() + test_fn.first.size());
-    const int cstride = mu_packed.second + lmbda_packed.second + h.second
-                        + gap.second + test_fn.second;
-
-    const int num_facets = (*active_facets).size();
-    int offset;
-    int stride;
-    for (int i = 0; i < num_facets; i++)
-    {
-      offset = 0;
-      stride = mu_packed.second;
-      for (int j = 0; j < stride; j++)
-        c[i * cstride + offset + j] = mu_packed.first[i * stride + j];
-      offset += stride;
-      stride = lmbda_packed.second;
-      for (int j = 0; j < stride; j++)
-        c[i * cstride + offset + j] = lmbda_packed.first[i * stride + j];
-      offset += stride;
-      stride = h.second;
-      for (int j = 0; j < stride; j++)
-        c[i * cstride + offset + j] = h.first[i * stride + j];
-      offset += stride;
-      stride = gap.second;
-      for (int j = 0; j < stride; j++)
-        c[i * cstride + offset + j] = gap.first[i * stride + j];
-      offset += stride;
-      stride = test_fn.second;
-      for (int j = 0; j < stride; j++)
-        c[i * cstride + offset + j] = test_fn.first[i * stride + j];
-    }
-    return {std::move(c), cstride};
-  }
 
 private:
   int _quadrature_degree = 3;

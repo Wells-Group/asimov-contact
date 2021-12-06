@@ -61,7 +61,6 @@ if __name__ == "__main__":
     nitsche_bc = not args.dirichlet
     physical_parameters = {"E": args.E, "nu": args.nu, "strain": args.plane_strain}
     vertical_displacement = -args.disp
-    num_refs = args.refs + 1
     top_value = 1
     threed = args.threed
     bottom_value = 2
