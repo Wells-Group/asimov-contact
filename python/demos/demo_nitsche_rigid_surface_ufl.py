@@ -8,9 +8,8 @@ import numpy as np
 from dolfinx.io import XDMFFile
 from mpi4py import MPI
 
-from dolfinx_contact.create_contact_meshes import (create_circle_plane_mesh,
-                                                   create_sphere_plane_mesh)
-from dolfinx_contact.helpers import convert_mesh
+from dolfinx_contact.meshing import (convert_mesh, create_circle_plane_mesh,
+                                     create_sphere_plane_mesh)
 from dolfinx_contact.nitsche_rigid_surface import nitsche_rigid_surface
 
 if __name__ == "__main__":
@@ -60,8 +59,8 @@ if __name__ == "__main__":
     if threed:
         fname = "sphere"
         create_sphere_plane_mesh(filename=f"{fname}.msh")
-        convert_mesh(fname, "tetra")
-        convert_mesh(f"{fname}", "triangle", ext="facets")
+        convert_mesh(fname, fname, "tetra")
+        convert_mesh(f"{fname}", f"{fname}_facets", "triangle")
         with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
             mesh = xdmf.read_mesh(name="Grid")
         tdim = mesh.topology.dim
@@ -77,8 +76,8 @@ if __name__ == "__main__":
     else:
         fname = "twomeshes"
         create_circle_plane_mesh(filename=f"{fname}.msh")
-        convert_mesh(fname, "triangle", prune_z=True)
-        convert_mesh(f"{fname}", "line", ext="facets", prune_z=True)
+        convert_mesh(fname, fname, "triangle", prune_z=True)
+        convert_mesh(f"{fname}", f"{fname}_facets", "line", prune_z=True)
 
         with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
             mesh = xdmf.read_mesh(name="Grid")

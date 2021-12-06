@@ -6,7 +6,6 @@ from typing import Tuple
 
 import dolfinx.common as _common
 import dolfinx.fem as _fem
-import dolfinx.io as _io
 import dolfinx.log as _log
 import dolfinx.mesh as _mesh
 import dolfinx_cuas
@@ -24,22 +23,24 @@ kt = dolfinx_contact.cpp.Kernel
 
 def nitsche_unbiased(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTags, int, int, int, int],
                      physical_parameters: dict, refinement: int = 0,
-                     nitsche_parameters: dict = {"gamma": 1, "theta": 1},
-                     vertical_displacement: float = -0.1, nitsche_bc: bool = True, initGuess=None):
-    (facet_marker, top_value, bottom_value, surface_value, surface_bottom) = mesh_data
-    # quadrature degree
-    q_deg = 3
-    # Nitche parameters and variables
-    theta = nitsche_parameters["theta"]
-    gamma = nitsche_parameters["gamma"] * physical_parameters["E"]
+                     nitsche_parameters: dict = {},
+                     vertical_displacement: float = -0.1, nitsche_bc: bool = True, initGuess=None,
+                     quadrature_degree: int = 3):
 
-    # elasticity parameters
-    E = physical_parameters["E"]
-    nu = physical_parameters["nu"]
-    mu_func, lambda_func = lame_parameters(physical_parameters["strain"])
+    # Compute lame parameters
+    plane_strain = physical_parameters.get("strain", False)
+    E = physical_parameters.get("E", 1e3)
+    nu = physical_parameters.get("nu", 0.1)
+    mu_func, lambda_func = lame_parameters(plane_strain)
     mu = mu_func(E, nu)
     lmbda = lambda_func(E, nu)
     sigma = sigma_func(mu, lmbda)
+
+    # Nitche parameters and variables
+    theta = nitsche_parameters.get("theta", 1)
+    gamma = E * nitsche_parameters.get("gamma", 10)
+
+    (facet_marker, top_value, bottom_value, surface_value, surface_bottom) = mesh_data
 
     # Functions space and FEM functions
     V = _fem.VectorFunctionSpace(mesh, ("CG", 1))
@@ -48,27 +49,12 @@ def nitsche_unbiased(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTags, int, int
     v = ufl.TestFunction(V)
     du = ufl.TrialFunction(V)
 
-    # Initial condition
-    def _u_initial(x):
-        values = np.zeros((gdim, x.shape[1]))
-        # values[-1] = -vertical_displacement
-        for i in range(x.shape[1]):
-            if x[-1, i] > 0.1:
-                values[-1, i] = -vertical_displacement
-            else:
-                values[-1, i] = vertical_displacement
-        return values
-
-    if initGuess is None:
-        u.interpolate(_u_initial)
-    else:
-        u.x.array[:] = initGuess.x.array[:]
-
     h = ufl.Circumradius(mesh)
     n = ufl.FacetNormal(mesh)
-    # integration measure and ufl part of linear/bilinear form
+    # Integration measure and ufl part of linear/bilinear form
+    metadata = {"quadrature_degree": quadrature_degree}
     dx = ufl.Measure("dx", domain=mesh)
-    ds = ufl.Measure("ds", domain=mesh,  # metadata=metadata,
+    ds = ufl.Measure("ds", domain=mesh, metadata=metadata,
                      subdomain_data=facet_marker)
     a = ufl.inner(sigma(du), epsilon(v)) * dx - 0.5 * theta * h / gamma * ufl.inner(sigma(du) * n, sigma(v) * n) * \
         ds(bottom_value) - 0.5 * theta * h / gamma * ufl.inner(sigma(du) * n, sigma(v) * n) * ds(surface_value)
@@ -99,58 +85,49 @@ def nitsche_unbiased(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTags, int, int
             - theta * ufl.inner(sigma(v) * n, du) * \
             ds(surface_bottom) + gamma / h * ufl.inner(du, v) * ds(surface_bottom)
     else:
-        print("Dirichlet bc not implemented in custom assemblers yet.")
+        raise RuntimeError("Strong Dirichlet bc's are not implemented in custom assemblers yet.")
 
     # Custom assembly
     _log.set_log_level(_log.LogLevel.OFF)
     # create contact class
     contact = dolfinx_contact.cpp.Contact(facet_marker, bottom_value, surface_value, V._cpp_object)
-    contact.set_quadrature_degree(q_deg)
+    contact.set_quadrature_degree(quadrature_degree)
     contact.create_distance_map(0)
     contact.create_distance_map(1)
     # pack constants
     consts = np.array([gamma, theta])
 
-    # Pack all coefficients
-    def lmbda_func2(x):
-        values = np.zeros((1, x.shape[1]))
-        for i in range(x.shape[1]):
-            for j in range(1):
-                values[j, i] = lmbda
-        return values
-
-    def mu_func2(x):
-        values = np.zeros((1, x.shape[1]))
-        for i in range(x.shape[1]):
-            for j in range(1):
-                values[j, i] = mu
-        return values
-
+    # Pack material parameters mu and lambda on each contact surface
     V2 = _fem.FunctionSpace(mesh, ("DG", 0))
     lmbda2 = _fem.Function(V2)
-    lmbda2.interpolate(lmbda_func2)
+    lmbda2.interpolate(lambda x: np.full((1, x.shape[1]), lmbda))
     mu2 = _fem.Function(V2)
-    mu2.interpolate(mu_func2)
-
-    mu_packed_0 = contact.pack_coefficient_dofs(0, mu2._cpp_object)
-    mu_packed_1 = contact.pack_coefficient_dofs(1, mu2._cpp_object)
-    lmbda_packed_0 = contact.pack_coefficient_dofs(0, lmbda2._cpp_object)
-    lmbda_packed_1 = contact.pack_coefficient_dofs(1, lmbda2._cpp_object)
-
+    mu2.interpolate(lambda x: np.full((1, x.shape[1]), mu))
     bottom_facets = facet_marker.indices[facet_marker.values == bottom_value]
     surface_facets = facet_marker.indices[facet_marker.values == surface_value]
+
+    integral = _fem.IntegralType.exterior_facet
+    bottom_entities = dolfinx_cuas.compute_active_entities(mesh, bottom_facets, integral)
+    material_bottom = dolfinx_cuas.pack_coefficients([mu2, lmbda2], bottom_entities)
+
+    surface_entities = dolfinx_cuas.compute_active_entities(mesh, surface_facets, integral)
+    material_top = dolfinx_cuas.pack_coefficients([mu2, lmbda2], surface_entities)
+
+    # Pack circumradius on each surface
     h_0 = dolfinx_contact.pack_circumradius_facet(mesh, bottom_facets)
     h_1 = dolfinx_contact.pack_circumradius_facet(mesh, surface_facets)
 
+    # Pack gap and test functions on each surface
     gap_0 = contact.pack_gap(0)
     test_fn_0 = contact.pack_test_functions(0, gap_0)
     gap_1 = contact.pack_gap(1)
     test_fn_1 = contact.pack_test_functions(1, gap_1)
 
-    coeff_0 = np.hstack([mu_packed_0, lmbda_packed_0, h_0, gap_0, test_fn_0])
-    coeff_1 = np.hstack([mu_packed_1, lmbda_packed_1, h_1, gap_1, test_fn_1])
+    # Concatenate all coeffs
+    coeff_0 = np.hstack([material_bottom, h_0, gap_0, test_fn_0])
+    coeff_1 = np.hstack([material_top, h_1, gap_1, test_fn_1])
 
-    # assemble jacobian
+    # Assemble jacobian
     a_cuas = _fem.Form(a)
     kernel_jac = contact.generate_kernel(kt.Jac)
 
@@ -161,8 +138,8 @@ def nitsche_unbiased(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTags, int, int
         u.vector[:] = x.array
         u_opp_0 = contact.pack_u_contact(0, u._cpp_object, gap_0)
         u_opp_1 = contact.pack_u_contact(1, u._cpp_object, gap_1)
-        u_0 = contact.pack_coefficient_dofs(0, u._cpp_object)
-        u_1 = contact.pack_coefficient_dofs(1, u._cpp_object)
+        u_0 = dolfinx_cuas.pack_coefficients([u], bottom_entities)
+        u_1 = dolfinx_cuas.pack_coefficients([u], surface_entities)
         c_0 = np.hstack([coeff_0, u_0, u_opp_0])
         c_1 = np.hstack([coeff_1, u_1, u_opp_1])
         contact.assemble_matrix(A, [], 0, kernel_jac, c_0, consts)
@@ -183,8 +160,8 @@ def nitsche_unbiased(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTags, int, int
         u.vector[:] = x.array
         u_opp_0 = contact.pack_u_contact(0, u._cpp_object, gap_0)
         u_opp_1 = contact.pack_u_contact(1, u._cpp_object, gap_1)
-        u_0 = contact.pack_coefficient_dofs(0, u._cpp_object)
-        u_1 = contact.pack_coefficient_dofs(1, u._cpp_object)
+        u_0 = dolfinx_cuas.pack_coefficients([u], bottom_entities)
+        u_1 = dolfinx_cuas.pack_coefficients([u], surface_entities)
         c_0 = np.hstack([coeff_0, u_0, u_opp_0])
         c_1 = np.hstack([coeff_1, u_1, u_opp_1])
         contact.assemble_vector(b, 0, kernel_rhs, c_0, consts)
@@ -199,6 +176,12 @@ def nitsche_unbiased(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTags, int, int
     # problem.i = 0
     # xdmf = dolfinx.io.XDMFFile(MPI.COMM_WORLD, "results/tmp_sol.xdmf", "w")
     # xdmf.write_mesh(mesh)
+
+    # Set initial guess
+    if initGuess is None:
+        u.x.array[:] = 0
+    else:
+        u.x.array[:] = initGuess.x.array[:]
 
     solver = dolfinx_cuas.NewtonSolver(MPI.COMM_WORLD, problem)
     # null_space = rigid_motions_nullspace(V)
@@ -239,14 +222,5 @@ def nitsche_unbiased(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTags, int, int
     if solver.error_on_nonconvergence:
         assert(converged)
     print(f"{V.dofmap.index_map_bs*V.dofmap.index_map.size_global}, Number of interations: {n:d}")
-
-    with _io.XDMFFile(MPI.COMM_WORLD, f"results/u_unbiased_{refinement}.xdmf", "w") as xdmf:
-        xdmf.write_mesh(mesh)
-        u.name = "u"
-        xdmf.write_function(u)
-    facet_marker.name = "Contact facets"
-    with _io.XDMFFile(MPI.COMM_WORLD, "mt_unbiased.xdmf", "w") as xdmf:
-        xdmf.write_mesh(mesh)
-        xdmf.write_meshtags(facet_marker)
 
     return u

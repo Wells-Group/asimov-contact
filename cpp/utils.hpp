@@ -433,55 +433,6 @@ std::pair<std::vector<PetscScalar>, int> pack_coefficient_facet(
   return {std::move(c), cstride};
 }
 
-std::pair<std::vector<PetscScalar>, int> pack_coefficient_dofs(
-    std::shared_ptr<const dolfinx::fem::Function<PetscScalar>> coeff,
-    xt::xtensor<std::int32_t, 2>& active_facets)
-{
-
-  auto element = coeff->function_space()->element().get();
-  auto dofmap = coeff->function_space()->dofmap().get();
-  auto v = coeff->x()->array();
-  // Get mesh
-  auto mesh = coeff->function_space()->mesh();
-  assert(mesh);
-  const std::size_t num_facets = active_facets.shape(0);
-  std::size_t bs = dofmap->bs();
-  std::size_t ndofs = dofmap->cell_dofs(0).size();
-  std::vector<PetscScalar> c(num_facets * ndofs * bs);
-  const int cstride = ndofs * bs;
-
-  bool needs_dof_transformations = false;
-  xtl::span<const std::uint32_t> cell_info;
-  if (element->needs_dof_transformations())
-  {
-    needs_dof_transformations = true;
-    mesh->topology_mutable().create_entity_permutations();
-    cell_info = xtl::span(mesh->topology().get_cell_permutation_info());
-  }
-  const std::function<void(const xtl::span<PetscScalar>&,
-                           const xtl::span<const std::uint32_t>&, std::int32_t,
-                           int)>
-      transformation
-      = element->get_dof_transformation_function<PetscScalar>(false, true);
-
-  for (std::size_t facet = 0; facet < num_facets; ++facet)
-  {
-    std::int32_t cell = active_facets(facet, 0);
-    auto dofs = dofmap->cell_dofs(cell);
-    for (std::size_t i = 0; i < dofs.size(); ++i)
-    {
-      for (std::size_t k = 0; k < bs; ++k)
-      {
-        c[facet * cstride + bs * i + k] = v[bs * dofs[i] + k];
-      }
-    }
-    transformation(
-        xtl::span(c.data() + facet * cstride, element->space_dimension()),
-        cell_info, cell, 1);
-  }
-  return {std::move(c), cstride};
-}
-
 /// Prepare circumradii of triangle/tetrahedron for assembly with custom
 /// kernels by packing them as an array, where the j*cstride to the ith facet
 /// int active_facets.

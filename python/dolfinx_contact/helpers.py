@@ -11,7 +11,8 @@ import numpy
 import ufl
 from petsc4py import PETSc
 
-__all__ = ["lame_parameters", "epsilon", "sigma_func", "convert_mesh"]
+__all__ = ["lame_parameters", "epsilon", "sigma_func", "R_minus", "ball_projection",
+           "tangential_proj", "NonlinearPDE_SNESProblem", "rigid_motions_nullspace"]
 
 
 def lame_parameters(plane_strain: bool = False):
@@ -40,14 +41,17 @@ def sigma_func(mu, lmbda):
     return lambda v: (2.0 * mu * epsilon(v) + lmbda * ufl.tr(epsilon(v)) * ufl.Identity(len(v)))
 
 
-# R_minus(x) returns x if negative zero else
 def R_minus(x):
-    abs_x = abs(x)
-    return 0.5 * (x - abs_x)
+    """
+    Negative restriction of variable (x if x<0 else 0)
+    """
+    return 0.5 * (x - abs(x))
 
 
-# ball projection
 def ball_projection(x, s):
+    """
+    Ball projection, project a vector quantity x onto a ball of radius r  if |x|>r
+    """
     dim = x.geometric_dimension()
     abs_x = ufl.sqrt(sum([x[i]**2 for i in range(dim)]))
     return ufl.conditional(ufl.le(abs_x, s), x, s * x / abs_x)
@@ -62,13 +66,15 @@ def tangential_proj(u, n):
 
 
 class NonlinearPDE_SNESProblem:
-    def __init__(self, F, u, bc):
+    def __init__(self, F, u, bc, form_compiler_parameters={}, jit_parameters={}):
         V = u.function_space
         du = ufl.TrialFunction(V)
 
-        self.L = F
+        self.L = _fem.Form(F, form_compiler_parameters=form_compiler_parameters,
+                           jit_parameters=jit_parameters)
         self.a = ufl.derivative(F, u, du)
-        self.a_comp = _fem.Form(self.a)
+        self.a_comp = _fem.Form(self.a, form_compiler_parameters=form_compiler_parameters,
+                                jit_parameters=jit_parameters)
         self.bc = bc
         self._F, self._J = None, None
         self.u = u
@@ -91,31 +97,6 @@ class NonlinearPDE_SNESProblem:
         J.zeroEntries()
         _fem.assemble_matrix(J, self.a, [self.bc])
         J.assemble()
-
-
-def convert_mesh(filename: str, cell_type: str, prune_z: bool = False, ext: str = None,
-                 cell_data: str = "gmsh:physical"):
-    """
-    Given the filename of a msh file, read data and convert to XDMF file containing cells of given cell type
-    """
-    try:
-        import meshio
-    except ImportError:
-        print("Meshio and h5py must be installed to convert meshes."
-              + " Please run `pip3 install --no-binary=h5py h5py meshio`")
-        exit(1)
-    from mpi4py import MPI
-    if MPI.COMM_WORLD.rank == 0:
-        mesh = meshio.read(f"{filename}.msh")
-        cells = mesh.get_cells_type(cell_type)
-        data = mesh.get_cell_data(cell_data, cell_type)
-        pts = mesh.points[:, :2] if prune_z else mesh.points
-        out_mesh = meshio.Mesh(points=pts, cells={cell_type: cells}, cell_data={"name_to_read": [data]})
-        if ext is None:
-            ext = ""
-        else:
-            ext = "_" + ext
-        meshio.write(f"{filename}{ext}.xdmf", out_mesh)
 
 
 def rigid_motions_nullspace(V: _fem.FunctionSpace):
