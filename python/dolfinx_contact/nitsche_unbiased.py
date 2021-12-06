@@ -99,7 +99,7 @@ def nitsche_unbiased(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTags, int, int
             - theta * ufl.inner(sigma(v) * n, du) * \
             ds(surface_bottom) + gamma / h * ufl.inner(du, v) * ds(surface_bottom)
     else:
-        print("Dirichlet bc not implemented in custom assemblers yet.")
+        raise RuntimeError("Strong Dirichlet bc's are not implemented in custom assemblers yet.")
 
     # Custom assembly
     _log.set_log_level(_log.LogLevel.OFF)
@@ -239,14 +239,5 @@ def nitsche_unbiased(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTags, int, int
     if solver.error_on_nonconvergence:
         assert(converged)
     print(f"{V.dofmap.index_map_bs*V.dofmap.index_map.size_global}, Number of interations: {n:d}")
-
-    with _io.XDMFFile(MPI.COMM_WORLD, f"results/u_unbiased_{refinement}.xdmf", "w") as xdmf:
-        xdmf.write_mesh(mesh)
-        u.name = "u"
-        xdmf.write_function(u)
-    facet_marker.name = "Contact facets"
-    with _io.XDMFFile(MPI.COMM_WORLD, "mt_unbiased.xdmf", "w") as xdmf:
-        xdmf.write_mesh(mesh)
-        xdmf.write_meshtags(facet_marker)
 
     return u

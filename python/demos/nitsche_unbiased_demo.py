@@ -43,16 +43,15 @@ if __name__ == "__main__":
     _dirichlet = parser.add_mutually_exclusive_group(required=False)
     _dirichlet.add_argument('--dirichlet', dest='dirichlet', action='store_true',
                             help="Use strong Dirichlet formulation", default=False)
-    _E = parser.add_argument("--E", default=1e3, type=np.float64, dest="E",
-                             help="Youngs modulus of material")
-    _nu = parser.add_argument(
-        "--nu", default=0.1, type=np.float64, dest="nu", help="Poisson's ratio")
-    _disp = parser.add_argument("--disp", default=0.2, type=np.float64, dest="disp",
-                                help="Displacement BC in negative y direction")
-    _ref = parser.add_argument("--refinements", default=2, type=np.int32,
-                               dest="refs", help="Number of mesh refinements")
-    _nload_steps = parser.add_argument("--load_steps", default=1, type=np.int32, dest="nload_steps",
-                                       help="Number of steps for gradual loading")
+    parser.add_argument("--E", default=1e3, type=np.float64, dest="E",
+                        help="Youngs modulus of material")
+    parser.add_argument("--nu", default=0.1, type=np.float64, dest="nu", help="Poisson's ratio")
+    parser.add_argument("--disp", default=0.2, type=np.float64, dest="disp",
+                        help="Displacement BC in negative y direction")
+    parser.add_argument("--refinements", default=2, type=np.int32,
+                        dest="refs", help="Number of mesh refinements")
+    parser.add_argument("--load_steps", default=1, type=np.int32, dest="nload_steps",
+                        help="Number of steps for gradual loading")
 
     # Parse input arguments or set to defualt values
     args = parser.parse_args()
@@ -174,8 +173,8 @@ if __name__ == "__main__":
         elif box:
             fname = "box_2D"
             create_box_mesh_2D(filename=f"{fname}.msh")
-            convert_mesh(fname, "triangle", prune_z=True)
-            convert_mesh(f"{fname}", "line", ext="facets", prune_z=True)
+            convert_mesh(fname, fname, "triangle", prune_z=True)
+            convert_mesh(f"{fname}", f"{fname}_facets", "line", prune_z=True)
 
             with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
                 mesh = xdmf.read_mesh(name="Grid")
@@ -193,8 +192,8 @@ if __name__ == "__main__":
         else:
             fname = "twomeshes"
             create_circle_plane_mesh(filename=f"{fname}.msh")
-            convert_mesh(fname, "triangle", prune_z=True)
-            convert_mesh(f"{fname}", "line", ext="facets", prune_z=True)
+            convert_mesh(fname, fname, "triangle", prune_z=True)
+            convert_mesh(f"{fname}", f"{fname}_facets", "line", prune_z=True)
 
             with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
                 mesh = xdmf.read_mesh(name="Grid")
@@ -237,32 +236,48 @@ if __name__ == "__main__":
             values = np.hstack([top_values, bottom_values, surface_values, sbottom_values])
             sorted_facets = np.argsort(indices)
             facet_marker = MeshTags(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
-    e_abs = []
-    e_rel = []
-    dofs_global = []
-    rank = MPI.COMM_WORLD.rank
+
+    # Pack mesh data for Nitsche solver
     mesh_data = (facet_marker, top_value, bottom_value, surface_value, surface_bottom)
+
     # Solve contact problem using Nitsche's method
     load_increment = vertical_displacement / nload_steps
+
+    # Defome function space for problem
+    V = VectorFunctionSpace(mesh, ("CG", 1))
     u1 = None
 
-    V = VectorFunctionSpace(mesh, ("CG", 1))
+    # Data to be stored on the unperturb domain at the end of the simulation
     u = Function(V)
     u.x.array[:] = np.zeros(u.x.array[:].shape)
     geometry = mesh.geometry.x[:].copy()
+
+    # Load geometry over multiple steps
     for j in range(nload_steps):
         displacement = load_increment
+
         # Solve contact problem using Nitsche's method
         u1 = nitsche_unbiased(mesh=mesh, mesh_data=mesh_data, physical_parameters=physical_parameters,
                               nitsche_parameters=nitsche_parameters, vertical_displacement=displacement,
-                              nitsche_bc=True, initGuess=None, refinement=j)
+                              nitsche_bc=nitsche_bc, initGuess=None)
+
+        with XDMFFile(mesh.comm, f"results/u_unbiased_{j}.xdmf", "w") as xdmf:
+            xdmf.write_mesh(mesh)
+            u1.name = "u"
+            xdmf.write_function(u1)
+
+        # Perturb mesh with solution displacement
         delta_x = u1.compute_point_values()
-        u.x.array[:] += u1.x.array[:]
         if delta_x.shape[1] < 3:
             delta_x = np.hstack([delta_x, np.zeros((delta_x.shape[0], 3 - delta_x.shape[1]))])
         mesh.geometry.x[:] += delta_x
+
+        # Accumulate displacements
+        u.x.array[:] += u1.x.array[:]
+
+    # Reset mesh to initial state and write accumulated solution
     mesh.geometry.x[:] = geometry
-    with XDMFFile(MPI.COMM_WORLD, "results/u_unbiased_total.xdmf", "w") as xdmf:
+    with XDMFFile(mesh.comm, "results/u_unbiased_total.xdmf", "w") as xdmf:
         xdmf.write_mesh(mesh)
         u.name = "u"
         xdmf.write_function(u)
