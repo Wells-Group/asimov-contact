@@ -93,31 +93,6 @@ class NonlinearPDE_SNESProblem:
         J.assemble()
 
 
-def convert_mesh(filename: str, cell_type: str, prune_z: bool = False, ext: str = None,
-                 cell_data: str = "gmsh:physical"):
-    """
-    Given the filename of a msh file, read data and convert to XDMF file containing cells of given cell type
-    """
-    try:
-        import meshio
-    except ImportError:
-        print("Meshio and h5py must be installed to convert meshes."
-              + " Please run `pip3 install --no-binary=h5py h5py meshio`")
-        exit(1)
-    from mpi4py import MPI
-    if MPI.COMM_WORLD.rank == 0:
-        mesh = meshio.read(f"{filename}.msh")
-        cells = mesh.get_cells_type(cell_type)
-        data = mesh.get_cell_data(cell_data, cell_type)
-        pts = mesh.points[:, :2] if prune_z else mesh.points
-        out_mesh = meshio.Mesh(points=pts, cells={cell_type: cells}, cell_data={"name_to_read": [data]})
-        if ext is None:
-            ext = ""
-        else:
-            ext = "_" + ext
-        meshio.write(f"{filename}{ext}.xdmf", out_mesh)
-
-
 def rigid_motions_nullspace(V: _fem.FunctionSpace):
     """
     Function to build nullspace for 2D/3D elasticity.
