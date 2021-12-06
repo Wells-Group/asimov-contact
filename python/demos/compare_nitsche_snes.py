@@ -15,8 +15,8 @@ from dolfinx.io import XDMFFile
 from dolfinx.mesh import MeshTags, locate_entities_boundary, refine
 from dolfinx_contact.meshing import (convert_mesh, create_disk_mesh,
                                      create_sphere_mesh)
-from dolfinx_contact.nitsche_one_way import nitsche_one_way
-from dolfinx_contact.snes_against_plane import snes_solver
+from dolfinx_contact.one_sided import nitsche_ufl
+from dolfinx_contact.one_sided import snes_solver
 from mpi4py import MPI
 
 if __name__ == "__main__":
@@ -102,11 +102,22 @@ if __name__ == "__main__":
         def bottom(x):
             return x[1] < 0.2
 
+    newton_options = {"relaxation_parameter": 0.8}
+    petsc_options = {"ksp_type": "cg", "pc_type": "gamg", "rtol": 1e-6, "pc_gamg_coarse_eq_limit": 1000,
+                     "mg_levels_ksp_type": "chebyshev", "mg_levels_pc_type": "jacobi",
+                     "mg_levels_esteig_ksp_type": "cg", "matptap_via": "scalable", "ksp_view": None}
+    snes_options = {"snes_monitor": None, "snes_max_it": 50, "snes_no_convergence_test": False,
+                    "snes_max_fail": 10, "snes_type": "vinewtonrsls",
+                    "snes_rtol": 1e-9, "snes_atol": 1e-9, "snes_view": None}
+    # Cannot use GAMG with SNES, see: https://gitlab.com/petsc/petsc/-/issues/829
+    petsc_snes = {"ksp_type": "cg", "ksp_rtol": 1e-5, "pc_type": "jacobi"}
     e_abs = []
     e_rel = []
     dofs_global = []
     rank = MPI.COMM_WORLD.rank
     refs = np.arange(0, num_refs)
+    jit_parameters = {"cffi_extra_compile_args": ["-O3", "-march=native"], "cffi_libraries": ["m"]}
+    form_compiler_parameters = {"verbosity": 30}
     for i in refs:
         if i > 0:
             # Refine mesh
@@ -126,12 +137,24 @@ if __name__ == "__main__":
         mesh_data = (facet_marker, top_value, bottom_value)
 
         # Solve contact problem using Nitsche's method
-        u1 = nitsche_one_way(mesh=mesh, mesh_data=mesh_data, physical_parameters=physical_parameters,
-                             vertical_displacement=vertical_displacement, nitsche_parameters=nitsche_parameters,
-                             refinement=i, g=gap, nitsche_bc=nitsche_bc)
+        u1 = nitsche_ufl(mesh=mesh, mesh_data=mesh_data, physical_parameters=physical_parameters,
+                         vertical_displacement=vertical_displacement, nitsche_parameters=nitsche_parameters,
+                         plane_loc=gap, nitsche_bc=nitsche_bc, petsc_options=petsc_options,
+                         newton_options=newton_options, form_compiler_parameters=form_compiler_parameters,
+                         jit_parameters=jit_parameters)
+
+        with XDMFFile(mesh.comm, f"results/u_nitsche_{i}.xdmf", "w") as xdmf:
+            xdmf.write_mesh(mesh)
+            xdmf.write_function(u1)
+
         # Solve contact problem using PETSc SNES
         u2 = snes_solver(mesh=mesh, mesh_data=mesh_data, physical_parameters=physical_parameters,
-                         vertical_displacement=vertical_displacement, refinement=i, g=gap)
+                         vertical_displacement=vertical_displacement, plane_loc=gap,
+                         petsc_options=petsc_snes, form_compiler_parameters=form_compiler_parameters,
+                         jit_parameters=jit_parameters, snes_options=snes_options)
+        with XDMFFile(mesh.comm, f"results/u_snes_{i}.xdmf", "w") as xdmf:
+            xdmf.write_mesh(mesh)
+            xdmf.write_function(u2)
 
         # Compute the difference (error) between Nitsche and SNES
         V = u1.function_space
@@ -153,8 +176,8 @@ if __name__ == "__main__":
         print(f"Absolute error {e_abs}")
         print(f"Relative error {e_rel}")
     for i in refs:
-        nitsche_timings = timing(f'{i} Solve Nitsche')
-        snes_timings = timing(f'{i} Solve SNES')
+        nitsche_timings = timing(f'{dofs_global[i]} Solve Nitsche')
+        snes_timings = timing(f'{dofs_global[i]} Solve SNES')
         if rank == 0:
             print(f"{dofs_global[i]}, Nitsche: {nitsche_timings[1]: 0.2e}"
                   + f" SNES: {snes_timings[1]:0.2e}")

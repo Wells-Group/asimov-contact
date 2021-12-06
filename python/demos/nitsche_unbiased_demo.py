@@ -4,16 +4,18 @@
 
 import argparse
 
-from dolfinx.mesh import MeshTags, locate_entities_boundary
-from dolfinx.io import XDMFFile
-from dolfinx.fem import Function, VectorFunctionSpace
 import numpy as np
+from dolfinx.fem import Function, VectorFunctionSpace
+from dolfinx.io import XDMFFile
+from dolfinx.mesh import MeshTags, locate_entities_boundary
 from mpi4py import MPI
 
+from dolfinx_contact.meshing import (convert_mesh, create_box_mesh_2D,
+                                     create_box_mesh_3D,
+                                     create_circle_circle_mesh,
+                                     create_circle_plane_mesh,
+                                     create_sphere_plane_mesh)
 from dolfinx_contact.nitsche_unbiased import nitsche_unbiased
-from dolfinx_contact.meshing import create_circle_plane_mesh, create_circle_circle_mesh,\
-    create_sphere_plane_mesh, create_box_mesh_2D, create_box_mesh_3D
-from dolfinx_contact.helpers import convert_mesh
 
 if __name__ == "__main__":
     desc = "Nitsche's method with rigid surface using custom assemblers"

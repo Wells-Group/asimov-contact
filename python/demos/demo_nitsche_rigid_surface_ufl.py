@@ -8,9 +8,8 @@ import numpy as np
 from dolfinx.io import XDMFFile
 from mpi4py import MPI
 
-from dolfinx_contact.meshing import (create_circle_plane_mesh,
+from dolfinx_contact.meshing import (convert_mesh, create_circle_plane_mesh,
                                      create_sphere_plane_mesh)
-from dolfinx_contact.helpers import convert_mesh
 from dolfinx_contact.nitsche_rigid_surface import nitsche_rigid_surface
 
 if __name__ == "__main__":

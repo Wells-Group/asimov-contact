@@ -62,13 +62,15 @@ def tangential_proj(u, n):
 
 
 class NonlinearPDE_SNESProblem:
-    def __init__(self, F, u, bc):
+    def __init__(self, F, u, bc, form_compiler_parameters={}, jit_parameters={}):
         V = u.function_space
         du = ufl.TrialFunction(V)
 
-        self.L = F
+        self.L = _fem.Form(F, form_compiler_parameters=form_compiler_parameters,
+                           jit_parameters=jit_parameters)
         self.a = ufl.derivative(F, u, du)
-        self.a_comp = _fem.Form(self.a)
+        self.a_comp = _fem.Form(self.a, form_compiler_parameters=form_compiler_parameters,
+                                jit_parameters=jit_parameters)
         self.bc = bc
         self._F, self._J = None, None
         self.u = u
