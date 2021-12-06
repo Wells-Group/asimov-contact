@@ -46,7 +46,7 @@ def test_contact_kernel(theta, gamma, dim, gap):
     if dim == 3:
         fname = "sphere"
         create_sphere_mesh(filename=f"{fname}.msh")
-        convert_mesh(fname, "tetra")
+        convert_mesh(fname, fname, "tetra")
 
         with dolfinx.io.XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
             mesh = xdmf.read_mesh(name="Grid")
@@ -60,7 +60,7 @@ def test_contact_kernel(theta, gamma, dim, gap):
     else:
         fname = "disk"
         create_disk_mesh(filename=f"{fname}.msh")
-        convert_mesh(fname, "triangle", prune_z=True)
+        convert_mesh(fname, fname, "triangle", prune_z=True)
         with dolfinx.io.XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
             mesh = xdmf.read_mesh(name="Grid")
 

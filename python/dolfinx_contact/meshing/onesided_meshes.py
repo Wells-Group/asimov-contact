@@ -2,13 +2,12 @@
 #
 # SPDX-License-Identifier:    MIT
 
-import argparse
 import warnings
 
 import gmsh
 from mpi4py import MPI
 
-from dolfinx_contact.helpers import convert_mesh
+from .utils import convert_mesh
 
 warnings.filterwarnings("ignore")
 
@@ -80,21 +79,3 @@ def create_sphere_mesh(LcMin=0.01, LcMax=0.05, filename="disk.msh"):
         gmsh.write(filename)
 
     gmsh.finalize()
-
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-        description='GMSH Python API script for creating a 2D disk mesh ')
-    parser.add_argument("--name", default="disk", type=str, dest="name",
-                        help="Name of file to write the mesh to (without filetype extension)")
-    _3D = parser.add_mutually_exclusive_group(required=False)
-    _3D.add_argument('--3D', dest='threed', action='store_true',
-                     help="Create 3D mesh", default=False)
-    args = parser.parse_args()
-    if args.threed:
-        create_sphere_mesh(filename=f"{args.name}.msh")
-        convert_mesh(args.name, "tetra")
-    else:
-        create_disk_mesh(filename=f"{args.name}.msh")
-        convert_mesh(args.name, "triangle", prune_z=True)
