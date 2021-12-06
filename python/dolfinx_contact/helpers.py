@@ -11,7 +11,8 @@ import numpy
 import ufl
 from petsc4py import PETSc
 
-__all__ = ["lame_parameters", "epsilon", "sigma_func"]
+__all__ = ["lame_parameters", "epsilon", "sigma_func", "R_minus", "ball_projection",
+           "tangential_proj", "NonlinearPDE_SNESProblem", "rigid_motions_nullspace"]
 
 
 def lame_parameters(plane_strain: bool = False):
@@ -40,14 +41,17 @@ def sigma_func(mu, lmbda):
     return lambda v: (2.0 * mu * epsilon(v) + lmbda * ufl.tr(epsilon(v)) * ufl.Identity(len(v)))
 
 
-# R_minus(x) returns x if negative zero else
 def R_minus(x):
-    abs_x = abs(x)
-    return 0.5 * (x - abs_x)
+    """
+    Negative restriction of variable (x if x<0 else 0)
+    """
+    return 0.5 * (x - abs(x))
 
 
-# ball projection
 def ball_projection(x, s):
+    """
+    Ball projection, project a vector quantity x onto a ball of radius r  if |x|>r
+    """
     dim = x.geometric_dimension()
     abs_x = ufl.sqrt(sum([x[i]**2 for i in range(dim)]))
     return ufl.conditional(ufl.le(abs_x, s), x, s * x / abs_x)
