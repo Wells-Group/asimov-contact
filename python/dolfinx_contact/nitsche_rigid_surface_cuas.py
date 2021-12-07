@@ -106,7 +106,7 @@ def nitsche_rigid_surface_cuas(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTags
     _log.set_log_level(_log.LogLevel.OFF)
     q_rule = dolfinx_cuas.cpp.QuadratureRule(mesh.topology.cell_type, q_deg,
                                              mesh.topology.dim - 1, basix.QuadratureType.Default)
-    consts = np.array([gamma * E, theta])
+    consts = np.array([gamma, theta])
     consts = np.hstack((consts, n_vec))
 
     def lmbda_func2(x):

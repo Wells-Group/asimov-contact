@@ -179,4 +179,3 @@ if __name__ == "__main__":
         if delta_x.shape[1] < 3:
             delta_x = np.hstack([delta_x, np.zeros((delta_x.shape[0], 3 - delta_x.shape[1]))])
         mesh.geometry.x[:] += delta_x
-        facet_marker = MeshTags(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])

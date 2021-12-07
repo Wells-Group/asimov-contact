@@ -1350,6 +1350,119 @@ public:
     return {std::move(c), cstride};
   }
 
+  /// Compute inward surface normal at Pi(x)
+  /// @param[in] orgin_meshtag - surface on which to integrate
+  /// @param[out] c - normals ny packed on facets.
+  std::pair<std::vector<PetscScalar>, int>
+  pack_ny(int origin_meshtag, const xtl::span<const PetscScalar> gap)
+  {
+
+    // Mesh info
+    auto mesh = _marker->mesh();             // mesh
+    const int gdim = mesh->geometry().dim(); // geometrical dimension
+    const int tdim = mesh->topology().dim();
+    const int fdim = tdim - 1;
+    auto cmap = mesh->geometry().cmap();
+    auto x_dofmap = mesh->geometry().dofmap();
+    const xt::xtensor<double, 2>& mesh_geometry = mesh->geometry().x();
+    xt::xtensor<std::int32_t, 3>* map;
+    std::vector<xt::xtensor<double, 2>>* q_phys_pt;
+    xt::xtensor<std::int32_t, 2>* puppet_facets;
+    auto element = _V->element();
+    const std::uint32_t bs = element->block_size();
+    mesh->topology_mutable().create_entity_permutations();
+
+    auto cell_type
+        = dolfinx::mesh::cell_type_to_basix_type(mesh->topology().cell_type());
+    // Get facet normals on reference cell
+    auto facet_normals = basix::cell::facet_outward_normals(cell_type);
+
+    // Select which side of the contact interface to loop from and get the
+    // correct map
+    if (origin_meshtag == 0)
+    {
+      map = &_map_0_to_1;
+      q_phys_pt = &_qp_phys_0;
+      puppet_facets = &_cell_facet_pairs_0;
+    }
+    else
+    {
+      map = &_map_1_to_0;
+      q_phys_pt = &_qp_phys_1;
+      puppet_facets = &_cell_facet_pairs_1;
+    }
+    std::size_t max_links = std::max(_max_links_0, _max_links_1);
+    const std::int32_t num_facets = (*map).shape(0);
+    const std::int32_t num_q_points = _qp_ref_facet[0].shape(0);
+    const std::int32_t ndofs = _V->dofmap()->cell_dofs(0).size();
+    std::vector<PetscScalar> c(num_facets * num_q_points * gdim, 0.0);
+    const int cstride = num_q_points * gdim;
+    std::vector<std::int32_t> perm(num_q_points);
+    std::vector<std::int32_t> sorted_cells(num_q_points);
+    xt::xtensor<double, 2> q_points
+        = xt::zeros<double>({std::size_t(num_q_points), std::size_t(gdim)});
+    xt::xtensor<double, 2> dphi;
+    xt::xtensor<double, 3> J = xt::zeros<double>(
+        {std::size_t(1), std::size_t(gdim), std::size_t(tdim)});
+    xt::xtensor<double, 3> K = xt::zeros<double>(
+        {std::size_t(1), std::size_t(tdim), std::size_t(gdim)});
+    xt::xtensor<double, 1> detJ = xt::zeros<double>({1});
+    xt::xtensor<double, 4> phi(cmap.tabulate_shape(1, 1));
+    for (int i = 0; i < num_facets; i++)
+    {
+      auto cell = (*puppet_facets)(i, 0); // extract cell
+
+      for (int j = 0; j < num_q_points; j++)
+      {
+        sorted_cells[j] = (*map)(i, j, 0);
+        // Is there a better way to do this???
+        for (int k = 0; k < gdim; k++)
+        {
+          q_points(j, k) = (*q_phys_pt)[i](j, k)
+                           + gap[i * gdim * num_q_points + j * gdim + k];
+        }
+      }
+      std::iota(perm.begin(), perm.end(), 0);
+      dolfinx::argsort_radix<std::int32_t>(sorted_cells, perm);
+      std::sort(sorted_cells.begin(), sorted_cells.end());
+      auto it = sorted_cells.begin();
+      while (it != sorted_cells.end())
+      {
+        auto upper = std::upper_bound(it, sorted_cells.end(), *it);
+        int num_indices
+            = upper - sorted_cells.begin() - (it - sorted_cells.begin());
+        std::vector<std::int32_t> indices(num_indices, 0);
+        for (int k = it - sorted_cells.begin();
+             k < upper - sorted_cells.begin(); k++)
+        {
+          int l = it - sorted_cells.begin();
+          indices[k - l] = perm[k];
+        }
+        int linked_cell = *it;
+        // extract local dofs
+        auto x_dofs = x_dofmap.links(linked_cell);
+        const xt::xtensor<double, 2> coordinate_dofs
+            = xt::view(mesh_geometry, xt::keep(x_dofs), xt::range(0, gdim));
+        auto qp = xt::view(q_points, xt::keep(indices), xt::all());
+        auto facet_indices = xt::view(*map, i, xt::keep(indices), 1);
+        auto normals = dolfinx_contact::get_facet_normals(
+            J, K, detJ, qp, coordinate_dofs, linked_cell, facet_indices,
+            element, cmap, facet_normals);
+        for (std::size_t q = 0; q < normals.shape(0); ++q)
+        {
+          for (std::size_t l = 0; l < gdim; l++)
+          {
+            c[i * cstride + indices[q] * gdim + l] = normals(q, l);
+          }
+        }
+
+        it = upper;
+      }
+    }
+
+    return {std::move(c), cstride};
+  }
+
   /// Pack gap with rigid surface defined by x[gdim-1] = -g.
   /// g_vec = zeros(gdim), g_vec[gdim-1] = -g
   /// Gap = x - g_vec
