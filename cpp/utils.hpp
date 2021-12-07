@@ -771,14 +771,15 @@ get_basis_functions(xt::xtensor<double, 3>& J, xt::xtensor<double, 3>& K,
   return basis_array;
 }
 //-----------------------------------------------------------------------------
-xt::xtensor<double, 2> get_facet_normals(
-    xt::xtensor<double, 3>& J, xt::xtensor<double, 3>& K,
-    xt::xtensor<double, 1>& detJ, const xt::xtensor<double, 2>& x,
-    xt::xtensor<double, 2> coordinate_dofs, const std::int32_t index,
-    const xt::xtensor<std::int32_t, 1> facet_indices, 
-    std::shared_ptr<const dolfinx::fem::FiniteElement> element,
-    const dolfinx::fem::CoordinateElement& cmap,
-    xt::xtensor<double, 2> facet_normals)
+xt::xtensor<double, 2>
+get_facet_normals(xt::xtensor<double, 3>& J, xt::xtensor<double, 3>& K,
+                  xt::xtensor<double, 1>& detJ, const xt::xtensor<double, 2>& x,
+                  xt::xtensor<double, 2> coordinate_dofs,
+                  const std::int32_t index,
+                  const xt::xtensor<std::int32_t, 1> facet_indices,
+                  std::shared_ptr<const dolfinx::fem::FiniteElement> element,
+                  const dolfinx::fem::CoordinateElement& cmap,
+                  xt::xtensor<double, 2> facet_normals)
 {
   // number of points
   const std::size_t num_points = x.shape(0);
@@ -820,6 +821,11 @@ xt::xtensor<double, 2> get_facet_normals(
     for (std::size_t i = 0; i < gdim; i++)
       for (std::size_t j = 0; j < tdim; j++)
         normals(q, i) += _K(j, i) * facet_normal[j];
+    double n_norm = 0;
+    for (std::size_t i = 0; i < gdim; i++)
+      n_norm += normals(q, i) * normals(q, i);
+    for (std::size_t i = 0; i < gdim; i++)
+      normals(q, i) /= std::sqrt(n_norm);
   }
   return normals;
 }

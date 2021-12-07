@@ -20,6 +20,7 @@ import dolfinx_contact
 import dolfinx_contact.cpp
 from dolfinx_contact.helpers import (epsilon, lame_parameters,
                                      rigid_motions_nullspace, sigma_func)
+from dolfinx_contact.plotting import plot_gap
 
 __all__ = ["nitsche_rigid_surface_cuas"]
 kt = dolfinx_contact.cpp.Kernel
@@ -137,8 +138,9 @@ def nitsche_rigid_surface_cuas(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTags
     contact.set_quadrature_degree(q_deg)
     contact.create_distance_map(0)
     g_vec = contact.pack_gap(0)
+    n_surf = contact.pack_ny(0, g_vec)
 
-    coeffs = np.hstack([coeffs, h_facets, g_vec])
+    coeffs = np.hstack([coeffs, h_facets, g_vec, n_surf])
 
     # RHS
     L_cuas = _fem.Form(L)
@@ -182,12 +184,12 @@ def nitsche_rigid_surface_cuas(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTags
     solver.A.setNearNullSpace(null_space)
 
     # Set Newton solver options
-    solver.atol = 1e-6
-    solver.rtol = 1e-6
+    solver.atol = 1e-9
+    solver.rtol = 1e-9
     solver.convergence_criterion = "incremental"
     solver.max_it = 200
     solver.error_on_nonconvergence = True
-    solver.relaxation_parameter = 0.6
+    solver.relaxation_parameter = 1
 
     # Define solver and options
     ksp = solver.krylov_solver
@@ -218,7 +220,7 @@ def nitsche_rigid_surface_cuas(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTags
         assert(converged)
     print(f"{V.dofmap.index_map_bs*V.dofmap.index_map.size_global}, Number of interations: {n:d}")
 
-    with _io.XDMFFile(mesh.comm, f"results/u_cuas_{refinement}.xdmf", "w") as xdmf:
+    with _io.XDMFFile(mesh.comm, f"results/u_cuas_rigid_{refinement}.xdmf", "w") as xdmf:
         xdmf.write_mesh(mesh)
         u.name = "u"
         xdmf.write_function(u)

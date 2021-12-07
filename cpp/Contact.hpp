@@ -2,7 +2,7 @@
 //
 // This file is part of DOLFINx_CUAS
 //
-// SPDX-License-Identifier:    LGPL-3.0-or-later
+// SPDX-License-Identifier:    MIT
 
 #pragma once
 
@@ -1521,11 +1521,7 @@ public:
       int offset = i * cstride;
       for (int k = 0; k < num_q_point; k++)
       {
-        for (int j = 0; j < gdim; j++)
-        {
-          c[offset + k * gdim + j] -= (*q_phys_pt)[i](k, j);
-        }
-        c[offset + (k + 1) * gdim - 1] += g;
+        c[offset + (k + 1) * gdim - 1] = g - (*q_phys_pt)[i](k, gdim - 1);
       }
     }
     return {std::move(c), cstride};

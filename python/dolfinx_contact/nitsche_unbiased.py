@@ -183,7 +183,7 @@ def nitsche_unbiased(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTags, int, int
     else:
         u.x.array[:] = initGuess.x.array[:]
 
-    solver = dolfinx_cuas.NewtonSolver(MPI.COMM_WORLD, problem)
+    solver = dolfinx_cuas.NewtonSolver(mesh.comm, problem)
     # null_space = rigid_motions_nullspace(V)
     # solver.A.setNearNullSpace(null_space)
     # Set Newton solver options

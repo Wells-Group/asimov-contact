@@ -65,7 +65,7 @@ if __name__ == "__main__":
         fname = "sphere"
         create_sphere_plane_mesh(filename=f"{fname}.msh")
         convert_mesh(fname, fname, "tetra")
-        convert_mesh(f"{fname}", f"{fname}", "triangle", ext="facets")
+        convert_mesh(f"{fname}", f"{fname}_facets", "triangle")
         with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
             mesh = xdmf.read_mesh(name="Grid")
         tdim = mesh.topology.dim
@@ -144,7 +144,7 @@ if __name__ == "__main__":
                 return x[1] > 0.5
 
             def bottom(x):
-                return x[1] < 0.45
+                return np.logical_and(x[1] < 0.45, x[1] > 0.15)
 
             top_value = 1
             bottom_value = 2
