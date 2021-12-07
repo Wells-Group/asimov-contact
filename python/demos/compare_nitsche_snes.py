@@ -76,7 +76,7 @@ if __name__ == "__main__":
         else:
             fname = "sphere"
             create_sphere_mesh(filename=f"{fname}.msh")
-            convert_mesh(fname, "tetra")
+            convert_mesh(fname, fname, "tetra")
             with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
                 mesh = xdmf.read_mesh(name="Grid")
 

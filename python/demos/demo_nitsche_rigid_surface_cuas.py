@@ -64,8 +64,8 @@ if __name__ == "__main__":
     if threed:
         fname = "sphere"
         create_sphere_plane_mesh(filename=f"{fname}.msh")
-        convert_mesh(fname, "tetra")
-        convert_mesh(f"{fname}", "triangle", ext="facets")
+        convert_mesh(fname, fname, "tetra")
+        convert_mesh(f"{fname}", f"{fname}", "triangle", ext="facets")
         with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
             mesh = xdmf.read_mesh(name="Grid")
         tdim = mesh.topology.dim
@@ -83,7 +83,7 @@ if __name__ == "__main__":
             fname = "two_disks"
             create_circle_circle_mesh(filename=f"{fname}.msh")
             convert_mesh(fname, fname, "triangle", prune_z=True)
-            convert_mesh(f"{fname}", f"{fname}_facets" "line", prune_z=True)
+            convert_mesh(f"{fname}", f"{fname}_facets", "line", prune_z=True)
 
             with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
                 mesh = xdmf.read_mesh(name="Grid")
