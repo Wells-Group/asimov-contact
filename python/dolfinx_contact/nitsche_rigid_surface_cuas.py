@@ -20,7 +20,6 @@ import dolfinx_contact
 import dolfinx_contact.cpp
 from dolfinx_contact.helpers import (epsilon, lame_parameters,
                                      rigid_motions_nullspace, sigma_func)
-from dolfinx_contact.plotting import plot_gap
 
 __all__ = ["nitsche_rigid_surface_cuas"]
 kt = dolfinx_contact.cpp.Kernel

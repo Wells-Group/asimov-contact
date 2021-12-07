@@ -11,7 +11,6 @@ import dolfinx.mesh as _mesh
 import dolfinx_cuas
 import numpy as np
 import ufl
-from mpi4py import MPI
 from petsc4py import PETSc
 
 import dolfinx_contact
