@@ -15,10 +15,10 @@ from dolfinx.generation import UnitCubeMesh, UnitSquareMesh
 from dolfinx.io import XDMFFile
 from dolfinx.mesh import MeshTags, locate_entities_boundary, refine
 
-from dolfinx_contact.create_mesh import (convert_mesh, create_disk_mesh,
-                                         create_sphere_mesh)
+from dolfinx_contact.meshing import (convert_mesh, create_disk_mesh,
+                                     create_sphere_mesh)
 from dolfinx_contact.one_sided.nitsche_cuas import nitsche_cuas
-from dolfinx_contact.snes_against_plane import snes_solver
+from dolfinx_contact.one_sided.snes_against_plane import snes_solver
 
 from mpi4py import MPI
 
@@ -75,7 +75,11 @@ if __name__ == "__main__":
     # petsc_options = {"ksp_type": "cg", "pc_type": "gamg", "rtol": 1e-6, "pc_gamg_coarse_eq_limit": 1000,
     #                  "mg_levels_ksp_type": "chebyshev", "mg_levels_pc_type": "jacobi",
     #                  "mg_levels_esteig_ksp_type": "cg", "matptap_via": "scalable", "ksp_view": None}
-
+    snes_options = {"snes_monitor": None, "snes_max_it": 50, "snes_no_convergence_test": False,
+                    "snes_max_fail": 10, "snes_type": "vinewtonrsls",
+                    "snes_rtol": 1e-9, "snes_atol": 1e-9, "snes_view": None}
+    # Cannot use GAMG with SNES, see: https://gitlab.com/petsc/petsc/-/issues/829
+    petsc_snes = {"ksp_type": "cg", "ksp_rtol": 1e-5, "pc_type": "jacobi"}
     # Load mesh and create identifier functions for the top (Displacement condition)
     # and the bottom (contact condition)
     if threed:
@@ -100,7 +104,7 @@ if __name__ == "__main__":
         else:
             fname = "disk"
             create_disk_mesh(filename=f"{fname}.msh")
-            convert_mesh(fname, "triangle", prune_z=True)
+            convert_mesh(fname, fname, "triangle", prune_z=True)
             with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
                 mesh = xdmf.read_mesh(name="Grid")
 
@@ -143,8 +147,11 @@ if __name__ == "__main__":
 
         # Solve contact problem using PETSc SNES
         u2 = snes_solver(mesh=mesh, mesh_data=mesh_data, physical_parameters=physical_parameters,
-                         vertical_displacement=vertical_displacement, refinement=i, g=gap)
-
+                         vertical_displacement=vertical_displacement, plane_loc=gap, petsc_options=petsc_snes,
+                         snes_options=snes_options)
+        with XDMFFile(mesh.comm, f"results/u_snes_{i}.xdmf", "w") as xdmf:
+            xdmf.write_mesh(mesh)
+            xdmf.write_function(u2)
         # Compute the difference (error) between Nitsche and SNES
         V = u1.function_space
         dx = ufl.Measure("dx", domain=mesh)
@@ -171,7 +178,7 @@ if __name__ == "__main__":
         print(f"Relative error {e_rel}")
     for i in refs:
         nitsche_timings = timing(f'{dofs_global[i]} Solve Nitsche')
-        snes_timings = timing(f'{i} Solve SNES')
+        snes_timings = timing(f'{dofs_global[i]} Solve SNES')
         if rank == 0:
             print(f"{dofs_global[i]}, Nitsche: {nitsche_timings[1]: 0.2e}"
                   + f" SNES: {snes_timings[1]:0.2e}")
