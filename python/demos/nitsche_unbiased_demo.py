@@ -236,7 +236,7 @@ if __name__ == "__main__":
             sorted_facets = np.argsort(indices)
             facet_marker = MeshTags(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
 
-   # Solver options
+    # Solver options
     newton_options = {"relaxation_parameter": 1.0}
     # petsc_options = {"ksp_type": "preonly", "pc_type": "lu"}
     petsc_options = {"ksp_type": "cg", "pc_type": "gamg", "rtol": 1e-6, "pc_gamg_coarse_eq_limit": 1000,
@@ -265,7 +265,8 @@ if __name__ == "__main__":
         # Solve contact problem using Nitsche's method
         u1 = nitsche_unbiased(mesh=mesh, mesh_data=mesh_data, physical_parameters=physical_parameters,
                               nitsche_parameters=nitsche_parameters, vertical_displacement=displacement,
-                              nitsche_bc=True, quadrature_degree=3, petsc_options=petsc_options, newton_options=newton_options)
+                              nitsche_bc=True, quadrature_degree=3, petsc_options=petsc_options,
+                              newton_options=newton_options)
 
         with XDMFFile(mesh.comm, f"results/u_unbiased_{j}.xdmf", "w") as xdmf:
             xdmf.write_mesh(mesh)

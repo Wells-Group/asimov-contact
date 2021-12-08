@@ -7,7 +7,6 @@ from typing import Tuple, Dict
 import basix
 import dolfinx.common as _common
 import dolfinx.fem as _fem
-import dolfinx.io as _io
 import dolfinx.log as _log
 import dolfinx.mesh as _mesh
 import dolfinx_cuas
@@ -39,10 +38,11 @@ def nitsche_rigid_surface_cuas(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTags
     mesh
         The input mesh
     mesh_data
-        A quinteplet with a mesh tag for facets and values v0, v1, v2, v3. v0 and v3 should be the values in the mesh tags
-        for facets to apply a Dirichlet condition on, where v0 corresponds to the elastic body and v2 to the rigid body. 
-        v1 is the value for facets which should have applied a contact condition on and v2 marks the potential contact surface 
-        on the rigid body.
+        A quinteplet with a mesh tag for facets and values v0, v1, v2, v3. v0 and v3
+        should be the values in the mesh tags for facets to apply a Dirichlet condition
+        on, where v0 corresponds to the elastic body and v2 to the rigid body. v1 is the
+        value for facets which should have applied a contact condition on and v2 marks
+        the potential contact surface on the rigid body.
     physical_parameters
         Optional dictionary with information about the linear elasticity problem.
         Valid (key, value) tuples are: ('E': float), ('nu', float), ('strain', bool)
@@ -89,7 +89,8 @@ def nitsche_rigid_surface_cuas(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTags
     gamma = nitsche_parameters.get("gamma", 10)
 
     # Unpack mesh data
-    (facet_marker, dirichlet_value_elastic, contact_value_elastic, contact_value_rigid, dirichlet_value_rigid) = mesh_data
+    (facet_marker, dirichlet_value_elastic, contact_value_elastic, contact_value_rigid,
+     dirichlet_value_rigid) = mesh_data
     assert(facet_marker.dim == mesh.topology.dim - 1)
     gdim = mesh.geometry.dim
 

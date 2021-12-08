@@ -180,8 +180,9 @@ if __name__ == "__main__":
     # Solve contact problem using Nitsche's method
     u1 = nitsche_rigid_surface_cuas(mesh=mesh, mesh_data=mesh_data, physical_parameters=physical_parameters,
                                     nitsche_parameters=nitsche_parameters, vertical_displacement=vertical_displacement,
-                                    nitsche_bc=True, quadrature_degree=3, petsc_options=petsc_options, newton_options=newton_options)
+                                    nitsche_bc=True, quadrature_degree=3, petsc_options=petsc_options,
+                                    newton_options=newton_options)
 
-    with XDMFFile(mesh.comm, f"results/u_cuas_rigid.xdmf", "w") as xdmf:
+    with XDMFFile(mesh.comm, "results/u_cuas_rigid.xdmf", "w") as xdmf:
         xdmf.write_mesh(mesh)
         xdmf.write_function(u1)

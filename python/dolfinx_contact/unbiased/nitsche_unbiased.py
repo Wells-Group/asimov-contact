@@ -33,10 +33,11 @@ def nitsche_unbiased(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTags, int, int
     mesh
         The input mesh
     mesh_data
-        A quinteplet with a mesh tag for facets and values v0, v1, v2, v3. v0 and v3 should be the values in the mesh tags
-        for facets to apply a Dirichlet condition on, where v0 corresponds to the first elastic body and v2 to the second. 
-        v1 is the value for facets which should have applied a contact condition on and v2 marks the potential contact surface 
-        on the rigid body.
+        A quinteplet with a mesh tag for facets and values v0, v1, v2, v3. v0
+        and v3 should be the values in the mesh tags for facets to apply a Dirichlet
+        condition on, where v0 corresponds to the first elastic body and v2 to the second.
+        v1 is the value for facets which should have applied a contact condition on and v2
+        marks the potential contact surface on the rigid body.
     physical_parameters
         Optional dictionary with information about the linear elasticity problem.
         Valid (key, value) tuples are: ('E': float), ('nu', float), ('strain', bool)
@@ -152,25 +153,27 @@ def nitsche_unbiased(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTags, int, int
     facets_1 = facet_marker.indices[facet_marker.values == surface_value_1]
 
     integral = _fem.IntegralType.exterior_facet
-    bottom_entities = dolfinx_cuas.compute_active_entities(mesh, facets_0, integral)
-    material_bottom = dolfinx_cuas.pack_coefficients([mu2, lmbda2], bottom_entities)
+    entities_0 = dolfinx_cuas.compute_active_entities(mesh, facets_0, integral)
+    material_0 = dolfinx_cuas.pack_coefficients([mu2, lmbda2], entities_0)
 
-    surface_entities = dolfinx_cuas.compute_active_entities(mesh, facets_1, integral)
-    material_top = dolfinx_cuas.pack_coefficients([mu2, lmbda2], surface_entities)
+    entities_1 = dolfinx_cuas.compute_active_entities(mesh, facets_1, integral)
+    material_1 = dolfinx_cuas.pack_coefficients([mu2, lmbda2], entities_1)
 
     # Pack circumradius on each surface
     h_0 = dolfinx_contact.pack_circumradius_facet(mesh, facets_0)
     h_1 = dolfinx_contact.pack_circumradius_facet(mesh, facets_1)
 
-    # Pack gap and test functions on each surface
+    # Pack gap, normals and test functions on each surface
     gap_0 = contact.pack_gap(0)
+    n_0 = contact.pack_ny(0, gap_0)
     test_fn_0 = contact.pack_test_functions(0, gap_0)
     gap_1 = contact.pack_gap(1)
+    n_1 = contact.pack_ny(1, gap_1)
     test_fn_1 = contact.pack_test_functions(1, gap_1)
 
     # Concatenate all coeffs
-    coeff_0 = np.hstack([material_bottom, h_0, gap_0, test_fn_0])
-    coeff_1 = np.hstack([material_top, h_1, gap_1, test_fn_1])
+    coeff_0 = np.hstack([material_0, h_0, gap_0, n_0, test_fn_0])
+    coeff_1 = np.hstack([material_1, h_1, gap_1, n_1, test_fn_1])
 
     # Assemble jacobian
     J_cuas = _fem.Form(J)
@@ -183,8 +186,8 @@ def nitsche_unbiased(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTags, int, int
         u.vector[:] = x.array
         u_opp_0 = contact.pack_u_contact(0, u._cpp_object, gap_0)
         u_opp_1 = contact.pack_u_contact(1, u._cpp_object, gap_1)
-        u_0 = dolfinx_cuas.pack_coefficients([u], bottom_entities)
-        u_1 = dolfinx_cuas.pack_coefficients([u], surface_entities)
+        u_0 = dolfinx_cuas.pack_coefficients([u], entities_0)
+        u_1 = dolfinx_cuas.pack_coefficients([u], entities_1)
         c_0 = np.hstack([coeff_0, u_0, u_opp_0])
         c_1 = np.hstack([coeff_1, u_1, u_opp_1])
         contact.assemble_matrix(A, [], 0, kernel_jac, c_0, consts)
@@ -205,8 +208,8 @@ def nitsche_unbiased(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTags, int, int
         u.vector[:] = x.array
         u_opp_0 = contact.pack_u_contact(0, u._cpp_object, gap_0)
         u_opp_1 = contact.pack_u_contact(1, u._cpp_object, gap_1)
-        u_0 = dolfinx_cuas.pack_coefficients([u], bottom_entities)
-        u_1 = dolfinx_cuas.pack_coefficients([u], surface_entities)
+        u_0 = dolfinx_cuas.pack_coefficients([u], entities_0)
+        u_1 = dolfinx_cuas.pack_coefficients([u], entities_1)
         c_0 = np.hstack([coeff_0, u_0, u_opp_0])
         c_1 = np.hstack([coeff_1, u_1, u_opp_1])
         contact.assemble_vector(b, 0, kernel_rhs, c_0, consts)
