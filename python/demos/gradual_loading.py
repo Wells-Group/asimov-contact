@@ -1,15 +1,16 @@
 import argparse
 
 import numpy as np
+from dolfinx.fem import Function, VectorFunctionSpace
 from dolfinx.io import XDMFFile
 from dolfinx.mesh import MeshTags, locate_entities_boundary
-from dolfinx_contact.meshing import (create_circle_circle_mesh,
+from mpi4py import MPI
+
+from dolfinx_contact.meshing import (convert_mesh, create_circle_circle_mesh,
                                      create_circle_plane_mesh,
                                      create_sphere_plane_mesh)
-from dolfinx_contact.helpers import convert_mesh
-from dolfinx_contact.nitsche_rigid_surface_cuas import \
+from dolfinx_contact.one_sided.nitsche_rigid_surface_cuas import \
     nitsche_rigid_surface_cuas
-from mpi4py import MPI
 
 if __name__ == "__main__":
     desc = "Nitsche's method with rigid surface using custom assemblers and apply gradual loading in non-linear solve"
@@ -38,7 +39,7 @@ if __name__ == "__main__":
                              help="Youngs modulus of material")
     _nu = parser.add_argument(
         "--nu", default=0.1, type=np.float64, dest="nu", help="Poisson's ratio")
-    _disp = parser.add_argument("--disp", default=0.08, type=np.float64, dest="disp",
+    _disp = parser.add_argument("--disp", default=0.2, type=np.float64, dest="disp",
                                 help="Displacement BC in negative y direction")
     _nload_steps = parser.add_argument("--load_steps", default=1, type=np.int32, dest="nload_steps",
                                        help="Number of steps for gradual loading")
@@ -161,21 +162,52 @@ if __name__ == "__main__":
             sorted_facets = np.argsort(indices)
             facet_marker = MeshTags(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
 
-    e_abs = []
-    e_rel = []
-    dofs_global = []
-    rank = MPI.COMM_WORLD.rank
+    # Solver options
+    newton_options = {"relaxation_parameter": 1.0}
+    # petsc_options = {"ksp_type": "preonly", "pc_type": "lu"}
+    petsc_options = {"ksp_type": "cg", "pc_type": "gamg", "rtol": 1e-6, "pc_gamg_coarse_eq_limit": 1000,
+                     "mg_levels_ksp_type": "chebyshev", "mg_levels_pc_type": "jacobi",
+                     "mg_levels_esteig_ksp_type": "cg", "matptap_via": "scalable", "ksp_view": None}
+
+    # Pack mesh data for Nitsche solver
+    mesh_data = (facet_marker, top_value, bottom_value, surface_value, surface_bottom)
+
+    # Solve contact problem using Nitsche's method
     load_increment = vertical_displacement / nload_steps
+
+    # Define function space for problem
+    V = VectorFunctionSpace(mesh, ("CG", 1))
     u1 = None
+
+    # Data to be stored on the unperturb domain at the end of the simulation
+    u = Function(V)
+    u.x.array[:] = np.zeros(u.x.array[:].shape)
+    geometry = mesh.geometry.x[:].copy()
+
     for j in range(nload_steps):
         displacement = load_increment
-        mesh_data = (facet_marker, top_value, bottom_value, surface_value, surface_bottom)
 
         # Solve contact problem using Nitsche's method
         u1 = nitsche_rigid_surface_cuas(mesh=mesh, mesh_data=mesh_data, physical_parameters=physical_parameters,
                                         nitsche_parameters=nitsche_parameters, vertical_displacement=displacement,
-                                        nitsche_bc=True, initGuess=None, refinement=j)
+                                        nitsche_bc=True, quadrature_degree=3, petsc_options=petsc_options, newton_options=newton_options)
+        with XDMFFile(mesh.comm, f"results/u_cuas_{j}.xdmf", "w") as xdmf:
+            xdmf.write_mesh(mesh)
+            u1.name = "u"
+            xdmf.write_function(u1)
+
+        # Perturb mesh with solution displacement
         delta_x = u1.compute_point_values()
         if delta_x.shape[1] < 3:
             delta_x = np.hstack([delta_x, np.zeros((delta_x.shape[0], 3 - delta_x.shape[1]))])
         mesh.geometry.x[:] += delta_x
+
+        # Accumulate displacements
+        u.x.array[:] += u1.x.array[:]
+
+    # Reset mesh to initial state and write accumulated solution
+    mesh.geometry.x[:] = geometry
+    with XDMFFile(mesh.comm, "results/u_cuas_total.xdmf", "w") as xdmf:
+        xdmf.write_mesh(mesh)
+        u.name = "u"
+        xdmf.write_function(u)

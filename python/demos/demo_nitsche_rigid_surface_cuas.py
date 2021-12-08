@@ -4,14 +4,16 @@
 
 import argparse
 
+import numpy as np
 from dolfinx.io import XDMFFile
 from dolfinx.mesh import MeshTags, locate_entities_boundary
-import numpy as np
 from mpi4py import MPI
 
-from dolfinx_contact.nitsche_rigid_surface_cuas import nitsche_rigid_surface_cuas
-from dolfinx_contact.meshing import create_circle_plane_mesh, create_circle_circle_mesh,\
-    create_sphere_plane_mesh, convert_mesh
+from dolfinx_contact.meshing import (convert_mesh, create_circle_circle_mesh,
+                                     create_circle_plane_mesh,
+                                     create_sphere_plane_mesh)
+from dolfinx_contact.one_sided.nitsche_rigid_surface_cuas import \
+    nitsche_rigid_surface_cuas
 
 if __name__ == "__main__":
     desc = "Nitsche's method with rigid surface using custom assemblers"
@@ -40,7 +42,7 @@ if __name__ == "__main__":
                              help="Youngs modulus of material")
     _nu = parser.add_argument(
         "--nu", default=0.1, type=np.float64, dest="nu", help="Poisson's ratio")
-    _disp = parser.add_argument("--disp", default=0.3, type=np.float64, dest="disp",
+    _disp = parser.add_argument("--disp", default=0.2, type=np.float64, dest="disp",
                                 help="Displacement BC in negative y direction")
     _ref = parser.add_argument("--refinements", default=2, type=np.int32,
                                dest="refs", help="Number of mesh refinements")
@@ -164,12 +166,22 @@ if __name__ == "__main__":
             values = np.hstack([top_values, bottom_values, surface_values, sbottom_values])
             sorted_facets = np.argsort(indices)
             facet_marker = MeshTags(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
-    e_abs = []
-    e_rel = []
-    dofs_global = []
-    rank = MPI.COMM_WORLD.rank
+
+    # Solver options
+    newton_options = {"relaxation_parameter": 1.0}
+    # petsc_options = {"ksp_type": "preonly", "pc_type": "lu"}
+    petsc_options = {"ksp_type": "cg", "pc_type": "gamg", "rtol": 1e-6, "pc_gamg_coarse_eq_limit": 1000,
+                     "mg_levels_ksp_type": "chebyshev", "mg_levels_pc_type": "jacobi",
+                     "mg_levels_esteig_ksp_type": "cg", "matptap_via": "scalable", "ksp_view": None}
+
+    # Pack mesh data for Nitsche solver
     mesh_data = (facet_marker, top_value, bottom_value, surface_value, surface_bottom)
+
     # Solve contact problem using Nitsche's method
     u1 = nitsche_rigid_surface_cuas(mesh=mesh, mesh_data=mesh_data, physical_parameters=physical_parameters,
                                     nitsche_parameters=nitsche_parameters, vertical_displacement=vertical_displacement,
-                                    nitsche_bc=True)
+                                    nitsche_bc=True, quadrature_degree=3, petsc_options=petsc_options, newton_options=newton_options)
+
+    with XDMFFile(mesh.comm, f"results/u_cuas_rigid.xdmf", "w") as xdmf:
+        xdmf.write_mesh(mesh)
+        xdmf.write_function(u1)
