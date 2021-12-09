@@ -1,5 +1,6 @@
 # Copyright (C) 2021 Sarah Roggendorf
-# SPDX-License-Identifier:   LGPL-3.0-or-later
+#
+# SPDX-License-Identifier:   MIT
 
 import numpy as np
 import pytest

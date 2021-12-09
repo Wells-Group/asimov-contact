@@ -1,18 +1,18 @@
-# Copyright (C) 2021 Sarah Roggendorf and Jørgen S. Dokken
+# Copyright (C) 2021 Sarah Roggendorf
 #
 # SPDX-License-Identifier:    MIT
 
 from typing import Tuple, Dict
 
 import basix
+import dolfinx.common as _common
+import dolfinx.fem as _fem
+import dolfinx.log as _log
+import dolfinx.mesh as _mesh
 import dolfinx_cuas
 import dolfinx_cuas.cpp
 import numpy as np
 import ufl
-from dolfinx import common as _common
-from dolfinx import fem as _fem
-from dolfinx import log as _log
-from dolfinx import mesh as dmesh
 from petsc4py import PETSc as _PETSc
 
 import dolfinx_contact
@@ -20,26 +20,29 @@ import dolfinx_contact.cpp
 from dolfinx_contact.helpers import (epsilon, lame_parameters,
                                      rigid_motions_nullspace, sigma_func)
 
-__all__ = ["nitsche_cuas"]
+__all__ = ["nitsche_rigid_surface_cuas"]
+kt = dolfinx_contact.cpp.Kernel
 
 
-def nitsche_cuas(mesh: dmesh.Mesh, mesh_data: Tuple[dmesh.MeshTags, int, int],
-                 physical_parameters: dict = {}, nitsche_parameters: Dict[str, float] = {},
-                 plane_loc: float = 0.0, vertical_displacement: float = -0.1,
-                 nitsche_bc: bool = True, quadrature_degree: int = 5, form_compiler_parameters: Dict = {},
-                 jit_parameters: Dict = {}, petsc_options: Dict = {}, newton_options: Dict = {}) -> _fem.Function:
+def nitsche_rigid_surface_cuas(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTags, int, int, int, int],
+                               physical_parameters: dict = {}, nitsche_parameters: Dict[str, float] = {},
+                               vertical_displacement: float = -0.1, nitsche_bc: bool = True, quadrature_degree: int = 5,
+                               form_compiler_parameters: Dict = {}, jit_parameters: Dict = {}, petsc_options: Dict = {},
+                               newton_options: Dict = {}):
     """
     Use custom kernel to compute the one sided contact problem with a mesh coming into contact
-    with a rigid surface (not meshed).
+    with a rigid surface (meshed).
 
     Parameters
     ==========
     mesh
         The input mesh
     mesh_data
-        A triplet with a mesh tag for facets and values v0, v1. v0 should be the value in the mesh tags
-        for facets to apply a Dirichlet condition on. v1 is the value for facets which should have applied
-        a contact condition on
+        A quinteplet with a mesh tag for facets and values v0, v1, v2, v3. v0 and v3
+        should be the values in the mesh tags for facets to apply a Dirichlet condition
+        on, where v0 corresponds to the elastic body and v2 to the rigid body. v1 is the
+        value for facets which should have applied a contact condition on and v2 marks
+        the potential contact surface on the rigid body.
     physical_parameters
         Optional dictionary with information about the linear elasticity problem.
         Valid (key, value) tuples are: ('E': float), ('nu', float), ('strain', bool)
@@ -47,8 +50,6 @@ def nitsche_cuas(mesh: dmesh.Mesh, mesh_data: Tuple[dmesh.MeshTags, int, int],
         Optional dictionary with information about the Nitsche configuration.
         Valid (keu, value) tuples are: ('gamma', float), ('theta', float) where theta can be -1, 0 or 1 for
         skew-symmetric, penalty like or symmetric enforcement of Nitsche conditions
-    plane_loc
-        The location of the plane in y-coordinate (2D) and z-coordinate (3D)
     vertical_displacement
         The amount of verticial displacment enforced on Dirichlet boundary
     nitsche_bc
@@ -57,7 +58,7 @@ def nitsche_cuas(mesh: dmesh.Mesh, mesh_data: Tuple[dmesh.MeshTags, int, int],
         The quadrature degree to use for the custom contact kernels
     form_compiler_parameters
         Parameters used in FFCX compilation of this form. Run `ffcx --help` at
-        the commandline to see all available options. Takes priority over all
+        the commandline to see all available opsurface_bottomtions. Takes priority over all
         other parameter values, except for `scalar_type` which is determined by
         DOLFINX.
     jit_parameters
@@ -83,17 +84,15 @@ def nitsche_cuas(mesh: dmesh.Mesh, mesh_data: Tuple[dmesh.MeshTags, int, int],
     lmbda = lambda_func(E, nu)
     sigma = sigma_func(mu, lmbda)
 
-    # Nitche parameters and variables
+    # Nitsche parameters and variables
     theta = nitsche_parameters.get("theta", 1)
-    gamma = nitsche_parameters.get("gamma", 1)
+    gamma = nitsche_parameters.get("gamma", 10)
 
     # Unpack mesh data
-    (facet_marker, dirichlet_value, contact_value) = mesh_data
+    (facet_marker, dirichlet_value_elastic, contact_value_elastic, contact_value_rigid,
+     dirichlet_value_rigid) = mesh_data
     assert(facet_marker.dim == mesh.topology.dim - 1)
-
-    # Outward unit normal of plane
-    n_vec = np.zeros(mesh.geometry.dim)
-    n_vec[mesh.geometry.dim - 1] = 1
+    gdim = mesh.geometry.dim
 
     # Setup function space and functions used in Jacobian and residual formulation
     V = _fem.VectorFunctionSpace(mesh, ("CG", 1))
@@ -108,29 +107,41 @@ def nitsche_cuas(mesh: dmesh.Mesh, mesh_data: Tuple[dmesh.MeshTags, int, int],
     J = ufl.inner(sigma(du), epsilon(v)) * dx
     F = ufl.inner(sigma(u), epsilon(v)) * dx
 
-    # Nitsche for Dirichlet
+    # Nitsche for Dirichlet, another theta-scheme.
     # https://doi.org/10.1016/j.cma.2018.05.024
     if nitsche_bc:
         ds = ufl.Measure("ds", domain=mesh, subdomain_data=facet_marker)
         h = ufl.Circumradius(mesh)
         n = ufl.FacetNormal(mesh)
-        disp_vec = np.zeros(mesh.geometry.dim)
-        disp_vec[mesh.geometry.dim - 1] = vertical_displacement
-        u_D = ufl.as_vector(disp_vec)
-        F += - ufl.inner(sigma(u) * n, v) * ds(dirichlet_value)\
-             - theta * ufl.inner(sigma(v) * n, u - u_D) * \
-            ds(dirichlet_value) + E * gamma / h * ufl.inner(u - u_D, v) * ds(dirichlet_value)
-        J += - ufl.inner(sigma(du) * n, v) * ds(dirichlet_value)\
-            - theta * ufl.inner(sigma(v) * n, du) * \
-            ds(dirichlet_value) + E * gamma / h * ufl.inner(du, v) * ds(dirichlet_value)
-    else:
-        raise RuntimeError("Dirichlet bc not implemented in custom assemblers yet.")
 
-    # Custom assembly of contact boundary condition
-    q_rule = dolfinx_cuas.QuadratureRule(mesh.topology.cell_type, quadrature_degree,
-                                         mesh.topology.dim - 1, basix.QuadratureType.Default)
-    consts = np.array([E * gamma, theta])
-    consts = np.hstack((consts, n_vec))
+        disp_vec = np.zeros(gdim)
+        disp_vec[gdim - 1] = vertical_displacement
+        u_D = ufl.as_vector(disp_vec)
+        F += - ufl.inner(sigma(u) * n, v) * ds(dirichlet_value_elastic)\
+             - theta * ufl.inner(sigma(v) * n, u - u_D) * \
+            ds(dirichlet_value_elastic) + E * gamma / h * ufl.inner(u - u_D, v) * ds(dirichlet_value_elastic)
+
+        J += - ufl.inner(sigma(du) * n, v) * ds(dirichlet_value_elastic)\
+            - theta * ufl.inner(sigma(v) * n, du) * \
+            ds(dirichlet_value_elastic) + E * gamma / h * ufl.inner(du, v) * ds(dirichlet_value_elastic)
+
+        # Nitsche bc for rigid plane
+        disp_plane = np.zeros(gdim)
+        u_D_plane = ufl.as_vector(disp_plane)
+        F += - ufl.inner(sigma(u) * n, v) * ds(dirichlet_value_rigid)\
+             - theta * ufl.inner(sigma(v) * n, u - u_D_plane) * \
+            ds(dirichlet_value_rigid) + E * gamma / h * ufl.inner(u - u_D_plane, v) * ds(dirichlet_value_rigid)
+        J += - ufl.inner(sigma(du) * n, v) * ds(dirichlet_value_rigid)\
+            - theta * ufl.inner(sigma(v) * n, du) * \
+            ds(dirichlet_value_rigid) + E * gamma / h * ufl.inner(du, v) * ds(dirichlet_value_rigid)
+    else:
+        print("Dirichlet bc not implemented in custom assemblers yet.")
+
+    # Custom assembly of contact boundary conditions
+    _log.set_log_level(_log.LogLevel.OFF)  # avoid large amounts of output
+    q_rule = dolfinx_cuas.cpp.QuadratureRule(mesh.topology.cell_type, quadrature_degree,
+                                             mesh.topology.dim - 1, basix.QuadratureType.Default)
+    consts = np.array([gamma * E, theta])
 
     # Compute coefficients for mu and lambda as DG-0 functions
     V2 = _fem.FunctionSpace(mesh, ("DG", 0))
@@ -140,52 +151,57 @@ def nitsche_cuas(mesh: dmesh.Mesh, mesh_data: Tuple[dmesh.MeshTags, int, int],
     mu2.interpolate(lambda x: np.full((1, x.shape[1]), mu))
 
     # Compute integral entities on exterior facets (cell_index, local_index)
-    bottom_facets = facet_marker.indices[facet_marker.values == contact_value]
+    contact_facets = facet_marker.indices[facet_marker.values == contact_value_elastic]
     integral = _fem.IntegralType.exterior_facet
-    integral_entities = dolfinx_cuas.compute_active_entities(mesh, bottom_facets, integral)
+    integral_entities = dolfinx_cuas.cpp.compute_active_entities(mesh, contact_facets, integral)
+
     # Pack mu and lambda on facets
     coeffs = dolfinx_cuas.pack_coefficients([mu2, lmbda2], integral_entities)
-    # Pack circumradius of facets
-    h_facets = dolfinx_contact.pack_circumradius_facet(mesh, bottom_facets)
+    # Pack circumradius on facets
+    h_facets = dolfinx_contact.pack_circumradius_facet(mesh, contact_facets)
 
     # Create contact class
-    contact = dolfinx_contact.cpp.Contact(facet_marker, contact_value, dirichlet_value, V._cpp_object)
+    contact = dolfinx_contact.cpp.Contact(facet_marker, contact_value_elastic, contact_value_rigid, V._cpp_object)
     contact.set_quadrature_degree(quadrature_degree)
-    # Compute gap from contact boundary
-    g_vec = contact.pack_gap_plane(0, -plane_loc)
+
+    # Compute gap and normals
+    contact.create_distance_map(0)
+    g_vec = contact.pack_gap(0)
+    n_surf = contact.pack_ny(0, g_vec)
 
     # Concatenate coefficients
-    coeffs = np.hstack([coeffs, h_facets, g_vec])
+    coeffs = np.hstack([coeffs, h_facets, g_vec, n_surf])
 
     # Create RHS kernels
-    L_cuas = _fem.Form(F, jit_parameters=jit_parameters, form_compiler_parameters=form_compiler_parameters)
-    kernel_rhs = dolfinx_contact.cpp.generate_contact_kernel(V._cpp_object, dolfinx_contact.Kernel.Rhs, q_rule,
-                                                             [u._cpp_object, mu2._cpp_object, lmbda2._cpp_object])
+    F_cuas = _fem.Form(F, jit_parameters=jit_parameters, form_compiler_parameters=form_compiler_parameters)
+    kernel_rhs = dolfinx_contact.cpp.generate_contact_kernel(V._cpp_object, kt.Rhs, q_rule,
+                                                             [u._cpp_object, mu2._cpp_object, lmbda2._cpp_object],
+                                                             False)
 
     def create_b():
-        return _fem.create_vector(L_cuas)
+        return _fem.create_vector(F_cuas)
 
     def F(x, b):
         u.vector[:] = x.array
-        u_packed = dolfinx_cuas.pack_coefficients([u._cpp_object], integral_entities)
+        u_packed = dolfinx_cuas.cpp.pack_coefficients([u._cpp_object], integral_entities)
         c = np.hstack([u_packed, coeffs])
-        dolfinx_cuas.assemble_vector(b, V, bottom_facets, kernel_rhs, c, consts, integral)
-        _fem.assemble_vector(b, L_cuas)
+        dolfinx_cuas.assemble_vector(b, V, contact_facets, kernel_rhs, c, consts, integral)
+        _fem.assemble_vector(b, F_cuas)
 
     # Create Jacobian kernels
-    a_cuas = _fem.Form(J, jit_parameters=jit_parameters, form_compiler_parameters=form_compiler_parameters)
+    J_cuas = _fem.Form(J, jit_parameters=jit_parameters, form_compiler_parameters=form_compiler_parameters)
     kernel_J = dolfinx_contact.cpp.generate_contact_kernel(
-        V._cpp_object, dolfinx_contact.Kernel.Jac, q_rule, [u._cpp_object, mu2._cpp_object, lmbda2._cpp_object])
+        V._cpp_object, kt.Jac, q_rule, [u._cpp_object, mu2._cpp_object, lmbda2._cpp_object], False)
 
     def create_A():
-        return _fem.create_matrix(a_cuas)
+        return _fem.create_matrix(J_cuas)
 
     def A(x, A):
         u.vector[:] = x.array
-        u_packed = dolfinx_cuas.pack_coefficients([u._cpp_object], integral_entities)
+        u_packed = dolfinx_cuas.cpp.pack_coefficients([u._cpp_object], integral_entities)
         c = np.hstack([u_packed, coeffs])
-        dolfinx_cuas.assemble_matrix(A, V, bottom_facets, kernel_J, c, consts, integral)
-        _fem.assemble_matrix(A, a_cuas)
+        dolfinx_cuas.assemble_matrix(A, V, contact_facets, kernel_J, c, consts, integral)
+        _fem.assemble_matrix(A, J_cuas)
 
     # Setup non-linear problem and Newton-solver
     problem = dolfinx_cuas.NonlinearProblemCUAS(F, A, create_b, create_A)
@@ -203,12 +219,11 @@ def nitsche_cuas(mesh: dmesh.Mesh, mesh_data: Tuple[dmesh.MeshTags, int, int],
     solver.error_on_nonconvergence = newton_options.get("error_on_nonconvergence", True)
     solver.relaxation_parameter = newton_options.get("relaxation_parameter", 1.0)
 
+    # Set initial condition
     def _u_initial(x):
-        values = np.zeros((mesh.geometry.dim, x.shape[1]))
-        values[-1] = -0.01 - plane_loc
+        values = np.zeros((gdim, x.shape[1]))
+        values[-1] = -vertical_displacement
         return values
-
-    # Set initial_condition:
     u.interpolate(_u_initial)
 
     # Define solver and options

@@ -15,7 +15,7 @@ from dolfinx_contact.meshing import (convert_mesh, create_box_mesh_2D,
                                      create_circle_circle_mesh,
                                      create_circle_plane_mesh,
                                      create_sphere_plane_mesh)
-from dolfinx_contact.nitsche_unbiased import nitsche_unbiased
+from dolfinx_contact.unbiased.nitsche_unbiased import nitsche_unbiased
 
 if __name__ == "__main__":
     desc = "Nitsche's method with rigid surface using custom assemblers"
@@ -74,7 +74,7 @@ if __name__ == "__main__":
         if box:
             fname = "box_3D"
             create_box_mesh_3D(filename=f"{fname}.msh")
-            convert_mesh(fname, "tetra")
+            convert_mesh(fname, fname, "tetra")
 
             with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
                 mesh = xdmf.read_mesh(name="Grid")
@@ -108,8 +108,8 @@ if __name__ == "__main__":
         else:
             fname = "sphere"
             create_sphere_plane_mesh(filename=f"{fname}.msh")
-            convert_mesh(fname, "tetra")
-            convert_mesh(f"{fname}", "triangle", ext="facets")
+            convert_mesh(fname, fname, "tetra")
+            convert_mesh(f"{fname}", f"{fname}_facets", "triangle")
             with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
                 mesh = xdmf.read_mesh(name="Grid")
             tdim = mesh.topology.dim
@@ -126,8 +126,8 @@ if __name__ == "__main__":
         if curved:
             fname = "two_disks"
             create_circle_circle_mesh(filename=f"{fname}.msh")
-            convert_mesh(fname, "triangle", prune_z=True)
-            convert_mesh(f"{fname}", "line", ext="facets", prune_z=True)
+            convert_mesh(fname, fname, "triangle", prune_z=True)
+            convert_mesh(f"{fname}", f"{fname}_facets", "line", prune_z=True)
 
             with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
                 mesh = xdmf.read_mesh(name="Grid")
@@ -236,13 +236,20 @@ if __name__ == "__main__":
             sorted_facets = np.argsort(indices)
             facet_marker = MeshTags(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
 
+    # Solver options
+    newton_options = {"relaxation_parameter": 1.0}
+    # petsc_options = {"ksp_type": "preonly", "pc_type": "lu"}
+    petsc_options = {"ksp_type": "cg", "pc_type": "gamg", "rtol": 1e-6, "pc_gamg_coarse_eq_limit": 1000,
+                     "mg_levels_ksp_type": "chebyshev", "mg_levels_pc_type": "jacobi",
+                     "mg_levels_esteig_ksp_type": "cg", "matptap_via": "scalable", "ksp_view": None}
+
     # Pack mesh data for Nitsche solver
     mesh_data = (facet_marker, top_value, bottom_value, surface_value, surface_bottom)
 
     # Solve contact problem using Nitsche's method
     load_increment = vertical_displacement / nload_steps
 
-    # Defome function space for problem
+    # Define function space for problem
     V = VectorFunctionSpace(mesh, ("CG", 1))
     u1 = None
 
@@ -258,7 +265,8 @@ if __name__ == "__main__":
         # Solve contact problem using Nitsche's method
         u1 = nitsche_unbiased(mesh=mesh, mesh_data=mesh_data, physical_parameters=physical_parameters,
                               nitsche_parameters=nitsche_parameters, vertical_displacement=displacement,
-                              nitsche_bc=nitsche_bc, initGuess=None)
+                              nitsche_bc=True, quadrature_degree=3, petsc_options=petsc_options,
+                              newton_options=newton_options)
 
         with XDMFFile(mesh.comm, f"results/u_unbiased_{j}.xdmf", "w") as xdmf:
             xdmf.write_mesh(mesh)

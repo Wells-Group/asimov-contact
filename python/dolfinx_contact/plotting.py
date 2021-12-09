@@ -1,4 +1,4 @@
-# Copyright (C) 2021 Jørgen S. Dokken and Sarah Roggendorf
+# Copyright (C) 2021 Sarah Roggendorf
 #
 # SPDX-License-Identifier:    MIT
 import dolfinx

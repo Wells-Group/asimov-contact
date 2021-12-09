@@ -7,7 +7,7 @@ import numpy as np
 from mpi4py import MPI
 
 __all__ = ["create_circle_plane_mesh", "create_circle_circle_mesh", "create_box_mesh_2D",
-           "create_box_mesh_3D", "create_sphere_plane_mesh"]
+           "create_box_mesh_3D", "create_sphere_plane_mesh", "create_sphere_sphere_mesh"]
 
 
 def create_circle_plane_mesh(filename: str):
@@ -72,7 +72,7 @@ def create_circle_plane_mesh(filename: str):
 
 def create_circle_circle_mesh(filename: str):
     """
-    Create two circular meshes, with radius 0.3 with centers (0.5,0.5) and (0.5, -0.5)
+    Create two circular meshes, with radii 0.3 and 0.6 with centers (0.5,0.5) and (0.5, -0.5)
     """
     center = [0.5, 0.5, 0]
     r = 0.3
@@ -282,6 +282,65 @@ def create_sphere_plane_mesh(filename: str):
         gmsh.model.occ.synchronize()
         gmsh.model.mesh.field.add("Distance", 1)
         gmsh.model.mesh.field.setNumbers(1, "NodesList", [p0])
+
+        gmsh.model.mesh.field.add("Threshold", 2)
+        gmsh.model.mesh.field.setNumber(2, "IField", 1)
+        gmsh.model.mesh.field.setNumber(2, "LcMin", LcMin)
+        gmsh.model.mesh.field.setNumber(2, "LcMax", LcMax)
+        gmsh.model.mesh.field.setNumber(2, "DistMin", 0.5 * r)
+        gmsh.model.mesh.field.setNumber(2, "DistMax", r)
+        gmsh.model.mesh.field.setAsBackgroundMesh(2)
+
+        gmsh.model.mesh.generate(3)
+        # gmsh.option.setNumber("Mesh.SaveAll", 1)
+        gmsh.write(filename)
+    MPI.COMM_WORLD.Barrier()
+    gmsh.finalize()
+
+
+def create_sphere_sphere_mesh(filename: str):
+    """
+    Create a 3D mesh consisting of two spheres with radii 0.3 and 0.6 and
+    centers (0.5,0.5,0.5) and (0.5,0.5,-0.5)
+    """
+    center = [0.5, 0.5, 0.5]
+    r = 0.3
+    angle = np.pi / 8
+    LcMin = 0.05 * r
+    LcMax = 0.2 * r
+    gmsh.initialize()
+    if MPI.COMM_WORLD.rank == 0:
+        # Create sphere 1 composed of of two volumes
+        sphere_bottom = gmsh.model.occ.addSphere(center[0], center[1], center[2], r, angle1=-np.pi / 2, angle2=-angle)
+        p0 = gmsh.model.occ.addPoint(center[0], center[1], center[2] - r)
+        sphere_top = gmsh.model.occ.addSphere(center[0], center[1], center[2], r, angle1=-angle, angle2=np.pi / 2)
+        out_vol_tags, _ = gmsh.model.occ.fragment([(3, sphere_bottom)], [(3, sphere_top)])
+
+        # Create sphere 2 composed of of two volumes
+        sphere_bottom2 = gmsh.model.occ.addSphere(
+            center[0], center[1], -center[2], 2 * r, angle1=-np.pi / 2, angle2=-angle)
+        p1 = gmsh.model.occ.addPoint(center[0], center[1], -center[2] - 2 * r)
+        sphere_top2 = gmsh.model.occ.addSphere(center[0], center[1], -center[2], 2 * r, angle1=-angle, angle2=np.pi / 2)
+        out_vol_tags2, _ = gmsh.model.occ.fragment([(3, sphere_bottom2)], [(3, sphere_top2)])
+
+        # Synchronize and create physical tags
+        gmsh.model.occ.synchronize()
+
+        sphere_boundary = gmsh.model.getBoundary(out_vol_tags)
+        for boundary_tag in sphere_boundary:
+            gmsh.model.addPhysicalGroup(boundary_tag[0], boundary_tag[1:2])
+        sphere_boundary2 = gmsh.model.getBoundary(out_vol_tags2)
+        for boundary_tag in sphere_boundary2:
+            gmsh.model.addPhysicalGroup(boundary_tag[0], boundary_tag[1:2])
+
+        p_v = [v_tag[1] for v_tag in out_vol_tags]
+        p_v2 = [v_tag[1] for v_tag in out_vol_tags2]
+        gmsh.model.addPhysicalGroup(3, p_v)
+        gmsh.model.addPhysicalGroup(3, p_v2)
+
+        gmsh.model.occ.synchronize()
+        gmsh.model.mesh.field.add("Distance", 1)
+        gmsh.model.mesh.field.setNumbers(1, "NodesList", [p0, p1])
 
         gmsh.model.mesh.field.add("Threshold", 2)
         gmsh.model.mesh.field.setNumber(2, "IField", 1)
