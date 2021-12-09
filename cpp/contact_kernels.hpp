@@ -201,7 +201,10 @@ kernel_fn generate_contact_kernel(
       // If surface normal constant precompute (n_phys * n_surf)
       for (int i = 0; i < gdim; i++)
       {
-        n_surf(i) = w[i + 2];
+        // For closest point projection the gap function is given by
+        // (-n_y)* (Pi(x) - x), where n_y is the outward unit normal
+        // in y = Pi(x)
+        n_surf(i) = -w[i + 2];
         n_dot += n_phys(i) * n_surf(i);
       }
     }
@@ -247,6 +250,9 @@ kernel_fn generate_contact_kernel(
         n_dot = 0;
         for (int i = 0; i < gdim; i++)
         {
+          // For closest point projection the gap function is given by
+          // (-n_y)* (Pi(x) - x), where n_y is the outward unit normal
+          // in y = Pi(x)
           n_surf(i) = -c[normal_offset + q * gdim + i];
           n_dot += n_phys(i) * n_surf(i);
         }
@@ -381,7 +387,10 @@ kernel_fn generate_contact_kernel(
       // If surface normal constant precompute (n_phys * n_surf)
       for (int i = 0; i < gdim; i++)
       {
-        n_surf(i) = w[i + 2];
+        // For closest point projection the gap function is given by
+        // (-n_y)* (Pi(x) - x), where n_y is the outward unit normal
+        // in y = Pi(x)
+        n_surf(i) = -w[i + 2];
         n_dot += n_phys(i) * n_surf(i);
       }
     }
@@ -420,6 +429,9 @@ kernel_fn generate_contact_kernel(
         n_dot = 0;
         for (int i = 0; i < gdim; i++)
         {
+          // For closest point projection the gap function is given by
+          // (-n_y)* (Pi(x) - x), where n_y is the outward unit normal
+          // in y = Pi(x)
           n_surf(i) = -c[normal_offset + q * gdim + i];
           n_dot += n_phys(i) * n_surf(i);
         }

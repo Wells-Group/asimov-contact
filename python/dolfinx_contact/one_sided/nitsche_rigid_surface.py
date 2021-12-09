@@ -158,7 +158,8 @@ def nitsche_rigid_surface(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTags, int
     # Create contact class
     contact_facets = facet_marker.indices[facet_marker.values == contact_value_elastic]
     contact = dolfinx_contact.cpp.Contact(facet_marker, contact_value_elastic, contact_value_rigid, V._cpp_object)
-    contact.set_quadrature_degree(quadrature_degree)
+    # Ensures that we find closest facet to midpoint of facet
+    contact.set_quadrature_degree(1)
 
     # Create gap function
     gdim = mesh.geometry.dim
@@ -172,15 +173,21 @@ def nitsche_rigid_surface(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTags, int
     # This function returns Pi(x) - x, where Pi(x) is the closest point projection
     def gap(x):
         dist_vec_array = np.zeros((gdim, x.shape[1]))
+        # Find closest facet to point x
         facets = _geometry.compute_closest_entity(master_bbox, midpoint_tree, mesh, np.transpose(x))
         for i in range(x.shape[1]):
             xi = x[:, i]
             facet = facets[i]
+            # FIXME: code crashes if the if statement is removed. Bug in compute_closes_entity.
             if (np.argwhere(np.array(contact_facets) == facet)).shape[0] > 0:
+                # Compute distance between point and closest facet
                 index = np.argwhere(np.array(contact_facets) == facet)[0, 0]
                 facet_geometry = _cpp.mesh.entities_to_geometry(mesh, fdim, [facet], False)
                 coords0 = mesh_geometry[facet_geometry][0]
                 R = np.linalg.norm(_cpp.geometry.compute_distance_gjk(coords0, xi))
+                # If point on a facet in contact surface (i.e., if distance between point and closest
+                # facet is 0), use contact.map_0_to_1() to find closest facet on rigid surface and
+                # compute distance vector
                 if np.isclose(R, 0):
                     facet_2 = lookup.links(index)[0]
                     facet2_geometry = _cpp.mesh.entities_to_geometry(mesh, fdim, [facet_2], False)

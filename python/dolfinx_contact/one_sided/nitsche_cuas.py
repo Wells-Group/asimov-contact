@@ -91,10 +91,9 @@ def nitsche_cuas(mesh: dmesh.Mesh, mesh_data: Tuple[dmesh.MeshTags, int, int],
     (facet_marker, dirichlet_value, contact_value) = mesh_data
     assert(facet_marker.dim == mesh.topology.dim - 1)
 
-    # Normal vector pointing into plane (but outward of the body coming into contact)
-    # Similar to computing the normal by finding the gap vector between two meshes
+    # Outward unit normal of plane
     n_vec = np.zeros(mesh.geometry.dim)
-    n_vec[mesh.geometry.dim - 1] = -1
+    n_vec[mesh.geometry.dim - 1] = 1
 
     # Setup function space and functions used in Jacobian and residual formulation
     V = _fem.VectorFunctionSpace(mesh, ("CG", 1))

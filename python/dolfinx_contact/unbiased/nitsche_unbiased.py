@@ -191,9 +191,6 @@ def nitsche_unbiased(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTags, int, int
         c_0 = np.hstack([coeff_0, u_0, u_opp_0])
         c_1 = np.hstack([coeff_1, u_1, u_opp_1])
         contact.assemble_matrix(A, [], 0, kernel_jac, c_0, consts)
-        # To create onesided contact assembly remove comment
-        # contact.assemble_matrix(A, [], 0, kernel_jac, c_0, consts)
-        # To create rigid assembly comment next line
         contact.assemble_matrix(A, [], 1, kernel_jac, c_1, consts)
         _fem.assemble_matrix(A, J_cuas)
 
@@ -213,9 +210,6 @@ def nitsche_unbiased(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTags, int, int
         c_0 = np.hstack([coeff_0, u_0, u_opp_0])
         c_1 = np.hstack([coeff_1, u_1, u_opp_1])
         contact.assemble_vector(b, 0, kernel_rhs, c_0, consts)
-        # To create onesided contact assembly remove comment
-        # contact.assemble_vector(b, 0, kernel_rhs, c_0, consts)
-        # To create rigid assembly comment next line
         contact.assemble_vector(b, 1, kernel_rhs, c_1, consts)
         _fem.assemble_vector(b, F_cuas)
 

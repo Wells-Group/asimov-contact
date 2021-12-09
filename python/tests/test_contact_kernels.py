@@ -85,7 +85,7 @@ def test_vector_surface_kernel(dim, kernel_type, P, Q):
     gamma = 20
 
     n_vec = np.zeros(mesh.geometry.dim)
-    n_vec[mesh.geometry.dim - 1] = -1
+    n_vec[mesh.geometry.dim - 1] = 1
     # FIXME: more general definition of n_2 needed for surface that is not a horizontal rectangular box.
     n_2 = ufl.as_vector(n_vec)  # Normal of plane (projection onto other body)
     n = ufl.FacetNormal(mesh)
@@ -99,7 +99,7 @@ def test_vector_surface_kernel(dim, kernel_type, P, Q):
 
     def sigma_n(v):
         # NOTE: Different normals, see summary paper
-        return ufl.dot(sigma(v) * n, n_2)
+        return ufl.dot(sigma(v) * n, (-n_2))
 
     # Mimicking the plane y=-g
     g = 0.1
@@ -107,8 +107,8 @@ def test_vector_surface_kernel(dim, kernel_type, P, Q):
     gap = x[mesh.geometry.dim - 1] + g
     L = ufl.inner(sigma(u), epsilon(v)) * dx
     L += - h * theta / gamma * sigma_n(u) * sigma_n(v) * ds(1)
-    L += h / gamma * R_minus(sigma_n(u) + (gamma / h) * (gap - ufl.dot(u, n_2))) * \
-        (theta * sigma_n(v) - (gamma / h) * ufl.dot(v, n_2)) * ds(1)
+    L += h / gamma * R_minus(sigma_n(u) + (gamma / h) * (gap - ufl.dot(u, (-n_2)))) * \
+        (theta * sigma_n(v) - (gamma / h) * ufl.dot(v, (-n_2))) * ds(1)
     # Compile UFL form
     cffi_options = ["-O2", "-march=native"]
     L = Form(L, jit_parameters={"cffi_extra_compile_args": cffi_options, "cffi_libraries": ["m"]})
@@ -203,7 +203,7 @@ def test_matrix_surface_kernel(dim, kernel_type, P, Q):
     gamma = 20
 
     n_vec = np.zeros(mesh.geometry.dim)
-    n_vec[mesh.geometry.dim - 1] = -1
+    n_vec[mesh.geometry.dim - 1] = 1
     # FIXME: more general definition of n_2 needed for surface that is not a horizontal rectangular box.
     n_2 = ufl.as_vector(n_vec)  # Normal of plane (projection onto other body)
     n = ufl.FacetNormal(mesh)
@@ -217,18 +217,18 @@ def test_matrix_surface_kernel(dim, kernel_type, P, Q):
 
     def sigma_n(v):
         # NOTE: Different normals, see summary paper
-        return ufl.dot(sigma(v) * n, n_2)
+        return ufl.dot(sigma(v) * n, (-n_2))
 
     # Mimicking the plane y=-g
     g = 0.1
     x = ufl.SpatialCoordinate(mesh)
     gap = x[mesh.geometry.dim - 1] + g
     h = ufl.Circumradius(mesh)
-    q = sigma_n(u) + gamma / h * (gap - ufl.dot(u, n_2))
+    q = sigma_n(u) + gamma / h * (gap - ufl.dot(u, (-n_2)))
     a = ufl.inner(sigma(du), epsilon(v)) * dx
     a += - h * theta / gamma * sigma_n(du) * sigma_n(v) * ds(1)
-    a += h / gamma * 0.5 * (1 - ufl.sign(q)) * (sigma_n(du) - gamma / h * ufl.dot(du, n_2)) * \
-        (theta * sigma_n(v) - gamma / h * ufl.dot(v, n_2)) * ds(1)
+    a += h / gamma * 0.5 * (1 - ufl.sign(q)) * (sigma_n(du) - gamma / h * ufl.dot(du, (-n_2))) * \
+        (theta * sigma_n(v) - gamma / h * ufl.dot(v, (-n_2))) * ds(1)
     # Compile UFL form
     cffi_options = ["-O2", "-march=native"]
     a = Form(a, jit_parameters={"cffi_extra_compile_args": cffi_options, "cffi_libraries": ["m"]})

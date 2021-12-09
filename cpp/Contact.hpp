@@ -552,6 +552,9 @@ public:
         const std::size_t normal_offset = gap_offset + cstrides[3];
         for (int i = 0; i < gdim; i++)
         {
+          // For closest point projection the gap function is given by
+          // (-n_y)* (Pi(x) - x), where n_y is the outward unit normal
+          // in y = Pi(x)
           n_surf(i) = -c[normal_offset + q * gdim + i];
           n_dot += n_phys(i) * n_surf(i);
           gap += c[gap_offset + q * gdim + i] * n_surf(i);
@@ -704,6 +707,9 @@ public:
         const std::size_t normal_offset = gap_offset + cstrides[3];
         for (int i = 0; i < gdim; i++)
         {
+          // For closest point projection the gap function is given by
+          // (-n_y)* (Pi(x) - x), where n_y is the outward unit normal
+          // in y = Pi(x)
           n_surf(i) = -c[normal_offset + q * gdim + i];
           n_dot += n_phys(i) * n_surf(i);
           gap += c[gap_offset + q * gdim + i] * n_surf(i);
@@ -1318,6 +1324,9 @@ public:
 
   /// Compute inward surface normal at Pi(x)
   /// @param[in] orgin_meshtag - surface on which to integrate
+  /// @param[in] gap - gap function: Pi(x)-x packed at quadrature points, where
+  /// Pi(x) is the chosen projection of x onto the contact surface of the body
+  /// coming into contact
   /// @param[out] c - normals ny packed on facets.
   std::pair<std::vector<PetscScalar>, int>
   pack_ny(int origin_meshtag, const xtl::span<const PetscScalar> gap)

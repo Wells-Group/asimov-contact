@@ -600,6 +600,19 @@ pack_circumradius_facet(std::shared_ptr<const dolfinx::mesh::Mesh> mesh,
 
   return {std::move(c), cstride};
 }
+/// This function computes the pull bac for a set of points x on a cell
+/// described by coordinate_dofs as well as the corresponding Jacobian, their
+/// inverses and their determinants
+/// @param[in, out] J: Jacobians of transformation from reference element to
+/// physical element. Shape = (num_points, tdim, gdim). Computed at each point
+/// in x
+/// @param[in, out] K: inverse of J at each point.
+/// @param[in, out] detJ: determinant of J at each  point
+/// @param[in] x: points on physical element
+/// @param[in ,out] X: pull pack of x (points on reference element)
+/// @param[in] coordinate_dofs: geometry coordinates of cell
+/// @param[in] element: the corresponding finite element
+/// @param[in] cmap: the coordinate element
 //-----------------------------------------------------------------------------
 void pull_back(xt::xtensor<double, 3>& J, xt::xtensor<double, 3>& K,
                xt::xtensor<double, 1>& detJ, const xt::xtensor<double, 2>& x,
@@ -677,6 +690,19 @@ void pull_back(xt::xtensor<double, 3>& J, xt::xtensor<double, 3>& K,
   }
 }
 //-----------------------------------------------------------------------------
+/// This function computes the basis function values on a given cell at a
+/// given set of points
+/// @param[in, out] J: Jacobians of transformation from reference element to
+/// physical element. Shape = (num_points, tdim, gdim). Computed at each point
+/// in x
+/// @param[in, out] K: inverse of J at each point.
+/// @param[in, out] detJ: determinant of J at each  point
+/// @param[in] x: points on physical element
+/// @param[in] coordinate_dofs: geometry coordinates of cell
+/// @param[in] index: the index of the cell (local to process)
+/// @param[in] perm: permutation infor for cell
+/// @param[in] element: the corresponding finite element
+/// @param[in] cmap: the coordinate element
 xt::xtensor<double, 3>
 get_basis_functions(xt::xtensor<double, 3>& J, xt::xtensor<double, 3>& K,
                     xt::xtensor<double, 1>& detJ,
@@ -771,6 +797,20 @@ get_basis_functions(xt::xtensor<double, 3>& J, xt::xtensor<double, 3>& K,
   return basis_array;
 }
 //-----------------------------------------------------------------------------
+/// This function computes the outward unit normal on a given cell at a
+/// given set of points on the facets of the cell
+/// @param[in, out] J: Jacobians of transformation from reference element to
+/// physical element. Shape = (num_points, tdim, gdim). Computed at each point
+/// in x
+/// @param[in, out] K: inverse of J at each point.
+/// @param[in, out] detJ: determinant of J at each  point
+/// @param[in] x: points on facets physical element
+/// @param[in] coordinate_dofs: geometry coordinates of cell
+/// @param[in] index: the index of the cell (local to process)
+/// @param[in] facet_indices: local facet index corresponding to each point
+/// @param[in] element: the corresponding finite element
+/// @param[in] cmap: the coordinate element
+/// @param[in] facet_normals: The facet normals on the reference cell
 xt::xtensor<double, 2>
 get_facet_normals(xt::xtensor<double, 3>& J, xt::xtensor<double, 3>& K,
                   xt::xtensor<double, 1>& detJ, const xt::xtensor<double, 2>& x,
