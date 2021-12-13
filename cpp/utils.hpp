@@ -10,6 +10,7 @@
 #include <basix/finite-element.h>
 #include <basix/quadrature.h>
 #include <dolfinx/common/IndexMap.h>
+#include <dolfinx/common/sort.h>
 #include <dolfinx/fem/DofMap.h>
 #include <dolfinx/fem/FiniteElement.h>
 #include <dolfinx/fem/Function.h>
@@ -623,9 +624,9 @@ void pull_back(xt::xtensor<double, 3>& J, xt::xtensor<double, 3>& K,
 {
   // number of points
   const std::size_t num_points = x.shape(0);
-  assert(J.shape(0) == num_points);
-  assert(K.shape(0) == num_points);
-  assert(detJ.shape(0) == num_points);
+  assert(J.shape(0) >= num_points);
+  assert(K.shape(0) >= num_points);
+  assert(detJ.shape(0) >= num_points);
 
   // Get mesh data from input
   const size_t gdim = coordinate_dofs.shape(1);
@@ -714,9 +715,9 @@ get_basis_functions(xt::xtensor<double, 3>& J, xt::xtensor<double, 3>& K,
 {
   // number of points
   const std::size_t num_points = x.shape(0);
-  assert(J.shape(0) == num_points);
-  assert(K.shape(0) == num_points);
-  assert(detJ.shape(0) == num_points);
+  assert(J.shape(0) >= num_points);
+  assert(K.shape(0) >= num_points);
+  assert(detJ.shape(0) >= num_points);
 
   // Get mesh data from input
   const size_t gdim = coordinate_dofs.shape(1);
@@ -823,9 +824,9 @@ get_facet_normals(xt::xtensor<double, 3>& J, xt::xtensor<double, 3>& K,
 {
   // number of points
   const std::size_t num_points = x.shape(0);
-  assert(J.shape(0) == num_points);
-  assert(K.shape(0) == num_points);
-  assert(detJ.shape(0) == num_points);
+  assert(J.shape(0) >= num_points);
+  assert(K.shape(0) >= num_points);
+  assert(detJ.shape(0) >= num_points);
 
   // Get mesh data from input
   const size_t gdim = coordinate_dofs.shape(1);
@@ -879,5 +880,50 @@ template <typename T>
 int sgn(T val)
 {
   return (T(0) < val) - (val < T(0));
+}
+/// @param[in] cells: the cells to be sorted
+/// @param[in, out] perm: the permutation for the sorted cells
+/// @param[out] pair(unique_cells, offsets): unique_cells is a vector of sorted
+/// cells with all duplicates deleted, offsets contains the start and end for
+/// each unique value in the sorted vector with all duplicates
+// Example: cells = [5, 7, 6, 5]
+//          unique_cells = [5, 6, 7]
+//          offsets = [0, 2, 3, 4]
+//          perm = [0, 3, 2, 1]
+// Then given a cell and its index ("i") in unique_cells, one can recover the
+// indices for its occurance in cells with perm[k], where
+// offsets[i]<=k<offsets[i+1]. In the example if i = 0, then perm[k] = 0 or
+// perm[k] = 3.
+std::pair<std::vector<std::int32_t>, std::vector<std::int32_t>>
+sort_cells(const xtl::span<const std::int32_t>& cells,
+           const xtl::span<std::int32_t>& perm)
+{
+  std::int32_t num_cells = cells.size();
+  assert(perm.size() == num_cells);
+  std::vector<std::int32_t> unique_cells(num_cells);
+  std::vector<std::int32_t> offsets(num_cells + 1, 0);
+  std::iota(perm.begin(), perm.end(), 0);
+  dolfinx::argsort_radix<std::int32_t>(cells, perm);
+
+  for (std::int32_t i = 0; i < num_cells; ++i)
+  {
+    perm[i] = perm[i];
+    unique_cells[i] = cells[perm[i]];
+  }
+  std::int32_t index = 0;
+  for (std::int32_t i = 0; i < num_cells - 1; ++i)
+  {
+    if (unique_cells[i] != unique_cells[i + 1])
+    {
+      index++;
+      offsets[index] = i + 1;
+    }
+  }
+  offsets[index + 1] = num_cells;
+  unique_cells.erase(std::unique(unique_cells.begin(), unique_cells.end()),
+                     unique_cells.end());
+  offsets.resize(unique_cells.size() + 1);
+
+  return std::make_pair(unique_cells, offsets);
 }
 } // namespace dolfinx_contact

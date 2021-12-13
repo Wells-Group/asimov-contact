@@ -146,7 +146,7 @@ def snes_solver(mesh: dmesh.Mesh, mesh_data: Tuple[dmesh.MeshTags, int, int],
 
     # Create LHS matrix and RHS vector
     b = _la.create_petsc_vector(V.dofmap.index_map, V.dofmap.index_map_bs)
-    J = _cpp_fem.create_matrix(problem.a_comp._cpp_object)
+    J = _cpp_fem.petsc.create_matrix(problem.a_comp._cpp_object)
 
     # Create semismooth Newton solver (SNES)
     snes = _PETSc.SNES().create()

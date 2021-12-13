@@ -111,7 +111,7 @@ PYBIND11_MODULE(cpp, m)
            {
              auto ker = kernel.get();
              self.assemble_matrix(
-                 dolfinx::la::PETScMatrix::set_block_fn(A, ADD_VALUES), bcs,
+                 dolfinx::la::petsc::Matrix::set_block_fn(A, ADD_VALUES), bcs,
                  origin_meshtag, ker,
                  xtl::span<const PetscScalar>(coeffs.data(), coeffs.size()),
                  coeffs.shape(1),
