@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 import ufl
 from dolfinx.fem import FunctionSpace, LinearProblem
-from dolfinx.generation import UnitCubeMesh, UnitSquareMesh
+from dolfinx.mesh import create_unit_cube, create_unit_square
 from dolfinx.mesh import locate_entities_boundary
 from mpi4py import MPI
 
@@ -17,10 +17,10 @@ import dolfinx_contact.cpp
 def test_circumradius(dim):
     if dim == 3:
         N = 5
-        mesh = UnitCubeMesh(MPI.COMM_WORLD, N, N, N)
+        mesh = create_unit_cube(MPI.COMM_WORLD, N, N, N)
     else:
         N = 10
-        mesh = UnitSquareMesh(MPI.COMM_WORLD, N, N)
+        mesh = create_unit_square(MPI.COMM_WORLD, N, N)
 
     mesh.topology.create_connectivity(dim - 1, dim)
     f_to_c = mesh.topology.connectivity(dim - 1, dim)

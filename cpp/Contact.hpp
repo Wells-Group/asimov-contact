@@ -1385,8 +1385,8 @@ public:
 
         // Compute Pi(x) from x, and gap = Pi(x) - x
         for (int k; k < gdim; ++k)
-          point(k) = (*q_phys_pt)[i](q, k)
-                     + gap[i * gdim * num_q_points + q * gdim + k];
+          point(0, k) = (*q_phys_pt)[i](q, k)
+                        + gap[i * gdim * num_q_points + q * gdim + k];
 
         // extract local dofs
         auto x_dofs = x_dofmap.links(linked_cell);

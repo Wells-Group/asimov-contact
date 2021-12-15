@@ -11,7 +11,7 @@ import ufl
 
 from dolfinx.common import timing
 from dolfinx.fem import Function, assemble_scalar
-from dolfinx.generation import UnitCubeMesh, UnitSquareMesh
+from dolfinx.mesh import create_unit_cube, create_unit_square
 from dolfinx.io import XDMFFile
 from dolfinx.mesh import MeshTags, locate_entities_boundary, refine
 
@@ -84,7 +84,7 @@ if __name__ == "__main__":
     # and the bottom (contact condition)
     if threed:
         if cube:
-            mesh = UnitCubeMesh(MPI.COMM_WORLD, 10, 10, 20)
+            mesh = create_unit_cube(MPI.COMM_WORLD, 10, 10, 20)
         else:
             fname = "sphere"
             create_sphere_mesh(filename=f"{fname}.msh")
@@ -100,7 +100,7 @@ if __name__ == "__main__":
 
     else:
         if cube:
-            mesh = UnitSquareMesh(MPI.COMM_WORLD, 30, 30)
+            mesh = create_unit_square(MPI.COMM_WORLD, 30, 30)
         else:
             fname = "disk"
             create_disk_mesh(filename=f"{fname}.msh")
