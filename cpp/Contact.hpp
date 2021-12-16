@@ -1384,7 +1384,7 @@ public:
         facet_indices(0) = (*map)(i, q, 1);
 
         // Compute Pi(x) from x, and gap = Pi(x) - x
-        for (int k; k < gdim; ++k)
+        for (int k = 0; k < gdim; ++k)
           point(0, k) = (*q_phys_pt)[i](q, k)
                         + gap[i * gdim * num_q_points + q * gdim + k];
 
