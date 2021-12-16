@@ -5,7 +5,6 @@
 from typing import Dict, Tuple
 
 import dolfinx.common as _common
-import dolfinx.cpp.fem as _cpp_fem
 import dolfinx.fem as _fem
 import dolfinx.la as _la
 import dolfinx.mesh as dmesh
