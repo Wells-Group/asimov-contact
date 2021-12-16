@@ -10,11 +10,10 @@ import ufl
 from dolfinx.fem import (DirichletBC, Function, LinearProblem,
                          NonlinearProblem, VectorFunctionSpace,
                          locate_dofs_topological)
-from dolfinx.generation import RectangleMesh
 from dolfinx.geometry import (BoundingBoxTree, compute_colliding_cells,
                               compute_collisions)
 from dolfinx.io import XDMFFile
-from dolfinx.mesh import (CellType, GhostMode, MeshTags,
+from dolfinx.mesh import (CellType, create_rectangle, GhostMode, MeshTags,
                           locate_entities_boundary)
 from dolfinx.nls import NewtonSolver
 from mpi4py import MPI
@@ -30,7 +29,7 @@ def solve_euler_bernoulli(nx: int, ny: int, theta: float, gamma: float, linear_s
     Solve the Euler-Bernoulli equations for a (0,0)x(L,H) beam
     (https://en.wikipedia.org/wiki/Euler%E2%80%93Bernoulli_beam_theory#Cantilever_beams)
     """
-    mesh = RectangleMesh(MPI.COMM_WORLD, [np.array([0, 0, 0]), np.array([L, H, 0])], [nx, ny],
+    mesh = create_rectangle(MPI.COMM_WORLD, [np.array([0, 0, 0]), np.array([L, H, 0])], [nx, ny],
                          CellType.triangle, GhostMode.none)
 
     def left(x):

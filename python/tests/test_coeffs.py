@@ -7,8 +7,7 @@ import dolfinx_cuas.cpp
 import numpy as np
 import pytest
 from dolfinx.fem import Function, FunctionSpace, VectorFunctionSpace
-from dolfinx.generation import UnitSquareMesh
-from dolfinx.mesh import locate_entities_boundary
+from dolfinx.mesh import create_unit_square, locate_entities_boundary
 from mpi4py import MPI
 
 import dolfinx_contact.cpp
@@ -19,7 +18,7 @@ import dolfinx_contact.cpp
 @pytest.mark.parametrize("space", ["CG", "N1curl", "DG"])
 def test_pack_coeff_at_quadrature(quadrature_degree, space, degree):
     N = 15
-    mesh = UnitSquareMesh(MPI.COMM_WORLD, N, N)
+    mesh = create_unit_square(MPI.COMM_WORLD, N, N)
     if space == "CG":
         V = VectorFunctionSpace(mesh, (space, degree))
     elif space == "N1curl":
@@ -61,7 +60,7 @@ def test_pack_coeff_at_quadrature(quadrature_degree, space, degree):
 @pytest.mark.parametrize("space", ["CG", "DG", "N1curl"])
 def test_pack_coeff_on_facet(quadrature_degree, space, degree):
     N = 15
-    mesh = UnitSquareMesh(MPI.COMM_WORLD, N, N)
+    mesh = create_unit_square(MPI.COMM_WORLD, N, N)
     if space == "CG":
         V = VectorFunctionSpace(mesh, (space, degree))
     elif space == "N1curl":
