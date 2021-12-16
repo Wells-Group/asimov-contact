@@ -1366,7 +1366,7 @@ public:
 
     // Needed for pull_back in get_facet_normals
     xt::xtensor<double, 3> J = xt::zeros<double>(
-        {std::size_t(1), std::size_t(gdim), std::size_t(tdim)});
+        {std::size_t(num_q_points), std::size_t(gdim), std::size_t(tdim)});
     xt::xtensor<double, 3> K = xt::zeros<double>(
         {std::size_t(1), std::size_t(tdim), std::size_t(gdim)});
     xt::xtensor<double, 1> detJ = xt::zeros<double>({std::size_t(1)});

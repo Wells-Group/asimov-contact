@@ -5,7 +5,6 @@
 from typing import Dict, Tuple
 
 import dolfinx.common as _common
-import dolfinx.cpp.fem as _cpp_fem
 import dolfinx.fem as _fem
 import dolfinx.la as _la
 import dolfinx.mesh as dmesh
@@ -146,7 +145,7 @@ def snes_solver(mesh: dmesh.Mesh, mesh_data: Tuple[dmesh.MeshTags, int, int],
 
     # Create LHS matrix and RHS vector
     b = _la.create_petsc_vector(V.dofmap.index_map, V.dofmap.index_map_bs)
-    J = _cpp_fem.petsc.create_matrix(problem.a_comp._cpp_object)
+    J = _fem.create_matrix(problem.a_comp)
 
     # Create semismooth Newton solver (SNES)
     snes = _PETSc.SNES().create()

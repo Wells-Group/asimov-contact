@@ -10,9 +10,8 @@ import numpy as np
 import ufl
 from dolfinx.common import timing
 from dolfinx.fem import assemble_scalar
-from dolfinx.mesh import create_unit_cube, create_unit_square
 from dolfinx.io import XDMFFile
-from dolfinx.mesh import MeshTags, locate_entities_boundary, refine
+from dolfinx.mesh import create_unit_cube, create_unit_square, MeshTags, locate_entities_boundary, refine
 from dolfinx_contact.meshing import (convert_mesh, create_disk_mesh,
                                      create_sphere_mesh)
 from dolfinx_contact.one_sided import nitsche_ufl

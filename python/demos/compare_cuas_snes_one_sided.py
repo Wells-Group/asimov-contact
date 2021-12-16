@@ -8,19 +8,17 @@ import argparse
 
 import numpy as np
 import ufl
-
 from dolfinx.common import timing
 from dolfinx.fem import Function, assemble_scalar
-from dolfinx.mesh import create_unit_cube, create_unit_square
 from dolfinx.io import XDMFFile
-from dolfinx.mesh import MeshTags, locate_entities_boundary, refine
+from dolfinx.mesh import (MeshTags, create_unit_cube, create_unit_square,
+                          locate_entities_boundary, refine)
+from mpi4py import MPI
 
 from dolfinx_contact.meshing import (convert_mesh, create_disk_mesh,
                                      create_sphere_mesh)
 from dolfinx_contact.one_sided.nitsche_cuas import nitsche_cuas
 from dolfinx_contact.one_sided.snes_against_plane import snes_solver
-
-from mpi4py import MPI
 
 if __name__ == "__main__":
     description = "Compare Nitsche's method for contact against a straight plane with PETSc SNES"

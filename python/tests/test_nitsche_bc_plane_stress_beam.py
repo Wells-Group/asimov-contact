@@ -10,8 +10,8 @@ import ufl
 from dolfinx.fem import (Function, LinearProblem, NonlinearProblem,
                          VectorFunctionSpace, assemble_scalar)
 from dolfinx.io import XDMFFile
-from dolfinx.mesh import (CellType, GhostMode, MeshTags,
-                          locate_entities_boundary, create_rectangle)
+from dolfinx.mesh import (CellType, create_rectangle, GhostMode, MeshTags,
+                          locate_entities_boundary)
 from dolfinx.nls import NewtonSolver
 from mpi4py import MPI
 

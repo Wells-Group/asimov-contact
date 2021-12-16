@@ -601,7 +601,7 @@ pack_circumradius_facet(std::shared_ptr<const dolfinx::mesh::Mesh> mesh,
 
   return {std::move(c), cstride};
 }
-/// This function computes the pull bac for a set of points x on a cell
+/// This function computes the pull back for a set of points x on a cell
 /// described by coordinate_dofs as well as the corresponding Jacobian, their
 /// inverses and their determinants
 /// @param[in, out] J: Jacobians of transformation from reference element to
