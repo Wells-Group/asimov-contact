@@ -12,8 +12,7 @@ import ufl
 from dolfinx.fem import (Form, Function, FunctionSpace, IntegralType,
                          VectorFunctionSpace, assemble_matrix, assemble_vector,
                          create_matrix, create_vector)
-from dolfinx.generation import UnitCubeMesh, UnitSquareMesh
-from dolfinx.mesh import MeshTags, locate_entities_boundary
+from dolfinx.mesh import create_unit_cube, create_unit_square, MeshTags, locate_entities_boundary
 from mpi4py import MPI
 
 import dolfinx_contact
@@ -35,7 +34,7 @@ def R_minus(x):
 @pytest.mark.parametrize("Q", [0, 1, 2])
 def test_vector_surface_kernel(dim, kernel_type, P, Q):
     N = 20 if dim == 2 else 5
-    mesh = UnitSquareMesh(MPI.COMM_WORLD, N, N) if dim == 2 else UnitCubeMesh(MPI.COMM_WORLD, N, N, N)
+    mesh = create_unit_square(MPI.COMM_WORLD, N, N) if dim == 2 else create_unit_cube(MPI.COMM_WORLD, N, N, N)
 
     # Find facets on boundary to integrate over
     facets = locate_entities_boundary(mesh, mesh.topology.dim - 1,
@@ -153,7 +152,7 @@ def test_vector_surface_kernel(dim, kernel_type, P, Q):
 @pytest.mark.parametrize("Q", [0, 1, 2])
 def test_matrix_surface_kernel(dim, kernel_type, P, Q):
     N = 20 if dim == 2 else 5
-    mesh = UnitSquareMesh(MPI.COMM_WORLD, N, N) if dim == 2 else UnitCubeMesh(MPI.COMM_WORLD, N, N, N)
+    mesh = create_unit_square(MPI.COMM_WORLD, N, N) if dim == 2 else create_unit_cube(MPI.COMM_WORLD, N, N, N)
 
     # Find facets on boundary to integrate over
     facets = dolfinx.mesh.locate_entities_boundary(mesh, mesh.topology.dim - 1,

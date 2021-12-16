@@ -9,9 +9,8 @@ import pytest
 import ufl
 from dolfinx.fem import (Function, LinearProblem, NonlinearProblem,
                          VectorFunctionSpace, assemble_scalar)
-from dolfinx.generation import RectangleMesh
 from dolfinx.io import XDMFFile
-from dolfinx.mesh import (CellType, GhostMode, MeshTags,
+from dolfinx.mesh import (CellType, create_rectangle, GhostMode, MeshTags,
                           locate_entities_boundary)
 from dolfinx.nls import NewtonSolver
 from mpi4py import MPI
@@ -29,8 +28,8 @@ def solve_manufactured(nx: int, ny: int, theta: float, gamma: float,
     (strong/Nitsche) Dirichlet condition at (0,y) and Neumann conditions everywhere else.
     """
 
-    mesh = RectangleMesh(MPI.COMM_WORLD, [np.array([0, -1, 0]), np.array([L, 1, 0])],
-                         [nx, ny], CellType.triangle, GhostMode.none)
+    mesh = create_rectangle(MPI.COMM_WORLD, [np.array([0, -1, 0]), np.array([L, 1, 0])],
+                            [nx, ny], CellType.triangle, GhostMode.none)
 
     def left(x):
         return np.isclose(x[0], 0)

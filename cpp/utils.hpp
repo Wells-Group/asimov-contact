@@ -600,7 +600,7 @@ pack_circumradius_facet(std::shared_ptr<const dolfinx::mesh::Mesh> mesh,
 
   return {std::move(c), cstride};
 }
-/// This function computes the pull bac for a set of points x on a cell
+/// This function computes the pull back for a set of points x on a cell
 /// described by coordinate_dofs as well as the corresponding Jacobian, their
 /// inverses and their determinants
 /// @param[in, out] J: Jacobians of transformation from reference element to
@@ -623,9 +623,9 @@ void pull_back(xt::xtensor<double, 3>& J, xt::xtensor<double, 3>& K,
 {
   // number of points
   const std::size_t num_points = x.shape(0);
-  assert(J.shape(0) == num_points);
-  assert(K.shape(0) == num_points);
-  assert(detJ.shape(0) == num_points);
+  assert(J.shape(0) >= num_points);
+  assert(K.shape(0) >= num_points);
+  assert(detJ.shape(0) >= num_points);
 
   // Get mesh data from input
   const size_t gdim = coordinate_dofs.shape(1);
@@ -823,9 +823,9 @@ get_facet_normals(xt::xtensor<double, 3>& J, xt::xtensor<double, 3>& K,
 {
   // number of points
   const std::size_t num_points = x.shape(0);
-  assert(J.shape(0) == num_points);
-  assert(K.shape(0) == num_points);
-  assert(detJ.shape(0) == num_points);
+  assert(J.shape(0) >= num_points);
+  assert(K.shape(0) >= num_points);
+  assert(detJ.shape(0) >= num_points);
 
   // Get mesh data from input
   const size_t gdim = coordinate_dofs.shape(1);
