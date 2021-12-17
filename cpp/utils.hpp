@@ -907,17 +907,13 @@ sort_cells(const xtl::span<const std::int32_t>& cells,
 
   for (std::int32_t i = 0; i < num_cells; ++i)
   {
-    perm[i] = perm[i];
     unique_cells[i] = cells[perm[i]];
   }
   std::int32_t index = 0;
   for (std::int32_t i = 0; i < num_cells - 1; ++i)
   {
     if (unique_cells[i] != unique_cells[i + 1])
-    {
-      index++;
-      offsets[index] = i + 1;
-    }
+      offsets[++index] = i + 1;
   }
   offsets[index + 1] = num_cells;
   unique_cells.erase(std::unique(unique_cells.begin(), unique_cells.end()),
