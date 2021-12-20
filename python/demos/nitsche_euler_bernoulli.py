@@ -29,7 +29,7 @@ def solve_euler_bernoulli(nx: int, ny: int, theta: float, gamma: float, linear_s
     Solve the Euler-Bernoulli equations for a (0,0)x(L,H) beam
     (https://en.wikipedia.org/wiki/Euler%E2%80%93Bernoulli_beam_theory#Cantilever_beams)
     """
-    mesh = create_rectangle(MPI.COMM_WORLD, [np.array([0, 0, 0]), np.array([L, H, 0])], [nx, ny],
+    mesh = create_rectangle(MPI.COMM_WORLD, [np.array([0, 0]), np.array([L, H])], [nx, ny],
                             CellType.triangle, GhostMode.none)
 
     def left(x):

@@ -28,7 +28,7 @@ def solve_manufactured(nx: int, ny: int, theta: float, gamma: float,
     (strong/Nitsche) Dirichlet condition at (0,y) and Neumann conditions everywhere else.
     """
 
-    mesh = create_rectangle(MPI.COMM_WORLD, [np.array([0, -1, 0]), np.array([L, 1, 0])],
+    mesh = create_rectangle(MPI.COMM_WORLD, [np.array([0, -1]), np.array([L, 1])],
                             [nx, ny], CellType.triangle, GhostMode.none)
 
     def left(x):
