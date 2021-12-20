@@ -215,7 +215,7 @@ public:
 
     // FIXME: Add proper interface for num coordinate dofs
     const std::size_t num_dofs_g = x_dofmap.num_links(0);
-    const xt::xtensor<double, 2>& x_g = mesh->geometry().x();
+    xtl::span<const double> x_g = mesh->geometry().x();
 
     // Extract function space data (assuming same test and trial space)
     std::shared_ptr<const dolfinx::fem::DofMap> dofmap = _V->dofmap();
@@ -252,8 +252,8 @@ public:
       auto x_dofs = x_dofmap.links(cell);
       for (std::size_t i = 0; i < x_dofs.size(); ++i)
       {
-        std::copy_n(xt::row(x_g, x_dofs[i]).begin(), 3,
-                    std::next(coordinate_dofs.begin(), 3 * i));
+        std::copy_n(std::next(x_g.begin(), 3 * x_dofs[i]), gdim,
+                    std::next(coordinate_dofs.begin(), i * gdim));
       }
       std::int32_t local_index = (*active_facets)(i, 1);
       std::vector<std::int32_t> linked_cells;
@@ -316,7 +316,7 @@ public:
 
     // FIXME: Add proper interface for num coordinate dofs
     const std::size_t num_dofs_g = x_dofmap.num_links(0);
-    const xt::xtensor<double, 2>& x_g = mesh->geometry().x();
+    xtl::span<const double> x_g = mesh->geometry().x();
 
     // Extract function space data (assuming same test and trial space)
     std::shared_ptr<const dolfinx::fem::DofMap> dofmap = _V->dofmap();
@@ -354,8 +354,8 @@ public:
       auto x_dofs = x_dofmap.links(cell);
       for (std::size_t i = 0; i < x_dofs.size(); ++i)
       {
-        std::copy_n(xt::row(x_g, x_dofs[i]).begin(), 3,
-                    std::next(coordinate_dofs.begin(), 3 * i));
+        std::copy_n(std::next(x_g.begin(), 3 * x_dofs[i]), gdim,
+                    std::next(coordinate_dofs.begin(), i * gdim));
       }
       std::int32_t local_index = (*active_facets)(i, 1);
       std::vector<std::int32_t> linked_cells;
@@ -847,7 +847,7 @@ public:
   {
     // Mesh info
     auto mesh = _marker->mesh();
-    auto mesh_geometry = mesh->geometry().x();
+    xtl::span<const double> mesh_geometry = mesh->geometry().x();
     auto cmap = mesh->geometry().cmap();
     auto x_dofmap = mesh->geometry().dofmap();
     const int gdim = mesh->geometry().dim(); // geometrical dimension
@@ -875,8 +875,14 @@ public:
 
       // extract local dofs
       auto x_dofs = x_dofmap.links(cell);
-      auto coordinate_dofs
-          = xt::view(mesh_geometry, xt::keep(x_dofs), xt::range(0, gdim));
+      const std::size_t num_dofs_g = x_dofmap.num_links(cell);
+      xt::xtensor<double, 2> coordinate_dofs
+          = xt::zeros<double>({num_dofs_g, std::size_t(gdim)});
+      for (std::size_t i = 0; i < x_dofs.size(); ++i)
+      {
+        std::copy_n(std::next(mesh_geometry.begin(), 3 * x_dofs[i]), gdim,
+                    std::next(coordinate_dofs.begin(), i * gdim));
+      }
       xt::xtensor<double, 2> q_phys({_qp_ref_facet[local_index].shape(0),
                                      _qp_ref_facet[local_index].shape(1)});
 
@@ -1081,7 +1087,7 @@ public:
     const int gdim = mesh->geometry().dim(); // geometrical dimension
     const int tdim = mesh->topology().dim();
     const int fdim = tdim - 1;
-    const xt::xtensor<double, 2>& mesh_geometry = mesh->geometry().x();
+    xtl::span<const double> mesh_geometry = mesh->geometry().x();
     std::vector<int32_t>* puppet_facets;
     std::shared_ptr<dolfinx::graph::AdjacencyList<std::int32_t>> map;
     std::vector<xt::xtensor<double, 2>>* q_phys_pt;
@@ -1124,8 +1130,15 @@ public:
         // Get the coordinates of the geometry on the other interface, and
         // compute the distance of the convex hull created by the points
         auto master_facet = xt::view(master_facet_geometry, j, xt::all());
-        auto master_coords
-            = xt::view(mesh_geometry, xt::keep(master_facet), xt::all());
+        std::size_t num_facet_dofs = master_facet_geometry.shape(1);
+        xt::xtensor<double, 2> master_coords
+            = xt::zeros<double>({num_facet_dofs, std::size_t(3)});
+        for (std::size_t l = 0; l < num_facet_dofs; ++l)
+        {
+          const int pos = 3 * master_facet[l];
+          for (std::size_t k = 0; k < gdim; ++k)
+            master_coords(l, k) = mesh_geometry[pos + k];
+        }
         auto dist_vec
             = dolfinx::geometry::compute_distance_gjk(master_coords, point);
 
@@ -1153,7 +1166,7 @@ public:
     const int fdim = tdim - 1;
     auto cmap = mesh->geometry().cmap();
     auto x_dofmap = mesh->geometry().dofmap();
-    const xt::xtensor<double, 2>& mesh_geometry = mesh->geometry().x();
+    xtl::span<const double> mesh_geometry = mesh->geometry().x();
     xt::xtensor<std::int32_t, 3>* map;
     std::vector<xt::xtensor<double, 2>>* q_phys_pt;
     xt::xtensor<std::int32_t, 2>* puppet_facets;
@@ -1231,8 +1244,14 @@ public:
             = xtl::span(perm.data() + offsets[j], offsets[j + 1] - offsets[j]);
         // Extract local dofs
         auto x_dofs = x_dofmap.links(linked_cell);
-        const xt::xtensor<double, 2> coordinate_dofs
-            = xt::view(mesh_geometry, xt::keep(x_dofs), xt::range(0, gdim));
+        const std::size_t num_dofs_g = x_dofmap.num_links(linked_cell);
+        xt::xtensor<double, 2> coordinate_dofs
+            = xt::zeros<double>({num_dofs_g, std::size_t(gdim)});
+        for (std::size_t i = 0; i < x_dofs.size(); ++i)
+        {
+          std::copy_n(std::next(mesh_geometry.begin(), 3 * x_dofs[i]), gdim,
+                      std::next(coordinate_dofs.begin(), i * gdim));
+        }
         // Extract all physical points Pi(x) on a facet of linked_cell
         auto qp = xt::view(q_points, xt::keep(indices), xt::all());
         // Compute values of basis functions for all y = Pi(x) in qp
@@ -1333,7 +1352,7 @@ public:
     const int tdim = mesh->topology().dim();
     auto cmap = mesh->geometry().cmap();
     auto x_dofmap = mesh->geometry().dofmap();
-    const xt::xtensor<double, 2>& mesh_geometry = mesh->geometry().x();
+    xtl::span<const double> mesh_geometry = mesh->geometry().x();
     xt::xtensor<std::int32_t, 3>* map;
     std::vector<xt::xtensor<double, 2>>* q_phys_pt;
     xt::xtensor<std::int32_t, 2>* puppet_facets;
@@ -1390,8 +1409,14 @@ public:
 
         // extract local dofs
         auto x_dofs = x_dofmap.links(linked_cell);
-        const xt::xtensor<double, 2> coordinate_dofs
-            = xt::view(mesh_geometry, xt::keep(x_dofs), xt::range(0, gdim));
+        const std::size_t num_dofs_g = x_dofmap.num_links(linked_cell);
+        xt::xtensor<double, 2> coordinate_dofs
+            = xt::zeros<double>({num_dofs_g, std::size_t(gdim)});
+        for (std::size_t i = 0; i < x_dofs.size(); ++i)
+        {
+          std::copy_n(std::next(mesh_geometry.begin(), 3 * x_dofs[i]), gdim,
+                      std::next(coordinate_dofs.begin(), i * gdim));
+        }
 
         // Compute outward unit normal in point = Pi(x)
         // Note: in the affine case potential gains can be made
@@ -1426,7 +1451,7 @@ public:
     const int gdim = mesh->geometry().dim(); // geometrical dimension
     const int tdim = mesh->topology().dim();
     const int fdim = tdim - 1;
-    auto mesh_geometry = mesh->geometry().x();
+    xtl::span<const double> mesh_geometry = mesh->geometry().x();
     // Create _qp_ref_facet (quadrature points on reference facet)
     dolfinx_cuas::QuadratureRule facet_quadrature(
         _marker->mesh()->topology().cell_type(), _quadrature_degree, fdim);

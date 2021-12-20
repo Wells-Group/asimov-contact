@@ -94,7 +94,7 @@ std::pair<std::vector<PetscScalar>, int> pack_coefficient_quadrature(
 
     // FIXME: Add proper interface for num coordinate dofs
     const std::size_t num_dofs_g = x_dofmap.num_links(0);
-    const xt::xtensor<double, 2>& x_g = mesh->geometry().x();
+    xtl::span<const double> x_g = mesh->geometry().x();
 
     // Prepare geometry data structures
     xt::xtensor<double, 2> X({num_points, tdim});
@@ -133,8 +133,11 @@ std::pair<std::vector<PetscScalar>, int> pack_coefficient_quadrature(
       // Get cell geometry (coordinate dofs)
       auto x_dofs = x_dofmap.links(cell);
       for (std::size_t i = 0; i < num_dofs_g; ++i)
+      {
+        const int pos = 3 * x_dofs[i];
         for (std::size_t j = 0; j < gdim; ++j)
-          coordinate_dofs(i, j) = x_g(x_dofs[i], j);
+          coordinate_dofs(i, j) = x_g[pos + j];
+      }
       // NOTE: This can be simplified in affine case
       for (std::size_t q = 0; q < num_points; ++q)
       {
@@ -290,7 +293,7 @@ std::pair<std::vector<PetscScalar>, int> pack_coefficient_facet(
 
     // FIXME: Add proper interface for num coordinate dofs
     const std::size_t num_dofs_g = x_dofmap.num_links(0);
-    const xt::xtensor<double, 2>& x_g = mesh->geometry().x();
+    xtl::span<const double> x_g = mesh->geometry().x();
 
     // Prepare geometry data structures
     xt::xtensor<double, 2> X({num_points, tdim});
@@ -350,8 +353,11 @@ std::pair<std::vector<PetscScalar>, int> pack_coefficient_facet(
       auto x_dofs = x_dofmap.links(cell);
 
       for (std::size_t i = 0; i < num_dofs_g; ++i)
+      {
+        const int pos = 3 * x_dofs[i];
         for (std::size_t j = 0; j < gdim; ++j)
-          coordinate_dofs(i, j) = x_g(x_dofs[i], j);
+          coordinate_dofs(i, j) = x_g[pos + j];
+      }
 
       auto dphi_ci = xt::view(dphi_c, local_index, xt::all(), xt::all(),
                               xt::all(), xt::all());
@@ -483,7 +489,7 @@ pack_circumradius_facet(std::shared_ptr<const dolfinx::mesh::Mesh> mesh,
 
   // FIXME: Add proper interface for num coordinate dofs
   const std::size_t num_dofs_g = x_dofmap.num_links(0);
-  const xt::xtensor<double, 2>& x_g = mesh->geometry().x();
+  xtl::span<const double> x_g = mesh->geometry().x();
 
   // Prepare geometry data structures
   // xt::xtensor<double, 2> X({num_points, tdim});
@@ -532,8 +538,11 @@ pack_circumradius_facet(std::shared_ptr<const dolfinx::mesh::Mesh> mesh,
     auto x_dofs = x_dofmap.links(cell);
 
     for (std::size_t i = 0; i < num_dofs_g; ++i)
+    {
+      const int pos = 3 * x_dofs[i];
       for (std::size_t j = 0; j < gdim; ++j)
-        coordinate_dofs(i, j) = x_g(x_dofs[i], j);
+        coordinate_dofs(i, j) = x_g[pos + j];
+    }
 
     auto dphi_ci = xt::view(dphi_c, local_index, xt::all(), xt::all(),
                             xt::all(), xt::all());
