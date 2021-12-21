@@ -1157,7 +1157,7 @@ public:
   /// @param[out] c - test functions packed on facets.
   std::pair<std::vector<PetscScalar>, int>
   pack_test_functions(int origin_meshtag,
-                      const xtl::span<const PetscScalar> gap)
+                      const xtl::span<const PetscScalar>& gap)
   {
     // Mesh info
     auto mesh = _marker->mesh();             // mesh
@@ -1198,8 +1198,6 @@ public:
     std::vector<PetscScalar> c(
         num_facets * num_q_points * max_links * ndofs * bs, 0.0);
     const int cstride = num_q_points * max_links * ndofs * bs;
-    std::vector<std::int32_t> perm(num_q_points);
-    std::vector<std::int32_t> sorted_cells(num_q_points);
     xt::xtensor<double, 2> q_points
         = xt::zeros<double>({std::size_t(num_q_points), std::size_t(gdim)});
     xt::xtensor<double, 2> dphi;
@@ -1209,39 +1207,41 @@ public:
         {std::size_t(num_q_points), std::size_t(tdim), std::size_t(gdim)});
     xt::xtensor<double, 1> detJ = xt::zeros<double>({num_q_points});
     xt::xtensor<double, 4> phi(cmap.tabulate_shape(1, 1));
+    std::vector<std::int32_t> perm(num_q_points);
+    std::vector<std::int32_t> linked_cells(num_q_points);
+
+    // Loop over all facets
     for (int i = 0; i < num_facets; i++)
     {
       auto cell = (*puppet_facets)(i, 0); // extract cell
 
+      // Compute Pi(x) form points x and gap funtion Pi(x) - x
       for (int j = 0; j < num_q_points; j++)
       {
-        sorted_cells[j] = (*map)(i, j, 0);
-        // Is there a better way to do this???
+        linked_cells[j] = (*map)(i, j, 0);
         for (int k = 0; k < gdim; k++)
-        {
           q_points(j, k) = (*q_phys_pt)[i](j, k)
                            + gap[i * gdim * num_q_points + j * gdim + k];
-        }
       }
-      std::iota(perm.begin(), perm.end(), 0);
-      dolfinx::argsort_radix<std::int32_t>(sorted_cells, perm);
-      std::sort(sorted_cells.begin(), sorted_cells.end());
-      auto it = sorted_cells.begin();
-      int link = 0;
-      while (it != sorted_cells.end())
-      {
-        auto upper = std::upper_bound(it, sorted_cells.end(), *it);
-        int num_indices
-            = upper - sorted_cells.begin() - (it - sorted_cells.begin());
-        std::vector<std::int32_t> indices(num_indices, 0);
-        for (int k = it - sorted_cells.begin();
-             k < upper - sorted_cells.begin(); k++)
-        {
-          int l = it - sorted_cells.begin();
-          indices[k - l] = perm[k];
-        }
-        int linked_cell = *it;
 
+      // Sort linked cells
+      assert((*map).shape(1) == num_q_points);
+      assert(linked_cells.size() == num_q_points);
+      std::pair<std::vector<std::int32_t>, std::vector<std::int32_t>>
+          sorted_cells = dolfinx_contact::sort_cells(
+              xtl::span(linked_cells.data(), linked_cells.size()),
+              xtl::span(perm.data(), perm.size()));
+      auto unique_cells = sorted_cells.first;
+      auto offsets = sorted_cells.second;
+
+      // Loop over sorted array of unique cells
+      for (int j = 0; j < unique_cells.size(); ++j)
+      {
+
+        std::int32_t linked_cell = unique_cells[j];
+        // Extract indices of all occurances of cell in the unsorted cell array
+        auto indices
+            = xtl::span(perm.data() + offsets[j], offsets[j + 1] - offsets[j]);
         // Extract local dofs
         auto x_dofs = x_dofmap.links(linked_cell);
         const std::size_t num_dofs_g = x_dofmap.num_links(linked_cell);
@@ -1252,26 +1252,20 @@ public:
           std::copy_n(std::next(mesh_geometry.begin(), 3 * x_dofs[i]), gdim,
                       std::next(coordinate_dofs.begin(), i * gdim));
         }
+        // Extract all physical points Pi(x) on a facet of linked_cell
         auto qp = xt::view(q_points, xt::keep(indices), xt::all());
+        // Compute values of basis functions for all y = Pi(x) in qp
         auto test_fn = dolfinx_contact::get_basis_functions(
             J, K, detJ, qp, coordinate_dofs, linked_cell,
             permutation_info[linked_cell], element, cmap);
 
+        // Insert basis function values into c
         for (std::size_t k = 0; k < ndofs; k++)
-        {
           for (std::size_t q = 0; q < test_fn.shape(0); ++q)
-          {
             for (std::size_t l = 0; l < bs; l++)
-            {
-              c[i * cstride + link * ndofs * bs * num_q_points
+              c[i * cstride + j * ndofs * bs * num_q_points
                 + k * bs * num_q_points + indices[q] * bs + l]
                   = test_fn(q, k * bs + l, l);
-            }
-          }
-        }
-
-        it = upper;
-        link += 1;
       }
     }
 
@@ -1356,7 +1350,6 @@ public:
     auto mesh = _marker->mesh();             // mesh
     const int gdim = mesh->geometry().dim(); // geometrical dimension
     const int tdim = mesh->topology().dim();
-    const int fdim = tdim - 1;
     auto cmap = mesh->geometry().cmap();
     auto x_dofmap = mesh->geometry().dofmap();
     xtl::span<const double> mesh_geometry = mesh->geometry().x();
@@ -1364,9 +1357,6 @@ public:
     std::vector<xt::xtensor<double, 2>>* q_phys_pt;
     xt::xtensor<std::int32_t, 2>* puppet_facets;
     auto element = _V->element();
-    const std::uint32_t bs = element->block_size();
-    mesh->topology_mutable().create_entity_permutations();
-
     auto cell_type
         = dolfinx::mesh::cell_type_to_basix_type(mesh->topology().cell_type());
     // Get facet normals on reference cell
@@ -1386,52 +1376,37 @@ public:
       q_phys_pt = &_qp_phys_1;
       puppet_facets = &_cell_facet_pairs_1;
     }
-    std::size_t max_links = std::max(_max_links_0, _max_links_1);
     const std::int32_t num_facets = (*map).shape(0);
     const std::int32_t num_q_points = _qp_ref_facet[0].shape(0);
-    const std::int32_t ndofs = _V->dofmap()->cell_dofs(0).size();
     std::vector<PetscScalar> c(num_facets * num_q_points * gdim, 0.0);
     const int cstride = num_q_points * gdim;
-    std::vector<std::int32_t> perm(num_q_points);
-    std::vector<std::int32_t> sorted_cells(num_q_points);
-    xt::xtensor<double, 2> q_points
-        = xt::zeros<double>({std::size_t(num_q_points), std::size_t(gdim)});
+    xt::xtensor<double, 2> point = xt::zeros<double>(
+        {std::size_t(1), std::size_t(gdim)}); // To store Pi(x)
+
+    // Needed for pull_back in get_facet_normals
     xt::xtensor<double, 3> J = xt::zeros<double>(
         {std::size_t(num_q_points), std::size_t(gdim), std::size_t(tdim)});
     xt::xtensor<double, 3> K = xt::zeros<double>(
-        {std::size_t(num_q_points), std::size_t(tdim), std::size_t(gdim)});
-    xt::xtensor<double, 1> detJ = xt::zeros<double>({num_q_points});
+        {std::size_t(1), std::size_t(tdim), std::size_t(gdim)});
+    xt::xtensor<double, 1> detJ = xt::zeros<double>({std::size_t(1)});
+    xt::xtensor<std::int32_t, 1> facet_indices
+        = xt::zeros<std::int32_t>({std::size_t(1)});
+
+    // Loop over quadrature points
     for (int i = 0; i < num_facets; i++)
     {
       auto cell = (*puppet_facets)(i, 0); // extract cell
+      for (int q = 0; q < num_q_points; ++q)
+      {
+        // Extract linked cell and facet at quadrature point q
+        std::int32_t linked_cell = (*map)(i, q, 0);
+        facet_indices(0) = (*map)(i, q, 1);
 
-      for (int j = 0; j < num_q_points; j++)
-      {
-        sorted_cells[j] = (*map)(i, j, 0);
-        // Is there a better way to do this???
-        for (int k = 0; k < gdim; k++)
-        {
-          q_points(j, k) = (*q_phys_pt)[i](j, k)
-                           + gap[i * gdim * num_q_points + j * gdim + k];
-        }
-      }
-      std::iota(perm.begin(), perm.end(), 0);
-      dolfinx::argsort_radix<std::int32_t>(sorted_cells, perm);
-      std::sort(sorted_cells.begin(), sorted_cells.end());
-      auto it = sorted_cells.begin();
-      while (it != sorted_cells.end())
-      {
-        auto upper = std::upper_bound(it, sorted_cells.end(), *it);
-        int num_indices
-            = upper - sorted_cells.begin() - (it - sorted_cells.begin());
-        std::vector<std::int32_t> indices(num_indices, 0);
-        for (int k = it - sorted_cells.begin();
-             k < upper - sorted_cells.begin(); k++)
-        {
-          int l = it - sorted_cells.begin();
-          indices[k - l] = perm[k];
-        }
-        int linked_cell = *it;
+        // Compute Pi(x) from x, and gap = Pi(x) - x
+        for (int k = 0; k < gdim; ++k)
+          point(0, k) = (*q_phys_pt)[i](q, k)
+                        + gap[i * gdim * num_q_points + q * gdim + k];
+
         // extract local dofs
         auto x_dofs = x_dofmap.links(linked_cell);
         const std::size_t num_dofs_g = x_dofmap.num_links(linked_cell);
@@ -1442,20 +1417,19 @@ public:
           std::copy_n(std::next(mesh_geometry.begin(), 3 * x_dofs[i]), gdim,
                       std::next(coordinate_dofs.begin(), i * gdim));
         }
-        auto qp = xt::view(q_points, xt::keep(indices), xt::all());
-        auto facet_indices = xt::view(*map, i, xt::keep(indices), 1);
-        auto normals = dolfinx_contact::get_facet_normals(
-            J, K, detJ, qp, coordinate_dofs, linked_cell, facet_indices,
-            element, cmap, facet_normals);
-        for (std::size_t q = 0; q < normals.shape(0); ++q)
-        {
-          for (std::size_t l = 0; l < gdim; l++)
-          {
-            c[i * cstride + indices[q] * gdim + l] = normals(q, l);
-          }
-        }
 
-        it = upper;
+        // Compute outward unit normal in point = Pi(x)
+        // Note: in the affine case potential gains can be made
+        //       if the cells are sorted like in pack_test_functions
+        auto normals = dolfinx_contact::get_facet_normals(
+            J, K, detJ, point, coordinate_dofs, linked_cell, facet_indices,
+            element, cmap, facet_normals);
+
+        // Copy normal into c
+        for (std::size_t l = 0; l < gdim; l++)
+        {
+          c[i * cstride + q * gdim + l] = normals(0, l);
+        }
       }
     }
 
