@@ -358,7 +358,6 @@ std::pair<std::vector<PetscScalar>, int> pack_coefficient_facet(
         for (std::size_t j = 0; j < gdim; ++j)
           coordinate_dofs(i, j) = x_g[pos + j];
       }
-
       auto dphi_ci = xt::view(dphi_c, local_index, xt::all(), xt::all(),
                               xt::all(), xt::all());
 
