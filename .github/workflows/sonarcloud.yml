@@ -1,4 +1,4 @@
-name: Build
+name: Run sonarcloud analysis
 on:
   push:
     branches:
@@ -8,7 +8,7 @@ on:
     types: [opened, synchronize, reopened]
 jobs:
   build:
-    name: Build
+    name: Sonarcloud analysis
     runs-on: ubuntu-latest
     container: dolfinx/dev-env
     env:
