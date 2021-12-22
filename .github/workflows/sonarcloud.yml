@@ -51,11 +51,13 @@ jobs:
           wget -O $HOME/.sonar/build-wrapper-linux-x86.zip ${{ env.BUILD_WRAPPER_DOWNLOAD_URL }}
           unzip -o $HOME/.sonar/build-wrapper-linux-x86.zip -d $HOME/.sonar/
           echo "$HOME/.sonar/build-wrapper-linux-x86" >> $GITHUB_PATH
-      - name: Install FEniCS Python components
-        run: |
-          python3 -m pip install git+https://github.com/FEniCS/ufl.git
-          python3 -m pip install git+https://github.com/FEniCS/basix.git
-          python3 -m pip install git+https://github.com/FEniCS/ffcx.git
+
+      - name: Get Basix and install
+        uses: actions/checkout@v2
+        with:
+          path: ./basix
+          repository: FEniCS/basix
+          ref: main
 
       - name: Get DOLFINx
         uses: actions/checkout@v2
@@ -64,8 +66,14 @@ jobs:
           repository: FEniCS/dolfinx
           ref: main
 
-      - name: Install DOLFINx
+      - name: Install FEniCS Python components (DOLFINx)
         run: |
+          cmake -G Ninja -DCMAKE_BUILD_TYPE=Release -B build-basix -S ./basix/cpp
+          cmake --build build-basix
+          cmake --install build-basix
+          python3 -m pip install ./basix/python
+          python3 -m pip install git+https://github.com/FEniCS/ufl.git
+          python3 -m pip install git+https://github.com/FEniCS/ffcx.git
           cmake -G Ninja -DCMAKE_BUILD_TYPE="Release" -B build-dolfinx -S ./dolfinx/cpp/
           cmake --build build-dolfinx
           cmake --install build-dolfinx
