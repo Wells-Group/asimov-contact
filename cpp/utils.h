@@ -29,10 +29,11 @@ namespace dolfinx_contact
 /// phi^i(x_q)[c] is the ith basis function's c-th value compoenent at the
 /// quadrature point x_q.
 /// @param[in] coeff The coefficient to pack
-/// @param[out] c The packed coefficients and the number of coeffs per cell
+/// @param[in] q_degree The quadrature degree
+/// @returns c The packed coefficients and the number of coeffs per cell
 std::pair<std::vector<PetscScalar>, int> pack_coefficient_quadrature(
     std::shared_ptr<const dolfinx::fem::Function<PetscScalar>> coeff,
-    const int q)
+    const int q_degree)
 {
   const dolfinx::fem::DofMap* dofmap = coeff->function_space()->dofmap().get();
   const dolfinx::fem::FiniteElement* element
@@ -46,8 +47,8 @@ std::pair<std::vector<PetscScalar>, int> pack_coefficient_quadrature(
   const std::size_t tdim = mesh->topology().dim();
   const std::size_t gdim = mesh->geometry().dim();
   const std::int32_t num_cells
-      = mesh->topology().index_map(tdim)->size_local()
-        + mesh->topology().index_map(tdim)->num_ghosts();
+      = mesh->topology().index_map((int)tdim)->size_local()
+        + mesh->topology().index_map((int)tdim)->num_ghosts();
 
   // Get dof transformations
   const bool needs_dof_transformations = element->needs_dof_transformations();
@@ -73,12 +74,12 @@ std::pair<std::vector<PetscScalar>, int> pack_coefficient_quadrature(
   // Tabulate function at quadrature points
   auto [points, weights] = basix::quadrature::make_quadrature(
       basix::quadrature::type::Default,
-      dolfinx::mesh::cell_type_to_basix_type(cell_type), q);
+      dolfinx::mesh::cell_type_to_basix_type(cell_type), q_degree);
   const std::size_t num_points = weights.size();
   xt::xtensor<double, 4> coeff_basis({1, num_points, num_dofs, vs});
   element->tabulate(coeff_basis, points, 0);
   std::vector<PetscScalar> c(num_cells * vs * bs * num_points, 0.0);
-  const int cstride = vs * bs * num_points;
+  const auto cstride = int(vs * bs * num_points);
   auto reference_basis_values
       = xt::view(coeff_basis, 0, xt::all(), xt::all(), xt::all());
 
@@ -154,7 +155,7 @@ std::pair<std::vector<PetscScalar>, int> pack_coefficient_quadrature(
         point_basis_values
             = xt::view(reference_basis_values, q, xt::all(), xt::all());
         transformation(xtl::span(point_basis_values.data(), num_dofs / bs * vs),
-                       cell_info, cell, vs);
+                       cell_info, cell, (int)vs);
 
         // Push basis forward to physical element
         auto _u = xt::view(basis_values, q, xt::all(), xt::all());
@@ -167,7 +168,7 @@ std::pair<std::vector<PetscScalar>, int> pack_coefficient_quadrature(
       auto dofs = dofmap->cell_dofs(cell);
       for (std::size_t i = 0; i < dofs.size(); ++i)
       {
-        const int pos_v = bs * dofs[i];
+        const int pos_v = (int)bs * dofs[i];
 
         for (std::size_t q = 0; q < num_points; ++q)
           for (std::size_t k = 0; k < bs; ++k)
@@ -187,7 +188,7 @@ std::pair<std::vector<PetscScalar>, int> pack_coefficient_quadrature(
       auto dofs = dofmap->cell_dofs(cell);
       for (std::size_t i = 0; i < dofs.size(); ++i)
       {
-        const int pos_v = bs * dofs[i];
+        const int pos_v = (int)bs * dofs[i];
 
         for (std::size_t q = 0; q < num_points; ++q)
           for (std::size_t k = 0; k < bs; ++k)
@@ -208,11 +209,11 @@ std::pair<std::vector<PetscScalar>, int> pack_coefficient_quadrature(
 /// compoenent at the quadrature point x_q.
 /// @param[in] coeff The coefficient to pack
 /// @param[in] active_facets List of active facets
-/// @param[in] q the quadrature degree
+/// @param[in] q_degree the quadrature degree
 /// @param[out] c The packed coefficients and the number of coeffs per facet
 std::pair<std::vector<PetscScalar>, int> pack_coefficient_facet(
-    std::shared_ptr<const dolfinx::fem::Function<PetscScalar>> coeff, int q,
-    const xtl::span<const std::int32_t>& active_facets)
+    std::shared_ptr<const dolfinx::fem::Function<PetscScalar>> coeff,
+    int q_degree, const xtl::span<const std::int32_t>& active_facets)
 {
   const dolfinx::fem::DofMap* dofmap = coeff->function_space()->dofmap().get();
   const dolfinx::fem::FiniteElement* element
@@ -223,10 +224,10 @@ std::pair<std::vector<PetscScalar>, int> pack_coefficient_facet(
   std::shared_ptr<const dolfinx::mesh::Mesh> mesh
       = coeff->function_space()->mesh();
   assert(mesh);
-  const std::size_t tdim = mesh->topology().dim();
-  const std::size_t gdim = mesh->geometry().dim();
-  const std::size_t fdim = tdim - 1;
-  const std::int32_t num_facets = active_facets.size();
+  const int tdim = mesh->topology().dim();
+  const int gdim = mesh->geometry().dim();
+  const int fdim = tdim - 1;
+  const std::size_t num_facets = active_facets.size();
 
   // Connectivity to evaluate at quadrature points
   // FIXME: Move create_connectivity out of this function and call before
@@ -255,20 +256,21 @@ std::pair<std::vector<PetscScalar>, int> pack_coefficient_facet(
       = dolfinx::mesh::to_string(mesh->topology().cell_type());
   const std::size_t num_dofs = element->space_dimension();
   const std::size_t bs = dofmap->bs();
-  const std::size_t vs
-      = element->reference_value_size() / element->block_size();
+  const int vs = element->reference_value_size() / element->block_size();
 
   // Tabulate function at quadrature points
-  dolfinx_cuas::QuadratureRule q_rule(mesh->topology().cell_type(), q, fdim);
+  dolfinx_cuas::QuadratureRule q_rule(mesh->topology().cell_type(), q_degree,
+                                      fdim);
   // FIXME: This does not work for prism elements
   const std::vector<double> weights = q_rule.weights()[0];
   const std::vector<xt::xarray<double>> points = q_rule.points();
 
   const std::size_t num_points = weights.size();
   const std::size_t num_local_facets = points.size();
-  xt::xtensor<double, 4> coeff_basis({1, num_points, num_dofs / bs, vs});
+  xt::xtensor<double, 4> coeff_basis(
+      {1, num_points, num_dofs / bs, (std::size_t)vs});
   xt::xtensor<double, 4> reference_basis_values(
-      {num_local_facets, num_points, num_dofs / bs, vs});
+      {num_local_facets, num_points, num_dofs / bs, (std::size_t)vs});
 
   for (std::size_t i = 0; i < num_local_facets; i++)
   {
@@ -284,8 +286,10 @@ std::pair<std::vector<PetscScalar>, int> pack_coefficient_facet(
   if (needs_dof_transformations)
   {
     // Prepare basis function data structures
-    xt::xtensor<double, 3> basis_values({num_points, num_dofs / bs, vs});
-    xt::xtensor<double, 2> point_basis_values({num_dofs / bs, vs});
+    xt::xtensor<double, 3> basis_values(
+        {num_points, num_dofs / bs, (std::size_t)vs});
+    xt::xtensor<double, 2> point_basis_values(
+        {basis_values.shape(0), basis_values.shape(1)});
 
     // Get geometry data
     const dolfinx::graph::AdjacencyList<std::int32_t>& x_dofmap
@@ -296,18 +300,20 @@ std::pair<std::vector<PetscScalar>, int> pack_coefficient_facet(
     xtl::span<const double> x_g = mesh->geometry().x();
 
     // Prepare geometry data structures
-    xt::xtensor<double, 2> X({num_points, tdim});
-    xt::xtensor<double, 3> J = xt::zeros<double>({num_points, gdim, tdim});
-    xt::xtensor<double, 3> K = xt::zeros<double>({num_points, tdim, gdim});
+    xt::xtensor<double, 2> X({num_points, (std::size_t)tdim});
+    xt::xtensor<double, 3> J
+        = xt::zeros<double>({num_points, (std::size_t)gdim, (std::size_t)tdim});
+    xt::xtensor<double, 3> K
+        = xt::zeros<double>({num_points, (std::size_t)tdim, (std::size_t)gdim});
     xt::xtensor<double, 1> detJ = xt::zeros<double>({num_points});
     xt::xtensor<double, 2> coordinate_dofs
-        = xt::zeros<double>({num_dofs_g, gdim});
+        = xt::zeros<double>({num_dofs_g, (std::size_t)gdim});
 
     // Get coordinate map
     const dolfinx::fem::CoordinateElement& cmap = mesh->geometry().cmap();
 
     xt::xtensor<double, 5> dphi_c(
-        {num_local_facets, tdim, num_points, num_dofs_g / bs, 1});
+        {num_local_facets, (std::size_t)tdim, num_points, num_dofs_g / bs, 1});
     for (std::size_t i = 0; i < num_local_facets; i++)
     {
       const xt::xarray<double>& q_facet = points[i];
@@ -329,7 +335,7 @@ std::pair<std::vector<PetscScalar>, int> pack_coefficient_facet(
                           xt::xall<std::size_t>>;
     auto push_forward_fn = element->map_fn<u_t, U_t, J_t, K_t>();
 
-    for (int facet = 0; facet < num_facets; facet++)
+    for (std::size_t facet = 0; facet < num_facets; facet++)
     {
 
       // NOTE Add two separate loops here, one for and one without dof
@@ -355,7 +361,7 @@ std::pair<std::vector<PetscScalar>, int> pack_coefficient_facet(
       for (std::size_t i = 0; i < num_dofs_g; ++i)
       {
         const int pos = 3 * x_dofs[i];
-        for (std::size_t j = 0; j < gdim; ++j)
+        for (int j = 0; j < gdim; ++j)
           coordinate_dofs(i, j) = x_g[pos + j];
       }
       auto dphi_ci = xt::view(dphi_c, local_index, xt::all(), xt::all(),
@@ -393,7 +399,7 @@ std::pair<std::vector<PetscScalar>, int> pack_coefficient_facet(
 
         for (std::size_t q = 0; q < num_points; ++q)
           for (std::size_t k = 0; k < bs; ++k)
-            for (std::size_t j = 0; j < vs; j++)
+            for (int j = 0; j < vs; j++)
               c[offset + q * (bs * vs) + k + j]
                   += basis_values(q, i, j) * data[pos_v + k];
       }
@@ -402,7 +408,7 @@ std::pair<std::vector<PetscScalar>, int> pack_coefficient_facet(
   else
   {
 
-    for (int facet = 0; facet < num_facets; facet++)
+    for (std::size_t facet = 0; facet < num_facets; facet++)
     { // Sum up quadrature contributions
       // FIXME: Assuming exterior facets
       // get cell/local facet index
@@ -416,8 +422,7 @@ std::pair<std::vector<PetscScalar>, int> pack_coefficient_facet(
       auto cell_facets = c_to_f->links(cell);
       auto local_facet
           = std::find(cell_facets.begin(), cell_facets.end(), global_facet);
-      const std::int32_t local_index
-          = std::distance(cell_facets.data(), local_facet);
+      const auto local_index = std::distance(cell_facets.data(), local_facet);
 
       int offset = cstride * facet;
       auto dofs = dofmap->cell_dofs(cell);
@@ -427,7 +432,7 @@ std::pair<std::vector<PetscScalar>, int> pack_coefficient_facet(
 
         for (std::size_t q = 0; q < num_points; ++q)
           for (std::size_t k = 0; k < bs; ++k)
-            for (std::size_t l = 0; l < vs; l++)
+            for (int l = 0; l < vs; l++)
             {
               c[offset + q * (bs * vs) + k + l]
                   += reference_basis_values(local_index, q, i, l)
@@ -449,12 +454,9 @@ std::pair<std::vector<PetscScalar>, int>
 pack_circumradius_facet(std::shared_ptr<const dolfinx::mesh::Mesh> mesh,
                         const xtl::span<const std::int32_t>& active_facets)
 {
-  // // Get mesh
-  // std::shared_ptr<const dolfinx::mesh::Mesh> mesh =
-  // coeff->function_space()->mesh(); assert(mesh);
-  const std::size_t tdim = mesh->topology().dim();
-  const std::size_t gdim = mesh->geometry().dim();
-  const std::size_t fdim = tdim - 1;
+  const int tdim = mesh->topology().dim();
+  const int gdim = mesh->geometry().dim();
+  const int fdim = tdim - 1;
   const std::int32_t num_facets = active_facets.size();
 
   // Connectivity to evaluate at quadrature points
@@ -492,17 +494,19 @@ pack_circumradius_facet(std::shared_ptr<const dolfinx::mesh::Mesh> mesh,
 
   // Prepare geometry data structures
   // xt::xtensor<double, 2> X({num_points, tdim});
-  xt::xtensor<double, 3> J = xt::zeros<double>({std::size_t(1), gdim, tdim});
-  xt::xtensor<double, 3> K = xt::zeros<double>({std::size_t(1), tdim, gdim});
+  xt::xtensor<double, 3> J = xt::zeros<double>(
+      {std::size_t(1), (std::size_t)gdim, (std::size_t)tdim});
+  xt::xtensor<double, 3> K = xt::zeros<double>(
+      {std::size_t(1), (std::size_t)tdim, (std::size_t)gdim});
   xt::xtensor<double, 1> detJ = xt::zeros<double>({std::size_t(1)});
   xt::xtensor<double, 2> coordinate_dofs
-      = xt::zeros<double>({num_dofs_g, gdim});
+      = xt::zeros<double>({num_dofs_g, (std::size_t)gdim});
 
   // Get coordinate map
   const dolfinx::fem::CoordinateElement& cmap = mesh->geometry().cmap();
 
   xt::xtensor<double, 5> dphi_c(
-      {num_local_facets, tdim, num_points, num_dofs_g, 1});
+      {num_local_facets, (std::size_t)tdim, num_points, num_dofs_g, 1});
   for (std::size_t i = 0; i < num_local_facets; i++)
   {
     const xt::xarray<double>& q_facet = points[i];
@@ -539,7 +543,7 @@ pack_circumradius_facet(std::shared_ptr<const dolfinx::mesh::Mesh> mesh,
     for (std::size_t i = 0; i < num_dofs_g; ++i)
     {
       const int pos = 3 * x_dofs[i];
-      for (std::size_t j = 0; j < gdim; ++j)
+      for (int j = 0; j < gdim; ++j)
         coordinate_dofs(i, j) = x_g[pos + j];
     }
 
@@ -559,7 +563,7 @@ pack_circumradius_facet(std::shared_ptr<const dolfinx::mesh::Mesh> mesh,
       double cellvolume
           = 0.5 * std::abs(detJ[0]); // reference triangle has area 0.5
       double a = 0, b = 0, c = 0;
-      for (std::size_t i = 0; i < gdim; i++)
+      for (int i = 0; i < gdim; i++)
       {
         a += (coordinate_dofs(0, i) - coordinate_dofs(1, i))
              * (coordinate_dofs(0, i) - coordinate_dofs(1, i));
@@ -578,7 +582,7 @@ pack_circumradius_facet(std::shared_ptr<const dolfinx::mesh::Mesh> mesh,
       double cellvolume
           = detJ[0] / 6; // reference tetrahedron has volume 1/6 = 0.5*1/3
       double a = 0, b = 0, c = 0, A = 0, B = 0, C = 0;
-      for (std::size_t i = 0; i < gdim; i++)
+      for (int i = 0; i < gdim; i++)
       {
         a += (coordinate_dofs(0, i) - coordinate_dofs(1, i))
              * (coordinate_dofs(0, i) - coordinate_dofs(1, i));
@@ -626,7 +630,7 @@ pack_circumradius_facet(std::shared_ptr<const dolfinx::mesh::Mesh> mesh,
 void pull_back(xt::xtensor<double, 3>& J, xt::xtensor<double, 3>& K,
                xt::xtensor<double, 1>& detJ, const xt::xtensor<double, 2>& x,
                xt::xtensor<double, 2>& X,
-               xt::xtensor<double, 2> coordinate_dofs,
+               const xt::xtensor<double, 2>& coordinate_dofs,
                std::shared_ptr<const dolfinx::fem::FiniteElement> element,
                const dolfinx::fem::CoordinateElement& cmap)
 {
@@ -812,9 +816,9 @@ get_basis_functions(xt::xtensor<double, 3>& J, xt::xtensor<double, 3>& K,
 xt::xtensor<double, 2>
 get_facet_normals(xt::xtensor<double, 3>& J, xt::xtensor<double, 3>& K,
                   xt::xtensor<double, 1>& detJ, const xt::xtensor<double, 2>& x,
-                  xt::xtensor<double, 2> coordinate_dofs,
+                  const xt::xtensor<double, 2>& coordinate_dofs,
                   const std::int32_t index,
-                  const xt::xtensor<std::int32_t, 1> facet_indices,
+                  const xt::xtensor<std::int32_t, 1>& facet_indices,
                   std::shared_ptr<const dolfinx::fem::FiniteElement> element,
                   const dolfinx::fem::CoordinateElement& cmap,
                   xt::xtensor<double, 2> facet_normals);

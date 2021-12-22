@@ -10,8 +10,8 @@ using namespace dolfinx_contact;
 xt::xtensor<double, 2> dolfinx_contact::get_facet_normals(
     xt::xtensor<double, 3>& J, xt::xtensor<double, 3>& K,
     xt::xtensor<double, 1>& detJ, const xt::xtensor<double, 2>& x,
-    xt::xtensor<double, 2> coordinate_dofs, const std::int32_t index,
-    const xt::xtensor<std::int32_t, 1> facet_indices,
+    const xt::xtensor<double, 2>& coordinate_dofs, const std::int32_t index,
+    const xt::xtensor<std::int32_t, 1>& facet_indices,
     std::shared_ptr<const dolfinx::fem::FiniteElement> element,
     const dolfinx::fem::CoordinateElement& cmap,
     xt::xtensor<double, 2> facet_normals)
