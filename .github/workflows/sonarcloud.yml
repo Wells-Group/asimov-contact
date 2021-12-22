@@ -64,17 +64,12 @@ jobs:
           repository: FEniCS/dolfinx
           ref: main
 
-      - name: Configure C++ (dolfinx)
+      - name: Install DOLFINx
         run: |
           cmake -G Ninja -DCMAKE_BUILD_TYPE="Release" -B build-dolfinx -S ./dolfinx/cpp/
-
-      - name: Build and install C++ library (dolfinx)
-        run: |
           cmake --build build-dolfinx
           cmake --install build-dolfinx
-
-      - name: Build Python interface (dolfinx)
-        run: BUILD_TYPE="Release" python3 -m pip -v install ./dolfinx/python/
+          BUILD_TYPE="Release" python3 -m pip -v install ./dolfinx/python/
 
       - name: Get Custom assemblers
         uses: actions/checkout@v2
@@ -82,7 +77,13 @@ jobs:
           path: ./asimov-custom-assemblers
           repository: Wells-Group/asimov-custom-assemblers
           ref: dokken/pkg-config
-
+   
+      - name: Install custom assemblers
+        run: |
+          cmake -G Ninja -DCMAKE_BUILD_TYPE=Debug -B build-cuas -S ./asimov-custom-assemblers/cpp
+          ninja -C build-cuas install
+          BUILD_TYPE=Debug python3 -m pip -v install ./asimov-custom-assemblers/python/
+      
       - name: Run build-wrapper
         run: |
           cmake -S ./cpp -B build-contact
