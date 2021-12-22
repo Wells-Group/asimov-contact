@@ -17,7 +17,7 @@
 #include <dolfinx/mesh/Mesh.h>
 #include <dolfinx/mesh/MeshTags.h>
 #include <dolfinx/mesh/cell_types.h>
-#include <dolfinx_contact/utils.hpp>
+#include <dolfinx_contact/utils.h>
 #include <dolfinx_cuas/QuadratureRule.hpp>
 #include <dolfinx_cuas/math.hpp>
 #include <dolfinx_cuas/utils.hpp>
@@ -1421,7 +1421,7 @@ public:
         // Compute outward unit normal in point = Pi(x)
         // Note: in the affine case potential gains can be made
         //       if the cells are sorted like in pack_test_functions
-        auto normals = dolfinx_contact::get_facet_normals(
+        xt::xtensor<double, 2> normals = dolfinx_contact::get_facet_normals(
             J, K, detJ, point, coordinate_dofs, linked_cell, facet_indices,
             element, cmap, facet_normals);
 

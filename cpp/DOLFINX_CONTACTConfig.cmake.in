@@ -1,0 +1,19 @@
+# - Build details for DOLFINX_CONTACT: An extension to dolfinx to solve unbiased contact problems
+#
+
+@PACKAGE_INIT@
+
+# Compilers
+set_and_check(DOLFINX_CONTACT_CXX_COMPILER "@CMAKE_CXX_COMPILER@")
+
+include(CMakeFindDependencyMacro)
+find_dependency(DOLFINX REQUIRED)
+find_dependency(DOLFINX_CUAS REQUIRED)
+find_dependency(MPI REQUIRED)
+
+if (NOT TARGET dolfinx_contact)
+  include("${CMAKE_CURRENT_LIST_DIR}/DOLFINX_CONTACTTargets.cmake")
+endif()
+
+
+check_required_components(DOLFINX_CONTACT)

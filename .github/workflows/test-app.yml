@@ -85,7 +85,7 @@ jobs:
         with:
           path: ./asimov-custom-assemblers
           repository: Wells-Group/asimov-custom-assemblers
-          ref: main
+          ref: dokken/pkg-config
 
       - name: Install custom assemblers (C++)
         run: |
