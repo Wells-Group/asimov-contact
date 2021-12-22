@@ -14,13 +14,15 @@ find_package(pybind11 REQUIRED CONFIG HINTS ${PYBIND11_DIR} ${PYBIND11_ROOT}
 
 
 find_package(DOLFINX REQUIRED)
-
+find_package(DOLFINX_CONTACT REQUIRED)
 
 # Create the binding library
 pybind11_add_module(cpp SHARED 
   dolfinx_contact/wrappers.cpp)
 
 
+
+target_link_libraries(cpp PRIVATE dolfinx_contact)
 target_link_libraries(cpp PUBLIC pybind11::module)
 target_link_libraries(cpp PUBLIC dolfinx)
 
