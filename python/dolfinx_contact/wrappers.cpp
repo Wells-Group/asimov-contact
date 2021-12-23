@@ -10,6 +10,7 @@
 #include <dolfinx/la/PETScMatrix.h>
 #include <dolfinx/mesh/MeshTags.h>
 #include <dolfinx_contact/Contact.hpp>
+#include <dolfinx_contact/coefficients.h>
 #include <dolfinx_contact/contact_kernels.hpp>
 #include <dolfinx_contact/utils.h>
 #include <dolfinx_cuas/kernelwrapper.h>

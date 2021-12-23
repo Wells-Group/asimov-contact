@@ -55,10 +55,11 @@ target_link_libraries(dolfinx_contact PUBLIC Basix::basix)
 target_link_libraries(dolfinx_contact PUBLIC dolfinx)
 
 include(GNUInstallDirs)
-install(FILES Contact.hpp contact_kernels.hpp utils.h DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/dolfinx_contact COMPONENT Development)
+install(FILES Contact.hpp contact_kernels.hpp utils.h coefficients.h geometric_quantities.h DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/dolfinx_contact COMPONENT Development)
 
 target_sources(dolfinx_contact PRIVATE
-  ${CMAKE_CURRENT_SOURCE_DIR}/utils.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/coefficients.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/geometric_quantities.cpp
   )
 
 # Set target include location (for build and installed)
