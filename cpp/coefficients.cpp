@@ -90,7 +90,7 @@ dolfinx_contact::pack_coefficient_quadrature(
   // Get fetch local-index function
   auto fetch_cell = [&active_entities](const std::size_t i)
   {
-    std::pair<std::int32_t, int> pair(active_entities[i], (int)0);
+    std::pair<std::int32_t, int> pair(active_entities[i], 0);
     return pair;
   };
 
@@ -196,11 +196,11 @@ dolfinx_contact::pack_coefficient_quadrature(
       // Get cell geometry (coordinate dofs)
       auto x_dofs = x_dofmap.links(cell);
 
-      for (std::size_t i = 0; i < num_dofs_g; ++i)
+      for (std::size_t k = 0; k < num_dofs_g; ++k)
       {
         const int pos = 3 * x_dofs[i];
         for (int j = 0; j < gdim; ++j)
-          coordinate_dofs(i, j) = x_g[pos + j];
+          coordinate_dofs(k, j) = x_g[pos + j];
       }
       auto dphi_ci = xt::view(dphi_c, entity_index, xt::all(), xt::all(),
                               xt::all(), xt::all());
