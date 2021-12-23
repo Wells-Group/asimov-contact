@@ -25,18 +25,17 @@ def test_circumradius(dim):
     V = FunctionSpace(mesh, ufl.VectorElement("CG", mesh.ufl_cell(), 1))
     u = Function(V)
     if dim == 3:
-        u.interpolate(lambda x: (0.1*(x[1]>0.5), 0.1*np.sin(2*np.pi*x[2]), np.zeros(x.shape[1])))
+        u.interpolate(lambda x: (0.1 * (x[1] > 0.5), 0.1 * np.sin(2 * np.pi * x[2]), np.zeros(x.shape[1])))
     else:
-        u.interpolate(lambda x: (0.1*np.cos(x[1])*(x[0]>0.2), 0.1*x[1]+0.1*np.sin(2*np.pi*x[0])))
-    mesh.geometry.x[:,:mesh.geometry.dim] += u.compute_point_values()
-    
+        u.interpolate(lambda x: (0.1 * np.cos(x[1]) * (x[0] > 0.2), 0.1 * x[1] + 0.1 * np.sin(2 * np.pi * x[0])))
+    mesh.geometry.x[:, :mesh.geometry.dim] += u.compute_point_values()
 
     mesh.topology.create_connectivity(dim - 1, dim)
     f_to_c = mesh.topology.connectivity(dim - 1, dim)
 
     # Find facets on boundary to integrate over
 
-    facets  = locate_entities_boundary(
+    facets = locate_entities_boundary(
         mesh, mesh.topology.dim - 1, lambda x: np.full(x.shape[1], True, dtype=bool))
 
     sorted = np.argsort(facets)
