@@ -29,4 +29,13 @@ std::pair<std::vector<PetscScalar>, int> pack_coefficient_quadrature(
     const int q_degree, dolfinx::fem::IntegralType integral,
     const xtl::span<const std::int32_t>& active_entities);
 
+/// Prepare circumradii of triangle/tetrahedron for assembly with custom
+/// kernels by packing them as an array, where the j*cstride to the ith facet
+/// int active_facets.
+/// @param[in] mesh
+/// @param[in] active_facets List of active facets
+/// @param[out] c The packed coefficients and the number of coeffs per facet
+std::pair<std::vector<PetscScalar>, int>
+pack_circumradius_facet(std::shared_ptr<const dolfinx::mesh::Mesh> mesh,
+                        const xtl::span<const std::int32_t>& active_facets);
 } // namespace dolfinx_contact
