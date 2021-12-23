@@ -282,7 +282,7 @@ std::pair<std::vector<PetscScalar>, int> pack_coefficient_facet(
   }
 
   std::vector<PetscScalar> c(num_facets * vs * bs * num_points, 0.0);
-  const int cstride = vs * bs * num_points;
+  const std::size_t cstride = vs * bs * num_points;
   if (needs_dof_transformations)
   {
     // Prepare basis function data structures
@@ -353,8 +353,7 @@ std::pair<std::vector<PetscScalar>, int> pack_coefficient_facet(
       auto cell_facets = c_to_f->links(cell);
       auto local_facet
           = std::find(cell_facets.begin(), cell_facets.end(), global_facet);
-      const std::int32_t local_index
-          = std::distance(cell_facets.data(), local_facet);
+      const auto local_index = std::distance(cell_facets.data(), local_facet);
       // Get cell geometry (coordinate dofs)
       auto x_dofs = x_dofmap.links(cell);
 
@@ -391,16 +390,15 @@ std::pair<std::vector<PetscScalar>, int> pack_coefficient_facet(
       }
 
       // Sum up quadrature contributions
-      int offset = cstride * facet;
       auto dofs = dofmap->cell_dofs(cell);
       for (std::size_t i = 0; i < dofs.size(); ++i)
       {
-        const int pos_v = bs * dofs[i];
+        const int pos_v = (int)bs * dofs[i];
 
         for (std::size_t q = 0; q < num_points; ++q)
           for (std::size_t k = 0; k < bs; ++k)
             for (int j = 0; j < vs; j++)
-              c[offset + q * (bs * vs) + k + j]
+              c[cstride * facet + q * (bs * vs) + k + j]
                   += basis_values(q, i, j) * data[pos_v + k];
       }
     }
@@ -424,17 +422,16 @@ std::pair<std::vector<PetscScalar>, int> pack_coefficient_facet(
           = std::find(cell_facets.begin(), cell_facets.end(), global_facet);
       const auto local_index = std::distance(cell_facets.data(), local_facet);
 
-      int offset = cstride * facet;
       auto dofs = dofmap->cell_dofs(cell);
       for (std::size_t i = 0; i < dofs.size(); ++i)
       {
-        const int pos_v = bs * dofs[i];
+        const int pos_v = (int)bs * dofs[i];
 
         for (std::size_t q = 0; q < num_points; ++q)
           for (std::size_t k = 0; k < bs; ++k)
             for (int l = 0; l < vs; l++)
             {
-              c[offset + q * (bs * vs) + k + l]
+              c[cstride * facet + q * (bs * vs) + k + l]
                   += reference_basis_values(local_index, q, i, l)
                      * data[pos_v + k];
             }
@@ -457,7 +454,7 @@ pack_circumradius_facet(std::shared_ptr<const dolfinx::mesh::Mesh> mesh,
   const int tdim = mesh->topology().dim();
   const int gdim = mesh->geometry().dim();
   const int fdim = tdim - 1;
-  const std::int32_t num_facets = active_facets.size();
+  const std::size_t num_facets = active_facets.size();
 
   // Connectivity to evaluate at quadrature points
   // FIXME: Move create_connectivity out of this function and call before
@@ -469,20 +466,17 @@ pack_circumradius_facet(std::shared_ptr<const dolfinx::mesh::Mesh> mesh,
 
   // Tabulate element at quadrature points
   // NOTE: Assuming no derivatives for now, should be reconsidered later
-  const std::string cell_type
-      = dolfinx::mesh::to_string(mesh->topology().cell_type());
+  const dolfinx::mesh::CellType cell_type = mesh->topology().cell_type();
 
   // Quadrature points for piecewise constant
-  dolfinx_cuas::QuadratureRule q_rule(mesh->topology().cell_type(), 0, fdim);
+  dolfinx_cuas::QuadratureRule q_rule(cell_type, 0, fdim);
+
   // FIXME: This does not work for prism elements
   const std::vector<double> weights = q_rule.weights()[0];
   const std::vector<xt::xarray<double>> points = q_rule.points();
 
   const std::size_t num_points = weights.size();
   const std::size_t num_local_facets = points.size();
-
-  std::vector<PetscScalar> c(num_facets, 0.0);
-  const int cstride = 1;
 
   // Get geometry data
   const dolfinx::graph::AdjacencyList<std::int32_t>& x_dofmap
@@ -493,11 +487,8 @@ pack_circumradius_facet(std::shared_ptr<const dolfinx::mesh::Mesh> mesh,
   xtl::span<const double> x_g = mesh->geometry().x();
 
   // Prepare geometry data structures
-  // xt::xtensor<double, 2> X({num_points, tdim});
   xt::xtensor<double, 3> J = xt::zeros<double>(
       {std::size_t(1), (std::size_t)gdim, (std::size_t)tdim});
-  xt::xtensor<double, 3> K = xt::zeros<double>(
-      {std::size_t(1), (std::size_t)tdim, (std::size_t)gdim});
   xt::xtensor<double, 1> detJ = xt::zeros<double>({std::size_t(1)});
   xt::xtensor<double, 2> coordinate_dofs
       = xt::zeros<double>({num_dofs_g, (std::size_t)gdim});
@@ -517,7 +508,12 @@ pack_circumradius_facet(std::shared_ptr<const dolfinx::mesh::Mesh> mesh,
                        xt::all(), xt::all(), xt::all());
   }
 
-  for (int facet = 0; facet < num_facets; facet++)
+  // Prepare output variables
+  std::vector<PetscScalar> circumradius;
+  circumradius.reserve(num_facets);
+  const int cstride = 1;
+
+  for (auto facet : active_facets)
   {
 
     // NOTE Add two separate loops here, one for and one without dof
@@ -525,21 +521,18 @@ pack_circumradius_facet(std::shared_ptr<const dolfinx::mesh::Mesh> mesh,
 
     // FIXME: Assuming exterior facets
     // get cell/local facet index
-    int global_facet = active_facets[facet]; // extract facet
-    auto cells = f_to_c->links(global_facet);
+    auto cells = f_to_c->links(facet);
     // since the facet is on the boundary it should only link to one cell
     assert(cells.size() == 1);
     auto cell = cells[0]; // extract cell
 
     // find local index of facet
     auto cell_facets = c_to_f->links(cell);
-    auto local_facet
-        = std::find(cell_facets.begin(), cell_facets.end(), global_facet);
-    const std::int32_t local_index
-        = std::distance(cell_facets.data(), local_facet);
+    auto local_facet = std::find(cell_facets.begin(), cell_facets.end(), facet);
+    const auto local_index = std::distance(cell_facets.data(), local_facet);
+
     // Get cell geometry (coordinate dofs)
     auto x_dofs = x_dofmap.links(cell);
-
     for (std::size_t i = 0; i < num_dofs_g; ++i)
     {
       const int pos = 3 * x_dofs[i];
@@ -547,71 +540,91 @@ pack_circumradius_facet(std::shared_ptr<const dolfinx::mesh::Mesh> mesh,
         coordinate_dofs(i, j) = x_g[pos + j];
     }
 
+    // Compute determinant of Jacobian which is used to compute the area/volume
+    // of the cell
     auto dphi_ci = xt::view(dphi_c, local_index, xt::all(), xt::all(),
                             xt::all(), xt::all());
-
     J.fill(0);
     auto _J = xt::view(J, 0, xt::all(), xt::all());
     xt::xtensor<double, 2> dphi
         = xt::view(dphi_c, local_index, xt::all(), 0, xt::all(), 0);
     cmap.compute_jacobian(dphi, coordinate_dofs, _J);
-    cmap.compute_jacobian_inverse(_J, xt::view(K, 0, xt::all(), xt::all()));
     detJ[0] = cmap.compute_jacobian_determinant(_J);
-    double h = 0;
-    if (cell_type == "triangle")
-    {
-      double cellvolume
-          = 0.5 * std::abs(detJ[0]); // reference triangle has area 0.5
-      double a = 0, b = 0, c = 0;
-      for (int i = 0; i < gdim; i++)
-      {
-        a += (coordinate_dofs(0, i) - coordinate_dofs(1, i))
-             * (coordinate_dofs(0, i) - coordinate_dofs(1, i));
-        b += (coordinate_dofs(1, i) - coordinate_dofs(2, i))
-             * (coordinate_dofs(1, i) - coordinate_dofs(2, i));
-        c += (coordinate_dofs(2, i) - coordinate_dofs(0, i))
-             * (coordinate_dofs(2, i) - coordinate_dofs(0, i));
-      }
-      a = std::sqrt(a);
-      b = std::sqrt(b);
-      c = std::sqrt(c);
-      h = a * b * c / (4 * cellvolume);
-    }
-    else if (cell_type == "tetrahedron")
-    {
-      double cellvolume
-          = detJ[0] / 6; // reference tetrahedron has volume 1/6 = 0.5*1/3
-      double a = 0, b = 0, c = 0, A = 0, B = 0, C = 0;
-      for (int i = 0; i < gdim; i++)
-      {
-        a += (coordinate_dofs(0, i) - coordinate_dofs(1, i))
-             * (coordinate_dofs(0, i) - coordinate_dofs(1, i));
-        b += (coordinate_dofs(0, i) - coordinate_dofs(2, i))
-             * (coordinate_dofs(0, i) - coordinate_dofs(2, i));
-        c += (coordinate_dofs(0, i) - coordinate_dofs(3, i))
-             * (coordinate_dofs(0, i) - coordinate_dofs(3, i));
-        A += (coordinate_dofs(2, i) - coordinate_dofs(3, i))
-             * (coordinate_dofs(2, i) - coordinate_dofs(3, i));
-        B += (coordinate_dofs(1, i) - coordinate_dofs(3, i))
-             * (coordinate_dofs(1, i) - coordinate_dofs(3, i));
-        C += (coordinate_dofs(1, i) - coordinate_dofs(2, i))
-             * (coordinate_dofs(1, i) - coordinate_dofs(2, i));
-      }
-      a = std::sqrt(a);
-      b = std::sqrt(b);
-      c = std::sqrt(c);
-      A = std::sqrt(A);
-      B = std::sqrt(B);
-      C = std::sqrt(C);
-      h = std::sqrt((a * A + b * B + c * C) * (a * A + b * B - c * C)
-                    * (a * A - b * B + c * C) * (b * B + c * C - a * A))
-          / (24 * cellvolume);
-    }
-    // Sum up quadrature contributions
-    c[facet] = h;
-  }
 
-  return {std::move(c), cstride};
+    double h = 0;
+    switch (cell_type)
+    {
+    case dolfinx::mesh::CellType::triangle:
+    {
+      // Formula for circumradius of a triangle with sides with length a, b, c
+      // is R = a b c / (4 A) where A is the area of the triangle
+      const double ref_area = basix::cell::volume(basix::cell::type::triangle);
+      double area = ref_area * std::abs(detJ[0]);
+
+      // Compute the lenghts of each side of the cell
+      std::array<double, 3> sides
+          = {0, 0, 0}; // Array to hold lenghts of sides of triangle
+      for (int i = 0; i < gdim; i++)
+      {
+        sides[0] += std::pow(coordinate_dofs(0, i) - coordinate_dofs(1, i), 2);
+        sides[1] += std::pow(coordinate_dofs(1, i) - coordinate_dofs(2, i), 2);
+        sides[2] += std::pow(coordinate_dofs(2, i) - coordinate_dofs(0, i), 2);
+      }
+      std::for_each(sides.begin(), sides.end(),
+                    [](double& side) { side = std::sqrt(side); });
+
+      h = sides[0] * sides[1] * sides[2] / (4 * area);
+      break;
+    }
+    case dolfinx::mesh::CellType::tetrahedron:
+    {
+      // Formula for circunradius of a tetrahedron with volume V.
+      // Given three edges meeting at a vertex with length a, b, c,
+      // and opposite edges with corresponding length A, B, C we have that the
+      // circumradius
+      // R = sqrt((aA + bB + cC)(aA+bB-cC)(aA-bB+cC)(-aA +bB+cC))/24V
+      const double ref_volume
+          = basix::cell::volume(basix::cell::type::tetrahedron);
+      double cellvolume = detJ[0] * ref_volume;
+
+      // Edges ordered as a, b, c, A, B, C
+      std::array<double, 6> edges = {0, 0, 0, 0, 0, 0};
+      for (int i = 0; i < gdim; i++)
+      {
+        // Accummulate a^2, b^2, c^2
+        edges[0] += std::pow(coordinate_dofs(0, i) - coordinate_dofs(1, i), 2);
+        edges[1] += std::pow(coordinate_dofs(0, i) - coordinate_dofs(2, i), 2);
+        edges[2] += std::pow(coordinate_dofs(0, i) - coordinate_dofs(3, i), 2);
+
+        // Accumulate A^2, B^2, C^2
+        edges[3] += std::pow(coordinate_dofs(2, i) - coordinate_dofs(3, i), 2);
+        edges[4] += std::pow(coordinate_dofs(1, i) - coordinate_dofs(3, i), 2);
+        edges[5] += std::pow(coordinate_dofs(1, i) - coordinate_dofs(2, i), 2);
+      }
+      // Compute length of each edge
+      std::for_each(edges.begin(), edges.end(),
+                    [](double& edge) { edge = std::sqrt(edge); });
+
+      // Compute temporary variables
+      const double aA = edges[0] * edges[3];
+      const double bB = edges[1] * edges[4];
+      const double cC = edges[2] * edges[5];
+
+      // Compute circumradius
+      h = std::sqrt((aA + bB + cC) * (aA + bB - cC) * (aA - bB + cC)
+                    * (-aA + bB + cC))
+          / (24 * cellvolume);
+      break;
+    }
+    default:
+      throw std::runtime_error("Unsupported cell_type "
+                               + dolfinx::mesh::to_string(cell_type));
+    }
+
+    // Sum up quadrature contributions
+    circumradius.push_back(h);
+  }
+  return {std::move(circumradius), cstride};
 }
 /// This function computes the pull back for a set of points x on a cell
 /// described by coordinate_dofs as well as the corresponding Jacobian, their
@@ -836,9 +849,9 @@ int sgn(T val)
 
 /// @param[in] cells: the cells to be sorted
 /// @param[in, out] perm: the permutation for the sorted cells
-/// @param[out] pair(unique_cells, offsets): unique_cells is a vector of sorted
-/// cells with all duplicates deleted, offsets contains the start and end for
-/// each unique value in the sorted vector with all duplicates
+/// @param[out] pair(unique_cells, offsets): unique_cells is a vector of
+/// sorted cells with all duplicates deleted, offsets contains the start and
+/// end for each unique value in the sorted vector with all duplicates
 // Example: cells = [5, 7, 6, 5]
 //          unique_cells = [5, 6, 7]
 //          offsets = [0, 2, 3, 4]
