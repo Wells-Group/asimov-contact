@@ -128,10 +128,12 @@ dolfinx_contact::pack_coefficient_quadrature(
         xt::xtensor<double, 2> dphi
             = xt::view(dphi_c, xt::all(), q, xt::all(), 0);
         auto _J = xt::view(J, q, xt::all(), xt::all());
-        cmap.compute_jacobian(dphi, coordinate_dofs, _J);
+        dolfinx::fem::CoordinateElement::compute_jacobian(dphi, coordinate_dofs,
+                                                          _J);
         auto _K = xt::view(K, q, xt::all(), xt::all());
-        cmap.compute_jacobian_inverse(_J, _K);
-        detJ[q] = cmap.compute_jacobian_determinant(_J);
+        dolfinx::fem::CoordinateElement::compute_jacobian_inverse(_J, _K);
+        detJ[q]
+            = dolfinx::fem::CoordinateElement::compute_jacobian_determinant(_J);
 
         // Permute the reference values to account for the cell's orientation
         point_basis_values
@@ -346,10 +348,12 @@ dolfinx_contact::pack_coefficient_facet(
         xt::xtensor<double, 2> dphi
             = xt::view(dphi_ci, xt::all(), q, xt::all(), 0);
         auto _J = xt::view(J, q, xt::all(), xt::all());
-        cmap.compute_jacobian(dphi, coordinate_dofs, _J);
+        dolfinx::fem::CoordinateElement::compute_jacobian(dphi, coordinate_dofs,
+                                                          _J);
         auto _K = xt::view(K, q, xt::all(), xt::all());
-        cmap.compute_jacobian_inverse(_J, _K);
-        detJ[q] = cmap.compute_jacobian_determinant(_J);
+        dolfinx::fem::CoordinateElement::compute_jacobian_inverse(_J, _K);
+        detJ[q]
+            = dolfinx::fem::CoordinateElement::compute_jacobian_determinant(_J);
         // Permute the reference values to account for the cell's orientation
         point_basis_values = xt::view(reference_basis_values, local_index, q,
                                       xt::all(), xt::all());

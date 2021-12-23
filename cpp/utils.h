@@ -129,8 +129,9 @@ pack_circumradius_facet(std::shared_ptr<const dolfinx::mesh::Mesh> mesh,
     auto _J = xt::view(J, 0, xt::all(), xt::all());
     xt::xtensor<double, 2> dphi
         = xt::view(dphi_c, local_index, xt::all(), 0, xt::all(), 0);
-    cmap.compute_jacobian(dphi, coordinate_dofs, _J);
-    detJ[0] = cmap.compute_jacobian_determinant(_J);
+    dolfinx::fem::CoordinateElement::compute_jacobian(dphi, coordinate_dofs,
+                                                      _J);
+    detJ[0] = dolfinx::fem::CoordinateElement::compute_jacobian_determinant(_J);
 
     double h = 0;
     switch (cell_type)
@@ -246,8 +247,8 @@ void pull_back(xt::xtensor<double, 3>& J, xt::xtensor<double, 3>& K,
   {
     cmap.tabulate(1, X0, data);
     dphi = xt::view(data, xt::range(1, tdim + 1), 0, xt::all(), 0);
-    cmap.compute_jacobian(dphi, cell_geometry, J);
-    cmap.compute_jacobian_inverse(J, K);
+    dolfinx::fem::CoordinateElement::compute_jacobian(dphi, cell_geometry, J);
+    dolfinx::fem::CoordinateElement::compute_jacobian_inverse(J, K);
     cmap.pull_back_affine(X, K, cmap.x0(cell_geometry), x);
   };
 
@@ -259,7 +260,7 @@ void pull_back(xt::xtensor<double, 3>& J, xt::xtensor<double, 3>& K,
     J.fill(0);
     pull_back_affine(X, coordinate_dofs, xt::view(J, 0, xt::all(), xt::all()),
                      xt::view(K, 0, xt::all(), xt::all()), x);
-    detJ[0] = cmap.compute_jacobian_determinant(
+    detJ[0] = dolfinx::fem::CoordinateElement::compute_jacobian_determinant(
         xt::view(J, 0, xt::all(), xt::all()));
     for (std::size_t p = 1; p < num_points; ++p)
     {
@@ -279,9 +280,12 @@ void pull_back(xt::xtensor<double, 3>& J, xt::xtensor<double, 3>& K,
     {
       auto _J = xt::view(J, p, xt::all(), xt::all());
       dphi = xt::view(phi, xt::range(1, tdim + 1), p, xt::all(), 0);
-      cmap.compute_jacobian(dphi, coordinate_dofs, _J);
-      cmap.compute_jacobian_inverse(_J, xt::view(K, p, xt::all(), xt::all()));
-      detJ[p] = cmap.compute_jacobian_determinant(_J);
+      dolfinx::fem::CoordinateElement::compute_jacobian(dphi, coordinate_dofs,
+                                                        _J);
+      dolfinx::fem::CoordinateElement::compute_jacobian_inverse(
+          _J, xt::view(K, p, xt::all(), xt::all()));
+      detJ[p]
+          = dolfinx::fem::CoordinateElement::compute_jacobian_determinant(_J);
     }
   }
 }

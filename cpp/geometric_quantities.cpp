@@ -45,8 +45,9 @@ xt::xtensor<double, 2> dolfinx_contact::push_forward_facet_normal(
     auto _K = xt::view(K, 0, xt::all(), xt::all());
     cmap.tabulate(1, X, phi);
     dphi = xt::view(phi, xt::range(1, tdim + 1), 0, xt::all(), 0);
-    cmap.compute_jacobian(dphi, coordinate_dofs, _J);
-    cmap.compute_jacobian_inverse(_J, _K);
+    dolfinx::fem::CoordinateElement::compute_jacobian(dphi, coordinate_dofs,
+                                                      _J);
+    dolfinx::fem::CoordinateElement::compute_jacobian_inverse(_J, _K);
     for (std::size_t p = 1; p < num_points; ++p)
     {
       xt::view(J, p, xt::all(), xt::all()) = _J;
@@ -65,8 +66,10 @@ xt::xtensor<double, 2> dolfinx_contact::push_forward_facet_normal(
     {
       dphi = xt::view(phi, xt::range(1, tdim + 1), p, xt::all(), 0);
       auto _J = xt::view(J, p, xt::all(), xt::all());
-      cmap.compute_jacobian(dphi, coordinate_dofs, _J);
-      cmap.compute_jacobian_inverse(_J, xt::view(K, p, xt::all(), xt::all()));
+      dolfinx::fem::CoordinateElement::compute_jacobian(dphi, coordinate_dofs,
+                                                        _J);
+      dolfinx::fem::CoordinateElement::compute_jacobian_inverse(
+          _J, xt::view(K, p, xt::all(), xt::all()));
     }
   }
 
