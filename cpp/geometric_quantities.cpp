@@ -93,3 +93,80 @@ xt::xtensor<double, 2> dolfinx_contact::push_forward_facet_normal(
   }
   return normals;
 }
+
+//-----------------------------------------------------------------------------
+double dolfinx_contact::compute_circumradius(
+    std::shared_ptr<const dolfinx::mesh::Mesh> mesh, double detJ,
+    const xt::xtensor<double, 2> coordinate_dofs)
+{
+  const dolfinx::mesh::CellType cell_type = mesh->topology().cell_type();
+  const int gdim = mesh->geometry().dim();
+
+  switch (cell_type)
+  {
+  case dolfinx::mesh::CellType::triangle:
+  {
+    // Formula for circumradius of a triangle with sides with length a, b, c
+    // is R = a b c / (4 A) where A is the area of the triangle
+    const double ref_area = basix::cell::volume(basix::cell::type::triangle);
+    double area = ref_area * std::abs(detJ);
+
+    // Compute the lenghts of each side of the cell
+    std::array<double, 3> sides
+        = {0, 0, 0}; // Array to hold lenghts of sides of triangle
+    for (int i = 0; i < gdim; i++)
+    {
+      sides[0] += std::pow(coordinate_dofs(0, i) - coordinate_dofs(1, i), 2);
+      sides[1] += std::pow(coordinate_dofs(1, i) - coordinate_dofs(2, i), 2);
+      sides[2] += std::pow(coordinate_dofs(2, i) - coordinate_dofs(0, i), 2);
+    }
+    std::for_each(sides.begin(), sides.end(),
+                  [](double& side) { side = std::sqrt(side); });
+
+    return sides[0] * sides[1] * sides[2] / (4 * area);
+  }
+  case dolfinx::mesh::CellType::tetrahedron:
+  {
+    // Formula for circunradius of a tetrahedron with volume V.
+    // Given three edges meeting at a vertex with length a, b, c,
+    // and opposite edges with corresponding length A, B, C we have that the
+    // circumradius
+    // R = sqrt((aA + bB + cC)(aA+bB-cC)(aA-bB+cC)(-aA +bB+cC))/24V
+    const double ref_volume
+        = basix::cell::volume(basix::cell::type::tetrahedron);
+    double cellvolume = detJ * ref_volume;
+
+    // Edges ordered as a, b, c, A, B, C
+    std::array<double, 6> edges = {0, 0, 0, 0, 0, 0};
+    for (int i = 0; i < gdim; i++)
+    {
+      // Accummulate a^2, b^2, c^2
+      edges[0] += std::pow(coordinate_dofs(0, i) - coordinate_dofs(1, i), 2);
+      edges[1] += std::pow(coordinate_dofs(0, i) - coordinate_dofs(2, i), 2);
+      edges[2] += std::pow(coordinate_dofs(0, i) - coordinate_dofs(3, i), 2);
+
+      // Accumulate A^2, B^2, C^2
+      edges[3] += std::pow(coordinate_dofs(2, i) - coordinate_dofs(3, i), 2);
+      edges[4] += std::pow(coordinate_dofs(1, i) - coordinate_dofs(3, i), 2);
+      edges[5] += std::pow(coordinate_dofs(1, i) - coordinate_dofs(2, i), 2);
+    }
+    // Compute length of each edge
+    std::for_each(edges.begin(), edges.end(),
+                  [](double& edge) { edge = std::sqrt(edge); });
+
+    // Compute temporary variables
+    const double aA = edges[0] * edges[3];
+    const double bB = edges[1] * edges[4];
+    const double cC = edges[2] * edges[5];
+
+    // Compute circumradius
+    double h = std::sqrt((aA + bB + cC) * (aA + bB - cC) * (aA - bB + cC)
+                         * (-aA + bB + cC))
+               / (24 * cellvolume);
+    return h;
+  }
+  default:
+    throw std::runtime_error("Unsupported cell_type "
+                             + dolfinx::mesh::to_string(cell_type));
+  }
+}

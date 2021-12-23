@@ -7,8 +7,8 @@
 #pragma once
 #include <dolfinx/fem/CoordinateElement.h>
 #include <dolfinx/fem/FiniteElement.h>
+#include <dolfinx/mesh/Mesh.h>
 #include <xtensor/xtensor.hpp>
-
 namespace dolfinx_contact
 {
 
@@ -35,4 +35,16 @@ push_forward_facet_normal(const xt::xtensor<double, 2>& x,
                           const xt::xtensor<std::int32_t, 1>& facet_indices,
                           const dolfinx::fem::CoordinateElement& cmap,
                           const xt::xtensor<double, 2>& reference_normals);
+
+/// Compute circumradius for a cell with given coordinates and determinant of
+/// Jacobian
+/// @param[in] mesh The mesh
+/// @param[in] detJ The determinant of the Jacobian of the mapping to the
+/// reference cell
+/// @param[in] coordinate_dofs The cell geometry
+/// @returns The circumradius of the cell
+double compute_circumradius(std::shared_ptr<const dolfinx::mesh::Mesh> mesh,
+                            double detJ,
+                            const xt::xtensor<double, 2> coordinate_dofs);
+
 } // namespace dolfinx_contact
