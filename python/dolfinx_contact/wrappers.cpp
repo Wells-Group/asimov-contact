@@ -186,23 +186,13 @@ PYBIND11_MODULE(cpp, m)
       .value("Jac", dolfinx_contact::Kernel::Jac);
   m.def("pack_coefficient_quadrature",
         [](std::shared_ptr<const dolfinx::fem::Function<PetscScalar>> coeff,
-           int q)
+           int q, dolfinx::fem::IntegralType integral,
+           const py::array_t<std::int32_t, py::array::c_style>& active_entities)
         {
-          auto [coeffs, cstride]
-              = dolfinx_contact::pack_coefficient_quadrature(coeff, q);
-          int shape0 = cstride == 0 ? 0 : coeffs.size() / cstride;
-          return dolfinx_wrappers::as_pyarray(std::move(coeffs),
-                                              std::array{shape0, cstride});
-        });
-  m.def("pack_coefficient_facet",
-        [](std::shared_ptr<const dolfinx::fem::Function<PetscScalar>> coeff,
-           int q,
-           const py::array_t<std::int32_t, py::array::c_style>& active_facets)
-        {
-          auto [coeffs, cstride] = dolfinx_contact::pack_coefficient_facet(
-              coeff, q,
-              xtl::span<const std::int32_t>(active_facets.data(),
-                                            active_facets.size()));
+          auto [coeffs, cstride] = dolfinx_contact::pack_coefficient_quadrature(
+              coeff, q, integral,
+              xtl::span<const std::int32_t>(active_entities.data(),
+                                            active_entities.size()));
           int shape0 = cstride == 0 ? 0 : coeffs.size() / cstride;
           return dolfinx_wrappers::as_pyarray(std::move(coeffs),
                                               std::array{shape0, cstride});
