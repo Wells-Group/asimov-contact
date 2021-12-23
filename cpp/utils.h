@@ -724,7 +724,7 @@ xt::xtensor<double, 3>
 get_basis_functions(xt::xtensor<double, 3>& J, xt::xtensor<double, 3>& K,
                     xt::xtensor<double, 1>& detJ,
                     const xt::xtensor<double, 2>& x,
-                    xt::xtensor<double, 2> coordinate_dofs,
+                    const xt::xtensor<double, 2>& coordinate_dofs,
                     const std::int32_t index, const std::int32_t perm,
                     std::shared_ptr<const dolfinx::fem::FiniteElement> element,
                     const dolfinx::fem::CoordinateElement& cmap)
@@ -864,24 +864,25 @@ std::pair<std::vector<std::int32_t>, std::vector<std::int32_t>>
 sort_cells(const xtl::span<const std::int32_t>& cells,
            const xtl::span<std::int32_t>& perm)
 {
-  std::size_t num_cells = cells.size();
-  assert(perm.size() == num_cells);
+  assert(perm.size() == cells.size());
+
+  const auto num_cells = (std::int32_t)cells.size();
   std::vector<std::int32_t> unique_cells(num_cells);
   std::vector<std::int32_t> offsets(num_cells + 1, 0);
   std::iota(perm.begin(), perm.end(), 0);
   dolfinx::argsort_radix<std::int32_t>(cells, perm);
 
-  for (std::size_t i = 0; i < num_cells; ++i)
-  {
+  // Sort cells in accending order
+  for (std::int32_t i = 0; i < num_cells; ++i)
     unique_cells[i] = cells[perm[i]];
-  }
+
+  // Compute the number of identical cells
   std::int32_t index = 0;
-  for (std::size_t i = 0; i < num_cells - 1; ++i)
-  {
+  for (std::int32_t i = 0; i < num_cells - 1; ++i)
     if (unique_cells[i] != unique_cells[i + 1])
       offsets[++index] = i + 1;
-  }
-  offsets[index + 1] = (std::int32_t)num_cells;
+
+  offsets[index + 1] = num_cells;
   unique_cells.erase(std::unique(unique_cells.begin(), unique_cells.end()),
                      unique_cells.end());
   offsets.resize(unique_cells.size() + 1);
