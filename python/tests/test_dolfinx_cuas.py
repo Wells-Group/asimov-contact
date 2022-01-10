@@ -140,7 +140,7 @@ def test_contact_kernel(theta, gamma, dim, gap):
             (theta * sigma_n(v) - gammah * ufl.dot(v, (-n_2))) * ds(bottom_value)
 
         u.interpolate(_u_initial)
-        L = dolfinx.fem.Form(F)
+        L = dolfinx.fem.form(F)
         b = dolfinx.fem.create_vector(L)
 
         # Normal assembly
@@ -152,7 +152,7 @@ def test_contact_kernel(theta, gamma, dim, gap):
         J = ufl.inner(sigma(du), epsilon(v)) * ufl.dx - theta / gammah * sigma_n(du) * sigma_n(v) * ds(bottom_value)
         J += 1 / gammah * 0.5 * (1 - ufl.sign(q)) * (sigma_n(du) - gammah * ufl.dot(du, (-n_2))) * \
             (theta * sigma_n(v) - gammah * ufl.dot(v, (-n_2))) * ds(bottom_value)
-        a = dolfinx.fem.Form(J)
+        a = dolfinx.fem.form(J)
         A = dolfinx.fem.create_matrix(a)
 
         # Normal assembly
@@ -198,7 +198,7 @@ def test_contact_kernel(theta, gamma, dim, gap):
         coeffs = np.hstack([coeffs, h_facets, g_vec])
         # RHS
         L_cuas = ufl.inner(sigma(u), epsilon(v)) * dx
-        L_cuas = dolfinx.fem.Form(L_cuas)
+        L_cuas = dolfinx.fem.form(L_cuas)
         b2 = dolfinx.fem.create_vector(L_cuas)
         kernel = dolfinx_contact.cpp.generate_contact_kernel(V._cpp_object, kt.Rhs, q_rule,
                                                              [u._cpp_object, mu2._cpp_object, lmbda2._cpp_object])
@@ -209,7 +209,7 @@ def test_contact_kernel(theta, gamma, dim, gap):
         b2.assemble()
         # Jacobian
         a_cuas = ufl.inner(sigma(du), epsilon(v)) * dx
-        a_cuas = dolfinx.fem.Form(a_cuas)
+        a_cuas = dolfinx.fem.form(a_cuas)
         B = dolfinx.fem.create_matrix(a_cuas)
         kernel = dolfinx_contact.cpp.generate_contact_kernel(
             V._cpp_object, kt.Jac, q_rule, [u._cpp_object, mu2._cpp_object, lmbda2._cpp_object])

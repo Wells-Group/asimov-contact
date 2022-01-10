@@ -158,7 +158,7 @@ def nitsche_cuas(mesh: dmesh.Mesh, mesh_data: Tuple[dmesh.MeshTags, int, int],
     coeffs = np.hstack([coeffs, h_facets, g_vec])
 
     # Create RHS kernels
-    L_cuas = _fem.Form(F, jit_parameters=jit_parameters, form_compiler_parameters=form_compiler_parameters)
+    L_cuas = _fem.form(F, jit_parameters=jit_parameters, form_compiler_parameters=form_compiler_parameters)
     kernel_rhs = dolfinx_contact.cpp.generate_contact_kernel(V._cpp_object, dolfinx_contact.Kernel.Rhs, q_rule,
                                                              [u._cpp_object, mu2._cpp_object, lmbda2._cpp_object])
 
@@ -173,7 +173,7 @@ def nitsche_cuas(mesh: dmesh.Mesh, mesh_data: Tuple[dmesh.MeshTags, int, int],
         _fem.assemble_vector(b, L_cuas)
 
     # Create Jacobian kernels
-    a_cuas = _fem.Form(J, jit_parameters=jit_parameters, form_compiler_parameters=form_compiler_parameters)
+    a_cuas = _fem.form(J, jit_parameters=jit_parameters, form_compiler_parameters=form_compiler_parameters)
     kernel_J = dolfinx_contact.cpp.generate_contact_kernel(
         V._cpp_object, dolfinx_contact.Kernel.Jac, q_rule, [u._cpp_object, mu2._cpp_object, lmbda2._cpp_object])
 

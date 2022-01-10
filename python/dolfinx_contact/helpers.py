@@ -70,11 +70,11 @@ class NonlinearPDE_SNESProblem:
         V = u.function_space
         du = ufl.TrialFunction(V)
 
-        self.L = _fem.Form(F, form_compiler_parameters=form_compiler_parameters,
+        self.L = _fem.form(F, form_compiler_parameters=form_compiler_parameters,
                            jit_parameters=jit_parameters)
-        self.a = ufl.derivative(F, u, du)
-        self.a_comp = _fem.Form(self.a, form_compiler_parameters=form_compiler_parameters,
-                                jit_parameters=jit_parameters)
+        self.a = _fem.form(ufl.derivative(F, u, du),
+                           form_compiler_parameters=form_compiler_parameters,
+                           jit_parameters=jit_parameters)
         self.bc = bc
         self._F, self._J = None, None
         self.u = u

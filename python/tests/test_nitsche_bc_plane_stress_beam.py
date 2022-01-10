@@ -8,7 +8,7 @@ import numpy as np
 import pytest
 import ufl
 from dolfinx.fem import (Function, LinearProblem, NonlinearProblem,
-                         VectorFunctionSpace, assemble_scalar)
+                         VectorFunctionSpace, assemble_scalar, form)
 from dolfinx.io import XDMFFile
 from dolfinx.mesh import (CellType, create_rectangle, GhostMode, MeshTags,
                           locate_entities_boundary)
@@ -119,7 +119,7 @@ def solve_manufactured(nx: int, ny: int, theta: float, gamma: float,
         xdmf.write_function(u)
 
     # Error computation:
-    error = (u - u_D)**2 * dx
+    error = form((u - u_D)**2 * dx)
     E_L2 = np.sqrt(mesh.comm.allreduce(assemble_scalar(error), op=MPI.SUM))
     if mesh.comm.rank == 0:
         print(f"{nx} {ny}: L2-error={E_L2:.2e}")

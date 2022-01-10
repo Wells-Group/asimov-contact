@@ -7,7 +7,7 @@
 #include "kernelwrapper.h"
 #include <array.h>
 #include <caster_petsc.h>
-#include <dolfinx/la/PETScMatrix.h>
+#include <dolfinx/la/petsc.h>
 #include <dolfinx/mesh/MeshTags.h>
 #include <dolfinx_contact/Contact.hpp>
 #include <dolfinx_contact/coefficients.h>

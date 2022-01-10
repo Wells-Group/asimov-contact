@@ -144,7 +144,7 @@ def nitsche_rigid_surface(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTags, int
         u_D.x.scatter_forward()
         dirichlet_dofs = _fem.locate_dofs_topological(
             V, tdim - 1, facet_marker.indices[facet_marker.values == dirichlet_value_elastic])
-        bc = _fem.DirichletBC(u_D, dirichlet_dofs)
+        bc = _fem.dirichletbc(u_D, dirichlet_dofs)
         bcs = [bc]
         # Dirichlet boundary conditions for rigid plane
         dirichlet_dofs_plane = _fem.locate_dofs_topological(
@@ -152,7 +152,7 @@ def nitsche_rigid_surface(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTags, int
         u_D_plane = _fem.Function(V)
         with u_D_plane.vector.localForm() as loc:
             loc.set(0)
-        bc_plane = _fem.DirichletBC(u_D_plane, dirichlet_dofs_plane)
+        bc_plane = _fem.dirichletbc(u_D_plane, dirichlet_dofs_plane)
         bcs.append(bc_plane)
 
     # Create contact class

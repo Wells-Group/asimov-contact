@@ -109,7 +109,7 @@ def snes_solver(mesh: dmesh.Mesh, mesh_data: Tuple[dmesh.MeshTags, int, int],
     tdim = mesh.topology.dim
     dirichlet_dofs = _fem.locate_dofs_topological(
         V, tdim - 1, facet_marker.indices[facet_marker.values == top_value])
-    bc = _fem.DirichletBC(u_D, dirichlet_dofs)
+    bc = _fem.dirichletbc(u_D, dirichlet_dofs)
     # bcs = [bc]
 
     # create nonlinear problem
@@ -145,7 +145,7 @@ def snes_solver(mesh: dmesh.Mesh, mesh_data: Tuple[dmesh.MeshTags, int, int],
 
     # Create LHS matrix and RHS vector
     b = _la.create_petsc_vector(V.dofmap.index_map, V.dofmap.index_map_bs)
-    J = _fem.create_matrix(problem.a_comp)
+    J = _fem.create_matrix(problem.a)
 
     # Create semismooth Newton solver (SNES)
     snes = _PETSc.SNES().create()

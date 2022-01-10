@@ -9,7 +9,7 @@ import argparse
 import numpy as np
 import ufl
 from dolfinx.common import timing
-from dolfinx.fem import assemble_scalar
+from dolfinx.fem import assemble_scalar, form
 from dolfinx.io import XDMFFile
 from dolfinx.mesh import create_unit_cube, create_unit_square, MeshTags, locate_entities_boundary, refine
 from dolfinx_contact.meshing import (convert_mesh, create_disk_mesh,
@@ -158,9 +158,9 @@ if __name__ == "__main__":
         # Compute the difference (error) between Nitsche and SNES
         V = u1.function_space
         dx = ufl.Measure("dx", domain=mesh)
-        error = ufl.inner(u1 - u2, u1 - u2) * dx
+        error = form(ufl.inner(u1 - u2, u1 - u2) * dx)
         E_L2 = np.sqrt(mesh.comm.allreduce(assemble_scalar(error), op=MPI.SUM))
-        u2_norm = ufl.inner(u2, u2) * dx
+        u2_norm = form(ufl.inner(u2, u2) * dx)
         u2_L2 = np.sqrt(mesh.comm.allreduce(assemble_scalar(u2_norm), op=MPI.SUM))
         if rank == 0:
             print(f"abs. L2-error={E_L2:.2e}")

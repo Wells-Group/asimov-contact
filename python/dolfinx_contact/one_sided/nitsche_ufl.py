@@ -156,7 +156,7 @@ def nitsche_ufl(mesh: dmesh.Mesh, mesh_data: Tuple[dmesh.MeshTags, int, int],
         tdim = mesh.topology.dim
         dirichlet_dofs = _fem.locate_dofs_topological(
             V, tdim - 1, facet_marker.indices[facet_marker.values == top_value])
-        bc = _fem.DirichletBC(u_D, dirichlet_dofs)
+        bc = _fem.dirichletbc(u_D, dirichlet_dofs)
         bcs = [bc]
 
     # DEBUG: Write each step of Newton iterations

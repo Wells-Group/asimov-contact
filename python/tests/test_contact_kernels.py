@@ -9,10 +9,11 @@ import dolfinx_cuas.cpp
 import numpy as np
 import pytest
 import ufl
-from dolfinx.fem import (Form, Function, FunctionSpace, IntegralType,
+from dolfinx.fem import (Function, FunctionSpace, IntegralType,
                          VectorFunctionSpace, assemble_matrix, assemble_vector,
-                         create_matrix, create_vector)
-from dolfinx.mesh import create_unit_cube, create_unit_square, MeshTags, locate_entities_boundary
+                         create_matrix, create_vector, form)
+from dolfinx.mesh import (MeshTags, create_unit_cube, create_unit_square,
+                          locate_entities_boundary)
 from mpi4py import MPI
 
 import dolfinx_contact
@@ -110,7 +111,7 @@ def test_vector_surface_kernel(dim, kernel_type, P, Q):
         (theta * sigma_n(v) - (gamma / h) * ufl.dot(v, (-n_2))) * ds(1)
     # Compile UFL form
     cffi_options = ["-O2", "-march=native"]
-    L = Form(L, jit_parameters={"cffi_extra_compile_args": cffi_options, "cffi_libraries": ["m"]})
+    L = form(L, jit_parameters={"cffi_extra_compile_args": cffi_options, "cffi_libraries": ["m"]})
     b = create_vector(L)
 
     # Normal assembly
@@ -134,7 +135,7 @@ def test_vector_surface_kernel(dim, kernel_type, P, Q):
     coeffs = np.hstack([coeffs, h_facets, g_vec])
 
     L_cuas = ufl.inner(sigma(u), epsilon(v)) * dx
-    L_cuas = Form(L_cuas)
+    L_cuas = form(L_cuas)
     b2 = create_vector(L_cuas)
     kernel = dolfinx_contact.cpp.generate_contact_kernel(V._cpp_object, kernel_type, q_rule,
                                                          [u._cpp_object, mu._cpp_object, lmbda._cpp_object])
@@ -230,7 +231,7 @@ def test_matrix_surface_kernel(dim, kernel_type, P, Q):
         (theta * sigma_n(v) - gamma / h * ufl.dot(v, (-n_2))) * ds(1)
     # Compile UFL form
     cffi_options = ["-O2", "-march=native"]
-    a = Form(a, jit_parameters={"cffi_extra_compile_args": cffi_options, "cffi_libraries": ["m"]})
+    a = form(a, jit_parameters={"cffi_extra_compile_args": cffi_options, "cffi_libraries": ["m"]})
     A = create_matrix(a)
 
     # Normal assembly
@@ -251,7 +252,7 @@ def test_matrix_surface_kernel(dim, kernel_type, P, Q):
     g_vec = contact.pack_gap_plane(0, -g)
     coeffs = np.hstack([coeffs, h_facets, g_vec])
     a_cuas = ufl.inner(sigma(du), epsilon(v)) * dx
-    a_cuas = Form(a_cuas)
+    a_cuas = form(a_cuas)
     B = create_matrix(a_cuas)
     kernel = dolfinx_contact.cpp.generate_contact_kernel(
         V._cpp_object, kernel_type, q_rule, [u._cpp_object, mu._cpp_object, lmbda._cpp_object])

@@ -7,13 +7,13 @@ import os
 
 import numpy as np
 import ufl
-from dolfinx.fem import (DirichletBC, Function, LinearProblem,
-                         NonlinearProblem, VectorFunctionSpace,
+from dolfinx.fem import (Function, LinearProblem, NonlinearProblem,
+                         VectorFunctionSpace, dirichletbc,
                          locate_dofs_topological)
 from dolfinx.geometry import (BoundingBoxTree, compute_colliding_cells,
                               compute_collisions)
 from dolfinx.io import XDMFFile
-from dolfinx.mesh import (CellType, create_rectangle, GhostMode, MeshTags,
+from dolfinx.mesh import (CellType, GhostMode, MeshTags, create_rectangle,
                           locate_entities_boundary)
 from dolfinx.nls import NewtonSolver
 from mpi4py import MPI
@@ -82,7 +82,7 @@ def solve_euler_bernoulli(nx: int, ny: int, theta: float, gamma: float, linear_s
         u_bc = Function(V)
         with u_bc.vector.localForm() as loc:
             loc.set(0)
-        bc = DirichletBC(u_bc, locate_dofs_topological(
+        bc = dirichletbc(u_bc, locate_dofs_topological(
             V, mesh.topology.dim - 1, left_facets))
         bcs = [bc]
 
