@@ -173,7 +173,7 @@ def nitsche_rigid_surface_cuas(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTags
     coeffs = np.hstack([coeffs, h_facets, g_vec, n_surf])
 
     # Create RHS kernels
-    F_cuas = _fem.Form(F, jit_parameters=jit_parameters, form_compiler_parameters=form_compiler_parameters)
+    F_cuas = _fem.form(F, jit_parameters=jit_parameters, form_compiler_parameters=form_compiler_parameters)
     kernel_rhs = dolfinx_contact.cpp.generate_contact_kernel(V._cpp_object, kt.Rhs, q_rule,
                                                              [u._cpp_object, mu2._cpp_object, lmbda2._cpp_object],
                                                              False)
@@ -189,7 +189,7 @@ def nitsche_rigid_surface_cuas(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTags
         _fem.assemble_vector(b, F_cuas)
 
     # Create Jacobian kernels
-    J_cuas = _fem.Form(J, jit_parameters=jit_parameters, form_compiler_parameters=form_compiler_parameters)
+    J_cuas = _fem.form(J, jit_parameters=jit_parameters, form_compiler_parameters=form_compiler_parameters)
     kernel_J = dolfinx_contact.cpp.generate_contact_kernel(
         V._cpp_object, kt.Jac, q_rule, [u._cpp_object, mu2._cpp_object, lmbda2._cpp_object], False)
 

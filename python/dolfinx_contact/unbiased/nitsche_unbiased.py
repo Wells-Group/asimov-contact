@@ -176,7 +176,7 @@ def nitsche_unbiased(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTags, int, int
     coeff_1 = np.hstack([material_1, h_1, gap_1, n_1, test_fn_1])
 
     # Assemble jacobian
-    J_cuas = _fem.Form(J)
+    J_cuas = _fem.form(J)
     kernel_jac = contact.generate_kernel(kt.Jac)
 
     def create_A():
@@ -195,7 +195,7 @@ def nitsche_unbiased(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTags, int, int
         _fem.assemble_matrix(A, J_cuas)
 
     # assemble rhs
-    F_cuas = _fem.Form(F)
+    F_cuas = _fem.form(F)
     kernel_rhs = contact.generate_kernel(kt.Rhs)
 
     def create_b():
