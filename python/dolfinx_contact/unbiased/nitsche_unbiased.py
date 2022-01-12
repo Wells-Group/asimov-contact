@@ -15,7 +15,8 @@ from petsc4py import PETSc as _PETSc
 
 import dolfinx_contact
 import dolfinx_contact.cpp
-from dolfinx_contact.helpers import epsilon, lame_parameters, sigma_func
+from dolfinx_contact.helpers import epsilon, lame_parameters, sigma_func, rigid_motions_nullspace
+from dolfinx_contact.plotting import plot_gap
 
 kt = dolfinx_contact.cpp.Kernel
 
@@ -180,7 +181,7 @@ def nitsche_unbiased(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTags, int, int
     kernel_jac = contact.generate_kernel(kt.Jac)
 
     def create_A():
-        return contact.create_matrix(J_cuas._cpp_object)
+        return contact.create_matrix(J_cuas)
 
     def A(x, A):
         u.vector[:] = x.array
@@ -216,6 +217,10 @@ def nitsche_unbiased(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTags, int, int
     # Setup non-linear problem and Newton-solver
     problem = dolfinx_cuas.NonlinearProblemCUAS(F, A, create_b, create_A)
     solver = dolfinx_cuas.NewtonSolver(mesh.comm, problem)
+
+    # Create rigid motion null-space
+    null_space = rigid_motions_nullspace(V)
+    solver.A.setNearNullSpace(null_space)
 
     # Set Newton solver options
     solver.atol = newton_options.get("atol", 1e-9)
