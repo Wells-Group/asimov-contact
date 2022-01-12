@@ -241,7 +241,8 @@ if __name__ == "__main__":
     # petsc_options = {"ksp_type": "preonly", "pc_type": "lu"}
     petsc_options = {"ksp_type": "cgs", "pc_type": "gamg", "pc_gamg_type": "agg", "pc_gamg_coarse_eq_limit": 1000,
                      "pc_gamg_sym_graph": True, "mg_levels_ksp_type": "chebyshev", "mg_levels_pc_type": "sor",
-                     "mg_levels_esteig_ksp_type": "cg", "matptap_via": "scalable", "pc_gamg_square_graph": 3, "pc_gamg_threshold": 1e-1, "ksp_view": None}
+                     "mg_levels_esteig_ksp_type": "cg", "matptap_via": "scalable", "pc_gamg_square_graph": 3,
+                     "pc_gamg_threshold": 1e-1, "ksp_view": None}
 
     # Pack mesh data for Nitsche solver
     mesh_data = (facet_marker, top_value, bottom_value, surface_value, surface_bottom)
