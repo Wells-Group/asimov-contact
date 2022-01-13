@@ -192,7 +192,7 @@ def test_contact_kernel(theta, gamma, dim, gap):
         coeffs = dolfinx_cuas.cpp.pack_coefficients(
             [u._cpp_object, mu2._cpp_object, lmbda2._cpp_object], integral_entities)
         h_facets = dolfinx_contact.pack_circumradius_facet(mesh, bottom_facets)
-        contact = dolfinx_contact.cpp.Contact(facet_marker, bottom_value, top_value, V._cpp_object)
+        contact = dolfinx_contact.cpp.Contact(facet_marker, [bottom_value, top_value], V._cpp_object)
         contact.set_quadrature_degree(q_deg)
         g_vec = contact.pack_gap_plane(0, g)
         coeffs = np.hstack([coeffs, h_facets, g_vec])

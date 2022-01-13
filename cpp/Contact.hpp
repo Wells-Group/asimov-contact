@@ -42,12 +42,13 @@ class Contact
 public:
   /// Constructor
   /// @param[in] marker The meshtags defining the contact surfaces
-  /// @param[in] surface_0 Value of the meshtag marking the first surface
-  /// @param[in] surface_1 Value of the meshtag marking the first surface
+  /// @param[in] surfaces Array of the values of the meshtags marking the
+  /// surfaces
+  /// @param[in] V The functions space
   Contact(std::shared_ptr<dolfinx::mesh::MeshTags<std::int32_t>> marker,
-          int surface_0, int surface_1,
+          std::array<int, 2> surfaces,
           std::shared_ptr<dolfinx::fem::FunctionSpace> V)
-      : _marker(marker), _surfaces({surface_0, surface_1}), _V(V)
+      : _marker(marker), _surfaces(surfaces), _V(V)
   {
     auto mesh = _marker->mesh();
     const int gdim = mesh->geometry().dim(); // geometrical dimension
@@ -58,8 +59,8 @@ public:
     assert(f_to_c);
     auto c_to_f = mesh->topology().connectivity(tdim, tdim - 1);
     assert(c_to_f);
-    _facets[0] = marker->find(surface_0);
-    _facets[1] = marker->find(surface_1);
+    _facets[0] = marker->find(surfaces[0]);
+    _facets[1] = marker->find(surfaces[1]);
 
     auto get_cell_indices = [c_to_f, f_to_c](std::vector<std::int32_t> facets)
     {
@@ -801,7 +802,7 @@ public:
   /// Compute push forward of quadrature points _qp_ref_facet to the physical
   /// facet for each facet in _facet_"origin_meshtag" Creates and fills
   /// _qp_phys_"origin_meshtag"
-  /// @param[in] origin_meshtag flag to choose between surface_0 and surface_1
+  /// @param[in] origin_meshtag flag to choose the surface
   void create_q_phys(int origin_meshtag)
   {
     // Mesh info
@@ -876,8 +877,9 @@ public:
     _max_links[origin_meshtag] = max_links;
   }
   /// Compute closest candidate_facet for each quadrature point in
-  /// _qp_phys_"origin_meshtag" This is saved as an adjacency list _map_0_to_1
-  /// or _map_1_to_0
+  /// _qp_phys[origin_meshtag]
+  /// This is saved as an adjacency list in _facet_maps[origin_meshtag]
+  /// and an xtensor containing cell_facet_pairs in  _cell_maps[origin_mesthtag]
   void create_distance_map(int puppet_mt, int candidate_mt)
   {
 
@@ -1368,8 +1370,9 @@ private:
   // the cell (l=0) or local facet index (l=1) of the facets closest
   // to the jth facet on the ith surface at the kth quadrature point
   std::array<xt::xtensor<std::int32_t, 3>, 2> _cell_maps;
-  // Adjacency list of closest facet on surface_1 for every quadrature point
-  // in _qp_phys_0 (quadrature points on every facet of surface_0)
+  // _facets_maps[i] = adjacency list of closest facet on candidate surface for
+  // every quadrature point in _qp_phys[i] (quadrature points on every facet of
+  // ith surface)
   std::array<std::shared_ptr<dolfinx::graph::AdjacencyList<std::int32_t>>, 2>
       _facet_maps; // FIXME: should be made redundant
   //  _qp_phys[i] contains the quadrature points on the physical facets for each

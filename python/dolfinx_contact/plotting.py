@@ -11,11 +11,11 @@ def plot_gap(mesh, contact, tag, gap):
     fdim = mesh.topology.dim - 1
     mesh_geometry = mesh.geometry.x
     if tag == 0:
-        facets = contact.facet_0()
-        facets_opp = contact.facet_1()
+        facets = contact.facets(0)
+        facets_opp = contact.facets(1)
     else:
-        facets = contact.facet_1()
-        facets_opp = contact.facet_0()
+        facets = contact.facets(1)
+        facets_opp = contact.facets(0)
 
     # Draw facets on opposite surface
     plt.figure()

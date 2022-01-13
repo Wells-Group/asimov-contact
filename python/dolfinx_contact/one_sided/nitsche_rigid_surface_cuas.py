@@ -161,7 +161,7 @@ def nitsche_rigid_surface_cuas(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTags
     h_facets = dolfinx_contact.pack_circumradius_facet(mesh, contact_facets)
 
     # Create contact class
-    contact = dolfinx_contact.cpp.Contact(facet_marker, contact_value_elastic, contact_value_rigid, V._cpp_object)
+    contact = dolfinx_contact.cpp.Contact(facet_marker, [contact_value_elastic, contact_value_rigid], V._cpp_object)
     contact.set_quadrature_degree(quadrature_degree)
 
     # Compute gap and normals

@@ -126,7 +126,7 @@ def test_vector_surface_kernel(dim, kernel_type, P, Q):
     integral_entities = dolfinx_cuas.cpp.compute_active_entities(mesh, ft.indices, IntegralType.exterior_facet)
     coeffs = dolfinx_cuas.cpp.pack_coefficients([u._cpp_object, mu._cpp_object, lmbda._cpp_object], integral_entities)
     h_facets = dolfinx_contact.pack_circumradius_facet(mesh, facets)
-    contact = dolfinx_contact.cpp.Contact(ft, 1, 1, V._cpp_object)
+    contact = dolfinx_contact.cpp.Contact(ft, [1, 1], V._cpp_object)
     contact.set_quadrature_degree(2 * P + Q + 1)
     g_vec = contact.pack_gap_plane(0, -g)
     # FIXME: assuming all facets are the same type
@@ -247,7 +247,7 @@ def test_matrix_surface_kernel(dim, kernel_type, P, Q):
     integral_entities = dolfinx_cuas.cpp.compute_active_entities(mesh, facets, IntegralType.exterior_facet)
     coeffs = dolfinx_cuas.cpp.pack_coefficients([u._cpp_object, mu._cpp_object, lmbda._cpp_object], integral_entities)
     h_facets = dolfinx_contact.pack_circumradius_facet(mesh, facets)
-    contact = dolfinx_contact.cpp.Contact(ft, 1, 1, V._cpp_object)
+    contact = dolfinx_contact.cpp.Contact(ft, [1, 1], V._cpp_object)
     contact.set_quadrature_degree(2 * P + Q + 1)
     g_vec = contact.pack_gap_plane(0, -g)
     coeffs = np.hstack([coeffs, h_facets, g_vec])

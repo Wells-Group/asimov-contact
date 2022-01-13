@@ -43,10 +43,10 @@ PYBIND11_MODULE(cpp, m)
   py::class_<dolfinx_contact::Contact,
              std::shared_ptr<dolfinx_contact::Contact>>(m, "Contact",
                                                         "Contact object")
-      .def(py::init<std::shared_ptr<dolfinx::mesh::MeshTags<std::int32_t>>, int,
-                    int, std::shared_ptr<dolfinx::fem::FunctionSpace>>(),
-           py::arg("marker"), py::arg("suface_0"), py::arg("surface_1"),
-           py::arg("V"))
+      .def(py::init<std::shared_ptr<dolfinx::mesh::MeshTags<std::int32_t>>,
+                    std::array<int, 2>,
+                    std::shared_ptr<dolfinx::fem::FunctionSpace>>(),
+           py::arg("marker"), py::arg("sufaces"), py::arg("V"))
       .def("create_distance_map",
            [](dolfinx_contact::Contact& self, int puppet_mt, int candidate_mt)
            {
