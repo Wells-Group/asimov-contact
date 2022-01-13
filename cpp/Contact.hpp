@@ -107,7 +107,7 @@ public:
   }
 
   // quadrature points on physical facet for each facet on surface
-  std::vector<xt::xtensor<double, 2>> qp_phys_0(int surface)
+  std::vector<xt::xtensor<double, 2>> qp_phys(int surface)
   {
     return _qp_phys[surface];
   }
