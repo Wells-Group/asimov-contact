@@ -812,8 +812,7 @@ public:
     const int gdim = mesh->geometry().dim(); // geometrical dimension
     auto puppet_facets = _cell_facet_pairs[origin_meshtag];
     _qp_phys[origin_meshtag].reserve(puppet_facets.shape(0));
-    auto qp_phys = _qp_phys[origin_meshtag];
-    qp_phys.clear();
+    _qp_phys[origin_meshtag].clear();
     // push forward of quadrature points _qp_ref_facet to physical facet for
     // each facet in _facet_"origin_meshtag"
     for (int i = 0; i < puppet_facets.shape(0); ++i)
@@ -836,7 +835,7 @@ public:
 
       // push forward of quadrature points _qp_ref_facet to the physical facet
       cmap.push_forward(q_phys, coordinate_dofs, _phi_ref_facets[local_index]);
-      qp_phys.push_back(q_phys);
+      _qp_phys[origin_meshtag].push_back(q_phys);
     }
   }
   /// Compute maximum number of links

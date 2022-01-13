@@ -165,7 +165,7 @@ def nitsche_rigid_surface_cuas(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTags
     contact.set_quadrature_degree(quadrature_degree)
 
     # Compute gap and normals
-    contact.create_distance_map(0)
+    contact.create_distance_map(0, 1)
     g_vec = contact.pack_gap(0)
     n_surf = contact.pack_ny(0, g_vec)
 

@@ -165,8 +165,8 @@ def nitsche_rigid_surface(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTags, int
     gdim = mesh.geometry.dim
     fdim = mesh.topology.dim - 1
     mesh_geometry = mesh.geometry.x
-    contact.create_distance_map(0)
-    lookup = contact.map_0_to_1()
+    contact.create_distance_map(0, 1)
+    lookup = contact.facet_map(0)
     master_bbox = _geometry.BoundingBoxTree(mesh, fdim, contact_facets)
     midpoint_tree = _geometry.create_midpoint_tree(mesh, fdim, contact_facets)
 
