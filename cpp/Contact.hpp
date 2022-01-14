@@ -90,24 +90,32 @@ public:
     _cell_facet_pairs[1] = get_cell_indices(_facets[1]);
   }
 
+  /// Return facets belonging to surface with index surface
+  /// @param[in] surface - the index of the surface
   const std::vector<int32_t>& facets(int surface) const
   {
     return _facets[surface];
   }
-  // Return meshtag value for surface
+
+  /// Return meshtag value for surface with index surface
+  /// @param[in] surface - the index of the surface
   const int surface_mt(int surface) const { return _surfaces[surface]; }
+
   // return quadrature degree
   const int quadrature_degree() const { return _quadrature_degree; }
   void set_quadrature_degree(int deg) { _quadrature_degree = deg; }
 
-  // return distance map
+  /// return distance map (adjacency map mapping quadrature points on surface
+  /// to closest facet on other surface)
+  /// @param[in] surface - index of the surface
   const std::shared_ptr<dolfinx::graph::AdjacencyList<std::int32_t>>
   facet_map(int surface) const
   {
     return _facet_maps[surface];
   }
 
-  // quadrature points on physical facet for each facet on surface
+  /// Return the quadrature points on physical facet for each facet on surface
+  /// @param[in] surface The index of the surface (0 or 1).
   std::vector<xt::xtensor<double, 2>> qp_phys(int surface)
   {
     return _qp_phys[surface];
@@ -1055,7 +1063,7 @@ public:
   /// Compute test functions on opposite surface at quadrature points of
   /// facets
   /// @param[in] orgin_meshtag - surface on which to integrate
-  /// @param[in] - gap packed on facets per quadrature point
+  /// @param[in] gap - gap packed on facets per quadrature point
   /// @param[out] c - test functions packed on facets.
   std::pair<std::vector<PetscScalar>, int>
   pack_test_functions(int origin_meshtag,
