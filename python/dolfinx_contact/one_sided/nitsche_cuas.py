@@ -149,7 +149,7 @@ def nitsche_cuas(mesh: dmesh.Mesh, mesh_data: Tuple[dmesh.MeshTags, int, int],
     h_facets = dolfinx_contact.pack_circumradius_facet(mesh, bottom_facets)
 
     # Create contact class
-    contact = dolfinx_contact.cpp.Contact(facet_marker, contact_value, dirichlet_value, V._cpp_object)
+    contact = dolfinx_contact.cpp.Contact(facet_marker, [contact_value, dirichlet_value], V._cpp_object)
     contact.set_quadrature_degree(quadrature_degree)
     # Compute gap from contact boundary
     g_vec = contact.pack_gap_plane(0, -plane_loc)

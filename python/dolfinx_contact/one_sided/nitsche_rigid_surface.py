@@ -157,7 +157,7 @@ def nitsche_rigid_surface(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTags, int
 
     # Create contact class
     contact_facets = facet_marker.indices[facet_marker.values == contact_value_elastic]
-    contact = dolfinx_contact.cpp.Contact(facet_marker, contact_value_elastic, contact_value_rigid, V._cpp_object)
+    contact = dolfinx_contact.cpp.Contact(facet_marker, [contact_value_elastic, contact_value_rigid], V._cpp_object)
     # Ensures that we find closest facet to midpoint of facet
     contact.set_quadrature_degree(1)
 
@@ -165,8 +165,8 @@ def nitsche_rigid_surface(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTags, int
     gdim = mesh.geometry.dim
     fdim = mesh.topology.dim - 1
     mesh_geometry = mesh.geometry.x
-    contact.create_distance_map(0)
-    lookup = contact.map_0_to_1()
+    contact.create_distance_map(0, 1)
+    lookup = contact.facet_map(0)
     master_bbox = _geometry.BoundingBoxTree(mesh, fdim, contact_facets)
     midpoint_tree = _geometry.create_midpoint_tree(mesh, fdim, contact_facets)
 
@@ -186,7 +186,7 @@ def nitsche_rigid_surface(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTags, int
                 coords0 = mesh_geometry[facet_geometry][0]
                 R = np.linalg.norm(_cpp.geometry.compute_distance_gjk(coords0, xi))
                 # If point on a facet in contact surface (i.e., if distance between point and closest
-                # facet is 0), use contact.map_0_to_1() to find closest facet on rigid surface and
+                # facet is 0), use contact.facet_map(0) to find closest facet on rigid surface and
                 # compute distance vector
                 if np.isclose(R, 0):
                     facet_2 = lookup.links(index)[0]

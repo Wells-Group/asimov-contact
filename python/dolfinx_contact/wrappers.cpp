@@ -43,14 +43,14 @@ PYBIND11_MODULE(cpp, m)
   py::class_<dolfinx_contact::Contact,
              std::shared_ptr<dolfinx_contact::Contact>>(m, "Contact",
                                                         "Contact object")
-      .def(py::init<std::shared_ptr<dolfinx::mesh::MeshTags<std::int32_t>>, int,
-                    int, std::shared_ptr<dolfinx::fem::FunctionSpace>>(),
-           py::arg("marker"), py::arg("suface_0"), py::arg("surface_1"),
-           py::arg("V"))
+      .def(py::init<std::shared_ptr<dolfinx::mesh::MeshTags<std::int32_t>>,
+                    std::array<int, 2>,
+                    std::shared_ptr<dolfinx::fem::FunctionSpace>>(),
+           py::arg("marker"), py::arg("sufaces"), py::arg("V"))
       .def("create_distance_map",
-           [](dolfinx_contact::Contact& self, int origin_meshtag)
+           [](dolfinx_contact::Contact& self, int puppet_mt, int candidate_mt)
            {
-             self.create_distance_map(origin_meshtag);
+             self.create_distance_map(puppet_mt, candidate_mt);
              return;
            })
       .def("pack_gap_plane",
@@ -76,25 +76,14 @@ PYBIND11_MODULE(cpp, m)
           py::return_value_policy::take_ownership, py::arg("a"),
           py::arg("type") = std::string(),
           "Create a PETSc Mat for two-sided contact.")
-      .def("facet_0", &dolfinx_contact::Contact::facet_0)
-      .def("facet_1", &dolfinx_contact::Contact::facet_1)
+      .def("facets", &dolfinx_contact::Contact::facets)
       .def("qp_phys",
            [](dolfinx_contact::Contact& self, int origin_meshtag, int facet)
            {
-             if (origin_meshtag == 0)
-             {
-
-               auto qp = self.qp_phys_0()[facet];
-               return dolfinx_wrappers::xt_as_pyarray(std::move(qp));
-             }
-             else
-             {
-               auto qp = self.qp_phys_1()[facet];
-               return dolfinx_wrappers::xt_as_pyarray(std::move(qp));
-             }
+             auto qp = self.qp_phys(origin_meshtag)[facet];
+             return dolfinx_wrappers::xt_as_pyarray(std::move(qp));
            })
-      .def("map_0_to_1", &dolfinx_contact::Contact::map_0_to_1_facet)
-      .def("map_1_to_0", &dolfinx_contact::Contact::map_1_to_0_facet)
+      .def("facet_map", &dolfinx_contact::Contact::facet_map)
       .def("set_quadrature_degree",
            &dolfinx_contact::Contact::set_quadrature_degree)
       .def("generate_kernel",
@@ -175,9 +164,9 @@ PYBIND11_MODULE(cpp, m)
              coeffs,
          bool constant_normal)
       {
-        return cuas_wrappers::KernelWrapper(
-            dolfinx_contact::generate_contact_kernel(V, type, q_rule, coeffs,
-                                                     constant_normal));
+        return cuas_wrappers::KernelWrapper<PetscScalar>(
+            dolfinx_contact::generate_contact_kernel<PetscScalar>(
+                V, type, q_rule, coeffs, constant_normal));
       },
       py::arg("V"), py::arg("kernel_type"), py::arg("quadrature_rule"),
       py::arg("coeffs"), py::arg("constant_normal") = true);

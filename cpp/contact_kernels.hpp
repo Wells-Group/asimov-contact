@@ -10,17 +10,14 @@
 #include <dolfinx/fem/FunctionSpace.h>
 #include <dolfinx_contact/Contact.hpp>
 #include <dolfinx_cuas/QuadratureRule.hpp>
+#include <dolfinx_cuas/kernels.hpp>
 #include <dolfinx_cuas/math.hpp>
 #include <dolfinx_cuas/utils.hpp>
 
-using kernel_fn
-    = std::function<void(double*, const double*, const double*, const double*,
-                         const int*, const std::uint8_t*)>;
-
 namespace dolfinx_contact
 {
-
-kernel_fn generate_contact_kernel(
+template <typename T>
+dolfinx_cuas::kernel_fn<T> generate_contact_kernel(
     std::shared_ptr<const dolfinx::fem::FunctionSpace> V, Kernel type,
     dolfinx_cuas::QuadratureRule& quadrature_rule,
     std::vector<std::shared_ptr<const dolfinx::fem::Function<PetscScalar>>>
@@ -143,7 +140,7 @@ kernel_fn generate_contact_kernel(
   // Define kernels
   // RHS for contact with rigid surface
   // =====================================================================================
-  kernel_fn nitsche_rigid_rhs
+  dolfinx_cuas::kernel_fn<T> nitsche_rigid_rhs
       = [=](double* b, const double* c, const double* w,
             const double* coordinate_dofs, const int* entity_local_index,
             const std::uint8_t* quadrature_permutation)
@@ -325,7 +322,7 @@ kernel_fn generate_contact_kernel(
 
   // Jacobian for contact with rigid surface
   // =====================================================================================
-  kernel_fn nitsche_rigid_jacobian
+  dolfinx_cuas::kernel_fn<T> nitsche_rigid_jacobian
       = [dphi_c, phi, dphi, phi_coeffs, dphi_coeffs, offsets, num_coeffs, gdim,
          tdim, fdim, q_weights, num_coordinate_dofs, ref_jacobians, bs,
          facet_normals, constant_normal](

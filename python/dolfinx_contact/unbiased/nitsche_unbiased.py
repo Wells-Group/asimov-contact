@@ -136,10 +136,10 @@ def nitsche_unbiased(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTags, int, int
     # Custom assembly
     _log.set_log_level(_log.LogLevel.OFF)
     # create contact class
-    contact = dolfinx_contact.cpp.Contact(facet_marker, surface_value_0, surface_value_1, V._cpp_object)
+    contact = dolfinx_contact.cpp.Contact(facet_marker, [surface_value_0, surface_value_1], V._cpp_object)
     contact.set_quadrature_degree(quadrature_degree)
-    contact.create_distance_map(0)
-    contact.create_distance_map(1)
+    contact.create_distance_map(0, 1)
+    contact.create_distance_map(1, 0)
     # pack constants
     consts = np.array([gamma, theta])
 
