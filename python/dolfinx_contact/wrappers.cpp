@@ -164,9 +164,9 @@ PYBIND11_MODULE(cpp, m)
              coeffs,
          bool constant_normal)
       {
-        return cuas_wrappers::KernelWrapper(
-            dolfinx_contact::generate_contact_kernel(V, type, q_rule, coeffs,
-                                                     constant_normal));
+        return cuas_wrappers::KernelWrapper<PetscScalar>(
+            dolfinx_contact::generate_contact_kernel<PetscScalar>(
+                V, type, q_rule, coeffs, constant_normal));
       },
       py::arg("V"), py::arg("kernel_type"), py::arg("quadrature_rule"),
       py::arg("coeffs"), py::arg("constant_normal") = true);
