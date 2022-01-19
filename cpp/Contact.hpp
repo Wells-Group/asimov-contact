@@ -69,7 +69,7 @@ public:
 
     std::vector<std::int32_t> marked_facets(num_facets, 0);
     // mark which facets are in any of the facet lists
-    for (size_t s = 0; s < 2; ++s)
+    for (size_t s = 0; _facets.size(); ++s)
       for (size_t i = 0; i < _facets[s].size(); ++i)
       {
         std::int32_t facet = _facets[s][i];
@@ -83,7 +83,7 @@ public:
 
     std::vector<bool> empty(num_facets, true);
     std::vector<std::int32_t> data(offsets[num_facets]);
-    for (size_t s = 0; s < 2; ++s)
+    for (size_t s = 0; s < _facets.size(); ++s)
       for (size_t i = 0; i < _facets[s].size(); ++i)
       {
         std::int32_t facet = _facets[s][i];
@@ -253,10 +253,12 @@ public:
       std::int32_t local_index = _facets_to_cells->links(active_facets[i])[1];
       std::vector<std::int32_t> linked_cells;
       auto links = map->links(i);
-      for (std::int32_t j = 0; j < map->num_links(i); j++)
+      for (auto link : links)
       {
-        linked_cells.push_back(_facets_to_cells->links(links[j])[0]);
+        auto facet_pair = _facets_to_cells->links(link);
+        linked_cells.push_back(facet_pair[0]);
       }
+
       // Remove duplicates
       std::sort(linked_cells.begin(), linked_cells.end());
       linked_cells.erase(std::unique(linked_cells.begin(), linked_cells.end()),
@@ -331,22 +333,24 @@ public:
     std::vector<std::vector<PetscScalar>> be_vec(
         max_links + 1, std::vector<PetscScalar>(bs * ndofs_cell));
 
-    for (int i = 0; i < active_facets.size(); i++)
+    for (std::size_t i = 0; i < active_facets.size(); i++)
     {
-      auto cell = _facets_to_cells->links(active_facets[i])[0];
+      auto facet_pair = _facets_to_cells->links(active_facets[i]);
+      auto cell = facet_pair[0];
       // Get cell coordinates/geometry
       auto x_dofs = x_dofmap.links(cell);
-      for (std::size_t i = 0; i < x_dofs.size(); ++i)
+      for (std::size_t j = 0; j < x_dofs.size(); ++j)
       {
-        std::copy_n(std::next(x_g.begin(), 3 * x_dofs[i]), gdim,
-                    std::next(coordinate_dofs.begin(), i * gdim));
+        std::copy_n(std::next(x_g.begin(), 3 * x_dofs[j]), gdim,
+                    std::next(coordinate_dofs.begin(), j * gdim));
       }
-      std::int32_t local_index = _facets_to_cells->links(active_facets[i])[1];
+      std::int32_t local_index = facet_pair[1];
       std::vector<std::int32_t> linked_cells;
       auto links = map->links(i);
-      for (std::int32_t j = 0; j < map->num_links(i); j++)
+      for (auto link : links)
       {
-        linked_cells.push_back(_facets_to_cells->links(links[j])[0]);
+        auto other_pair = _facets_to_cells->links(link);
+        linked_cells.push_back(other_pair[0]);
       }
       // Remove duplicates
       std::sort(linked_cells.begin(), linked_cells.end());
@@ -840,11 +844,11 @@ public:
     _qp_phys[origin_meshtag].clear();
     // push forward of quadrature points _qp_ref_facet to physical facet for
     // each facet in _facet_"origin_meshtag"
-    for (int i = 0; i < puppet_facets.size(); ++i)
+    for (std::size_t i = 0; i < puppet_facets.size(); ++i)
     {
-      auto cell = _facets_to_cells->links(puppet_facets[i])[0]; // extract cell
-      const std::int32_t local_index
-          = _facets_to_cells->links(puppet_facets[i])[1];
+      auto facet_pair = _facets_to_cells->links(puppet_facets[i]);
+      auto cell = facet_pair[0]; // extract cell
+      const std::int32_t local_index = _facet_pair[1];
 
       // extract local dofs
       auto x_dofs = x_dofmap.links(cell);
@@ -888,9 +892,10 @@ public:
       auto cell_dofs = dofmap->cell_dofs(cell);
       std::vector<std::int32_t> linked_cells;
       auto links = map->links(i);
-      for (std::int32_t j = 0; j < map->num_links(i); j++)
+      for (auto link : links)
       {
-        linked_cells.push_back(_facets_to_cells->links(links[j])[0]);
+        auto linked_pair = _facets_to_cells->links(link);
+        linked_cells.push_back(linked_pair[0]);
       }
       // Remove duplicates
       std::sort(linked_cells.begin(), linked_cells.end());
@@ -1093,12 +1098,16 @@ public:
     // Loop over all facets
     for (int i = 0; i < num_facets; i++)
     {
-      auto cell = _facets_to_cells->links(puppet_facets[i])[0]; // extract cell
+      auto facet_pair = _facets_to_cells->links(puppet_facets[i]);
+      auto cell = facet_pair[0]; // extract cell
       auto links = map->links(i);
+      assert(links.size() == num_q_points);
+
       // Compute Pi(x) form points x and gap funtion Pi(x) - x
       for (int j = 0; j < num_q_points; j++)
       {
-        linked_cells[j] = _facets_to_cells->links(links[j])[0];
+        auto linked_pair = _facets_to_cells->links(links[j]);
+        linked_cells[j] = linked_pair[0];
         for (int k = 0; k < gdim; k++)
           q_points(j, k)
               = qp_phys[i](j, k) + gap[i * gdim * num_q_points + j * gdim + k];
@@ -1183,13 +1192,15 @@ public:
     for (std::size_t i = 0; i < num_facets; ++i)
     {
       auto links = map->links(i);
+      assert(links.size() == num_q_points);
       for (std::size_t q = 0; q < num_q_points; ++q)
       {
         for (std::size_t j = 0; j < gdim; ++j)
         {
           points(q, j)
               = qp_phys[i](q, j) + gap[i * gdim * num_q_points + q * gdim + j];
-          cells[q] = _facets_to_cells->links(links[j])[0];
+          auto linked_pair = _facets_to_cells->links(links[q]);
+          cells[q] = linked_pair[0];
         }
       }
       vals.fill(0);
@@ -1253,13 +1264,15 @@ public:
     // Loop over quadrature points
     for (int i = 0; i < num_facets; i++)
     {
-      auto cell = _facets_to_cells->links(puppet_facets[i])[0]; // extract cell
+      auto facet_pair = _facets_to_cells->links(puppet_facets[i]);
+      auto cell = facet_pair[0]; // extract cell
       auto links = map->links(i);
       for (int q = 0; q < num_q_points; ++q)
       {
         // Extract linked cell and facet at quadrature point q
-        std::int32_t linked_cell = _facets_to_cells->links(links[q])[0];
-        facet_indices(0) = _facets_to_cells->links(links[q])[1];
+        auto linked_pair = _facets_to_cells->links(links[q]);
+        std::int32_t linked_cell = linked_pair[0];
+        facet_indices(0) = linked_pair[1];
 
         // Compute Pi(x) from x, and gap = Pi(x) - x
         for (int k = 0; k < gdim; ++k)
