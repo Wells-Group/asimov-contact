@@ -69,7 +69,7 @@ public:
 
     std::vector<std::int32_t> marked_facets(num_facets, 0);
     // mark which facets are in any of the facet lists
-    for (size_t s = 0; _facets.size(); ++s)
+    for (size_t s = 0; s < _facets.size(); ++s)
       for (size_t i = 0; i < _facets[s].size(); ++i)
       {
         std::int32_t facet = _facets[s][i];
@@ -848,7 +848,7 @@ public:
     {
       auto facet_pair = _facets_to_cells->links(puppet_facets[i]);
       auto cell = facet_pair[0]; // extract cell
-      const std::int32_t local_index = _facet_pair[1];
+      const std::int32_t local_index = facet_pair[1];
 
       // extract local dofs
       auto x_dofs = x_dofmap.links(cell);

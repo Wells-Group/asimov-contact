@@ -178,22 +178,20 @@ def nitsche_rigid_surface(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTags, int
         for i in range(x.shape[1]):
             xi = x[:, i]
             facet = facets[i]
-            # FIXME: code crashes if the if statement is removed. Bug in compute_closes_entity.
-            if (np.argwhere(np.array(contact_facets) == facet)).shape[0] > 0:
-                # Compute distance between point and closest facet
-                index = np.argwhere(np.array(contact_facets) == facet)[0, 0]
-                facet_geometry = _cpp.mesh.entities_to_geometry(mesh, fdim, [facet], False)
-                coords0 = mesh_geometry[facet_geometry][0]
-                R = np.linalg.norm(_cpp.geometry.compute_distance_gjk(coords0, xi))
-                # If point on a facet in contact surface (i.e., if distance between point and closest
-                # facet is 0), use contact.facet_map(0) to find closest facet on rigid surface and
-                # compute distance vector
-                if np.isclose(R, 0):
-                    facet_2 = lookup.links(index)[0]
-                    facet2_geometry = _cpp.mesh.entities_to_geometry(mesh, fdim, [facet_2], False)
-                    coords = mesh_geometry[facet2_geometry][0]
-                    dist_vec = _cpp.geometry.compute_distance_gjk(coords, xi)
-                    dist_vec_array[: gdim, i] = dist_vec[: gdim]
+            # Compute distance between point and closest facet
+            index = np.argwhere(np.array(contact_facets) == facet)[0, 0]
+            facet_geometry = _cpp.mesh.entities_to_geometry(mesh, fdim, [facet], False)
+            coords0 = mesh_geometry[facet_geometry][0]
+            R = np.linalg.norm(_cpp.geometry.compute_distance_gjk(coords0, xi))
+            # If point on a facet in contact surface (i.e., if distance between point and closest
+            # facet is 0), use contact.facet_map(0) to find closest facet on rigid surface and
+            # compute distance vector
+            if np.isclose(R, 0):
+                facet_2 = lookup.links(index)[0]
+                facet2_geometry = _cpp.mesh.entities_to_geometry(mesh, fdim, [facet_2], False)
+                coords = mesh_geometry[facet2_geometry][0]
+                dist_vec = _cpp.geometry.compute_distance_gjk(coords, xi)
+                dist_vec_array[: gdim, i] = dist_vec[: gdim]
         return dist_vec_array
 
     # interpolate gap function
