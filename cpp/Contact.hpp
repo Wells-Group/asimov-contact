@@ -83,8 +83,8 @@ public:
 
     std::vector<bool> empty(num_facets, true);
     std::vector<std::int32_t> data(offsets[num_facets]);
-    for (size_t s = 0; s < _facets.size(); ++s)
-      for (size_t i = 0; i < _facets[s].size(); ++i)
+    for (std::size_t s = 0; s < _facets.size(); ++s)
+      for (std::size_t i = 0; i < _facets[s].size(); ++i)
       {
         std::int32_t facet = _facets[s][i];
         if (empty[facet])
@@ -105,6 +105,8 @@ public:
     _facets_to_cells
         = std::make_shared<dolfinx::graph::AdjacencyList<std::int32_t>>(
             data, offsets);
+    for (std::size_t s = 0; s < _facets.size(); ++s)
+      _submeshes[s] = dolfinx::mesh::create_submesh(*mesh, tdim, _facets[s]);
   }
 
   /// Return facets belonging to surface with index surface
@@ -918,6 +920,9 @@ public:
     const int tdim = mesh->topology().dim();
     const int fdim = tdim - 1;
 
+    // submesh info
+    auto candidate_mesh = std::get<0>(_submeshes[candidate_mt]);
+
     // Create _qp_ref_facet (quadrature points on reference facet)
     dolfinx_cuas::QuadratureRule q_rule(mesh->topology().cell_type(),
                                         _quadrature_degree, fdim);
@@ -948,10 +953,10 @@ public:
     auto qp_phys = _qp_phys[puppet_mt];
     // Create midpoint tree as compute_closest_entity will be called many
     // times
-    dolfinx::geometry::BoundingBoxTree master_bbox(*mesh, fdim,
+    dolfinx::geometry::BoundingBoxTree master_bbox(candidate_mesh, fdim,
                                                    candidate_facets);
     auto master_midpoint_tree = dolfinx::geometry::create_midpoint_tree(
-        *mesh, fdim, candidate_facets);
+        candidate_mesh, fdim, candidate_facets);
 
     std::vector<std::int32_t> data; // will contain closest candidate facet
     std::vector<std::int32_t> offset(1);
@@ -969,7 +974,7 @@ public:
         // Find closest facet to point
         std::vector<std::int32_t> search_result
             = dolfinx::geometry::compute_closest_entity(
-                master_bbox, master_midpoint_tree, *mesh, point);
+                master_bbox, master_midpoint_tree, candidate_mesh, point);
         data.push_back(search_result[0]);
       }
       offset.push_back(data.size());
@@ -1391,5 +1396,10 @@ private:
   std::array<std::vector<int32_t>, 2> _facets;
   // maximum number of cells linked to a cell on ith surface
   std::array<std::size_t, 2> _max_links = {0, 0};
+  // submeshes for contact surface
+  std::array<std::tuple<dolfinx::mesh::Mesh, std::vector<std::int32_t>,
+                        std::vector<std::int32_t>>,
+             2>
+      _submeshes;
 };
 } // namespace dolfinx_contact
