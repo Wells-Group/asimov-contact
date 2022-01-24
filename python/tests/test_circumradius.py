@@ -28,7 +28,7 @@ def test_circumradius(dim):
         u.interpolate(lambda x: (0.1 * (x[1] > 0.5), 0.1 * np.sin(2 * np.pi * x[2]), np.zeros(x.shape[1])))
     else:
         u.interpolate(lambda x: (0.1 * np.cos(x[1]) * (x[0] > 0.2), 0.1 * x[1] + 0.1 * np.sin(2 * np.pi * x[0])))
-    mesh.geometry.x[:, :mesh.geometry.dim] += u.compute_point_values()
+    dolfinx_contact.update_geometry(u._cpp_object, mesh)
 
     mesh.topology.create_connectivity(dim - 1, dim)
     f_to_c = mesh.topology.connectivity(dim - 1, dim)

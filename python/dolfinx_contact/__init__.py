@@ -7,9 +7,8 @@
 # flake8: noqa
 
 
-from dolfinx_contact.cpp import Kernel, pack_circumradius_facet
-
+from dolfinx_contact.cpp import Kernel, pack_circumradius_facet, update_geometry
 from .helpers import epsilon, lame_parameters, sigma_func
 
 __all__ = ["lame_parameters", "epsilon", "sigma_func", "Kernel",
-           "pack_circumradius_facet"]
+           "pack_circumradius_facet", "update_geometry"]
