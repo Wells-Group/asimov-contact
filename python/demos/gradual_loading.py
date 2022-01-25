@@ -9,6 +9,7 @@ from mpi4py import MPI
 from dolfinx_contact.meshing import (convert_mesh, create_circle_circle_mesh,
                                      create_circle_plane_mesh,
                                      create_sphere_plane_mesh)
+from dolfinx_contact import update_geometry
 from dolfinx_contact.one_sided.nitsche_rigid_surface_cuas import \
     nitsche_rigid_surface_cuas
 
@@ -198,10 +199,7 @@ if __name__ == "__main__":
             xdmf.write_function(u1)
 
         # Perturb mesh with solution displacement
-        delta_x = u1.compute_point_values()
-        if delta_x.shape[1] < 3:
-            delta_x = np.hstack([delta_x, np.zeros((delta_x.shape[0], 3 - delta_x.shape[1]))])
-        mesh.geometry.x[:] += delta_x
+        update_geometry(u1._cpp_object, mesh)
 
         # Accumulate displacements
         u.x.array[:] += u1.x.array[:]

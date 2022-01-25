@@ -5,7 +5,6 @@
 // SPDX-License-Identifier:    MIT
 
 #include "geometric_quantities.h"
-#include "utils.h"
 #include <xtensor/xio.hpp>
 #include <xtensor/xmath.hpp>
 #include <xtensor/xnorm.hpp>

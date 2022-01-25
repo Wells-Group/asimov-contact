@@ -198,4 +198,7 @@ PYBIND11_MODULE(cpp, m)
           return dolfinx_wrappers::as_pyarray(std::move(coeffs),
                                               std::array{shape0, cstride});
         });
+  m.def("update_geometry", [](const dolfinx::fem::Function<PetscScalar>& u,
+                              std::shared_ptr<dolfinx::mesh::Mesh> mesh)
+        { dolfinx_contact::update_geometry(u, mesh); });
 }
