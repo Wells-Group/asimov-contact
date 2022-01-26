@@ -1,8 +1,8 @@
 name: Run sonarcloud analysis
 on:
   push:
-    branches-ignore:
-      - "**"
+   branches-ignore:
+      - '**'
   #   branches:
   #     - main
   #     - dokken/*
