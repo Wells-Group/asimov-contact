@@ -160,8 +160,8 @@ def nitsche_unbiased(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTags, int, int
     material_1 = dolfinx_cuas.pack_coefficients([mu2, lmbda2], entities_1)
 
     # Pack circumradius on each surface
-    h_0 = dolfinx_contact.pack_circumradius_facet(mesh, facets_0)
-    h_1 = dolfinx_contact.pack_circumradius_facet(mesh, facets_1)
+    h_0 = dolfinx_contact.pack_circumradius(mesh, entities_0)
+    h_1 = dolfinx_contact.pack_circumradius(mesh, entities_1)
 
     # Pack gap, normals and test functions on each surface
     gap_0 = contact.pack_gap(0)

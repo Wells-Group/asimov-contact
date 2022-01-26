@@ -158,7 +158,7 @@ def nitsche_rigid_surface_cuas(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTags
     # Pack mu and lambda on facets
     coeffs = dolfinx_cuas.pack_coefficients([mu2, lmbda2], integral_entities)
     # Pack circumradius on facets
-    h_facets = dolfinx_contact.pack_circumradius_facet(mesh, contact_facets)
+    h_facets = dolfinx_contact.pack_circumradius(mesh, integral_entities)
 
     # Create contact class
     contact = dolfinx_contact.cpp.Contact(facet_marker, [contact_value_elastic, contact_value_rigid], V._cpp_object)

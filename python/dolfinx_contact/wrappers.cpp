@@ -187,13 +187,22 @@ PYBIND11_MODULE(cpp, m)
                                               std::array{shape0, cstride});
         });
 
-  m.def("pack_circumradius_facet",
-        [](std::shared_ptr<const dolfinx::mesh::Mesh> mesh,
+  m.def("pack_circumradius",
+        [](const dolfinx::mesh::Mesh& mesh,
            const py::array_t<std::int32_t, py::array::c_style>& active_facets)
         {
-          auto [coeffs, cstride] = dolfinx_contact::pack_circumradius_facet(
-              mesh, xtl::span<const std::int32_t>(active_facets.data(),
-                                                  active_facets.size()));
+          assert(active_facets.ndim() == 2);
+          const std::size_t shape_0 = active_facets.shape(0);
+          auto ents = active_facets.unchecked();
+          // FIXME: How to avoid copy here
+          std::vector<std::pair<std::int32_t, int>> facets;
+          facets.reserve(shape_0);
+          for (std::size_t i = 0; i < shape_0; i++)
+            facets.emplace_back(ents(i, 0), ents(i, 1));
+          auto facet_span = xtl::span<const std::pair<std::int32_t, int>>(
+              facets.data(), facets.size());
+          auto [coeffs, cstride]
+              = dolfinx_contact::pack_circumradius(mesh, facet_span);
           int shape0 = cstride == 0 ? 0 : coeffs.size() / cstride;
           return dolfinx_wrappers::as_pyarray(std::move(coeffs),
                                               std::array{shape0, cstride});

@@ -95,11 +95,11 @@ xt::xtensor<double, 2> dolfinx_contact::push_forward_facet_normal(
 
 //-----------------------------------------------------------------------------
 double dolfinx_contact::compute_circumradius(
-    std::shared_ptr<const dolfinx::mesh::Mesh> mesh, double detJ,
-    const xt::xtensor<double, 2> coordinate_dofs)
+    const dolfinx::mesh::Mesh& mesh, double detJ,
+    const xt::xtensor<double, 2>& coordinate_dofs)
 {
-  const dolfinx::mesh::CellType cell_type = mesh->topology().cell_type();
-  const int gdim = mesh->geometry().dim();
+  const dolfinx::mesh::CellType cell_type = mesh.topology().cell_type();
+  const int gdim = mesh.geometry().dim();
 
   switch (cell_type)
   {
