@@ -1,22 +1,23 @@
 name: Run sonarcloud analysis
 on:
   push:
-   branches-ignore:
-      - '**'
-  #   branches:
-  #     - main
-  #     - dokken/*
-  # pull_request:
-  #   branches:
-  #     - main
+    # branches-ignore:
+    #   - "**"
+    branches:
+      - main
+      - dokken/*
+  pull_request:
+    branches:
+      - main
 jobs:
   build:
     name: Sonarcloud analysis
     runs-on: ubuntu-latest
     container: dolfinx/dev-env
     env:
-      SONAR_SCANNER_VERSION: 4.6.1.2450 # Find the latest version in the "Linux" link on this page:
-                                        # https://sonarcloud.io/documentation/analysis/scan/sonarscanner/
+      SONAR_SCANNER_VERSION:
+        4.6.1.2450 # Find the latest version in the "Linux" link on this page:
+        # https://sonarcloud.io/documentation/analysis/scan/sonarscanner/
       SONAR_SERVER_URL: "https://sonarcloud.io"
       BUILD_WRAPPER_OUT_DIR: build_wrapper_output_directory # Directory where build-wrapper output will be placed
       PETSC_ARCH: linux-gnu-real-32
@@ -87,13 +88,13 @@ jobs:
           path: ./asimov-custom-assemblers
           repository: Wells-Group/asimov-custom-assemblers
           ref: dokken/pkg-config
-   
+
       - name: Install custom assemblers
         run: |
           cmake -G Ninja -DCMAKE_BUILD_TYPE=Debug -B build-cuas -S ./asimov-custom-assemblers/cpp
           ninja -C build-cuas install
           BUILD_TYPE=Debug python3 -m pip -v install ./asimov-custom-assemblers/python/
-      
+
       - name: Run build-wrapper
         run: |
           cmake -S ./cpp -B build-contact
