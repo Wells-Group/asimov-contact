@@ -133,7 +133,7 @@ double dolfinx_contact::compute_circumradius(
     // R = sqrt((aA + bB + cC)(aA+bB-cC)(aA-bB+cC)(-aA +bB+cC))/24V
     const double ref_volume
         = basix::cell::volume(basix::cell::type::tetrahedron);
-    double cellvolume = detJ * ref_volume;
+    double cellvolume = std::abs(detJ) * ref_volume;
 
     // Edges ordered as a, b, c, A, B, C
     std::array<double, 6> edges = {0, 0, 0, 0, 0, 0};
