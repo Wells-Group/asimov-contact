@@ -16,7 +16,8 @@ jobs:
     container: dolfinx/dev-env
     env:
       SONAR_SCANNER_VERSION:
-        4.6.1.2450 # Find the latest version in the "Linux" link on this page:
+        4.6.2.2472 # Find the latest version at:
+        # https://github.com/SonarSource/sonar-scanner-cli/tags
         # https://sonarcloud.io/documentation/analysis/scan/sonarscanner/
       SONAR_SERVER_URL: "https://sonarcloud.io"
       BUILD_WRAPPER_OUT_DIR: build_wrapper_output_directory # Directory where build-wrapper output will be placed
