@@ -95,11 +95,11 @@ xt::xtensor<double, 2> dolfinx_contact::push_forward_facet_normal(
 
 //-----------------------------------------------------------------------------
 double dolfinx_contact::compute_circumradius(
-    std::shared_ptr<const dolfinx::mesh::Mesh> mesh, double detJ,
-    const xt::xtensor<double, 2> coordinate_dofs)
+    const dolfinx::mesh::Mesh& mesh, double detJ,
+    const xt::xtensor<double, 2>& coordinate_dofs)
 {
-  const dolfinx::mesh::CellType cell_type = mesh->topology().cell_type();
-  const int gdim = mesh->geometry().dim();
+  const dolfinx::mesh::CellType cell_type = mesh.topology().cell_type();
+  const int gdim = mesh.geometry().dim();
 
   switch (cell_type)
   {
@@ -133,7 +133,7 @@ double dolfinx_contact::compute_circumradius(
     // R = sqrt((aA + bB + cC)(aA+bB-cC)(aA-bB+cC)(-aA +bB+cC))/24V
     const double ref_volume
         = basix::cell::volume(basix::cell::type::tetrahedron);
-    double cellvolume = detJ * ref_volume;
+    double cellvolume = std::abs(detJ) * ref_volume;
 
     // Edges ordered as a, b, c, A, B, C
     std::array<double, 6> edges = {0, 0, 0, 0, 0, 0};

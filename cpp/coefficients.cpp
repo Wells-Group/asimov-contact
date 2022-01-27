@@ -268,30 +268,23 @@ dolfinx_contact::pack_coefficient_quadrature(
   }
   return {std::move(coefficients), cstride};
 }
-
-std::pair<std::vector<PetscScalar>, int>
-dolfinx_contact::pack_circumradius_facet(
-    std::shared_ptr<const dolfinx::mesh::Mesh> mesh,
-    const xtl::span<const std::int32_t>& active_facets)
+//-----------------------------------------------------------------------------
+std::pair<std::vector<PetscScalar>, int> dolfinx_contact::pack_circumradius(
+    const dolfinx::mesh::Mesh& mesh,
+    const tcb::span<const std::pair<std::int32_t, int>>& active_facets)
 {
-  const int tdim = mesh->topology().dim();
-  const int gdim = mesh->geometry().dim();
-  const int fdim = tdim - 1;
-  const std::size_t num_facets = active_facets.size();
-
-  // Connectivity to evaluate at quadrature points
-  // FIXME: Move create_connectivity out of this function and call before
-  // calling the function...
-  mesh->topology_mutable().create_connectivity(fdim, tdim);
-  auto f_to_c = mesh->topology().connectivity(fdim, tdim);
-  mesh->topology_mutable().create_connectivity(tdim, fdim);
-  auto c_to_f = mesh->topology().connectivity(tdim, fdim);
+  if (!mesh.geometry().cmap().is_affine())
+    throw std::runtime_error("Non-affine circumradius is not implemented");
 
   // Tabulate element at quadrature points
   // NOTE: Assuming no derivatives for now, should be reconsidered later
-  const dolfinx::mesh::CellType cell_type = mesh->topology().cell_type();
+  const dolfinx::mesh::CellType cell_type = mesh.topology().cell_type();
 
-  // Quadrature points for piecewise constant
+  // NOTE: This is not correct for non-affine geometries, then the quadrature
+  // rule has to be passed in Quadrature points for piecewise constant
+  const int tdim = mesh.topology().dim();
+  const int gdim = mesh.geometry().dim();
+  const int fdim = tdim - 1;
   dolfinx_cuas::QuadratureRule q_rule(cell_type, 0, fdim);
 
   // FIXME: This does not work for prism elements
@@ -303,11 +296,11 @@ dolfinx_contact::pack_circumradius_facet(
 
   // Get geometry data
   const dolfinx::graph::AdjacencyList<std::int32_t>& x_dofmap
-      = mesh->geometry().dofmap();
+      = mesh.geometry().dofmap();
 
   // FIXME: Add proper interface for num coordinate dofs
   const std::size_t num_dofs_g = x_dofmap.num_links(0);
-  xtl::span<const double> x_g = mesh->geometry().x();
+  xtl::span<const double> x_g = mesh.geometry().x();
 
   // Prepare geometry data structures
   xt::xtensor<double, 3> J = xt::zeros<double>(
@@ -317,7 +310,7 @@ dolfinx_contact::pack_circumradius_facet(
       = xt::zeros<double>({num_dofs_g, (std::size_t)gdim});
 
   // Get coordinate map
-  const dolfinx::fem::CoordinateElement& cmap = mesh->geometry().cmap();
+  const dolfinx::fem::CoordinateElement& cmap = mesh.geometry().cmap();
 
   xt::xtensor<double, 5> dphi_c(
       {num_local_facets, (std::size_t)tdim, num_points, num_dofs_g, 1});
@@ -333,27 +326,12 @@ dolfinx_contact::pack_circumradius_facet(
 
   // Prepare output variables
   std::vector<PetscScalar> circumradius;
-  circumradius.reserve(num_facets);
-  const int cstride = 1;
+  circumradius.reserve(active_facets.size());
 
-  for (auto facet : active_facets)
+  // Create tmp array to host dphi
+  xt::xtensor<double, 2> dphi({(std::size_t)tdim, num_dofs_g});
+  for (auto [cell, local_index] : active_facets)
   {
-
-    // NOTE Add two separate loops here, one for and one without dof
-    // transforms
-
-    // FIXME: Assuming exterior facets
-    // get cell/local facet index
-    auto cells = f_to_c->links(facet);
-    // since the facet is on the boundary it should only link to one cell
-    assert(cells.size() == 1);
-    auto cell = cells[0]; // extract cell
-
-    // find local index of facet
-    auto cell_facets = c_to_f->links(cell);
-    auto local_facet = std::find(cell_facets.begin(), cell_facets.end(), facet);
-    const auto local_index = std::distance(cell_facets.data(), local_facet);
-
     // Get cell geometry (coordinate dofs)
     auto x_dofs = x_dofmap.links(cell);
     for (std::size_t i = 0; i < num_dofs_g; ++i)
@@ -365,12 +343,10 @@ dolfinx_contact::pack_circumradius_facet(
 
     // Compute determinant of Jacobian which is used to compute the area/volume
     // of the cell
-    auto dphi_ci = xt::view(dphi_c, local_index, xt::all(), xt::all(),
-                            xt::all(), xt::all());
     J.fill(0);
     auto _J = xt::view(J, 0, xt::all(), xt::all());
-    xt::xtensor<double, 2> dphi
-        = xt::view(dphi_c, local_index, xt::all(), 0, xt::all(), 0);
+
+    dphi = xt::view(dphi_c, local_index, xt::all(), 0, xt::all(), 0);
     dolfinx::fem::CoordinateElement::compute_jacobian(dphi, coordinate_dofs,
                                                       _J);
     detJ[0] = dolfinx::fem::CoordinateElement::compute_jacobian_determinant(_J);
@@ -381,5 +357,6 @@ dolfinx_contact::pack_circumradius_facet(
     circumradius.push_back(
         compute_circumradius(mesh, detJ[0], coordinate_dofs));
   }
+  const int cstride = 1;
   return {std::move(circumradius), cstride};
 }

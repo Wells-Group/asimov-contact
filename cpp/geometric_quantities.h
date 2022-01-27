@@ -43,8 +43,7 @@ push_forward_facet_normal(const xt::xtensor<double, 2>& x,
 /// reference cell
 /// @param[in] coordinate_dofs The cell geometry
 /// @returns The circumradius of the cell
-double compute_circumradius(std::shared_ptr<const dolfinx::mesh::Mesh> mesh,
-                            double detJ,
-                            const xt::xtensor<double, 2> coordinate_dofs);
+double compute_circumradius(const dolfinx::mesh::Mesh& mesh, double detJ,
+                            const xt::xtensor<double, 2>& coordinate_dofs);
 
 } // namespace dolfinx_contact
