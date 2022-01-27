@@ -76,7 +76,6 @@ PYBIND11_MODULE(cpp, m)
           py::return_value_policy::take_ownership, py::arg("a"),
           py::arg("type") = std::string(),
           "Create a PETSc Mat for two-sided contact.")
-      .def("facets", &dolfinx_contact::Contact::facets)
       .def("qp_phys",
            [](dolfinx_contact::Contact& self, int origin_meshtag, int facet)
            {
