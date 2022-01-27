@@ -1043,8 +1043,8 @@ public:
                       const xtl::span<const PetscScalar>& gap)
   {
     // Mesh info
-    auto mesh = _submeshes[origin_meshtag].mesh(); // mesh
-    const int gdim = mesh->geometry().dim();       // geometrical dimension
+    auto mesh = _submeshes[_opposites[origin_meshtag]].mesh(); // mesh
+    const int gdim = mesh->geometry().dim(); // geometrical dimension
     const int tdim = mesh->topology().dim();
     const int fdim = tdim - 1;
     auto cmap = mesh->geometry().cmap();
@@ -1062,7 +1062,7 @@ public:
     auto map = _facet_maps[origin_meshtag];
     auto qp_phys = _qp_phys[origin_meshtag];
     auto puppet_facets = _cell_facet_pairs[origin_meshtag];
-    auto facet_map = _submeshes[origin_meshtag].facet_map();
+    auto facet_map = _submeshes[_opposites[origin_meshtag]].facet_map();
     std::size_t max_links = std::max(_max_links[0], _max_links[1]);
     const std::int32_t num_facets = puppet_facets.size();
     const std::int32_t num_q_points = _qp_ref_facet[0].shape(0);
@@ -1157,7 +1157,7 @@ public:
   {
 
     // Mesh info
-    auto submesh = _submeshes[origin_meshtag];
+    auto submesh = _submeshes[_opposites[origin_meshtag]];
     auto mesh = submesh.mesh();                      // mesh
     const std::size_t gdim = mesh->geometry().dim(); // geometrical dimension
     const std::size_t bs = _V->element()->block_size();
@@ -1355,8 +1355,9 @@ public:
 private:
   int _quadrature_degree = 3;
   std::shared_ptr<dolfinx::mesh::MeshTags<std::int32_t>> _marker;
-  std::array<int, 2> _surfaces;           // meshtag values for surfaces
-  std::array<int, 2> _opposites = {0, 0}; // meshtag values for surfaces
+  std::array<int, 2> _surfaces; // meshtag values for surfaces
+  // store index of candidate_surface for each puppet_surface
+  std::array<int, 2> _opposites = {0, 0};
   std::shared_ptr<dolfinx::fem::FunctionSpace> _V; // Function space
   // _facets_maps[i] = adjacency list of closest facet on candidate surface for
   // every quadrature point in _qp_phys[i] (quadrature points on every facet of
@@ -1376,7 +1377,7 @@ private:
   std::array<std::size_t, 2> _max_links = {0, 0};
   // submeshes for contact surface
   std::array<SubMesh, 2> _submeshes;
-  // facets
+  // facets as (cell, facet) pairs
   std::array<std::vector<std::pair<std::int32_t, int>>, 2> _cell_facet_pairs;
 };
 } // namespace dolfinx_contact
