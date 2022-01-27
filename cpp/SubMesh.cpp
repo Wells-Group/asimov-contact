@@ -57,9 +57,9 @@ dolfinx_contact::SubMesh::SubMesh(
                    offsets.begin() + 1);
   // fill data array
   std::vector<std::int32_t> data(offsets[num_cells]);
-  for (std::int32_t c = 0; c < cells.size(); ++c)
+  for (std::size_t c = 0; c < cells.size(); ++c)
   {
-    data[offsets[cells[c]]] = c;
+    data[offsets[cells[c]]] = (std::int32_t)c;
   }
 
   // create adjacency list
@@ -76,7 +76,7 @@ dolfinx_contact::SubMesh::SubMesh(
 
   // mark which facets are in any of the facet lists
   std::vector<std::int32_t> marked_facets(num_facets, 0);
-  for (size_t i = 0; i < cell_facet_pairs.size(); ++i)
+  for (std::size_t i = 0; i < cell_facet_pairs.size(); ++i)
   {
     auto facet_pair = cell_facet_pairs[i];
     // get submesh cell from parent cell
