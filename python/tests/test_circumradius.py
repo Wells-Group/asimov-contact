@@ -5,8 +5,9 @@
 import numpy as np
 import pytest
 import ufl
-from dolfinx.fem import Function, FunctionSpace, LinearProblem
+from dolfinx.fem import Function, FunctionSpace, LinearProblem, IntegralType
 from dolfinx.mesh import create_unit_cube, create_unit_square, locate_entities_boundary
+from dolfinx_cuas import compute_active_entities
 from mpi4py import MPI
 
 import dolfinx_contact.cpp
@@ -54,5 +55,7 @@ def test_circumradius(dim):
     for i, facet in enumerate(facets):
         cell = f_to_c.links(facet)[0]
         h2[i] = uh.vector[cell]
-    h = dolfinx_contact.pack_circumradius_facet(mesh, facets).reshape(-1)
+
+    active_facets = compute_active_entities(mesh, facets, IntegralType.exterior_facet)
+    h = dolfinx_contact.pack_circumradius(mesh, active_facets).reshape(-1)
     assert np.allclose(h, h2)

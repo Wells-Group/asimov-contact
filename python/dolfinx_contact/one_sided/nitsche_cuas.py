@@ -146,7 +146,7 @@ def nitsche_cuas(mesh: dmesh.Mesh, mesh_data: Tuple[dmesh.MeshTags, int, int],
     # Pack mu and lambda on facets
     coeffs = dolfinx_cuas.pack_coefficients([mu2, lmbda2], integral_entities)
     # Pack circumradius of facets
-    h_facets = dolfinx_contact.pack_circumradius_facet(mesh, bottom_facets)
+    h_facets = dolfinx_contact.pack_circumradius(mesh, integral_entities)
 
     # Create contact class
     contact = dolfinx_contact.cpp.Contact(facet_marker, [contact_value, dirichlet_value], V._cpp_object)
