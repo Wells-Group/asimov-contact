@@ -16,8 +16,8 @@ dolfinx_contact::SubMesh::SubMesh(
   // create sorted vector of unique cells adjacent to the input facets
   std::vector<std::int32_t> cells(cell_facet_pairs.size());
   for (std::size_t f = 0; f < cell_facet_pairs.size(); ++f)
-    cells[f] = cell_facet_pairs[f].first; // retrieve cells
-  std::sort(cells.begin(), cells.end());  // sort cells
+    cells[f] = cell_facet_pairs[f].first;              // retrieve cells
+  dolfinx::radix_sort<std::int32_t>(xtl::span(cells)); // sort cells
   cells.erase(std::unique(cells.begin(), cells.end()),
               cells.end()); // remove duplicates
 
@@ -56,7 +56,7 @@ dolfinx_contact::SubMesh::SubMesh(
   std::partial_sum(marked_cells.begin(), marked_cells.end(),
                    offsets.begin() + 1);
   // fill data array
-  std::vector<std::int32_t> data(offsets[num_cells]);
+  std::vector<std::int32_t> data(offsets.back());
   for (std::size_t c = 0; c < cells.size(); ++c)
   {
     data[offsets[cells[c]]] = (std::int32_t)c;
@@ -92,7 +92,7 @@ dolfinx_contact::SubMesh::SubMesh(
                    offsets2.begin() + 1);
 
   // fill data
-  std::vector<std::int32_t> data2(offsets2[num_facets]);
+  std::vector<std::int32_t> data2(offsets2.back());
   for (std::size_t i = 0; i < cell_facet_pairs.size(); ++i)
   {
     auto facet_pair = cell_facet_pairs[i];
@@ -124,15 +124,15 @@ dolfinx::fem::FunctionSpace dolfinx_contact::SubMesh::create_functionspace(
 }
 
 //-----------------------------------------------------------------------------------------------
-dolfinx::fem::Function<PetscScalar> dolfinx_contact::SubMesh::copy_function(
-    dolfinx::fem::Function<PetscScalar>& u,
-    std::shared_ptr<dolfinx::fem::FunctionSpace> V_sub)
+void dolfinx_contact::SubMesh::copy_function(
+    dolfinx::fem::Function<PetscScalar>& u_parent,
+    dolfinx::fem::Function<PetscScalar>& u_sub)
 {
-  // create function in function space on submesh
-  auto u_sub = dolfinx::fem::Function<PetscScalar>(V_sub);
+  // retrieve function space on submesh
+  auto V_sub = u_sub.function_space();
   // get dofmaps for both function spaces
   auto dofmap_sub = V_sub->dofmap();
-  auto dofmap_parent = u.function_space()->dofmap();
+  auto dofmap_parent = u_parent.function_space()->dofmap();
   // Assume tdim is the same for both
   const int tdim = _mesh->topology().dim();
   // get number of submesh cells on proces
@@ -146,7 +146,7 @@ dolfinx::fem::Function<PetscScalar> dolfinx_contact::SubMesh::copy_function(
 
   // retrieve value array
   auto u_sub_data = u_sub.x()->mutable_array();
-  const auto& u_data = u.x()->array();
+  const auto& u_data = u_parent.x()->array();
 
   // copy data from u into u_sub
   for (std::int32_t c = 0; c < num_cells; ++c)
@@ -160,7 +160,4 @@ dolfinx::fem::Function<PetscScalar> dolfinx_contact::SubMesh::copy_function(
         u_sub_data[bs * dofs_sub[i] + j] = u_data[bs * dofs_parent[i] + j];
       }
   }
-
-  // return function on submesh
-  return u_sub;
 }

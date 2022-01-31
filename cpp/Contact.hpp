@@ -829,7 +829,7 @@ public:
 
       // extract local dofs
       assert(cell_map->num_links(cell) == 1);
-      std::int32_t submesh_cell = cell_map->links(cell)[0];
+      const std::int32_t submesh_cell = cell_map->links(cell)[0];
       auto x_dofs = x_dofmap.links(submesh_cell);
       const std::size_t num_dofs_g = x_dofmap.num_links(submesh_cell);
       xt::xtensor<double, 2> coordinate_dofs
@@ -1172,7 +1172,8 @@ public:
     const int cstride = num_q_points * bs;
     auto V_sub = std::make_shared<dolfinx::fem::FunctionSpace>(
         submesh.create_functionspace(_V));
-    auto u_sub = submesh.copy_function(*u, V_sub);
+    auto u_sub = dolfinx::fem::Function<PetscScalar>(V_sub);
+    submesh.copy_function(*u, u_sub);
 
     xt::xtensor<double, 2> points = xt::zeros<double>({num_q_points, gdim});
     std::vector<std::int32_t> cells(num_q_points, 0);

@@ -6,6 +6,7 @@
 
 #pragma once
 #include <dolfinx.h>
+#include <dolfinx/common/sort.h>
 #include <dolfinx/fem/DofMap.h>
 #include <dolfinx/fem/Function.h>
 #include <dolfinx/fem/FunctionSpace.h>
@@ -64,11 +65,10 @@ public:
 
   // Copy of a function on the parent mesh/ in the parent function space
   // to submesh/ function space on submesh
-  ///@param[in] u - functio to be copied
-  ///@param[in] V_sub - the function space on the submesh
-  dolfinx::fem::Function<PetscScalar>
-  copy_function(dolfinx::fem::Function<PetscScalar>& u,
-                std::shared_ptr<dolfinx::fem::FunctionSpace> V_sub);
+  ///@param[in] u_parent - function to be copied
+  ///@param[in, out] u_sub - function into which the function values are to be copied
+  void copy_function(dolfinx::fem::Function<PetscScalar>& u_parent,
+                     dolfinx::fem::Function<PetscScalar>& u_sub);
 
 private:
   // the submesh mesh
