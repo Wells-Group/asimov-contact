@@ -81,6 +81,10 @@ public:
   /// @param[in] surface - the index of the surface
   const int surface_mt(int surface) const { return _surfaces[surface]; }
 
+  /// Return index of candidate surface
+  /// @param[in] surface - the index of the surface
+  const int opposite(int surface) const { return _opposites[surface]; }
+
   // return quadrature degree
   const int quadrature_degree() const { return _quadrature_degree; }
   void set_quadrature_degree(int deg) { _quadrature_degree = deg; }
@@ -101,6 +105,9 @@ public:
     return _qp_phys[surface];
   }
 
+  /// Return the submesh corresponding to surface
+  /// @param[in] surface The index of the surface (0 or 1).
+  SubMesh submesh(int surface) { return _submeshes[surface]; }
   // Return meshtags
   std::shared_ptr<dolfinx::mesh::MeshTags<std::int32_t>> meshtags() const
   {
@@ -846,13 +853,6 @@ public:
   /// It is therefore called inside create_distance_map
   void max_links(int origin_meshtag)
   {
-    // facet to cell connectivity
-    auto mesh = _marker->mesh();
-    auto dofmap = _V->dofmap();
-    const int gdim = mesh->geometry().dim(); // geometrical dimension
-    const int tdim = mesh->topology().dim(); // topological dimension
-    const int fdim = tdim - 1;               // topological dimension of facet
-
     std::size_t max_links = 0;
     // Select which side of the contact interface to loop from and get the
     // correct map
@@ -861,7 +861,6 @@ public:
     auto facet_map = _submeshes[_opposites[origin_meshtag]].facet_map();
     for (std::int32_t i = 0; i < active_facets.size(); i++)
     {
-      auto cell = active_facets[i].first;
       std::vector<std::int32_t> linked_cells;
       auto links = map->links(i);
       for (auto link : links)

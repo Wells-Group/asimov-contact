@@ -45,11 +45,11 @@ def create_circle_plane_mesh(filename: str):
         # Synchronize and create physical tags
         gmsh.model.occ.synchronize()
         gmsh.model.addPhysicalGroup(2, [surface])
-        bndry = gmsh.model.getBoundary([(2, surface)])
+        bndry = gmsh.model.getBoundary([(2, surface)], oriented=False)
         [gmsh.model.addPhysicalGroup(b[0], [b[1]]) for b in bndry]
 
         gmsh.model.addPhysicalGroup(2, [surface2], 2)
-        bndry2 = gmsh.model.getBoundary([(2, surface2)])
+        bndry2 = gmsh.model.getBoundary([(2, surface2)], oriented=False)
         [gmsh.model.addPhysicalGroup(b[0], [b[1]]) for b in bndry2]
 
         gmsh.model.mesh.field.add("Distance", 1)
@@ -107,11 +107,11 @@ def create_circle_circle_mesh(filename: str):
         gmsh.model.occ.addPoint(0.5, 0.2, 0, tag=17)
         gmsh.model.occ.synchronize()
         gmsh.model.addPhysicalGroup(2, [surface])
-        bndry = gmsh.model.getBoundary([(2, surface)])
+        bndry = gmsh.model.getBoundary([(2, surface)], oriented=False)
         [gmsh.model.addPhysicalGroup(b[0], [b[1]]) for b in bndry]
 
         gmsh.model.addPhysicalGroup(2, [surface2], 2)
-        bndry2 = gmsh.model.getBoundary([(2, surface2)])
+        bndry2 = gmsh.model.getBoundary([(2, surface2)], oriented=False)
         [gmsh.model.addPhysicalGroup(b[0], [b[1]]) for b in bndry2]
 
         gmsh.model.mesh.field.add("Distance", 1)
@@ -167,19 +167,19 @@ def create_box_mesh_2D(filename: str):
         gmsh.model.occ.synchronize()
         res = 0.1
         # Set mesh sizes on the points from the surface we are extruding
-        top_nodes = gmsh.model.getBoundary([(2, surface)], recursive=True)
+        top_nodes = gmsh.model.getBoundary([(2, surface)], recursive=True, oriented=False)
         gmsh.model.occ.mesh.setSize(top_nodes, res)
-        bottom_nodes = gmsh.model.getBoundary([(2, surface2)], recursive=True)
+        bottom_nodes = gmsh.model.getBoundary([(2, surface2)], recursive=True, oriented=False)
         gmsh.model.occ.mesh.setSize(bottom_nodes, 2 * res)
 
         # Synchronize and create physical tags
         gmsh.model.occ.synchronize()
         gmsh.model.addPhysicalGroup(2, [surface])
-        bndry = gmsh.model.getBoundary([(2, surface)])
+        bndry = gmsh.model.getBoundary([(2, surface)], oriented=False)
         [gmsh.model.addPhysicalGroup(b[0], [b[1]]) for b in bndry]
 
         gmsh.model.addPhysicalGroup(2, [surface2], 2)
-        bndry2 = gmsh.model.getBoundary([(2, surface2)])
+        bndry2 = gmsh.model.getBoundary([(2, surface2)], oriented=False)
         [gmsh.model.addPhysicalGroup(b[0], [b[1]]) for b in bndry2]
 
         gmsh.model.mesh.generate(2)
@@ -225,11 +225,11 @@ def create_box_mesh_3D(filename: str):
         # Synchronize and create physical tags
         gmsh.model.occ.synchronize()
         gmsh.model.addPhysicalGroup(3, [box])
-        bndry = gmsh.model.getBoundary([(2, box)])
+        bndry = gmsh.model.getBoundary([(2, box)], oriented=False)
         [gmsh.model.addPhysicalGroup(b[0], [b[1]]) for b in bndry]
 
         gmsh.model.addPhysicalGroup(3, [box2])
-        bndry2 = gmsh.model.getBoundary([(2, box2)])
+        bndry2 = gmsh.model.getBoundary([(2, box2)], oriented=False)
         [gmsh.model.addPhysicalGroup(b[0], [b[1]]) for b in bndry2]
 
         gmsh.model.mesh.generate(3)
@@ -268,10 +268,10 @@ def create_sphere_plane_mesh(filename: str):
         # Synchronize and create physical tags
         gmsh.model.occ.synchronize()
 
-        sphere_boundary = gmsh.model.getBoundary(out_vol_tags)
+        sphere_boundary = gmsh.model.getBoundary(out_vol_tags, oriented=False)
         for boundary_tag in sphere_boundary:
             gmsh.model.addPhysicalGroup(boundary_tag[0], boundary_tag[1:2])
-        box_boundary = gmsh.model.getBoundary([(3, box)])
+        box_boundary = gmsh.model.getBoundary([(3, box)], oriented=False)
         for boundary_tag in box_boundary:
             gmsh.model.addPhysicalGroup(boundary_tag[0], boundary_tag[1:2])
 
@@ -326,10 +326,10 @@ def create_sphere_sphere_mesh(filename: str):
         # Synchronize and create physical tags
         gmsh.model.occ.synchronize()
 
-        sphere_boundary = gmsh.model.getBoundary(out_vol_tags)
+        sphere_boundary = gmsh.model.getBoundary(out_vol_tags, oriented=False)
         for boundary_tag in sphere_boundary:
             gmsh.model.addPhysicalGroup(boundary_tag[0], boundary_tag[1:2])
-        sphere_boundary2 = gmsh.model.getBoundary(out_vol_tags2)
+        sphere_boundary2 = gmsh.model.getBoundary(out_vol_tags2, oriented=False)
         for boundary_tag in sphere_boundary2:
             gmsh.model.addPhysicalGroup(boundary_tag[0], boundary_tag[1:2])
 
