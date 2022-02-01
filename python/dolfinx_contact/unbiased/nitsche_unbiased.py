@@ -19,6 +19,8 @@ from dolfinx_contact.helpers import epsilon, lame_parameters, sigma_func, rigid_
 
 kt = dolfinx_contact.cpp.Kernel
 
+__all__ = ["nitsche_unbiased"]
+
 
 def nitsche_unbiased(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTags, int, int, int, int],
                      physical_parameters: dict = {}, nitsche_parameters: Dict[str, float] = {},

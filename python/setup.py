@@ -72,7 +72,7 @@ setup(name='dolfinx_contact',
 
       author='Sarah Roggendorf',
       python_requires='>3.6.0',
-      packages=['dolfinx_contact', "dolfinx_contact.one_sided", "dolfinx_contact.meshing"],
+      packages=['dolfinx_contact', "dolfinx_contact.one_sided", "dolfinx_contact.meshing", "dolfinx_contact.unbiased"],
       ext_modules=[CMakeExtension('dolfinx_contact.cpp')],
       cmdclass=dict(build_ext=CMakeBuild),
       install_requires=REQUIREMENTS,

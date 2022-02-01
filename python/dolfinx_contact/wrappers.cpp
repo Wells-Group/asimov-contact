@@ -76,14 +76,42 @@ PYBIND11_MODULE(cpp, m)
           py::return_value_policy::take_ownership, py::arg("a"),
           py::arg("type") = std::string(),
           "Create a PETSc Mat for two-sided contact.")
-      .def("facets", &dolfinx_contact::Contact::facets)
       .def("qp_phys",
            [](dolfinx_contact::Contact& self, int origin_meshtag, int facet)
            {
              auto qp = self.qp_phys(origin_meshtag)[facet];
              return dolfinx_wrappers::xt_as_pyarray(std::move(qp));
            })
-      .def("facet_map", &dolfinx_contact::Contact::facet_map)
+      .def("facet_map",
+           [](dolfinx_contact::Contact& self, int mt)
+           {
+             // This exposes facet_map() to python but replaces the facet
+             // indices on the submesh with the facet indices in the parent mesh
+             // This is only exposed for testing (in particular
+             // nitsche_rigid_surface.py/demo_nitsche_rigid_surface_ufl.py)
+             auto mesh = self.meshtags()->mesh();
+             const int tdim = mesh->topology().dim(); // topological dimension
+             const int fdim = tdim - 1; // topological dimension of facet
+             auto c_to_f = mesh->topology().connectivity(tdim, fdim);
+             assert(c_to_f);
+             auto submesh_map = self.facet_map(mt);
+             auto offsets = submesh_map->offsets();
+             auto old_data = submesh_map->array();
+             auto num_facets = offsets.size() - 1;
+             auto facet_map = self.submesh(self.opposite(mt)).facet_map();
+             auto parent_cells = self.submesh(self.opposite(mt)).parent_cells();
+             std::vector<std::int32_t> data(old_data.size());
+             for (std::size_t i = 0; i < old_data.size(); ++i)
+             {
+               auto facet_sub = old_data[i];
+               auto facet_pair = facet_map->links(facet_sub);
+               auto cell_parent = parent_cells[facet_pair[0]];
+               data[i] = c_to_f->links(cell_parent)[facet_pair[1]];
+             }
+             return std::make_shared<
+                 dolfinx::graph::AdjacencyList<std::int32_t>>(
+                 std::move(data), std::move(offsets));
+           })
       .def("set_quadrature_degree",
            &dolfinx_contact::Contact::set_quadrature_degree)
       .def("generate_kernel",
