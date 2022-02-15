@@ -11,7 +11,6 @@
 #include <dolfinx_contact/Contact.hpp>
 #include <dolfinx_cuas/QuadratureRule.hpp>
 #include <dolfinx_cuas/kernels.hpp>
-#include <dolfinx_cuas/math.hpp>
 #include <dolfinx_cuas/utils.hpp>
 
 namespace dolfinx_contact
@@ -174,8 +173,8 @@ dolfinx_cuas::kernel_fn<T> generate_contact_kernel(
     xt::xtensor<double, 2> J = xt::zeros<double>({gdim, tdim});
     xt::xtensor<double, 2> K = xt::zeros<double>({tdim, gdim});
 
-    dolfinx_cuas::math::compute_jacobian(dphi0_c, c_view, J);
-    dolfinx_cuas::math::compute_inv(J, K);
+    dolfinx::fem::CoordinateElement::compute_jacobian(dphi0_c, c_view, J);
+    dolfinx::fem::CoordinateElement::compute_jacobian_inverse(J, K);
 
     // Compute normal of physical facet using a normalized covariant Piola
     // transform n_phys = J^{-T} n_ref / ||J^{-T} n_ref|| See for instance
@@ -216,7 +215,8 @@ dolfinx_cuas::kernel_fn<T> generate_contact_kernel(
     xt::xtensor<double, 2> J_tot
         = xt::zeros<double>({J.shape(0), J_f.shape(1)});
     dolfinx::math::dot(J, J_f, J_tot);
-    double detJ = std::fabs(dolfinx_cuas::math::compute_determinant(J_tot));
+    double detJ = std::fabs(
+        dolfinx::fem::CoordinateElement::compute_jacobian_determinant(J_tot));
 
     const xt::xtensor<double, 3>& dphi_f = dphi[facet_index];
     const xt::xtensor<double, 2>& phi_f = phi[facet_index];
@@ -358,8 +358,8 @@ dolfinx_cuas::kernel_fn<T> generate_contact_kernel(
     xt::xtensor<double, 2> J = xt::zeros<double>({gdim, tdim});
     xt::xtensor<double, 2> K = xt::zeros<double>({tdim, gdim});
     auto c_view = xt::view(coord, xt::all(), xt::range(0, gdim));
-    dolfinx_cuas::math::compute_jacobian(dphi0_c, c_view, J);
-    dolfinx_cuas::math::compute_inv(J, K);
+    dolfinx::fem::CoordinateElement::compute_jacobian(dphi0_c, c_view, J);
+    dolfinx::fem::CoordinateElement::compute_jacobian_inverse(J, K);
 
     // Compute normal of physical facet using a normalized covariant Piola
     // transform n_phys = J^{-T} n_ref / ||J^{-T} n_ref|| See for instance
@@ -404,7 +404,8 @@ dolfinx_cuas::kernel_fn<T> generate_contact_kernel(
     xt::xtensor<double, 2> J_tot
         = xt::zeros<double>({J.shape(0), J_f.shape(1)});
     dolfinx::math::dot(J, J_f, J_tot);
-    double detJ = std::fabs(dolfinx_cuas::math::compute_determinant(J_tot));
+    double detJ = std::fabs(
+        dolfinx::fem::CoordinateElement::compute_jacobian_determinant(J_tot));
 
     const xt::xtensor<double, 3>& dphi_f = dphi[facet_index];
     const xt::xtensor<double, 2>& phi_f = phi[facet_index];

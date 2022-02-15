@@ -97,7 +97,6 @@ PYBIND11_MODULE(cpp, m)
              auto submesh_map = self.facet_map(mt);
              auto offsets = submesh_map->offsets();
              auto old_data = submesh_map->array();
-             auto num_facets = offsets.size() - 1;
              auto facet_map = self.submesh(self.opposite(mt)).facet_map();
              auto parent_cells = self.submesh(self.opposite(mt)).parent_cells();
              std::vector<std::int32_t> data(old_data.size());
