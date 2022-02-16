@@ -48,32 +48,7 @@ public:
   /// @param[in] V The functions space
   Contact(std::shared_ptr<dolfinx::mesh::MeshTags<std::int32_t>> marker,
           std::array<int, 2> surfaces,
-          std::shared_ptr<dolfinx::fem::FunctionSpace> V)
-      : _marker(marker), _surfaces(surfaces), _V(V)
-  {
-    auto mesh = _marker->mesh();
-    const int tdim = mesh->topology().dim(); // topological dimension
-    const int fdim = tdim - 1;               // topological dimension of facet
-    const dolfinx::mesh::Topology& topology = mesh->topology();
-    auto f_to_c = mesh->topology().connectivity(fdim, tdim);
-    assert(f_to_c);
-    auto c_to_f = mesh->topology().connectivity(tdim, fdim);
-    assert(c_to_f);
-    for (std::size_t s = 0; s < _surfaces.size(); ++s)
-    {
-      auto facets = _marker->find(_surfaces[s]);
-      std::variant<
-          std::vector<std::int32_t>, std::vector<std::pair<std::int32_t, int>>,
-          std::vector<std::tuple<std::int32_t, int, std::int32_t, int>>>
-          pairs = dolfinx_cuas::compute_active_entities(
-              mesh, facets, dolfinx::fem::IntegralType::exterior_facet);
-
-      _cell_facet_pairs[s]
-          = std::get<std::vector<std::pair<std::int32_t, int>>>(pairs);
-
-      _submeshes[s] = dolfinx_contact::SubMesh(mesh, _cell_facet_pairs[s]);
-    }
-  }
+          std::shared_ptr<dolfinx::fem::FunctionSpace> V);
 
   /// Return meshtag value for surface with index surface
   /// @param[in] surface - the index of the surface
@@ -112,57 +87,20 @@ public:
     return _marker;
   }
 
-  Mat create_matrix(const dolfinx::fem::Form<PetscScalar>& a, std::string type)
-  {
+  /// Create a PETSc matrix with the sparsity pattern of the input form and the
+  /// coupling contact interfaces
+  /// @param[in] The bilinear form
+  /// @param[in] The matrix type, see:
+  /// https://petsc.org/main/docs/manualpages/Mat/MatType.html#MatType for
+  /// available types
+  Mat create_petsc_matrix(const dolfinx::fem::Form<PetscScalar>& a,
+                          std::string type);
 
-    // Build standard sparsity pattern
-    dolfinx::la::SparsityPattern pattern
-        = dolfinx::fem::create_sparsity_pattern(a);
-
-    // facet to cell connectivity
-    auto dofmap = a.function_spaces().at(0)->dofmap();
-    // Temporary array to hold dofs for sparsity pattern
-    std::vector<std::int32_t> linked_dofs;
-    for (int s = 0; s < 2; ++s)
-    {
-      auto facet_map = _submeshes[_opposites[s]].facet_map();
-      auto parent_cells = _submeshes[_opposites[s]].parent_cells();
-      for (std::int32_t i = 0; i < _cell_facet_pairs[s].size(); i++)
-      {
-        auto cell = _cell_facet_pairs[s][i].first;
-        auto cell_dofs = dofmap->cell_dofs(cell);
-
-        linked_dofs.clear();
-        for (auto link : _facet_maps[s]->links(i))
-        {
-          auto linked_sub_cell = facet_map->links(link)[0];
-          auto linked_cell = parent_cells[linked_sub_cell];
-          auto linked_cell_dofs = dofmap->cell_dofs(linked_cell);
-          for (auto dof : linked_cell_dofs)
-            linked_dofs.push_back(dof);
-        }
-        // Remove duplicates
-        dolfinx::radix_sort(xtl::span(linked_dofs));
-        linked_dofs.erase(std::unique(linked_dofs.begin(), linked_dofs.end()),
-                          linked_dofs.end());
-
-        pattern.insert(cell_dofs, linked_dofs);
-        pattern.insert(linked_dofs, cell_dofs);
-      }
-    }
-    // Finalise communication
-    pattern.assemble();
-
-    return dolfinx::la::petsc::create_matrix(a.mesh()->comm(), pattern, type);
-  }
-
-  /// Assemble matrix over exterior facets
-  /// Provides easier interface to dolfinx::fem::impl::assemble_exterior_facets
+  /// Assemble matrix over exterior facets (for contact facets)
   /// @param[in] mat_set the function for setting the values in the matrix
-  /// @param[in] V the function space
-  /// @param[in] active_facets list of indices (local to process) of facets to
-  /// be integrated over
-  /// @param[in] kernel the custom integration kernel
+  /// @param[in] bcs List of Dirichlet BCs
+  /// @param[in] origin_meshtag Tag indicating with interface to integrate over
+  /// @param[in] kernel The integration kernel
   /// @param[in] coeffs coefficients used in the variational form packed on
   /// facets
   /// @param[in] cstride Number of coefficients per facet
@@ -175,181 +113,20 @@ public:
           std::shared_ptr<const dolfinx::fem::DirichletBC<PetscScalar>>>& bcs,
       int origin_meshtag, contact_kernel_fn& kernel,
       const xtl::span<const PetscScalar> coeffs, int cstride,
-      const xtl::span<const PetscScalar>& constants)
-  {
-    auto mesh = _marker->mesh();
-    const int gdim = mesh->geometry().dim(); // geometrical dimension
+      const xtl::span<const PetscScalar>& constants);
 
-    // Prepare cell geometry
-    const dolfinx::graph::AdjacencyList<std::int32_t>& x_dofmap
-        = mesh->geometry().dofmap();
-
-    // FIXME: Add proper interface for num coordinate dofs
-    const std::size_t num_dofs_g = x_dofmap.num_links(0);
-    xtl::span<const double> x_g = mesh->geometry().x();
-
-    // Extract function space data (assuming same test and trial space)
-    std::shared_ptr<const dolfinx::fem::DofMap> dofmap = _V->dofmap();
-    const std::int32_t ndofs_cell = dofmap->cell_dofs(0).size();
-    const dolfinx::graph::AdjacencyList<std::int32_t>& dofs = dofmap->list();
-    const int bs = dofmap->bs();
-
-    // FIXME: Need to reconsider facet permutations for jump integrals
-    std::uint8_t perm = 0;
-    std::size_t max_links = std::max(_max_links[0], _max_links[1]);
-    auto active_facets = _cell_facet_pairs[origin_meshtag];
-    auto map = _facet_maps[origin_meshtag];
-    auto facet_map = _submeshes[_opposites[origin_meshtag]].facet_map();
-    auto parent_cells = _submeshes[_opposites[origin_meshtag]].parent_cells();
-    // Data structures used in assembly
-    std::vector<double> coordinate_dofs(3 * num_dofs_g);
-    std::vector<std::vector<PetscScalar>> Ae_vec(
-        3 * max_links + 1,
-        std::vector<PetscScalar>(bs * ndofs_cell * bs * ndofs_cell));
-    std::vector<std::int32_t> linked_cells;
-    for (int i = 0; i < active_facets.size(); i++)
-    {
-      auto [cell, local_index] = active_facets[i];
-      // Get cell coordinates/geometry
-      auto x_dofs = x_dofmap.links(cell);
-      for (std::size_t i = 0; i < x_dofs.size(); ++i)
-      {
-        std::copy_n(std::next(x_g.begin(), 3 * x_dofs[i]), gdim,
-                    std::next(coordinate_dofs.begin(), i * gdim));
-      }
-      auto links = map->links(i);
-      linked_cells.resize(links.size());
-      for (int i = 0; i < (int)links.size(); ++i)
-      {
-        // Extract (cell, facet) pair from submesh
-        auto facet_pair = facet_map->links((int)links[i]);
-        assert(facet_pair.size() == 2);
-        linked_cells[i] = parent_cells[facet_pair[0]];
-      }
-
-      // Remove duplicates
-      dolfinx::radix_sort(xtl::span(linked_cells));
-      linked_cells.erase(std::unique(linked_cells.begin(), linked_cells.end()),
-                         linked_cells.end());
-      const int num_linked_cells = linked_cells.size();
-
-      std::fill(Ae_vec[0].begin(), Ae_vec[0].end(), 0);
-      for (std::int32_t j = 0; j < num_linked_cells; j++)
-      {
-        std::fill(Ae_vec[3 * j + 1].begin(), Ae_vec[3 * j + 1].end(), 0);
-        std::fill(Ae_vec[3 * j + 2].begin(), Ae_vec[3 * j + 2].end(), 0);
-        std::fill(Ae_vec[3 * j + 3].begin(), Ae_vec[3 * j + 3].end(), 0);
-      }
-
-      kernel(Ae_vec, coeffs.data() + i * cstride, constants.data(),
-             coordinate_dofs.data(), &local_index, &perm, num_linked_cells);
-
-      // NOTE: Normally dof transform needs to be applied to the elements in
-      // Ae_vec at this stage This is not need for the function spaces we
-      // currently consider
-      auto dmap_cell = dofmap->cell_dofs(cell);
-      mat_set(dmap_cell, dmap_cell, Ae_vec[0]);
-
-      for (std::int32_t j = 0; j < num_linked_cells; j++)
-      {
-        auto dmap_linked = dofmap->cell_dofs(linked_cells[j]);
-        mat_set(dmap_cell, dmap_linked, Ae_vec[3 * j + 1]);
-        mat_set(dmap_linked, dmap_cell, Ae_vec[3 * j + 2]);
-        mat_set(dmap_linked, dmap_linked, Ae_vec[3 * j + 3]);
-      }
-    }
-  }
-
+  /// Assemble vector over exterior facet (for contact facets)
+  /// @param[in] b The vector
+  /// @param[in] origin_meshtag Tag indicating with interface to integrate over
+  /// @param[in] kernel The integration kernel
+  /// @param[in] coeffs coefficients used in the variational form packed on
+  /// facets
+  /// @param[in] cstride Number of coefficients per facet
+  /// @param[in] constants used in the variational form
   void assemble_vector(xtl::span<PetscScalar> b, int origin_meshtag,
                        contact_kernel_fn& kernel,
                        const xtl::span<const PetscScalar> coeffs, int cstride,
-                       const xtl::span<const PetscScalar>& constants)
-  {
-    // Extract mesh
-    auto mesh = _marker->mesh();
-    const int gdim = mesh->geometry().dim(); // geometrical dimension
-
-    // Prepare cell geometry
-    const dolfinx::graph::AdjacencyList<std::int32_t>& x_dofmap
-        = mesh->geometry().dofmap();
-
-    // FIXME: Add proper interface for num coordinate dofs
-    const std::size_t num_dofs_g = x_dofmap.num_links(0);
-    xtl::span<const double> x_g = mesh->geometry().x();
-
-    // Extract function space data (assuming same test and trial space)
-    std::shared_ptr<const dolfinx::fem::DofMap> dofmap = _V->dofmap();
-    const std::int32_t ndofs_cell = dofmap->cell_dofs(0).size();
-    const int bs = dofmap->bs();
-
-    // FIXME: Need to reconsider facet permutations for jump integrals
-    std::uint8_t perm = 0;
-    // Select which side of the contact interface to loop from and get the
-    // correct map
-    auto active_facets = _cell_facet_pairs[origin_meshtag];
-    auto map = _facet_maps[origin_meshtag];
-    auto facet_map = _submeshes[_opposites[origin_meshtag]].facet_map();
-    auto parent_cells = _submeshes[_opposites[origin_meshtag]].parent_cells();
-    std::size_t max_links = std::max(_max_links[0], _max_links[1]);
-    // Data structures used in assembly
-    std::vector<double> coordinate_dofs(3 * num_dofs_g);
-    std::vector<std::vector<PetscScalar>> be_vec(
-        max_links + 1, std::vector<PetscScalar>(bs * ndofs_cell));
-
-    // Tempoary array to hold cell links
-    std::vector<std::int32_t> linked_cells;
-    for (std::size_t i = 0; i < active_facets.size(); i++)
-    {
-      auto [cell, local_index] = active_facets[i];
-
-      // Get cell coordinates/geometry
-      auto x_dofs = x_dofmap.links(cell);
-      for (std::size_t j = 0; j < x_dofs.size(); ++j)
-      {
-        std::copy_n(std::next(x_g.begin(), 3 * x_dofs[j]), gdim,
-                    std::next(coordinate_dofs.begin(), j * gdim));
-      }
-
-      auto links = map->links(i);
-      linked_cells.resize(links.size());
-      for (int i = 0; i < (int)links.size(); ++i)
-      {
-        // Extract (cell, facet) pair from submesh
-        auto facet_pair = facet_map->links((int)links[i]);
-        assert(facet_pair.size() == 2);
-        linked_cells[i] = parent_cells[facet_pair[0]];
-      }
-
-      // Remove duplicates
-      dolfinx::radix_sort(xtl::span(linked_cells));
-      linked_cells.erase(std::unique(linked_cells.begin(), linked_cells.end()),
-                         linked_cells.end());
-
-      // Using integer loop here to reduce number of zeroed vectors
-      const int num_linked_cells = linked_cells.size();
-      std::fill(be_vec[0].begin(), be_vec[0].end(), 0);
-      for (std::int32_t j = 0; j < num_linked_cells; j++)
-        std::fill(be_vec[j + 1].begin(), be_vec[j + 1].end(), 0);
-      kernel(be_vec, coeffs.data() + i * cstride, constants.data(),
-             coordinate_dofs.data(), &local_index, &perm, num_linked_cells);
-      // NOTE: Normally dof transform needs to be applied to the elements in
-      // Ae_vec at this stage This is not need for the function spaces we
-      // currently consider
-
-      // Add element vector to global vector
-      auto dofs_cell = dofmap->cell_dofs(cell);
-      for (int j = 0; j < ndofs_cell; ++j)
-        for (int k = 0; k < bs; ++k)
-          b[bs * dofs_cell[j] + k] += be_vec[0][bs * j + k];
-      for (int l = 0; l < num_linked_cells; ++l)
-      {
-        auto dofs_linked = dofmap->cell_dofs(linked_cells[l]);
-        for (int j = 0; j < ndofs_cell; ++j)
-          for (int k = 0; k < bs; ++k)
-            b[bs * dofs_linked[j] + k] += be_vec[l + 1][bs * j + k];
-      }
-    }
-  }
+                       const xtl::span<const PetscScalar>& constants);
 
   contact_kernel_fn generate_kernel(dolfinx_contact::Kernel type)
   {
@@ -427,7 +204,6 @@ public:
     // mu, lmbda, h scalar
     // gap vector valued gdim
     // test_fn, u, u_opposite vector valued bs (should be bs = gdim)
-    const std::size_t num_coeffs = 8;
     std::vector<std::size_t> cstrides
         = {1,
            1,
@@ -462,7 +238,7 @@ public:
       // NOTE: DOLFINx has 3D input coordinate dofs
       // FIXME: These array should be views (when compute_jacobian doesn't use
       // xtensor)
-      std::array<std::size_t, 2> shape = {num_coordinate_dofs, 3};
+      std::array<std::size_t, 2> shape = {(std::size_t)num_coordinate_dofs, 3};
       xt::xtensor<double, 2> coord = xt::adapt(
           coordinate_dofs, num_coordinate_dofs * 3, xt::no_ownership(), shape);
 
@@ -614,7 +390,7 @@ public:
 
       // Reshape coordinate dofs to two dimensional array
       // NOTE: DOLFINx has 3D input coordinate dofs
-      std::array<std::size_t, 2> shape = {num_coordinate_dofs, 3};
+      std::array<std::size_t, 2> shape = {(std::size_t)num_coordinate_dofs, 3};
 
       // FIXME: These array should be views (when compute_jacobian doesn't use
       // xtensor)
@@ -793,7 +569,6 @@ public:
 
     // Create _phi_ref_facets
     std::uint32_t num_facets = _qp_ref_facet.size();
-    std::uint32_t num_local_dofs = element.dim();
     std::vector<xt::xtensor<double, 2>> phi;
     phi.reserve(num_facets);
 
@@ -947,8 +722,6 @@ public:
     std::vector<std::int32_t> data; // will contain closest candidate facet
     std::vector<std::int32_t> offset(1);
     offset[0] = 0;
-    const int num_qp = qp_phys[0].shape(0);
-    const int num_facets = puppet_facets.size();
     for (int i = 0; i < puppet_facets.size(); ++i)
     {
       // FIXME: This does not work for prism meshes
@@ -1051,7 +824,6 @@ public:
     auto mesh = _submeshes[_opposites[origin_meshtag]].mesh(); // mesh
     const int gdim = mesh->geometry().dim(); // geometrical dimension
     const int tdim = mesh->topology().dim();
-    const int fdim = tdim - 1;
     auto cmap = mesh->geometry().cmap();
     auto x_dofmap = mesh->geometry().dofmap();
     xtl::span<const double> mesh_geometry = mesh->geometry().x();
@@ -1319,7 +1091,7 @@ public:
     const int gdim = mesh->geometry().dim(); // geometrical dimension
     const int tdim = mesh->topology().dim();
     const int fdim = tdim - 1;
-    xtl::span<const double> mesh_geometry = mesh->geometry().x();
+
     // Create _qp_ref_facet (quadrature points on reference facet)
     dolfinx_cuas::QuadratureRule facet_quadrature(
         _marker->mesh()->topology().cell_type(), _quadrature_degree, fdim);
