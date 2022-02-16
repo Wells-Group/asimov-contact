@@ -27,14 +27,15 @@ void compute_linked_cells(
     const tcb::span<const std::int32_t>& parent_cells)
 {
   linked_cells.resize(submesh_facets.size());
-  // FIXME: Use STD transform here
-  for (int i = 0; i < (int)submesh_facets.size(); ++i)
-  {
-    // Extract (cell, facet) pair from submesh
-    auto facet_pair = sub_to_parent->links((int)submesh_facets[i]);
-    assert(facet_pair.size() == 2);
-    linked_cells[i] = parent_cells[facet_pair[0]];
-  }
+  std::transform(submesh_facets.cbegin(), submesh_facets.cend(),
+                 linked_cells.begin(),
+                 [&sub_to_parent, &parent_cells](const auto facet)
+                 {
+                   // Extract (cell, facet) pair from submesh
+                   auto facet_pair = sub_to_parent->links(facet);
+                   assert(facet_pair.size() == 2);
+                   return parent_cells[facet_pair[0]];
+                 });
 
   // Remove duplicates
   dolfinx::radix_sort(xtl::span<std::int32_t>(linked_cells));
@@ -75,7 +76,7 @@ dolfinx_contact::Contact::Contact(
 }
 //------------------------------------------------------------------------------------------------
 Mat dolfinx_contact::Contact::create_petsc_matrix(
-    const dolfinx::fem::Form<PetscScalar>& a, std::string type)
+    const dolfinx::fem::Form<PetscScalar>& a, const std::string& type)
 {
 
   // Build standard sparsity pattern
@@ -124,9 +125,7 @@ Mat dolfinx_contact::Contact::create_petsc_matrix(
 }
 //------------------------------------------------------------------------------------------------
 void dolfinx_contact::Contact::assemble_matrix(
-    const std::function<int(const xtl::span<const std::int32_t>&,
-                            const xtl::span<const std::int32_t>&,
-                            const xtl::span<const PetscScalar>&)>& mat_set,
+    mat_set_fn& mat_set,
     const std::vector<
         std::shared_ptr<const dolfinx::fem::DirichletBC<PetscScalar>>>& bcs,
     int origin_meshtag, contact_kernel_fn& kernel,

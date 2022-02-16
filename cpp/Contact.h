@@ -27,6 +27,11 @@
 using contact_kernel_fn = std::function<void(
     std::vector<std::vector<PetscScalar>>&, const double*, const double*,
     const double*, const int*, const std::uint8_t*, const std::int32_t)>;
+
+using mat_set_fn = const std::function<int(
+    const xtl::span<const std::int32_t>&, const xtl::span<const std::int32_t>&,
+    const xtl::span<const PetscScalar>&)>;
+
 namespace dolfinx_contact
 {
 enum Kernel
@@ -91,7 +96,7 @@ public:
   /// https://petsc.org/main/docs/manualpages/Mat/MatType.html#MatType for
   /// available types
   Mat create_petsc_matrix(const dolfinx::fem::Form<PetscScalar>& a,
-                          std::string type);
+                          const std::string& type);
 
   /// Assemble matrix over exterior facets (for contact facets)
   /// @param[in] mat_set the function for setting the values in the matrix
@@ -103,9 +108,7 @@ public:
   /// @param[in] cstride Number of coefficients per facet
   /// @param[in] constants used in the variational form
   void assemble_matrix(
-      const std::function<int(const xtl::span<const std::int32_t>&,
-                              const xtl::span<const std::int32_t>&,
-                              const xtl::span<const PetscScalar>&)>& mat_set,
+      const mat_set_fn& mat_set,
       const std::vector<
           std::shared_ptr<const dolfinx::fem::DirichletBC<PetscScalar>>>& bcs,
       int origin_meshtag, contact_kernel_fn& kernel,
