@@ -45,7 +45,8 @@ void compute_linked_cells(
 
 dolfinx_contact::Contact::Contact(
     std::shared_ptr<dolfinx::mesh::MeshTags<std::int32_t>> marker,
-    std::array<int, 2> surfaces, std::shared_ptr<dolfinx::fem::FunctionSpace> V)
+    const std::array<int, 2>& surfaces,
+    std::shared_ptr<dolfinx::fem::FunctionSpace> V)
     : _marker(marker), _surfaces(surfaces), _V(V)
 {
   auto mesh = _marker->mesh();

@@ -6,10 +6,12 @@
 
 #pragma once
 
+#include "SubMesh.h"
+#include "geometric_quantities.h"
+#include "utils.h"
 #include <basix/cell.h>
 #include <basix/finite-element.h>
 #include <basix/quadrature.h>
-#include <dolfinx.h>
 #include <dolfinx/common/sort.h>
 #include <dolfinx/geometry/BoundingBoxTree.h>
 #include <dolfinx/geometry/utils.h>
@@ -17,14 +19,9 @@
 #include <dolfinx/mesh/Mesh.h>
 #include <dolfinx/mesh/MeshTags.h>
 #include <dolfinx/mesh/cell_types.h>
-#include <dolfinx_contact/SubMesh.h>
-#include <dolfinx_contact/geometric_quantities.h>
-#include <dolfinx_contact/utils.h>
 #include <dolfinx_cuas/QuadratureRule.hpp>
 #include <dolfinx_cuas/utils.hpp>
-#include <iostream>
 #include <xtensor/xindex_view.hpp>
-#include <xtensor/xio.hpp>
 #include <xtl/xspan.hpp>
 
 using contact_kernel_fn = std::function<void(
@@ -47,7 +44,7 @@ public:
   /// surfaces
   /// @param[in] V The functions space
   Contact(std::shared_ptr<dolfinx::mesh::MeshTags<std::int32_t>> marker,
-          std::array<int, 2> surfaces,
+          const std::array<int, 2>& surfaces,
           std::shared_ptr<dolfinx::fem::FunctionSpace> V);
 
   /// Return meshtag value for surface with index surface
