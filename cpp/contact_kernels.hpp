@@ -6,9 +6,9 @@
 
 #pragma once
 
+#include "Contact.h"
 #include <dolfinx/fem/FiniteElement.h>
 #include <dolfinx/fem/FunctionSpace.h>
-#include <dolfinx_contact/Contact.hpp>
 #include <dolfinx_cuas/QuadratureRule.hpp>
 #include <dolfinx_cuas/kernels.hpp>
 #include <dolfinx_cuas/utils.hpp>

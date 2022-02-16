@@ -9,7 +9,7 @@
 #include <caster_petsc.h>
 #include <dolfinx/la/petsc.h>
 #include <dolfinx/mesh/MeshTags.h>
-#include <dolfinx_contact/Contact.hpp>
+#include <dolfinx_contact/Contact.h>
 #include <dolfinx_contact/coefficients.h>
 #include <dolfinx_contact/contact_kernels.hpp>
 #include <dolfinx_contact/utils.h>
@@ -72,7 +72,7 @@ PYBIND11_MODULE(cpp, m)
       .def(
           "create_matrix",
           [](dolfinx_contact::Contact& self, dolfinx::fem::Form<PetscScalar>& a,
-             std::string type) { return self.create_matrix(a, type); },
+             std::string type) { return self.create_petsc_matrix(a, type); },
           py::return_value_policy::take_ownership, py::arg("a"),
           py::arg("type") = std::string(),
           "Create a PETSc Mat for two-sided contact.")

@@ -245,3 +245,7 @@ void dolfinx_contact::update_geometry(
   std::transform(coords.begin(), coords.end(), dx.begin(), coords.begin(),
                  std::plus<double>());
 }
+//-------------------------------------------------------------------------------------
+double dolfinx_contact::R_plus(double x) { return 0.5 * (std::abs(x) + x); }
+//-------------------------------------------------------------------------------------
+double dolfinx_contact::dR_plus(double x) { return double(x > 0); }

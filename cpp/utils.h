@@ -64,17 +64,6 @@ get_basis_functions(xt::xtensor<double, 3>& J, xt::xtensor<double, 3>& K,
                     std::shared_ptr<const dolfinx::fem::FiniteElement> element,
                     const dolfinx::fem::CoordinateElement& cmap);
 
-double R_plus(double x) { return 0.5 * (std::abs(x) + x); }
-double dR_plus(double x) { return double(x > 0); }
-
-/// See
-/// https://stackoverflow.com/questions/1903954/is-there-a-standard-sign-function-signum-sgn-in-c-c/10133700
-template <typename T>
-int sgn(T val)
-{
-  return (T(0) < val) - (val < T(0));
-}
-
 /// @param[in] cells: the cells to be sorted
 /// @param[in, out] perm: the permutation for the sorted cells
 /// @param[out] pair(unique_cells, offsets): unique_cells is a vector of
@@ -97,4 +86,11 @@ sort_cells(const xtl::span<const std::int32_t>& cells,
 /// Adds perturbation u to mesh
 void update_geometry(const dolfinx::fem::Function<PetscScalar>& u,
                      std::shared_ptr<dolfinx::mesh::Mesh> mesh);
+
+/// Compute the positive restriction of a double, i.e. f(x)= x if x>0 else 0
+double R_plus(double x);
+
+/// Compute the derivative of the positive restriction (i.e.) the step function.
+/// @note Evaluates to 0 at x=0
+double dR_plus(double x);
 } // namespace dolfinx_contact
