@@ -292,7 +292,7 @@ public:
         double gap = 0;
         const std::size_t gap_offset = 3;
         const std::size_t normal_offset = gap_offset + cstrides[3];
-        for (int i = 0; i < gdim; i++)
+        for (std::size_t i = 0; i < gdim; i++)
         {
           // For closest point projection the gap function is given by
           // (-n_y)* (Pi(x) - x), where n_y is the outward unit normal
@@ -305,14 +305,14 @@ public:
         xt::xtensor<double, 2> tr = xt::zeros<double>({ndofs_cell, gdim});
         xt::xtensor<double, 2> epsn = xt::zeros<double>({ndofs_cell, gdim});
         // precompute tr(eps(phi_j e_l)), eps(phi^j e_l)n*n2
-        for (int j = 0; j < ndofs_cell; j++)
+        for (std::size_t j = 0; j < ndofs_cell; j++)
         {
-          for (int l = 0; l < bs; l++)
+          for (std::size_t l = 0; l < bs; l++)
           {
-            for (int k = 0; k < tdim; k++)
+            for (std::size_t k = 0; k < tdim; k++)
             {
               tr(j, l) += K(k, l) * dphi_f(k, q, j);
-              for (int s = 0; s < gdim; s++)
+              for (std::size_t s = 0; s < gdim; s++)
               {
                 epsn(j, l) += K(k, s) * dphi_f(k, q, j)
                               * (n_phys(s) * n_surf(l) + n_phys(l) * n_surf(s));
@@ -327,10 +327,10 @@ public:
         std::size_t offset_u = cstrides[0] + cstrides[1] + cstrides[2]
                                + cstrides[3] + cstrides[4] + cstrides[5];
 
-        for (int i = 0; i < ndofs_cell; i++)
+        for (std::size_t i = 0; i < ndofs_cell; i++)
         {
           std::size_t block_index = offset_u + i * bs;
-          for (int j = 0; j < bs; j++)
+          for (std::size_t j = 0; j < bs; j++)
           {
             tr_u += c[block_index + j] * tr(i, j);
             epsn_u += c[block_index + j] * epsn(i, j);
@@ -338,7 +338,7 @@ public:
           }
         }
         std::size_t offset_u_opp = offset_u + cstrides[6] + q * bs;
-        for (int j = 0; j < bs; ++j)
+        for (std::size_t j = 0; j < bs; ++j)
           jump_un += -c[offset_u_opp + j] * n_surf(j);
         double sign_u = lmbda * tr_u * n_dot + mu * epsn_u;
         const double w0 = _qw_ref_facet[facet_index][q] * detJ;
@@ -347,9 +347,9 @@ public:
         sign_u *= w0;
         // Fill contributions of facet with itself
 
-        for (int i = 0; i < ndofs_cell; i++)
+        for (std::size_t i = 0; i < ndofs_cell; i++)
         {
-          for (int n = 0; n < bs; n++)
+          for (std::size_t n = 0; n < bs; n++)
           {
             double v_dot_nsurf = n_surf(n) * phi_f(q, i);
             double sign_v = (lmbda * tr(i, n) * n_dot + mu * epsn(i, n));
@@ -359,7 +359,7 @@ public:
             // 0.5 * (-theta * gamma * sign_v * sign_u + Pn_u * Pn_v);
 
             // entries corresponding to v on the other surface
-            for (int k = 0; k < num_links; k++)
+            for (std::int32_t k = 0; k < num_links; k++)
             {
               int index = 3 + cstrides[3] + cstrides[4]
                           + k * num_q_points * ndofs_cell * bs
@@ -448,7 +448,7 @@ public:
         double gap = 0;
         const std::size_t gap_offset = 3;
         const std::size_t normal_offset = gap_offset + cstrides[3];
-        for (int i = 0; i < gdim; i++)
+        for (std::size_t i = 0; i < gdim; i++)
         {
           // For closest point projection the gap function is given by
           // (-n_y)* (Pi(x) - x), where n_y is the outward unit normal
@@ -461,14 +461,14 @@ public:
         xt::xtensor<double, 2> tr = xt::zeros<double>({ndofs_cell, gdim});
         xt::xtensor<double, 2> epsn = xt::zeros<double>({ndofs_cell, gdim});
         // precompute tr(eps(phi_j e_l)), eps(phi^j e_l)n*n2
-        for (int j = 0; j < ndofs_cell; j++)
+        for (std::size_t j = 0; j < ndofs_cell; j++)
         {
-          for (int l = 0; l < bs; l++)
+          for (std::size_t l = 0; l < bs; l++)
           {
-            for (int k = 0; k < tdim; k++)
+            for (std::size_t k = 0; k < tdim; k++)
             {
               tr(j, l) += K(k, l) * dphi_f(k, q, j);
-              for (int s = 0; s < gdim; s++)
+              for (std::size_t s = 0; s < gdim; s++)
               {
                 epsn(j, l) += K(k, s) * dphi_f(k, q, j)
                               * (n_phys(s) * n_surf(l) + n_phys(l) * n_surf(s));
@@ -483,10 +483,10 @@ public:
         double jump_un = 0;
         std::size_t offset_u = cstrides[0] + cstrides[1] + cstrides[2]
                                + cstrides[3] + cstrides[4] + cstrides[5];
-        for (int i = 0; i < ndofs_cell; i++)
+        for (std::size_t i = 0; i < ndofs_cell; i++)
         {
           std::size_t block_index = offset_u + i * bs;
-          for (int j = 0; j < bs; j++)
+          for (std::size_t j = 0; j < bs; j++)
           {
             tr_u += c[block_index + j] * tr(i, j);
             epsn_u += c[block_index + j] * epsn(i, j);
@@ -494,7 +494,7 @@ public:
           }
         }
         std::size_t offset_u_opp = offset_u + cstrides[6] + q * bs;
-        for (int j = 0; j < bs; ++j)
+        for (std::size_t j = 0; j < bs; ++j)
           jump_un += -c[offset_u_opp + j] * n_surf(j);
         double sign_u = lmbda * tr_u * n_dot + mu * epsn_u;
         double Pn_u
@@ -502,18 +502,18 @@ public:
 
         // Fill contributions of facet with itself
         const double w0 = _qw_ref_facet[facet_index][q] * detJ;
-        for (int j = 0; j < ndofs_cell; j++)
+        for (std::size_t j = 0; j < ndofs_cell; j++)
         {
-          for (int l = 0; l < bs; l++)
+          for (std::size_t l = 0; l < bs; l++)
           {
             double sign_du = (lmbda * tr(j, l) * n_dot + mu * epsn(j, l));
             double Pn_du
                 = (phi_f(q, j) * n_surf(l) - gamma * sign_du) * Pn_u * w0;
 
             sign_du *= w0;
-            for (int i = 0; i < ndofs_cell; i++)
+            for (std::size_t i = 0; i < ndofs_cell; i++)
             {
-              for (int b = 0; b < bs; b++)
+              for (std::size_t b = 0; b < bs; b++)
               {
                 double v_dot_nsurf = n_surf(b) * phi_f(q, i);
                 double sign_v = (lmbda * tr(i, b) * n_dot + mu * epsn(i, b));
@@ -523,7 +523,7 @@ public:
                 // 0.5 * (-theta * gamma * sign_du * sign_v + Pn_du * Pn_v);
 
                 // entries corresponding to u and v on the other surface
-                for (int k = 0; k < num_links; k++)
+                for (std::int32_t k = 0; k < num_links; k++)
                 {
                   int index = 3 + cstrides[3] + cstrides[4]
                               + k * num_q_points * ndofs_cell * bs
@@ -571,7 +571,7 @@ public:
 
     // Tabulate basis functions at quadrature points _qp_ref_facet for each
     // facet of the reference cell. Fill _phi_ref_facets
-    for (int i = 0; i < num_facets; ++i)
+    for (std::size_t i = 0; i < num_facets; ++i)
     {
       auto cell_tab = element.tabulate(0, _qp_ref_facet[i]);
       const xt::xtensor<double, 2> _phi_i
@@ -637,7 +637,7 @@ public:
     auto active_facets = _cell_facet_pairs[origin_meshtag];
     auto map = _facet_maps[origin_meshtag];
     auto facet_map = _submeshes[_opposites[origin_meshtag]].facet_map();
-    for (std::int32_t i = 0; i < active_facets.size(); i++)
+    for (std::size_t i = 0; i < active_facets.size(); i++)
     {
       std::vector<std::int32_t> linked_cells;
       auto links = map->links(i);
@@ -719,10 +719,10 @@ public:
     std::vector<std::int32_t> data; // will contain closest candidate facet
     std::vector<std::int32_t> offset(1);
     offset[0] = 0;
-    for (int i = 0; i < puppet_facets.size(); ++i)
+    for (std::size_t i = 0; i < puppet_facets.size(); ++i)
     {
       // FIXME: This does not work for prism meshes
-      for (int j = 0; j < qp_phys[0].shape(0); ++j)
+      for (std::size_t j = 0; j < qp_phys[0].shape(0); ++j)
       {
         for (int k = 0; k < gdim; ++k)
           point(0, k) = qp_phys[i](j, k);
@@ -772,7 +772,7 @@ public:
     const int cstride = num_q_point * gdim;
     xt::xtensor<double, 2> point = {{0, 0, 0}};
 
-    for (int i = 0; i < num_facets; ++i)
+    for (std::int32_t i = 0; i < num_facets; ++i)
     {
       auto master_facets = map->links(i);
       auto master_facet_geometry = dolfinx::mesh::entities_to_geometry(
@@ -794,7 +794,7 @@ public:
         for (std::size_t l = 0; l < num_facet_dofs; ++l)
         {
           const int pos = 3 * master_facet[l];
-          for (std::size_t k = 0; k < gdim; ++k)
+          for (int k = 0; k < gdim; ++k)
             master_coords(l, k) = mesh_geometry[pos + k];
         }
         auto dist_vec
@@ -839,7 +839,7 @@ public:
     auto facet_map = _submeshes[_opposites[origin_meshtag]].facet_map();
     std::size_t max_links = std::max(_max_links[0], _max_links[1]);
     const std::int32_t num_facets = puppet_facets.size();
-    const std::int32_t num_q_points = _qp_ref_facet[0].shape(0);
+    const std::size_t num_q_points = _qp_ref_facet[0].shape(0);
     const std::int32_t ndofs = _V->dofmap()->cell_dofs(0).size();
     std::vector<PetscScalar> c(
         num_facets * num_q_points * max_links * ndofs * bs, 0.0);
@@ -863,7 +863,7 @@ public:
       assert(links.size() == num_q_points);
 
       // Compute Pi(x) form points x and gap funtion Pi(x) - x
-      for (int j = 0; j < num_q_points; j++)
+      for (std::size_t j = 0; j < num_q_points; j++)
       {
         auto linked_pair = facet_map->links(links[j]);
         linked_cells[j] = linked_pair[0];
@@ -882,7 +882,7 @@ public:
       auto offsets = sorted_cells.second;
 
       // Loop over sorted array of unique cells
-      for (int j = 0; j < unique_cells.size(); ++j)
+      for (std::size_t j = 0; j < unique_cells.size(); ++j)
       {
 
         std::int32_t linked_cell = unique_cells[j];
@@ -907,7 +907,7 @@ public:
             permutation_info[linked_cell], element, cmap);
 
         // Insert basis function values into c
-        for (std::size_t k = 0; k < ndofs; k++)
+        for (std::int32_t k = 0; k < ndofs; k++)
           for (std::size_t q = 0; q < test_fn.shape(0); ++q)
             for (std::size_t l = 0; l < bs; l++)
               c[i * cstride + j * ndofs * bs * num_q_points
@@ -1010,7 +1010,7 @@ public:
     auto map = _facet_maps[origin_meshtag];
     auto qp_phys = _qp_phys[origin_meshtag];
     const std::int32_t num_facets = _cell_facet_pairs[origin_meshtag].size();
-    const std::int32_t num_q_points = _qp_ref_facet[0].shape(0);
+    const std::size_t num_q_points = _qp_ref_facet[0].shape(0);
     std::vector<PetscScalar> c(num_facets * num_q_points * gdim, 0.0);
     const int cstride = num_q_points * gdim;
     xt::xtensor<double, 2> point = xt::zeros<double>(
@@ -1030,7 +1030,7 @@ public:
     {
       auto links = map->links(i);
       assert(links.size() == num_q_points);
-      for (int q = 0; q < num_q_points; ++q)
+      for (std::size_t q = 0; q < num_q_points; ++q)
       {
         // Extract linked cell and facet at quadrature point q
         auto linked_pair = facet_map->links(links[q]);
@@ -1063,7 +1063,7 @@ public:
                 facet_normals);
 
         // Copy normal into c
-        for (std::size_t l = 0; l < gdim; l++)
+        for (int l = 0; l < gdim; l++)
         {
           c[i * cstride + q * gdim + l] = normals(0, l);
         }

@@ -27,6 +27,7 @@ void compute_linked_cells(
     const tcb::span<const std::int32_t>& parent_cells)
 {
   linked_cells.resize(submesh_facets.size());
+  // FIXME: Use STD transform here
   for (int i = 0; i < (int)submesh_facets.size(); ++i)
   {
     // Extract (cell, facet) pair from submesh
@@ -92,7 +93,7 @@ Mat dolfinx_contact::Contact::create_petsc_matrix(
   {
     auto facet_map = _submeshes[_opposites[s]].facet_map();
     auto parent_cells = _submeshes[_opposites[s]].parent_cells();
-    for (std::int32_t i = 0; i < _cell_facet_pairs[s].size(); i++)
+    for (std::size_t i = 0; i < _cell_facet_pairs[s].size(); i++)
     {
       auto cell = _cell_facet_pairs[s][i].first;
       auto cell_dofs = dofmap->cell_dofs(cell);
@@ -108,7 +109,7 @@ Mat dolfinx_contact::Contact::create_petsc_matrix(
       }
 
       // Remove duplicates
-      dolfinx::radix_sort(xtl::span(linked_dofs));
+      dolfinx::radix_sort(xtl::span<std::int32_t>(linked_dofs));
       linked_dofs.erase(std::unique(linked_dofs.begin(), linked_dofs.end()),
                         linked_dofs.end());
 
@@ -157,11 +158,11 @@ void dolfinx_contact::Contact::assemble_matrix(
   auto parent_cells = _submeshes[_opposites[origin_meshtag]].parent_cells();
   // Data structures used in assembly
   std::vector<double> coordinate_dofs(3 * num_dofs_g);
-  std::vector<std::vector<PetscScalar>> Ae_vec(
+  std::vector<std::vector<PetscScalar>> Aes(
       3 * max_links + 1,
       std::vector<PetscScalar>(bs * ndofs_cell * bs * ndofs_cell));
   std::vector<std::int32_t> linked_cells;
-  for (int i = 0; i < active_facets.size(); i++)
+  for (std::size_t i = 0; i < active_facets.size(); i++)
   {
     [[maybe_unused]] auto [cell, local_index] = active_facets[i];
     // Get cell coordinates/geometry
@@ -176,29 +177,29 @@ void dolfinx_contact::Contact::assemble_matrix(
 
     // Fill initial local element matrices with zeros prior to assembly
     const int num_linked_cells = linked_cells.size();
-    std::fill(Ae_vec[0].begin(), Ae_vec[0].end(), 0);
+    std::fill(Aes[0].begin(), Aes[0].end(), 0);
     for (std::int32_t j = 0; j < num_linked_cells; j++)
     {
-      std::fill(Ae_vec[3 * j + 1].begin(), Ae_vec[3 * j + 1].end(), 0);
-      std::fill(Ae_vec[3 * j + 2].begin(), Ae_vec[3 * j + 2].end(), 0);
-      std::fill(Ae_vec[3 * j + 3].begin(), Ae_vec[3 * j + 3].end(), 0);
+      std::fill(Aes[3 * j + 1].begin(), Aes[3 * j + 1].end(), 0);
+      std::fill(Aes[3 * j + 2].begin(), Aes[3 * j + 2].end(), 0);
+      std::fill(Aes[3 * j + 3].begin(), Aes[3 * j + 3].end(), 0);
     }
 
-    kernel(Ae_vec, coeffs.data() + i * cstride, constants.data(),
+    kernel(Aes, coeffs.data() + i * cstride, constants.data(),
            coordinate_dofs.data(), &local_index, &perm, num_linked_cells);
 
     // NOTE: Normally dof transform needs to be applied to the elements in
-    // Ae_vec at this stage This is not need for the function spaces we
-    // currently consider
+    // Aes at this stage This is not need for the function spaces
+    // we currently consider
     auto dmap_cell = dofmap->cell_dofs(cell);
-    mat_set(dmap_cell, dmap_cell, Ae_vec[0]);
+    mat_set(dmap_cell, dmap_cell, Aes[0]);
 
     for (int j = 0; j < num_linked_cells; j++)
     {
       auto dmap_linked = dofmap->cell_dofs(linked_cells[j]);
-      mat_set(dmap_cell, dmap_linked, Ae_vec[3 * j + 1]);
-      mat_set(dmap_linked, dmap_cell, Ae_vec[3 * j + 2]);
-      mat_set(dmap_linked, dmap_linked, Ae_vec[3 * j + 3]);
+      mat_set(dmap_cell, dmap_linked, Aes[3 * j + 1]);
+      mat_set(dmap_linked, dmap_cell, Aes[3 * j + 2]);
+      mat_set(dmap_linked, dmap_linked, Aes[3 * j + 3]);
     }
   }
 }
@@ -237,7 +238,7 @@ void dolfinx_contact::Contact::assemble_vector(
   std::size_t max_links = std::max(_max_links[0], _max_links[1]);
   // Data structures used in assembly
   std::vector<double> coordinate_dofs(3 * num_dofs_g);
-  std::vector<std::vector<PetscScalar>> be_vec(
+  std::vector<std::vector<PetscScalar>> bes(
       max_links + 1, std::vector<PetscScalar>(bs * ndofs_cell));
 
   // Tempoary array to hold cell links
@@ -259,26 +260,26 @@ void dolfinx_contact::Contact::assemble_vector(
 
     // Using integer loop here to reduce number of zeroed vectors
     const int num_linked_cells = linked_cells.size();
-    std::fill(be_vec[0].begin(), be_vec[0].end(), 0);
+    std::fill(bes[0].begin(), bes[0].end(), 0);
     for (std::int32_t j = 0; j < num_linked_cells; j++)
-      std::fill(be_vec[j + 1].begin(), be_vec[j + 1].end(), 0);
-    kernel(be_vec, coeffs.data() + i * cstride, constants.data(),
+      std::fill(bes[j + 1].begin(), bes[j + 1].end(), 0);
+    kernel(bes, coeffs.data() + i * cstride, constants.data(),
            coordinate_dofs.data(), &local_index, &perm, num_linked_cells);
     // NOTE: Normally dof transform needs to be applied to the elements in
-    // Ae_vec at this stage This is not need for the function spaces we
-    // currently consider
+    // bes at this stage This is not need for the function spaces
+    // we currently consider
 
     // Add element vector to global vector
     auto dofs_cell = dofmap->cell_dofs(cell);
     for (int j = 0; j < ndofs_cell; ++j)
       for (int k = 0; k < bs; ++k)
-        b[bs * dofs_cell[j] + k] += be_vec[0][bs * j + k];
+        b[bs * dofs_cell[j] + k] += bes[0][bs * j + k];
     for (int l = 0; l < num_linked_cells; ++l)
     {
       auto dofs_linked = dofmap->cell_dofs(linked_cells[l]);
       for (int j = 0; j < ndofs_cell; ++j)
         for (int k = 0; k < bs; ++k)
-          b[bs * dofs_linked[j] + k] += be_vec[l + 1][bs * j + k];
+          b[bs * dofs_linked[j] + k] += bes[l + 1][bs * j + k];
     }
   }
 }
