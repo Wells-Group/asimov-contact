@@ -25,11 +25,11 @@ dolfinx_contact::SubMesh::SubMesh(
   _parent_cells = cells;
 
   // call doflinx::mesh::create_submesh and save ouput to member variables
-  auto submesh_data = dolfinx::mesh::create_submesh(
+  auto [submesh, vertex_map, x_dof_map] = dolfinx::mesh::create_submesh(
       *mesh, tdim, xtl::span(cells.data(), cells.size()));
-  _mesh = std::make_shared<dolfinx::mesh::Mesh>(std::get<0>(submesh_data));
-  _submesh_to_mesh_vertex_map = std::get<1>(submesh_data);
-  _submesh_to_mesh_x_dof_map = std::get<2>(submesh_data);
+  _mesh = std::make_shared<dolfinx::mesh::Mesh>(submesh);
+  _submesh_to_mesh_vertex_map = vertex_map;
+  _submesh_to_mesh_x_dof_map = x_dof_map;
 
   // create/retrieve connectivities on submesh
   _mesh->topology().create_connectivity(tdim - 1, tdim);
@@ -76,16 +76,17 @@ dolfinx_contact::SubMesh::SubMesh(
 
   // mark which facets are in any of the facet lists
   std::vector<std::int32_t> marked_facets(num_facets, 0);
-  for (std::size_t i = 0; i < cell_facet_pairs.size(); ++i)
-  {
-    auto facet_pair = cell_facet_pairs[i];
-    // get submesh cell from parent cell
-    auto cell = _mesh_to_submesh_cell_map->links(facet_pair.first)[0];
-    // cell facet index the same for both meshes: use c_to_f to get submesh
-    // facet index
-    std::int32_t facet = c_to_f->links(cell)[facet_pair.second];
-    marked_facets[facet] = 2;
-  }
+  std::for_each(cell_facet_pairs.cbegin(), cell_facet_pairs.cend(),
+                [&](const auto& facet_pair)
+                {
+                  auto [parent_cell, parent_facet] = facet_pair;
+                  // get submesh cell from parent cell
+                  auto cell = _mesh_to_submesh_cell_map->links(parent_cell)[0];
+                  // cell facet index the same for both meshes: use c_to_f to
+                  // get submesh facet index
+                  std::int32_t facet = c_to_f->links(cell)[parent_facet];
+                  marked_facets[facet] = 2;
+                });
   // Create offsets
   std::vector<int32_t> offsets2(num_facets + 1, 0);
   std::partial_sum(marked_facets.begin(), marked_facets.end(),
@@ -93,14 +94,15 @@ dolfinx_contact::SubMesh::SubMesh(
 
   // fill data
   std::vector<std::int32_t> data2(offsets2.back());
-  for (std::size_t i = 0; i < cell_facet_pairs.size(); ++i)
-  {
-    auto facet_pair = cell_facet_pairs[i];
-    auto cell = _mesh_to_submesh_cell_map->links(facet_pair.first)[0];
-    std::int32_t facet = c_to_f->links(cell)[facet_pair.second];
-    data2[offsets2[facet]] = cell;
-    data2[offsets2[facet] + 1] = facet_pair.second;
-  }
+  std::for_each(cell_facet_pairs.cbegin(), cell_facet_pairs.cend(),
+                [&](const auto& facet_pair)
+                {
+                  auto [parent_cell, parent_facet] = facet_pair;
+                  auto cell = _mesh_to_submesh_cell_map->links(parent_cell)[0];
+                  std::int32_t facet = c_to_f->links(cell)[parent_facet];
+                  data2[offsets2[facet]] = cell;
+                  data2[offsets2[facet] + 1] = parent_facet;
+                });
 
   // create adjacency list
   _facets_to_cells
@@ -110,7 +112,7 @@ dolfinx_contact::SubMesh::SubMesh(
 
 //------------------------------------------------------------------------------------------------
 dolfinx::fem::FunctionSpace dolfinx_contact::SubMesh::create_functionspace(
-    std::shared_ptr<dolfinx::fem::FunctionSpace> V_parent)
+    std::shared_ptr<dolfinx::fem::FunctionSpace> V_parent) const
 {
   // get element and element_dof_layout from parent mesh
   auto element = V_parent->element();
