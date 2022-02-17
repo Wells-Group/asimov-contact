@@ -94,7 +94,7 @@ Mat dolfinx_contact::Contact::create_petsc_matrix(
   {
     auto facet_map = _submeshes[_opposites[s]].facet_map();
     auto parent_cells = _submeshes[_opposites[s]].parent_cells();
-    for (std::size_t i = 0; i < _cell_facet_pairs[s].size(); i++)
+    for (int i = 0; i < (int)_cell_facet_pairs[s].size(); i++)
     {
       auto cell = _cell_facet_pairs[s][i].first;
       auto cell_dofs = dofmap->cell_dofs(cell);
@@ -126,9 +126,9 @@ Mat dolfinx_contact::Contact::create_petsc_matrix(
 //------------------------------------------------------------------------------------------------
 void dolfinx_contact::Contact::assemble_matrix(
     mat_set_fn& mat_set,
-    const std::vector<
+    [[maybe_unused]] const std::vector<
         std::shared_ptr<const dolfinx::fem::DirichletBC<PetscScalar>>>& bcs,
-    int origin_meshtag, contact_kernel_fn& kernel,
+    int origin_meshtag, const contact_kernel_fn& kernel,
     const xtl::span<const PetscScalar> coeffs, int cstride,
     const xtl::span<const PetscScalar>& constants)
 {
@@ -145,7 +145,7 @@ void dolfinx_contact::Contact::assemble_matrix(
 
   // Extract function space data (assuming same test and trial space)
   std::shared_ptr<const dolfinx::fem::DofMap> dofmap = _V->dofmap();
-  const std::int32_t ndofs_cell = dofmap->cell_dofs(0).size();
+  const std::size_t ndofs_cell = dofmap->cell_dofs(0).size();
   const int bs = dofmap->bs();
 
   // FIXME: Need to reconsider facet permutations for jump integrals
@@ -166,18 +166,19 @@ void dolfinx_contact::Contact::assemble_matrix(
     [[maybe_unused]] auto [cell, local_index] = active_facets[i];
     // Get cell coordinates/geometry
     auto x_dofs = x_dofmap.links(cell);
-    for (std::size_t i = 0; i < x_dofs.size(); ++i)
+    for (std::size_t j = 0; j < x_dofs.size(); ++j)
     {
-      std::copy_n(std::next(x_g.begin(), 3 * x_dofs[i]), gdim,
-                  std::next(coordinate_dofs.begin(), i * gdim));
+      std::copy_n(std::next(x_g.begin(), 3 * x_dofs[j]), gdim,
+                  std::next(coordinate_dofs.begin(), j * gdim));
     }
     // Compute the unique set of cells linked to the current facet
-    compute_linked_cells(linked_cells, map->links(i), facet_map, parent_cells);
+    compute_linked_cells(linked_cells, map->links((int)i), facet_map,
+                         parent_cells);
 
     // Fill initial local element matrices with zeros prior to assembly
-    const int num_linked_cells = linked_cells.size();
+    const std::size_t num_linked_cells = linked_cells.size();
     std::fill(Aes[0].begin(), Aes[0].end(), 0);
-    for (std::int32_t j = 0; j < num_linked_cells; j++)
+    for (std::size_t j = 0; j < num_linked_cells; j++)
     {
       std::fill(Aes[3 * j + 1].begin(), Aes[3 * j + 1].end(), 0);
       std::fill(Aes[3 * j + 2].begin(), Aes[3 * j + 2].end(), 0);
@@ -187,13 +188,16 @@ void dolfinx_contact::Contact::assemble_matrix(
     kernel(Aes, coeffs.data() + i * cstride, constants.data(),
            coordinate_dofs.data(), &local_index, &perm, num_linked_cells);
 
-    // NOTE: Normally dof transform needs to be applied to the elements in
-    // Aes at this stage This is not need for the function spaces
-    // we currently consider
+    // FIXME: We would have to handle possible Dirichlet conditions here, if we
+    // think that we can have a case with contact and Dirichlet
+
+    // NOTE  Normally
+    // dof transform needs to be applied to the elements in Aes at this
+    // stage This is not need for the function spaces we currently consider
     auto dmap_cell = dofmap->cell_dofs(cell);
     mat_set(dmap_cell, dmap_cell, Aes[0]);
 
-    for (int j = 0; j < num_linked_cells; j++)
+    for (std::size_t j = 0; j < num_linked_cells; j++)
     {
       auto dmap_linked = dofmap->cell_dofs(linked_cells[j]);
       mat_set(dmap_cell, dmap_linked, Aes[3 * j + 1]);
@@ -205,9 +209,9 @@ void dolfinx_contact::Contact::assemble_matrix(
 //------------------------------------------------------------------------------------------------
 
 void dolfinx_contact::Contact::assemble_vector(
-    xtl::span<PetscScalar> b, int origin_meshtag, contact_kernel_fn& kernel,
-    const xtl::span<const PetscScalar> coeffs, int cstride,
-    const xtl::span<const PetscScalar>& constants)
+    xtl::span<PetscScalar> b, int origin_meshtag,
+    const contact_kernel_fn& kernel, const xtl::span<const PetscScalar>& coeffs,
+    int cstride, const xtl::span<const PetscScalar>& constants)
 {
   // Extract mesh
   auto mesh = _marker->mesh();
@@ -223,7 +227,7 @@ void dolfinx_contact::Contact::assemble_vector(
 
   // Extract function space data (assuming same test and trial space)
   std::shared_ptr<const dolfinx::fem::DofMap> dofmap = _V->dofmap();
-  const std::int32_t ndofs_cell = dofmap->cell_dofs(0).size();
+  const std::size_t ndofs_cell = dofmap->cell_dofs(0).size();
   const int bs = dofmap->bs();
 
   // FIXME: Need to reconsider facet permutations for jump integrals
@@ -258,9 +262,9 @@ void dolfinx_contact::Contact::assemble_vector(
     compute_linked_cells(linked_cells, map->links(i), facet_map, parent_cells);
 
     // Using integer loop here to reduce number of zeroed vectors
-    const int num_linked_cells = linked_cells.size();
+    const std::size_t num_linked_cells = linked_cells.size();
     std::fill(bes[0].begin(), bes[0].end(), 0);
-    for (std::int32_t j = 0; j < num_linked_cells; j++)
+    for (std::size_t j = 0; j < num_linked_cells; j++)
       std::fill(bes[j + 1].begin(), bes[j + 1].end(), 0);
     kernel(bes, coeffs.data() + i * cstride, constants.data(),
            coordinate_dofs.data(), &local_index, &perm, num_linked_cells);
@@ -270,13 +274,13 @@ void dolfinx_contact::Contact::assemble_vector(
 
     // Add element vector to global vector
     auto dofs_cell = dofmap->cell_dofs(cell);
-    for (int j = 0; j < ndofs_cell; ++j)
+    for (std::size_t j = 0; j < ndofs_cell; ++j)
       for (int k = 0; k < bs; ++k)
         b[bs * dofs_cell[j] + k] += bes[0][bs * j + k];
-    for (int l = 0; l < num_linked_cells; ++l)
+    for (std::size_t l = 0; l < num_linked_cells; ++l)
     {
       auto dofs_linked = dofmap->cell_dofs(linked_cells[l]);
-      for (int j = 0; j < ndofs_cell; ++j)
+      for (std::size_t j = 0; j < ndofs_cell; ++j)
         for (int k = 0; k < bs; ++k)
           b[bs * dofs_linked[j] + k] += bes[l + 1][bs * j + k];
     }

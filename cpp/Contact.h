@@ -26,7 +26,7 @@
 
 using contact_kernel_fn = std::function<void(
     std::vector<std::vector<PetscScalar>>&, const double*, const double*,
-    const double*, const int*, const std::uint8_t*, const std::int32_t)>;
+    const double*, const int*, const std::uint8_t*, const std::size_t)>;
 
 using mat_set_fn = const std::function<int(
     const xtl::span<const std::int32_t>&, const xtl::span<const std::int32_t>&,
@@ -111,7 +111,7 @@ public:
       const mat_set_fn& mat_set,
       const std::vector<
           std::shared_ptr<const dolfinx::fem::DirichletBC<PetscScalar>>>& bcs,
-      int origin_meshtag, contact_kernel_fn& kernel,
+      int origin_meshtag, const contact_kernel_fn& kernel,
       const xtl::span<const PetscScalar> coeffs, int cstride,
       const xtl::span<const PetscScalar>& constants);
 
@@ -124,8 +124,8 @@ public:
   /// @param[in] cstride Number of coefficients per facet
   /// @param[in] constants used in the variational form
   void assemble_vector(xtl::span<PetscScalar> b, int origin_meshtag,
-                       contact_kernel_fn& kernel,
-                       const xtl::span<const PetscScalar> coeffs, int cstride,
+                       const contact_kernel_fn& kernel,
+                       const xtl::span<const PetscScalar>& coeffs, int cstride,
                        const xtl::span<const PetscScalar>& constants);
 
   contact_kernel_fn generate_kernel(dolfinx_contact::Kernel type)
@@ -228,7 +228,7 @@ public:
               const double* w, const double* coordinate_dofs,
               const int* entity_local_index,
               const std::uint8_t* quadrature_permutation,
-              const std::int32_t num_links)
+              const std::size_t num_links)
     {
       // assumption that the vector function space has block size tdim
       assert(bs == gdim);
@@ -362,7 +362,7 @@ public:
             // 0.5 * (-theta * gamma * sign_v * sign_u + Pn_u * Pn_v);
 
             // entries corresponding to v on the other surface
-            for (std::int32_t k = 0; k < num_links; k++)
+            for (std::size_t k = 0; k < num_links; k++)
             {
               int index = 3 + cstrides[3] + cstrides[4]
                           + k * num_q_points * ndofs_cell * bs
@@ -382,7 +382,7 @@ public:
               const double* w, const double* coordinate_dofs,
               const int* entity_local_index,
               const std::uint8_t* quadrature_permutation,
-              const std::int32_t num_links)
+              const std::size_t num_links)
     {
       // assumption that the vector function space has block size tdim
       assert(bs == gdim);
@@ -526,7 +526,7 @@ public:
                 // 0.5 * (-theta * gamma * sign_du * sign_v + Pn_du * Pn_v);
 
                 // entries corresponding to u and v on the other surface
-                for (std::int32_t k = 0; k < num_links; k++)
+                for (std::size_t k = 0; k < num_links; k++)
                 {
                   int index = 3 + cstrides[3] + cstrides[4]
                               + k * num_q_points * ndofs_cell * bs
