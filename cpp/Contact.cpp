@@ -259,7 +259,8 @@ void dolfinx_contact::Contact::assemble_vector(
     }
 
     // Compute the unique set of cells linked to the current facet
-    compute_linked_cells(linked_cells, map->links(i), facet_map, parent_cells);
+    compute_linked_cells(linked_cells, map->links((int)i), facet_map,
+                         parent_cells);
 
     // Using integer loop here to reduce number of zeroed vectors
     const std::size_t num_linked_cells = linked_cells.size();
