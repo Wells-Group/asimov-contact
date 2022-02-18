@@ -29,22 +29,23 @@ dolfinx_contact::pack_coefficient_quadrature(
   // Create quadrature rule
   const int tdim = mesh->topology().dim();
   const int gdim = mesh->geometry().dim();
+  const dolfinx::mesh::CellType cell_type = mesh->topology().cell_type();
   std::shared_ptr<dolfinx_cuas::QuadratureRule> q_rule;
   std::visit(
-      [&](auto&& entities)
+      [&q_rule, q_degree, tdim, cell_type](auto& entities)
       {
         using U = std::decay_t<decltype(entities)>;
         if constexpr (std::is_same_v<U, tcb::span<const std::int32_t>>)
         {
           q_rule = std::make_shared<dolfinx_cuas::QuadratureRule>(
-              mesh->topology().cell_type(), q_degree, tdim);
+              cell_type, q_degree, tdim);
         }
         else if constexpr (std::is_same_v<
                                U,
                                tcb::span<const std::pair<std::int32_t, int>>>)
         {
           q_rule = std::make_shared<dolfinx_cuas::QuadratureRule>(
-              mesh->topology().cell_type(), q_degree, tdim - 1);
+              cell_type, q_degree, tdim - 1);
         }
         else
         {
@@ -104,7 +105,7 @@ dolfinx_contact::pack_coefficient_quadrature(
   std::size_t num_active_entities;
   // TODO see if this can be simplified with templating
   std::visit(
-      [&](auto&& entities)
+      [&num_active_entities, &get_cell_info](auto& entities)
       {
         using U = std::decay_t<decltype(entities)>;
         if constexpr (std::is_same_v<U, tcb::span<const std::int32_t>>)
@@ -137,7 +138,7 @@ dolfinx_contact::pack_coefficient_quadrature(
   // Create output array
   std::vector<PetscScalar> coefficients(
       num_active_entities * vs * bs * num_points, 0.0);
-  const std::size_t cstride = vs * bs * num_points;
+  const int cstride = int(vs * bs * num_points);
 
   if (needs_dof_transformations)
   {

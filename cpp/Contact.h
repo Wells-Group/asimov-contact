@@ -772,21 +772,21 @@ public:
     // correct map
     auto map = _facet_maps[origin_meshtag];
     auto qp_phys = _qp_phys[origin_meshtag];
-    const std::int32_t num_facets = _cell_facet_pairs[origin_meshtag].size();
-    const std::int32_t num_q_point = _qp_ref_facet[0].shape(0);
+    const std::size_t num_facets = _cell_facet_pairs[origin_meshtag].size();
+    const std::size_t num_q_point = _qp_ref_facet[0].shape(0);
 
     // Pack gap function for each quadrature point on each facet
     std::vector<PetscScalar> c(num_facets * num_q_point * gdim, 0.0);
-    const int cstride = num_q_point * gdim;
+    const int cstride = (int)num_q_point * gdim;
     xt::xtensor<double, 2> point = {{0, 0, 0}};
 
-    for (std::int32_t i = 0; i < num_facets; ++i)
+    for (std::size_t i = 0; i < num_facets; ++i)
     {
-      auto master_facets = map->links(i);
+      auto master_facets = map->links((int)i);
       auto master_facet_geometry = dolfinx::mesh::entities_to_geometry(
           *candidate_mesh, fdim, master_facets, false);
-      int offset = i * cstride;
-      for (int j = 0; j < map->num_links(i); ++j)
+      int offset = (int)i * cstride;
+      for (std::size_t j = 0; j < master_facets.size(); ++j)
       {
         // Get quadrature points in physical space for the ith facet, jth
         // quadrature point
