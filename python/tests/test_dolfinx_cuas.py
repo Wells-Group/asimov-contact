@@ -141,7 +141,7 @@ def test_contact_kernel(theta, gamma, dim, gap):
 
         u.interpolate(_u_initial)
         L = dolfinx.fem.form(F)
-        b = dolfinx.fem.create_vector(L)
+        b = dolfinx.fem.petsc.create_vector(L)
 
         # Normal assembly
         b.zeroEntries()
