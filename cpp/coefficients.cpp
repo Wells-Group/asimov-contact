@@ -138,7 +138,7 @@ dolfinx_contact::pack_coefficient_quadrature(
   // Create output array
   std::vector<PetscScalar> coefficients(
       num_active_entities * vs * bs * num_points, 0.0);
-  const int cstride = int(vs * bs * num_points);
+  const auto cstride = int(vs * bs * num_points);
 
   if (needs_dof_transformations)
   {
