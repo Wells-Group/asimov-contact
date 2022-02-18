@@ -141,11 +141,11 @@ def test_contact_kernel(theta, gamma, dim, gap):
 
         u.interpolate(_u_initial)
         L = dolfinx.fem.form(F)
-        b = dolfinx.fem.create_vector(L)
+        b = dolfinx.fem.petsc.create_vector(L)
 
         # Normal assembly
         b.zeroEntries()
-        dolfinx.fem.assemble_vector(b, L)
+        dolfinx.fem.petsc.assemble_vector(b, L)
         b.assemble()
 
         q = sigma_n(u) + gammah * (gap - ufl.dot(u, (-n_2)))
@@ -153,11 +153,11 @@ def test_contact_kernel(theta, gamma, dim, gap):
         J += 1 / gammah * 0.5 * (1 - ufl.sign(q)) * (sigma_n(du) - gammah * ufl.dot(du, (-n_2))) * \
             (theta * sigma_n(v) - gammah * ufl.dot(v, (-n_2))) * ds(bottom_value)
         a = dolfinx.fem.form(J)
-        A = dolfinx.fem.create_matrix(a)
+        A = dolfinx.fem.petsc.create_matrix(a)
 
         # Normal assembly
         A.zeroEntries()
-        dolfinx.fem.assemble_matrix(A, a)
+        dolfinx.fem.petsc.assemble_matrix(A, a)
         A.assemble()
 
         # Custom assembly
@@ -199,24 +199,24 @@ def test_contact_kernel(theta, gamma, dim, gap):
         # RHS
         L_cuas = ufl.inner(sigma(u), epsilon(v)) * dx
         L_cuas = dolfinx.fem.form(L_cuas)
-        b2 = dolfinx.fem.create_vector(L_cuas)
+        b2 = dolfinx.fem.petsc.create_vector(L_cuas)
         kernel = dolfinx_contact.cpp.generate_contact_kernel(V._cpp_object, kt.Rhs, q_rule,
                                                              [u._cpp_object, mu2._cpp_object, lmbda2._cpp_object])
         b2.zeroEntries()
         dolfinx_cuas.assemble_vector(b2, V, bottom_facets, kernel, coeffs, consts,
                                      dolfinx.fem.IntegralType.exterior_facet)
-        dolfinx.fem.assemble_vector(b2, L_cuas)
+        dolfinx.fem.petsc.assemble_vector(b2, L_cuas)
         b2.assemble()
         # Jacobian
         a_cuas = ufl.inner(sigma(du), epsilon(v)) * dx
         a_cuas = dolfinx.fem.form(a_cuas)
-        B = dolfinx.fem.create_matrix(a_cuas)
+        B = dolfinx.fem.petsc.create_matrix(a_cuas)
         kernel = dolfinx_contact.cpp.generate_contact_kernel(
             V._cpp_object, kt.Jac, q_rule, [u._cpp_object, mu2._cpp_object, lmbda2._cpp_object])
         B.zeroEntries()
         dolfinx_cuas.assemble_matrix(B, V, bottom_facets, kernel, coeffs, consts,
                                      dolfinx.fem.IntegralType.exterior_facet)
-        dolfinx.fem.assemble_matrix(B, a_cuas)
+        dolfinx.fem.petsc.assemble_matrix(B, a_cuas)
         B.assemble()
         assert(np.allclose(b.array, b2.array))
         # Compare matrices, first norm, then entries

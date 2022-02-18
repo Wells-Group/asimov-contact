@@ -7,8 +7,8 @@
 #pragma once
 #include <dolfinx/fem/Function.h>
 #include <dolfinx/fem/petsc.h>
+#include <variant>
 #include <xtl/xspan.hpp>
-
 namespace dolfinx_contact
 {
 
@@ -26,8 +26,10 @@ namespace dolfinx_contact
 /// @returns c The packed coefficients and the number of coeffs per entity
 std::pair<std::vector<PetscScalar>, int> pack_coefficient_quadrature(
     std::shared_ptr<const dolfinx::fem::Function<PetscScalar>> coeff,
-    const int q_degree, dolfinx::fem::IntegralType integral,
-    const xtl::span<const std::int32_t>& active_entities);
+    const int q_degree,
+    std::variant<tcb::span<const std::int32_t>,
+                 tcb::span<const std::pair<std::int32_t, int>>>
+        active_entities);
 
 /// Prepare circumradii of triangle/tetrahedron for assembly with custom
 /// kernels by packing them as an array, where the j*cstride to the ith facet

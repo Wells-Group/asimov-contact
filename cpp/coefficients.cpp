@@ -16,8 +16,10 @@ using namespace dolfinx_contact;
 std::pair<std::vector<PetscScalar>, int>
 dolfinx_contact::pack_coefficient_quadrature(
     std::shared_ptr<const dolfinx::fem::Function<PetscScalar>> coeff,
-    const int q_degree, dolfinx::fem::IntegralType integral,
-    const xtl::span<const std::int32_t>& active_entities)
+    const int q_degree,
+    std::variant<tcb::span<const std::int32_t>,
+                 tcb::span<const std::pair<std::int32_t, int>>>
+        active_entities)
 {
   // Get mesh
   std::shared_ptr<const dolfinx::mesh::Mesh> mesh
@@ -27,20 +29,31 @@ dolfinx_contact::pack_coefficient_quadrature(
   // Create quadrature rule
   const int tdim = mesh->topology().dim();
   const int gdim = mesh->geometry().dim();
+  const dolfinx::mesh::CellType cell_type = mesh->topology().cell_type();
   std::shared_ptr<dolfinx_cuas::QuadratureRule> q_rule;
-  switch (integral)
-  {
-  case dolfinx::fem::IntegralType::cell:
-    q_rule = std::make_shared<dolfinx_cuas::QuadratureRule>(
-        mesh->topology().cell_type(), q_degree, tdim);
-    break;
-  case dolfinx::fem::IntegralType::exterior_facet:
-    q_rule = std::make_shared<dolfinx_cuas::QuadratureRule>(
-        mesh->topology().cell_type(), q_degree, tdim - 1);
-    break;
-  default:
-    throw std::runtime_error("Unsupported integral type");
-  }
+  std::visit(
+      [&q_rule, q_degree, tdim, cell_type](auto& entities)
+      {
+        using U = std::decay_t<decltype(entities)>;
+        if constexpr (std::is_same_v<U, tcb::span<const std::int32_t>>)
+        {
+          q_rule = std::make_shared<dolfinx_cuas::QuadratureRule>(
+              cell_type, q_degree, tdim);
+        }
+        else if constexpr (std::is_same_v<
+                               U,
+                               tcb::span<const std::pair<std::int32_t, int>>>)
+        {
+          q_rule = std::make_shared<dolfinx_cuas::QuadratureRule>(
+              cell_type, q_degree, tdim - 1);
+        }
+        else
+        {
+          throw std::runtime_error("Could not pack coefficients. Input entity "
+                                   "type is not supported.");
+        }
+      },
+      active_entities);
 
   // Get the dofmap and finite element
   const dolfinx::fem::DofMap* dofmap = coeff->function_space()->dofmap().get();
@@ -88,55 +101,44 @@ dolfinx_contact::pack_coefficient_quadrature(
     basis_ref = xt::view(coeff_basis, 0, xt::all(), xt::all(), xt::all());
   }
 
-  // Get fetch local-index function
-  auto fetch_cell = [&active_entities](const std::size_t i)
-  {
-    std::pair<std::int32_t, int> pair(active_entities[i], 0);
-    return pair;
-  };
-
-  if (integral == dolfinx::fem::IntegralType::exterior_facet)
-  {
-    mesh->topology_mutable().create_connectivity(tdim - 1, tdim);
-    mesh->topology_mutable().create_connectivity(tdim, tdim - 1);
-  }
-  // FIXME: This computation should be moved when we send in entities with
-  // cell index/ entity index
-  auto f_to_c = mesh->topology().connectivity(tdim - 1, tdim);
-  auto c_to_f = mesh->topology().connectivity(tdim, tdim - 1);
-  auto fetch_facet = [&active_entities, &c_to_f, &f_to_c](const std::size_t i)
-  {
-    int facet = active_entities[i]; // extract facet
-    auto cells = f_to_c->links(facet);
-    // Since the facet is on the boundary it should only link to one cell
-    assert(cells.size() == 1);
-    auto cell = cells[0]; // extract cell
-    // find local index of facet
-    auto cell_facets = c_to_f->links(cell);
-    auto local_facet = std::find(cell_facets.begin(), cell_facets.end(), facet);
-    const auto local_index = std::distance(cell_facets.data(), local_facet);
-    std::pair<std::int32_t, int> pair = {cell, local_index};
-    return pair;
-  };
-
   std::function<std::pair<std::int32_t, int>(std::size_t)> get_cell_info;
-  switch (integral)
-  {
-  case dolfinx::fem::IntegralType::cell:
-    get_cell_info = fetch_cell;
-    break;
-  case dolfinx::fem::IntegralType::exterior_facet:
-    get_cell_info = fetch_facet;
-    break;
-  default:
-    throw std::runtime_error("Unsupported integral type");
-  }
+  std::size_t num_active_entities;
+  // TODO see if this can be simplified with templating
+  std::visit(
+      [&num_active_entities, &get_cell_info](auto& entities)
+      {
+        using U = std::decay_t<decltype(entities)>;
+        if constexpr (std::is_same_v<U, tcb::span<const std::int32_t>>)
+        {
+          num_active_entities = entities.size();
+          // Iterate over coefficients
+          get_cell_info = [&entities](auto i)
+          {
+            std::pair<std::int32_t, int> pair(entities[i], 0);
+            return pair;
+          };
+        }
+        else if constexpr (std::is_same_v<
+                               U,
+                               tcb::span<const std::pair<std::int32_t, int>>>)
+        {
+          num_active_entities = entities.size();
+          // Create lambda function fetching cell index from exterior facet
+          // entity
+          get_cell_info = [&entities](auto i) { return entities[i]; };
+        }
+        else
+        {
+          throw std::runtime_error("Could not pack coefficient. Input entity "
+                                   "type is not supported.");
+        }
+      },
+      active_entities);
 
   // Create output array
-  std::size_t num_active_entities = active_entities.size();
   std::vector<PetscScalar> coefficients(
       num_active_entities * vs * bs * num_points, 0.0);
-  const std::size_t cstride = vs * bs * num_points;
+  const auto cstride = int(vs * bs * num_points);
 
   if (needs_dof_transformations)
   {

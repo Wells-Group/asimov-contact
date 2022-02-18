@@ -7,15 +7,15 @@ import os
 
 import numpy as np
 import ufl
-from dolfinx.fem import (Function, LinearProblem, NonlinearProblem,
-                         VectorFunctionSpace, dirichletbc,
+from dolfinx.fem import (Function, VectorFunctionSpace, dirichletbc,
                          locate_dofs_topological)
+from dolfinx.fem.petsc import LinearProblem, NonlinearProblem
 from dolfinx.geometry import (BoundingBoxTree, compute_colliding_cells,
                               compute_collisions)
 from dolfinx.io import XDMFFile
 from dolfinx.mesh import (CellType, GhostMode, MeshTags, create_rectangle,
                           locate_entities_boundary)
-from dolfinx.nls import NewtonSolver
+from dolfinx.nls.petsc import NewtonSolver
 from mpi4py import MPI
 
 from dolfinx_contact.helpers import epsilon, lame_parameters, sigma_func

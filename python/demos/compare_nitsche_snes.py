@@ -115,8 +115,8 @@ if __name__ == "__main__":
     dofs_global = []
     rank = MPI.COMM_WORLD.rank
     refs = np.arange(0, num_refs)
-    jit_parameters = {"cffi_extra_compile_args": ["-O3", "-march=native"], "cffi_libraries": ["m"]}
-    form_compiler_parameters = {"verbosity": 30}
+    jit_params = {"cffi_extra_compile_args": ["-O3", "-march=native"], "cffi_libraries": ["m"]}
+    form_compiler_params = {"verbosity": 30}
     for i in refs:
         if i > 0:
             # Refine mesh
@@ -139,8 +139,8 @@ if __name__ == "__main__":
         u1 = nitsche_ufl(mesh=mesh, mesh_data=mesh_data, physical_parameters=physical_parameters,
                          vertical_displacement=vertical_displacement, nitsche_parameters=nitsche_parameters,
                          plane_loc=gap, nitsche_bc=nitsche_bc, petsc_options=petsc_options,
-                         newton_options=newton_options, form_compiler_parameters=form_compiler_parameters,
-                         jit_parameters=jit_parameters)
+                         newton_options=newton_options, form_compiler_params=form_compiler_params,
+                         jit_params=jit_params)
 
         with XDMFFile(mesh.comm, f"results/u_nitsche_{i}.xdmf", "w") as xdmf:
             xdmf.write_mesh(mesh)
@@ -149,8 +149,8 @@ if __name__ == "__main__":
         # Solve contact problem using PETSc SNES
         u2 = snes_solver(mesh=mesh, mesh_data=mesh_data, physical_parameters=physical_parameters,
                          vertical_displacement=vertical_displacement, plane_loc=gap,
-                         petsc_options=petsc_snes, form_compiler_parameters=form_compiler_parameters,
-                         jit_parameters=jit_parameters, snes_options=snes_options)
+                         petsc_options=petsc_snes, form_compiler_params=form_compiler_params,
+                         jit_params=jit_params, snes_options=snes_options)
         with XDMFFile(mesh.comm, f"results/u_snes_{i}.xdmf", "w") as xdmf:
             xdmf.write_mesh(mesh)
             xdmf.write_function(u2)

@@ -5,7 +5,8 @@
 import numpy as np
 import pytest
 import ufl
-from dolfinx.fem import Function, FunctionSpace, LinearProblem, IntegralType
+from dolfinx.fem import Function, FunctionSpace, IntegralType
+from dolfinx.fem.petsc import LinearProblem
 from dolfinx.mesh import create_unit_cube, create_unit_square, locate_entities_boundary
 from dolfinx_cuas import compute_active_entities
 from mpi4py import MPI

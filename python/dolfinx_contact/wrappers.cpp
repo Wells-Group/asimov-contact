@@ -202,16 +202,44 @@ PYBIND11_MODULE(cpp, m)
       .value("Jac", dolfinx_contact::Kernel::Jac);
   m.def("pack_coefficient_quadrature",
         [](std::shared_ptr<const dolfinx::fem::Function<PetscScalar>> coeff,
-           int q, dolfinx::fem::IntegralType integral,
-           const py::array_t<std::int32_t, py::array::c_style>& active_entities)
+           int q, const py::array_t<std::int32_t, py::array::c_style>& entities)
         {
-          auto [coeffs, cstride] = dolfinx_contact::pack_coefficient_quadrature(
-              coeff, q, integral,
-              xtl::span<const std::int32_t>(active_entities.data(),
-                                            active_entities.size()));
-          int shape0 = cstride == 0 ? 0 : coeffs.size() / cstride;
-          return dolfinx_wrappers::as_pyarray(std::move(coeffs),
-                                              std::array{shape0, cstride});
+          const std::size_t shape_0
+              = entities.ndim() == 1 ? 1 : entities.shape(0);
+
+          if (entities.ndim() == 1)
+          {
+            auto cell_span = xtl::span<const std::int32_t>(entities.data(),
+                                                           entities.size());
+            auto [coeffs, cstride]
+                = dolfinx_contact::pack_coefficient_quadrature(coeff, q,
+                                                               cell_span);
+            int shape0 = cstride == 0 ? 0 : coeffs.size() / cstride;
+            return dolfinx_wrappers::as_pyarray(std::move(coeffs),
+                                                std::array{shape0, cstride});
+          }
+          else if (entities.ndim() == 2)
+          {
+            auto ents = entities.unchecked();
+            // FIXME: How to avoid copy here
+            std::vector<std::pair<std::int32_t, int>> facets;
+            facets.reserve(shape_0);
+            for (std::size_t i = 0; i < shape_0; i++)
+              facets.emplace_back(ents(i, 0), ents(i, 1));
+
+            auto facet_span = xtl::span<const std::pair<std::int32_t, int>>(
+                facets.data(), facets.size());
+            auto [coeffs, cstride]
+                = dolfinx_contact::pack_coefficient_quadrature(coeff, q,
+                                                               facet_span);
+            int shape0 = cstride == 0 ? 0 : coeffs.size() / cstride;
+            return dolfinx_wrappers::as_pyarray(std::move(coeffs),
+                                                std::array{shape0, cstride});
+          }
+          else
+          {
+            throw std::runtime_error("Unsupported entities");
+          }
         });
 
   m.def("pack_circumradius",
