@@ -7,12 +7,12 @@ import os
 import numpy as np
 import pytest
 import ufl
-from dolfinx.fem import (Function, LinearProblem, NonlinearProblem,
-                         VectorFunctionSpace, assemble_scalar, form)
+from dolfinx.fem import Function, VectorFunctionSpace, assemble_scalar, form
+from dolfinx.fem.petsc import LinearProblem, NonlinearProblem
 from dolfinx.io import XDMFFile
-from dolfinx.mesh import (CellType, create_rectangle, GhostMode, MeshTags,
+from dolfinx.mesh import (CellType, GhostMode, MeshTags, create_rectangle,
                           locate_entities_boundary)
-from dolfinx.nls import NewtonSolver
+from dolfinx.nls.petsc import NewtonSolver
 from mpi4py import MPI
 
 from dolfinx_contact.helpers import epsilon, lame_parameters, sigma_func

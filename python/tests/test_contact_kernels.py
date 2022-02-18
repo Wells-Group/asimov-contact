@@ -10,8 +10,9 @@ import numpy as np
 import pytest
 import ufl
 from dolfinx.fem import (Function, FunctionSpace, IntegralType,
-                         VectorFunctionSpace, assemble_matrix, assemble_vector,
-                         create_matrix, create_vector, form)
+                         VectorFunctionSpace, form)
+from dolfinx.fem.petsc import (assemble_matrix, assemble_vector, create_matrix,
+                               create_vector)
 from dolfinx.mesh import (MeshTags, create_unit_cube, create_unit_square,
                           locate_entities_boundary)
 from mpi4py import MPI
@@ -112,7 +113,7 @@ def test_vector_surface_kernel(dim, kernel_type, P, Q):
         (theta * sigma_n(v) - (gamma / h) * ufl.dot(v, (-n_2))) * ds(1)
     # Compile UFL form
     cffi_options = ["-O2", "-march=native"]
-    L = form(L, jit_parameters={"cffi_extra_compile_args": cffi_options, "cffi_libraries": ["m"]})
+    L = form(L, jit_params={"cffi_extra_compile_args": cffi_options, "cffi_libraries": ["m"]})
     b = create_vector(L)
 
     # Normal assembly
@@ -233,7 +234,7 @@ def test_matrix_surface_kernel(dim, kernel_type, P, Q):
         (theta * sigma_n(v) - gamma / h * ufl.dot(v, (-n_2))) * ds(1)
     # Compile UFL form
     cffi_options = ["-O2", "-march=native"]
-    a = form(a, jit_parameters={"cffi_extra_compile_args": cffi_options, "cffi_libraries": ["m"]})
+    a = form(a, jit_params={"cffi_extra_compile_args": cffi_options, "cffi_libraries": ["m"]})
     A = create_matrix(a)
 
     # Normal assembly

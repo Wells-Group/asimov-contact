@@ -7,9 +7,9 @@ import os
 
 import numpy as np
 import ufl
-from dolfinx.fem import (Function, LinearProblem, NonlinearProblem,
-                         VectorFunctionSpace, dirichletbc,
+from dolfinx.fem import (Function, VectorFunctionSpace, dirichletbc,
                          locate_dofs_topological)
+from dolfinx.fem.petsc import LinearProblem, NonlinearProblem
 from dolfinx.geometry import (BoundingBoxTree, compute_colliding_cells,
                               compute_collisions)
 from dolfinx.io import XDMFFile
