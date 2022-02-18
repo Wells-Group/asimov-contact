@@ -199,7 +199,7 @@ def test_contact_kernel(theta, gamma, dim, gap):
         # RHS
         L_cuas = ufl.inner(sigma(u), epsilon(v)) * dx
         L_cuas = dolfinx.fem.form(L_cuas)
-        b2 = dolfinx.fem.create_vector(L_cuas)
+        b2 = dolfinx.fem.petsc.create_vector(L_cuas)
         kernel = dolfinx_contact.cpp.generate_contact_kernel(V._cpp_object, kt.Rhs, q_rule,
                                                              [u._cpp_object, mu2._cpp_object, lmbda2._cpp_object])
         b2.zeroEntries()

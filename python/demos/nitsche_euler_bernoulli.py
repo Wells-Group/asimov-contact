@@ -15,7 +15,7 @@ from dolfinx.geometry import (BoundingBoxTree, compute_colliding_cells,
 from dolfinx.io import XDMFFile
 from dolfinx.mesh import (CellType, GhostMode, MeshTags, create_rectangle,
                           locate_entities_boundary)
-from dolfinx.nls import NewtonSolver
+from dolfinx.nls.petsc import NewtonSolver
 from mpi4py import MPI
 
 from dolfinx_contact.helpers import epsilon, lame_parameters, sigma_func
