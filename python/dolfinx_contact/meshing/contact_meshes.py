@@ -61,6 +61,9 @@ def create_circle_plane_mesh(filename: str):
         gmsh.model.mesh.field.setNumber(2, "LcMax", 0.01)
         gmsh.model.mesh.field.setNumber(2, "DistMin", 0.3)
         gmsh.model.mesh.field.setNumber(2, "DistMax", 0.6)
+        gmsh.option.setNumber("Mesh.RecombinationAlgorithm", 8)
+        gmsh.option.setNumber("Mesh.RecombineAll", 2)
+        gmsh.option.setNumber("Mesh.SubdivisionAlgorithm", 1)
         gmsh.model.mesh.field.setAsBackgroundMesh(2)
 
         gmsh.model.mesh.generate(2)

@@ -192,7 +192,7 @@ if __name__ == "__main__":
         else:
             fname = "twomeshes"
             create_circle_plane_mesh(filename=f"{fname}.msh")
-            convert_mesh(fname, fname, "triangle", prune_z=True)
+            convert_mesh(fname, fname, "quad", prune_z=True)
             convert_mesh(f"{fname}", f"{fname}_facets", "line", prune_z=True)
 
             with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
@@ -212,7 +212,7 @@ if __name__ == "__main__":
                 return x[1] > 0.5
 
             def bottom(x):
-                return x[1] < np.logical_and(x[1] < 0.25, x[1] > 0.11)
+                return x[1] < np.logical_and(x[1] < 0.5, x[1] > 0.11)
 
             top_value = 1
             bottom_value = 2

@@ -93,8 +93,14 @@ def nitsche_ufl(mesh: dmesh.Mesh, mesh_data: Tuple[dmesh.MeshTags, int, int],
     n_2 = ufl.as_vector(n_vec)  # Normal of plane (projection onto other body)
 
     # Scaled Nitsche parameter
-    h = ufl.Circumradius(mesh)
+    print("circumradius")
+    h = ufl.CellDiameter(mesh)
     gamma_scaled = gamma * E / h
+    V2 = _fem.FunctionSpace(mesh, ("DG", 0))
+    h_int = _fem.Function(V2)
+    print("calling interpolate")
+    h_int.interpolate(h)
+    print("done")
 
     # Mimicking the plane y=-plane_loc
     x = ufl.SpatialCoordinate(mesh)

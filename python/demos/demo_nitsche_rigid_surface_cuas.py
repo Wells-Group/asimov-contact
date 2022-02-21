@@ -126,7 +126,7 @@ if __name__ == "__main__":
         else:
             fname = "twomeshes"
             create_circle_plane_mesh(filename=f"{fname}.msh")
-            convert_mesh(fname, f"{fname}.xdmf", "triangle", prune_z=True)
+            convert_mesh(fname, f"{fname}.xdmf", "quad", prune_z=True)
             convert_mesh(fname, f"{fname}_facets.xdmf", "line", prune_z=True)
 
             with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:

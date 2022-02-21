@@ -35,7 +35,7 @@ public:
           std::vector<std::pair<std::int32_t, int>>& facets);
 
   // Return mesh
-  std::shared_ptr<const dolfinx::mesh::Mesh> mesh() const { return _mesh; }
+  std::shared_ptr<dolfinx::mesh::Mesh> mesh() const { return _mesh; }
 
   // Return adjacency list mapping from parent mesh cell to submesh cell
   std::shared_ptr<const dolfinx::graph::AdjacencyList<std::int32_t>>
@@ -66,7 +66,8 @@ public:
   // Copy of a function on the parent mesh/ in the parent function space
   // to submesh/ function space on submesh
   ///@param[in] u_parent - function to be copied
-  ///@param[in, out] u_sub - function into which the function values are to be copied
+  ///@param[in, out] u_sub - function into which the function values are to be
+  ///copied
   void copy_function(dolfinx::fem::Function<PetscScalar>& u_parent,
                      dolfinx::fem::Function<PetscScalar>& u_sub);
 

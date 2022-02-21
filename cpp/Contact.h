@@ -745,6 +745,10 @@ public:
     max_links(puppet_mt);
   }
 
+  /// Update the geometry of the submeshes according to the displacement
+  /// given by a function u
+  void update_submesh_geometry(dolfinx::fem::Function<PetscScalar>& u);
+
   /// Compute and pack the gap function for each quadrature point the set of
   /// facets. For a set of facets; go through the quadrature points on each
   /// facet find the closest facet on the other surface and compute the
@@ -859,6 +863,8 @@ public:
     std::vector<std::int32_t> perm(num_q_points);
     std::vector<std::int32_t> linked_cells(num_q_points);
 
+    std::cout << "made it here 1\n";
+
     // Loop over all facets
     for (int i = 0; i < num_facets; i++)
     {
@@ -897,18 +903,21 @@ public:
         const std::size_t num_dofs_g = x_dofmap.num_links(linked_cell);
         xt::xtensor<double, 2> coordinate_dofs
             = xt::zeros<double>({num_dofs_g, std::size_t(gdim)});
+        std::cout << "made it here 21 " << i << " \n";
         for (std::size_t i = 0; i < x_dofs.size(); ++i)
         {
           std::copy_n(std::next(mesh_geometry.begin(), 3 * x_dofs[i]), gdim,
                       std::next(coordinate_dofs.begin(), i * gdim));
         }
+        std::cout << "made it here 22 " << i << " \n";
         // Extract all physical points Pi(x) on a facet of linked_cell
         auto qp = xt::view(q_points, xt::keep(indices), xt::all());
+        std::cout << "made it here 23 " << i << " \n";
         // Compute values of basis functions for all y = Pi(x) in qp
         auto test_fn = dolfinx_contact::get_basis_functions(
             J, K, detJ, qp, coordinate_dofs, linked_cell,
             permutation_info[linked_cell], element, cmap);
-
+        std::cout << "made it here 24 " << i << " \n";
         // Insert basis function values into c
         for (std::int32_t k = 0; k < ndofs; k++)
           for (std::size_t q = 0; q < test_fn.shape(0); ++q)
@@ -917,8 +926,9 @@ public:
                 + k * bs * num_q_points + indices[q] * bs + l]
                   = test_fn(q, k * bs + l, l);
       }
+      std::cout << "made it here 2 " << i << " \n";
     }
-
+    std::cout << "made it here 3\n";
     return {std::move(c), cstride};
   }
 
@@ -1129,6 +1139,13 @@ public:
     }
     return {std::move(c), cstride};
   }
+
+  // /// Pack data for second derivative of gap
+  // /// @param[in] orgin_meshtag - surface on which to integrate
+  // /// @param[in] gap - packed at quadrature points
+  // /// @param[out] c - packed data: TODO: list what is being packed
+  // std::pair<std::vector<PetscScalar>, int>
+  // pack_data_ddg(int origin_meshtag, const xtl::span<const PetscScalar> gap);
 
 private:
   int _quadrature_degree = 3;
