@@ -38,8 +38,10 @@ def test_pack_coeff_at_quadrature(quadrature_degree, space, degree):
     # Pack coeffs with cuas
     tdim = mesh.topology.dim
     num_cells = mesh.topology.index_map(tdim).size_local
+    integration_entities = dolfinx_cuas.compute_active_entities(mesh, np.arange(num_cells, dtype=np.int32),
+                                                                IntegralType.cell)
     coeffs_cuas = dolfinx_contact.cpp.pack_coefficient_quadrature(
-        v._cpp_object, quadrature_degree, IntegralType.cell, np.arange(num_cells, dtype=np.int32))
+        v._cpp_object, quadrature_degree, integration_entities)
 
     # Use prepare quadrature points and geometry for eval
     quadrature_points, wts = basix.make_quadrature(
@@ -47,6 +49,7 @@ def test_pack_coeff_at_quadrature(quadrature_degree, space, degree):
     x_g = mesh.geometry.x
     coord_dofs = mesh.geometry.dofmap
 
+    # FIXME: Replace this with dolfinx.Expression
     # Eval for each cell
     for cell in range(num_cells):
         xg = x_g[coord_dofs.links(cell)]
@@ -83,8 +86,10 @@ def test_pack_coeff_on_facet(quadrature_degree, space, degree):
                                                               np.isclose(x[0], 1.0)))
 
     # Pack coeffs with cuas
+    integration_entities = dolfinx_cuas.compute_active_entities(mesh, facets,
+                                                                IntegralType.exterior_facet)
     coeffs_cuas = dolfinx_contact.cpp.pack_coefficient_quadrature(
-        v._cpp_object, quadrature_degree, IntegralType.exterior_facet, facets)
+        v._cpp_object, quadrature_degree, integration_entities)
 
     # Use prepare quadrature points and geometry for eval
     qp_test, wts = basix.make_quadrature(basix.QuadratureType.Default,

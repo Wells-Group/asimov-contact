@@ -66,15 +66,15 @@ def tangential_proj(u, n):
 
 
 class NonlinearPDE_SNESProblem:
-    def __init__(self, F, u, bc, form_compiler_parameters={}, jit_parameters={}):
+    def __init__(self, F, u, bc, form_compiler_params={}, jit_params={}):
         V = u.function_space
         du = ufl.TrialFunction(V)
 
-        self.L = _fem.form(F, form_compiler_parameters=form_compiler_parameters,
-                           jit_parameters=jit_parameters)
+        self.L = _fem.form(F, form_compiler_params=form_compiler_params,
+                           jit_params=jit_params)
         self.a = _fem.form(ufl.derivative(F, u, du),
-                           form_compiler_parameters=form_compiler_parameters,
-                           jit_parameters=jit_parameters)
+                           form_compiler_params=form_compiler_params,
+                           jit_params=jit_params)
         self.bc = bc
         self._F, self._J = None, None
         self.u = u
@@ -87,7 +87,7 @@ class NonlinearPDE_SNESProblem:
             addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD)
         with F.localForm() as f_local:
             f_local.set(0.0)
-        _fem.assemble_vector(F, self.L)
+        _fem.petsc.assemble_vector(F, self.L)
         _fem.apply_lifting(F, [self.a], [[self.bc]], [x], -1.0)
         F.ghostUpdate(addv=PETSc.InsertMode.ADD, mode=PETSc.ScatterMode.REVERSE)
         _fem.set_bc(F, [self.bc], x, -1.0)
@@ -95,7 +95,7 @@ class NonlinearPDE_SNESProblem:
     def J(self, snes, x, J, P):
         """Assemble Jacobian matrix."""
         J.zeroEntries()
-        _fem.assemble_matrix(J, self.a, [self.bc])
+        _fem.petsc.assemble_matrix(J, self.a, [self.bc])
         J.assemble()
 
 

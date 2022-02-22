@@ -14,7 +14,6 @@
 #include <dolfinx/mesh/Mesh.h>
 #include <dolfinx/mesh/MeshTags.h>
 #include <xtensor/xadapt.hpp>
-#include <xtensor/xio.hpp>
 
 namespace dolfinx_contact
 {
@@ -22,15 +21,15 @@ class SubMesh
 {
 public:
   // empty constructor
-  SubMesh() {}
+  SubMesh() = default;
 
   // submesh constructor
   // constructs a submesh consisting of the cells adjacent to a given set of
   // exterior facets
   /// @param[in] mesh - the parent mesh
   /// @param[in] facets - vector of pairs (cell, facet) of exterior facets,
-  /// where cell is the index of the cell local to the process and facet is the
-  /// facet index within the cell
+  /// where cell is the index of the cell local to the process and facet is
+  /// the facet index within the cell
   SubMesh(std::shared_ptr<const dolfinx::mesh::Mesh> mesh,
           std::vector<std::pair<std::int32_t, int>>& facets);
 
@@ -60,14 +59,14 @@ public:
   // FunctionSpace on the parent mesh but restricted to submesh
   /// @param[in] V_parent - the function space on the the parent mesh
   /// @return the function space on the submesh
-  dolfinx::fem::FunctionSpace
-  create_functionspace(std::shared_ptr<dolfinx::fem::FunctionSpace> V_parent);
+  dolfinx::fem::FunctionSpace create_functionspace(
+      std::shared_ptr<dolfinx::fem::FunctionSpace> V_parent) const;
 
   // Copy of a function on the parent mesh/ in the parent function space
   // to submesh/ function space on submesh
   ///@param[in] u_parent - function to be copied
   ///@param[in, out] u_sub - function into which the function values are to be
-  ///copied
+  /// copied
   void copy_function(dolfinx::fem::Function<PetscScalar>& u_parent,
                      dolfinx::fem::Function<PetscScalar>& u_sub);
 
