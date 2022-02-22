@@ -621,7 +621,7 @@ public:
           for (std::size_t i = 0; i < x_dofs.size(); ++i)
           {
             const int pos = 3 * x_dofs[i];
-            for (std::size_t j = 0; j < gdim; ++j)
+            for (std::size_t j = 0; j < std::size_t(gdim); ++j)
               coordinate_dofs(i, j) = mesh_geometry[pos + j];
           }
           xt::xtensor<double, 2> q_phys({_qp_ref_facet[local_index].shape(0),
@@ -907,7 +907,7 @@ public:
         for (std::size_t i = 0; i < x_dofs.size(); ++i)
         {
           const int pos = 3 * x_dofs[i];
-          for (std::size_t j = 0; j < gdim; ++j)
+          for (std::size_t j = 0; j < std::size_t(gdim); ++j)
             coordinate_dofs(i, j) = mesh_geometry[pos + j];
         }
         // Extract all physical points Pi(x) on a facet of linked_cell
@@ -1061,7 +1061,7 @@ public:
         for (std::size_t i = 0; i < x_dofs.size(); ++i)
         {
           const int pos = 3 * x_dofs[i];
-          for (std::size_t j = 0; j < gdim; ++j)
+          for (std::size_t j = 0; j < std::size_t(gdim); ++j)
             coordinate_dofs(i, j) = mesh_geometry[pos + j];
         }
 

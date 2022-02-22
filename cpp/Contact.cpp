@@ -169,7 +169,7 @@ void dolfinx_contact::Contact::assemble_matrix(
     for (std::size_t j = 0; j < x_dofs.size(); ++j)
     {
       const int pos = 3 * x_dofs[j];
-      for (std::size_t k = 0; k < gdim; ++k)
+      for (std::size_t k = 0; k < std::size_t(gdim); ++k)
         coordinate_dofs[3 * j + k] = x_g[pos + k];
     }
     // Compute the unique set of cells linked to the current facet
@@ -256,7 +256,7 @@ void dolfinx_contact::Contact::assemble_vector(
     for (std::size_t j = 0; j < x_dofs.size(); ++j)
     {
       const int pos = 3 * x_dofs[j];
-      for (std::size_t k = 0; k < gdim; ++k)
+      for (std::size_t k = 0; k < std::size_t(gdim); ++k)
         coordinate_dofs[3 * j + k] = x_g[pos + k];
     }
 
