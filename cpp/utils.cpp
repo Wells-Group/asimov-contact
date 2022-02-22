@@ -61,13 +61,10 @@ void dolfinx_contact::pull_back(xt::xtensor<double, 3>& J,
   }
   else
   {
-    std::cout << "call pull back non-affine\n";
     cmap.pull_back_nonaffine(X, x, coordinate_dofs);
-    std::cout << "done\n";
     xt::xtensor<double, 4> phi(cmap.tabulate_shape(1, X.shape(0)));
     cmap.tabulate(1, X, phi);
     J.fill(0);
-    std::cout << "jacobians \n";
     for (std::size_t p = 0; p < X.shape(0); ++p)
     {
       auto _J = xt::view(J, p, xt::all(), xt::all());
@@ -115,9 +112,7 @@ xt::xtensor<double, 3> dolfinx_contact::get_basis_functions(
   if (index < 0)
     return basis_array;
 
-  std::cout << "call pull back \n";
   pull_back(J, K, detJ, x, X, coordinate_dofs, cmap);
-  std::cout << "pull back done \n";
   // Prepare basis function data structures
   xt::xtensor<double, 4> tabulated_data(
       {1, num_points, space_dimension, reference_value_size});

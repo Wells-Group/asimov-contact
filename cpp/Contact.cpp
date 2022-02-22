@@ -282,22 +282,3 @@ void dolfinx_contact::Contact::assemble_vector(
     }
   }
 }
-
-// std::pair<std::vector<PetscScalar>, int>
-// dolfinx_contact::Contact::pack_data_ddg(int origin_meshtag,
-//                                         const xtl::span<const PetscScalar> gap)
-// {
-// }
-
-void dolfinx_contact::Contact::update_submesh_geometry(
-    dolfinx::fem::Function<PetscScalar>& u)
-{
-  for (auto submesh : _submeshes)
-  {
-    auto V_sub = std::make_shared<dolfinx::fem::FunctionSpace>(
-        submesh.create_functionspace(_V));
-    auto u_sub = dolfinx::fem::Function<PetscScalar>(V_sub);
-    submesh.copy_function(u, u_sub);
-    dolfinx_contact::update_geometry(u_sub, submesh.mesh());
-  }
-}
