@@ -111,7 +111,7 @@ def nitsche_rigid_surface_cuas(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTags
     # https://doi.org/10.1016/j.cma.2018.05.024
     if nitsche_bc:
         ds = ufl.Measure("ds", domain=mesh, subdomain_data=facet_marker)
-        h = ufl.Circumradius(mesh)
+        h = ufl.CellDiameter(mesh)
         n = ufl.FacetNormal(mesh)
 
         disp_vec = np.zeros(gdim)
@@ -158,7 +158,10 @@ def nitsche_rigid_surface_cuas(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTags
     # Pack mu and lambda on facets
     coeffs = dolfinx_cuas.pack_coefficients([mu2, lmbda2], integral_entities)
     # Pack circumradius on facets
-    h_facets = dolfinx_contact.pack_circumradius(mesh, integral_entities)
+    h_int = _fem.Function(V2)
+    expr = _fem.Expression(h, V2.element.interpolation_points)
+    h_int.interpolate(expr)
+    h_facets = dolfinx_cuas.pack_coefficients([h_int], integral_entities)
 
     # Create contact class
     contact = dolfinx_contact.cpp.Contact(facet_marker, [contact_value_elastic, contact_value_rigid], V._cpp_object)
