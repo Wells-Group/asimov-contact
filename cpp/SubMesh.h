@@ -34,7 +34,7 @@ public:
           std::vector<std::pair<std::int32_t, int>>& facets);
 
   // Return mesh
-  std::shared_ptr<dolfinx::mesh::Mesh> mesh() const { return _mesh; }
+  std::shared_ptr<const dolfinx::mesh::Mesh> mesh() const { return _mesh; }
 
   // Return adjacency list mapping from parent mesh cell to submesh cell
   std::shared_ptr<const dolfinx::graph::AdjacencyList<std::int32_t>>
