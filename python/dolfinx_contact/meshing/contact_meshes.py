@@ -10,7 +10,7 @@ __all__ = ["create_circle_plane_mesh", "create_circle_circle_mesh", "create_box_
            "create_box_mesh_3D", "create_sphere_plane_mesh", "create_sphere_sphere_mesh"]
 
 
-def create_circle_plane_mesh(filename: str):
+def create_circle_plane_mesh(filename: str, quads: bool = False):
     """
     Create a circular mesh, with center at (0.5,0.5,0) with radius 3 and a box [0,1]x[0,0.1]
     """
@@ -61,6 +61,10 @@ def create_circle_plane_mesh(filename: str):
         gmsh.model.mesh.field.setNumber(2, "LcMax", 0.01)
         gmsh.model.mesh.field.setNumber(2, "DistMin", 0.3)
         gmsh.model.mesh.field.setNumber(2, "DistMax", 0.6)
+        if quads:
+            gmsh.option.setNumber("Mesh.RecombinationAlgorithm", 8)
+            gmsh.option.setNumber("Mesh.RecombineAll", 2)
+            gmsh.option.setNumber("Mesh.SubdivisionAlgorithm", 1)
         gmsh.model.mesh.field.setAsBackgroundMesh(2)
 
         gmsh.model.mesh.generate(2)
@@ -70,7 +74,7 @@ def create_circle_plane_mesh(filename: str):
     gmsh.finalize()
 
 
-def create_circle_circle_mesh(filename: str):
+def create_circle_circle_mesh(filename: str, quads: bool = False):
     """
     Create two circular meshes, with radii 0.3 and 0.6 with centers (0.5,0.5) and (0.5, -0.5)
     """
@@ -123,6 +127,10 @@ def create_circle_circle_mesh(filename: str):
         gmsh.model.mesh.field.setNumber(2, "LcMax", 0.015)
         gmsh.model.mesh.field.setNumber(2, "DistMin", 0.3)
         gmsh.model.mesh.field.setNumber(2, "DistMax", 0.6)
+        if quads:
+            gmsh.option.setNumber("Mesh.RecombinationAlgorithm", 8)
+            gmsh.option.setNumber("Mesh.RecombineAll", 2)
+            gmsh.option.setNumber("Mesh.SubdivisionAlgorithm", 1)
         gmsh.model.mesh.field.setAsBackgroundMesh(2)
 
         gmsh.model.mesh.generate(2)
@@ -132,7 +140,7 @@ def create_circle_circle_mesh(filename: str):
     gmsh.finalize()
 
 
-def create_box_mesh_2D(filename: str):
+def create_box_mesh_2D(filename: str, quads: bool = False):
     """
     Create two boxes, one slightly skewed
     """
@@ -181,7 +189,10 @@ def create_box_mesh_2D(filename: str):
         gmsh.model.addPhysicalGroup(2, [surface2], 2)
         bndry2 = gmsh.model.getBoundary([(2, surface2)], oriented=False)
         [gmsh.model.addPhysicalGroup(b[0], [b[1]]) for b in bndry2]
-
+        if quads:
+            gmsh.option.setNumber("Mesh.RecombinationAlgorithm", 8)
+            gmsh.option.setNumber("Mesh.RecombineAll", 2)
+            gmsh.option.setNumber("Mesh.SubdivisionAlgorithm", 1)
         gmsh.model.mesh.generate(2)
         # gmsh.option.setNumber("Mesh.SaveAll", 1)
         gmsh.write(filename)

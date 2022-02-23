@@ -29,6 +29,9 @@ if __name__ == "__main__":
     _3D = parser.add_mutually_exclusive_group(required=False)
     _3D.add_argument('--3D', dest='threed', action='store_true',
                      help="Use 3D mesh", default=False)
+    _simplex = parser.add_mutually_exclusive_group(required=False)
+    _simplex.add_argument('--simplex', dest='simplex', action='store_true',
+                          help="Use triangle/test mesh", default=False)
     _curved = parser.add_mutually_exclusive_group(required=False)
     _curved.add_argument('--curved', dest='curved', action='store_true',
                          help="Use curved rigid surface", default=False)
@@ -60,6 +63,7 @@ if __name__ == "__main__":
     threed = args.threed
     bottom_value = 2
     curved = args.curved
+    simplex = args.simplex
 
     # Load mesh and create identifier functions for the top (Displacement condition)
     # and the bottom (contact condition)
@@ -125,8 +129,12 @@ if __name__ == "__main__":
             facet_marker = MeshTags(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
         else:
             fname = "twomeshes"
-            create_circle_plane_mesh(filename=f"{fname}.msh")
-            convert_mesh(fname, f"{fname}.xdmf", "triangle", prune_z=True)
+            if simplex:
+                create_circle_plane_mesh(filename=f"{fname}.msh")
+                convert_mesh(fname, f"{fname}.xdmf", "triangle", prune_z=True)
+            else:
+                create_circle_plane_mesh(filename=f"{fname}.msh", quads=True)
+                convert_mesh(fname, f"{fname}.xdmf", "quad", prune_z=True)
             convert_mesh(fname, f"{fname}_facets.xdmf", "line", prune_z=True)
 
             with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:

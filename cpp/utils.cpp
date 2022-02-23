@@ -42,9 +42,9 @@ void dolfinx_contact::pull_back(xt::xtensor<double, 3>& J,
 
   xt::xtensor<double, 2> dphi;
 
-  xt::xtensor<double, 4> phi(cmap.tabulate_shape(1, 1));
   if (cmap.is_affine())
   {
+    xt::xtensor<double, 4> phi(cmap.tabulate_shape(1, 1));
     J.fill(0);
     pull_back_affine(X, coordinate_dofs, xt::view(J, 0, xt::all(), xt::all()),
                      xt::view(K, 0, xt::all(), xt::all()), x);
@@ -62,6 +62,7 @@ void dolfinx_contact::pull_back(xt::xtensor<double, 3>& J,
   else
   {
     cmap.pull_back_nonaffine(X, x, coordinate_dofs);
+    xt::xtensor<double, 4> phi(cmap.tabulate_shape(1, X.shape(0)));
     cmap.tabulate(1, X, phi);
     J.fill(0);
     for (std::size_t p = 0; p < X.shape(0); ++p)

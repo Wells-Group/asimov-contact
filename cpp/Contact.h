@@ -615,13 +615,13 @@ public:
           assert(cell_map->num_links(cell) == 1);
           const std::int32_t submesh_cell = cell_map->links(cell)[0];
           auto x_dofs = x_dofmap.links(submesh_cell);
-          const std::size_t num_dofs_g = x_dofmap.num_links(submesh_cell);
+          const std::size_t num_dofs_g = x_dofs.size();
           xt::xtensor<double, 2> coordinate_dofs
               = xt::zeros<double>({num_dofs_g, std::size_t(gdim)});
-          for (std::size_t j = 0; j < x_dofs.size(); ++j)
+          for (std::size_t i = 0; i < num_dofs_g; ++i)
           {
-            std::copy_n(std::next(mesh_geometry.begin(), 3 * x_dofs[j]), gdim,
-                        std::next(coordinate_dofs.begin(), j * gdim));
+            std::copy_n(std::next(mesh_geometry.begin(), 3 * x_dofs[i]), gdim,
+                        std::next(coordinate_dofs.begin(), i * gdim));
           }
           xt::xtensor<double, 2> q_phys({_qp_ref_facet[local_index].shape(0),
                                          _qp_ref_facet[local_index].shape(1)});
@@ -900,11 +900,12 @@ public:
             = xtl::span(perm.data() + offsets[j], offsets[j + 1] - offsets[j]);
         // Extract local dofs
         auto x_dofs = x_dofmap.links(linked_cell);
-        const std::size_t num_dofs_g = x_dofmap.num_links(linked_cell);
+        const std::size_t num_dofs_g = x_dofs.size();
         xt::xtensor<double, 2> coordinate_dofs
             = xt::zeros<double>({num_dofs_g, std::size_t(gdim)});
-        for (std::size_t i = 0; i < x_dofs.size(); ++i)
+        for (std::size_t i = 0; i < num_dofs_g; ++i)
         {
+
           std::copy_n(std::next(mesh_geometry.begin(), 3 * x_dofs[i]), gdim,
                       std::next(coordinate_dofs.begin(), i * gdim));
         }

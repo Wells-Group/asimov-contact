@@ -118,7 +118,7 @@ jobs:
           python3 demo_nitsche_rigid_surface_ufl.py
           python3 demo_nitsche_rigid_surface_cuas.py
           python3 nitsche_euler_bernoulli.py
-          python3 demo_nitsche_unbiased.py
+          python3 demo_nitsche_unbiased.py --curved
 
       - name: Run tests
         run: |

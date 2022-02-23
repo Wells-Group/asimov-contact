@@ -97,7 +97,7 @@ def nitsche_unbiased(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTags, int, int
     v = ufl.TestFunction(V)
     du = ufl.TrialFunction(V)
 
-    h = ufl.Circumradius(mesh)
+    h = ufl.CellDiameter(mesh)
     n = ufl.FacetNormal(mesh)
     # Integration measure and ufl part of linear/bilinear form
     metadata = {"quadrature_degree": quadrature_degree}
@@ -161,9 +161,13 @@ def nitsche_unbiased(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTags, int, int
     entities_1 = dolfinx_cuas.compute_active_entities(mesh, facets_1, integral)
     material_1 = dolfinx_cuas.pack_coefficients([mu2, lmbda2], entities_1)
 
-    # Pack circumradius on each surface
-    h_0 = dolfinx_contact.pack_circumradius(mesh, entities_0)
-    h_1 = dolfinx_contact.pack_circumradius(mesh, entities_1)
+    # Pack celldiameter on each surface
+    surface_cells = np.unique(np.hstack([entities_0[:, 0], entities_1[:, 0]]))
+    h_int = _fem.Function(V2)
+    expr = _fem.Expression(h, V2.element.interpolation_points)
+    h_int.interpolate(expr, surface_cells)
+    h_0 = dolfinx_cuas.pack_coefficients([h_int], entities_0)
+    h_1 = dolfinx_cuas.pack_coefficients([h_int], entities_1)
 
     # Pack gap, normals and test functions on each surface
     gap_0 = contact.pack_gap(0)
