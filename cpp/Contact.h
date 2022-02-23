@@ -615,14 +615,13 @@ public:
           assert(cell_map->num_links(cell) == 1);
           const std::int32_t submesh_cell = cell_map->links(cell)[0];
           auto x_dofs = x_dofmap.links(submesh_cell);
-          const std::size_t num_dofs_g = x_dofmap.num_links(submesh_cell);
+          const std::size_t num_dofs_g = x_dofs.size();
           xt::xtensor<double, 2> coordinate_dofs
               = xt::zeros<double>({num_dofs_g, std::size_t(gdim)});
-          for (std::size_t i = 0; i < x_dofs.size(); ++i)
+          for (std::size_t i = 0; i < num_dofs_g; ++i)
           {
-            const int pos = 3 * x_dofs[i];
-            for (std::size_t j = 0; j < std::size_t(gdim); ++j)
-              coordinate_dofs(i, j) = mesh_geometry[pos + j];
+            std::copy_n(std::next(mesh_geometry.begin(), 3 * x_dofs[i]), gdim,
+                        std::next(coordinate_dofs.begin(), i * gdim));
           }
           xt::xtensor<double, 2> q_phys({_qp_ref_facet[local_index].shape(0),
                                          _qp_ref_facet[local_index].shape(1)});
@@ -901,14 +900,14 @@ public:
             = xtl::span(perm.data() + offsets[j], offsets[j + 1] - offsets[j]);
         // Extract local dofs
         auto x_dofs = x_dofmap.links(linked_cell);
-        const std::size_t num_dofs_g = x_dofmap.num_links(linked_cell);
+        const std::size_t num_dofs_g = x_dofs.size();
         xt::xtensor<double, 2> coordinate_dofs
             = xt::zeros<double>({num_dofs_g, std::size_t(gdim)});
-        for (std::size_t i = 0; i < x_dofs.size(); ++i)
+        for (std::size_t i = 0; i < num_dofs_g; ++i)
         {
-          const int pos = 3 * x_dofs[i];
-          for (std::size_t j = 0; j < std::size_t(gdim); ++j)
-            coordinate_dofs(i, j) = mesh_geometry[pos + j];
+
+          std::copy_n(std::next(mesh_geometry.begin(), 3 * x_dofs[i]), gdim,
+                      std::next(coordinate_dofs.begin(), i * gdim));
         }
         // Extract all physical points Pi(x) on a facet of linked_cell
         auto qp = xt::view(q_points, xt::keep(indices), xt::all());
@@ -1060,9 +1059,8 @@ public:
             = xt::zeros<double>({num_dofs_g, std::size_t(gdim)});
         for (std::size_t i = 0; i < x_dofs.size(); ++i)
         {
-          const int pos = 3 * x_dofs[i];
-          for (std::size_t j = 0; j < std::size_t(gdim); ++j)
-            coordinate_dofs(i, j) = mesh_geometry[pos + j];
+          std::copy_n(std::next(mesh_geometry.begin(), 3 * x_dofs[i]), gdim,
+                      std::next(coordinate_dofs.begin(), i * gdim));
         }
 
         // Compute outward unit normal in point = Pi(x)
