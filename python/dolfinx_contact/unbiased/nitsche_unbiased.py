@@ -24,7 +24,7 @@ __all__ = ["nitsche_unbiased"]
 
 def nitsche_unbiased(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTags, int, int, int, int],
                      physical_parameters: dict = {}, nitsche_parameters: Dict[str, float] = {},
-                     vertical_displacement: float = -0.1, nitsche_bc: bool = True, quadrature_degree: int = 5,
+                     displacement: Tuple[list[float], list[float]] = [[0, 0, 0], [0, 0, 0]], nitsche_bc: bool = True, quadrature_degree: int = 5,
                      form_compiler_params: Dict = {}, jit_params: Dict = {}, petsc_options: Dict = {},
                      newton_options: Dict = {}, initGuess=None):
     """
@@ -47,8 +47,8 @@ def nitsche_unbiased(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTags, int, int
         Optional dictionary with information about the Nitsche configuration.
         Valid (keu, value) tuples are: ('gamma', float), ('theta', float) where theta can be -1, 0 or 1 for
         skew-symmetric, penalty like or symmetric enforcement of Nitsche conditions
-    vertical_displacement
-        The amount of verticial displacment enforced on Dirichlet boundary
+    displacement
+        The displacement enforced on Dirichlet boundary
     nitsche_bc
         Use Nitche's method to enforce Dirichlet boundary conditions
     quadrature_degree
@@ -112,23 +112,22 @@ def nitsche_unbiased(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTags, int, int
     # Nitsche for Dirichlet, another theta-scheme.
     # https://doi.org/10.1016/j.cma.2018.05.024
     if nitsche_bc:
-        disp_vec = np.zeros(gdim)
-        disp_vec[gdim - 1] = vertical_displacement
-        u_D = ufl.as_vector(disp_vec)
+        # Nitsche bc for body 0
+        disp_0 = displacement[0][:gdim]
+        u_D_0 = ufl.as_vector(disp_0)
         F += - ufl.inner(sigma(u) * n, v) * ds(dirichlet_value_0)\
-             - theta * ufl.inner(sigma(v) * n, u - u_D) * \
-            ds(dirichlet_value_0) + gamma / h * ufl.inner(u - u_D, v) * ds(dirichlet_value_0)
+             - theta * ufl.inner(sigma(v) * n, u - u_D_0) * \
+            ds(dirichlet_value_0) + gamma / h * ufl.inner(u - u_D_0, v) * ds(dirichlet_value_0)
 
         J += - ufl.inner(sigma(du) * n, v) * ds(dirichlet_value_0)\
             - theta * ufl.inner(sigma(v) * n, du) * \
             ds(dirichlet_value_0) + gamma / h * ufl.inner(du, v) * ds(dirichlet_value_0)
-        # Nitsche bc for rigid plane
-        disp_plane = np.zeros(gdim)
-        # disp_plane[gdim - 1] = -0.5 * vertical_displacement
-        u_D_plane = ufl.as_vector(disp_plane)
+        # Nitsche bc for body 1
+        disp_1 = displacement[1][:gdim]
+        u_D_1 = ufl.as_vector(disp_1)
         F += - ufl.inner(sigma(u) * n, v) * ds(dirichlet_value_1)\
-             - theta * ufl.inner(sigma(v) * n, u - u_D_plane) * \
-            ds(dirichlet_value_1) + gamma / h * ufl.inner(u - u_D_plane, v) * ds(dirichlet_value_1)
+             - theta * ufl.inner(sigma(v) * n, u - u_D_1) * \
+            ds(dirichlet_value_1) + gamma / h * ufl.inner(u - u_D_1, v) * ds(dirichlet_value_1)
         J += - ufl.inner(sigma(du) * n, v) * ds(dirichlet_value_1)\
             - theta * ufl.inner(sigma(v) * n, du) * \
             ds(dirichlet_value_1) + gamma / h * ufl.inner(du, v) * ds(dirichlet_value_1)

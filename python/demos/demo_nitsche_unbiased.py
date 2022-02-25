@@ -14,7 +14,8 @@ from dolfinx_contact.meshing import (convert_mesh, create_box_mesh_2D,
                                      create_box_mesh_3D,
                                      create_circle_circle_mesh,
                                      create_circle_plane_mesh,
-                                     create_sphere_plane_mesh)
+                                     create_sphere_plane_mesh,
+                                     create_hexahedral_mesh)
 from dolfinx_contact import update_geometry
 from dolfinx_contact.unbiased.nitsche_unbiased import nitsche_unbiased
 
@@ -38,6 +39,9 @@ if __name__ == "__main__":
     _curved = parser.add_mutually_exclusive_group(required=False)
     _curved.add_argument('--curved', dest='curved', action='store_true',
                          help="Use curved rigid surface", default=False)
+    _hex = parser.add_mutually_exclusive_group(required=False)
+    _hex.add_argument('--hex', dest='hex', action='store_true',
+                      help="Use hexahedral mesh", default=False)
     _box = parser.add_mutually_exclusive_group(required=False)
     _box.add_argument('--box', dest='box', action='store_true',
                       help="Use curved rigid surface", default=False)
@@ -64,18 +68,19 @@ if __name__ == "__main__":
     nitsche_parameters = {"gamma": args.gamma, "theta": args.theta}
     nitsche_bc = not args.dirichlet
     physical_parameters = {"E": args.E, "nu": args.nu, "strain": args.plane_strain}
-    vertical_displacement = -args.disp
     top_value = 1
     threed = args.threed
     bottom_value = 2
     curved = args.curved
     box = args.box
+    hex = args.hex
     nload_steps = args.nload_steps
     simplex = args.simplex
 
     # Load mesh and create identifier functions for the top (Displacement condition)
     # and the bottom (contact condition)
     if threed:
+        displacement = ([0, 0, -args.disp], [0, 0, 0])
         if box:
             fname = "box_3D"
             create_box_mesh_3D(filename=f"{fname}.msh")
@@ -110,6 +115,51 @@ if __name__ == "__main__":
             values = np.hstack([top_values, bottom_values, surface_values, sbottom_values])
             sorted_facets = np.argsort(indices)
             facet_marker = MeshTags(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
+
+        elif hex:
+            fname = "hex"
+            displacement = ([-1, 0, 0], [0, 0, 0])
+            create_hexahedral_mesh(fname)
+            with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
+                mesh = xdmf.read_mesh(name="hex_d2")
+            tdim = mesh.topology.dim
+            mesh.topology.create_connectivity(tdim - 1, 0)
+            mesh.topology.create_connectivity(tdim - 1, tdim)
+
+            def top1(x):
+                return x[0] > 3.7
+
+            def bottom1(x):
+                return np.logical_and(x[0] < 3.5, x[0] > 2.3)
+
+            def top2(x):
+                return np.logical_and(x[0] > 0.05, x[0] < 2.1)
+
+            def bottom2(x):
+                return x[0] < -0.8
+
+            top_value = 1
+            bottom_value = 2
+            surface_value = 3
+            surface_bottom = 4
+            # Create meshtag for top and bottom markers
+            top_facets1 = locate_entities_boundary(mesh, tdim - 1, top1)
+            bottom_facets1 = locate_entities_boundary(
+                mesh, tdim - 1, bottom1)
+            top_facets2 = locate_entities_boundary(mesh, tdim - 1, top2)
+            bottom_facets2 = locate_entities_boundary(
+                mesh, tdim - 1, bottom2)
+            top_values = np.full(len(top_facets1), top_value, dtype=np.int32)
+            bottom_values = np.full(
+                len(bottom_facets1), bottom_value, dtype=np.int32)
+
+            surface_values = np.full(len(top_facets2), surface_value, dtype=np.int32)
+            sbottom_values = np.full(
+                len(bottom_facets2), surface_bottom, dtype=np.int32)
+            indices = np.concatenate([top_facets1, bottom_facets1, top_facets2, bottom_facets2])
+            values = np.hstack([top_values, bottom_values, surface_values, sbottom_values])
+            sorted_facets = np.argsort(indices)
+            facet_marker = MeshTags(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
         else:
             fname = "sphere"
             create_sphere_plane_mesh(filename=f"{fname}.msh")
@@ -128,6 +178,7 @@ if __name__ == "__main__":
             surface_bottom = 7
 
     else:
+        displacement = ([0, -args.disp], [0, 0])
         if curved:
             fname = "two_disks"
             if simplex:
@@ -265,7 +316,7 @@ if __name__ == "__main__":
     mesh_data = (facet_marker, top_value, bottom_value, surface_value, surface_bottom)
 
     # Solve contact problem using Nitsche's method
-    load_increment = vertical_displacement / nload_steps
+    load_increment = np.array(displacement) / nload_steps
 
     # Define function space for problem
     V = VectorFunctionSpace(mesh, ("CG", 1))
@@ -282,7 +333,7 @@ if __name__ == "__main__":
 
         # Solve contact problem using Nitsche's method
         u1 = nitsche_unbiased(mesh=mesh, mesh_data=mesh_data, physical_parameters=physical_parameters,
-                              nitsche_parameters=nitsche_parameters, vertical_displacement=displacement,
+                              nitsche_parameters=nitsche_parameters, displacement=displacement,
                               nitsche_bc=True, quadrature_degree=3, petsc_options=petsc_options,
                               newton_options=newton_options)
 
