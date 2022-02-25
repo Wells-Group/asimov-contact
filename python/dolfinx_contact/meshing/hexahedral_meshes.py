@@ -4,7 +4,6 @@
 
 import gmsh
 import numpy as np
-from dolfinx.graph import create_adjacencylist
 from dolfinx.io import (XDMFFile, cell_perm_gmsh,
                         extract_gmsh_geometry,
                         extract_gmsh_topology_and_markers, ufl_mesh_from_gmsh)
@@ -54,10 +53,8 @@ def create_hexahedral_mesh(filename: str, order: int = 1):
         # Get mesh data for dim (0, tdim) for all physical entities
         topologies = extract_gmsh_topology_and_markers(model, model.getCurrent())
         cells = topologies[gmsh_cell_id]["topology"]
-        cell_data = topologies[gmsh_cell_id]["cell_data"]
 
         num_nodes = MPI.COMM_WORLD.bcast(cells.shape[1], root=0)
-        gmsh_facet_id = model.mesh.getElementType("quadrangle", order)
         gmsh.finalize()
     else:
         gmsh_cell_id = MPI.COMM_WORLD.bcast(None, root=0)

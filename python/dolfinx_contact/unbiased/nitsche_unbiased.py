@@ -24,7 +24,8 @@ __all__ = ["nitsche_unbiased"]
 
 def nitsche_unbiased(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTags, int, int, int, int],
                      physical_parameters: dict = {}, nitsche_parameters: Dict[str, float] = {},
-                     displacement: Tuple[list[float], list[float]] = [[0, 0, 0], [0, 0, 0]], nitsche_bc: bool = True, quadrature_degree: int = 5,
+                     displacement: Tuple[list[float], list[float]] = [[0, 0, 0], [0, 0, 0]],
+                     nitsche_bc: bool = True, quadrature_degree: int = 5,
                      form_compiler_params: Dict = {}, jit_params: Dict = {}, petsc_options: Dict = {},
                      newton_options: Dict = {}, initGuess=None):
     """
