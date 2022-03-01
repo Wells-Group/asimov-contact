@@ -181,7 +181,20 @@ PYBIND11_MODULE(cpp, m)
              int shape0 = cstride == 0 ? 0 : coeffs.size() / cstride;
              return dolfinx_wrappers::as_pyarray(std::move(coeffs),
                                                  std::array{shape0, cstride});
-           });
+           })
+      .def("pack_surface_derivatives",
+           [](dolfinx_contact::Contact& self, int origin_meshtag,
+              const py::array_t<PetscScalar, py::array::c_style>& gap)
+           {
+             auto [coeffs, cstride] = self.pack_surface_derivatives(
+                 origin_meshtag,
+                 xtl::span<const PetscScalar>(gap.data(), gap.size()));
+             int shape0 = cstride == 0 ? 0 : coeffs.size() / cstride;
+             return dolfinx_wrappers::as_pyarray(std::move(coeffs),
+                                                 std::array{shape0, cstride});
+           })
+      .def("update_submesh_geometry",
+           &dolfinx_contact::Contact::update_submesh_geometry);
 
   m.def(
       "generate_contact_kernel",
@@ -199,7 +212,9 @@ PYBIND11_MODULE(cpp, m)
       py::arg("coeffs"), py::arg("constant_normal") = true);
   py::enum_<dolfinx_contact::Kernel>(m, "Kernel")
       .value("Rhs", dolfinx_contact::Kernel::Rhs)
-      .value("Jac", dolfinx_contact::Kernel::Jac);
+      .value("Jac", dolfinx_contact::Kernel::Jac)
+      .value("Rhs_variable_gap", dolfinx_contact::Kernel::Rhs_variable_gap)
+      .value("Jac_variable_gap", dolfinx_contact::Kernel::Jac_variable_gap);
   m.def("pack_coefficient_quadrature",
         [](std::shared_ptr<const dolfinx::fem::Function<PetscScalar>> coeff,
            int q, const py::array_t<std::int32_t, py::array::c_style>& entities)

@@ -21,6 +21,13 @@
 #include <xtensor/xtensor.hpp>
 namespace dolfinx_contact
 {
+enum class Kernel
+{
+  Rhs,
+  Jac,
+  Rhs_variable_gap,
+  Jac_variable_gap
+};
 
 /// This function computes the pull back for a set of points x on a cell
 /// described by coordinate_dofs as well as the corresponding Jacobian, their
@@ -40,6 +47,28 @@ void pull_back(xt::xtensor<double, 3>& J, xt::xtensor<double, 3>& K,
                xt::xtensor<double, 2>& X,
                const xt::xtensor<double, 2>& coordinate_dofs,
                const dolfinx::fem::CoordinateElement& cmap);
+
+/// This function computes the pull back for a set of points x on a cell
+/// described by coordinate_dofs as well as the corresponding Jacobian and
+/// hessian.
+/// FIXME: This is very similar to pull_back except second derivatives are
+/// computed. as well. The two should probably be combined. For testing purposes
+/// we will keep it separately for now.
+/// @param[in, out] J: Jacobians of transformation from reference element to
+/// physical element. Shape = (num_points, tdim, gdim). Computed at each point
+/// in x
+/// @param[in, out] H: Hessian at each point.
+/// @param[in, out] K: inverse of J at each point.
+/// @param[in] x: points on physical element
+/// @param[in ,out] X: pull pack of x (points on reference element)
+/// @param[in] coordinate_dofs: geometry coordinates of cell
+/// @param[in] cmap: the coordinate element
+//-----------------------------------------------------------------------------
+void pull_back_2(xt::xtensor<double, 3>& J, xt::xtensor<double, 3>& K,
+                 xt::xtensor<double, 3>& H, const xt::xtensor<double, 2>& x,
+                 xt::xtensor<double, 2>& X,
+                 const xt::xtensor<double, 2>& coordinate_dofs,
+                 const dolfinx::fem::CoordinateElement& cmap);
 
 //-----------------------------------------------------------------------------
 /// This function computes the basis function values on a given cell at a
@@ -93,4 +122,11 @@ double R_plus(double x);
 /// Compute the derivative of the positive restriction (i.e.) the step function.
 /// @note Evaluates to 0 at x=0
 double dR_plus(double x);
+
+/// Compute the negative restriction of a double, i.e. f(x)= x if x < 0 else 0
+double R_minus(double x);
+
+/// Compute the derivative of the negative restriction (i.e.) the step function.
+/// @note Evaluates to 0 at x=0
+double dR_minus(double x);
 } // namespace dolfinx_contact

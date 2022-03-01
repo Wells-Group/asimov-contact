@@ -1,6 +1,6 @@
 // Copyright (C) 2021 Sarah Roggendorf
 //
-// This file is part of DOLFINx_CUAS
+// This file is part of DOLFINx_CONTACT
 //
 // SPDX-License-Identifier:    MIT
 

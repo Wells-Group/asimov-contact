@@ -80,6 +80,84 @@ void dolfinx_contact::pull_back(xt::xtensor<double, 3>& J,
 }
 
 //-----------------------------------------------------------------------------
+void dolfinx_contact::pull_back_2(xt::xtensor<double, 3>& J,
+                                  xt::xtensor<double, 3>& K,
+                                  xt::xtensor<double, 3>& H,
+                                  const xt::xtensor<double, 2>& x,
+                                  xt::xtensor<double, 2>& X,
+                                  const xt::xtensor<double, 2>& coordinate_dofs,
+                                  const dolfinx::fem::CoordinateElement& cmap)
+{
+  // number of points
+  const std::size_t num_points = x.shape(0);
+  assert(J.shape(0) >= num_points);
+  assert(K.shape(0) >= num_points);
+
+  // Get mesh data from input
+  const size_t tdim = K.shape(1);
+
+  // -- Lambda function for affine pull-backs
+  xt::xtensor<double, 4> data(cmap.tabulate_shape(1, 1));
+  const xt::xtensor<double, 2> X0(xt::zeros<double>({std::size_t(1), tdim}));
+  cmap.tabulate(1, X0, data);
+  const xt::xtensor<double, 2> dphi_i
+      = xt::view(data, xt::range(1, tdim + 1), 0, xt::all(), 0);
+  auto pull_back_affine = [dphi_i](auto&& X, const auto& cell_geometry,
+                                   auto&& J, auto&& K, const auto& x) mutable
+  {
+    dolfinx::fem::CoordinateElement::compute_jacobian(dphi_i, cell_geometry, J);
+    dolfinx::fem::CoordinateElement::compute_jacobian_inverse(J, K);
+    dolfinx::fem::CoordinateElement::pull_back_affine(
+        X, K, dolfinx::fem::CoordinateElement::x0(cell_geometry), x);
+  };
+
+  xt::xtensor<double, 2> dphi;
+  xt::xtensor<double, 2> ddphi;
+
+  if (cmap.is_affine())
+  {
+    xt::xtensor<double, 4> phi(cmap.tabulate_shape(1, 1));
+    J.fill(0);
+    pull_back_affine(X, coordinate_dofs, xt::view(J, 0, xt::all(), xt::all()),
+                     xt::view(K, 0, xt::all(), xt::all()), x);
+    for (std::size_t p = 1; p < num_points; ++p)
+    {
+      xt::view(J, p, xt::all(), xt::all())
+          = xt::view(J, 0, xt::all(), xt::all());
+      xt::view(K, p, xt::all(), xt::all())
+          = xt::view(K, 0, xt::all(), xt::all());
+    }
+    H.fill(0);
+  }
+  else
+  {
+    cmap.pull_back_nonaffine(X, x, coordinate_dofs);
+    // For the non-affine case we need the second derivative
+    // in the affine case H is left untouched as it is just 0
+    xt::xtensor<double, 4> phi(cmap.tabulate_shape(2, X.shape(0)));
+    cmap.tabulate(2, X, phi);
+    J.fill(0);
+    H.fill(0);
+    for (std::size_t p = 0; p < X.shape(0); ++p)
+    {
+      auto _J = xt::view(J, p, xt::all(), xt::all());
+      auto _H = xt::view(H, p, xt::all(), xt::all());
+      dphi = xt::view(phi, xt::range(1, tdim + 1), p, xt::all(), 0);
+      dolfinx::fem::CoordinateElement::compute_jacobian(dphi, coordinate_dofs,
+                                                        _J);
+
+      dolfinx::fem::CoordinateElement::compute_jacobian_inverse(
+          _J, xt::view(K, p, xt::all(), xt::all()));
+      ddphi = xt::view(phi, xt::range(tdim + 1, phi.shape(0)), p, xt::all(), 0);
+
+      /// FIXME: Is this correct? compute jacobian wraps math::dot.
+      // Would it make things more clear to explicitly call math::dot
+      dolfinx::fem::CoordinateElement::compute_jacobian(ddphi, coordinate_dofs,
+                                                        _H);
+    }
+  }
+}
+//-----------------------------------------------------------------------------
 xt::xtensor<double, 3> dolfinx_contact::get_basis_functions(
     xt::xtensor<double, 3>& J, xt::xtensor<double, 3>& K,
     xt::xtensor<double, 1>& detJ, const xt::xtensor<double, 2>& x,
@@ -250,3 +328,7 @@ void dolfinx_contact::update_geometry(
 double dolfinx_contact::R_plus(double x) { return 0.5 * (std::abs(x) + x); }
 //-------------------------------------------------------------------------------------
 double dolfinx_contact::dR_plus(double x) { return double(x > 0); }
+//-------------------------------------------------------------------------------------
+double dolfinx_contact::R_minus(double x) { return 0.5 * (x - std::abs(x)); }
+//-------------------------------------------------------------------------------------
+double dolfinx_contact::dR_minus(double x) { return double(x < 0); }

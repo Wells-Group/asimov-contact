@@ -5,6 +5,8 @@
 // SPDX-License-Identifier:    MIT
 
 #include "SubMesh.h"
+#include "utils.h"
+
 using namespace dolfinx_contact;
 
 dolfinx_contact::SubMesh::SubMesh(
@@ -112,7 +114,7 @@ dolfinx_contact::SubMesh::SubMesh(
 
 //------------------------------------------------------------------------------------------------
 dolfinx::fem::FunctionSpace dolfinx_contact::SubMesh::create_functionspace(
-    std::shared_ptr<dolfinx::fem::FunctionSpace> V_parent) const
+    std::shared_ptr<const dolfinx::fem::FunctionSpace> V_parent) const
 {
   // get element and element_dof_layout from parent mesh
   auto element = V_parent->element();
@@ -162,4 +164,16 @@ void dolfinx_contact::SubMesh::copy_function(
         u_sub_data[bs * dofs_sub[i] + j] = u_data[bs * dofs_parent[i] + j];
       }
   }
+}
+
+//-----------------------------------------------------------------------------------------------
+void dolfinx_contact::SubMesh::update_geometry(
+    dolfinx::fem::Function<PetscScalar>& u)
+{
+  auto V_parent = u.function_space();
+  auto V_sub = std::make_shared<dolfinx::fem::FunctionSpace>(
+      create_functionspace(V_parent));
+  auto u_sub = dolfinx::fem::Function<PetscScalar>(V_sub);
+  copy_function(u, u_sub);
+  dolfinx_contact::update_geometry(u_sub, _mesh);
 }

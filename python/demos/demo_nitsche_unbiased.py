@@ -17,7 +17,7 @@ from dolfinx_contact.meshing import (convert_mesh, create_box_mesh_2D,
                                      create_sphere_plane_mesh,
                                      create_hexahedral_mesh)
 from dolfinx_contact import update_geometry
-from dolfinx_contact.unbiased.nitsche_unbiased import nitsche_unbiased
+from dolfinx_contact.unbiased import nitsche_unbiased, nitsche_variable_gap
 
 if __name__ == "__main__":
     desc = "Nitsche's method with rigid surface using custom assemblers"
@@ -60,6 +60,8 @@ if __name__ == "__main__":
                         dest="refs", help="Number of mesh refinements")
     parser.add_argument("--load_steps", default=1, type=np.int32, dest="nload_steps",
                         help="Number of steps for gradual loading")
+    parser.add_argument("--variable_gap", default=False, action='store_true', dest="variable_gap",
+                        help="If true, gap is recomputed in each Newton step")
 
     # Parse input arguments or set to defualt values
     args = parser.parse_args()
@@ -76,6 +78,7 @@ if __name__ == "__main__":
     hex = args.hex
     nload_steps = args.nload_steps
     simplex = args.simplex
+    variable_gap = args.variable_gap
 
     # Load mesh and create identifier functions for the top (Displacement condition)
     # and the bottom (contact condition)
@@ -310,7 +313,7 @@ if __name__ == "__main__":
     petsc_options = {"ksp_type": "cgs", "pc_type": "gamg", "pc_gamg_type": "agg", "pc_gamg_coarse_eq_limit": 1000,
                      "pc_gamg_sym_graph": True, "mg_levels_ksp_type": "chebyshev", "mg_levels_pc_type": "sor",
                      "mg_levels_esteig_ksp_type": "cg", "matptap_via": "scalable", "pc_gamg_square_graph": 3,
-                     "pc_gamg_threshold": 1e-1, "ksp_view": None}
+                     "pc_gamg_threshold": 1e-1}
 
     # Pack mesh data for Nitsche solver
     mesh_data = (facet_marker, top_value, bottom_value, surface_value, surface_bottom)
@@ -332,10 +335,16 @@ if __name__ == "__main__":
         displacement = load_increment
 
         # Solve contact problem using Nitsche's method
-        u1 = nitsche_unbiased(mesh=mesh, mesh_data=mesh_data, physical_parameters=physical_parameters,
-                              nitsche_parameters=nitsche_parameters, displacement=displacement,
-                              nitsche_bc=True, quadrature_degree=3, petsc_options=petsc_options,
-                              newton_options=newton_options)
+        if variable_gap:
+            u1 = nitsche_variable_gap(mesh=mesh, mesh_data=mesh_data, physical_parameters=physical_parameters,
+                                      nitsche_parameters=nitsche_parameters, displacement=displacement,
+                                      nitsche_bc=True, quadrature_degree=3, petsc_options=petsc_options,
+                                      newton_options=newton_options)
+        else:
+            u1 = nitsche_unbiased(mesh=mesh, mesh_data=mesh_data, physical_parameters=physical_parameters,
+                                  nitsche_parameters=nitsche_parameters, displacement=displacement,
+                                  nitsche_bc=True, quadrature_degree=3, petsc_options=petsc_options,
+                                  newton_options=newton_options)
 
         with XDMFFile(mesh.comm, f"results/u_unbiased_{j}.xdmf", "w") as xdmf:
             xdmf.write_mesh(mesh)

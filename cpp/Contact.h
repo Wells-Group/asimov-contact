@@ -8,6 +8,7 @@
 
 #include "SubMesh.h"
 #include "geometric_quantities.h"
+#include "unbiased_kernels.h"
 #include "utils.h"
 #include <basix/cell.h>
 #include <basix/finite-element.h>
@@ -24,21 +25,12 @@
 #include <xtensor/xindex_view.hpp>
 #include <xtl/xspan.hpp>
 
-using contact_kernel_fn = std::function<void(
-    std::vector<std::vector<PetscScalar>>&, const double*, const double*,
-    const double*, const int*, const std::uint8_t*, const std::size_t)>;
-
 using mat_set_fn = const std::function<int(
     const xtl::span<const std::int32_t>&, const xtl::span<const std::int32_t>&,
     const xtl::span<const PetscScalar>&)>;
 
 namespace dolfinx_contact
 {
-enum class Kernel
-{
-  Rhs,
-  Jac
-};
 
 class Contact
 {
@@ -560,6 +552,26 @@ public:
       return unbiased_rhs;
     case dolfinx_contact::Kernel::Jac:
       return unbiased_jac;
+    case dolfinx_contact::Kernel::Rhs_variable_gap:
+    {
+      const basix::FiniteElement basix_element
+          = dolfinx_cuas::mesh_to_basix_element(_marker->mesh(), tdim);
+      const std::size_t max_links
+          = *std::max_element(_max_links.begin(), _max_links.end());
+      return dolfinx_contact::generate_kernel(type, _marker->mesh(), _V,
+                                              _qp_ref_facet, _qw_ref_facet,
+                                              max_links, basix_element);
+    }
+    case dolfinx_contact::Kernel::Jac_variable_gap:
+    {
+      const basix::FiniteElement basix_element
+          = dolfinx_cuas::mesh_to_basix_element(_marker->mesh(), tdim);
+      const std::size_t max_links
+          = *std::max_element(_max_links.begin(), _max_links.end());
+      return dolfinx_contact::generate_kernel(type, _marker->mesh(), _V,
+                                              _qp_ref_facet, _qw_ref_facet,
+                                              max_links, basix_element);
+    }
     default:
       throw std::runtime_error("Unrecognized kernel");
     }
@@ -1132,6 +1144,20 @@ public:
     }
     return {std::move(c), cstride};
   }
+
+  /// Compute jacobians and hessians of transformations between
+  /// reference cells and pyhsical cells
+  /// @param[in] orgin_meshtag - surface on which to integrate
+  /// @param[in] gap - gap packed on facets per quadrature point
+  /// @param[out] c - jacobians/hessians at quadrature points
+  std::pair<std::vector<PetscScalar>, int>
+  pack_surface_derivatives(int origin_meshtag,
+                           const xtl::span<const PetscScalar>& gap);
+
+  /// This function updates the submesh geometry for all submeshes using
+  /// a function given on the parent mesh
+  /// @param[in] u - displacement
+  void update_submesh_geometry(dolfinx::fem::Function<PetscScalar>& u);
 
 private:
   int _quadrature_degree = 3;
