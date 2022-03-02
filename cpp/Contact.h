@@ -32,6 +32,207 @@ using mat_set_fn = const std::function<int(
     const xtl::span<const std::int32_t>&, const xtl::span<const std::int32_t>&,
     const xtl::span<const PetscScalar>&)>;
 
+namespace
+{
+
+//-----------------------------------------------------------------------------
+/// Get basis values (not unrolled for block size) for a set of points and
+/// corresponding cells.
+/// @param[in] V The function space
+/// @param[in] x The coordinates of the points. It has shape
+/// (num_points, 3).
+/// @param[in] cells An array of cell indices. cells[i] is the index
+/// of the cell that contains the point x(i). Negative cell indices
+/// can be passed, and the corresponding point will be ignored.
+/// @param[in,out] u The values at the points. Values are not computed
+/// for points with a negative cell index. This argument must be
+/// passed with the correct size.
+/// @returns basis values (not unrolled for block size) for each point. shape
+/// (num_points, number_of_dofs, value_size)
+xt::xtensor<double, 3>
+evaluate_basis_functions(const dolfinx::fem::FunctionSpace& V,
+                         const xt::xtensor<double, 2>& x,
+                         const xtl::span<const std::int32_t>& cells)
+{
+  if (x.shape(0) != cells.size())
+  {
+    throw std::runtime_error(
+        "Number of points and number of cells must be equal.");
+  }
+  // Get mesh
+  std::shared_ptr<const dolfinx::mesh::Mesh> mesh = V.mesh();
+  assert(mesh);
+  const std::size_t gdim = mesh->geometry().dim();
+  const std::size_t tdim = mesh->topology().dim();
+  auto map = mesh->topology().index_map((int)tdim);
+
+  // Get geometry data
+  const dolfinx::graph::AdjacencyList<std::int32_t>& x_dofmap
+      = mesh->geometry().dofmap();
+  // FIXME: Add proper interface for num coordinate dofs
+  const std::size_t num_dofs_g = x_dofmap.num_links(0);
+  xtl::span<const double> x_g = mesh->geometry().x();
+
+  // Get coordinate map
+  const dolfinx::fem::CoordinateElement& cmap = mesh->geometry().cmap();
+
+  // Get element
+  assert(V.element());
+  std::shared_ptr<const dolfinx::fem::FiniteElement> element = V.element();
+  assert(element);
+  const int bs_element = element->block_size();
+  const std::size_t reference_value_size
+      = element->reference_value_size() / bs_element;
+  const std::size_t value_size = element->value_size() / bs_element;
+  const std::size_t space_dimension = element->space_dimension() / bs_element;
+
+  // Return early if we have no points
+  xt::xtensor<double, 3> basis_values(
+      {x.shape(0), space_dimension, value_size});
+  if (x.shape(0) == 0)
+    return basis_values;
+
+  // If the space has sub elements, concatenate the evaluations on the sub
+  // elements
+  if (const int num_sub_elements = element->num_sub_elements();
+      num_sub_elements > 1 && num_sub_elements != bs_element)
+  {
+    throw std::runtime_error("Function::eval is not supported for mixed "
+                             "elements. Extract subspaces.");
+  }
+
+  // Get dofmap
+  std::shared_ptr<const dolfinx::fem::DofMap> dofmap = V.dofmap();
+  assert(dofmap);
+
+  xtl::span<const std::uint32_t> cell_info;
+  if (element->needs_dof_transformations())
+  {
+    mesh->topology_mutable().create_entity_permutations();
+    cell_info = xtl::span(mesh->topology().get_cell_permutation_info());
+  }
+
+  xt::xtensor<double, 2> coordinate_dofs
+      = xt::zeros<double>({num_dofs_g, gdim});
+  xt::xtensor<double, 2> xp = xt::zeros<double>({std::size_t(1), gdim});
+
+  // -- Lambda function for affine pull-backs
+  xt::xtensor<double, 4> data(cmap.tabulate_shape(1, 1));
+  const xt::xtensor<double, 2> X0(xt::zeros<double>({std::size_t(1), tdim}));
+  cmap.tabulate(1, X0, data);
+  const xt::xtensor<double, 2> dphi_i
+      = xt::view(data, xt::range(1, tdim + 1), 0, xt::all(), 0);
+  auto pull_back_affine = [&dphi_i](auto&& X, const auto& cell_geometry,
+                                    auto&& J, auto&& K, const auto& x) mutable
+  {
+    dolfinx::fem::CoordinateElement::compute_jacobian(dphi_i, cell_geometry, J);
+    dolfinx::fem::CoordinateElement::compute_jacobian_inverse(J, K);
+    dolfinx::fem::CoordinateElement::pull_back_affine(
+        X, K, dolfinx::fem::CoordinateElement::x0(cell_geometry), x);
+  };
+
+  xt::xtensor<double, 2> dphi;
+  xt::xtensor<double, 2> X({x.shape(0), tdim});
+  xt::xtensor<double, 3> J = xt::zeros<double>({x.shape(0), gdim, tdim});
+  xt::xtensor<double, 3> K = xt::zeros<double>({x.shape(0), tdim, gdim});
+  xt::xtensor<double, 1> detJ = xt::zeros<double>({x.shape(0)});
+  xt::xtensor<double, 4> phi(cmap.tabulate_shape(1, 1));
+
+  xt::xtensor<double, 2> _Xp({1, tdim});
+  for (std::size_t p = 0; p < cells.size(); ++p)
+  {
+    const int cell_index = cells[p];
+
+    // Skip negative cell indices
+    if (cell_index < 0)
+      continue;
+
+    // Get cell geometry (coordinate dofs)
+    auto x_dofs = x_dofmap.links(cell_index);
+    for (std::size_t i = 0; i < num_dofs_g; ++i)
+    {
+      const int pos = 3 * x_dofs[i];
+      for (std::size_t j = 0; j < gdim; ++j)
+        coordinate_dofs(i, j) = x_g[pos + j];
+    }
+
+    for (std::size_t j = 0; j < gdim; ++j)
+      xp(0, j) = x(p, j);
+
+    auto _J = xt::view(J, p, xt::all(), xt::all());
+    auto _K = xt::view(K, p, xt::all(), xt::all());
+
+    // Compute reference coordinates X, and J, detJ and K
+    if (cmap.is_affine())
+    {
+      pull_back_affine(_Xp, coordinate_dofs, _J, _K, xp);
+      detJ[p]
+          = dolfinx::fem::CoordinateElement::compute_jacobian_determinant(_J);
+    }
+    else
+    {
+      cmap.pull_back_nonaffine(_Xp, xp, coordinate_dofs);
+      cmap.tabulate(1, _Xp, phi);
+      dphi = xt::view(phi, xt::range(1, tdim + 1), 0, xt::all(), 0);
+      J.fill(0);
+      dolfinx::fem::CoordinateElement::compute_jacobian(dphi, coordinate_dofs,
+                                                        _J);
+      dolfinx::fem::CoordinateElement::compute_jacobian_inverse(_J, _K);
+      detJ[p]
+          = dolfinx::fem::CoordinateElement::compute_jacobian_determinant(_J);
+    }
+    xt::row(X, p) = xt::row(_Xp, 9);
+  }
+
+  // Prepare basis function data structures
+  xt::xtensor<double, 4> basis_reference_values(
+      {1, x.shape(0), space_dimension, reference_value_size});
+
+  // Compute basis on reference element
+  element->tabulate(basis_reference_values, X, 0);
+
+  using u_t = xt::xview<decltype(basis_values)&, std::size_t,
+                        xt::xall<std::size_t>, xt::xall<std::size_t>>;
+  using U_t
+      = xt::xview<decltype(basis_reference_values)&, std::size_t, std::size_t,
+                  xt::xall<std::size_t>, xt::xall<std::size_t>>;
+  using J_t = xt::xview<decltype(J)&, std::size_t, xt::xall<std::size_t>,
+                        xt::xall<std::size_t>>;
+  using K_t = xt::xview<decltype(K)&, std::size_t, xt::xall<std::size_t>,
+                        xt::xall<std::size_t>>;
+  auto push_forward_fn = element->map_fn<u_t, U_t, J_t, K_t>();
+  const std::function<void(const xtl::span<double>&,
+                           const xtl::span<const std::uint32_t>&, std::int32_t,
+                           int)>
+      apply_dof_transformation
+      = element->get_dof_transformation_function<double>();
+  const std::size_t num_basis_values = space_dimension * reference_value_size;
+  for (std::size_t p = 0; p < cells.size(); ++p)
+  {
+    const int cell_index = cells[p];
+
+    // Skip negative cell indices
+    if (cell_index < 0)
+      continue;
+
+    // Permute the reference values to account for the cell's orientation
+    apply_dof_transformation(
+        xtl::span(basis_reference_values.data() + p * num_basis_values,
+                  num_basis_values),
+        cell_info, cell_index, (int)reference_value_size);
+
+    // Push basis forward to physical element
+    auto _K = xt::view(K, p, xt::all(), xt::all());
+    auto _J = xt::view(J, p, xt::all(), xt::all());
+    auto _u = xt::view(basis_values, p, xt::all(), xt::all());
+    auto _U = xt::view(basis_reference_values, (std::size_t)0, p, xt::all(),
+                       xt::all());
+    push_forward_fn(_u, _U, _J, detJ[p], _K);
+  }
+  return basis_values;
+};
+} // namespace
+
 namespace dolfinx_contact
 {
 enum class Kernel
@@ -944,7 +1145,7 @@ public:
     auto submesh = _submeshes[_opposites[origin_meshtag]];
     auto mesh = submesh.mesh();                      // mesh
     const std::size_t gdim = mesh->geometry().dim(); // geometrical dimension
-    const std::size_t bs = _V->element()->block_size();
+    const std::size_t bs_element = _V->element()->block_size();
 
     // Select which side of the contact interface to loop from and get the
     // correct map
@@ -953,17 +1154,19 @@ public:
     auto facet_map = submesh.facet_map();
     const std::size_t num_facets = _cell_facet_pairs[origin_meshtag].size();
     const std::size_t num_q_points = _qp_ref_facet[0].shape(0);
-    std::vector<PetscScalar> c(num_facets * num_q_points * bs, 0.0);
-    const int cstride = num_q_points * bs;
     auto V_sub = std::make_shared<dolfinx::fem::FunctionSpace>(
         submesh.create_functionspace(_V));
     auto u_sub = dolfinx::fem::Function<PetscScalar>(V_sub);
-    submesh.copy_function(*u, u_sub);
+    auto sub_dofmap = V_sub->dofmap();
+    assert(sub_dofmap);
+    const int bs_dof = sub_dofmap->bs();
 
-    xt::xtensor<double, 2> points = xt::zeros<double>({num_q_points, gdim});
-    std::vector<std::int32_t> cells(num_q_points, 0);
-    xt::xtensor<PetscScalar, 2> vals
-        = xt::zeros<PetscScalar>({num_q_points, bs});
+    // dolfinx::common::Timer t("~~~Contact: copy u");
+    submesh.copy_function(*u, u_sub);
+    // t.stop();
+    xt::xtensor<double, 2> points
+        = xt::zeros<double>({num_facets * num_q_points, gdim});
+    std::vector<std::int32_t> cells(num_facets * num_q_points, -1);
     for (std::size_t i = 0; i < num_facets; ++i)
     {
       auto links = map->links(i);
@@ -972,31 +1175,59 @@ public:
       {
         for (std::size_t j = 0; j < gdim; ++j)
         {
-          points(q, j)
+          points(i * num_q_points + q, j)
               = qp_phys[i](q, j) + gap[i * gdim * num_q_points + q * gdim + j];
           auto linked_pair = facet_map->links(links[q]);
-          cells[q] = linked_pair[0];
-        }
-      }
-      vals.fill(0);
-      u_sub.eval(points, cells, vals);
-      for (std::size_t q = 0; q < num_q_points; ++q)
-      {
-        for (std::size_t j = 0; j < bs; ++j)
-        {
-          c[i * cstride + q * bs + j] = vals(q, j);
+          cells[i * num_q_points + q] = linked_pair[0];
         }
       }
     }
+    xt::xtensor<double, 3> basis_values
+        = evaluate_basis_functions(*u_sub.function_space(), points, cells);
+    const xtl::span<const PetscScalar>& u_coeffs = u_sub.x()->array();
 
+    // Output vector
+    std::vector<PetscScalar> c(num_facets * num_q_points * bs_element, 0.0);
+
+    // Create work vector for expansion coefficients
+    const int cstride = (int)num_q_points * bs_element;
+    const std::size_t num_basis_functions = basis_values.shape(1);
+    const std::size_t value_size = basis_values.shape(2);
+    std::vector<PetscScalar> coefficients(num_basis_functions * bs_element);
+    for (std::size_t i = 0; i < num_facets; ++i)
+    {
+      for (std::size_t q = 0; q < num_q_points; ++q)
+      {
+        // Get degrees of freedom for current cell
+        xtl::span<const std::int32_t> dofs
+            = sub_dofmap->cell_dofs(cells[i * num_q_points + q]);
+        for (std::size_t j = 0; j < dofs.size(); ++j)
+          for (int k = 0; k < bs_dof; ++k)
+            coefficients[bs_dof * j + k] = u_coeffs[bs_dof * dofs[j] + k];
+
+        // Compute expansion
+        for (std::size_t k = 0; k < bs_element; ++k)
+        {
+          for (std::size_t l = 0; l < num_basis_functions; ++l)
+          {
+            for (std::size_t m = 0; m < value_size; ++m)
+            {
+              c[cstride + q * (num_basis_functions * bs_element)
+                + l * bs_element + k]
+                  += coefficients[bs_element * l + k] * basis_values(0, l, m);
+            }
+          }
+        }
+      }
+    }
     return {std::move(c), cstride};
   }
 
   /// Compute inward surface normal at Pi(x)
   /// @param[in] orgin_meshtag - surface on which to integrate
-  /// @param[in] gap - gap function: Pi(x)-x packed at quadrature points, where
-  /// Pi(x) is the chosen projection of x onto the contact surface of the body
-  /// coming into contact
+  /// @param[in] gap - gap function: Pi(x)-x packed at quadrature points,
+  /// where Pi(x) is the chosen projection of x onto the contact surface of
+  /// the body coming into contact
   /// @param[out] c - normals ny packed on facets.
   std::pair<std::vector<PetscScalar>, int>
   pack_ny(int origin_meshtag, const xtl::span<const PetscScalar> gap)
@@ -1140,14 +1371,14 @@ private:
   // store index of candidate_surface for each puppet_surface
   std::array<int, 2> _opposites = {0, 0};
   std::shared_ptr<dolfinx::fem::FunctionSpace> _V; // Function space
-  // _facets_maps[i] = adjacency list of closest facet on candidate surface for
-  // every quadrature point in _qp_phys[i] (quadrature points on every facet of
-  // ith surface)
+  // _facets_maps[i] = adjacency list of closest facet on candidate surface
+  // for every quadrature point in _qp_phys[i] (quadrature points on every
+  // facet of ith surface)
   std::array<std::shared_ptr<const dolfinx::graph::AdjacencyList<std::int32_t>>,
              2>
       _facet_maps;
-  //  _qp_phys[i] contains the quadrature points on the physical facets for each
-  //  facet on ith surface in _surfaces
+  //  _qp_phys[i] contains the quadrature points on the physical facets for
+  //  each facet on ith surface in _surfaces
   std::array<std::vector<xt::xtensor<double, 2>>, 2> _qp_phys;
   // quadrature points on reference facet
   std::vector<xt::xarray<double>> _qp_ref_facet;

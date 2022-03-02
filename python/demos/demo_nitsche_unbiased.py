@@ -7,6 +7,7 @@ import argparse
 import numpy as np
 from dolfinx.fem import Function, VectorFunctionSpace
 from dolfinx.io import XDMFFile
+from dolfinx.common import list_timings, TimingType
 from dolfinx.mesh import MeshTags, locate_entities_boundary
 from mpi4py import MPI
 
@@ -60,6 +61,8 @@ if __name__ == "__main__":
                         dest="refs", help="Number of mesh refinements")
     parser.add_argument("--load_steps", default=1, type=np.int32, dest="nload_steps",
                         help="Number of steps for gradual loading")
+    parser.add_argument("--res", default=0.1, type=np.float64, dest="res",
+                        help="Mesh resolution")
 
     # Parse input arguments or set to defualt values
     args = parser.parse_args()
@@ -119,7 +122,7 @@ if __name__ == "__main__":
         elif hex:
             fname = "hex"
             displacement = ([-1, 0, 0], [0, 0, 0])
-            create_hexahedral_mesh(fname)
+            create_hexahedral_mesh(fname, res=args.res)
             with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
                 mesh = xdmf.read_mesh(name="hex_d2")
             tdim = mesh.topology.dim
@@ -354,3 +357,4 @@ if __name__ == "__main__":
         xdmf.write_mesh(mesh)
         u.name = "u"
         xdmf.write_function(u)
+    list_timings(mesh.comm, [TimingType.wall])
