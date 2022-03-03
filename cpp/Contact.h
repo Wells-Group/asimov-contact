@@ -21,7 +21,9 @@
 #include <dolfinx/mesh/cell_types.h>
 #include <dolfinx_cuas/QuadratureRule.hpp>
 #include <dolfinx_cuas/utils.hpp>
+#include <xtensor/xadapt.hpp>
 #include <xtensor/xindex_view.hpp>
+#include <xtensor/xio.hpp>
 #include <xtl/xspan.hpp>
 using contact_kernel_fn = std::function<void(
     std::vector<std::vector<PetscScalar>>&, const double*, const double*,
@@ -1190,6 +1192,7 @@ public:
     std::vector<PetscScalar> c(num_facets * num_q_points * bs_element, 0.0);
 
     // Create work vector for expansion coefficients
+    const int cstride = (int)num_q_points * bs_element;
     const std::size_t num_basis_functions = basis_values.shape(1);
     const std::size_t value_size = basis_values.shape(2);
     std::vector<PetscScalar> coefficients(num_basis_functions * bs_element);
@@ -1211,7 +1214,7 @@ public:
           {
             for (std::size_t m = 0; m < value_size; ++m)
             {
-              c[num_q_points * i + q * bs_element + k]
+              c[cstride * i + q * bs_element + k]
                   += coefficients[bs_element * l + k]
                      * basis_values(num_q_points * i + q, l, m);
             }
@@ -1219,7 +1222,6 @@ public:
         }
       }
     }
-    const int cstride = (int)num_q_points * bs_element;
     return {std::move(c), cstride};
   }
 
