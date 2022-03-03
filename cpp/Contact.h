@@ -23,7 +23,6 @@
 #include <dolfinx_cuas/utils.hpp>
 #include <xtensor/xindex_view.hpp>
 #include <xtl/xspan.hpp>
-
 using contact_kernel_fn = std::function<void(
     std::vector<std::vector<PetscScalar>>&, const double*, const double*,
     const double*, const int*, const std::uint8_t*, const std::size_t)>;
@@ -1173,12 +1172,13 @@ public:
       assert(links.size() == num_q_points);
       for (std::size_t q = 0; q < num_q_points; ++q)
       {
+        const std::size_t row = i * num_q_points;
         for (std::size_t j = 0; j < gdim; ++j)
         {
-          points(i * num_q_points + q, j)
-              = qp_phys[i](q, j) + gap[i * gdim * num_q_points + q * gdim + j];
+          points(row + q, j)
+              = qp_phys[i](q, j) + gap[row * gdim + q * gdim + j];
           auto linked_pair = facet_map->links(links[q]);
-          cells[i * num_q_points + q] = linked_pair[0];
+          cells[row + q] = linked_pair[0];
         }
       }
     }
@@ -1190,7 +1190,6 @@ public:
     std::vector<PetscScalar> c(num_facets * num_q_points * bs_element, 0.0);
 
     // Create work vector for expansion coefficients
-    const int cstride = (int)num_q_points * bs_element;
     const std::size_t num_basis_functions = basis_values.shape(1);
     const std::size_t value_size = basis_values.shape(2);
     std::vector<PetscScalar> coefficients(num_basis_functions * bs_element);
@@ -1212,14 +1211,15 @@ public:
           {
             for (std::size_t m = 0; m < value_size; ++m)
             {
-              c[cstride + q * (num_basis_functions * bs_element)
-                + l * bs_element + k]
-                  += coefficients[bs_element * l + k] * basis_values(0, l, m);
+              c[num_q_points * i + q * bs_element + k]
+                  += coefficients[bs_element * l + k]
+                     * basis_values(num_q_points * i + q, l, m);
             }
           }
         }
       }
     }
+    const int cstride = (int)num_q_points * bs_element;
     return {std::move(c), cstride};
   }
 
