@@ -250,16 +250,39 @@ void dolfinx_contact::update_geometry(
 double dolfinx_contact::R_plus(double x) { return 0.5 * (std::abs(x) + x); }
 //-------------------------------------------------------------------------------------
 double dolfinx_contact::dR_plus(double x) { return double(x > 0); }
+//-------------------------------------------------------------------------------------
+std::array<std::size_t, 3>
+dolfinx_contact::evaulate_basis_shape(const dolfinx::fem::FunctionSpace& V,
+                                      const std::size_t num_points)
+{
+  // Get element
+  assert(V.element());
+  std::shared_ptr<const dolfinx::fem::FiniteElement> element = V.element();
+  assert(element);
+  const int bs_element = element->block_size();
+  const std::size_t value_size = element->value_size() / bs_element;
+  const std::size_t space_dimension = element->space_dimension() / bs_element;
+  return {num_points, space_dimension, value_size};
+}
 //-----------------------------------------------------------------------------
-xt::xtensor<double, 3> dolfinx_contact::evaluate_basis_functions(
+void dolfinx_contact::evaluate_basis_functions(
     const dolfinx::fem::FunctionSpace& V, const xt::xtensor<double, 2>& x,
-    const xtl::span<const std::int32_t>& cells)
+    const xtl::span<const std::int32_t>& cells,
+    xt::xtensor<double, 3>& basis_values)
 {
   if (x.shape(0) != cells.size())
   {
     throw std::runtime_error(
         "Number of points and number of cells must be equal.");
   }
+  if (x.shape(0) != basis_values.shape(0))
+  {
+    throw std::runtime_error("Length of array for basis values must be the "
+                             "same as the number of points.");
+  }
+  if (x.shape(0) == 0)
+    return;
+
   // Get mesh
   std::shared_ptr<const dolfinx::mesh::Mesh> mesh = V.mesh();
   assert(mesh);
@@ -284,22 +307,15 @@ xt::xtensor<double, 3> dolfinx_contact::evaluate_basis_functions(
   const int bs_element = element->block_size();
   const std::size_t reference_value_size
       = element->reference_value_size() / bs_element;
-  const std::size_t value_size = element->value_size() / bs_element;
   const std::size_t space_dimension = element->space_dimension() / bs_element;
-
-  // Return early if we have no points
-  xt::xtensor<double, 3> basis_values(
-      {x.shape(0), space_dimension, value_size});
-  if (x.shape(0) == 0)
-    return basis_values;
 
   // If the space has sub elements, concatenate the evaluations on the sub
   // elements
   if (const int num_sub_elements = element->num_sub_elements();
       num_sub_elements > 1 && num_sub_elements != bs_element)
   {
-    throw std::runtime_error("Function::eval is not supported for mixed "
-                             "elements. Extract subspaces.");
+    throw std::runtime_error("Canot evaluate basis functions for mixed "
+                             "function spaces. Extract subspaces.");
   }
 
   // Get dofmap
@@ -375,14 +391,13 @@ xt::xtensor<double, 3> dolfinx_contact::evaluate_basis_functions(
       cmap.pull_back_nonaffine(_Xp, xp, coordinate_dofs);
       cmap.tabulate(1, _Xp, phi);
       dphi = xt::view(phi, xt::range(1, tdim + 1), 0, xt::all(), 0);
-      J.fill(0);
       dolfinx::fem::CoordinateElement::compute_jacobian(dphi, coordinate_dofs,
                                                         _J);
       dolfinx::fem::CoordinateElement::compute_jacobian_inverse(_J, _K);
       detJ[p]
           = dolfinx::fem::CoordinateElement::compute_jacobian_determinant(_J);
     }
-    xt::row(X, p) = xt::row(_Xp, 9);
+    xt::row(X, p) = xt::row(_Xp, 0);
   }
 
   // Prepare basis function data structures
@@ -420,7 +435,7 @@ xt::xtensor<double, 3> dolfinx_contact::evaluate_basis_functions(
     apply_dof_transformation(
         xtl::span(basis_reference_values.data() + p * num_basis_values,
                   num_basis_values),
-        cell_info, cell_index, (int)reference_value_size);
+        cell_info, cell_index, reference_value_size);
 
     // Push basis forward to physical element
     auto _K = xt::view(K, p, xt::all(), xt::all());
@@ -430,5 +445,4 @@ xt::xtensor<double, 3> dolfinx_contact::evaluate_basis_functions(
                        xt::all());
     push_forward_fn(_u, _U, _J, detJ[p], _K);
   }
-  return basis_values;
 };

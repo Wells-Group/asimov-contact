@@ -94,6 +94,12 @@ double R_plus(double x);
 /// @note Evaluates to 0 at x=0
 double dR_plus(double x);
 
+/// Get shape of in,out variable for filling basis functions in for
+/// evaluate_basis_functions
+std::array<std::size_t, 3>
+evaulate_basis_shape(const dolfinx::fem::FunctionSpace& V,
+                     const std::size_t num_points);
+
 /// Get basis values (not unrolled for block size) for a set of points and
 /// corresponding cells.
 /// @param[in] V The function space
@@ -102,14 +108,12 @@ double dR_plus(double x);
 /// @param[in] cells An array of cell indices. cells[i] is the index
 /// of the cell that contains the point x(i). Negative cell indices
 /// can be passed, and the corresponding point will be ignored.
-/// @param[in,out] u The values at the points. Values are not computed
-/// for points with a negative cell index. This argument must be
-/// passed with the correct size.
-/// @returns basis values (not unrolled for block size) for each point. shape
-/// (num_points, number_of_dofs, value_size)
-xt::xtensor<double, 3>
-evaluate_basis_functions(const dolfinx::fem::FunctionSpace& V,
-                         const xt::xtensor<double, 2>& x,
-                         const xtl::span<const std::int32_t>& cells);
+/// @param[in,out] basis_values The values at the points. Values are not
+/// computed for points with a negative cell index. This argument must be passed
+/// with the correct size (num_points, number_of_dofs, value_size).
+void evaluate_basis_functions(const dolfinx::fem::FunctionSpace& V,
+                              const xt::xtensor<double, 2>& x,
+                              const xtl::span<const std::int32_t>& cells,
+                              xt::xtensor<double, 3>& basis_values);
 
 } // namespace dolfinx_contact

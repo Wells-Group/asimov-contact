@@ -959,30 +959,44 @@ public:
     assert(sub_dofmap);
     const int bs_dof = sub_dofmap->bs();
 
-    // dolfinx::common::Timer t("~~~Contact: copy u");
-    submesh.copy_function(*u, u_sub);
-    // t.stop();
-    xt::xtensor<double, 2> points
-        = xt::zeros<double>({num_facets * num_q_points, gdim});
+    std::array<std::size_t, 3> b_shape
+        = evaulate_basis_shape(*V_sub, num_facets * num_q_points);
+    xt::xtensor<double, 3> basis_values(b_shape);
+    std::fill(basis_values.begin(), basis_values.end(), 0);
     std::vector<std::int32_t> cells(num_facets * num_q_points, -1);
-    for (std::size_t i = 0; i < num_facets; ++i)
     {
-      auto links = map->links(i);
-      assert(links.size() == num_q_points);
-      for (std::size_t q = 0; q < num_q_points; ++q)
+      // Copy function from parent mesh
+      submesh.copy_function(*u, u_sub);
+
+      xt::xtensor<double, 2> points
+          = xt::zeros<double>({num_facets * num_q_points, gdim});
+      for (std::size_t i = 0; i < num_facets; ++i)
       {
-        const std::size_t row = i * num_q_points;
-        for (std::size_t j = 0; j < gdim; ++j)
+        auto links = map->links(i);
+        assert(links.size() == num_q_points);
+        for (std::size_t q = 0; q < num_q_points; ++q)
         {
-          points(row + q, j)
-              = qp_phys[i](q, j) + gap[row * gdim + q * gdim + j];
-          auto linked_pair = facet_map->links(links[q]);
-          cells[row + q] = linked_pair[0];
+          const std::size_t row = i * num_q_points;
+          for (std::size_t j = 0; j < gdim; ++j)
+          {
+            points(row + q, j)
+                = qp_phys[i](q, j) + gap[row * gdim + q * gdim + j];
+            auto linked_pair = facet_map->links(links[q]);
+            cells[row + q] = linked_pair[0];
+          }
         }
       }
+
+      dolfinx::common::Timer ttt("~~Old eval");
+      xt::xtensor<double, 2> u_vals({num_facets * num_q_points, gdim});
+      u_sub.eval(points, cells, u_vals);
+      ttt.stop();
+      dolfinx::common::Timer tt("~~New eval");
+      evaluate_basis_functions(*u_sub.function_space(), points, cells,
+                               basis_values);
+      tt.stop();
     }
-    xt::xtensor<double, 3> basis_values
-        = evaluate_basis_functions(*u_sub.function_space(), points, cells);
+
     const xtl::span<const PetscScalar>& u_coeffs = u_sub.x()->array();
 
     // Output vector
