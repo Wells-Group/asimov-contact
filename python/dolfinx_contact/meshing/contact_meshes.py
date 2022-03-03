@@ -140,7 +140,7 @@ def create_circle_circle_mesh(filename: str, quads: bool = False):
     gmsh.finalize()
 
 
-def create_box_mesh_2D(filename: str, quads: bool = False):
+def create_box_mesh_2D(filename: str, quads: bool = False, res=0.1):
     """
     Create two boxes, one slightly skewed
     """
@@ -151,6 +151,7 @@ def create_box_mesh_2D(filename: str, quads: bool = False):
 
     gmsh.initialize()
     if MPI.COMM_WORLD.rank == 0:
+        gmsh.option.setNumber("Mesh.CharacteristicLengthFactor", res)
 
         # Create box
         p0 = gmsh.model.occ.addPoint(-delta, 0, 0)

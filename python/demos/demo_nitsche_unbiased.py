@@ -234,11 +234,10 @@ if __name__ == "__main__":
             facet_marker = MeshTags(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
         elif box:
             fname = "box_2D"
+            create_box_mesh_2D(filename=f"{fname}.msh", quads=not simplex, res=args.res)
             if simplex:
-                create_box_mesh_2D(filename=f"{fname}.msh")
                 convert_mesh(fname, f"{fname}.xdmf", "triangle", prune_z=True)
             else:
-                create_box_mesh_2D(filename=f"{fname}.msh", quads=True)
                 convert_mesh(fname, f"{fname}.xdmf", "quad", prune_z=True)
             convert_mesh(f"{fname}", f"{fname}_facets", "line", prune_z=True)
 
