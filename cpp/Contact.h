@@ -1141,7 +1141,7 @@ public:
                  std::shared_ptr<dolfinx::fem::Function<PetscScalar>> u,
                  const xtl::span<const PetscScalar> gap)
   {
-
+    dolfinx::common::Timer t("Pack contact u");
     // Mesh info
     auto submesh = _submeshes[_opposites[origin_meshtag]];
     auto mesh = submesh.mesh();                      // mesh
@@ -1222,6 +1222,7 @@ public:
         }
       }
     }
+    t.stop();
     return {std::move(c), cstride};
   }
 

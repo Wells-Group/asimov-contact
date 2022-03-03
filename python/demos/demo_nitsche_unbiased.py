@@ -357,3 +357,7 @@ if __name__ == "__main__":
         u.name = "u"
         xdmf.write_function(u)
     list_timings(mesh.comm, [TimingType.wall])
+
+    import dolfinx.common
+    t = dolfinx.common.timing("Pack contact u")
+    print(t)
