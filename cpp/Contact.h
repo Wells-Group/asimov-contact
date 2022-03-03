@@ -987,14 +987,8 @@ public:
         }
       }
 
-      dolfinx::common::Timer ttt("~~Old eval");
-      xt::xtensor<double, 2> u_vals({num_facets * num_q_points, gdim});
-      u_sub.eval(points, cells, u_vals);
-      ttt.stop();
-      dolfinx::common::Timer tt("~~New eval");
       evaluate_basis_functions(*u_sub.function_space(), points, cells,
                                basis_values);
-      tt.stop();
     }
 
     const xtl::span<const PetscScalar>& u_coeffs = u_sub.x()->array();
