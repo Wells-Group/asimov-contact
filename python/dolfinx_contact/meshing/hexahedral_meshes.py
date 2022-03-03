@@ -25,7 +25,7 @@ def create_hexahedral_mesh(filename: str, order: int = 1, res=0.25):
         # Recombine tetrahedrons to hexahedrons
         gmsh.option.setNumber("Mesh.RecombinationAlgorithm", 2)
         gmsh.option.setNumber("Mesh.RecombineAll", 2)
-        #gmsh.option.setNumber("Mesh.CharacteristicLengthFactor", 0.1)
+        # gmsh.option.setNumber("Mesh.CharacteristicLengthFactor", 0.1)
 
         circle = model.occ.addDisk(0, 0, 0, 2, 2)
         circle2 = model.occ.addDisk(3.5, 0, 0, 1, 1)
