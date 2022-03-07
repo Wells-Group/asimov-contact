@@ -776,7 +776,7 @@ public:
 
     // Pack gap function for each quadrature point on each facet
     std::vector<PetscScalar> c(num_facets * num_q_point * gdim, 0.0);
-    const int cstride = (int)num_q_point * gdim;
+    const auto cstride = (int)num_q_point * gdim;
     xt::xtensor<double, 2> point = {{0, 0, 0}};
 
     for (std::size_t i = 0; i < num_facets; ++i)
@@ -851,7 +851,7 @@ public:
     const std::int32_t ndofs = _V->dofmap()->cell_dofs(0).size();
     std::vector<PetscScalar> c(
         num_facets * num_q_points * max_links * ndofs * bs, 0.0);
-    const int cstride = num_q_points * max_links * ndofs * bs;
+    const auto cstride = int(num_q_points * max_links * ndofs * bs);
     xt::xtensor<double, 2> q_points
         = xt::zeros<double>({std::size_t(num_q_points), std::size_t(gdim)});
     xt::xtensor<double, 2> dphi;
@@ -902,11 +902,11 @@ public:
         const std::size_t num_dofs_g = x_dofs.size();
         xt::xtensor<double, 2> coordinate_dofs
             = xt::zeros<double>({num_dofs_g, std::size_t(gdim)});
-        for (std::size_t i = 0; i < num_dofs_g; ++i)
+        for (std::size_t k = 0; k < num_dofs_g; ++k)
         {
 
-          std::copy_n(std::next(mesh_geometry.begin(), 3 * x_dofs[i]), gdim,
-                      std::next(coordinate_dofs.begin(), i * gdim));
+          std::copy_n(std::next(mesh_geometry.begin(), 3 * x_dofs[k]), gdim,
+                      std::next(coordinate_dofs.begin(), k * gdim));
         }
         // Extract all physical points Pi(x) on a facet of linked_cell
         auto qp = xt::view(q_points, xt::keep(indices), xt::all());
@@ -997,7 +997,7 @@ public:
     std::vector<PetscScalar> c(num_facets * num_q_points * bs_element, 0.0);
 
     // Create work vector for expansion coefficients
-    const int cstride = int(num_q_points * bs_element);
+    const auto cstride = int(num_q_points * bs_element);
     const std::size_t num_basis_functions = basis_values.shape(1);
     const std::size_t value_size = basis_values.shape(2);
     std::vector<PetscScalar> coefficients(num_basis_functions * bs_element);
@@ -1061,7 +1061,7 @@ public:
     const std::size_t num_facets = _cell_facet_pairs[origin_meshtag].size();
     const std::size_t num_q_points = _qp_ref_facet[0].shape(0);
     std::vector<PetscScalar> c(num_facets * num_q_points * gdim, 0.0);
-    const int cstride = (int)num_q_points * gdim;
+    const auto cstride = (int)num_q_points * gdim;
     xt::xtensor<double, 2> point = xt::zeros<double>(
         {std::size_t(1), std::size_t(gdim)}); // To store Pi(x)
 
@@ -1162,7 +1162,7 @@ public:
     // FIXME: This does not work for prism meshes
     std::size_t num_q_point = _qp_ref_facet[0].shape(0);
     std::vector<PetscScalar> c(num_facets * num_q_point * gdim, 0.0);
-    const int cstride = (int)num_q_point * gdim;
+    const auto cstride = (int)num_q_point * gdim;
     for (std::size_t i = 0; i < num_facets; i++)
     {
       int offset = (int)i * cstride;
