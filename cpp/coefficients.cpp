@@ -359,6 +359,5 @@ std::pair<std::vector<PetscScalar>, int> dolfinx_contact::pack_circumradius(
     circumradius.push_back(
         compute_circumradius(mesh, detJ[0], coordinate_dofs));
   }
-  const int cstride = 1;
-  return {std::move(circumradius), cstride};
+  return {std::move(circumradius), 1};
 }

@@ -21,9 +21,8 @@
 #include <dolfinx/mesh/cell_types.h>
 #include <dolfinx_cuas/QuadratureRule.hpp>
 #include <dolfinx_cuas/utils.hpp>
+#include <xtensor/xadapt.hpp>
 #include <xtensor/xindex_view.hpp>
-#include <xtl/xspan.hpp>
-
 using contact_kernel_fn = std::function<void(
     std::vector<std::vector<PetscScalar>>&, const double*, const double*,
     const double*, const int*, const std::uint8_t*, const std::size_t)>;
@@ -777,7 +776,7 @@ public:
 
     // Pack gap function for each quadrature point on each facet
     std::vector<PetscScalar> c(num_facets * num_q_point * gdim, 0.0);
-    const int cstride = (int)num_q_point * gdim;
+    const auto cstride = (int)num_q_point * gdim;
     xt::xtensor<double, 2> point = {{0, 0, 0}};
 
     for (std::size_t i = 0; i < num_facets; ++i)
@@ -852,7 +851,7 @@ public:
     const std::int32_t ndofs = _V->dofmap()->cell_dofs(0).size();
     std::vector<PetscScalar> c(
         num_facets * num_q_points * max_links * ndofs * bs, 0.0);
-    const int cstride = num_q_points * max_links * ndofs * bs;
+    const auto cstride = int(num_q_points * max_links * ndofs * bs);
     xt::xtensor<double, 2> q_points
         = xt::zeros<double>({std::size_t(num_q_points), std::size_t(gdim)});
     xt::xtensor<double, 2> dphi;
@@ -903,11 +902,11 @@ public:
         const std::size_t num_dofs_g = x_dofs.size();
         xt::xtensor<double, 2> coordinate_dofs
             = xt::zeros<double>({num_dofs_g, std::size_t(gdim)});
-        for (std::size_t i = 0; i < num_dofs_g; ++i)
+        for (std::size_t k = 0; k < num_dofs_g; ++k)
         {
 
-          std::copy_n(std::next(mesh_geometry.begin(), 3 * x_dofs[i]), gdim,
-                      std::next(coordinate_dofs.begin(), i * gdim));
+          std::copy_n(std::next(mesh_geometry.begin(), 3 * x_dofs[k]), gdim,
+                      std::next(coordinate_dofs.begin(), k * gdim));
         }
         // Extract all physical points Pi(x) on a facet of linked_cell
         auto qp = xt::view(q_points, xt::keep(indices), xt::all());
@@ -939,12 +938,12 @@ public:
                  std::shared_ptr<dolfinx::fem::Function<PetscScalar>> u,
                  const xtl::span<const PetscScalar> gap)
   {
-
+    dolfinx::common::Timer t("Pack contact u");
     // Mesh info
     auto submesh = _submeshes[_opposites[origin_meshtag]];
     auto mesh = submesh.mesh();                      // mesh
     const std::size_t gdim = mesh->geometry().dim(); // geometrical dimension
-    const std::size_t bs = _V->element()->block_size();
+    const std::size_t bs_element = _V->element()->block_size();
 
     // Select which side of the contact interface to loop from and get the
     // correct map
@@ -953,50 +952,90 @@ public:
     auto facet_map = submesh.facet_map();
     const std::size_t num_facets = _cell_facet_pairs[origin_meshtag].size();
     const std::size_t num_q_points = _qp_ref_facet[0].shape(0);
-    std::vector<PetscScalar> c(num_facets * num_q_points * bs, 0.0);
-    const int cstride = num_q_points * bs;
     auto V_sub = std::make_shared<dolfinx::fem::FunctionSpace>(
         submesh.create_functionspace(_V));
     auto u_sub = dolfinx::fem::Function<PetscScalar>(V_sub);
-    submesh.copy_function(*u, u_sub);
+    auto sub_dofmap = V_sub->dofmap();
+    assert(sub_dofmap);
+    const int bs_dof = sub_dofmap->bs();
 
-    xt::xtensor<double, 2> points = xt::zeros<double>({num_q_points, gdim});
-    std::vector<std::int32_t> cells(num_q_points, 0);
-    xt::xtensor<PetscScalar, 2> vals
-        = xt::zeros<PetscScalar>({num_q_points, bs});
-    for (std::size_t i = 0; i < num_facets; ++i)
+    std::array<std::size_t, 3> b_shape
+        = evaulate_basis_shape(*V_sub, num_facets * num_q_points);
+    xt::xtensor<double, 3> basis_values(b_shape);
+    std::fill(basis_values.begin(), basis_values.end(), 0);
+    std::vector<std::int32_t> cells(num_facets * num_q_points, -1);
     {
-      auto links = map->links(i);
-      assert(links.size() == num_q_points);
-      for (std::size_t q = 0; q < num_q_points; ++q)
+      // Copy function from parent mesh
+      submesh.copy_function(*u, u_sub);
+
+      xt::xtensor<double, 2> points
+          = xt::zeros<double>({num_facets * num_q_points, gdim});
+      for (std::size_t i = 0; i < num_facets; ++i)
       {
-        for (std::size_t j = 0; j < gdim; ++j)
+        auto links = map->links(i);
+        assert(links.size() == num_q_points);
+        for (std::size_t q = 0; q < num_q_points; ++q)
         {
-          points(q, j)
-              = qp_phys[i](q, j) + gap[i * gdim * num_q_points + q * gdim + j];
-          auto linked_pair = facet_map->links(links[q]);
-          cells[q] = linked_pair[0];
+          const std::size_t row = i * num_q_points;
+          for (std::size_t j = 0; j < gdim; ++j)
+          {
+            points(row + q, j)
+                = qp_phys[i](q, j) + gap[row * gdim + q * gdim + j];
+            auto linked_pair = facet_map->links(links[q]);
+            cells[row + q] = linked_pair[0];
+          }
         }
       }
-      vals.fill(0);
-      u_sub.eval(points, cells, vals);
+
+      evaluate_basis_functions(*u_sub.function_space(), points, cells,
+                               basis_values);
+    }
+
+    const xtl::span<const PetscScalar>& u_coeffs = u_sub.x()->array();
+
+    // Output vector
+    std::vector<PetscScalar> c(num_facets * num_q_points * bs_element, 0.0);
+
+    // Create work vector for expansion coefficients
+    const auto cstride = int(num_q_points * bs_element);
+    const std::size_t num_basis_functions = basis_values.shape(1);
+    const std::size_t value_size = basis_values.shape(2);
+    std::vector<PetscScalar> coefficients(num_basis_functions * bs_element);
+    for (std::size_t i = 0; i < num_facets; ++i)
+    {
       for (std::size_t q = 0; q < num_q_points; ++q)
       {
-        for (std::size_t j = 0; j < bs; ++j)
+        // Get degrees of freedom for current cell
+        xtl::span<const std::int32_t> dofs
+            = sub_dofmap->cell_dofs(cells[i * num_q_points + q]);
+        for (std::size_t j = 0; j < dofs.size(); ++j)
+          for (int k = 0; k < bs_dof; ++k)
+            coefficients[bs_dof * j + k] = u_coeffs[bs_dof * dofs[j] + k];
+
+        // Compute expansion
+        for (std::size_t k = 0; k < bs_element; ++k)
         {
-          c[i * cstride + q * bs + j] = vals(q, j);
+          for (std::size_t l = 0; l < num_basis_functions; ++l)
+          {
+            for (std::size_t m = 0; m < value_size; ++m)
+            {
+              c[cstride * i + q * bs_element + k]
+                  += coefficients[bs_element * l + k]
+                     * basis_values(num_q_points * i + q, l, m);
+            }
+          }
         }
       }
     }
-
+    t.stop();
     return {std::move(c), cstride};
   }
 
   /// Compute inward surface normal at Pi(x)
   /// @param[in] orgin_meshtag - surface on which to integrate
-  /// @param[in] gap - gap function: Pi(x)-x packed at quadrature points, where
-  /// Pi(x) is the chosen projection of x onto the contact surface of the body
-  /// coming into contact
+  /// @param[in] gap - gap function: Pi(x)-x packed at quadrature points,
+  /// where Pi(x) is the chosen projection of x onto the contact surface of
+  /// the body coming into contact
   /// @param[out] c - normals ny packed on facets.
   std::pair<std::vector<PetscScalar>, int>
   pack_ny(int origin_meshtag, const xtl::span<const PetscScalar> gap)
@@ -1022,7 +1061,7 @@ public:
     const std::size_t num_facets = _cell_facet_pairs[origin_meshtag].size();
     const std::size_t num_q_points = _qp_ref_facet[0].shape(0);
     std::vector<PetscScalar> c(num_facets * num_q_points * gdim, 0.0);
-    const int cstride = num_q_points * gdim;
+    const auto cstride = (int)num_q_points * gdim;
     xt::xtensor<double, 2> point = xt::zeros<double>(
         {std::size_t(1), std::size_t(gdim)}); // To store Pi(x)
 
@@ -1057,10 +1096,10 @@ public:
         const std::size_t num_dofs_g = x_dofmap.num_links(linked_cell);
         xt::xtensor<double, 2> coordinate_dofs
             = xt::zeros<double>({num_dofs_g, std::size_t(gdim)});
-        for (std::size_t i = 0; i < x_dofs.size(); ++i)
+        for (std::size_t j = 0; j < x_dofs.size(); ++j)
         {
-          std::copy_n(std::next(mesh_geometry.begin(), 3 * x_dofs[i]), gdim,
-                      std::next(coordinate_dofs.begin(), i * gdim));
+          std::copy_n(std::next(mesh_geometry.begin(), 3 * x_dofs[j]), gdim,
+                      std::next(coordinate_dofs.begin(), j * gdim));
         }
 
         // Compute outward unit normal in point = Pi(x)
@@ -1123,10 +1162,10 @@ public:
     // FIXME: This does not work for prism meshes
     std::size_t num_q_point = _qp_ref_facet[0].shape(0);
     std::vector<PetscScalar> c(num_facets * num_q_point * gdim, 0.0);
-    const int cstride = num_q_point * gdim;
+    const auto cstride = (int)num_q_point * gdim;
     for (std::size_t i = 0; i < num_facets; i++)
     {
-      int offset = i * cstride;
+      int offset = (int)i * cstride;
       for (std::size_t k = 0; k < num_q_point; k++)
         c[offset + (k + 1) * gdim - 1] = g - qp_phys[i](k, gdim - 1);
     }
@@ -1140,14 +1179,14 @@ private:
   // store index of candidate_surface for each puppet_surface
   std::array<int, 2> _opposites = {0, 0};
   std::shared_ptr<dolfinx::fem::FunctionSpace> _V; // Function space
-  // _facets_maps[i] = adjacency list of closest facet on candidate surface for
-  // every quadrature point in _qp_phys[i] (quadrature points on every facet of
-  // ith surface)
+  // _facets_maps[i] = adjacency list of closest facet on candidate surface
+  // for every quadrature point in _qp_phys[i] (quadrature points on every
+  // facet of ith surface)
   std::array<std::shared_ptr<const dolfinx::graph::AdjacencyList<std::int32_t>>,
              2>
       _facet_maps;
-  //  _qp_phys[i] contains the quadrature points on the physical facets for each
-  //  facet on ith surface in _surfaces
+  //  _qp_phys[i] contains the quadrature points on the physical facets for
+  //  each facet on ith surface in _surfaces
   std::array<std::vector<xt::xtensor<double, 2>>, 2> _qp_phys;
   // quadrature points on reference facet
   std::vector<xt::xarray<double>> _qp_ref_facet;

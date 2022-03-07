@@ -22,7 +22,7 @@ kt = dolfinx_contact.cpp.Kernel
 __all__ = ["nitsche_unbiased"]
 
 
-def nitsche_unbiased(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTags, int, int, int, int],
+def nitsche_unbiased(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTagsMetaClass, int, int, int, int],
                      physical_parameters: dict = {}, nitsche_parameters: Dict[str, float] = {},
                      displacement: Tuple[list[float], list[float]] = [[0, 0, 0], [0, 0, 0]],
                      nitsche_bc: bool = True, quadrature_degree: int = 5,
@@ -138,44 +138,51 @@ def nitsche_unbiased(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTags, int, int
     # Custom assembly
     _log.set_log_level(_log.LogLevel.OFF)
     # create contact class
-    contact = dolfinx_contact.cpp.Contact(facet_marker, [surface_value_0, surface_value_1], V._cpp_object)
+    with _common.Timer("~Contact: Init"):
+        contact = dolfinx_contact.cpp.Contact(facet_marker, [surface_value_0, surface_value_1], V._cpp_object)
     contact.set_quadrature_degree(quadrature_degree)
-    contact.create_distance_map(0, 1)
-    contact.create_distance_map(1, 0)
+    with _common.Timer("~Contact: Distance maps"):
+        contact.create_distance_map(0, 1)
+        contact.create_distance_map(1, 0)
     # pack constants
     consts = np.array([gamma, theta])
 
     # Pack material parameters mu and lambda on each contact surface
-    V2 = _fem.FunctionSpace(mesh, ("DG", 0))
-    lmbda2 = _fem.Function(V2)
-    lmbda2.interpolate(lambda x: np.full((1, x.shape[1]), lmbda))
-    mu2 = _fem.Function(V2)
-    mu2.interpolate(lambda x: np.full((1, x.shape[1]), mu))
-    facets_0 = facet_marker.indices[facet_marker.values == surface_value_0]
-    facets_1 = facet_marker.indices[facet_marker.values == surface_value_1]
+    with _common.Timer("~Contact: Interpolate coeffs (mu, lmbda)"):
+        V2 = _fem.FunctionSpace(mesh, ("DG", 0))
+        lmbda2 = _fem.Function(V2)
+        lmbda2.interpolate(lambda x: np.full((1, x.shape[1]), lmbda))
+        mu2 = _fem.Function(V2)
+        mu2.interpolate(lambda x: np.full((1, x.shape[1]), mu))
 
-    integral = _fem.IntegralType.exterior_facet
-    entities_0 = dolfinx_cuas.compute_active_entities(mesh, facets_0, integral)
-    material_0 = dolfinx_cuas.pack_coefficients([mu2, lmbda2], entities_0)
+    with _common.Timer("~Contact: Compute active entities"):
+        facets_0 = facet_marker.indices[facet_marker.values == surface_value_0]
+        facets_1 = facet_marker.indices[facet_marker.values == surface_value_1]
+        integral = _fem.IntegralType.exterior_facet
+        entities_0 = dolfinx_cuas.compute_active_entities(mesh, facets_0, integral)
+        entities_1 = dolfinx_cuas.compute_active_entities(mesh, facets_1, integral)
 
-    entities_1 = dolfinx_cuas.compute_active_entities(mesh, facets_1, integral)
-    material_1 = dolfinx_cuas.pack_coefficients([mu2, lmbda2], entities_1)
+    with _common.Timer("~Contact: Pack coeffs (mu, lmbda"):
+        material_0 = dolfinx_cuas.pack_coefficients([mu2, lmbda2], entities_0)
+        material_1 = dolfinx_cuas.pack_coefficients([mu2, lmbda2], entities_1)
 
     # Pack celldiameter on each surface
-    surface_cells = np.unique(np.hstack([entities_0[:, 0], entities_1[:, 0]]))
-    h_int = _fem.Function(V2)
-    expr = _fem.Expression(h, V2.element.interpolation_points)
-    h_int.interpolate(expr, surface_cells)
-    h_0 = dolfinx_cuas.pack_coefficients([h_int], entities_0)
-    h_1 = dolfinx_cuas.pack_coefficients([h_int], entities_1)
+    with _common.Timer("~Contact: Compute and pack celldiameter"):
+        surface_cells = np.unique(np.hstack([entities_0[:, 0], entities_1[:, 0]]))
+        h_int = _fem.Function(V2)
+        expr = _fem.Expression(h, V2.element.interpolation_points)
+        h_int.interpolate(expr, surface_cells)
+        h_0 = dolfinx_cuas.pack_coefficients([h_int], entities_0)
+        h_1 = dolfinx_cuas.pack_coefficients([h_int], entities_1)
 
     # Pack gap, normals and test functions on each surface
-    gap_0 = contact.pack_gap(0)
-    n_0 = contact.pack_ny(0, gap_0)
-    test_fn_0 = contact.pack_test_functions(0, gap_0)
-    gap_1 = contact.pack_gap(1)
-    n_1 = contact.pack_ny(1, gap_1)
-    test_fn_1 = contact.pack_test_functions(1, gap_1)
+    with _common.Timer("~Contact: Pack gap, normals, testfunction"):
+        gap_0 = contact.pack_gap(0)
+        n_0 = contact.pack_ny(0, gap_0)
+        test_fn_0 = contact.pack_test_functions(0, gap_0)
+        gap_1 = contact.pack_gap(1)
+        n_1 = contact.pack_ny(1, gap_1)
+        test_fn_1 = contact.pack_test_functions(1, gap_1)
 
     # Concatenate all coeffs
     coeff_0 = np.hstack([material_0, h_0, gap_0, n_0, test_fn_0])
@@ -183,41 +190,54 @@ def nitsche_unbiased(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTags, int, int
 
     # Assemble jacobian
     J_cuas = _fem.form(J)
-    kernel_jac = contact.generate_kernel(kt.Jac)
+    with _common.Timer("~Contact: Generate kernel"):
+        kernel_jac = contact.generate_kernel(kt.Jac)
 
+    @_common.timed("~Contact: Create matrix")
     def create_A():
         return contact.create_matrix(J_cuas)
 
+    @_common.timed("~Contact: Assemble matrix")
     def A(x, A):
         u.vector[:] = x.array
-        u_opp_0 = contact.pack_u_contact(0, u._cpp_object, gap_0)
-        u_opp_1 = contact.pack_u_contact(1, u._cpp_object, gap_1)
-        u_0 = dolfinx_cuas.pack_coefficients([u], entities_0)
-        u_1 = dolfinx_cuas.pack_coefficients([u], entities_1)
+        with _common.Timer("~~Contact: Pack u contact (in assemble matrix"):
+            u_opp_0 = contact.pack_u_contact(0, u._cpp_object, gap_0)
+            u_opp_1 = contact.pack_u_contact(1, u._cpp_object, gap_1)
+        with _common.Timer("~~Contact: Pack u (in assemble matrix"):
+            u_0 = dolfinx_cuas.pack_coefficients([u], entities_0)
+            u_1 = dolfinx_cuas.pack_coefficients([u], entities_1)
         c_0 = np.hstack([coeff_0, u_0, u_opp_0])
         c_1 = np.hstack([coeff_1, u_1, u_opp_1])
-        contact.assemble_matrix(A, [], 0, kernel_jac, c_0, consts)
-        contact.assemble_matrix(A, [], 1, kernel_jac, c_1, consts)
-        _fem.petsc.assemble_matrix(A, J_cuas)
+        with _common.Timer("~~Contact: Contract contributions (in assemble matrix"):
+            contact.assemble_matrix(A, [], 0, kernel_jac, c_0, consts)
+            contact.assemble_matrix(A, [], 1, kernel_jac, c_1, consts)
+        with _common.Timer("~~Contact: Standard contributions (in assemble matrix"):
+            _fem.petsc.assemble_matrix(A, J_cuas)
 
     # assemble rhs
     F_cuas = _fem.form(F)
     kernel_rhs = contact.generate_kernel(kt.Rhs)
 
+    @_common.timed("~Contact: Create vector")
     def create_b():
         return _fem.petsc.create_vector(F_cuas)
 
+    @_common.timed("~Contact: Assemble residual")
     def F(x, b):
         u.vector[:] = x.array
-        u_opp_0 = contact.pack_u_contact(0, u._cpp_object, gap_0)
-        u_opp_1 = contact.pack_u_contact(1, u._cpp_object, gap_1)
-        u_0 = dolfinx_cuas.pack_coefficients([u], entities_0)
-        u_1 = dolfinx_cuas.pack_coefficients([u], entities_1)
+        with _common.Timer("~~Contact: Pack u contact (in assemble vector"):
+            u_opp_0 = contact.pack_u_contact(0, u._cpp_object, gap_0)
+            u_opp_1 = contact.pack_u_contact(1, u._cpp_object, gap_1)
+        with _common.Timer("~~Contact: Pack u (in assemble vector"):
+            u_0 = dolfinx_cuas.pack_coefficients([u], entities_0)
+            u_1 = dolfinx_cuas.pack_coefficients([u], entities_1)
         c_0 = np.hstack([coeff_0, u_0, u_opp_0])
         c_1 = np.hstack([coeff_1, u_1, u_opp_1])
-        contact.assemble_vector(b, 0, kernel_rhs, c_0, consts)
-        contact.assemble_vector(b, 1, kernel_rhs, c_1, consts)
-        _fem.petsc.assemble_vector(b, F_cuas)
+        with _common.Timer("~~Contact: Contact contributions (in assemble vector"):
+            contact.assemble_vector(b, 0, kernel_rhs, c_0, consts)
+            contact.assemble_vector(b, 1, kernel_rhs, c_1, consts)
+        with _common.Timer("~~Contact: Standard contributions (in assemble vector"):
+            _fem.petsc.assemble_vector(b, F_cuas)
 
     # Setup non-linear problem and Newton-solver
     problem = dolfinx_cuas.NonlinearProblemCUAS(F, A, create_b, create_A)
@@ -258,7 +278,7 @@ def nitsche_unbiased(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTags, int, int
     _log.set_log_level(_log.LogLevel.INFO)
 
     # Solve non-linear problem
-    with _common.Timer(f"{dofs_global} Solve Nitsche"):
+    with _common.Timer(f"~Contact: {dofs_global} Solve Nitsche"):
         n, converged = solver.solve(u)
     u.x.scatter_forward()
 

@@ -14,7 +14,7 @@ from mpi4py import MPI
 __all__ = ["create_hexahedral_mesh"]
 
 
-def create_hexahedral_mesh(filename: str, order: int = 1):
+def create_hexahedral_mesh(filename: str, order: int = 1, res=0.25):
     if MPI.COMM_WORLD.rank == 0:
         gmsh.initialize()
         model = gmsh.model()
@@ -25,7 +25,7 @@ def create_hexahedral_mesh(filename: str, order: int = 1):
         # Recombine tetrahedrons to hexahedrons
         gmsh.option.setNumber("Mesh.RecombinationAlgorithm", 2)
         gmsh.option.setNumber("Mesh.RecombineAll", 2)
-        gmsh.option.setNumber("Mesh.CharacteristicLengthFactor", 0.1)
+        # gmsh.option.setNumber("Mesh.CharacteristicLengthFactor", 0.1)
 
         circle = model.occ.addDisk(0, 0, 0, 2, 2)
         circle2 = model.occ.addDisk(3.5, 0, 0, 1, 1)
@@ -34,6 +34,18 @@ def create_hexahedral_mesh(filename: str, order: int = 1):
             fuse[0], 0, 0, 0.5, numElements=[5], recombine=True)
         model.occ.synchronize()
 
+        gmsh.model.mesh.field.add("Box", 1)
+        gmsh.model.mesh.field.setNumber(1, "VIn", res)
+        gmsh.model.mesh.field.setNumber(1, "VOut", 1.5 * res)
+        gmsh.model.mesh.field.setNumber(1, "XMin", -2)
+        gmsh.model.mesh.field.setNumber(1, "XMax", 2)
+        gmsh.model.mesh.field.setNumber(1, "YMin", -2)
+        gmsh.model.mesh.field.setNumber(1, "YMax", 2)
+        gmsh.model.mesh.field.setNumber(1, "ZMin", -2)
+        gmsh.model.mesh.field.setNumber(1, "ZMax", 2)
+
+        gmsh.model.mesh.field.setAsBackgroundMesh(1)
+        model.occ.synchronize()
         model.mesh.generate(3)
         model.mesh.setOrder(order)
         volume_entities = []

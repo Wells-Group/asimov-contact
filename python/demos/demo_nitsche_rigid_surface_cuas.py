@@ -6,7 +6,7 @@ import argparse
 
 import numpy as np
 from dolfinx.io import XDMFFile
-from dolfinx.mesh import MeshTags, locate_entities_boundary
+from dolfinx.mesh import locate_entities_boundary, meshtags
 from mpi4py import MPI
 
 from dolfinx_contact.meshing import (convert_mesh, create_circle_circle_mesh,
@@ -126,7 +126,7 @@ if __name__ == "__main__":
             indices = np.concatenate([top_facets1, bottom_facets1, top_facets2, bottom_facets2])
             values = np.hstack([top_values, bottom_values, surface_values, sbottom_values])
             sorted_facets = np.argsort(indices)
-            facet_marker = MeshTags(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
+            facet_marker = meshtags(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
         else:
             fname = "twomeshes"
             if simplex:
@@ -173,7 +173,7 @@ if __name__ == "__main__":
             indices = np.concatenate([top_facets1, bottom_facets1, top_facets2, bottom_facets2])
             values = np.hstack([top_values, bottom_values, surface_values, sbottom_values])
             sorted_facets = np.argsort(indices)
-            facet_marker = MeshTags(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
+            facet_marker = meshtags(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
 
     # Solver options
     newton_options = {"relaxation_parameter": 1.0}

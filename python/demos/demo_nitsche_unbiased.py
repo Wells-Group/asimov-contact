@@ -5,18 +5,19 @@
 import argparse
 
 import numpy as np
+from dolfinx.common import TimingType, list_timings
 from dolfinx.fem import Function, VectorFunctionSpace
 from dolfinx.io import XDMFFile
-from dolfinx.mesh import MeshTags, locate_entities_boundary
+from dolfinx.mesh import locate_entities_boundary, meshtags
 from mpi4py import MPI
 
+from dolfinx_contact import update_geometry
 from dolfinx_contact.meshing import (convert_mesh, create_box_mesh_2D,
                                      create_box_mesh_3D,
                                      create_circle_circle_mesh,
                                      create_circle_plane_mesh,
-                                     create_sphere_plane_mesh,
-                                     create_hexahedral_mesh)
-from dolfinx_contact import update_geometry
+                                     create_hexahedral_mesh,
+                                     create_sphere_plane_mesh)
 from dolfinx_contact.unbiased.nitsche_unbiased import nitsche_unbiased
 
 if __name__ == "__main__":
@@ -60,6 +61,8 @@ if __name__ == "__main__":
                         dest="refs", help="Number of mesh refinements")
     parser.add_argument("--load_steps", default=1, type=np.int32, dest="nload_steps",
                         help="Number of steps for gradual loading")
+    parser.add_argument("--res", default=0.1, type=np.float64, dest="res",
+                        help="Mesh resolution")
 
     # Parse input arguments or set to defualt values
     args = parser.parse_args()
@@ -114,12 +117,12 @@ if __name__ == "__main__":
             indices = np.concatenate([top_facets1, bottom_facets1, top_facets2, bottom_facets2])
             values = np.hstack([top_values, bottom_values, surface_values, sbottom_values])
             sorted_facets = np.argsort(indices)
-            facet_marker = MeshTags(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
+            facet_marker = meshtags(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
 
         elif hex:
             fname = "hex"
             displacement = ([-1, 0, 0], [0, 0, 0])
-            create_hexahedral_mesh(fname)
+            create_hexahedral_mesh(fname, res=args.res)
             with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
                 mesh = xdmf.read_mesh(name="hex_d2")
             tdim = mesh.topology.dim
@@ -159,7 +162,7 @@ if __name__ == "__main__":
             indices = np.concatenate([top_facets1, bottom_facets1, top_facets2, bottom_facets2])
             values = np.hstack([top_values, bottom_values, surface_values, sbottom_values])
             sorted_facets = np.argsort(indices)
-            facet_marker = MeshTags(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
+            facet_marker = meshtags(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
         else:
             fname = "sphere"
             create_sphere_plane_mesh(filename=f"{fname}.msh")
@@ -228,14 +231,13 @@ if __name__ == "__main__":
             indices = np.concatenate([top_facets1, bottom_facets1, top_facets2, bottom_facets2])
             values = np.hstack([top_values, bottom_values, surface_values, sbottom_values])
             sorted_facets = np.argsort(indices)
-            facet_marker = MeshTags(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
+            facet_marker = meshtags(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
         elif box:
             fname = "box_2D"
+            create_box_mesh_2D(filename=f"{fname}.msh", quads=not simplex, res=args.res)
             if simplex:
-                create_box_mesh_2D(filename=f"{fname}.msh")
                 convert_mesh(fname, f"{fname}.xdmf", "triangle", prune_z=True)
             else:
-                create_box_mesh_2D(filename=f"{fname}.msh", quads=True)
                 convert_mesh(fname, f"{fname}.xdmf", "quad", prune_z=True)
             convert_mesh(f"{fname}", f"{fname}_facets", "line", prune_z=True)
 
@@ -302,7 +304,7 @@ if __name__ == "__main__":
             indices = np.concatenate([top_facets1, bottom_facets1, top_facets2, bottom_facets2])
             values = np.hstack([top_values, bottom_values, surface_values, sbottom_values])
             sorted_facets = np.argsort(indices)
-            facet_marker = MeshTags(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
+            facet_marker = meshtags(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
 
     # Solver options
     newton_options = {"relaxation_parameter": 1.0}
@@ -354,3 +356,8 @@ if __name__ == "__main__":
         xdmf.write_mesh(mesh)
         u.name = "u"
         xdmf.write_function(u)
+    list_timings(mesh.comm, [TimingType.wall])
+
+    import dolfinx.common
+    t = dolfinx.common.timing("Pack contact u")
+    print(t)

@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier:    MIT
 
-from typing import Tuple, Dict
+from typing import Dict, Tuple
 
 import basix
 import dolfinx.common as _common
@@ -24,7 +24,7 @@ __all__ = ["nitsche_rigid_surface_cuas"]
 kt = dolfinx_contact.cpp.Kernel
 
 
-def nitsche_rigid_surface_cuas(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTags, int, int, int, int],
+def nitsche_rigid_surface_cuas(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTagsMetaClass, int, int, int, int],
                                physical_parameters: dict = {}, nitsche_parameters: Dict[str, float] = {},
                                vertical_displacement: float = -0.1, nitsche_bc: bool = True, quadrature_degree: int = 5,
                                form_compiler_params: Dict = {}, jit_params: Dict = {}, petsc_options: Dict = {},
