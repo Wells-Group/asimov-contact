@@ -22,7 +22,7 @@ kt = dolfinx_contact.cpp.Kernel
 __all__ = ["nitsche_unbiased"]
 
 
-def nitsche_unbiased(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTags, int, int, int, int],
+def nitsche_unbiased(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTagsMetaClass, int, int, int, int],
                      physical_parameters: dict = {}, nitsche_parameters: Dict[str, float] = {},
                      displacement: Tuple[list[float], list[float]] = [[0, 0, 0], [0, 0, 0]],
                      nitsche_bc: bool = True, quadrature_degree: int = 5,
