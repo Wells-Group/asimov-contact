@@ -13,8 +13,8 @@ from dolfinx.fem.petsc import LinearProblem, NonlinearProblem
 from dolfinx.geometry import (BoundingBoxTree, compute_colliding_cells,
                               compute_collisions)
 from dolfinx.io import XDMFFile
-from dolfinx.mesh import (CellType, GhostMode, MeshTags, create_rectangle,
-                          locate_entities_boundary)
+from dolfinx.mesh import (CellType, GhostMode, create_rectangle,
+                          locate_entities_boundary, meshtags)
 from dolfinx.nls.petsc import NewtonSolver
 from mpi4py import MPI
 
@@ -50,7 +50,7 @@ def solve_euler_bernoulli(nx: int, ny: int, theta: float, gamma: float, linear_s
     values = np.hstack([left_values, top_values])
     # Sort values to work in parallel
     sorted = np.argsort(indices)
-    facet_marker = MeshTags(mesh, tdim - 1, indices[sorted], values[sorted])
+    facet_marker = meshtags(mesh, tdim - 1, indices[sorted], values[sorted])
 
     V = VectorFunctionSpace(mesh, ("CG", 1))
     h = 2 * ufl.Circumradius(mesh)

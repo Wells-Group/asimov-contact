@@ -53,7 +53,7 @@ def test_pack_u():
     facets = np.hstack([s0, s1])
     values = np.hstack([v0, v1])
     arg_sort = np.argsort(facets)
-    facet_marker = msh.MeshTags(mesh, 1, facets[arg_sort], values[arg_sort])
+    facet_marker = msh.meshtags(mesh, 1, facets[arg_sort], values[arg_sort])
 
     # Compute contact class
     quadrature_degree = 2

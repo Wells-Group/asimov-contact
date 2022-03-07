@@ -11,8 +11,8 @@ import ufl
 from dolfinx.common import timing
 from dolfinx.fem import Function, assemble_scalar, form
 from dolfinx.io import XDMFFile
-from dolfinx.mesh import (MeshTags, create_unit_cube, create_unit_square,
-                          locate_entities_boundary, refine)
+from dolfinx.mesh import (create_unit_cube, create_unit_square,
+                          locate_entities_boundary, meshtags, refine)
 from mpi4py import MPI
 
 from dolfinx_contact.meshing import (convert_mesh, create_disk_mesh,
@@ -132,7 +132,7 @@ if __name__ == "__main__":
         indices = np.concatenate([top_facets, bottom_facets])
         values = np.hstack([top_values, bottom_values])
         sorted_facets = np.argsort(indices)
-        facet_marker = MeshTags(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
+        facet_marker = meshtags(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
         mesh_data = (facet_marker, top_value, bottom_value)
 
         # Solve contact problem using Nitsche's method
