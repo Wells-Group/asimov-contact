@@ -9,7 +9,8 @@
 
 using contact_kernel_fn = std::function<void(
     std::vector<std::vector<PetscScalar>>&, const double*, const double*,
-    const double*, const int*, const std::uint8_t*, const std::size_t)>;
+    const double*, const int*, const std::uint8_t*, const std::size_t,
+    const std::int32_t*)>;
 namespace dolfinx_contact
 {
 

@@ -130,7 +130,8 @@ void dolfinx_contact::Contact::assemble_matrix(
         std::shared_ptr<const dolfinx::fem::DirichletBC<PetscScalar>>>& bcs,
     int origin_meshtag, const contact_kernel_fn& kernel,
     const xtl::span<const PetscScalar> coeffs, int cstride,
-    const xtl::span<const PetscScalar>& constants)
+    const xtl::span<const PetscScalar>& constants,
+    const xtl::span<const std::int32_t>& facet_indices, int cstride_f)
 {
   auto mesh = _marker->mesh();
   const int gdim = mesh->geometry().dim(); // geometrical dimension
@@ -186,7 +187,8 @@ void dolfinx_contact::Contact::assemble_matrix(
     }
 
     kernel(Aes, coeffs.data() + i * cstride, constants.data(),
-           coordinate_dofs.data(), &local_index, &perm, num_linked_cells);
+           coordinate_dofs.data(), &local_index, &perm, num_linked_cells,
+           facet_indices.data() + i * cstride_f);
 
     // FIXME: We would have to handle possible Dirichlet conditions here, if we
     // think that we can have a case with contact and Dirichlet
@@ -211,7 +213,8 @@ void dolfinx_contact::Contact::assemble_matrix(
 void dolfinx_contact::Contact::assemble_vector(
     xtl::span<PetscScalar> b, int origin_meshtag,
     const contact_kernel_fn& kernel, const xtl::span<const PetscScalar>& coeffs,
-    int cstride, const xtl::span<const PetscScalar>& constants)
+    int cstride, const xtl::span<const PetscScalar>& constants,
+    const xtl::span<const std::int32_t>& facet_indices, int cstride_f)
 {
   // Extract mesh
   auto mesh = _marker->mesh();
@@ -268,7 +271,8 @@ void dolfinx_contact::Contact::assemble_vector(
     for (std::size_t j = 0; j < num_linked_cells; j++)
       std::fill(bes[j + 1].begin(), bes[j + 1].end(), 0);
     kernel(bes, coeffs.data() + i * cstride, constants.data(),
-           coordinate_dofs.data(), &local_index, &perm, num_linked_cells);
+           coordinate_dofs.data(), &local_index, &perm, num_linked_cells,
+           facet_indices.data() + i * cstride_f);
     // NOTE: Normally dof transform needs to be applied to the elements in
     // bes at this stage This is not need for the function spaces
     // we currently consider
@@ -301,7 +305,6 @@ dolfinx_contact::Contact::pack_surface_derivatives(
   auto x_dofmap = mesh->geometry().dofmap();
   xtl::span<const double> mesh_geometry = mesh->geometry().x();
   auto element = _V->element();
-  const std::uint32_t bs = element->block_size();
   mesh->topology_mutable().create_entity_permutations();
 
   const std::vector<std::uint32_t> permutation_info
@@ -317,11 +320,10 @@ dolfinx_contact::Contact::pack_surface_derivatives(
       = *std::max_element(_max_links.begin(), _max_links.end());
   const std::size_t num_facets = puppet_facets.size();
   const std::size_t num_q_points = _qp_ref_facet[0].shape(0);
-  const std::int32_t ndofs = _V->dofmap()->cell_dofs(0).size();
   const std::int32_t num_derivatives = ((tdim + 1) * (tdim + 2)) / 2 - 1;
   std::vector<PetscScalar> c(
       num_facets * num_q_points * max_links * num_derivatives * gdim, 0.0);
-  const int cstride = num_q_points * max_links * ndofs * bs;
+  const int cstride = num_q_points * max_links * num_derivatives * gdim;
   xt::xtensor<double, 2> q_points
       = xt::zeros<double>({std::size_t(num_q_points), std::size_t(gdim)});
   xt::xtensor<double, 2> dphi;
@@ -390,15 +392,15 @@ dolfinx_contact::Contact::pack_surface_derivatives(
         for (std::size_t q = 0; q < qp.shape(0); ++q)
         {
           for (std::int32_t l = 0; l < tdim; l++)
-            c[i * cstride + j * num_derivatives * gdim * num_q_points
-              + k * num_derivatives * num_q_points
-              + indices[q] * num_derivatives + l]
+            c[i * cstride + j * tdim * gdim * num_q_points
+              + indices[q] * tdim * gdim + k * tdim + l]
                 = J(q, k, l);
-          for (std::int32_t l = tdim; l < num_derivatives; l++)
-            c[i * cstride + j * num_derivatives * gdim * num_q_points
-              + k * num_derivatives * num_q_points
-              + indices[q] * num_derivatives + l]
-                = H(q, k, l - tdim);
+          int offset = max_links * gdim * num_q_points * tdim;
+          int num_second_der = tdim * (tdim + 1) / 2;
+          for (std::int32_t l = 0; l < num_second_der; l++)
+            c[i * cstride + offset + j * num_second_der * gdim * num_q_points
+              + indices[q] * num_second_der * gdim + k * num_second_der + l]
+                = H(q, k, l);
         }
     }
   }
@@ -406,6 +408,35 @@ dolfinx_contact::Contact::pack_surface_derivatives(
   return {std::move(c), cstride};
 }
 
+//-----------------------------------------------------------------------------------------------
+std::pair<std::vector<std::int32_t>, int>
+dolfinx_contact::Contact::pack_facet_indices(int origin_meshtag)
+{
+
+  auto facet_map = _submeshes[_opposites[origin_meshtag]].facet_map();
+
+  // Select which side of the contact interface to loop from and get the
+  // correct map
+  auto map = _facet_maps[origin_meshtag];
+  const std::size_t num_facets = _cell_facet_pairs[origin_meshtag].size();
+  const std::size_t num_q_points = _qp_ref_facet[0].shape(0);
+
+  // Pack gap function for each quadrature point on each facet
+  std::vector<std::int32_t> c(num_facets * num_q_points, 0);
+
+  for (std::size_t i = 0; i < num_facets; ++i)
+  {
+    auto candidate_facets = map->links((int)i);
+    assert(candidate_facets.size() == num_q_points);
+
+    for (std::size_t j = 0; j < num_q_points; ++j)
+    {
+      std::int32_t local_facet_index = facet_map->links(candidate_facets[j])[1];
+      c[i * num_q_points + j] = local_facet_index;
+    }
+  }
+  return {std::move(c), (int)num_q_points};
+}
 //-----------------------------------------------------------------------------------------------
 void dolfinx_contact::Contact::update_submesh_geometry(
     dolfinx::fem::Function<PetscScalar>& u)

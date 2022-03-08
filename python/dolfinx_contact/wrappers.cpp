@@ -118,47 +118,81 @@ PYBIND11_MODULE(cpp, m)
              return contact_wrappers::KernelWrapper(self.generate_kernel(type));
            })
 
-      .def("assemble_matrix",
-           [](dolfinx_contact::Contact& self, Mat A,
-              const std::vector<std::shared_ptr<
-                  const dolfinx::fem::DirichletBC<PetscScalar>>>& bcs,
-              int origin_meshtag, contact_wrappers::KernelWrapper& kernel,
-              const py::array_t<PetscScalar, py::array::c_style>& coeffs,
-              const py::array_t<PetscScalar, py::array::c_style>& constants)
-           {
-             auto ker = kernel.get();
-             self.assemble_matrix(
-                 dolfinx::la::petsc::Matrix::set_block_fn(A, ADD_VALUES), bcs,
-                 origin_meshtag, ker,
-                 xtl::span<const PetscScalar>(coeffs.data(), coeffs.size()),
-                 coeffs.shape(1),
-                 xtl::span(constants.data(), constants.shape(0)));
-           })
-      .def("assemble_vector",
-           [](dolfinx_contact::Contact& self,
-              py::array_t<PetscScalar, py::array::c_style>& b,
-              int origin_meshtag, contact_wrappers::KernelWrapper& kernel,
-              const py::array_t<PetscScalar, py::array::c_style>& coeffs,
-              const py::array_t<PetscScalar, py::array::c_style>& constants)
-           {
-             auto ker = kernel.get();
-             self.assemble_vector(
-                 xtl::span(b.mutable_data(), b.shape(0)), origin_meshtag, ker,
-                 xtl::span<const PetscScalar>(coeffs.data(), coeffs.size()),
-                 coeffs.shape(1),
-                 xtl::span(constants.data(), constants.shape(0)));
-           })
-      .def("pack_test_functions",
-           [](dolfinx_contact::Contact& self, int origin_meshtag,
-              const py::array_t<PetscScalar, py::array::c_style>& gap)
-           {
-             auto [coeffs, cstride] = self.pack_test_functions(
-                 origin_meshtag,
-                 xtl::span<const PetscScalar>(gap.data(), gap.size()));
-             int shape0 = cstride == 0 ? 0 : coeffs.size() / cstride;
-             return dolfinx_wrappers::as_pyarray(std::move(coeffs),
-                                                 std::array{shape0, cstride});
-           })
+      .def(
+          "assemble_matrix",
+          [](dolfinx_contact::Contact& self, Mat A,
+             const std::vector<std::shared_ptr<
+                 const dolfinx::fem::DirichletBC<PetscScalar>>>& bcs,
+             int origin_meshtag, contact_wrappers::KernelWrapper& kernel,
+             const py::array_t<PetscScalar, py::array::c_style>& coeffs,
+             const py::array_t<PetscScalar, py::array::c_style>& constants,
+             std::optional<const py::array_t<std::int32_t, py::array::c_style>>
+                 facet_indices)
+          {
+            auto ker = kernel.get();
+            xtl::span<const std::int32_t> _facet_indices;
+            int cstride_f = 0;
+            if (facet_indices.has_value())
+            {
+              _facet_indices = xtl::span<const std::int32_t>(
+                  facet_indices.value().data(), facet_indices.value().size());
+              cstride_f = facet_indices.value().shape(1);
+            }
+            self.assemble_matrix(
+                dolfinx::la::petsc::Matrix::set_block_fn(A, ADD_VALUES), bcs,
+                origin_meshtag, ker,
+                xtl::span<const PetscScalar>(coeffs.data(), coeffs.size()),
+                coeffs.shape(1),
+                xtl::span(constants.data(), constants.shape(0)), _facet_indices,
+                cstride_f);
+          },
+          py::arg("matrix"), py::arg("bcs"), py::arg("origin_meshtag"),
+          py::arg("kernel"), py::arg("coefficients"), py::arg("constants"),
+          py::arg("facet_indices") = py::none())
+      .def(
+          "assemble_vector",
+          [](dolfinx_contact::Contact& self,
+             py::array_t<PetscScalar, py::array::c_style>& b,
+             int origin_meshtag, contact_wrappers::KernelWrapper& kernel,
+             const py::array_t<PetscScalar, py::array::c_style>& coeffs,
+             const py::array_t<PetscScalar, py::array::c_style>& constants,
+             std::optional<const py::array_t<std::int32_t, py::array::c_style>>
+                 facet_indices)
+          {
+            auto ker = kernel.get();
+            xtl::span<const std::int32_t> _facet_indices;
+            int cstride_f = 0;
+            if (facet_indices.has_value())
+            {
+              _facet_indices = xtl::span<const std::int32_t>(
+                  facet_indices.value().data(), facet_indices.value().size());
+              cstride_f = facet_indices.value().shape(1);
+            }
+            self.assemble_vector(
+                xtl::span(b.mutable_data(), b.shape(0)), origin_meshtag, ker,
+                xtl::span<const PetscScalar>(coeffs.data(), coeffs.size()),
+                coeffs.shape(1),
+                xtl::span(constants.data(), constants.shape(0)), _facet_indices,
+                cstride_f);
+          },
+          py::arg("vector"), py::arg("origin_meshtag"), py::arg("kernel"),
+          py::arg("coefficients"), py::arg("constants"),
+          py::arg("facet_indices") = py::none())
+      .def(
+          "pack_test_functions",
+          [](dolfinx_contact::Contact& self, int origin_meshtag,
+             const py::array_t<PetscScalar, py::array::c_style>& gap,
+             std::size_t num_derivatives)
+          {
+            auto [coeffs, cstride] = self.pack_test_functions(
+                origin_meshtag,
+                xtl::span<const PetscScalar>(gap.data(), gap.size()),
+                num_derivatives);
+            int shape0 = cstride == 0 ? 0 : coeffs.size() / cstride;
+            return dolfinx_wrappers::as_pyarray(std::move(coeffs),
+                                                std::array{shape0, cstride});
+          },
+          py::arg("origin_meshtag"), py::arg("gap"), py::arg("nd") = 0)
       .def("pack_ny",
            [](dolfinx_contact::Contact& self, int origin_meshtag,
               const py::array_t<PetscScalar, py::array::c_style>& gap)
@@ -189,6 +223,14 @@ PYBIND11_MODULE(cpp, m)
              auto [coeffs, cstride] = self.pack_surface_derivatives(
                  origin_meshtag,
                  xtl::span<const PetscScalar>(gap.data(), gap.size()));
+             int shape0 = cstride == 0 ? 0 : coeffs.size() / cstride;
+             return dolfinx_wrappers::as_pyarray(std::move(coeffs),
+                                                 std::array{shape0, cstride});
+           })
+      .def("pack_facet_indices",
+           [](dolfinx_contact::Contact& self, int origin_meshtag)
+           {
+             auto [coeffs, cstride] = self.pack_facet_indices(origin_meshtag);
              int shape0 = cstride == 0 ? 0 : coeffs.size() / cstride;
              return dolfinx_wrappers::as_pyarray(std::move(coeffs),
                                                  std::array{shape0, cstride});

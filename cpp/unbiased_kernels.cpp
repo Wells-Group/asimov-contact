@@ -87,9 +87,11 @@ contact_kernel_fn dolfinx_contact::generate_kernel(
          1,
          num_q_points * gdim,
          num_q_points * gdim,
-         num_q_points * ndofs_cell * bs * max_links,
+         (tdim + 1) * num_q_points * ndofs_cell * bs * max_links,
          ndofs_cell * bs,
-         num_q_points * bs};
+         num_q_points * bs,
+         num_q_points * tdim * gdim,
+         num_q_points * (tdim + 1) * tdim * gdim / 2};
   // As reference facet and reference cell are affine, we do not need to
   // compute this per quadrature point
   xt::xtensor<double, 3> ref_jacobians
@@ -105,7 +107,7 @@ contact_kernel_fn dolfinx_contact::generate_kernel(
             const double* w, const double* coordinate_dofs,
             const int* entity_local_index,
             [[maybe_unused]] const std::uint8_t* quadrature_permutation,
-            const std::size_t num_links)
+            const std::size_t num_links, const std::int32_t* facet_indices)
   {
     // assumption that the vector function space has block size tdim
     assert(bs == gdim);
@@ -253,7 +255,7 @@ contact_kernel_fn dolfinx_contact::generate_kernel(
             const double* w, const double* coordinate_dofs,
             const int* entity_local_index,
             [[maybe_unused]] const std::uint8_t* quadrature_permutation,
-            const std::size_t num_links)
+            const std::size_t num_links, const std::int32_t* facet_indices)
   {
     // assumption that the vector function space has block size tdim
     assert(bs == gdim);

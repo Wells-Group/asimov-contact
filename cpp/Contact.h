@@ -105,7 +105,8 @@ public:
           std::shared_ptr<const dolfinx::fem::DirichletBC<PetscScalar>>>& bcs,
       int origin_meshtag, const contact_kernel_fn& kernel,
       const xtl::span<const PetscScalar> coeffs, int cstride,
-      const xtl::span<const PetscScalar>& constants);
+      const xtl::span<const PetscScalar>& constants,
+      const xtl::span<const std::int32_t>& facet_indices, int cstride_f);
 
   /// Assemble vector over exterior facet (for contact facets)
   /// @param[in] b The vector
@@ -118,7 +119,9 @@ public:
   void assemble_vector(xtl::span<PetscScalar> b, int origin_meshtag,
                        const contact_kernel_fn& kernel,
                        const xtl::span<const PetscScalar>& coeffs, int cstride,
-                       const xtl::span<const PetscScalar>& constants);
+                       const xtl::span<const PetscScalar>& constants,
+                       const xtl::span<const std::int32_t>& facet_indices,
+                       int cstride_f);
 
   contact_kernel_fn generate_kernel(dolfinx_contact::Kernel type)
   {
@@ -220,7 +223,7 @@ public:
               const double* w, const double* coordinate_dofs,
               const int* entity_local_index,
               [[maybe_unused]] const std::uint8_t* quadrature_permutation,
-              const std::size_t num_links)
+              const std::size_t num_links, const std::int32_t* facet_indices)
     {
       // assumption that the vector function space has block size tdim
       assert(bs == gdim);
@@ -375,7 +378,7 @@ public:
               const double* w, const double* coordinate_dofs,
               const int* entity_local_index,
               [[maybe_unused]] const std::uint8_t* quadrature_permutation,
-              const std::size_t num_links)
+              const std::size_t num_links, const std::int32_t* facet_indices)
     {
       // assumption that the vector function space has block size tdim
       assert(bs == gdim);
@@ -835,7 +838,8 @@ public:
   /// @param[out] c - test functions packed on facets.
   std::pair<std::vector<PetscScalar>, int>
   pack_test_functions(int origin_meshtag,
-                      const xtl::span<const PetscScalar>& gap)
+                      const xtl::span<const PetscScalar>& gap,
+                      std::size_t num_derivatives)
   {
     // Mesh info
     auto mesh = _submeshes[_opposites[origin_meshtag]].mesh(); // mesh
@@ -862,9 +866,11 @@ public:
     const std::size_t num_facets = puppet_facets.size();
     const std::size_t num_q_points = _qp_ref_facet[0].shape(0);
     const std::int32_t ndofs = _V->dofmap()->cell_dofs(0).size();
-    std::vector<PetscScalar> c(
-        num_facets * num_q_points * max_links * ndofs * bs, 0.0);
-    const int cstride = num_q_points * max_links * ndofs * bs;
+    std::vector<PetscScalar> c((num_derivatives * tdim + 1) * num_facets
+                                   * num_q_points * max_links * ndofs * bs,
+                               0.0);
+    const int cstride
+        = (num_derivatives * tdim + 1) * num_q_points * max_links * ndofs * bs;
     xt::xtensor<double, 2> q_points
         = xt::zeros<double>({std::size_t(num_q_points), std::size_t(gdim)});
     xt::xtensor<double, 2> dphi;
@@ -915,26 +921,30 @@ public:
         const std::size_t num_dofs_g = x_dofs.size();
         xt::xtensor<double, 2> coordinate_dofs
             = xt::zeros<double>({num_dofs_g, std::size_t(gdim)});
-        for (std::size_t i = 0; i < num_dofs_g; ++i)
+        for (std::size_t k = 0; k < num_dofs_g; ++k)
         {
 
-          std::copy_n(std::next(mesh_geometry.begin(), 3 * x_dofs[i]), gdim,
-                      std::next(coordinate_dofs.begin(), i * gdim));
+          std::copy_n(std::next(mesh_geometry.begin(), 3 * x_dofs[k]), gdim,
+                      std::next(coordinate_dofs.begin(), k * gdim));
         }
         // Extract all physical points Pi(x) on a facet of linked_cell
         auto qp = xt::view(q_points, xt::keep(indices), xt::all());
         // Compute values of basis functions for all y = Pi(x) in qp
         auto test_fn = dolfinx_contact::get_basis_functions(
             J, K, detJ, qp, coordinate_dofs, linked_cell,
-            permutation_info[linked_cell], element, cmap);
-
+            permutation_info[linked_cell], element, cmap, num_derivatives);
         // Insert basis function values into c
         for (std::int32_t k = 0; k < ndofs; k++)
-          for (std::size_t q = 0; q < test_fn.shape(0); ++q)
+          for (std::size_t q = 0; q < test_fn.shape(1); ++q)
             for (std::size_t l = 0; l < bs; l++)
-              c[i * cstride + j * ndofs * bs * num_q_points
-                + k * bs * num_q_points + indices[q] * bs + l]
-                  = test_fn(q, k * bs + l, l);
+              for (std::size_t d = 0; d < num_derivatives * tdim + 1; ++d)
+
+              {
+                c[i * cstride + d * ndofs * bs * num_q_points * max_links
+                  + j * ndofs * bs * num_q_points + k * bs * num_q_points
+                  + indices[q] * bs + l]
+                    = test_fn(d, q, k * bs + l, l);
+              }
       }
     }
 
@@ -1153,6 +1163,11 @@ public:
   std::pair<std::vector<PetscScalar>, int>
   pack_surface_derivatives(int origin_meshtag,
                            const xtl::span<const PetscScalar>& gap);
+
+  /// Pack local facet indices of closest facet for each quadrature point
+  /// @param[in] orgin_meshtag - surface on which to integrate
+  /// @param[out] c - local facet indices of closest facet
+    std::pair<std::vector<std::int32_t>, int> pack_facet_indices(int origin_meshtag);
 
   /// This function updates the submesh geometry for all submeshes using
   /// a function given on the parent mesh

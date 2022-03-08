@@ -202,7 +202,7 @@ if __name__ == "__main__":
                 return x[1] > 0.55
 
             def bottom1(x):
-                return np.logical_and(x[1] < 0.25, x[1] > 0.15)
+                return np.logical_and(x[1] < 0.5, x[1] > 0.15)
 
             def top2(x):
                 return np.logical_and(x[1] > 0.05, x[1] < 0.15)

@@ -84,14 +84,15 @@ void pull_back_2(xt::xtensor<double, 3>& J, xt::xtensor<double, 3>& K,
 /// @param[in] perm: permutation infor for cell
 /// @param[in] element: the corresponding finite element
 /// @param[in] cmap: the coordinate element
-xt::xtensor<double, 3>
+xt::xtensor<double, 4>
 get_basis_functions(xt::xtensor<double, 3>& J, xt::xtensor<double, 3>& K,
                     xt::xtensor<double, 1>& detJ,
                     const xt::xtensor<double, 2>& x,
                     const xt::xtensor<double, 2>& coordinate_dofs,
                     const std::int32_t index, const std::int32_t perm,
                     std::shared_ptr<const dolfinx::fem::FiniteElement> element,
-                    const dolfinx::fem::CoordinateElement& cmap);
+                    const dolfinx::fem::CoordinateElement& cmap,
+                    const std::size_t num_derivatives);
 
 /// @param[in] cells: the cells to be sorted
 /// @param[in, out] perm: the permutation for the sorted cells
