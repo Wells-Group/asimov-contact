@@ -7,7 +7,8 @@ import numpy as np
 from mpi4py import MPI
 
 __all__ = ["create_circle_plane_mesh", "create_circle_circle_mesh", "create_box_mesh_2D",
-           "create_box_mesh_3D", "create_sphere_plane_mesh", "create_sphere_sphere_mesh"]
+           "create_box_mesh_3D", "create_sphere_plane_mesh", "create_sphere_sphere_mesh",
+           "create_cylinder_cylinder_mesh"]
 
 
 def create_circle_plane_mesh(filename: str, quads: bool = False):
@@ -202,7 +203,7 @@ def create_box_mesh_2D(filename: str, quads: bool = False, res=0.1):
     gmsh.finalize()
 
 
-def create_box_mesh_3D(filename: str):
+def create_box_mesh_3D(filename: str, simplex: bool = True):
     """
     Create two boxes lying directly over eachother with a gap in between"""
     L = 0.5
@@ -211,40 +212,51 @@ def create_box_mesh_3D(filename: str):
 
     disp = -0.6
     gmsh.initialize()
+    model = gmsh.model
     if MPI.COMM_WORLD.rank == 0:
         # Create box
-        box = gmsh.model.occ.add_box(0, 0, 0, L, H, W)
-        box2 = gmsh.model.occ.add_box(0, 0, disp, L, H, W)
-        gmsh.model.occ.synchronize()
-        res = 0.1
-        # Set mesh sizes on the points from the surface we are extruding
-        # top_nodes = gmsh.model.getBoundary([(2, box)], recursive=True)
-        # gmsh.model.occ.mesh.setSize(top_nodes, res)
-        # bottom_nodes = gmsh.model.getBoundary([(2, box2)], recursive=True)
-        # gmsh.model.occ.mesh.setSize(bottom_nodes, 2 * res)
-        gmsh.model.mesh.field.add("Box", 1)
-        gmsh.model.mesh.field.setNumber(1, "VIn", res / 5.)
-        gmsh.model.mesh.field.setNumber(1, "VOut", res)
-        gmsh.model.mesh.field.setNumber(1, "XMin", 0)
-        gmsh.model.mesh.field.setNumber(1, "XMax", L)
-        gmsh.model.mesh.field.setNumber(1, "YMin", 0)
-        gmsh.model.mesh.field.setNumber(1, "YMax", H)
-        gmsh.model.mesh.field.setNumber(1, "ZMin", 0)
-        gmsh.model.mesh.field.setNumber(1, "ZMax", W)
+        if simplex:
+            box = model.occ.add_box(0, 0, 0, L, H, W)
+            box2 = model.occ.add_box(0, 0, disp, L, H, W)
+            model.occ.synchronize()
+        else:
+            square1 = model.occ.add_rectangle(0, 0, 0, L, H)
+            square2 = model.occ.add_rectangle(0, 0, disp, L, H)
+            extruded1 = model.occ.extrude(
+                [(2, square1)], 0, 0, H, numElements=[5], recombine=True)
+            extruded2 = model.occ.extrude(
+                [(2, square2)], 0, 0, H, numElements=[2], recombine=True)
+            model.occ.synchronize()
+            volumes = model.getEntities(3)
 
-        gmsh.model.mesh.field.setAsBackgroundMesh(1)
+        res = 0.1
+        model.mesh.field.add("Box", 1)
+        model.mesh.field.setNumber(1, "VIn", res / 5.)
+        model.mesh.field.setNumber(1, "VOut", res)
+        model.mesh.field.setNumber(1, "XMin", 0)
+        model.mesh.field.setNumber(1, "XMax", L)
+        model.mesh.field.setNumber(1, "YMin", 0)
+        model.mesh.field.setNumber(1, "YMax", H)
+        model.mesh.field.setNumber(1, "ZMin", 0)
+        model.mesh.field.setNumber(1, "ZMax", W)
+
+        model.mesh.field.setAsBackgroundMesh(1)
 
         # Synchronize and create physical tags
-        gmsh.model.occ.synchronize()
-        gmsh.model.addPhysicalGroup(3, [box])
-        bndry = gmsh.model.getBoundary([(2, box)], oriented=False)
-        [gmsh.model.addPhysicalGroup(b[0], [b[1]]) for b in bndry]
+        model.occ.synchronize()
+        model.addPhysicalGroup(volumes[0][0], [volumes[0][1]])
+        bndry = model.getBoundary([(2, volumes[0][1])], oriented=False)
+        [model.addPhysicalGroup(b[0], [b[1]]) for b in bndry]
 
-        gmsh.model.addPhysicalGroup(3, [box2])
-        bndry2 = gmsh.model.getBoundary([(2, box2)], oriented=False)
-        [gmsh.model.addPhysicalGroup(b[0], [b[1]]) for b in bndry2]
+        model.addPhysicalGroup(3, [volumes[1][1]])
+        bndry2 = model.getBoundary([(2, volumes[1][1])], oriented=False)
+        [model.addPhysicalGroup(b[0], [b[1]]) for b in bndry2]
 
-        gmsh.model.mesh.generate(3)
+        if not simplex:
+            gmsh.option.setNumber("Mesh.RecombinationAlgorithm", 2)
+            gmsh.option.setNumber("Mesh.RecombineAll", 2)
+            gmsh.option.setNumber("Mesh.SubdivisionAlgorithm", 1)
+        model.mesh.generate(3)
         # gmsh.option.setNumber("Mesh.SaveAll", 1)
         gmsh.write(filename)
     MPI.COMM_WORLD.Barrier()
@@ -367,3 +379,78 @@ def create_sphere_sphere_mesh(filename: str):
         gmsh.write(filename)
     MPI.COMM_WORLD.Barrier()
     gmsh.finalize()
+
+
+def create_cylinder_cylinder_mesh(filename: str, order: int = 1, res=0.25, simplex: bool = False):
+    if MPI.COMM_WORLD.rank == 0:
+        gmsh.initialize()
+        model = gmsh.model()
+
+        # Generate a mesh with 2nd-order hexahedral cells using gmsh
+        model.add("Hexahedral mesh")
+        model.setCurrent("Hexahedral mesh")
+        # Recombine tetrahedrons to hexahedrons
+        if not simplex:
+            gmsh.option.setNumber("Mesh.RecombinationAlgorithm", 2)
+            gmsh.option.setNumber("Mesh.RecombineAll", 2)
+        # gmsh.option.setNumber("Mesh.CharacteristicLengthFactor", 0.1)
+
+        circle = model.occ.addDisk(0, 0, 0, 2, 2)
+        circle2 = model.occ.addDisk(3.5, 0, 0, 1, 1)
+        fuse = gmsh.model.occ.fuse([(2, circle)], [(2, circle2)])
+        extruded_geometry = model.occ.extrude(
+            fuse[0], 0, 0, 0.5, numElements=[5], recombine=not simplex)
+        model.occ.synchronize()
+
+        gmsh.model.mesh.field.add("Box", 1)
+        gmsh.model.mesh.field.setNumber(1, "VIn", res)
+        gmsh.model.mesh.field.setNumber(1, "VOut", 1.5 * res)
+        gmsh.model.mesh.field.setNumber(1, "XMin", -2)
+        gmsh.model.mesh.field.setNumber(1, "XMax", 2)
+        gmsh.model.mesh.field.setNumber(1, "YMin", -2)
+        gmsh.model.mesh.field.setNumber(1, "YMax", 2)
+        gmsh.model.mesh.field.setNumber(1, "ZMin", -2)
+        gmsh.model.mesh.field.setNumber(1, "ZMax", 2)
+
+        gmsh.model.mesh.field.setAsBackgroundMesh(1)
+        model.occ.synchronize()
+        model.mesh.generate(3)
+        model.mesh.setOrder(order)
+
+        volume_entities = []
+        for entity in extruded_geometry:
+            if entity[0] == 3:
+                volume_entities.append(entity[1])
+        model.addPhysicalGroup(3, volume_entities, tag=1)
+        model.setPhysicalName(3, 1, "Mesh volume")
+
+        # Sort mesh nodes according to their index in gmsh
+        x = extract_gmsh_geometry(model, model.getCurrent())
+        ct = "tetrahedron" if simplex else "hexahedron"
+        # Broadcast cell type data and geometric dimension
+        gmsh_cell_id = MPI.COMM_WORLD.bcast(
+            model.mesh.getElementType(ct, order), root=0)
+
+        # Get mesh data for dim (0, tdim) for all physical entities
+        topologies = extract_gmsh_topology_and_markers(model, model.getCurrent())
+        cells = topologies[gmsh_cell_id]["topology"]
+
+        num_nodes = MPI.COMM_WORLD.bcast(cells.shape[1], root=0)
+        gmsh.finalize()
+    else:
+        gmsh_cell_id = MPI.COMM_WORLD.bcast(None, root=0)
+        num_nodes = MPI.COMM_WORLD.bcast(None, root=0)
+        cells, x = np.empty([0, num_nodes]), np.empty([0, 3])
+
+    # Permute the mesh topology from GMSH ordering to DOLFINx ordering
+    domain = ufl_mesh_from_gmsh(gmsh_cell_id, 3)
+    cell_type = CellType.tetrahedron if simplex else CellType.hexahedron
+    gmsh_hex = cell_perm_gmsh(cell_type, num_nodes)
+    cells = cells[:, gmsh_hex]
+
+    msh = create_mesh(MPI.COMM_WORLD, cells, x, domain)
+    msh.name = f"cylinder_cylinder"
+
+    # Permute also entities which are tagged
+    with XDMFFile(MPI.COMM_WORLD, f"{filename}.xdmf", "w") as file:
+        file.write_mesh(msh)

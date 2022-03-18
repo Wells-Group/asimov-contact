@@ -25,9 +25,8 @@ __all__ = ["nitsche_unbiased"]
 def nitsche_unbiased(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTagsMetaClass, int, int, int, int],
                      physical_parameters: dict = {}, nitsche_parameters: Dict[str, float] = {},
                      displacement: Tuple[list[float], list[float]] = [[0, 0, 0], [0, 0, 0]],
-                     nitsche_bc: bool = True, quadrature_degree: int = 5,
-                     form_compiler_params: Dict = None, jit_params: Dict = None, petsc_options: Dict = None,
-                     newton_options: Dict = {}, initGuess=None):
+                     quadrature_degree: int = 5, form_compiler_params: Dict = None, jit_params: Dict = None,
+                     petsc_options: Dict = None, newton_options: Dict = {}, initGuess=None):
     """
     Use custom kernel to compute the contact problem with two elastic bodies coming into contact.
 
@@ -50,8 +49,6 @@ def nitsche_unbiased(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTagsMetaClass,
         skew-symmetric, penalty like or symmetric enforcement of Nitsche conditions
     displacement
         The displacement enforced on Dirichlet boundary
-    nitsche_bc
-        Use Nitche's method to enforce Dirichlet boundary conditions
     quadrature_degree
         The quadrature degree to use for the custom contact kernels
     form_compiler_params
@@ -116,28 +113,25 @@ def nitsche_unbiased(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTagsMetaClass,
 
     # Nitsche for Dirichlet, another theta-scheme.
     # https://doi.org/10.1016/j.cma.2018.05.024
-    if nitsche_bc:
-        # Nitsche bc for body 0
-        disp_0 = displacement[0][:gdim]
-        u_D_0 = ufl.as_vector(disp_0)
-        F += - ufl.inner(sigma(u) * n, v) * ds(dirichlet_value_0)\
-             - theta * ufl.inner(sigma(v) * n, u - u_D_0) * \
-            ds(dirichlet_value_0) + gamma / h * ufl.inner(u - u_D_0, v) * ds(dirichlet_value_0)
+    # Nitsche bc for body 0
+    disp_0 = displacement[0][:gdim]
+    u_D_0 = ufl.as_vector(disp_0)
+    F += - ufl.inner(sigma(u) * n, v) * ds(dirichlet_value_0)\
+        - theta * ufl.inner(sigma(v) * n, u - u_D_0) * \
+        ds(dirichlet_value_0) + gamma / h * ufl.inner(u - u_D_0, v) * ds(dirichlet_value_0)
 
-        J += - ufl.inner(sigma(du) * n, v) * ds(dirichlet_value_0)\
-            - theta * ufl.inner(sigma(v) * n, du) * \
-            ds(dirichlet_value_0) + gamma / h * ufl.inner(du, v) * ds(dirichlet_value_0)
-        # Nitsche bc for body 1
-        disp_1 = displacement[1][:gdim]
-        u_D_1 = ufl.as_vector(disp_1)
-        F += - ufl.inner(sigma(u) * n, v) * ds(dirichlet_value_1)\
-             - theta * ufl.inner(sigma(v) * n, u - u_D_1) * \
-            ds(dirichlet_value_1) + gamma / h * ufl.inner(u - u_D_1, v) * ds(dirichlet_value_1)
-        J += - ufl.inner(sigma(du) * n, v) * ds(dirichlet_value_1)\
-            - theta * ufl.inner(sigma(v) * n, du) * \
-            ds(dirichlet_value_1) + gamma / h * ufl.inner(du, v) * ds(dirichlet_value_1)
-    else:
-        raise RuntimeError("Strong Dirichlet bc's are not implemented in custom assemblers yet.")
+    J += - ufl.inner(sigma(du) * n, v) * ds(dirichlet_value_0)\
+        - theta * ufl.inner(sigma(v) * n, du) * \
+        ds(dirichlet_value_0) + gamma / h * ufl.inner(du, v) * ds(dirichlet_value_0)
+    # Nitsche bc for body 1
+    disp_1 = displacement[1][:gdim]
+    u_D_1 = ufl.as_vector(disp_1)
+    F += - ufl.inner(sigma(u) * n, v) * ds(dirichlet_value_1)\
+        - theta * ufl.inner(sigma(v) * n, u - u_D_1) * \
+        ds(dirichlet_value_1) + gamma / h * ufl.inner(u - u_D_1, v) * ds(dirichlet_value_1)
+    J += - ufl.inner(sigma(du) * n, v) * ds(dirichlet_value_1)\
+        - theta * ufl.inner(sigma(v) * n, du) * \
+        ds(dirichlet_value_1) + gamma / h * ufl.inner(du, v) * ds(dirichlet_value_1)
 
     # Custom assembly
     # create contact class

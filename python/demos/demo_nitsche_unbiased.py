@@ -17,7 +17,7 @@ from dolfinx_contact.meshing import (convert_mesh, create_box_mesh_2D,
                                      create_box_mesh_3D,
                                      create_circle_circle_mesh,
                                      create_circle_plane_mesh,
-                                     create_hexahedral_mesh,
+                                     create_cylinder_cylinder_mesh,
                                      create_sphere_plane_mesh)
 from dolfinx_contact.unbiased.nitsche_unbiased import nitsche_unbiased
 
@@ -29,30 +29,20 @@ if __name__ == "__main__":
                         help="Theta parameter for Nitsche, 1 symmetric, -1 skew symmetric, 0 Penalty-like")
     parser.add_argument("--gamma", default=10, type=np.float64, dest="gamma",
                         help="Coercivity/Stabilization parameter for Nitsche condition")
-    _solve = parser.add_mutually_exclusive_group(required=False)
-    _solve.add_argument('--linear', dest='linear_solver', action='store_true',
-                        help="Use linear solver", default=False)
+    parser.add_argument("--quadrature", default=3, type=int, dest="q_degree",
+                        help="Quadrature degree used for contact integrals")
+    parser.add_argument("--problem", default=1, type=int, dest="problem",
+                        help="Which problem to solve: 1. Flat surfaces, 2. One curved surface, 3. Two curved surfaces",
+                        choices=[1, 2, 3])
     _3D = parser.add_mutually_exclusive_group(required=False)
     _3D.add_argument('--3D', dest='threed', action='store_true',
                      help="Use 3D mesh", default=False)
     _simplex = parser.add_mutually_exclusive_group(required=False)
     _simplex.add_argument('--simplex', dest='simplex', action='store_true',
-                          help="Use triangle/test mesh", default=False)
-    _curved = parser.add_mutually_exclusive_group(required=False)
-    _curved.add_argument('--curved', dest='curved', action='store_true',
-                         help="Use curved rigid surface", default=False)
-    _hex = parser.add_mutually_exclusive_group(required=False)
-    _hex.add_argument('--hex', dest='hex', action='store_true',
-                      help="Use hexahedral mesh", default=False)
-    _box = parser.add_mutually_exclusive_group(required=False)
-    _box.add_argument('--box', dest='box', action='store_true',
-                      help="Use curved rigid surface", default=False)
+                          help="Use triangle/tet mesh", default=False)
     _strain = parser.add_mutually_exclusive_group(required=False)
     _strain.add_argument('--strain', dest='plane_strain', action='store_true',
                          help="Use plane strain formulation", default=False)
-    _dirichlet = parser.add_mutually_exclusive_group(required=False)
-    _dirichlet.add_argument('--dirichlet', dest='dirichlet', action='store_true',
-                            help="Use strong Dirichlet formulation", default=False)
     parser.add_argument("--E", default=1e3, type=np.float64, dest="E",
                         help="Youngs modulus of material")
     parser.add_argument("--nu", default=0.1, type=np.float64, dest="nu", help="Poisson's ratio")
@@ -70,14 +60,11 @@ if __name__ == "__main__":
 
     # Current formulation uses unilateral contact
     nitsche_parameters = {"gamma": args.gamma, "theta": args.theta}
-    nitsche_bc = not args.dirichlet
     physical_parameters = {"E": args.E, "nu": args.nu, "strain": args.plane_strain}
     top_value = 1
     threed = args.threed
     bottom_value = 2
-    curved = args.curved
-    box = args.box
-    hex = args.hex
+    problem = args.problem
     nload_steps = args.nload_steps
     simplex = args.simplex
 
@@ -85,10 +72,11 @@ if __name__ == "__main__":
     # and the bottom (contact condition)
     if threed:
         displacement = ([0, 0, -args.disp], [0, 0, 0])
-        if box:
+        if problem == 1:
             fname = "box_3D"
-            create_box_mesh_3D(filename=f"{fname}.msh")
-            convert_mesh(fname, fname, "tetra")
+            create_box_mesh_3D(f"{fname}.msh", simplex)
+            ct = "tetra" if simplex else "hexahedron"
+            convert_mesh(fname, fname, ct)
 
             with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
                 mesh = xdmf.read_mesh(name="Grid")
@@ -120,12 +108,29 @@ if __name__ == "__main__":
             sorted_facets = np.argsort(indices)
             facet_marker = meshtags(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
 
-        elif hex:
+        elif problem == 2:
+            fname = "sphere"
+            create_sphere_plane_mesh(filename=f"{fname}.msh")
+            convert_mesh(fname, fname, "tetra")
+            convert_mesh(f"{fname}", f"{fname}_facets", "triangle")
+            with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
+                mesh = xdmf.read_mesh(name="Grid")
+            tdim = mesh.topology.dim
+            mesh.topology.create_connectivity(tdim - 1, 0)
+            mesh.topology.create_connectivity(tdim - 1, tdim)
+            with XDMFFile(MPI.COMM_WORLD, f"{fname}_facets.xdmf", "r") as xdmf:
+                facet_marker = xdmf.read_meshtags(mesh, name="Grid")
+            top_value = 2
+            bottom_value = 1
+            surface_value = 8
+            surface_bottom = 7
+
+        elif problem == 3:
             fname = "hex"
             displacement = ([-1, 0, 0], [0, 0, 0])
-            create_hexahedral_mesh(fname, res=args.res)
+            create_cylinder_cylinder_mesh(fname, res=args.res, simplex=simplex)
             with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
-                mesh = xdmf.read_mesh(name="hex_d2")
+                mesh = xdmf.read_mesh(name="cylinder_cylinder")
             tdim = mesh.topology.dim
             mesh.topology.create_connectivity(tdim - 1, 0)
             mesh.topology.create_connectivity(tdim - 1, tdim)
@@ -164,26 +169,54 @@ if __name__ == "__main__":
             values = np.hstack([top_values, bottom_values, surface_values, sbottom_values])
             sorted_facets = np.argsort(indices)
             facet_marker = meshtags(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
-        else:
-            fname = "sphere"
-            create_sphere_plane_mesh(filename=f"{fname}.msh")
-            convert_mesh(fname, fname, "tetra")
-            convert_mesh(f"{fname}", f"{fname}_facets", "triangle")
+
+    else:
+        displacement = ([0, -args.disp], [0, 0])
+        if problem == 1:
+            fname = "box_2D"
+            create_box_mesh_2D(filename=f"{fname}.msh", quads=not simplex, res=args.res)
+            if simplex:
+                convert_mesh(fname, f"{fname}.xdmf", "triangle", prune_z=True)
+            else:
+                convert_mesh(fname, f"{fname}.xdmf", "quad", prune_z=True)
+            convert_mesh(f"{fname}", f"{fname}_facets", "line", prune_z=True)
+
             with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
                 mesh = xdmf.read_mesh(name="Grid")
             tdim = mesh.topology.dim
+            gdim = mesh.geometry.dim
+            mesh.topology.create_connectivity(tdim - 1, 0)
+            mesh.topology.create_connectivity(tdim - 1, tdim)
+            with XDMFFile(MPI.COMM_WORLD, f"{fname}_facets.xdmf", "r") as xdmf:
+                facet_marker = xdmf.read_meshtags(mesh, name="Grid")
+            top_value = 5
+            bottom_value = 3
+            surface_value = 9
+            surface_bottom = 7
+
+        elif problem == 2:
+            fname = "twomeshes"
+            if simplex:
+                create_circle_plane_mesh(filename=f"{fname}.msh")
+                convert_mesh(fname, f"{fname}.xdmf", "triangle", prune_z=True)
+            else:
+                create_circle_plane_mesh(filename=f"{fname}.msh", quads=True)
+                convert_mesh(fname, f"{fname}.xdmf", "quad", prune_z=True)
+            convert_mesh(f"{fname}", f"{fname}_facets", "line", prune_z=True)
+
+            with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
+                mesh = xdmf.read_mesh(name="Grid")
+            tdim = mesh.topology.dim
+            gdim = mesh.geometry.dim
             mesh.topology.create_connectivity(tdim - 1, 0)
             mesh.topology.create_connectivity(tdim - 1, tdim)
             with XDMFFile(MPI.COMM_WORLD, f"{fname}_facets.xdmf", "r") as xdmf:
                 facet_marker = xdmf.read_meshtags(mesh, name="Grid")
             top_value = 2
-            bottom_value = 1
-            surface_value = 8
+            bottom_value = 4
+            surface_value = 9
             surface_bottom = 7
-
-    else:
-        displacement = ([0, -args.disp], [0, 0])
-        if curved:
+        elif problem == 3:
             fname = "two_disks"
             if simplex:
                 create_circle_circle_mesh(filename=f"{fname}.msh")
@@ -233,50 +266,6 @@ if __name__ == "__main__":
             values = np.hstack([top_values, bottom_values, surface_values, sbottom_values])
             sorted_facets = np.argsort(indices)
             facet_marker = meshtags(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
-        elif box:
-            fname = "box_2D"
-            create_box_mesh_2D(filename=f"{fname}.msh", quads=not simplex, res=args.res)
-            if simplex:
-                convert_mesh(fname, f"{fname}.xdmf", "triangle", prune_z=True)
-            else:
-                convert_mesh(fname, f"{fname}.xdmf", "quad", prune_z=True)
-            convert_mesh(f"{fname}", f"{fname}_facets", "line", prune_z=True)
-
-            with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
-                mesh = xdmf.read_mesh(name="Grid")
-            tdim = mesh.topology.dim
-            gdim = mesh.geometry.dim
-            mesh.topology.create_connectivity(tdim - 1, 0)
-            mesh.topology.create_connectivity(tdim - 1, tdim)
-            with XDMFFile(MPI.COMM_WORLD, f"{fname}_facets.xdmf", "r") as xdmf:
-                facet_marker = xdmf.read_meshtags(mesh, name="Grid")
-            top_value = 5
-            bottom_value = 3
-            surface_value = 9
-            surface_bottom = 7
-
-        else:
-            fname = "twomeshes"
-            if simplex:
-                create_circle_plane_mesh(filename=f"{fname}.msh")
-                convert_mesh(fname, f"{fname}.xdmf", "triangle", prune_z=True)
-            else:
-                create_circle_plane_mesh(filename=f"{fname}.msh", quads=True)
-                convert_mesh(fname, f"{fname}.xdmf", "quad", prune_z=True)
-            convert_mesh(f"{fname}", f"{fname}_facets", "line", prune_z=True)
-
-            with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
-                mesh = xdmf.read_mesh(name="Grid")
-            tdim = mesh.topology.dim
-            gdim = mesh.geometry.dim
-            mesh.topology.create_connectivity(tdim - 1, 0)
-            mesh.topology.create_connectivity(tdim - 1, tdim)
-            with XDMFFile(MPI.COMM_WORLD, f"{fname}_facets.xdmf", "r") as xdmf:
-                facet_marker = xdmf.read_meshtags(mesh, name="Grid")
-            top_value = 2
-            bottom_value = 4
-            surface_value = 9
-            surface_bottom = 7
 
             def top(x):
                 return x[1] > 0.5
@@ -339,7 +328,7 @@ if __name__ == "__main__":
         # Solve contact problem using Nitsche's method
         u1 = nitsche_unbiased(mesh=mesh, mesh_data=mesh_data, physical_parameters=physical_parameters,
                               nitsche_parameters=nitsche_parameters, displacement=displacement,
-                              nitsche_bc=True, quadrature_degree=3, petsc_options=petsc_options,
+                              quadrature_degree=args.q_degree, petsc_options=petsc_options,
                               newton_options=newton_options)
 
         with XDMFFile(mesh.comm, f"results/u_unbiased_{j}.xdmf", "w") as xdmf:
