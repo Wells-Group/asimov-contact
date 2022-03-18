@@ -124,8 +124,11 @@ class NewtonSolver():
         x.ghostUpdate(addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD)
 
     def _check_convergence(self, r: PETSc.Vec):
-        residual = r.norm(PETSc.NormType.NORM2)
-        relative_residual = residual / self.initial_residual
+        residual = r.norm(PETSc.NormType.NORM_2)
+        try:
+            relative_residual = residual / self.initial_residual
+        except ZeroDivisionError:
+            relative_residual = 0
         if self.comm.rank == 0:
             print(f"Newton Iteration {self.iteration}: r (abs) {residual} r (rel) {relative_residual}",
                   flush=True, end=" ")
@@ -154,22 +157,21 @@ class NewtonSolver():
         except AttributeError:
             raise RuntimeError("Function for computing residual vector has not been provided")
         newton_converged = False
-        if self._convergence_criterion == ConvergenceCriterion.residual:
+        if self.convergence_criterion == ConvergenceCriterion.residual:
             residual, newton_converged = self._check_convergence(self.b)
             self.residual = residual
-        elif (self._convergence_criterion == ConvergenceCriterion.incremental):
+        elif (self.convergence_criterion == ConvergenceCriterion.incremental):
             # We need to do at least one Newton step with the ||dx||-stopping criterion
             newton_converged = False
         else:
             raise ValueError("Unknown convergence criterion")
 
         try:
-            self.krylov_solver.set_operators(self._J, self._P)
+            self.krylov_solver.setOperators(self._A, self._P)
         except AttributeError:
-            self.krylov_solver.set_operators(self._J, self._P)
+            self.krylov_solver.setOperators(self._A, self._A)
 
         try:
             self._dx
         except AttributeError:
             self._dx = self._A.createVecs()
-        embed()
