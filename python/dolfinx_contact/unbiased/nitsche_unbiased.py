@@ -26,7 +26,7 @@ def nitsche_unbiased(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTagsMetaClass,
                      physical_parameters: dict = {}, nitsche_parameters: Dict[str, float] = {},
                      displacement: Tuple[list[float], list[float]] = [[0, 0, 0], [0, 0, 0]],
                      nitsche_bc: bool = True, quadrature_degree: int = 5,
-                     form_compiler_params: Dict = {}, jit_params: Dict = {}, petsc_options: Dict = {},
+                     form_compiler_params: Dict = None, jit_params: Dict = None, petsc_options: Dict = None,
                      newton_options: Dict = {}, initGuess=None):
     """
     Use custom kernel to compute the contact problem with two elastic bodies coming into contact.
@@ -73,6 +73,10 @@ def nitsche_unbiased(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTagsMetaClass,
         ("atol", float), ("rtol", float), ("convergence_criterion", "str"),
         ("max_it", int), ("error_on_nonconvergence", bool), ("relaxation_parameter", float)
     """
+    form_compiler_params = {} if form_compiler_params is None else form_compiler_params
+    jit_params = {} if jit_params is None else jit_params
+    petsc_options = {} if petsc_options is None else petsc_options
+    newton_options = {} if newton_options is None else newton_options
 
     # Compute lame parameters
     plane_strain = physical_parameters.get("strain", False)
@@ -136,7 +140,6 @@ def nitsche_unbiased(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTagsMetaClass,
         raise RuntimeError("Strong Dirichlet bc's are not implemented in custom assemblers yet.")
 
     # Custom assembly
-    _log.set_log_level(_log.LogLevel.OFF)
     # create contact class
     with _common.Timer("~Contact: Init"):
         contact = dolfinx_contact.cpp.Contact(facet_marker, [surface_value_0, surface_value_1], V._cpp_object)
@@ -189,7 +192,7 @@ def nitsche_unbiased(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTagsMetaClass,
     coeff_1 = np.hstack([material_1, h_1, gap_1, n_1, test_fn_1])
 
     # Assemble jacobian
-    J_cuas = _fem.form(J)
+    J_cuas = _fem.form(J, form_compiler_params=form_compiler_params, jit_params=jit_params)
     with _common.Timer("~Contact: Generate kernel"):
         kernel_jac = contact.generate_kernel(kt.Jac)
 
@@ -215,7 +218,7 @@ def nitsche_unbiased(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTagsMetaClass,
             _fem.petsc.assemble_matrix(A, J_cuas)
 
     # assemble rhs
-    F_cuas = _fem.form(F)
+    F_cuas = _fem.form(F, form_compiler_params=form_compiler_params, jit_params=jit_params)
     kernel_rhs = contact.generate_kernel(kt.Rhs)
 
     @_common.timed("~Contact: Create vector")
@@ -266,13 +269,26 @@ def nitsche_unbiased(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTagsMetaClass,
     opts = _PETSc.Options()
     option_prefix = ksp.getOptionsPrefix()
 
+    # Global options
+    keys = ["matptap_via"]
+    g_opts = {}
     # Set PETSc options
-    opts = _PETSc.Options()
     opts.prefixPush(option_prefix)
     for k, v in petsc_options.items():
-        opts[k] = v
+        if k in keys:
+            g_opts[k] = v
+        else:
+            opts[k] = v
     opts.prefixPop()
+    for k, v in g_opts.items():
+        opts[k] = v
+
     ksp.setFromOptions()
+    solver.A.setOptionsPrefix(option_prefix)
+    solver.A.setFromOptions()
+    solver.b.setOptionsPrefix(option_prefix)
+    solver.b.setFromOptions()
+    opts.view()
 
     dofs_global = V.dofmap.index_map_bs * V.dofmap.index_map.size_global
     _log.set_log_level(_log.LogLevel.INFO)
@@ -285,5 +301,6 @@ def nitsche_unbiased(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTagsMetaClass,
     if solver.error_on_nonconvergence:
         assert(converged)
     print(f"{dofs_global}, Number of interations: {n:d}")
+    _log.set_log_level(_log.LogLevel.OFF)
 
     return u

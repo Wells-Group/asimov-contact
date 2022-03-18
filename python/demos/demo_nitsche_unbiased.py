@@ -5,6 +5,7 @@
 import argparse
 
 import numpy as np
+from dolfinx import log
 from dolfinx.common import TimingType, list_timings
 from dolfinx.fem import Function, VectorFunctionSpace
 from dolfinx.io import XDMFFile
@@ -328,6 +329,8 @@ if __name__ == "__main__":
     u = Function(V)
     u.x.array[:] = np.zeros(u.x.array[:].shape)
     geometry = mesh.geometry.x[:].copy()
+
+    log.set_log_level(log.LogLevel.OFF)
 
     # Load geometry over multiple steps
     for j in range(nload_steps):
