@@ -4,6 +4,9 @@
 
 import gmsh
 import numpy as np
+from dolfinx.io import (XDMFFile, cell_perm_gmsh, extract_gmsh_geometry,
+                        extract_gmsh_topology_and_markers, ufl_mesh_from_gmsh)
+from dolfinx.mesh import CellType, create_mesh
 from mpi4py import MPI
 
 __all__ = ["create_circle_plane_mesh", "create_circle_circle_mesh", "create_box_mesh_2D",
