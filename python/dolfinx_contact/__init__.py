@@ -8,7 +8,8 @@
 
 
 from dolfinx_contact.cpp import Kernel, pack_circumradius, update_geometry
+from .newton_solver import NewtonSolver
 from .helpers import epsilon, lame_parameters, sigma_func
 
-__all__ = ["lame_parameters", "epsilon", "sigma_func", "Kernel",
+__all__ = ["NewtonSolver", "lame_parameters", "epsilon", "sigma_func", "Kernel",
            "pack_circumradius", "update_geometry"]
