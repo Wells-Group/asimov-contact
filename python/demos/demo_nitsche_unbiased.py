@@ -48,8 +48,6 @@ if __name__ == "__main__":
     parser.add_argument("--nu", default=0.1, type=np.float64, dest="nu", help="Poisson's ratio")
     parser.add_argument("--disp", default=0.2, type=np.float64, dest="disp",
                         help="Displacement BC in negative y direction")
-    parser.add_argument("--refinements", default=2, type=np.int32,
-                        dest="refs", help="Number of mesh refinements")
     parser.add_argument("--load_steps", default=1, type=np.int32, dest="nload_steps",
                         help="Number of steps for gradual loading")
     parser.add_argument("--res", default=0.1, type=np.float64, dest="res",
@@ -298,7 +296,7 @@ if __name__ == "__main__":
 
     # Solver options
     newton_options = {"relaxation_parameter": 1.0, "atol": 1e-8, "rtol": 1e-8, "convergence_criterion": "incremental"}
-    #petsc_options = {"ksp_type": "preonly", "pc_type": "lu"}
+    # petsc_options = {"ksp_type": "preonly", "pc_type": "lu"}
     petsc_options = {"ksp_type": "cgs", "pc_type": "gamg", "pc_gamg_type": "agg", "pc_gamg_coarse_eq_limit": 1000,
                      "pc_gamg_sym_graph": True, "mg_levels_ksp_type": "chebyshev", "mg_levels_pc_type": "sor",
                      "mg_levels_esteig_ksp_type": "cg", "matptap_via": "scalable", "pc_gamg_square_graph": 3,

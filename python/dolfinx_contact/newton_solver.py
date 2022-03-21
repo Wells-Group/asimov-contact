@@ -135,9 +135,9 @@ class NewtonSolver():
         except ZeroDivisionError:
             relative_residual = numpy.inf
         if self.comm.rank == 0:
-            print(f"Newton Iteration {self.iteration}: r (abs) {residual} r (rel) {relative_residual}",
+            print(f"Newton Iteration {self.iteration}: r (abs) {residual} (atol={self.atol})",
                   flush=True, end=" ")
-            print(f"(rtol={self.rtol}), atol={self.atol}", flush=True)
+            print(f"r (rel) {relative_residual} (rtol={self.rtol})", flush=True)
         return residual, relative_residual < self.rtol or residual < self.atol
 
     def _update_solution(self, dx: PETSc.Vec, x: PETSc.Vec):
