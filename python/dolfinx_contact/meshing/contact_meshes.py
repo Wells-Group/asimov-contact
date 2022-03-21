@@ -399,21 +399,23 @@ def create_cylinder_cylinder_mesh(filename: str, order: int = 1, res=0.25, simpl
         center1 = (0, 0, 0.5)
         r1 = 0.8
         l1 = 1
+        Nl1 = int(1 / res)
         circle = model.occ.addDisk(*center1, r1, r1)
         model.occ.rotate([(2, circle)], 0, 0, 0, 1, 0, 0, np.pi / 2)
         model.occ.extrude(
-            [(2, circle)], 0, l1, 0, numElements=[10], recombine=not simplex)
+            [(2, circle)], 0, l1, 0, numElements=[Nl1], recombine=not simplex)
 
         center2 = (2, 0, -0.5)
         r2 = 0.5
         l2 = 1
+        Nl2 = int(1 / res)
         circle2 = model.occ.addDisk(*center2, r2, r2)
         model.occ.extrude(
-            [(2, circle2)], 0, 0, l2, numElements=[10], recombine=not simplex)
+            [(2, circle2)], 0, 0, l2, numElements=[Nl2], recombine=not simplex)
 
         gmsh.model.mesh.field.add("Box", 1)
         gmsh.model.mesh.field.setNumber(1, "VIn", res)
-        gmsh.model.mesh.field.setNumber(1, "VOut", 1.5 * res)
+        gmsh.model.mesh.field.setNumber(1, "VOut", res)
         gmsh.model.mesh.field.setNumber(1, "XMin", center1[0] - l1)
         gmsh.model.mesh.field.setNumber(1, "XMax", center1[0] + l1)
         gmsh.model.mesh.field.setNumber(1, "YMin", center1[1] - 2 * r1)
