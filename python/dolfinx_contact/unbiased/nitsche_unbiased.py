@@ -102,7 +102,7 @@ def nitsche_unbiased(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTagsMetaClass,
     if nitsche_parameters.get("gamma") is None:
         raise RuntimeError("Need to supply Coercivity/Stabilization parameter for Nitsche condition")
     else:
-        gamma = E * nitsche_parameters.get("gamma", 10)
+        gamma = E * nitsche_parameters.get("gamma")
 
     # Unpack mesh data
     (facet_marker, dirichlet_value_0, surface_value_0, surface_value_1, dirichlet_value_1) = mesh_data
