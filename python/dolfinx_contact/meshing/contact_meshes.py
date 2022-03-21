@@ -14,7 +14,7 @@ __all__ = ["create_circle_plane_mesh", "create_circle_circle_mesh", "create_box_
            "create_cylinder_cylinder_mesh"]
 
 
-def create_circle_plane_mesh(filename: str, quads: bool = False):
+def create_circle_plane_mesh(filename: str, quads: bool = False, res=0.1):
     """
     Create a circular mesh, with center at (0.5,0.5,0) with radius 3 and a box [0,1]x[0,0.1]
     """
@@ -61,8 +61,8 @@ def create_circle_plane_mesh(filename: str, quads: bool = False):
 
         gmsh.model.mesh.field.add("Threshold", 2)
         gmsh.model.mesh.field.setNumber(2, "IField", 1)
-        gmsh.model.mesh.field.setNumber(2, "LcMin", 0.01)
-        gmsh.model.mesh.field.setNumber(2, "LcMax", 0.01)
+        gmsh.model.mesh.field.setNumber(2, "LcMin", res)
+        gmsh.model.mesh.field.setNumber(2, "LcMax", 2 * res)
         gmsh.model.mesh.field.setNumber(2, "DistMin", 0.3)
         gmsh.model.mesh.field.setNumber(2, "DistMax", 0.6)
         if quads:
@@ -78,7 +78,7 @@ def create_circle_plane_mesh(filename: str, quads: bool = False):
     gmsh.finalize()
 
 
-def create_circle_circle_mesh(filename: str, quads: bool = False):
+def create_circle_circle_mesh(filename: str, quads: bool = False, res: np.float64 = 0.1):
     """
     Create two circular meshes, with radii 0.3 and 0.6 with centers (0.5,0.5) and (0.5, -0.5)
     """
@@ -127,8 +127,8 @@ def create_circle_circle_mesh(filename: str, quads: bool = False):
 
         gmsh.model.mesh.field.add("Threshold", 2)
         gmsh.model.mesh.field.setNumber(2, "IField", 1)
-        gmsh.model.mesh.field.setNumber(2, "LcMin", 0.005)
-        gmsh.model.mesh.field.setNumber(2, "LcMax", 0.015)
+        gmsh.model.mesh.field.setNumber(2, "LcMin", res)
+        gmsh.model.mesh.field.setNumber(2, "LcMax", 3 * res)
         gmsh.model.mesh.field.setNumber(2, "DistMin", 0.3)
         gmsh.model.mesh.field.setNumber(2, "DistMax", 0.6)
         if quads:

@@ -233,7 +233,7 @@ def nitsche_unbiased(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTagsMetaClass,
         with _common.Timer("~~Contact: Standard contributions (in assemble vector"):
             _fem.petsc.assemble_vector(b, F_cuas)
 
-    @ _common.timed("~Contact: Assemble matrix")
+    @_common.timed("~Contact: Assemble matrix")
     def compute_jacobian_matrix(x, A):
         u.vector[:] = x.array
         A.zeroEntries()

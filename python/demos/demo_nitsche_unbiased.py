@@ -212,10 +212,10 @@ if __name__ == "__main__":
         elif problem == 3:
             fname = "two_disks"
             if simplex:
-                create_circle_circle_mesh(filename=f"{fname}.msh")
+                create_circle_circle_mesh(filename=f"{fname}.msh", res=args.res)
                 convert_mesh(fname, f"{fname}.xdmf", "triangle", prune_z=True)
             else:
-                create_circle_circle_mesh(filename=f"{fname}.msh", quads=True)
+                create_circle_circle_mesh(filename=f"{fname}.msh", quads=True, res=args.res)
                 convert_mesh(fname, f"{fname}.xdmf", "quad", prune_z=True)
             convert_mesh(f"{fname}", f"{fname}_facets", "line", prune_z=True)
 
@@ -225,69 +225,37 @@ if __name__ == "__main__":
             mesh.topology.create_connectivity(tdim - 1, 0)
             mesh.topology.create_connectivity(tdim - 1, tdim)
 
-            def top1(x):
-                return x[1] > 0.55
-
-            def bottom1(x):
-                return np.logical_and(x[1] < 0.25, x[1] > 0.15)
-
-            def top2(x):
-                return np.logical_and(x[1] > 0.05, x[1] < 0.15)
-
-            def bottom2(x):
-                return x[1] < -0.35
-
-            dirichet_bdy_1 = 1
-            contact_bdy_1 = 2
-            contact_bdy_2 = 3
-            dirichlet_bdy_2 = 4
-            # Create meshtag for top and bottom markers
-            top_facets1 = locate_entities_boundary(mesh, tdim - 1, top1)
-            bottom_facets1 = locate_entities_boundary(
-                mesh, tdim - 1, bottom1)
-            top_facets2 = locate_entities_boundary(mesh, tdim - 1, top2)
-            bottom_facets2 = locate_entities_boundary(
-                mesh, tdim - 1, bottom2)
-            top_values = np.full(len(top_facets1), dirichet_bdy_1, dtype=np.int32)
-            bottom_values = np.full(
-                len(bottom_facets1), contact_bdy_1, dtype=np.int32)
-
-            surface_values = np.full(len(top_facets2), contact_bdy_2, dtype=np.int32)
-            sbottom_values = np.full(
-                len(bottom_facets2), dirichlet_bdy_2, dtype=np.int32)
-            indices = np.concatenate([top_facets1, bottom_facets1, top_facets2, bottom_facets2])
-            values = np.hstack([top_values, bottom_values, surface_values, sbottom_values])
-            sorted_facets = np.argsort(indices)
-            facet_marker = meshtags(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
-
-            def top(x):
+            def top_dir(x):
                 return x[1] > 0.5
 
-            def bottom(x):
-                return x[1] < np.logical_and(x[1] < 0.5, x[1] > 0.11)
+            def top_contact(x):
+                return np.logical_and(x[1] < 0.49, x[1] > 0.11)
+
+            def bottom_dir(x):
+                return x[1] < -0.55
+
+            def bottom_contact(x):
+                return np.logical_and(x[1] > -0.45, x[1] < 0.1)
 
             dirichet_bdy_1 = 1
             contact_bdy_1 = 2
             contact_bdy_2 = 3
             dirichlet_bdy_2 = 4
             # Create meshtag for top and bottom markers
-            top_facets1 = locate_entities_boundary(mesh, tdim - 1, top)
-            bottom_facets1 = locate_entities_boundary(
-                mesh, tdim - 1, bottom)
-            top_facets2 = locate_entities_boundary(mesh, tdim - 1, lambda x: np.isclose(x[1], 0.1))
-            bottom_facets2 = locate_entities_boundary(
-                mesh, tdim - 1, lambda x: np.isclose(x[1], 0.0))
-            top_values = np.full(len(top_facets1), dirichet_bdy_1, dtype=np.int32)
-            bottom_values = np.full(
-                len(bottom_facets1), contact_bdy_1, dtype=np.int32)
-
+            top_facets1 = locate_entities_boundary(mesh, tdim - 1, top_dir)
+            bottom_facets1 = locate_entities_boundary(mesh, tdim - 1, top_contact)
+            top_facets2 = locate_entities_boundary(mesh, tdim - 1, bottom_contact)
+            bottom_facets2 = locate_entities_boundary(mesh, tdim - 1, bottom_dir)
+            dir_val1 = np.full(len(top_facets1), dirichet_bdy_1, dtype=np.int32)
+            c_val1 = np.full(len(bottom_facets1), contact_bdy_1, dtype=np.int32)
             surface_values = np.full(len(top_facets2), contact_bdy_2, dtype=np.int32)
-            sbottom_values = np.full(
-                len(bottom_facets2), dirichlet_bdy_2, dtype=np.int32)
+            sbottom_values = np.full(len(bottom_facets2), dirichlet_bdy_2, dtype=np.int32)
             indices = np.concatenate([top_facets1, bottom_facets1, top_facets2, bottom_facets2])
-            values = np.hstack([top_values, bottom_values, surface_values, sbottom_values])
+            values = np.hstack([dir_val1, c_val1, surface_values, sbottom_values])
             sorted_facets = np.argsort(indices)
+
             facet_marker = meshtags(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
+
     with XDMFFile(mesh.comm, "test.xdmf", "w") as xdmf:
         xdmf.write_mesh(mesh)
         xdmf.write_meshtags(facet_marker)
