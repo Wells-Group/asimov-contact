@@ -316,14 +316,12 @@ dolfinx_contact::Contact::pack_surface_derivatives(
   auto qp_phys = _qp_phys[origin_meshtag];
   auto puppet_facets = _cell_facet_pairs[origin_meshtag];
   auto facet_map = _submeshes[_opposites[origin_meshtag]].facet_map();
-  const std::size_t max_links
-      = *std::max_element(_max_links.begin(), _max_links.end());
   const std::size_t num_facets = puppet_facets.size();
   const std::size_t num_q_points = _qp_ref_facet[0].shape(0);
   const std::int32_t num_derivatives = ((tdim + 1) * (tdim + 2)) / 2 - 1;
-  std::vector<PetscScalar> c(
-      num_facets * num_q_points * max_links * num_derivatives * gdim, 0.0);
-  const int cstride = num_q_points * max_links * num_derivatives * gdim;
+  std::vector<PetscScalar> c(num_facets * num_q_points * num_derivatives * gdim,
+                             0.0);
+  const int cstride = num_q_points * num_derivatives * gdim;
   xt::xtensor<double, 2> q_points
       = xt::zeros<double>({std::size_t(num_q_points), std::size_t(gdim)});
   xt::xtensor<double, 2> dphi;
@@ -392,14 +390,13 @@ dolfinx_contact::Contact::pack_surface_derivatives(
         for (std::size_t q = 0; q < qp.shape(0); ++q)
         {
           for (std::int32_t l = 0; l < tdim; l++)
-            c[i * cstride + j * tdim * gdim * num_q_points
-              + indices[q] * tdim * gdim + k * tdim + l]
+            c[i * cstride + indices[q] * tdim * gdim + k * tdim + l]
                 = J(q, k, l);
-          int offset = max_links * gdim * num_q_points * tdim;
+          int offset = gdim * num_q_points * tdim;
           int num_second_der = tdim * (tdim + 1) / 2;
           for (std::int32_t l = 0; l < num_second_der; l++)
-            c[i * cstride + offset + j * num_second_der * gdim * num_q_points
-              + indices[q] * num_second_der * gdim + k * num_second_der + l]
+            c[i * cstride + offset + indices[q] * num_second_der * gdim
+              + k * num_second_der + l]
                 = H(q, k, l);
         }
     }

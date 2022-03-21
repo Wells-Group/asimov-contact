@@ -343,4 +343,4 @@ double dolfinx_contact::dR_plus(double x) { return double(x > 0); }
 //-------------------------------------------------------------------------------------
 double dolfinx_contact::R_minus(double x) { return 0.5 * (x - std::abs(x)); }
 //-------------------------------------------------------------------------------------
-double dolfinx_contact::dR_minus(double x) { return double(x < 0); }
+double dolfinx_contact::dR_minus(double x) { return -double(x < 0); }

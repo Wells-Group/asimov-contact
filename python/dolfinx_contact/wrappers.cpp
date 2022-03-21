@@ -236,7 +236,9 @@ PYBIND11_MODULE(cpp, m)
                                                  std::array{shape0, cstride});
            })
       .def("update_submesh_geometry",
-           &dolfinx_contact::Contact::update_submesh_geometry);
+           &dolfinx_contact::Contact::update_submesh_geometry)
+      .def("submesh", [](dolfinx_contact::Contact& self, int origin_meshtag)
+           { return self.submesh(origin_meshtag).mesh(); });
 
   m.def(
       "generate_contact_kernel",

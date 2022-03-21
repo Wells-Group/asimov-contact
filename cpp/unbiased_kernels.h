@@ -6,6 +6,7 @@
 
 #pragma once
 #include "utils.h"
+#include <dolfinx/common/math.h>
 
 using contact_kernel_fn = std::function<void(
     std::vector<std::vector<PetscScalar>>&, const double*, const double*,

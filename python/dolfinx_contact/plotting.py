@@ -6,16 +6,10 @@ from matplotlib import pyplot as plt
 
 
 # Visualise the gap. For debugging. Works in 2D only
-def plot_gap(mesh, contact, tag, gap):
+def plot_gap(mesh, contact, tag, gap, facets, facets_opp):
     gdim = mesh.geometry.dim
     fdim = mesh.topology.dim - 1
     mesh_geometry = mesh.geometry.x
-    if tag == 0:
-        facets = contact.facets(0)
-        facets_opp = contact.facets(1)
-    else:
-        facets = contact.facets(1)
-        facets_opp = contact.facets(0)
 
     # Draw facets on opposite surface
     plt.figure()

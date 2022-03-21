@@ -23,6 +23,7 @@
 #include <dolfinx_cuas/QuadratureRule.hpp>
 #include <dolfinx_cuas/utils.hpp>
 #include <xtensor/xindex_view.hpp>
+#include <xtensor/xio.hpp>
 #include <xtl/xspan.hpp>
 
 using mat_set_fn = const std::function<int(
@@ -1167,7 +1168,8 @@ public:
   /// Pack local facet indices of closest facet for each quadrature point
   /// @param[in] orgin_meshtag - surface on which to integrate
   /// @param[out] c - local facet indices of closest facet
-    std::pair<std::vector<std::int32_t>, int> pack_facet_indices(int origin_meshtag);
+  std::pair<std::vector<std::int32_t>, int>
+  pack_facet_indices(int origin_meshtag);
 
   /// This function updates the submesh geometry for all submeshes using
   /// a function given on the parent mesh

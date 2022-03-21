@@ -4,6 +4,7 @@
 //
 // SPDX-License-Identifier:    MIT
 #include "unbiased_kernels.h"
+#include <xtensor/xio.hpp>
 
 contact_kernel_fn dolfinx_contact::generate_kernel(
     dolfinx_contact::Kernel type,
@@ -319,12 +320,32 @@ contact_kernel_fn dolfinx_contact::generate_kernel(
     const xt::xtensor<double, 2>& phi_f = phi[facet_index];
     const std::vector<double>& weights = qw_ref_facet[facet_index];
     xt::xarray<double> n_surf = xt::zeros<double>({gdim});
+    xt::xtensor<double, 2> J_link
+        = xt::zeros<double>({gdim, (std::size_t)tdim});
+    xt::xtensor<double, 2> K_link
+        = xt::zeros<double>({(std::size_t)tdim, gdim});
+    xt::xtensor<double, 2> J_tot_link
+        = xt::zeros<double>({J_link.shape(0), J_link.shape(1) - 1});
+    xt::xtensor<double, 2> M = xt::zeros<double>({tdim - 1, tdim - 1});
+    xt::xtensor<double, 2> M_inv = xt::zeros<double>({tdim - 1, tdim - 1});
+    xt::xarray<double> dv_tan(tdim - 1);
+    xt::xarray<double> du_tan(tdim - 1);
+    xt::xarray<double> v_tan(tdim - 1);
+    xt::xarray<double> u_tan(tdim - 1);
+    xt::xarray<double> v_tan_opp(tdim - 1);
+    xt::xarray<double> u_tan_opp(tdim - 1);
+    xt::xarray<double> grad_u(gdim);
+    xt::xarray<double> grad_v(gdim);
     for (std::size_t q = 0; q < weights.size(); q++)
     {
       double n_dot = 0;
       double gap = 0;
       const std::size_t gap_offset = 3;
       const std::size_t normal_offset = gap_offset + cstrides[3];
+      xt::xtensor<double, 2> J_f_link
+          = xt::view(ref_jacobians, facet_indices[q], xt::all(), xt::all());
+      std::size_t offset_J = 3 + cstrides[3] + cstrides[4] + cstrides[5]
+                             + cstrides[6] + cstrides[7];
       for (std::size_t i = 0; i < gdim; i++)
       {
         // For closest point projection the gap function is given by
@@ -333,7 +354,21 @@ contact_kernel_fn dolfinx_contact::generate_kernel(
         n_surf(i) = -c[normal_offset + q * gdim + i];
         n_dot += n_phys(i) * n_surf(i);
         gap += c[gap_offset + q * gdim + i] * n_surf(i);
+        for (std::size_t j = 0; j < (std::size_t)tdim; j++)
+          J_link(i, j) = c[offset_J + q * tdim * gdim + i * tdim + j];
       }
+      dolfinx::fem::CoordinateElement::compute_jacobian_inverse(J_link, K_link);
+      // Compute metric tensor
+      M.fill(0);
+      dolfinx::math::dot(J_link, J_f_link, J_tot_link);
+      std::cout << "tangents " << J_tot_link << "\n";
+      for (std::size_t i = 0; i < (std::size_t)tdim - 1; ++i)
+        for (std::size_t j = 0; j < (std::size_t)tdim - 1; ++j)
+          for (std::size_t k = 0; k < gdim; ++k)
+            M(i, j) += J_tot_link(k, i) * J_tot_link(k, j);
+      // inverse of metric tensor
+      M_inv.fill(0);
+      dolfinx::math::inv(M, M_inv);
 
       xt::xtensor<double, 2> tr = xt::zeros<double>({ndofs_cell, gdim});
       xt::xtensor<double, 2> epsn = xt::zeros<double>({ndofs_cell, gdim});
@@ -370,8 +405,8 @@ contact_kernel_fn dolfinx_contact::generate_kernel(
       }
 
       double sign_u = lmbda * tr_u * n_dot + mu * epsn_u;
-      double Pn_u = dolfinx_contact::dR_minus(gap + gamma * sign_u);
-
+      double dPn_u = dolfinx_contact::dR_minus(gap + gamma * sign_u);
+      double Pn_u = dolfinx_contact::R_minus(gap + gamma * sign_u);
       // Fill contributions of facet with itself
       const double w0 = weights[q] * detJ;
       for (std::size_t j = 0; j < ndofs_cell; j++)
@@ -380,7 +415,9 @@ contact_kernel_fn dolfinx_contact::generate_kernel(
         {
           double sign_du = (lmbda * tr(j, l) * n_dot + mu * epsn(j, l));
           double Pn_du
-              = (gamma * sign_du - phi_f(q, j) * n_surf(l)) * Pn_u * w0;
+              = (gamma * sign_du - phi_f(q, j) * n_surf(l)) * dPn_u * w0;
+          for (std::size_t alpha = 0; alpha < (std::size_t)tdim - 1; ++alpha)
+            u_tan(alpha) = J_tot_link(l, alpha) * phi_f(q, j);
 
           sign_du *= w0;
           for (std::size_t i = 0; i < ndofs_cell; i++)
@@ -388,30 +425,91 @@ contact_kernel_fn dolfinx_contact::generate_kernel(
             for (std::size_t b = 0; b < bs; b++)
             {
               double v_dot_nsurf = n_surf(b) * phi_f(q, i);
+
               double sign_v = (lmbda * tr(i, b) * n_dot + mu * epsn(i, b));
               double Pn_v = theta * sign_v - gamma_inv * v_dot_nsurf;
+              for (std::size_t alpha = 0; alpha < (std::size_t)tdim - 1;
+                   ++alpha)
+                v_tan(alpha) = J_tot_link(b, alpha) * phi_f(q, i);
               A[0][(b + i * bs) * ndofs_cell * bs + l + j * bs]
-                  += 0.5 * Pn_du * Pn_v;
+                  -= 0.5 * Pn_du * Pn_v;
 
               // entries corresponding to u and v on the other surface
               for (std::size_t k = 0; k < num_links; k++)
               {
-                std::size_t index = 3 + cstrides[3] + cstrides[4]
-                                    + k * num_q_points * ndofs_cell * bs
-                                    + j * num_q_points * bs + q * bs + l;
-                double du_n_opp = c[index] * n_surf(l);
+                std::size_t index_u = 3 + cstrides[3] + cstrides[4]
+                                      + k * num_q_points * ndofs_cell * bs
+                                      + j * num_q_points * bs + q * bs + l;
+                std::size_t index_v = 3 + cstrides[3] + cstrides[4]
+                                      + k * num_q_points * ndofs_cell * bs
+                                      + i * num_q_points * bs + q * bs + b;
+                double du_n_opp = c[index_u] * n_surf(l);
+                double v_n_opp = c[index_v] * n_surf(b);
+                du_tan.fill(0);
+                dv_tan.fill(0);
+                grad_u.fill(0);
+                grad_v.fill(0);
+                std::size_t offset_grad
+                    = 3 + cstrides[3] + cstrides[4]
+                      + ndofs_cell * num_q_points * max_links * bs;
+                for (std::size_t r = 0; r < gdim; ++r)
+                  for (std::size_t s = 0; s < (std::size_t)tdim; ++s)
+                  {
+                    std::size_t index_u_grad
+                        = offset_grad
+                          + s * ndofs_cell * num_q_points * max_links * bs
+                          + k * ndofs_cell * num_q_points * bs
+                          + j * num_q_points * bs + q * bs + l;
+                    std::size_t index_v_grad
+                        = offset_grad
+                          + s * ndofs_cell * num_q_points * max_links * bs
+                          + k * ndofs_cell * num_q_points * bs
+                          + i * num_q_points * bs + q * bs + b;
+                    grad_u(r) += K_link(s, r) * c[index_u_grad];
+                    grad_v(r) += K_link(s, r) * c[index_v_grad];
+                  }
+                std::cout << "gradients" << grad_u << " " << grad_v << "\n";
+                for (std::size_t alpha = 0; alpha < (std::size_t)tdim - 1;
+                     ++alpha)
+                {
+                  for (std::size_t r = 0; r < gdim; ++r)
+                  {
+                    du_tan(alpha)
+                        += grad_u(r) * J_tot_link(r, alpha) * n_surf(l);
+                    dv_tan(alpha)
+                        += grad_v(r) * J_tot_link(r, alpha) * n_surf(b);
+                  }
+                  u_tan_opp(alpha) = J_tot_link(l, alpha) * c[index_u];
+                  v_tan_opp(alpha) = J_tot_link(b, alpha) * c[index_v];
+                }
 
-                du_n_opp *= w0 * Pn_u;
-                index = 3 + cstrides[3] + cstrides[4]
-                        + k * num_q_points * ndofs_cell * bs
-                        + i * num_q_points * bs + q * bs + b;
-                double v_n_opp = c[index] * n_surf(b);
+                du_n_opp *= w0 * dPn_u;
+
                 A[3 * k + 1][(b + i * bs) * ndofs_cell * bs + l + j * bs]
-                    += 0.5 * du_n_opp * Pn_v;
+                    -= 0.5 * du_n_opp * Pn_v;
                 A[3 * k + 2][(b + i * bs) * ndofs_cell * bs + l + j * bs]
-                    += 0.5 * gamma_inv * Pn_du * v_n_opp;
+                    -= 0.5 * gamma_inv * Pn_du * v_n_opp;
                 A[3 * k + 3][(b + i * bs) * ndofs_cell * bs + l + j * bs]
-                    += 0.5 * gamma_inv * du_n_opp * v_n_opp;
+                    -= 0.5 * gamma_inv * du_n_opp * v_n_opp;
+                for (std::size_t alpha = 0; alpha < (std::size_t)tdim - 1;
+                     ++alpha)
+                  for (std::size_t beta = 0; beta < (std::size_t)tdim - 1;
+                       ++beta)
+                  {
+                    A[3 * k + 3][(b + i * bs) * ndofs_cell * bs + l + j * bs]
+                        += +0.5 * gamma_inv * gap * Pn_u * w0 * du_tan(alpha)
+                               * M_inv(alpha, beta) * dv_tan(beta)
+                           + 0.5 * gamma_inv * Pn_u * w0 * du_tan(alpha)
+                                 * M_inv(alpha, beta) * v_tan_opp(beta)
+                           + 0.5 * gamma_inv * Pn_u * w0 * u_tan_opp(alpha)
+                                 * M_inv(alpha, beta) * dv_tan(beta);
+                    A[3 * k + 2][(b + i * bs) * ndofs_cell * bs + l + j * bs]
+                        -= 0.5 * gamma_inv * Pn_u * w0 * u_tan(alpha)
+                           * M_inv(alpha, beta) * dv_tan(beta);
+                    A[3 * k + 1][(b + i * bs) * ndofs_cell * bs + l + j * bs]
+                        -= 0.5 * gamma_inv * Pn_u * w0 * du_tan(alpha)
+                           * M_inv(alpha, beta) * v_tan(beta);
+                  }
               }
             }
           }

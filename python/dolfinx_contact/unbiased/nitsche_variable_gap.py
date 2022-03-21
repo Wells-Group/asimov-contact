@@ -12,10 +12,12 @@ import dolfinx_cuas
 import numpy as np
 import ufl
 from petsc4py import PETSc as _PETSc
+from dolfinx.io import XDMFFile
 
 import dolfinx_contact
 import dolfinx_contact.cpp
 from dolfinx_contact.helpers import epsilon, lame_parameters, sigma_func, rigid_motions_nullspace
+from dolfinx_contact.plotting import plot_gap
 
 kt = dolfinx_contact.cpp.Kernel
 
@@ -180,10 +182,22 @@ def nitsche_variable_gap(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTags, int,
     def create_A():
         return contact.create_matrix(J_cuas)
 
+    def update_mesh(u):
+        contact.update_submesh_geometry(u._cpp_object)
+        contact.create_distance_map(0, 1)
+        contact.create_distance_map(1, 0)
+        submesh_0 = contact.submesh(0)
+        submesh_1 = contact.submesh(1)
+        with XDMFFile(submesh_0.comm, f"results/sumbesh_0.xdmf", "w") as xdmf:
+            xdmf.write_mesh(submesh_0)
+        with XDMFFile(submesh_1.comm, f"results/sumbesh_1.xdmf", "w") as xdmf:
+            xdmf.write_mesh(submesh_1)
+
     def A(x, A):
         print("call matrix")
         _log.set_log_level(_log.LogLevel.OFF)
         u.vector[:] = x.array
+        update_mesh(u)
         # Pack gap, normals and test functions on each surface
         gap_0 = contact.pack_gap(0)
         n_0 = contact.pack_ny(0, gap_0)
@@ -217,12 +231,14 @@ def nitsche_variable_gap(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTags, int,
         print("call rhs")
         _log.set_log_level(_log.LogLevel.OFF)
         u.vector[:] = x.array
-        contact.update_submesh_geometry(u._cpp_object)
+        update_mesh(u)
         # Pack gap, normals and test functions on each surface
         gap_0 = contact.pack_gap(0)
         n_0 = contact.pack_ny(0, gap_0)
         test_fn_0 = contact.pack_test_functions(0, gap_0, 1)
         gap_1 = contact.pack_gap(1)
+        plot_gap(mesh, contact, 0, gap_0, facets_0, facets_1)
+        plot_gap(mesh, contact, 1, gap_1, facets_1, facets_0)
         n_1 = contact.pack_ny(1, gap_1)
         test_fn_1 = contact.pack_test_functions(1, gap_1, 1)
         u_opp_0 = contact.pack_u_contact(0, u._cpp_object, gap_0)
@@ -246,9 +262,9 @@ def nitsche_variable_gap(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTags, int,
 
     # Set Newton solver options
     solver.atol = newton_options.get("atol", 1e-9)
-    solver.rtol = newton_options.get("rtol", 1e-9)
-    solver.convergence_criterion = newton_options.get("convergence_criterion", "incremental")
-    solver.max_it = newton_options.get("max_it", 50)
+    solver.rtol = newton_options.get("rtol", 1e-6)
+    solver.convergence_criterion = newton_options.get("convergence_criterion", "residual")
+    solver.max_it = newton_options.get("max_it", 2)
     solver.error_on_nonconvergence = newton_options.get("error_on_nonconvergence", True)
     solver.relaxation_parameter = newton_options.get("relaxation_parameter", 1.0)
 
