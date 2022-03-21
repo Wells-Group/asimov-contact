@@ -27,7 +27,7 @@ def test_projection(q_deg, surf, dim):
     # Create mesh
     if dim == 2:
         fname = "two_disks"
-        create_circle_circle_mesh(filename=f"{fname}.msh")
+        create_circle_circle_mesh(filename=f"{fname}.msh", res=0.025)
         convert_mesh(fname, fname, "triangle", prune_z=True)
         convert_mesh(f"{fname}", f"{fname}_facets", "line", prune_z=True)
     else:
