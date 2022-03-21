@@ -219,16 +219,14 @@ def create_box_mesh_3D(filename: str, simplex: bool = True):
     if MPI.COMM_WORLD.rank == 0:
         # Create box
         if simplex:
-            box = model.occ.add_box(0, 0, 0, L, H, W)
-            box2 = model.occ.add_box(0, 0, disp, L, H, W)
+            model.occ.add_box(0, 0, 0, L, H, W)
+            model.occ.add_box(0, 0, disp, L, H, W)
             model.occ.synchronize()
         else:
             square1 = model.occ.add_rectangle(0, 0, 0, L, H)
             square2 = model.occ.add_rectangle(0, 0, disp, L, H)
-            extruded1 = model.occ.extrude(
-                [(2, square1)], 0, 0, H, numElements=[5], recombine=True)
-            extruded2 = model.occ.extrude(
-                [(2, square2)], 0, 0, H, numElements=[2], recombine=True)
+            model.occ.extrude([(2, square1)], 0, 0, H, numElements=[5], recombine=True)
+            model.occ.extrude([(2, square2)], 0, 0, H, numElements=[2], recombine=True)
             model.occ.synchronize()
             volumes = model.getEntities(3)
 
@@ -452,7 +450,7 @@ def create_cylinder_cylinder_mesh(filename: str, order: int = 1, res=0.25, simpl
     cells = cells[:, gmsh_hex]
 
     msh = create_mesh(MPI.COMM_WORLD, cells, x, domain)
-    msh.name = f"cylinder_cylinder"
+    msh.name = "cylinder_cylinder"
 
     # Permute also entities which are tagged
     with XDMFFile(MPI.COMM_WORLD, f"{filename}.xdmf", "w") as file:

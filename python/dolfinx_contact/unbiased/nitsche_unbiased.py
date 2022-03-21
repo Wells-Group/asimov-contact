@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier:    MIT
 
-from typing import Tuple, Dict
+from typing import Tuple, Union
 
 import dolfinx.common as _common
 import dolfinx.fem as _fem
@@ -11,7 +11,6 @@ import dolfinx.mesh as _mesh
 import dolfinx_cuas
 import numpy as np
 import ufl
-from petsc4py import PETSc as _PETSc
 
 import dolfinx_contact
 import dolfinx_contact.cpp
@@ -23,10 +22,11 @@ __all__ = ["nitsche_unbiased"]
 
 
 def nitsche_unbiased(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTagsMetaClass, int, int, int, int],
-                     physical_parameters: dict = {}, nitsche_parameters: Dict[str, float] = {},
+                     physical_parameters: dict[str, Union[bool, np.float64, int]],
+                     nitsche_parameters: dict[str, np.float64],
                      displacement: Tuple[list[float], list[float]] = [[0, 0, 0], [0, 0, 0]],
-                     quadrature_degree: int = 5, form_compiler_params: Dict = None, jit_params: Dict = None,
-                     petsc_options: Dict = None, newton_options: Dict = {}, initGuess=None):
+                     quadrature_degree: int = 5, form_compiler_params: dict = None, jit_params: dict = None,
+                     petsc_options: dict = None, newton_options: dict = None, initGuess=None):
     """
     Use custom kernel to compute the contact problem with two elastic bodies coming into contact.
 
@@ -75,18 +75,34 @@ def nitsche_unbiased(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTagsMetaClass,
     petsc_options = {} if petsc_options is None else petsc_options
     newton_options = {} if newton_options is None else newton_options
 
+    if physical_parameters.get("strain") is None:
+        raise RuntimeError("Need to supply if problem is plane strain (True) or plane stress (False)")
+    else:
+        plane_strain = physical_parameters.get("strain")
+    if physical_parameters.get("E") is None:
+        raise RuntimeError("Need to supply Youngs modulus")
+    else:
+        E = physical_parameters.get("E")
+    if physical_parameters.get("nu") is None:
+        raise RuntimeError("Need to supply Poisson's ratio")
+    else:
+        nu = physical_parameters.get("nu")
+
     # Compute lame parameters
-    plane_strain = physical_parameters.get("strain", False)
-    E = physical_parameters.get("E", 1e3)
-    nu = physical_parameters.get("nu", 0.1)
     mu_func, lambda_func = lame_parameters(plane_strain)
     mu = mu_func(E, nu)
     lmbda = lambda_func(E, nu)
     sigma = sigma_func(mu, lmbda)
 
     # Nitche parameters and variables
-    theta = nitsche_parameters.get("theta", 1)
-    gamma = E * nitsche_parameters.get("gamma", 10)
+    if nitsche_parameters.get("theta") is None:
+        raise RuntimeError("Need to supply theta for Nitsche imposition of boundary conditions")
+    else:
+        theta = nitsche_parameters.get("theta")
+    if nitsche_parameters.get("gamma") is None:
+        raise RuntimeError("Need to supply Coercivity/Stabilization parameter for Nitsche condition")
+    else:
+        gamma = E * nitsche_parameters.get("gamma", 10)
 
     # Unpack mesh data
     (facet_marker, dirichlet_value_0, surface_value_0, surface_value_1, dirichlet_value_1) = mesh_data
@@ -185,9 +201,6 @@ def nitsche_unbiased(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTagsMetaClass,
     coeff_0 = np.hstack([material_0, h_0, gap_0, n_0, test_fn_0])
     coeff_1 = np.hstack([material_1, h_1, gap_1, n_1, test_fn_1])
 
-  # Create rigid motion null-space
-    null_space = rigid_motions_nullspace(V)
-
     # Generate Jacobian data structures
     J_cuas = _fem.form(J, form_compiler_params=form_compiler_params, jit_params=jit_params)
     with _common.Timer("~Contact: Generate Jacobian kernel"):
@@ -240,25 +253,36 @@ def nitsche_unbiased(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTagsMetaClass,
         A.assemble()
 
     newton_solver = dolfinx_contact.NewtonSolver(mesh.comm, J, b)
+
     # Set matrix-vector computations
     newton_solver.setF(compute_residual)
     newton_solver.setJ(compute_jacobian_matrix)
+
     # Set rigid motion nullspace
+    null_space = rigid_motions_nullspace(V)
     newton_solver.A.setNearNullSpace(null_space)
+
     # Set Newton solver options
-    newton_solver.atol = newton_options.get("atol", 1e-9)
-    newton_solver.rtol = newton_options.get("rtol", 1e-9)
-    conv_crit = newton_options.get("convergence_criterion", "residual")
-    if conv_crit == "incremental":
-        crit = dolfinx_contact.ConvergenceCriterion.incremental
-    elif conv_crit == "residual":
-        crit = dolfinx_contact.ConvergenceCriterion.residual
-    else:
-        raise RuntimeError(f"Unknown convergence criterion '{conv_crit}'")
-    newton_solver.convergence_criterion = crit
-    newton_solver.max_it = newton_options.get("max_it", 50)
-    newton_solver.error_on_nonconvergence = newton_options.get("error_on_nonconvergence", False)
-    newton_solver.relaxation_parameter = newton_options.get("relaxation_parameter", 1.0)
+    if newton_options.get("atol") is not None:
+        newton_solver.atol = newton_options.get("atol")
+    if newton_options.get("rtol") is not None:
+        newton_solver.atol = newton_options.get("rtol")
+
+    if newton_options.get("convergence_criterion") is not None:
+        conv_crit = newton_options.get("convergence_criterion")
+        if conv_crit == "incremental":
+            crit = dolfinx_contact.ConvergenceCriterion.incremental
+        elif conv_crit == "residual":
+            crit = dolfinx_contact.ConvergenceCriterion.residual
+        else:
+            raise RuntimeError(f"Unknown convergence criterion '{conv_crit}'")
+        newton_solver.convergence_criterion = crit
+    if newton_options.get("max_it") is not None:
+        newton_solver.max_it = newton_options.get("max_it")
+    if newton_options.get("error_on_nonconvergence") is not None:
+        newton_solver.error_on_nonconvergence = newton_options.get("error_on_nonconvergence")
+    if newton_options.get("relaxation_parameter") is not None:
+        newton_solver.relaxation_parameter = newton_options.get("relaxation_parameter")
 
     # Set initial guess
     if initGuess is None:
@@ -275,6 +299,8 @@ def nitsche_unbiased(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTagsMetaClass,
     # Solve non-linear problem
     with _common.Timer(f"~Contact: {dofs_global} Solve Nitsche"):
         n, converged = newton_solver.solve(u)
+    if not converged:
+        raise RuntimeError("Newton sovler did not converge")
     u.x.scatter_forward()
 
     print(f"{dofs_global}\n Number of Newton iterations: {n:d}\n",

@@ -26,7 +26,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=desc,
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument("--theta", default=1, type=np.float64, dest="theta",
-                        help="Theta parameter for Nitsche, 1 symmetric, -1 skew symmetric, 0 Penalty-like")
+                        help="Theta parameter for Nitsche, 1 symmetric, -1 skew symmetric, 0 Penalty-like",
+                        choices=[1, -1, 0])
     parser.add_argument("--gamma", default=10, type=np.float64, dest="gamma",
                         help="Coercivity/Stabilization parameter for Nitsche condition")
     parser.add_argument("--quadrature", default=3, type=int, dest="q_degree",
