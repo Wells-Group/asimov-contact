@@ -297,8 +297,8 @@ if __name__ == "__main__":
             facet_marker = meshtags(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
 
     # Solver options
-    newton_options = {"relaxation_parameter": 1.0}
-    # petsc_options = {"ksp_type": "preonly", "pc_type": "lu"}
+    newton_options = {"relaxation_parameter": 1.0, "atol": 1e-8, "rtol": 1e-8, "convergence_criterion": "incremental"}
+    #petsc_options = {"ksp_type": "preonly", "pc_type": "lu"}
     petsc_options = {"ksp_type": "cgs", "pc_type": "gamg", "pc_gamg_type": "agg", "pc_gamg_coarse_eq_limit": 1000,
                      "pc_gamg_sym_graph": True, "mg_levels_ksp_type": "chebyshev", "mg_levels_pc_type": "sor",
                      "mg_levels_esteig_ksp_type": "cg", "matptap_via": "scalable", "pc_gamg_square_graph": 3,

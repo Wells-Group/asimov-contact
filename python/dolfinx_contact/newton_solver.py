@@ -3,13 +3,12 @@
 # SPDX-License-Identifier:    MIT
 
 from enum import Enum
-from re import A
-from xml.dom.minidom import Attr
+from typing import Callable, Tuple, Union
 
+import numpy
 from dolfinx import fem
 from mpi4py import MPI
 from petsc4py import PETSc
-from typing import Tuple, Callable, Union
 
 __all__ = ["NewtonSolver", "ConvergenceCriterion"]
 
@@ -134,7 +133,7 @@ class NewtonSolver():
         try:
             relative_residual = residual / self.initial_residual
         except ZeroDivisionError:
-            relative_residual = 1e5
+            relative_residual = numpy.inf
         if self.comm.rank == 0:
             print(f"Newton Iteration {self.iteration}: r (abs) {residual} r (rel) {relative_residual}",
                   flush=True, end=" ")
