@@ -302,7 +302,7 @@ if __name__ == "__main__":
     petsc_options = {"ksp_type": "cgs", "pc_type": "gamg", "pc_gamg_type": "agg", "pc_gamg_coarse_eq_limit": 1000,
                      "pc_gamg_sym_graph": True, "mg_levels_ksp_type": "chebyshev", "mg_levels_pc_type": "sor",
                      "mg_levels_esteig_ksp_type": "cg", "matptap_via": "scalable", "pc_gamg_square_graph": 3,
-                     "pc_gamg_threshold": 1e-1, "ksp_view": None}
+                     "pc_gamg_threshold": 1e-1}  # , "ksp_view": None}
 
     # Pack mesh data for Nitsche solver
     mesh_data = (facet_marker, top_value, bottom_value, surface_value, surface_bottom)
@@ -320,17 +320,21 @@ if __name__ == "__main__":
     geometry = mesh.geometry.x[:].copy()
 
     log.set_log_level(log.LogLevel.OFF)
+    num_newton_its = np.zeros(nload_steps, dtype=int)
+    num_krylov_its = np.zeros(nload_steps, dtype=int)
 
     # Load geometry over multiple steps
     for j in range(nload_steps):
         displacement = load_increment
 
         # Solve contact problem using Nitsche's method
-        u1 = nitsche_unbiased(mesh=mesh, mesh_data=mesh_data, physical_parameters=physical_parameters,
-                              nitsche_parameters=nitsche_parameters, displacement=displacement,
-                              quadrature_degree=args.q_degree, petsc_options=petsc_options,
-                              newton_options=newton_options)
-
+        u1, n, krylov_iterations = nitsche_unbiased(
+            mesh=mesh, mesh_data=mesh_data, physical_parameters=physical_parameters,
+            nitsche_parameters=nitsche_parameters, displacement=displacement,
+            quadrature_degree=args.q_degree, petsc_options=petsc_options,
+            newton_options=newton_options)
+        num_newton_its[j] = n
+        num_krylov_its[j] = krylov_iterations
         with XDMFFile(mesh.comm, f"results/u_unbiased_{j}.xdmf", "w") as xdmf:
             xdmf.write_mesh(mesh)
             u1.name = "u"
@@ -350,6 +354,8 @@ if __name__ == "__main__":
         xdmf.write_function(u)
     list_timings(mesh.comm, [TimingType.wall])
 
-    import dolfinx.common
-    t = dolfinx.common.timing("Pack contact u")
-    print(t)
+    print(f"Newton iterations {num_newton_its}")
+    print(f"Krylov iterations {num_krylov_its}")
+    print(f"Petsc options {petsc_options}")
+    print(f"Newton options {newton_options}")
+    print(f"Krylov/Newton: {num_krylov_its/num_newton_its}")

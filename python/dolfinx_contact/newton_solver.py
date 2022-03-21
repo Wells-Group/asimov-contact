@@ -11,7 +11,7 @@ from mpi4py import MPI
 from petsc4py import PETSc
 from typing import Tuple, Callable, Union
 
-__all__ = ["NewtonSolver"]
+__all__ = ["NewtonSolver", "ConvergenceCriterion"]
 
 
 class ConvergenceCriterion(Enum):
@@ -20,10 +20,9 @@ class ConvergenceCriterion(Enum):
 
 
 class NewtonSolver():
-    __slots__ = ["max_it", "rtol", "atol", "report", "error_on_noncovergence",
+    __slots__ = ["max_it", "rtol", "atol", "report", "error_on_nonconvergence",
                  "convergence_criterion", "relaxation_parameter", "_compute_residual",
-                 "_compute_jacobian", "_compute_preconditioner",
-                 "_post_solve", "krylov_iterations",
+                 "_compute_jacobian", "_compute_preconditioner", "krylov_iterations",
                  "iteration", "residual", "initial_residual", "krylov_solver", "_dx", "comm",
                  "_A", "_b", "_P"]
 
@@ -60,7 +59,7 @@ class NewtonSolver():
         keys = ["matptap_via"]
         g_opts = {}
         opts = PETSc.Options()
-        opts.setPrefix(self.krylov_solver.getOptionsPrefix())
+        opts.prefixPush(self.krylov_solver.getOptionsPrefix())
         for k, v in options.items():
             if k in keys:
                 g_opts[k] = v
@@ -70,6 +69,10 @@ class NewtonSolver():
         for k, v in g_opts.items():
             opts[k] = v
         self.krylov_solver.setFromOptions()
+        self._A.setOptionsPrefix(self.krylov_solver.getOptionsPrefix())
+        self._A.setFromOptions()
+        self._b.setOptionsPrefix(self.krylov_solver.getOptionsPrefix())
+        self._b.setFromOptions()
 
     def solve(self, u: Union[fem.Function, PETSc.Vec]):
         """
@@ -123,12 +126,15 @@ class NewtonSolver():
     def _pre_computation(self, x: PETSc.Vec):
         x.ghostUpdate(addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD)
 
+    def _post_solve(self, x: PETSc.Vec):
+        x.ghostUpdate(addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD)
+
     def _check_convergence(self, r: PETSc.Vec):
         residual = r.norm(PETSc.NormType.NORM_2)
         try:
             relative_residual = residual / self.initial_residual
         except ZeroDivisionError:
-            relative_residual = 0
+            relative_residual = 1e5
         if self.comm.rank == 0:
             print(f"Newton Iteration {self.iteration}: r (abs) {residual} r (rel) {relative_residual}",
                   flush=True, end=" ")
@@ -141,25 +147,31 @@ class NewtonSolver():
         """
         x.axpy(-self.relaxation_parameter, dx)
 
-    def _solve(self, x: PETSc.Vec) -> Tuple[int, int]:
+    def _solve(self, x: Union[PETSc.Vec, fem.Function]) -> Tuple[int, int]:
+        try:
+            x_vec = x.vector
+        except AttributeError:
+            x_vec = x
+
         # Reset iteration counts
         self.iteration = 0
         self.krylov_iterations = 0
         self.residual = -1
 
         try:
-            self._pre_computation(x)
+            self._pre_computation(x_vec)
         except AttributeError:
             raise RuntimeError("Pre-computation has not been set")
 
         try:
-            self._compute_residual(x, self._b)
+            self._compute_residual(x_vec, self._b)
         except AttributeError:
             raise RuntimeError("Function for computing residual vector has not been provided")
+
         newton_converged = False
+
         if self.convergence_criterion == ConvergenceCriterion.residual:
-            residual, newton_converged = self._check_convergence(self.b)
-            self.residual = residual
+            self.residual, newton_converged = self._check_convergence(self.b)
         elif (self.convergence_criterion == ConvergenceCriterion.incremental):
             # We need to do at least one Newton step with the ||dx||-stopping criterion
             newton_converged = False
@@ -174,4 +186,67 @@ class NewtonSolver():
         try:
             self._dx
         except AttributeError:
-            self._dx = self._A.createVecs()
+            self._dx = self._A.createVecRight()
+
+        # Start iterations
+        while not newton_converged and self.iteration < self.max_it:
+            try:
+                self._compute_jacobian(x_vec, self._A)
+            except AttributeError:
+                raise RuntimeError("Function for computing Jacobian has not been provided")
+
+            try:
+                self._compute_preconditioner(x_vec, self._P)
+            except AttributeError:
+                pass
+
+            # Perform linear solve and update number of Krylov iterations
+            self.krylov_solver.solve(self._b, self._dx)
+            self.krylov_iterations += self.krylov_solver.getIterationNumber()
+
+            # Update solution
+            self._update_solution(self._dx, x_vec)
+
+            # Increment iteration count
+            self.iteration += 1
+
+            # Update internal variables prior to computing residual
+            try:
+                self._post_solve(x_vec)
+            except AttributeError:
+                pass
+
+            # Compute residual (F)
+            self._compute_residual(x_vec, self._b)
+
+            # Initialize initial residual
+            if self.iteration == 1:
+                self.initial_residual = self._dx.norm(PETSc.NormType.NORM_2)
+
+            # Test for convergence
+            if self.convergence_criterion == ConvergenceCriterion.residual:
+                self.residual, newton_converged = self._check_convergence(self._b)
+            elif self.convergence_criterion == ConvergenceCriterion.incremental:
+                # Subtract 1 to make sure initial residual is properly set
+                if self.iteration == 1:
+                    self.residual = 1
+                    newton_converged = False
+                else:
+                    self.residual, newton_converged = self._check_convergence(self._dx)
+            else:
+                raise RuntimeError("Unknown convergence criterion")
+
+        if newton_converged:
+            if self.comm.rank == 0:
+                print(f"Newton solver finished in {self.iteration} iterations and ",
+                      f" {self.krylov_iterations} linear solver iterations", flush=True)
+        else:
+            if self.error_on_nonconvergence:
+                if self.iteration == self.max_it:
+                    raise RuntimeError("Newton solver did not converge because maximum number ",
+                                       f"of iterations ({self.max_it}) was reached")
+                else:
+                    raise RuntimeError("Newton solver did not converge")
+            else:
+                print("Newton Solver did non converge", flush=True)
+        return self.iteration, newton_converged
