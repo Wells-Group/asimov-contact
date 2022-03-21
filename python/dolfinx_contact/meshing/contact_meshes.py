@@ -388,30 +388,38 @@ def create_cylinder_cylinder_mesh(filename: str, order: int = 1, res=0.25, simpl
         model = gmsh.model()
 
         # Generate a mesh with 2nd-order hexahedral cells using gmsh
-        model.add("Hexahedral mesh")
-        model.setCurrent("Hexahedral mesh")
+        model_name = "Cylinder-cylinder mesh"
+        model.add(model_name)
+        model.setCurrent(model_name)
         # Recombine tetrahedrons to hexahedrons
         if not simplex:
             gmsh.option.setNumber("Mesh.RecombinationAlgorithm", 2)
             gmsh.option.setNumber("Mesh.RecombineAll", 2)
         # gmsh.option.setNumber("Mesh.CharacteristicLengthFactor", 0.1)
+        center1 = (0, 0, 0.5)
+        r1 = 0.8
+        l1 = 1
+        circle = model.occ.addDisk(*center1, r1, r1)
+        model.occ.rotate([(2, circle)], 0, 0, 0, 1, 0, 0, np.pi / 2)
+        model.occ.extrude(
+            [(2, circle)], 0, l1, 0, numElements=[10], recombine=not simplex)
 
-        circle = model.occ.addDisk(0, 0, 0, 2, 2)
-        circle2 = model.occ.addDisk(3.5, 0, 0, 1, 1)
-        fuse = gmsh.model.occ.fuse([(2, circle)], [(2, circle2)])
-        extruded_geometry = model.occ.extrude(
-            fuse[0], 0, 0, 0.5, numElements=[5], recombine=not simplex)
-        model.occ.synchronize()
+        center2 = (2, 0, -0.5)
+        r2 = 0.5
+        l2 = 1
+        circle2 = model.occ.addDisk(*center2, r2, r2)
+        model.occ.extrude(
+            [(2, circle2)], 0, 0, l2, numElements=[10], recombine=not simplex)
 
         gmsh.model.mesh.field.add("Box", 1)
         gmsh.model.mesh.field.setNumber(1, "VIn", res)
         gmsh.model.mesh.field.setNumber(1, "VOut", 1.5 * res)
-        gmsh.model.mesh.field.setNumber(1, "XMin", -2)
-        gmsh.model.mesh.field.setNumber(1, "XMax", 2)
-        gmsh.model.mesh.field.setNumber(1, "YMin", -2)
-        gmsh.model.mesh.field.setNumber(1, "YMax", 2)
-        gmsh.model.mesh.field.setNumber(1, "ZMin", -2)
-        gmsh.model.mesh.field.setNumber(1, "ZMax", 2)
+        gmsh.model.mesh.field.setNumber(1, "XMin", center1[0] - l1)
+        gmsh.model.mesh.field.setNumber(1, "XMax", center1[0] + l1)
+        gmsh.model.mesh.field.setNumber(1, "YMin", center1[1] - 2 * r1)
+        gmsh.model.mesh.field.setNumber(1, "YMax", center1[1] + 2 * r1)
+        gmsh.model.mesh.field.setNumber(1, "ZMin", center1[2] - 2 * r1)
+        gmsh.model.mesh.field.setNumber(1, "ZMax", center1[2] + 2 * r1)
 
         gmsh.model.mesh.field.setAsBackgroundMesh(1)
         model.occ.synchronize()
@@ -419,9 +427,8 @@ def create_cylinder_cylinder_mesh(filename: str, order: int = 1, res=0.25, simpl
         model.mesh.setOrder(order)
 
         volume_entities = []
-        for entity in extruded_geometry:
-            if entity[0] == 3:
-                volume_entities.append(entity[1])
+        for entity in model.getEntities(3):
+            volume_entities.append(entity[1])
         model.addPhysicalGroup(3, volume_entities, tag=1)
         model.setPhysicalName(3, 1, "Mesh volume")
 

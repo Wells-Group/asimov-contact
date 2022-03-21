@@ -60,9 +60,7 @@ if __name__ == "__main__":
     # Current formulation uses unilateral contact
     nitsche_parameters = {"gamma": args.gamma, "theta": args.theta}
     physical_parameters = {"E": args.E, "nu": args.nu, "strain": args.plane_strain}
-    top_value = 1
     threed = args.threed
-    bottom_value = 2
     problem = args.problem
     nload_steps = args.nload_steps
     simplex = args.simplex
@@ -84,10 +82,10 @@ if __name__ == "__main__":
             mesh.topology.create_connectivity(tdim - 1, 0)
             mesh.topology.create_connectivity(tdim - 1, tdim)
 
-            top_value = 1
-            bottom_value = 2
-            surface_value = 3
-            surface_bottom = 4
+            dirichet_bdy_1 = 1
+            contact_bdy_1 = 2
+            contact_bdy_2 = 3
+            dirichlet_bdy_2 = 4
             # Create meshtag for top and bottom markers
             top_facets1 = locate_entities_boundary(mesh, tdim - 1, lambda x: np.isclose(x[2], 0.5))
             bottom_facets1 = locate_entities_boundary(
@@ -95,13 +93,13 @@ if __name__ == "__main__":
             top_facets2 = locate_entities_boundary(mesh, tdim - 1, lambda x: np.isclose(x[2], -0.1))
             bottom_facets2 = locate_entities_boundary(
                 mesh, tdim - 1, lambda x: np.isclose(x[2], -0.6))
-            top_values = np.full(len(top_facets1), top_value, dtype=np.int32)
+            top_values = np.full(len(top_facets1), dirichet_bdy_1, dtype=np.int32)
             bottom_values = np.full(
-                len(bottom_facets1), bottom_value, dtype=np.int32)
+                len(bottom_facets1), contact_bdy_1, dtype=np.int32)
 
-            surface_values = np.full(len(top_facets2), surface_value, dtype=np.int32)
+            surface_values = np.full(len(top_facets2), contact_bdy_2, dtype=np.int32)
             sbottom_values = np.full(
-                len(bottom_facets2), surface_bottom, dtype=np.int32)
+                len(bottom_facets2), dirichlet_bdy_2, dtype=np.int32)
             indices = np.concatenate([top_facets1, bottom_facets1, top_facets2, bottom_facets2])
             values = np.hstack([top_values, bottom_values, surface_values, sbottom_values])
             sorted_facets = np.argsort(indices)
@@ -119,13 +117,13 @@ if __name__ == "__main__":
             mesh.topology.create_connectivity(tdim - 1, tdim)
             with XDMFFile(MPI.COMM_WORLD, f"{fname}_facets.xdmf", "r") as xdmf:
                 facet_marker = xdmf.read_meshtags(mesh, name="Grid")
-            top_value = 2
-            bottom_value = 1
-            surface_value = 8
-            surface_bottom = 7
+            dirichet_bdy_1 = 2
+            contact_bdy_1 = 1
+            contact_bdy_2 = 8
+            dirichlet_bdy_2 = 7
 
         elif problem == 3:
-            fname = "hex"
+            fname = "cylinder_cylinder_3D"
             displacement = ([-1, 0, 0], [0, 0, 0])
             create_cylinder_cylinder_mesh(fname, res=args.res, simplex=simplex)
             with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
@@ -134,38 +132,34 @@ if __name__ == "__main__":
             mesh.topology.create_connectivity(tdim - 1, 0)
             mesh.topology.create_connectivity(tdim - 1, tdim)
 
-            def top1(x):
-                return x[0] > 3.7
+            def right(x):
+                return x[0] > 2.2
 
-            def bottom1(x):
-                return np.logical_and(x[0] < 3.5, x[0] > 2.3)
+            def right_contact(x):
+                return np.logical_and(x[0] < 2, x[0] > 1.45)
 
-            def top2(x):
-                return np.logical_and(x[0] > 0.05, x[0] < 2.1)
+            def left_contact(x):
+                return np.logical_and(x[0] > 0.25, x[0] < 1.1)
 
-            def bottom2(x):
-                return x[0] < -0.8
+            def left(x):
+                return x[0] < -0.5
 
-            top_value = 1
-            bottom_value = 2
-            surface_value = 3
-            surface_bottom = 4
+            dirichet_bdy_1 = 1
+            contact_bdy_1 = 2
+            contact_bdy_2 = 3
+            dirichlet_bdy_2 = 4
             # Create meshtag for top and bottom markers
-            top_facets1 = locate_entities_boundary(mesh, tdim - 1, top1)
-            bottom_facets1 = locate_entities_boundary(
-                mesh, tdim - 1, bottom1)
-            top_facets2 = locate_entities_boundary(mesh, tdim - 1, top2)
-            bottom_facets2 = locate_entities_boundary(
-                mesh, tdim - 1, bottom2)
-            top_values = np.full(len(top_facets1), top_value, dtype=np.int32)
-            bottom_values = np.full(
-                len(bottom_facets1), bottom_value, dtype=np.int32)
+            dirichlet_facets_1 = locate_entities_boundary(mesh, tdim - 1, right)
+            contact_facets_1 = locate_entities_boundary(mesh, tdim - 1, right_contact)
+            contact_facets_2 = locate_entities_boundary(mesh, tdim - 1, left_contact)
+            dirchlet_facets_2 = locate_entities_boundary(mesh, tdim - 1, left)
 
-            surface_values = np.full(len(top_facets2), surface_value, dtype=np.int32)
-            sbottom_values = np.full(
-                len(bottom_facets2), surface_bottom, dtype=np.int32)
-            indices = np.concatenate([top_facets1, bottom_facets1, top_facets2, bottom_facets2])
-            values = np.hstack([top_values, bottom_values, surface_values, sbottom_values])
+            val0 = np.full(len(dirichlet_facets_1), dirichet_bdy_1, dtype=np.int32)
+            val1 = np.full(len(contact_facets_1), contact_bdy_1, dtype=np.int32)
+            val2 = np.full(len(contact_facets_2), contact_bdy_2, dtype=np.int32)
+            val3 = np.full(len(dirchlet_facets_2), dirichlet_bdy_2, dtype=np.int32)
+            indices = np.concatenate([dirichlet_facets_1, contact_facets_1, contact_facets_2, dirchlet_facets_2])
+            values = np.hstack([val0, val1, val2, val3])
             sorted_facets = np.argsort(indices)
             facet_marker = meshtags(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
 
@@ -188,10 +182,10 @@ if __name__ == "__main__":
             mesh.topology.create_connectivity(tdim - 1, tdim)
             with XDMFFile(MPI.COMM_WORLD, f"{fname}_facets.xdmf", "r") as xdmf:
                 facet_marker = xdmf.read_meshtags(mesh, name="Grid")
-            top_value = 5
-            bottom_value = 3
-            surface_value = 9
-            surface_bottom = 7
+            dirichet_bdy_1 = 5
+            contact_bdy_1 = 3
+            contact_bdy_2 = 9
+            dirichlet_bdy_2 = 7
 
         elif problem == 2:
             fname = "twomeshes"
@@ -211,10 +205,10 @@ if __name__ == "__main__":
             mesh.topology.create_connectivity(tdim - 1, tdim)
             with XDMFFile(MPI.COMM_WORLD, f"{fname}_facets.xdmf", "r") as xdmf:
                 facet_marker = xdmf.read_meshtags(mesh, name="Grid")
-            top_value = 2
-            bottom_value = 4
-            surface_value = 9
-            surface_bottom = 7
+            dirichet_bdy_1 = 2
+            contact_bdy_1 = 4
+            contact_bdy_2 = 9
+            dirichlet_bdy_2 = 7
         elif problem == 3:
             fname = "two_disks"
             if simplex:
@@ -243,10 +237,10 @@ if __name__ == "__main__":
             def bottom2(x):
                 return x[1] < -0.35
 
-            top_value = 1
-            bottom_value = 2
-            surface_value = 3
-            surface_bottom = 4
+            dirichet_bdy_1 = 1
+            contact_bdy_1 = 2
+            contact_bdy_2 = 3
+            dirichlet_bdy_2 = 4
             # Create meshtag for top and bottom markers
             top_facets1 = locate_entities_boundary(mesh, tdim - 1, top1)
             bottom_facets1 = locate_entities_boundary(
@@ -254,13 +248,13 @@ if __name__ == "__main__":
             top_facets2 = locate_entities_boundary(mesh, tdim - 1, top2)
             bottom_facets2 = locate_entities_boundary(
                 mesh, tdim - 1, bottom2)
-            top_values = np.full(len(top_facets1), top_value, dtype=np.int32)
+            top_values = np.full(len(top_facets1), dirichet_bdy_1, dtype=np.int32)
             bottom_values = np.full(
-                len(bottom_facets1), bottom_value, dtype=np.int32)
+                len(bottom_facets1), contact_bdy_1, dtype=np.int32)
 
-            surface_values = np.full(len(top_facets2), surface_value, dtype=np.int32)
+            surface_values = np.full(len(top_facets2), contact_bdy_2, dtype=np.int32)
             sbottom_values = np.full(
-                len(bottom_facets2), surface_bottom, dtype=np.int32)
+                len(bottom_facets2), dirichlet_bdy_2, dtype=np.int32)
             indices = np.concatenate([top_facets1, bottom_facets1, top_facets2, bottom_facets2])
             values = np.hstack([top_values, bottom_values, surface_values, sbottom_values])
             sorted_facets = np.argsort(indices)
@@ -272,10 +266,10 @@ if __name__ == "__main__":
             def bottom(x):
                 return x[1] < np.logical_and(x[1] < 0.5, x[1] > 0.11)
 
-            top_value = 1
-            bottom_value = 2
-            surface_value = 3
-            surface_bottom = 4
+            dirichet_bdy_1 = 1
+            contact_bdy_1 = 2
+            contact_bdy_2 = 3
+            dirichlet_bdy_2 = 4
             # Create meshtag for top and bottom markers
             top_facets1 = locate_entities_boundary(mesh, tdim - 1, top)
             bottom_facets1 = locate_entities_boundary(
@@ -283,20 +277,23 @@ if __name__ == "__main__":
             top_facets2 = locate_entities_boundary(mesh, tdim - 1, lambda x: np.isclose(x[1], 0.1))
             bottom_facets2 = locate_entities_boundary(
                 mesh, tdim - 1, lambda x: np.isclose(x[1], 0.0))
-            top_values = np.full(len(top_facets1), top_value, dtype=np.int32)
+            top_values = np.full(len(top_facets1), dirichet_bdy_1, dtype=np.int32)
             bottom_values = np.full(
-                len(bottom_facets1), bottom_value, dtype=np.int32)
+                len(bottom_facets1), contact_bdy_1, dtype=np.int32)
 
-            surface_values = np.full(len(top_facets2), surface_value, dtype=np.int32)
+            surface_values = np.full(len(top_facets2), contact_bdy_2, dtype=np.int32)
             sbottom_values = np.full(
-                len(bottom_facets2), surface_bottom, dtype=np.int32)
+                len(bottom_facets2), dirichlet_bdy_2, dtype=np.int32)
             indices = np.concatenate([top_facets1, bottom_facets1, top_facets2, bottom_facets2])
             values = np.hstack([top_values, bottom_values, surface_values, sbottom_values])
             sorted_facets = np.argsort(indices)
             facet_marker = meshtags(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
+    with XDMFFile(mesh.comm, "test.xdmf", "w") as xdmf:
+        xdmf.write_mesh(mesh)
+        xdmf.write_meshtags(facet_marker)
 
     # Solver options
-    newton_options = {"relaxation_parameter": 1.0, "atol": 1e-8, "rtol": 1e-8, "convergence_criterion": "incremental"}
+    newton_options = {"relaxation_parameter": 1, "atol": 1e-8, "rtol": 1e-8, "convergence_criterion": "residual"}
     # petsc_options = {"ksp_type": "preonly", "pc_type": "lu"}
     petsc_options = {"ksp_type": "cgs", "pc_type": "gamg", "pc_gamg_type": "agg", "pc_gamg_coarse_eq_limit": 1000,
                      "pc_gamg_sym_graph": True, "mg_levels_ksp_type": "chebyshev", "mg_levels_pc_type": "sor",
@@ -304,7 +301,7 @@ if __name__ == "__main__":
                      "pc_gamg_threshold": 1e-1}  # , "ksp_view": None}
 
     # Pack mesh data for Nitsche solver
-    mesh_data = (facet_marker, top_value, bottom_value, surface_value, surface_bottom)
+    mesh_data = (facet_marker, dirichet_bdy_1, contact_bdy_1, contact_bdy_2, dirichlet_bdy_2)
 
     # Solve contact problem using Nitsche's method
     load_increment = np.array(displacement) / nload_steps
@@ -353,8 +350,9 @@ if __name__ == "__main__":
         xdmf.write_function(u)
     list_timings(mesh.comm, [TimingType.wall])
 
-    print(f"Newton iterations {num_newton_its}")
-    print(f"Krylov iterations {num_krylov_its}")
+    print(f"Newton iterations {num_newton_its}, {sum(num_newton_its)}")
+    print(f"Krylov iterations {num_krylov_its}, {sum(num_krylov_its)}")
     print(f"Petsc options {petsc_options}")
     print(f"Newton options {newton_options}")
     print(f"Krylov/Newton: {num_krylov_its/num_newton_its}")
+    print(f"Krylov/Newton accumulated: {sum(num_krylov_its)/sum(num_newton_its)}")

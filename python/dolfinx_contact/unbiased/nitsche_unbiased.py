@@ -37,9 +37,9 @@ def nitsche_unbiased(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTagsMetaClass,
     mesh_data
         A quinteplet with a mesh tag for facets and values v0, v1, v2, v3. v0
         and v3 should be the values in the mesh tags for facets to apply a Dirichlet
-        condition on, where v0 corresponds to the first elastic body and v2 to the second.
-        v1 is the value for facets which should have applied a contact condition on and v2
-        marks the potential contact surface on the rigid body.
+        condition on, where v0 corresponds to the first elastic body and v3 to the second.
+        v1 is the value for facets on the first body that is in the potential contact zone.
+        v2 is the value for facets on the second body in potential contact zone
     physical_parameters
         Optional dictionary with information about the linear elasticity problem.
         Valid (key, value) tuples are: ('E': float), ('nu', float), ('strain', bool)
