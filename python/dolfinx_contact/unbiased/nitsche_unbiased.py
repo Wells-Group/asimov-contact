@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier:    MIT
 
-from typing import Tuple, Dict
+from typing import Tuple, Union
 
 import dolfinx.common as _common
 import dolfinx.fem as _fem
@@ -11,7 +11,6 @@ import dolfinx.mesh as _mesh
 import dolfinx_cuas
 import numpy as np
 import ufl
-from petsc4py import PETSc as _PETSc
 
 import dolfinx_contact
 import dolfinx_contact.cpp
@@ -23,11 +22,11 @@ __all__ = ["nitsche_unbiased"]
 
 
 def nitsche_unbiased(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTagsMetaClass, int, int, int, int],
-                     physical_parameters: dict = {}, nitsche_parameters: Dict[str, float] = {},
+                     physical_parameters: dict[str, Union[bool, np.float64, int]],
+                     nitsche_parameters: dict[str, np.float64],
                      displacement: Tuple[list[float], list[float]] = [[0, 0, 0], [0, 0, 0]],
-                     nitsche_bc: bool = True, quadrature_degree: int = 5,
-                     form_compiler_params: Dict = {}, jit_params: Dict = {}, petsc_options: Dict = {},
-                     newton_options: Dict = {}, initGuess=None):
+                     quadrature_degree: int = 5, form_compiler_params: dict = None, jit_params: dict = None,
+                     petsc_options: dict = None, newton_options: dict = None, initGuess=None):
     """
     Use custom kernel to compute the contact problem with two elastic bodies coming into contact.
 
@@ -38,9 +37,9 @@ def nitsche_unbiased(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTagsMetaClass,
     mesh_data
         A quinteplet with a mesh tag for facets and values v0, v1, v2, v3. v0
         and v3 should be the values in the mesh tags for facets to apply a Dirichlet
-        condition on, where v0 corresponds to the first elastic body and v2 to the second.
-        v1 is the value for facets which should have applied a contact condition on and v2
-        marks the potential contact surface on the rigid body.
+        condition on, where v0 corresponds to the first elastic body and v3 to the second.
+        v1 is the value for facets on the first body that is in the potential contact zone.
+        v2 is the value for facets on the second body in potential contact zone
     physical_parameters
         Optional dictionary with information about the linear elasticity problem.
         Valid (key, value) tuples are: ('E': float), ('nu', float), ('strain', bool)
@@ -50,8 +49,6 @@ def nitsche_unbiased(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTagsMetaClass,
         skew-symmetric, penalty like or symmetric enforcement of Nitsche conditions
     displacement
         The displacement enforced on Dirichlet boundary
-    nitsche_bc
-        Use Nitche's method to enforce Dirichlet boundary conditions
     quadrature_degree
         The quadrature degree to use for the custom contact kernels
     form_compiler_params
@@ -73,19 +70,39 @@ def nitsche_unbiased(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTagsMetaClass,
         ("atol", float), ("rtol", float), ("convergence_criterion", "str"),
         ("max_it", int), ("error_on_nonconvergence", bool), ("relaxation_parameter", float)
     """
+    form_compiler_params = {} if form_compiler_params is None else form_compiler_params
+    jit_params = {} if jit_params is None else jit_params
+    petsc_options = {} if petsc_options is None else petsc_options
+    newton_options = {} if newton_options is None else newton_options
+
+    if physical_parameters.get("strain") is None:
+        raise RuntimeError("Need to supply if problem is plane strain (True) or plane stress (False)")
+    else:
+        plane_strain = physical_parameters.get("strain")
+    if physical_parameters.get("E") is None:
+        raise RuntimeError("Need to supply Youngs modulus")
+    else:
+        E = physical_parameters.get("E")
+    if physical_parameters.get("nu") is None:
+        raise RuntimeError("Need to supply Poisson's ratio")
+    else:
+        nu = physical_parameters.get("nu")
 
     # Compute lame parameters
-    plane_strain = physical_parameters.get("strain", False)
-    E = physical_parameters.get("E", 1e3)
-    nu = physical_parameters.get("nu", 0.1)
     mu_func, lambda_func = lame_parameters(plane_strain)
     mu = mu_func(E, nu)
     lmbda = lambda_func(E, nu)
     sigma = sigma_func(mu, lmbda)
 
     # Nitche parameters and variables
-    theta = nitsche_parameters.get("theta", 1)
-    gamma = E * nitsche_parameters.get("gamma", 10)
+    if nitsche_parameters.get("theta") is None:
+        raise RuntimeError("Need to supply theta for Nitsche imposition of boundary conditions")
+    else:
+        theta = nitsche_parameters.get("theta")
+    if nitsche_parameters.get("gamma") is None:
+        raise RuntimeError("Need to supply Coercivity/Stabilization parameter for Nitsche condition")
+    else:
+        gamma = E * nitsche_parameters.get("gamma")
 
     # Unpack mesh data
     (facet_marker, dirichlet_value_0, surface_value_0, surface_value_1, dirichlet_value_1) = mesh_data
@@ -112,31 +129,27 @@ def nitsche_unbiased(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTagsMetaClass,
 
     # Nitsche for Dirichlet, another theta-scheme.
     # https://doi.org/10.1016/j.cma.2018.05.024
-    if nitsche_bc:
-        # Nitsche bc for body 0
-        disp_0 = displacement[0][:gdim]
-        u_D_0 = ufl.as_vector(disp_0)
-        F += - ufl.inner(sigma(u) * n, v) * ds(dirichlet_value_0)\
-             - theta * ufl.inner(sigma(v) * n, u - u_D_0) * \
-            ds(dirichlet_value_0) + gamma / h * ufl.inner(u - u_D_0, v) * ds(dirichlet_value_0)
+    # Nitsche bc for body 0
+    disp_0 = displacement[0][:gdim]
+    u_D_0 = ufl.as_vector(disp_0)
+    F += - ufl.inner(sigma(u) * n, v) * ds(dirichlet_value_0)\
+        - theta * ufl.inner(sigma(v) * n, u - u_D_0) * \
+        ds(dirichlet_value_0) + gamma / h * ufl.inner(u - u_D_0, v) * ds(dirichlet_value_0)
 
-        J += - ufl.inner(sigma(du) * n, v) * ds(dirichlet_value_0)\
-            - theta * ufl.inner(sigma(v) * n, du) * \
-            ds(dirichlet_value_0) + gamma / h * ufl.inner(du, v) * ds(dirichlet_value_0)
-        # Nitsche bc for body 1
-        disp_1 = displacement[1][:gdim]
-        u_D_1 = ufl.as_vector(disp_1)
-        F += - ufl.inner(sigma(u) * n, v) * ds(dirichlet_value_1)\
-             - theta * ufl.inner(sigma(v) * n, u - u_D_1) * \
-            ds(dirichlet_value_1) + gamma / h * ufl.inner(u - u_D_1, v) * ds(dirichlet_value_1)
-        J += - ufl.inner(sigma(du) * n, v) * ds(dirichlet_value_1)\
-            - theta * ufl.inner(sigma(v) * n, du) * \
-            ds(dirichlet_value_1) + gamma / h * ufl.inner(du, v) * ds(dirichlet_value_1)
-    else:
-        raise RuntimeError("Strong Dirichlet bc's are not implemented in custom assemblers yet.")
+    J += - ufl.inner(sigma(du) * n, v) * ds(dirichlet_value_0)\
+        - theta * ufl.inner(sigma(v) * n, du) * \
+        ds(dirichlet_value_0) + gamma / h * ufl.inner(du, v) * ds(dirichlet_value_0)
+    # Nitsche bc for body 1
+    disp_1 = displacement[1][:gdim]
+    u_D_1 = ufl.as_vector(disp_1)
+    F += - ufl.inner(sigma(u) * n, v) * ds(dirichlet_value_1)\
+        - theta * ufl.inner(sigma(v) * n, u - u_D_1) * \
+        ds(dirichlet_value_1) + gamma / h * ufl.inner(u - u_D_1, v) * ds(dirichlet_value_1)
+    J += - ufl.inner(sigma(du) * n, v) * ds(dirichlet_value_1)\
+        - theta * ufl.inner(sigma(v) * n, du) * \
+        ds(dirichlet_value_1) + gamma / h * ufl.inner(du, v) * ds(dirichlet_value_1)
 
     # Custom assembly
-    _log.set_log_level(_log.LogLevel.OFF)
     # create contact class
     with _common.Timer("~Contact: Init"):
         contact = dolfinx_contact.cpp.Contact(facet_marker, [surface_value_0, surface_value_1], V._cpp_object)
@@ -188,72 +201,88 @@ def nitsche_unbiased(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTagsMetaClass,
     coeff_0 = np.hstack([material_0, h_0, gap_0, n_0, test_fn_0])
     coeff_1 = np.hstack([material_1, h_1, gap_1, n_1, test_fn_1])
 
-    # Assemble jacobian
-    J_cuas = _fem.form(J)
-    with _common.Timer("~Contact: Generate kernel"):
+    # Generate Jacobian data structures
+    J_cuas = _fem.form(J, form_compiler_params=form_compiler_params, jit_params=jit_params)
+    with _common.Timer("~Contact: Generate Jacobian kernel"):
         kernel_jac = contact.generate_kernel(kt.Jac)
+    with _common.Timer("~Contact: Create matrix"):
+        J = contact.create_matrix(J_cuas)
 
-    @_common.timed("~Contact: Create matrix")
-    def create_A():
-        return contact.create_matrix(J_cuas)
-
-    @_common.timed("~Contact: Assemble matrix")
-    def A(x, A):
-        u.vector[:] = x.array
-        with _common.Timer("~~Contact: Pack u contact (in assemble matrix"):
-            u_opp_0 = contact.pack_u_contact(0, u._cpp_object, gap_0)
-            u_opp_1 = contact.pack_u_contact(1, u._cpp_object, gap_1)
-        with _common.Timer("~~Contact: Pack u (in assemble matrix"):
-            u_0 = dolfinx_cuas.pack_coefficients([u], entities_0)
-            u_1 = dolfinx_cuas.pack_coefficients([u], entities_1)
-        c_0 = np.hstack([coeff_0, u_0, u_opp_0])
-        c_1 = np.hstack([coeff_1, u_1, u_opp_1])
-        with _common.Timer("~~Contact: Contract contributions (in assemble matrix"):
-            contact.assemble_matrix(A, [], 0, kernel_jac, c_0, consts)
-            contact.assemble_matrix(A, [], 1, kernel_jac, c_1, consts)
-        with _common.Timer("~~Contact: Standard contributions (in assemble matrix"):
-            _fem.petsc.assemble_matrix(A, J_cuas)
-
-    # assemble rhs
-    F_cuas = _fem.form(F)
-    kernel_rhs = contact.generate_kernel(kt.Rhs)
-
-    @_common.timed("~Contact: Create vector")
-    def create_b():
-        return _fem.petsc.create_vector(F_cuas)
+    # Generate residual data structures
+    F_cuas = _fem.form(F, form_compiler_params=form_compiler_params, jit_params=jit_params)
+    with _common.Timer("~Contact: Generate residual kernel"):
+        kernel_rhs = contact.generate_kernel(kt.Rhs)
+    with _common.Timer("~Contact: Create vector"):
+        b = _fem.petsc.create_vector(F_cuas)
 
     @_common.timed("~Contact: Assemble residual")
-    def F(x, b):
+    def compute_residual(x, b):
+        b.zeroEntries()
         u.vector[:] = x.array
-        with _common.Timer("~~Contact: Pack u contact (in assemble vector"):
+        with _common.Timer("~~Contact: Pack u contact (in assemble vector)"):
             u_opp_0 = contact.pack_u_contact(0, u._cpp_object, gap_0)
             u_opp_1 = contact.pack_u_contact(1, u._cpp_object, gap_1)
-        with _common.Timer("~~Contact: Pack u (in assemble vector"):
+        with _common.Timer("~~Contact: Pack u (in assemble vector)"):
             u_0 = dolfinx_cuas.pack_coefficients([u], entities_0)
             u_1 = dolfinx_cuas.pack_coefficients([u], entities_1)
         c_0 = np.hstack([coeff_0, u_0, u_opp_0])
         c_1 = np.hstack([coeff_1, u_1, u_opp_1])
-        with _common.Timer("~~Contact: Contact contributions (in assemble vector"):
+        with _common.Timer("~~Contact: Contact contributions (in assemble vector)"):
             contact.assemble_vector(b, 0, kernel_rhs, c_0, consts)
             contact.assemble_vector(b, 1, kernel_rhs, c_1, consts)
-        with _common.Timer("~~Contact: Standard contributions (in assemble vector"):
+        with _common.Timer("~~Contact: Standard contributions (in assemble vector)"):
             _fem.petsc.assemble_vector(b, F_cuas)
 
-    # Setup non-linear problem and Newton-solver
-    problem = dolfinx_cuas.NonlinearProblemCUAS(F, A, create_b, create_A)
-    solver = dolfinx_cuas.NewtonSolver(mesh.comm, problem)
+    @_common.timed("~Contact: Assemble matrix")
+    def compute_jacobian_matrix(x, A):
+        u.vector[:] = x.array
+        A.zeroEntries()
+        with _common.Timer("~~Contact: Pack u contact (in assemble matrix)"):
+            u_opp_0 = contact.pack_u_contact(0, u._cpp_object, gap_0)
+            u_opp_1 = contact.pack_u_contact(1, u._cpp_object, gap_1)
+        with _common.Timer("~~Contact: Pack u (in assemble matrix)"):
+            u_0 = dolfinx_cuas.pack_coefficients([u], entities_0)
+            u_1 = dolfinx_cuas.pack_coefficients([u], entities_1)
+        c_0 = np.hstack([coeff_0, u_0, u_opp_0])
+        c_1 = np.hstack([coeff_1, u_1, u_opp_1])
+        with _common.Timer("~~Contact: Contact contributions (in assemble matrix)"):
+            contact.assemble_matrix(A, [], 0, kernel_jac, c_0, consts)
+            contact.assemble_matrix(A, [], 1, kernel_jac, c_1, consts)
+        with _common.Timer("~~Contact: Standard contributions (in assemble matrix)"):
+            _fem.petsc.assemble_matrix(A, J_cuas)
+        A.assemble()
 
-    # Create rigid motion null-space
+    newton_solver = dolfinx_contact.NewtonSolver(mesh.comm, J, b)
+
+    # Set matrix-vector computations
+    newton_solver.setF(compute_residual)
+    newton_solver.setJ(compute_jacobian_matrix)
+
+    # Set rigid motion nullspace
     null_space = rigid_motions_nullspace(V)
-    solver.A.setNearNullSpace(null_space)
+    newton_solver.A.setNearNullSpace(null_space)
 
     # Set Newton solver options
-    solver.atol = newton_options.get("atol", 1e-9)
-    solver.rtol = newton_options.get("rtol", 1e-9)
-    solver.convergence_criterion = newton_options.get("convergence_criterion", "incremental")
-    solver.max_it = newton_options.get("max_it", 50)
-    solver.error_on_nonconvergence = newton_options.get("error_on_nonconvergence", True)
-    solver.relaxation_parameter = newton_options.get("relaxation_parameter", 1.0)
+    if newton_options.get("atol") is not None:
+        newton_solver.atol = newton_options.get("atol")
+    if newton_options.get("rtol") is not None:
+        newton_solver.atol = newton_options.get("rtol")
+
+    if newton_options.get("convergence_criterion") is not None:
+        conv_crit = newton_options.get("convergence_criterion")
+        if conv_crit == "incremental":
+            crit = dolfinx_contact.ConvergenceCriterion.incremental
+        elif conv_crit == "residual":
+            crit = dolfinx_contact.ConvergenceCriterion.residual
+        else:
+            raise RuntimeError(f"Unknown convergence criterion '{conv_crit}'")
+        newton_solver.convergence_criterion = crit
+    if newton_options.get("max_it") is not None:
+        newton_solver.max_it = newton_options.get("max_it")
+    if newton_options.get("error_on_nonconvergence") is not None:
+        newton_solver.error_on_nonconvergence = newton_options.get("error_on_nonconvergence")
+    if newton_options.get("relaxation_parameter") is not None:
+        newton_solver.relaxation_parameter = newton_options.get("relaxation_parameter")
 
     # Set initial guess
     if initGuess is None:
@@ -261,29 +290,19 @@ def nitsche_unbiased(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTagsMetaClass,
     else:
         u.x.array[:] = initGuess.x.array[:]
 
-    # Define solver and options
-    ksp = solver.krylov_solver
-    opts = _PETSc.Options()
-    option_prefix = ksp.getOptionsPrefix()
-
-    # Set PETSc options
-    opts = _PETSc.Options()
-    opts.prefixPush(option_prefix)
-    for k, v in petsc_options.items():
-        opts[k] = v
-    opts.prefixPop()
-    ksp.setFromOptions()
+    # Set Krylov solver options
+    newton_solver.set_krylov_options(petsc_options)
 
     dofs_global = V.dofmap.index_map_bs * V.dofmap.index_map.size_global
-    _log.set_log_level(_log.LogLevel.INFO)
+    _log.set_log_level(_log.LogLevel.OFF)
 
     # Solve non-linear problem
     with _common.Timer(f"~Contact: {dofs_global} Solve Nitsche"):
-        n, converged = solver.solve(u)
+        n, converged = newton_solver.solve(u)
+    if not converged:
+        raise RuntimeError("Newton solver did not converge")
     u.x.scatter_forward()
 
-    if solver.error_on_nonconvergence:
-        assert(converged)
-    print(f"{dofs_global}, Number of interations: {n:d}")
-
-    return u
+    print(f"{dofs_global}\n Number of Newton iterations: {n:d}\n",
+          f"Number of Krylov iterations {newton_solver.krylov_iterations}\n", flush=True)
+    return u, n, newton_solver.krylov_iterations
