@@ -264,10 +264,12 @@ if __name__ == "__main__":
     newton_options = {"relaxation_parameter": 1, "atol": 1e-8, "rtol": 1e-8, "convergence_criterion": "residual"}
     # petsc_options = {"ksp_type": "preonly", "pc_type": "lu"}
     petsc_options = {"ksp_type": "cgs", "pc_type": "gamg", "pc_gamg_type": "agg", "pc_gamg_coarse_eq_limit": 1000,
-                     "pc_gamg_sym_graph": True, "mg_levels_ksp_type": "chebyshev", "mg_levels_pc_type": "sor",
-                     "mg_levels_esteig_ksp_type": "cg", "matptap_via": "scalable", "pc_gamg_square_graph": 3,
+                     "pc_gamg_agg_nsmooths": 2,
+                     "pc_gamg_sym_graph": True, "mg_levels_ksp_type": "chebyshev", "mg_levels_pc_type": "jacobi",
+                     "matptap_via": "scalable", "pc_gamg_square_graph": 2,
                      "pc_gamg_threshold": 1e-1}  # , "ksp_view": None}
-
+    # Add if mg_levels_pc_type: sor
+    # "mg_levels_esteig_ksp_type": "cg",
     # Pack mesh data for Nitsche solver
     mesh_data = (facet_marker, dirichet_bdy_1, contact_bdy_1, contact_bdy_2, dirichlet_bdy_2)
 
