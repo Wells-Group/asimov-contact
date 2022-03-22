@@ -228,7 +228,7 @@ def create_box_mesh_3D(filename: str, simplex: bool = True):
             model.occ.extrude([(2, square1)], 0, 0, H, numElements=[5], recombine=True)
             model.occ.extrude([(2, square2)], 0, 0, H, numElements=[2], recombine=True)
             model.occ.synchronize()
-            volumes = model.getEntities(3)
+        volumes = model.getEntities(3)
 
         res = 0.1
         model.mesh.field.add("Box", 1)
