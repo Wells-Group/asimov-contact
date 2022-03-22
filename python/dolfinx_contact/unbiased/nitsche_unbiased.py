@@ -219,36 +219,36 @@ def nitsche_unbiased(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTagsMetaClass,
     def compute_residual(x, b):
         b.zeroEntries()
         u.vector[:] = x.array
-        with _common.Timer("~~Contact: Pack u contact (in assemble vector"):
+        with _common.Timer("~~Contact: Pack u contact (in assemble vector)"):
             u_opp_0 = contact.pack_u_contact(0, u._cpp_object, gap_0)
             u_opp_1 = contact.pack_u_contact(1, u._cpp_object, gap_1)
-        with _common.Timer("~~Contact: Pack u (in assemble vector"):
+        with _common.Timer("~~Contact: Pack u (in assemble vector)"):
             u_0 = dolfinx_cuas.pack_coefficients([u], entities_0)
             u_1 = dolfinx_cuas.pack_coefficients([u], entities_1)
         c_0 = np.hstack([coeff_0, u_0, u_opp_0])
         c_1 = np.hstack([coeff_1, u_1, u_opp_1])
-        with _common.Timer("~~Contact: Contact contributions (in assemble vector"):
+        with _common.Timer("~~Contact: Contact contributions (in assemble vector)"):
             contact.assemble_vector(b, 0, kernel_rhs, c_0, consts)
             contact.assemble_vector(b, 1, kernel_rhs, c_1, consts)
-        with _common.Timer("~~Contact: Standard contributions (in assemble vector"):
+        with _common.Timer("~~Contact: Standard contributions (in assemble vector)"):
             _fem.petsc.assemble_vector(b, F_cuas)
 
     @_common.timed("~Contact: Assemble matrix")
     def compute_jacobian_matrix(x, A):
         u.vector[:] = x.array
         A.zeroEntries()
-        with _common.Timer("~~Contact: Pack u contact (in assemble matrix"):
+        with _common.Timer("~~Contact: Pack u contact (in assemble matrix)"):
             u_opp_0 = contact.pack_u_contact(0, u._cpp_object, gap_0)
             u_opp_1 = contact.pack_u_contact(1, u._cpp_object, gap_1)
-        with _common.Timer("~~Contact: Pack u (in assemble matrix"):
+        with _common.Timer("~~Contact: Pack u (in assemble matrix)"):
             u_0 = dolfinx_cuas.pack_coefficients([u], entities_0)
             u_1 = dolfinx_cuas.pack_coefficients([u], entities_1)
         c_0 = np.hstack([coeff_0, u_0, u_opp_0])
         c_1 = np.hstack([coeff_1, u_1, u_opp_1])
-        with _common.Timer("~~Contact: Contract contributions (in assemble matrix"):
+        with _common.Timer("~~Contact: Contact contributions (in assemble matrix)"):
             contact.assemble_matrix(A, [], 0, kernel_jac, c_0, consts)
             contact.assemble_matrix(A, [], 1, kernel_jac, c_1, consts)
-        with _common.Timer("~~Contact: Standard contributions (in assemble matrix"):
+        with _common.Timer("~~Contact: Standard contributions (in assemble matrix)"):
             _fem.petsc.assemble_matrix(A, J_cuas)
         A.assemble()
 
@@ -300,7 +300,7 @@ def nitsche_unbiased(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTagsMetaClass,
     with _common.Timer(f"~Contact: {dofs_global} Solve Nitsche"):
         n, converged = newton_solver.solve(u)
     if not converged:
-        raise RuntimeError("Newton sovler did not converge")
+        raise RuntimeError("Newton solver did not converge")
     u.x.scatter_forward()
 
     print(f"{dofs_global}\n Number of Newton iterations: {n:d}\n",
