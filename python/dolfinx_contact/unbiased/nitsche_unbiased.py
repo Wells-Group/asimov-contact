@@ -299,17 +299,18 @@ def nitsche_unbiased(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTagsMetaClass,
     dofs_global = V.dofmap.index_map_bs * V.dofmap.index_map.size_global
     _log.set_log_level(_log.LogLevel.OFF)
     # Solve non-linear problem
-    with _common.Timer(f"~Contact: {dofs_global} Solve Nitsche"):
+    timing_str = f"~Contact: {id(dofs_global)} Solve Nitsche"
+    with _common.Timer(timing_str):
         n, converged = newton_solver.solve(u)
 
     if outfile is not None:
         viewer = Viewer().createASCII(outfile, "a")
         newton_solver.krylov_solver.view(viewer)
-
+    newton_time = _common.timing(timing_str)
     if not converged:
         raise RuntimeError("Newton solver did not converge")
     u.x.scatter_forward()
 
     print(f"{dofs_global}\n Number of Newton iterations: {n:d}\n",
           f"Number of Krylov iterations {newton_solver.krylov_iterations}\n", flush=True)
-    return u, n, newton_solver.krylov_iterations
+    return u, n, newton_solver.krylov_iterations, newton_time[1]

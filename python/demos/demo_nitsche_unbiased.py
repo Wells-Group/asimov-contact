@@ -39,6 +39,12 @@ if __name__ == "__main__":
     _3D = parser.add_mutually_exclusive_group(required=False)
     _3D.add_argument('--3D', dest='threed', action='store_true',
                      help="Use 3D mesh", default=False)
+    _timing = parser.add_mutually_exclusive_group(required=False)
+    _timing.add_argument('--timing', dest='timing', action='store_true',
+                         help="List timings", default=False)
+    _ksp = parser.add_mutually_exclusive_group(required=False)
+    _ksp.add_argument('--ksp-view', dest='ksp', action='store_true',
+                      help="List ksp options", default=False)
     _simplex = parser.add_mutually_exclusive_group(required=False)
     _simplex.add_argument('--simplex', dest='simplex', action='store_true',
                           help="Use triangle/tet mesh", default=False)
@@ -307,19 +313,22 @@ if __name__ == "__main__":
     log.set_log_level(log.LogLevel.OFF)
     num_newton_its = np.zeros(nload_steps, dtype=int)
     num_krylov_its = np.zeros(nload_steps, dtype=int)
+    newton_time = np.zeros(nload_steps, dtype=np.float64)
 
+    solver_outfile = args.outfile if args.ksp else None
     # Load geometry over multiple steps
     for j in range(nload_steps):
         displacement = load_increment
 
         # Solve contact problem using Nitsche's method
-        u1, n, krylov_iterations = nitsche_unbiased(
+        u1, n, krylov_iterations, solver_time = nitsche_unbiased(
             mesh=mesh, mesh_data=mesh_data, physical_parameters=physical_parameters,
             nitsche_parameters=nitsche_parameters, displacement=displacement,
             quadrature_degree=args.q_degree, petsc_options=petsc_options,
-            newton_options=newton_options, outfile=args.outfile)
+            newton_options=newton_options, outfile=solver_outfile)
         num_newton_its[j] = n
         num_krylov_its[j] = krylov_iterations
+        newton_time[j] = solver_time
         with XDMFFile(mesh.comm, f"results/u_unbiased_{j}.xdmf", "w") as xdmf:
             xdmf.write_mesh(mesh)
             u1.name = "u"
@@ -337,7 +346,8 @@ if __name__ == "__main__":
         xdmf.write_mesh(mesh)
         u.name = "u"
         xdmf.write_function(u)
-    list_timings(mesh.comm, [TimingType.wall])
+    if args.timing:
+        list_timings(mesh.comm, [TimingType.wall])
 
     if args.outfile is None:
         outfile = sys.stdout
@@ -349,6 +359,7 @@ if __name__ == "__main__":
           file=outfile)
     print(f"Newton solver {timing('~Contact: Newton (Newton solver)')[1]}", file=outfile)
     print(f"Krylov solver {timing('~Contact: Newton (Krylov solver)')[1]}", file=outfile)
+    print(f"Newton time: {newton_time}", file=outfile)
     print(f"Newton iterations {num_newton_its}, {sum(num_newton_its)}", file=outfile)
     print(f"Krylov iterations {num_krylov_its}, {sum(num_krylov_its)}", file=outfile)
     print("-" * 25, file=outfile)
