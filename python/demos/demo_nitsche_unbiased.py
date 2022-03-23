@@ -3,10 +3,11 @@
 # SPDX-License-Identifier:    MIT
 
 import argparse
+import sys
 
 import numpy as np
 from dolfinx import log
-from dolfinx.common import TimingType, list_timings
+from dolfinx.common import TimingType, list_timings, timing
 from dolfinx.fem import Function, VectorFunctionSpace
 from dolfinx.io import XDMFFile
 from dolfinx.mesh import locate_entities_boundary, meshtags
@@ -30,7 +31,7 @@ if __name__ == "__main__":
                         choices=[1, -1, 0])
     parser.add_argument("--gamma", default=10, type=np.float64, dest="gamma",
                         help="Coercivity/Stabilization parameter for Nitsche condition")
-    parser.add_argument("--quadrature", default=3, type=int, dest="q_degree",
+    parser.add_argument("--quadrature", default=5, type=int, dest="q_degree",
                         help="Quadrature degree used for contact integrals")
     parser.add_argument("--problem", default=1, type=int, dest="problem",
                         help="Which problem to solve: 1. Flat surfaces, 2. One curved surface, 3. Two curved surfaces",
@@ -53,7 +54,8 @@ if __name__ == "__main__":
                         help="Number of steps for gradual loading")
     parser.add_argument("--res", default=0.1, type=np.float64, dest="res",
                         help="Mesh resolution")
-
+    parser.add_argument("--outfile", type=str, default=None, required=False,
+                        help="File for appending results", dest="outfile")
     # Parse input arguments or set to defualt values
     args = parser.parse_args()
 
@@ -261,15 +263,32 @@ if __name__ == "__main__":
         xdmf.write_meshtags(facet_marker)
 
     # Solver options
-    newton_options = {"relaxation_parameter": 1, "atol": 1e-8, "rtol": 1e-8, "convergence_criterion": "residual"}
+    ksp_tol = 1e-8
+    newton_tol = 1e-7
+    newton_options = {"relaxation_parameter": 1,
+                      "atol": newton_tol,
+                      "rtol": newton_tol,
+                      "convergence_criterion": "residual",
+                      "max_it": 50,
+                      "error_on_nonconvergence": True}
     # petsc_options = {"ksp_type": "preonly", "pc_type": "lu"}
-    petsc_options = {"ksp_type": "cgs", "pc_type": "gamg", "pc_gamg_type": "agg", "pc_gamg_coarse_eq_limit": 1000,
-                     "pc_gamg_agg_nsmooths": 2,
-                     "pc_gamg_sym_graph": True, "mg_levels_ksp_type": "chebyshev", "mg_levels_pc_type": "jacobi",
-                     "matptap_via": "scalable", "pc_gamg_square_graph": 2,
-                     "pc_gamg_threshold": 1e-1}  # , "ksp_view": None}
-    # Add if mg_levels_pc_type: sor
-    # "mg_levels_esteig_ksp_type": "cg",
+    petsc_options = {
+        "matptap_via": "scalable",
+        "ksp_type": "cg",
+        "ksp_rtol": ksp_tol,
+        "ksp_atol": ksp_tol,
+        "pc_type": "gamg",
+        "pc_mg_levels": 3,
+        "pc_mg_cycles": 1,   # 1 is v, 2 is w
+        "mg_levels_ksp_type": "chebyshev",
+        "mg_levels_pc_type": "jacobi",
+        "pc_gamg_type": "agg",
+        "pc_gamg_coarse_eq_limit": 100,
+        "pc_gamg_agg_nsmooths": 1,
+        "pc_gamg_sym_graph": True,
+        "pc_gamg_threshold": 1e-3,
+        "pc_gamg_square_graph": 2,
+    }
     # Pack mesh data for Nitsche solver
     mesh_data = (facet_marker, dirichet_bdy_1, contact_bdy_1, contact_bdy_2, dirichlet_bdy_2)
 
@@ -298,7 +317,7 @@ if __name__ == "__main__":
             mesh=mesh, mesh_data=mesh_data, physical_parameters=physical_parameters,
             nitsche_parameters=nitsche_parameters, displacement=displacement,
             quadrature_degree=args.q_degree, petsc_options=petsc_options,
-            newton_options=newton_options)
+            newton_options=newton_options, outfile=args.outfile)
         num_newton_its[j] = n
         num_krylov_its[j] = krylov_iterations
         with XDMFFile(mesh.comm, f"results/u_unbiased_{j}.xdmf", "w") as xdmf:
@@ -320,9 +339,19 @@ if __name__ == "__main__":
         xdmf.write_function(u)
     list_timings(mesh.comm, [TimingType.wall])
 
-    print(f"Newton iterations {num_newton_its}, {sum(num_newton_its)}")
-    print(f"Krylov iterations {num_krylov_its}, {sum(num_krylov_its)}")
-    print(f"Petsc options {petsc_options}")
-    print(f"Newton options {newton_options}")
-    print(f"Krylov/Newton: {num_krylov_its/num_newton_its}")
-    print(f"Krylov/Newton accumulated: {sum(num_krylov_its)/sum(num_newton_its)}")
+    if args.outfile is None:
+        outfile = sys.stdout
+    else:
+        outfile = open(args.outfile, "a")
+    print("-" * 25, file=outfile)
+    print(f"Newton options {newton_options}", file=outfile)
+    print(f"num_dofs: {u1.function_space.dofmap.index_map_bs*u1.function_space.dofmap.index_map.size_global}, {mesh.topology.cell_type}",
+          file=outfile)
+    print(f"Newton solver {timing('~Contact: Newton (Newton solver)')[1]}", file=outfile)
+    print(f"Krylov solver {timing('~Contact: Newton (Krylov solver)')[1]}", file=outfile)
+    print(f"Newton iterations {num_newton_its}, {sum(num_newton_its)}", file=outfile)
+    print(f"Krylov iterations {num_krylov_its}, {sum(num_krylov_its)}", file=outfile)
+    print("-" * 25, file=outfile)
+
+    if args.outfile is not None:
+        outfile.close()
