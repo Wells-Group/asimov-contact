@@ -216,7 +216,7 @@ def nitsche_unbiased(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTagsMetaClass,
         b = _fem.petsc.create_vector(F_cuas)
 
     @_common.timed("~Contact: Update coefficients")
-    def compute_coefficients(x):
+    def compute_coefficients(x, coeffs):
         u.vector[:] = x.array
         with _common.Timer("~~Contact: Pack u contact"):
             u_opp_0 = contact.pack_u_contact(0, u._cpp_object, gap_0)
@@ -226,7 +226,8 @@ def nitsche_unbiased(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTagsMetaClass,
             u_1 = dolfinx_cuas.pack_coefficients([u], entities_1)
         c_0 = np.hstack([coeff_0, u_0, u_opp_0])
         c_1 = np.hstack([coeff_1, u_1, u_opp_1])
-        return [c_0, c_1]
+        coeffs[0][:, :] = c_0[:, :]
+        coeffs[1][:, :] = c_1[:, :]
 
     @_common.timed("~Contact: Assemble residual")
     def compute_residual(x, b, coeffs):
@@ -249,7 +250,10 @@ def nitsche_unbiased(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTagsMetaClass,
             _fem.petsc.assemble_matrix(A, J_cuas)
         A.assemble()
 
-    newton_solver = dolfinx_contact.NewtonSolver(mesh.comm, J, b)
+    # coefficient arrays
+    num_coeffs = contact.coefficients_size()
+    coeffs = [np.zeros((facets_0.size, num_coeffs)), np.zeros((facets_1.size, num_coeffs))]
+    newton_solver = dolfinx_contact.NewtonSolver(mesh.comm, J, b, coeffs)
 
     # Set matrix-vector computations
     newton_solver.setF(compute_residual)
