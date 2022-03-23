@@ -21,6 +21,12 @@ axs[0].axis([1e3, 1e6, 0, 250])
 axs[0].legend()
 poly = np.polyfit(n_dofs[0:2], runtime[0:2], deg=1)
 
+# Check that polyfit is correct:
+a = (runtime[1] - runtime[0]) / (n_dofs[1] - n_dofs[0])
+assert(np.isclose(poly[0], a))
+b = runtime[0] - a * n_dofs[0]
+assert(np.isclose(b, poly[1]))
+
 
 def f(x):
     return poly[0] * x + poly[1]
