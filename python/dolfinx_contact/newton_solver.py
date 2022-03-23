@@ -23,9 +23,9 @@ class NewtonSolver():
                  "convergence_criterion", "relaxation_parameter", "_compute_residual",
                  "_compute_jacobian", "_compute_preconditioner", "_compute_coefficients", "krylov_iterations",
                  "iteration", "residual", "initial_residual", "krylov_solver", "_dx", "comm",
-                 "_A", "_b", "_P"]
+                 "_A", "_b", "_coeffs", "_P"]
 
-    def __init__(self, comm: MPI.Comm, J: PETSc.Mat, b: PETSc.Vec):
+    def __init__(self, comm: MPI.Comm, J: PETSc.Mat, b: PETSc.Vec, coeffs: Sequence[list[float]]):
         """
         Create a Newton solver
 
@@ -46,6 +46,7 @@ class NewtonSolver():
         self.convergence_criterion = ConvergenceCriterion.residual
         self._A = J
         self._b = b
+        self._coeffs = coeffs
         self.krylov_solver = PETSc.KSP()
         self.krylov_solver.create(self.comm)
         self.krylov_solver.setOptionsPrefix("nls_solve_")
@@ -122,7 +123,7 @@ class NewtonSolver():
         self._compute_preconditioner = P
         self._P = Pmat
 
-    def setCoeffs(self, Coeffs: Callable[[PETSc.Vec], None]):
+    def setCoeffs(self, Coeffs: Callable[[PETSc.Vec, Sequence[list[float]]], None]):
         """
         Set the function for computing the coefficients needed for assembly
         Args:
@@ -166,7 +167,7 @@ class NewtonSolver():
         self.residual = -1
 
         try:
-            coeffs = self._compute_coefficients(x_vec)
+            self._compute_coefficients(x_vec, self._coeffs)
         except AttributeError:
             raise RuntimeError("Function for computing coefficients has not been set")
 
@@ -176,7 +177,7 @@ class NewtonSolver():
             raise RuntimeError("Pre-computation has not been set")
 
         try:
-            self._compute_residual(x_vec, self._b, coeffs)
+            self._compute_residual(x_vec, self._b, self._coeffs)
         except AttributeError:
             raise RuntimeError("Function for computing residual vector has not been provided")
 
@@ -203,7 +204,7 @@ class NewtonSolver():
         # Start iterations
         while not newton_converged and self.iteration < self.max_it:
             try:
-                self._compute_jacobian(x_vec, self._A, coeffs)
+                self._compute_jacobian(x_vec, self._A, self._coeffs)
             except AttributeError:
                 raise RuntimeError("Function for computing Jacobian has not been provided")
 
@@ -218,7 +219,7 @@ class NewtonSolver():
 
             # Update solution
             self._update_solution(self._dx, x_vec)
-            coeffs = self._compute_coefficients(x_vec)
+            self._compute_coefficients(x_vec, self._coeffs)
 
             # Increment iteration count
             self.iteration += 1
@@ -230,7 +231,7 @@ class NewtonSolver():
                 pass
 
             # Compute residual (F)
-            self._compute_residual(x_vec, self._b, coeffs)
+            self._compute_residual(x_vec, self._b, self._coeffs)
 
             # Initialize initial residual
             if self.iteration == 1:
