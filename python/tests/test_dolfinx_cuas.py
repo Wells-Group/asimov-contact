@@ -88,7 +88,7 @@ def test_contact_kernel(theta, gamma, dim, gap):
         indices = np.concatenate([top_facets, bottom_facets])
         values = np.hstack([top_values, bottom_values])
         sorted_facets = np.argsort(indices)
-        facet_marker = dolfinx.mesh.MeshTags(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
+        facet_marker = dolfinx.mesh.meshtags(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
         bottom_facets = np.sort(bottom_facets)
 
         V = dolfinx.fem.VectorFunctionSpace(mesh, ("CG", 1))

@@ -46,7 +46,7 @@ def create_disk_mesh(LcMin=0.005, LcMax=0.015, filename="disk.msh"):
     gmsh.finalize()
 
 
-def create_sphere_mesh(LcMin=0.01, LcMax=0.05, filename="disk.msh"):
+def create_sphere_mesh(LcMin=0.025, LcMax=0.1, filename="disk.msh"):
     """
      Create a sphere mesh centered at (0.5, 0.5, 0.5) with radius 0.5.
      Mesh is finer at (0.5, 0.5, 0) using LcMin, and gradually decreasing to LcMax

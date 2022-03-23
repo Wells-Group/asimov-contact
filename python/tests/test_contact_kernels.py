@@ -13,7 +13,7 @@ from dolfinx.fem import (Function, FunctionSpace, IntegralType,
                          VectorFunctionSpace, form)
 from dolfinx.fem.petsc import (assemble_matrix, assemble_vector, create_matrix,
                                create_vector)
-from dolfinx.mesh import (MeshTags, create_unit_cube, create_unit_square,
+from dolfinx.mesh import (meshtags, create_unit_cube, create_unit_square,
                           locate_entities_boundary)
 from mpi4py import MPI
 
@@ -44,7 +44,7 @@ def test_vector_surface_kernel(dim, kernel_type, P, Q):
                                                               np.isclose(x[0], 1.0)))
     facets = np.sort(facets)
     values = np.ones(len(facets), dtype=np.int32)
-    ft = MeshTags(mesh, mesh.topology.dim - 1, facets, values)
+    ft = meshtags(mesh, mesh.topology.dim - 1, facets, values)
 
     # Define variational form
     V = VectorFunctionSpace(mesh, ("CG", P))
@@ -163,7 +163,7 @@ def test_matrix_surface_kernel(dim, kernel_type, P, Q):
                                                                            np.isclose(x[0], 1.0)))
     facets = np.sort(facets)
     values = np.ones(len(facets), dtype=np.int32)
-    ft = MeshTags(mesh, mesh.topology.dim - 1, facets, values)
+    ft = meshtags(mesh, mesh.topology.dim - 1, facets, values)
 
     # Define variational form
     V = VectorFunctionSpace(mesh, ("CG", P))

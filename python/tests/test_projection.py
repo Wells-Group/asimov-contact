@@ -11,7 +11,7 @@ import dolfinx.fem as _fem
 import numpy as np
 import pytest
 from dolfinx.io import XDMFFile
-from dolfinx.mesh import MeshTags, locate_entities_boundary
+from dolfinx.mesh import meshtags, locate_entities_boundary
 from mpi4py import MPI
 
 import dolfinx_contact
@@ -27,7 +27,7 @@ def test_projection(q_deg, surf, dim):
     # Create mesh
     if dim == 2:
         fname = "two_disks"
-        create_circle_circle_mesh(filename=f"{fname}.msh")
+        create_circle_circle_mesh(filename=f"{fname}.msh", res=0.025)
         convert_mesh(fname, fname, "triangle", prune_z=True)
         convert_mesh(f"{fname}", f"{fname}_facets", "line", prune_z=True)
     else:
@@ -68,7 +68,7 @@ def test_projection(q_deg, surf, dim):
     indices = np.concatenate([facets_0, facets_1])
     values = np.hstack([values_0, values_1])
     sorted_ind = np.argsort(indices)
-    facet_marker = MeshTags(mesh, tdim - 1, indices[sorted_ind], values[sorted_ind])
+    facet_marker = meshtags(mesh, tdim - 1, indices[sorted_ind], values[sorted_ind])
 
     # Functions space
     V = _fem.VectorFunctionSpace(mesh, ("CG", 1))

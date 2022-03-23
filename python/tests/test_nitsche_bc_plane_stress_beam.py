@@ -10,8 +10,8 @@ import ufl
 from dolfinx.fem import Function, VectorFunctionSpace, assemble_scalar, form
 from dolfinx.fem.petsc import LinearProblem, NonlinearProblem
 from dolfinx.io import XDMFFile
-from dolfinx.mesh import (CellType, GhostMode, MeshTags, create_rectangle,
-                          locate_entities_boundary)
+from dolfinx.mesh import (CellType, GhostMode, create_rectangle,
+                          locate_entities_boundary, meshtags)
 from dolfinx.nls.petsc import NewtonSolver
 from mpi4py import MPI
 
@@ -42,7 +42,7 @@ def solve_manufactured(nx: int, ny: int, theta: float, gamma: float,
 
     # Sort values to work in parallel
     sorted = np.argsort(left_facets)
-    facet_marker = MeshTags(mesh, tdim - 1, left_facets[sorted], left_values[sorted])
+    facet_marker = meshtags(mesh, tdim - 1, left_facets[sorted], left_values[sorted])
 
     V = VectorFunctionSpace(mesh, ("CG", 1))
     n = ufl.FacetNormal(mesh)
