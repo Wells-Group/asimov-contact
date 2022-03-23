@@ -1,15 +1,14 @@
-from IPython import embed
 import matplotlib.pyplot as plt
 import numpy as np
 
-n_dofs = [4137, 13332, 17028, 22932, 33930, 51510, 89712, 170352, 245514]
-newton_iterations = [9, 9, 9, 10, 10, 10, 10, 11, 11]
-krylov_iterations = [154, 159, 160, 179, 188, 196, 210, 236, 237]
+n_dofs = [4137, 13332, 17028, 22932, 33930, 51510, 89712, 170352, 245514, 388620, 669981]
+newton_iterations = [9, 9, 9, 10, 10, 10, 10, 11, 11, 12, 12]
+krylov_iterations = [154, 159, 160, 179, 188, 196, 210, 236, 237, 264, 270]
 runtime = [6.77954976, 26.76396604, 35.45588557, 51.65037789, 83.86667789, 124.73322894, 229.36642167,
-           492.29369094, 715.92167737]
+           492.29369094, 715.92167737, 1257.08187591, 2188]
 
-plt.title("Cylinder-Cylinder contact problem (1-step approach, tetrahedron)")
 fig, axs = plt.subplots(2, 1)
+axs[0].set_title("Cylinder-Cylinder contact problem (1-step approach, tetrahedron)")
 
 axs[0].plot(n_dofs, newton_iterations, marker="o", label="Newton\n solver")
 axs[0].plot(n_dofs, krylov_iterations, marker="s", label="Krylov\n solver")
@@ -17,14 +16,20 @@ axs[0].set_xlabel("Degrees of freedom")
 axs[0].set_ylabel("Number of iterations")
 axs[0].set_xscale('log')
 axs[0].grid(True, which="both")
-axs[0].axis([1e3, 1e6, 0, 250])
+axs[0].axis([1e3, 1e6, 0, 300])
 axs[0].legend()
-poly = np.polyfit(n_dofs[0:2], runtime[0:2], deg=1)
+
+n_dofs = np.array(n_dofs)
+min = 0
+max = 1
+ddofs = np.array([n_dofs[min], n_dofs[max]])
+drt = np.array([runtime[min], runtime[max]])
+poly = np.polyfit(ddofs, drt, deg=1)
 
 # Check that polyfit is correct:
-a = (runtime[1] - runtime[0]) / (n_dofs[1] - n_dofs[0])
+a = (runtime[max] - runtime[min]) / (n_dofs[max] - n_dofs[min])
 assert(np.isclose(poly[0], a))
-b = runtime[0] - a * n_dofs[0]
+b = runtime[min] - a * n_dofs[min]
 assert(np.isclose(b, poly[1]))
 
 
@@ -32,15 +37,16 @@ def f(x):
     return poly[0] * x + poly[1]
 
 
-axs[1].loglog(n_dofs, runtime, marker="o")
-n_dofs = np.array(n_dofs)
-axs[1].loglog(n_dofs, f(n_dofs), "--")
+axs[1].loglog(n_dofs, runtime, marker="o", label="Newton Solver")
+
+axs[1].loglog(n_dofs, f(n_dofs), "--", label="Linear fit")
 axs[1].set_xlabel("Degrees of freedom")
-axs[1].set_ylabel("Runtime (Newton Solver)")
+axs[1].set_ylabel("Runtime")
 
 axs[1].grid(True, which="both")
-axs[1].axis([1e3, 1e6, 1e0, 1e3])
 
+axs[1].axis([1e3, 1e6, 3e0, 3e3])
+axs[1].legend()
 plt.savefig("single_step_tet.png")
 
 exit()
