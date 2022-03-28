@@ -3,7 +3,7 @@
 # SPDX-License-Identifier:    MIT
 
 from enum import Enum
-from typing import Callable, Tuple, Union
+from typing import Callable, Tuple, Union, Sequence
 
 import numpy
 from dolfinx import fem
@@ -21,11 +21,11 @@ class ConvergenceCriterion(Enum):
 class NewtonSolver():
     __slots__ = ["max_it", "rtol", "atol", "report", "error_on_nonconvergence",
                  "convergence_criterion", "relaxation_parameter", "_compute_residual",
-                 "_compute_jacobian", "_compute_preconditioner", "krylov_iterations",
+                 "_compute_jacobian", "_compute_preconditioner", "_compute_coefficients", "krylov_iterations",
                  "iteration", "residual", "initial_residual", "krylov_solver", "_dx", "comm",
-                 "_A", "_b", "_P"]
+                 "_A", "_b", "_coeffs", "_P"]
 
-    def __init__(self, comm: MPI.Comm, J: PETSc.Mat, b: PETSc.Vec):
+    def __init__(self, comm: MPI.Comm, J: PETSc.Mat, b: PETSc.Vec, coeffs: Sequence[list[float]]):
         """
         Create a Newton solver
 
@@ -46,6 +46,7 @@ class NewtonSolver():
         self.convergence_criterion = ConvergenceCriterion.residual
         self._A = J
         self._b = b
+        self._coeffs = coeffs
         self.krylov_solver = PETSc.KSP()
         self.krylov_solver.create(self.comm)
         self.krylov_solver.setOptionsPrefix("nls_solve_")
@@ -96,7 +97,7 @@ class NewtonSolver():
         """Get the residual vector"""
         return self._b
 
-    def setJ(self, J: Callable[[PETSc.Vec, PETSc.Mat], None]):
+    def setJ(self, J: Callable[[PETSc.Vec, PETSc.Mat, list[numpy.ndarray]], None]):
         """
         Set the function for computing the Jacobian
         Args:
@@ -104,7 +105,7 @@ class NewtonSolver():
         """
         self._compute_jacobian = J
 
-    def setF(self, F: Callable[[PETSc.Vec, PETSc.Vec], None]):
+    def setF(self, F: Callable[[PETSc.Vec, PETSc.Vec, list[numpy.ndarray]], None]):
         """
         Set the function for computing the residual
         Args:
@@ -112,7 +113,7 @@ class NewtonSolver():
         """
         self._compute_residual = F
 
-    def setP(self, P: Callable[[PETSc.Vec, PETSc.Mat], None], Pmat: PETSc.Mat):
+    def setP(self, P: Callable[[PETSc.Vec, PETSc.Mat, list[numpy.ndarray]], None], Pmat: PETSc.Mat):
         """
         Set the function for computing the preconditioner matrix
         Args:
@@ -121,6 +122,14 @@ class NewtonSolver():
         """
         self._compute_preconditioner = P
         self._P = Pmat
+
+    def setCoeffs(self, Coeffs: Callable[[PETSc.Vec, list[numpy.ndarray]], None]):
+        """
+        Set the function for computing the coefficients needed for assembly
+        Args:
+            Coeffs: Function to compute coefficients coeffs(x)
+        """
+        self._compute_coefficients = Coeffs
 
     def _pre_computation(self, x: PETSc.Vec):
         x.ghostUpdate(addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD)
@@ -158,12 +167,17 @@ class NewtonSolver():
         self.residual = -1
 
         try:
+            self._compute_coefficients(x_vec, self._coeffs)
+        except AttributeError:
+            raise RuntimeError("Function for computing coefficients has not been set")
+
+        try:
             self._pre_computation(x_vec)
         except AttributeError:
             raise RuntimeError("Pre-computation has not been set")
 
         try:
-            self._compute_residual(x_vec, self._b)
+            self._compute_residual(x_vec, self._b, self._coeffs)
         except AttributeError:
             raise RuntimeError("Function for computing residual vector has not been provided")
 
@@ -190,7 +204,7 @@ class NewtonSolver():
         # Start iterations
         while not newton_converged and self.iteration < self.max_it:
             try:
-                self._compute_jacobian(x_vec, self._A)
+                self._compute_jacobian(x_vec, self._A, self._coeffs)
             except AttributeError:
                 raise RuntimeError("Function for computing Jacobian has not been provided")
 
@@ -205,6 +219,7 @@ class NewtonSolver():
 
             # Update solution
             self._update_solution(self._dx, x_vec)
+            self._compute_coefficients(x_vec, self._coeffs)
 
             # Increment iteration count
             self.iteration += 1
@@ -216,7 +231,7 @@ class NewtonSolver():
                 pass
 
             # Compute residual (F)
-            self._compute_residual(x_vec, self._b)
+            self._compute_residual(x_vec, self._b, self._coeffs)
 
             # Initialize initial residual
             if self.iteration == 1:

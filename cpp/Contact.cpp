@@ -75,6 +75,26 @@ dolfinx_contact::Contact::Contact(
   }
 }
 //------------------------------------------------------------------------------------------------
+std::size_t dolfinx_contact::Contact::coefficients_size()
+{
+  // mesh data
+  auto mesh = _marker->mesh();
+  const std::size_t gdim = mesh->geometry().dim(); // geometrical dimension
+
+  // Extract function space data (assuming same test and trial space)
+  std::shared_ptr<const dolfinx::fem::DofMap> dofmap = _V->dofmap();
+  const std::size_t ndofs_cell = dofmap->cell_dofs(0).size();
+  const std::size_t bs = dofmap->bs();
+
+  // NOTE: Assuming same number of quadrature points on each cell
+  const std::size_t num_q_points = _qp_ref_facet[0].shape(0);
+  const std::size_t max_links
+      = *std::max_element(_max_links.begin(), _max_links.end());
+
+  return 3 + num_q_points * (2 * gdim + ndofs_cell * bs * max_links + bs)
+         + ndofs_cell * bs;
+}
+
 Mat dolfinx_contact::Contact::create_petsc_matrix(
     const dolfinx::fem::Form<PetscScalar>& a, const std::string& type)
 {
