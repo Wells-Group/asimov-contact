@@ -97,7 +97,7 @@ class NewtonSolver():
         """Get the residual vector"""
         return self._b
 
-    def setJ(self, J: Callable[[PETSc.Vec, PETSc.Mat], None]):
+    def setJ(self, J: Callable[[PETSc.Vec, PETSc.Mat, list[numpy.ndarray]], None]):
         """
         Set the function for computing the Jacobian
         Args:
@@ -105,7 +105,7 @@ class NewtonSolver():
         """
         self._compute_jacobian = J
 
-    def setF(self, F: Callable[[PETSc.Vec, PETSc.Vec], None]):
+    def setF(self, F: Callable[[PETSc.Vec, PETSc.Vec, list[numpy.ndarray]], None]):
         """
         Set the function for computing the residual
         Args:
@@ -113,7 +113,7 @@ class NewtonSolver():
         """
         self._compute_residual = F
 
-    def setP(self, P: Callable[[PETSc.Vec, PETSc.Mat], None], Pmat: PETSc.Mat):
+    def setP(self, P: Callable[[PETSc.Vec, PETSc.Mat, list[numpy.ndarray]], None], Pmat: PETSc.Mat):
         """
         Set the function for computing the preconditioner matrix
         Args:
@@ -123,7 +123,7 @@ class NewtonSolver():
         self._compute_preconditioner = P
         self._P = Pmat
 
-    def setCoeffs(self, Coeffs: Callable[[PETSc.Vec, Sequence[list[float]]], None]):
+    def setCoeffs(self, Coeffs: Callable[[PETSc.Vec, list[numpy.ndarray]], None]):
         """
         Set the function for computing the coefficients needed for assembly
         Args:
