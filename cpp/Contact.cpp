@@ -75,11 +75,12 @@ dolfinx_contact::Contact::Contact(
   }
 }
 //------------------------------------------------------------------------------------------------
-std::size_t dolfinx_contact::Contact::coefficients_size()
+std::size_t dolfinx_contact::Contact::coefficients_size(bool variable_gap)
 {
   // mesh data
   auto mesh = _marker->mesh();
   const std::size_t gdim = mesh->geometry().dim(); // geometrical dimension
+  const std::size_t tdim = mesh->topology().dim(); // topological dimension
 
   // Extract function space data (assuming same test and trial space)
   std::shared_ptr<const dolfinx::fem::DofMap> dofmap = _V->dofmap();
@@ -91,8 +92,15 @@ std::size_t dolfinx_contact::Contact::coefficients_size()
   const std::size_t max_links
       = *std::max_element(_max_links.begin(), _max_links.end());
 
-  return 3 + num_q_points * (2 * gdim + ndofs_cell * bs * max_links + bs)
-         + ndofs_cell * bs;
+  if (variable_gap)
+    return 3
+           + num_q_points
+                 * (2 * gdim + (tdim + 1) * ndofs_cell * bs * max_links + bs
+                    + tdim * gdim + (tdim + 1) * tdim * gdim / 2)
+           + ndofs_cell * bs;
+  else
+    return 3 + num_q_points * (2 * gdim + ndofs_cell * bs * max_links + bs)
+           + ndofs_cell * bs;
 }
 
 Mat dolfinx_contact::Contact::create_petsc_matrix(

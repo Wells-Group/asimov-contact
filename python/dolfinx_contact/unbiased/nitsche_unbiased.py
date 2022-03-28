@@ -29,6 +29,8 @@ def nitsche_unbiased(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTagsMetaClass,
                      petsc_options: dict = None, newton_options: dict = None, initGuess=None):
     """
     Use custom kernel to compute the contact problem with two elastic bodies coming into contact.
+    The gap function is linear in u and based on closest point projection on the un-deformed body.
+
 
     Parameters
     ==========

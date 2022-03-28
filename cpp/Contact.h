@@ -59,7 +59,11 @@ public:
   void set_quadrature_degree(int deg) { _quadrature_degree = deg; }
 
   // return size of coefficients vector per facet on s
-  std::size_t coefficients_size();
+  std::size_t coefficients_size(bool variable_gap);
+  std::size_t num_quadrature_points() const
+  {
+    return std::size_t(_qp_ref_facet[0].shape(0));
+  }
 
   /// return distance map (adjacency map mapping quadrature points on surface
   /// to closest facet on other surface)
@@ -874,8 +878,8 @@ public:
     std::vector<PetscScalar> c((num_derivatives * tdim + 1) * num_facets
                                    * num_q_points * max_links * ndofs * bs,
                                0.0);
-    const auto cstride
-        = (int) (num_derivatives * tdim + 1) * num_q_points * max_links * ndofs * bs;
+    const auto cstride = (int)(num_derivatives * tdim + 1) * num_q_points
+                         * max_links * ndofs * bs;
     xt::xtensor<double, 2> q_points
         = xt::zeros<double>({std::size_t(num_q_points), std::size_t(gdim)});
     xt::xtensor<double, 2> dphi;

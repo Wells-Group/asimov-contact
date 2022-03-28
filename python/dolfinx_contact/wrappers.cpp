@@ -111,7 +111,10 @@ PYBIND11_MODULE(cpp, m)
                  dolfinx::graph::AdjacencyList<std::int32_t>>(
                  std::move(data), std::move(offsets));
            })
-      .def("coefficients_size", &dolfinx_contact::Contact::coefficients_size)
+      .def("coefficients_size", &dolfinx_contact::Contact::coefficients_size,
+           py::arg("variable_gap") = false)
+      .def("num_quadrature_points",
+           &dolfinx_contact::Contact::num_quadrature_points)
       .def("set_quadrature_degree",
            &dolfinx_contact::Contact::set_quadrature_degree)
       .def("generate_kernel",

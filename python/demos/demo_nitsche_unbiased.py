@@ -20,6 +20,7 @@ from dolfinx_contact.meshing import (convert_mesh, create_box_mesh_2D,
                                      create_cylinder_cylinder_mesh,
                                      create_sphere_plane_mesh)
 from dolfinx_contact.unbiased.nitsche_unbiased import nitsche_unbiased
+from dolfinx_contact.unbiased.nitsche_variable_gap import nitsche_variable_gap
 
 if __name__ == "__main__":
     desc = "Nitsche's method with rigid surface using custom assemblers"
@@ -66,7 +67,6 @@ if __name__ == "__main__":
     problem = args.problem
     nload_steps = args.nload_steps
     simplex = args.simplex
-    variable_gap = args.variable_gap
 
     # Load mesh and create identifier functions for the top (Displacement condition)
     # and the bottom (contact condition)
@@ -297,11 +297,18 @@ if __name__ == "__main__":
         displacement = load_increment
 
         # Solve contact problem using Nitsche's method
-        u1, n, krylov_iterations = nitsche_unbiased(
-            mesh=mesh, mesh_data=mesh_data, physical_parameters=physical_parameters,
-            nitsche_parameters=nitsche_parameters, displacement=displacement,
-            quadrature_degree=args.q_degree, petsc_options=petsc_options,
-            newton_options=newton_options)
+        if args.variable_gap:
+            u1, n, krylov_iterations = nitsche_variable_gap(
+                mesh=mesh, mesh_data=mesh_data, physical_parameters=physical_parameters,
+                nitsche_parameters=nitsche_parameters, displacement=displacement,
+                quadrature_degree=args.q_degree, petsc_options=petsc_options,
+                newton_options=newton_options)
+        else:
+            u1, n, krylov_iterations = nitsche_unbiased(
+                mesh=mesh, mesh_data=mesh_data, physical_parameters=physical_parameters,
+                nitsche_parameters=nitsche_parameters, displacement=displacement,
+                quadrature_degree=args.q_degree, petsc_options=petsc_options,
+                newton_options=newton_options)
         num_newton_its[j] = n
         num_krylov_its[j] = krylov_iterations
         with XDMFFile(mesh.comm, f"results/u_unbiased_{j}.xdmf", "w") as xdmf:
