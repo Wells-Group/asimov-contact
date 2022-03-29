@@ -218,48 +218,50 @@ def nitsche_unbiased(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTagsMetaClass,
     with _common.Timer("~Contact: Create vector"):
         b = _fem.petsc.create_vector(F_cuas)
 
-    @_common.timed("~Contact: Assemble residual")
-    def compute_residual(x, b):
-        b.zeroEntries()
+    @_common.timed("~Contact: Update coefficients")
+    def compute_coefficients(x, coeffs):
         u.vector[:] = x.array
-        with _common.Timer("~~Contact: Pack u contact (in assemble vector)"):
+        with _common.Timer("~~Contact: Pack u contact"):
             u_opp_0 = contact.pack_u_contact(0, u._cpp_object, gap_0)
             u_opp_1 = contact.pack_u_contact(1, u._cpp_object, gap_1)
-        with _common.Timer("~~Contact: Pack u (in assemble vector)"):
+        with _common.Timer("~~Contact: Pack u"):
             u_0 = dolfinx_cuas.pack_coefficients([u], entities_0)
             u_1 = dolfinx_cuas.pack_coefficients([u], entities_1)
         c_0 = np.hstack([coeff_0, u_0, u_opp_0])
         c_1 = np.hstack([coeff_1, u_1, u_opp_1])
+        coeffs[0][:, :] = c_0[:, :]
+        coeffs[1][:, :] = c_1[:, :]
+
+    @_common.timed("~Contact: Assemble residual")
+    def compute_residual(x, b, coeffs):
+        b.zeroEntries()
+        u.vector[:] = x.array
         with _common.Timer("~~Contact: Contact contributions (in assemble vector)"):
-            contact.assemble_vector(b, 0, kernel_rhs, c_0, consts)
-            contact.assemble_vector(b, 1, kernel_rhs, c_1, consts)
+            contact.assemble_vector(b, 0, kernel_rhs, coeffs[0], consts)
+            contact.assemble_vector(b, 1, kernel_rhs, coeffs[1], consts)
         with _common.Timer("~~Contact: Standard contributions (in assemble vector)"):
             _fem.petsc.assemble_vector(b, F_cuas)
 
     @_common.timed("~Contact: Assemble matrix")
-    def compute_jacobian_matrix(x, A):
+    def compute_jacobian_matrix(x, A, coeffs):
         u.vector[:] = x.array
         A.zeroEntries()
-        with _common.Timer("~~Contact: Pack u contact (in assemble matrix)"):
-            u_opp_0 = contact.pack_u_contact(0, u._cpp_object, gap_0)
-            u_opp_1 = contact.pack_u_contact(1, u._cpp_object, gap_1)
-        with _common.Timer("~~Contact: Pack u (in assemble matrix)"):
-            u_0 = dolfinx_cuas.pack_coefficients([u], entities_0)
-            u_1 = dolfinx_cuas.pack_coefficients([u], entities_1)
-        c_0 = np.hstack([coeff_0, u_0, u_opp_0])
-        c_1 = np.hstack([coeff_1, u_1, u_opp_1])
         with _common.Timer("~~Contact: Contact contributions (in assemble matrix)"):
-            contact.assemble_matrix(A, [], 0, kernel_jac, c_0, consts)
-            contact.assemble_matrix(A, [], 1, kernel_jac, c_1, consts)
+            contact.assemble_matrix(A, [], 0, kernel_jac, coeffs[0], consts)
+            contact.assemble_matrix(A, [], 1, kernel_jac, coeffs[1], consts)
         with _common.Timer("~~Contact: Standard contributions (in assemble matrix)"):
             _fem.petsc.assemble_matrix(A, J_cuas)
         A.assemble()
 
-    newton_solver = dolfinx_contact.NewtonSolver(mesh.comm, J, b)
+    # coefficient arrays
+    num_coeffs = contact.coefficients_size()
+    coeffs = [np.zeros((facets_0.size, num_coeffs)), np.zeros((facets_1.size, num_coeffs))]
+    newton_solver = dolfinx_contact.NewtonSolver(mesh.comm, J, b, coeffs)
 
     # Set matrix-vector computations
     newton_solver.setF(compute_residual)
     newton_solver.setJ(compute_jacobian_matrix)
+    newton_solver.setCoeffs(compute_coefficients)
 
     # Set rigid motion nullspace
     null_space = rigid_motions_nullspace(V)

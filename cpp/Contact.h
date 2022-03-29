@@ -63,6 +63,9 @@ public:
   int quadrature_degree() const { return _quadrature_degree; }
   void set_quadrature_degree(int deg) { _quadrature_degree = deg; }
 
+  // return size of coefficients vector per facet on s
+  std::size_t coefficients_size();
+
   /// return distance map (adjacency map mapping quadrature points on surface
   /// to closest facet on other surface)
   /// @param[in] surface - index of the surface
