@@ -355,8 +355,8 @@ if __name__ == "__main__":
         outfile = open(args.outfile, "a")
     print("-" * 25, file=outfile)
     print(f"Newton options {newton_options}", file=outfile)
-    print(f"num_dofs: {u1.function_space.dofmap.index_map_bs*u1.function_space.dofmap.index_map.size_global}, {mesh.topology.cell_type}",
-          file=outfile)
+    print(f"num_dofs: {u1.function_space.dofmap.index_map_bs*u1.function_space.dofmap.index_map.size_global}"
+          + f", {mesh.topology.cell_type}", file=outfile)
     print(f"Newton solver {timing('~Contact: Newton (Newton solver)')[1]}", file=outfile)
     print(f"Krylov solver {timing('~Contact: Newton (Krylov solver)')[1]}", file=outfile)
     print(f"Newton time: {newton_time}", file=outfile)
