@@ -6,7 +6,7 @@ from enum import Enum
 from typing import Callable, Tuple, Union, Sequence
 
 import numpy
-from dolfinx import fem
+from dolfinx import fem, common
 from mpi4py import MPI
 from petsc4py import PETSc
 
@@ -49,7 +49,7 @@ class NewtonSolver():
         self._coeffs = coeffs
         self.krylov_solver = PETSc.KSP()
         self.krylov_solver.create(self.comm)
-        self.krylov_solver.setOptionsPrefix("nls_solve_")
+        self.krylov_solver.setOptionsPrefix("Newton_solver_")
 
     def set_krylov_options(self, options: dict[str, str]):
         """
@@ -58,17 +58,26 @@ class NewtonSolver():
         # Options that has to apply to all matrices, not just the solver matrix
         keys = ["matptap_via"]
         g_opts = {}
+        pc_keys = ["pc_mg_levels", "pc_mg_cycles"]
+        pc_opts = {}
         opts = PETSc.Options()
         opts.prefixPush(self.krylov_solver.getOptionsPrefix())
         for k, v in options.items():
             if k in keys:
                 g_opts[k] = v
+            elif k in pc_keys:
+                pc_opts[k] = v
             else:
                 opts[k] = v
         opts.prefixPop()
         for k, v in g_opts.items():
             opts[k] = v
         self.krylov_solver.setFromOptions()
+        pc = self.krylov_solver.getPC()
+        if pc_opts.get("pc_mg_levels") is not None:
+            pc.setMGLevels(pc_opts.get("pc_mg_levels"))
+            if pc_opts.get("pc_mg_cycles") is not None:
+                pc.setMGCycleType(pc_opts.get("pc_mg_cycles"))
         self._A.setOptionsPrefix(self.krylov_solver.getOptionsPrefix())
         self._A.setFromOptions()
         self._b.setOptionsPrefix(self.krylov_solver.getOptionsPrefix())
@@ -156,6 +165,7 @@ class NewtonSolver():
         x.axpy(-self.relaxation_parameter, dx)
 
     def _solve(self, x: Union[PETSc.Vec, fem.Function]) -> Tuple[int, int]:
+        t = common.Timer("~Contact: Newton (Newton solver)")
         try:
             x_vec = x.vector
         except AttributeError:
@@ -214,7 +224,8 @@ class NewtonSolver():
                 pass
 
             # Perform linear solve and update number of Krylov iterations
-            self.krylov_solver.solve(self._b, self._dx)
+            with common.Timer("~Contact: Newton (Krylov solver)"):
+                self.krylov_solver.solve(self._b, self._dx)
             self.krylov_iterations += self.krylov_solver.getIterationNumber()
 
             # Update solution
@@ -263,4 +274,5 @@ class NewtonSolver():
                     raise RuntimeError("Newton solver did not converge")
             else:
                 print("Newton Solver did non converge", flush=True)
+        t.stop()
         return self.iteration, newton_converged

@@ -11,6 +11,7 @@ import dolfinx.mesh as _mesh
 import dolfinx_cuas
 import numpy as np
 import ufl
+from petsc4py.PETSc import Viewer
 
 import dolfinx_contact
 import dolfinx_contact.cpp
@@ -26,7 +27,7 @@ def nitsche_unbiased(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTagsMetaClass,
                      nitsche_parameters: dict[str, np.float64],
                      displacement: Tuple[list[float], list[float]] = [[0, 0, 0], [0, 0, 0]],
                      quadrature_degree: int = 5, form_compiler_params: dict = None, jit_params: dict = None,
-                     petsc_options: dict = None, newton_options: dict = None, initGuess=None):
+                     petsc_options: dict = None, newton_options: dict = None, initGuess=None, outfile=None):
     """
     Use custom kernel to compute the contact problem with two elastic bodies coming into contact.
 
@@ -69,6 +70,8 @@ def nitsche_unbiased(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTagsMetaClass,
         Dictionary with Newton-solver options. Valid (key, item) tuples are:
         ("atol", float), ("rtol", float), ("convergence_criterion", "str"),
         ("max_it", int), ("error_on_nonconvergence", bool), ("relaxation_parameter", float)
+    outfile
+        File to append solver summary
     """
     form_compiler_params = {} if form_compiler_params is None else form_compiler_params
     jit_params = {} if jit_params is None else jit_params
@@ -118,9 +121,9 @@ def nitsche_unbiased(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTagsMetaClass,
     h = ufl.CellDiameter(mesh)
     n = ufl.FacetNormal(mesh)
     # Integration measure and ufl part of linear/bilinear form
-    metadata = {"quadrature_degree": quadrature_degree}
+    # metadata = {"quadrature_degree": quadrature_degree}
     dx = ufl.Measure("dx", domain=mesh)
-    ds = ufl.Measure("ds", domain=mesh, metadata=metadata,
+    ds = ufl.Measure("ds", domain=mesh,  # metadata=metadata,
                      subdomain_data=facet_marker)
     J = ufl.inner(sigma(du), epsilon(v)) * dx - 0.5 * theta * h / gamma * ufl.inner(sigma(du) * n, sigma(v) * n) * \
         ds(surface_value_0) - 0.5 * theta * h / gamma * ufl.inner(sigma(du) * n, sigma(v) * n) * ds(surface_value_1)
@@ -268,7 +271,7 @@ def nitsche_unbiased(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTagsMetaClass,
     if newton_options.get("atol") is not None:
         newton_solver.atol = newton_options.get("atol")
     if newton_options.get("rtol") is not None:
-        newton_solver.atol = newton_options.get("rtol")
+        newton_solver.rtol = newton_options.get("rtol")
 
     if newton_options.get("convergence_criterion") is not None:
         conv_crit = newton_options.get("convergence_criterion")
@@ -297,14 +300,19 @@ def nitsche_unbiased(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTagsMetaClass,
 
     dofs_global = V.dofmap.index_map_bs * V.dofmap.index_map.size_global
     _log.set_log_level(_log.LogLevel.OFF)
-
     # Solve non-linear problem
-    with _common.Timer(f"~Contact: {dofs_global} Solve Nitsche"):
+    timing_str = f"~Contact: {id(dofs_global)} Solve Nitsche"
+    with _common.Timer(timing_str):
         n, converged = newton_solver.solve(u)
+
+    if outfile is not None:
+        viewer = Viewer().createASCII(outfile, "a")
+        newton_solver.krylov_solver.view(viewer)
+    newton_time = _common.timing(timing_str)
     if not converged:
         raise RuntimeError("Newton solver did not converge")
     u.x.scatter_forward()
 
     print(f"{dofs_global}\n Number of Newton iterations: {n:d}\n",
           f"Number of Krylov iterations {newton_solver.krylov_iterations}\n", flush=True)
-    return u, n, newton_solver.krylov_iterations
+    return u, n, newton_solver.krylov_iterations, newton_time[1]
