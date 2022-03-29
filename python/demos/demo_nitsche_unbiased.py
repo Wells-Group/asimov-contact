@@ -269,7 +269,7 @@ if __name__ == "__main__":
         xdmf.write_meshtags(facet_marker)
 
     # Solver options
-    ksp_tol = 1e-8
+    ksp_tol = 1e-10
     newton_tol = 1e-7
     newton_options = {"relaxation_parameter": 1,
                       "atol": newton_tol,
