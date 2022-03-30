@@ -236,8 +236,8 @@ def nitsche_variable_gap(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTagsMetaCl
             test_fn_0 = contact.pack_test_functions(0, gap_0, 1)
             test_fn_1 = contact.pack_test_functions(1, gap_1, 1)
         with _common.Timer("~~Contact: Pack u contact"):
-            u_opp_0 = contact.pack_u_contact(0, u._cpp_object, gap_0)
-            u_opp_1 = contact.pack_u_contact(1, u._cpp_object, gap_1)
+            u_opp_0 = contact.pack_u_contact(0, u._cpp_object, gap_0, 1)
+            u_opp_1 = contact.pack_u_contact(1, u._cpp_object, gap_1, 1)
         with _common.Timer("~~Contact: Pack u"):
             u_0 = dolfinx_cuas.pack_coefficients([u], entities_0)
             u_1 = dolfinx_cuas.pack_coefficients([u], entities_1)
@@ -279,7 +279,8 @@ def nitsche_variable_gap(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTagsMetaCl
     num_coeffs = contact.coefficients_size(variable_gap=True)
     num_q_points = contact.num_quadrature_points()
     coeffs = [np.zeros((facets_0.size, num_coeffs)), np.zeros((facets_1.size, num_coeffs)),
-              np.zeros((facets_0.size, num_q_points), dtype=np.int32), np.zeros((facets_1.size, num_q_points), dtype=np.int32)]
+              np.zeros((facets_0.size, num_q_points), dtype=np.int32),
+              np.zeros((facets_1.size, num_q_points), dtype=np.int32)]
 
     newton_solver = dolfinx_contact.NewtonSolver(mesh.comm, J, b, coeffs)
 
@@ -310,7 +311,7 @@ def nitsche_variable_gap(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTagsMetaCl
     # TODO: restore options after debugging
     # if newton_options.get("max_it") is not None:
     #     newton_solver.max_it = newton_options.get("max_it")
-    newton_solver.max_it = 5
+    newton_solver.max_it = 0
     # if newton_options.get("error_on_nonconvergence") is not None:
     #     newton_solver.error_on_nonconvergence = newton_options.get("error_on_nonconvergence")
     newton_solver.error_on_nonconvergence = False
@@ -321,9 +322,11 @@ def nitsche_variable_gap(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTagsMetaCl
     if initGuess is None:
         u.x.array[:] = 0
     else:
-        u.x.array[:] = initGuess.x.array[:]
+        u.x.array[:] = 0  # initGuess.x.array[:]
 
     # Set Krylov solver options
+    # TODO: Restore petsc options from input after debugging
+    petsc_options = {"ksp_type": "preonly", "pc_type": "lu"}
     newton_solver.set_krylov_options(petsc_options)
 
     dofs_global = V.dofmap.index_map_bs * V.dofmap.index_map.size_global

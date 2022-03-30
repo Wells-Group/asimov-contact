@@ -771,7 +771,9 @@ public:
     _facet_maps[puppet_mt]
         = std::make_shared<const dolfinx::graph::AdjacencyList<std::int32_t>>(
             data, offset);
-    max_links(puppet_mt);
+    // max_links(puppet_mt);
+    _max_links[puppet_mt] = qp_phys[0].shape(0);
+    std::cout << "max links" << _max_links[puppet_mt] << "\n";
   }
 
   /// Compute and pack the gap function for each quadrature point the set of
@@ -968,13 +970,15 @@ public:
   std::pair<std::vector<PetscScalar>, int>
   pack_u_contact(int origin_meshtag,
                  std::shared_ptr<dolfinx::fem::Function<PetscScalar>> u,
-                 const xtl::span<const PetscScalar> gap)
+                 const xtl::span<const PetscScalar> gap,
+                 std::size_t num_derivatives)
   {
     dolfinx::common::Timer t("Pack contact u");
     // Mesh info
     auto submesh = _submeshes[_opposites[origin_meshtag]];
     auto mesh = submesh.mesh();                      // mesh
     const std::size_t gdim = mesh->geometry().dim(); // geometrical dimension
+    const std::size_t tdim = mesh->topology().dim(); // topological dimension
     const std::size_t bs_element = _V->element()->block_size();
 
     // Select which side of the contact interface to loop from and get the
@@ -991,9 +995,9 @@ public:
     assert(sub_dofmap);
     const int bs_dof = sub_dofmap->bs();
 
-    std::array<std::size_t, 3> b_shape
-        = evaulate_basis_shape(*V_sub, num_facets * num_q_points);
-    xt::xtensor<double, 3> basis_values(b_shape);
+    std::array<std::size_t, 4> b_shape = evaluate_basis_shape(
+        *V_sub, num_facets * num_q_points, num_derivatives);
+    xt::xtensor<double, 4> basis_values(b_shape);
     std::fill(basis_values.begin(), basis_values.end(), 0);
     std::vector<std::int32_t> cells(num_facets * num_q_points, -1);
     {
@@ -1020,44 +1024,49 @@ public:
       }
 
       evaluate_basis_functions(*u_sub.function_space(), points, cells,
-                               basis_values);
+                               basis_values, num_derivatives);
     }
 
     const xtl::span<const PetscScalar>& u_coeffs = u_sub.x()->array();
 
     // Output vector
-    std::vector<PetscScalar> c(num_facets * num_q_points * bs_element, 0.0);
+    std::vector<PetscScalar> c((num_derivatives * tdim + 1) * num_facets
+                                   * num_q_points * bs_element,
+                               0.0);
 
     // Create work vector for expansion coefficients
-    const auto cstride = int(num_q_points * bs_element);
+    const auto cstride
+        = int(num_q_points * bs_element * (1 + num_derivatives * tdim));
     const std::size_t num_basis_functions = basis_values.shape(1);
     const std::size_t value_size = basis_values.shape(2);
     std::vector<PetscScalar> coefficients(num_basis_functions * bs_element);
     for (std::size_t i = 0; i < num_facets; ++i)
     {
-      for (std::size_t q = 0; q < num_q_points; ++q)
-      {
-        // Get degrees of freedom for current cell
-        xtl::span<const std::int32_t> dofs
-            = sub_dofmap->cell_dofs(cells[i * num_q_points + q]);
-        for (std::size_t j = 0; j < dofs.size(); ++j)
-          for (int k = 0; k < bs_dof; ++k)
-            coefficients[bs_dof * j + k] = u_coeffs[bs_dof * dofs[j] + k];
-
-        // Compute expansion
-        for (std::size_t k = 0; k < bs_element; ++k)
+      for (std::size_t j = 0; j < 1 + num_derivatives * tdim; ++j)
+        for (std::size_t q = 0; q < num_q_points; ++q)
         {
-          for (std::size_t l = 0; l < num_basis_functions; ++l)
+          // Get degrees of freedom for current cell
+          xtl::span<const std::int32_t> dofs
+              = sub_dofmap->cell_dofs(cells[i * num_q_points + q]);
+          for (std::size_t j = 0; j < dofs.size(); ++j)
+            for (int k = 0; k < bs_dof; ++k)
+              coefficients[bs_dof * j + k] = u_coeffs[bs_dof * dofs[j] + k];
+
+          // Compute expansion
+          for (std::size_t k = 0; k < bs_element; ++k)
           {
-            for (std::size_t m = 0; m < value_size; ++m)
+            for (std::size_t l = 0; l < num_basis_functions; ++l)
             {
-              c[cstride * i + q * bs_element + k]
-                  += coefficients[bs_element * l + k]
-                     * basis_values(num_q_points * i + q, l, m);
+              for (std::size_t m = 0; m < value_size; ++m)
+              {
+                c[cstride * i + j * num_q_points * bs_element + q * bs_element
+                  + k]
+                    += coefficients[bs_element * l + k]
+                       * basis_values(j, num_q_points * i + q, l, m);
+              }
             }
           }
         }
-      }
     }
     t.stop();
     return {std::move(c), cstride};

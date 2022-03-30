@@ -95,8 +95,9 @@ std::size_t dolfinx_contact::Contact::coefficients_size(bool variable_gap)
   if (variable_gap)
     return 3
            + num_q_points
-                 * (2 * gdim + (tdim + 1) * ndofs_cell * bs * max_links + bs
-                    + tdim * gdim + (tdim + 1) * tdim * gdim / 2)
+                 * (2 * gdim + (tdim + 1) * ndofs_cell * bs * max_links
+                    + bs * (tdim + 1) + tdim * gdim
+                    + (tdim + 1) * tdim * gdim / 2)
            + ndofs_cell * bs;
   else
     return 3 + num_q_points * (2 * gdim + ndofs_cell * bs * max_links + bs)

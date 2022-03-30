@@ -151,7 +151,7 @@ def create_box_mesh_2D(filename: str, quads: bool = False, res=0.1):
     L = 0.5
     H = 0.5
     disp = -0.6
-    delta = 0.1
+    delta = 0.0
 
     gmsh.initialize()
     if MPI.COMM_WORLD.rank == 0:
@@ -183,7 +183,7 @@ def create_box_mesh_2D(filename: str, quads: bool = False, res=0.1):
         top_nodes = gmsh.model.getBoundary([(2, surface)], recursive=True, oriented=False)
         gmsh.model.occ.mesh.setSize(top_nodes, res)
         bottom_nodes = gmsh.model.getBoundary([(2, surface2)], recursive=True, oriented=False)
-        gmsh.model.occ.mesh.setSize(bottom_nodes, 2 * res)
+        gmsh.model.occ.mesh.setSize(bottom_nodes, res)
 
         # Synchronize and create physical tags
         gmsh.model.occ.synchronize()

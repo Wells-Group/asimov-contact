@@ -132,9 +132,10 @@ double R_minus(double x);
 double dR_minus(double x);
 /// Get shape of in,out variable for filling basis functions in for
 /// evaluate_basis_functions
-std::array<std::size_t, 3>
-evaulate_basis_shape(const dolfinx::fem::FunctionSpace& V,
-                     const std::size_t num_points);
+std::array<std::size_t, 4>
+evaluate_basis_shape(const dolfinx::fem::FunctionSpace& V,
+                     const std::size_t num_points,
+                     const std::size_t num_derivatives);
 
 /// Get basis values (not unrolled for block size) for a set of points and
 /// corresponding cells.
@@ -150,6 +151,7 @@ evaulate_basis_shape(const dolfinx::fem::FunctionSpace& V,
 void evaluate_basis_functions(const dolfinx::fem::FunctionSpace& V,
                               const xt::xtensor<double, 2>& x,
                               const xtl::span<const std::int32_t>& cells,
-                              xt::xtensor<double, 3>& basis_values);
+                              xt::xtensor<double, 4>& basis_values,
+                              std::size_t num_derivatives);
 
 } // namespace dolfinx_contact
