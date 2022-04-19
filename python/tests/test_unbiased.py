@@ -1,3 +1,20 @@
+# Copyright (C) 2021 Sarah Roggendorf
+#
+# SPDX-License-Identifier:    MIT
+#
+# This tests the custom assembly for the unbiased Nitsche formulation in a special case
+# that can be expressed using ufl:
+# We consider a very simple test case made up of two disconnected elements with a constant
+# gap in x[tdim-1]-direction. The contact surfaces are made up of exactly one edge
+# from each element that are perfectly aligned such that the quadrature points only
+# differ in the x[tdim-1]-direction by the given gap.
+# For comparison, we consider a DG function space on a mesh that is constructed by
+# removing the gap between the elements and merging the edges making up the contact
+# surface into one. This allows us to use DG-functions and ufl to formulate the contact
+# terms in the variational form by suitably adjusting the deformation u and using the given
+# constant gap.
+
+
 from socket import J1939_EE_INFO_NONE
 import numpy as np
 import scipy
@@ -23,6 +40,10 @@ def dR_minus(x):
 
 
 def compute_dof_permutations(V_dg, V_cg, gap, facets_dg, facets_cg):
+    '''The meshes used for the two different formulations are 
+       created independently of each other. Therefore we need to 
+       determine how to map the dofs from one mesh to the other in 
+       order to compare the results'''
     mesh_dg = V_dg.mesh
     mesh_cg = V_cg.mesh
     bs = V_cg.dofmap.index_map_bs
@@ -43,7 +64,7 @@ def compute_dof_permutations(V_dg, V_cg, gap, facets_dg, facets_cg):
         dofs_cg = []
         coordinates_cg = []
         for facet_cg in np.array(facets_cg)[:, 0]:
-            # retrieve dofs and dof coordinates
+            # retrieve dofs and dof coordinates for mesh with gap
             cell = f_to_c_cg.links(facet_cg)[0]
             all_facets = c_to_f_cg.links(cell)
             local_index = np.argwhere(np.array(all_facets) == facet_cg)[0, 0]
@@ -53,18 +74,22 @@ def compute_dof_permutations(V_dg, V_cg, gap, facets_dg, facets_cg):
             dofs_cg.append(dofs_cg0)
             coordinates_cg.append(x_cg[dofs_cg0, :])
 
-        # retrieve corresponding dg dofs
+        # retrieve all dg dofs on mesh without gap for each cell
+        # and modify coordinates by gap if necessary
         cells = f_to_c_dg.links(facet_dg)
         for cell in cells:
             midpoint = compute_midpoints(mesh_dg, tdim, [cell])[0]
             if midpoint[tdim - 1] > 0:
+                # coordinates of corresponding dofs are identical for both meshes
                 dofs_dg0 = V_dg.dofmap.cell_dofs(cell)
                 coordinates_dg0 = x_dg[dofs_dg0, :]
             else:
+                # coordinates of corresponding dofs need to be adjusted by gap
                 dofs_dg1 = V_dg.dofmap.cell_dofs(cell)
                 coordinates_dg1 = x_dg[dofs_dg1, :]
                 coordinates_dg1[:, tdim - 1] -= gap
 
+        # create array of indices to access corresponding function values
         num_dofs_f = dofs_cg[0].size
         indices_cg = np.zeros(bs * 2 * num_dofs_f, dtype=np.int32)
         for i, dofs in enumerate(dofs_cg):
@@ -74,18 +99,27 @@ def compute_dof_permutations(V_dg, V_cg, gap, facets_dg, facets_cg):
         indices_dg = np.zeros(indices_cg.size, dtype=np.int32)
         for i, dofs in enumerate(dofs_cg[0]):
             coordinates = coordinates_cg[0][i, :]
+            # find dg dofs that correspond to cg dofs for first element
             dof = dofs_dg0[np.isclose(coordinates_dg0, coordinates).all(axis=1).nonzero()[0][0]]
+            # create array of indices to access corresponding function values
             for k in range(bs):
                 indices_dg[i * bs + k] = dof * bs + k
         for i, dofs in enumerate(dofs_cg[1]):
             coordinates = coordinates_cg[1][i, :]
+            # find dg dofs that correspond to cg dofs for first element
             dof = dofs_dg1[np.isclose(coordinates_dg1, coordinates).all(axis=1).nonzero()[0][0]]
+            # create array of indices to access corresponding function values
             for k in range(bs):
                 indices_dg[num_dofs_f * bs + i * bs + k] = dof * bs + k
+
+        # return indices used for comparing assembled vectors/matrices
         return indices_cg, indices_dg
 
 
 def create_functionspaces(ct, gap):
+    ''' This is a helper function to create the two element function spaces 
+        both for custom assembly and the DG formulation for 
+        quads, triangles, hexes and tetrahedra'''
     cell_type = to_type(ct)
     if cell_type == CellType.quadrilateral:
         x_ufl = np.array([[0, 0], [0.8, 0], [0.1, 1.3], [0.7, 1.2], [-0.1, -1.2], [0.8, -1.1]])
@@ -132,6 +166,8 @@ def create_functionspaces(ct, gap):
 
 
 def locate_contact_facets_cuas(V, gap):
+    '''This function locates the contact facets for custom assembly and ensures 
+       that the correct facet is chosen if the gap is zero'''
     # Retrieve mesh
     mesh = V.mesh
 
@@ -140,6 +176,7 @@ def locate_contact_facets_cuas(V, gap):
     facets1 = locate_entities_boundary(mesh, tdim - 1, lambda x: np.isclose(x[tdim - 1], 0))
     facets2 = locate_entities_boundary(mesh, tdim - 1, lambda x: np.isclose(x[tdim - 1], -gap))
 
+    # choose correct facet if gap is zero
     mesh.topology.create_connectivity(tdim - 1, tdim)
     f_to_c = mesh.topology.connectivity(tdim - 1, tdim)
     cells = [[], []]
@@ -161,7 +198,9 @@ def locate_contact_facets_cuas(V, gap):
     return cells, [contact_facets1, contact_facets2]
 
 
-def create_contact_data(V, u, quadrature_degree, gap, lmbda, mu, facets_cg):
+def create_contact_data(V, u, quadrature_degree, lmbda, mu, facets_cg):
+    ''' This function creates the contact class and the coefficients 
+        passed to the assembly for the unbiased Nitsche method'''
 
     # Retrieve mesh
     mesh = V.mesh
@@ -277,6 +316,7 @@ def test_unbiased_rhs(ct, gap, q_deg):
     h = ufl.CellDiameter(mesh_ufl)
     gamma_scaled = gamma * E
 
+    # Contact terms formulated using ufl
     F = -0.5 * 1 / (gamma_scaled / h('+')) * R_minus(ufl.dot(sigma(u0('+')) * n('+'), n('+'))
                                                      + (gamma_scaled / h('+')) * (gap - ufl.dot(u0('-') - u0('+'), n('+'))))\
         * (theta * ufl.dot(sigma(v0('+')) * n('+'), n('-'))
@@ -389,6 +429,7 @@ def test_unbiased_jac(ct, gap, q_deg):
     h = ufl.CellDiameter(mesh_ufl)
     gamma_scaled = gamma * E
 
+    # Contact terms formulated using ufl
     qp = ufl.dot(sigma(u0('+')) * n('+'), n('+')) + (gamma_scaled / h('+')) * (gap - ufl.dot(u0('-') - u0('+'), n('+')))
     J = -0.5 * 1 / (gamma_scaled / h('+')) * dR_minus(qp)\
         * (ufl.dot(sigma(w0('+')) * n('+'), n('-')) - (gamma_scaled / h('+')) * (ufl.dot(w0('-') - w0('+'), n('+'))))\
@@ -412,7 +453,6 @@ def test_unbiased_jac(ct, gap, q_deg):
     cells, facets_cg = locate_contact_facets_cuas(V_cuas, gap)
 
     # fem functions
-
     def _u1(x):
         values = np.zeros((gdim, x.shape[1]))
         for i in range(tdim):
