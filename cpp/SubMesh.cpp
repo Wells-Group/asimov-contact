@@ -22,20 +22,22 @@ dolfinx_contact::SubMesh::SubMesh(
               cells.end()); // remove duplicates
 
   // save sorted cell vector as _parent_cells
-  _parent_cells = cells;
 
   // call doflinx::mesh::create_submesh and save ouput to member variables
-  auto [submesh, vertex_map, x_dof_map] = dolfinx::mesh::create_submesh(
-      *mesh, tdim, xtl::span(cells.data(), cells.size()));
+  auto [submesh, cell_map, vertex_map, x_dof_map]
+      = dolfinx::mesh::create_submesh(*mesh, tdim,
+                                      xtl::span(cells.data(), cells.size()));
+  _parent_cells = cell_map;
+
   _mesh = std::make_shared<dolfinx::mesh::Mesh>(submesh);
   _submesh_to_mesh_vertex_map = vertex_map;
   _submesh_to_mesh_x_dof_map = x_dof_map;
 
   // create/retrieve connectivities on submesh
-  _mesh->topology().create_connectivity(tdim - 1, tdim);
+  _mesh->topology_mutable().create_connectivity(tdim - 1, tdim);
   auto f_to_c = _mesh->topology().connectivity(tdim - 1, tdim);
   assert(f_to_c);
-  _mesh->topology().create_connectivity(tdim, tdim - 1);
+  _mesh->topology_mutable().create_connectivity(tdim, tdim - 1);
   auto c_to_f = _mesh->topology().connectivity(tdim, tdim - 1);
   assert(c_to_f);
 

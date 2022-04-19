@@ -25,11 +25,13 @@ dolfinx_contact::pack_coefficient_quadrature(
   std::shared_ptr<const dolfinx::mesh::Mesh> mesh
       = coeff->function_space()->mesh();
   assert(mesh);
+  const dolfinx::mesh::Geometry& geometry = mesh->geometry();
+  const dolfinx::mesh::Topology& topology = mesh->topology();
 
   // Create quadrature rule
-  const int tdim = mesh->topology().dim();
-  const int gdim = mesh->geometry().dim();
-  const dolfinx::mesh::CellType cell_type = mesh->topology().cell_type();
+  const int tdim = topology.dim();
+  const int gdim = geometry.dim();
+  const dolfinx::mesh::CellType cell_type = topology.cell_type();
   std::shared_ptr<dolfinx_cuas::QuadratureRule> q_rule;
   std::visit(
       [&q_rule, q_degree, tdim, cell_type](auto& entities)
@@ -68,8 +70,8 @@ dolfinx_contact::pack_coefficient_quadrature(
   xtl::span<const std::uint32_t> cell_info;
   if (needs_dof_transformations)
   {
-    cell_info = xtl::span(mesh->topology().get_cell_permutation_info());
     mesh->topology_mutable().create_entity_permutations();
+    cell_info = topology.get_cell_permutation_info();
   }
   const std::function<void(const xtl::span<PetscScalar>&,
                            const xtl::span<const std::uint32_t>&, std::int32_t,
@@ -151,10 +153,9 @@ dolfinx_contact::pack_coefficient_quadrature(
     // Get geometry data
     const dolfinx::graph::AdjacencyList<std::int32_t>& x_dofmap
         = mesh->geometry().dofmap();
-
-    // FIXME: Add proper interface for num coordinate dofs
-    const std::size_t num_dofs_g = x_dofmap.num_links(0);
-    xtl::span<const double> x_g = mesh->geometry().x();
+    const dolfinx::fem::CoordinateElement& cmap = geometry.cmap();
+    const std::size_t num_dofs_g = cmap.dim();
+    xtl::span<const double> x_g = geometry.x();
 
     // Prepare geometry data structures
     xt::xtensor<double, 2> X({num_points, (std::size_t)tdim});
@@ -165,9 +166,6 @@ dolfinx_contact::pack_coefficient_quadrature(
     xt::xtensor<double, 1> detJ = xt::zeros<double>({num_points});
     xt::xtensor<double, 2> coordinate_dofs
         = xt::zeros<double>({num_dofs_g, (std::size_t)gdim});
-
-    // Get coordinate map
-    const dolfinx::fem::CoordinateElement& cmap = mesh->geometry().cmap();
 
     xt::xtensor<double, 5> dphi_c(
         {num_entities, (std::size_t)tdim, num_points, num_dofs_g / bs, 1});
@@ -284,8 +282,10 @@ std::pair<std::vector<PetscScalar>, int> dolfinx_contact::pack_circumradius(
 
   // NOTE: This is not correct for non-affine geometries, then the quadrature
   // rule has to be passed in Quadrature points for piecewise constant
-  const int tdim = mesh.topology().dim();
-  const int gdim = mesh.geometry().dim();
+  const dolfinx::mesh::Geometry& geometry = mesh.geometry();
+  const dolfinx::mesh::Topology& topology = mesh.topology();
+  const int tdim = topology.dim();
+  const int gdim = geometry.dim();
   const int fdim = tdim - 1;
   dolfinx_cuas::QuadratureRule q_rule(cell_type, 0, fdim);
 
@@ -298,11 +298,10 @@ std::pair<std::vector<PetscScalar>, int> dolfinx_contact::pack_circumradius(
 
   // Get geometry data
   const dolfinx::graph::AdjacencyList<std::int32_t>& x_dofmap
-      = mesh.geometry().dofmap();
-
-  // FIXME: Add proper interface for num coordinate dofs
-  const std::size_t num_dofs_g = x_dofmap.num_links(0);
-  xtl::span<const double> x_g = mesh.geometry().x();
+      = geometry.dofmap();
+  xtl::span<const double> x_g = geometry.x();
+  const dolfinx::fem::CoordinateElement& cmap = geometry.cmap();
+  const std::size_t num_dofs_g = cmap.dim();
 
   // Prepare geometry data structures
   xt::xtensor<double, 3> J = xt::zeros<double>(
@@ -310,9 +309,6 @@ std::pair<std::vector<PetscScalar>, int> dolfinx_contact::pack_circumradius(
   xt::xtensor<double, 1> detJ = xt::zeros<double>({std::size_t(1)});
   xt::xtensor<double, 2> coordinate_dofs
       = xt::zeros<double>({num_dofs_g, (std::size_t)gdim});
-
-  // Get coordinate map
-  const dolfinx::fem::CoordinateElement& cmap = mesh.geometry().cmap();
 
   xt::xtensor<double, 5> dphi_c(
       {num_local_facets, (std::size_t)tdim, num_points, num_dofs_g, 1});
