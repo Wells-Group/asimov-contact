@@ -436,7 +436,7 @@ void dolfinx_contact::evaluate_basis_functions(
     apply_dof_transformation(
         xtl::span(basis_reference_values.data() + p * num_basis_values,
                   num_basis_values),
-        cell_info, cell_index, reference_value_size);
+        cell_info, cell_index, (int)reference_value_size);
 
     // Push basis forward to physical element
     auto _K = xt::view(K, p, xt::all(), xt::all());
