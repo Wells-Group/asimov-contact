@@ -1,11 +1,11 @@
 name: Run sonarcloud analysis
 on:
   push:
-    branches-ignore:
-     - '**'
-    # branches:
-    #   - main
-    #   - dokken/*
+    # branches-ignore:
+    #   - "**"
+    branches:
+      - main
+      - dokken/*
   # pull_request:
   #   branches:
   #     - main
