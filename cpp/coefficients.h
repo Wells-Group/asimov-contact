@@ -17,7 +17,7 @@ namespace dolfinx_contact
 /// active_entities and c[j*cstride + q * (block_size * value_size) + k + c] =
 /// sum_i c^i[k] * phi^i(x_q)[c] where c^i[k] is the ith coefficient's kth
 /// vector component, phi^i(x_q)[c] is the ith basis function's c-th value
-/// compoenent at the quadrature point x_q.
+/// component at the quadrature point x_q.
 /// @param[in] coeff The coefficient to pack
 /// @param[in] q_degree The quadrature degree
 /// @param[in] integral The integral type (cell or exterior facet)
