@@ -15,13 +15,11 @@
 # constant gap.
 
 
-from socket import J1939_EE_INFO_NONE
 import numpy as np
 import scipy
 import pytest
 import ufl
 from dolfinx.cpp.mesh import to_type
-from dolfinx.io import XDMFFile
 import dolfinx.fem as _fem
 from dolfinx.mesh import (CellType, locate_entities_boundary, locate_entities, create_mesh,
                           compute_midpoints, meshtags)
@@ -40,9 +38,9 @@ def dR_minus(x):
 
 
 def compute_dof_permutations(V_dg, V_cg, gap, facets_dg, facets_cg):
-    '''The meshes used for the two different formulations are 
-       created independently of each other. Therefore we need to 
-       determine how to map the dofs from one mesh to the other in 
+    '''The meshes used for the two different formulations are
+       created independently of each other. Therefore we need to
+       determine how to map the dofs from one mesh to the other in
        order to compare the results'''
     mesh_dg = V_dg.mesh
     mesh_cg = V_cg.mesh
@@ -117,8 +115,8 @@ def compute_dof_permutations(V_dg, V_cg, gap, facets_dg, facets_cg):
 
 
 def create_functionspaces(ct, gap):
-    ''' This is a helper function to create the two element function spaces 
-        both for custom assembly and the DG formulation for 
+    ''' This is a helper function to create the two element function spaces
+        both for custom assembly and the DG formulation for
         quads, triangles, hexes and tetrahedra'''
     cell_type = to_type(ct)
     if cell_type == CellType.quadrilateral:
@@ -166,7 +164,7 @@ def create_functionspaces(ct, gap):
 
 
 def locate_contact_facets_cuas(V, gap):
-    '''This function locates the contact facets for custom assembly and ensures 
+    '''This function locates the contact facets for custom assembly and ensures
        that the correct facet is chosen if the gap is zero'''
     # Retrieve mesh
     mesh = V.mesh
@@ -199,7 +197,7 @@ def locate_contact_facets_cuas(V, gap):
 
 
 def create_contact_data(V, u, quadrature_degree, lmbda, mu, facets_cg):
-    ''' This function creates the contact class and the coefficients 
+    ''' This function creates the contact class and the coefficients
         passed to the assembly for the unbiased Nitsche method'''
 
     # Retrieve mesh
@@ -318,13 +316,15 @@ def test_unbiased_rhs(ct, gap, q_deg):
 
     # Contact terms formulated using ufl
     F = -0.5 * 1 / (gamma_scaled / h('+')) * R_minus(ufl.dot(sigma(u0('+')) * n('+'), n('+'))
-                                                     + (gamma_scaled / h('+')) * (gap - ufl.dot(u0('-') - u0('+'), n('+'))))\
+                                                     + (gamma_scaled / h('+'))
+                                                     * (gap - ufl.dot(u0('-') - u0('+'), n('+'))))\
         * (theta * ufl.dot(sigma(v0('+')) * n('+'), n('-'))
            - (gamma_scaled / h('+')) * ufl.dot(v0('+') - v0('-'), n('-'))) * \
         dS
 
     F += -0.5 * 1 / (gamma_scaled / h('-')) * R_minus(ufl.dot(sigma(u0('-')) * n('-'), n('-'))
-                                                      + (gamma_scaled / h('-')) * (gap - ufl.dot(u0('+') - u0('-'), n('-')))) \
+                                                      + (gamma_scaled / h('-'))
+                                                      * (gap - ufl.dot(u0('+') - u0('-'), n('-')))) \
         * (theta * ufl.dot(sigma(v0('-')) * n('-'), n('+'))
            - (gamma_scaled / h('-')) * ufl.dot(v0('-') - v0('+'), n('+'))) * \
         dS
