@@ -286,19 +286,20 @@ void dolfinx_contact::evaluate_basis_functions(
   // Get mesh
   std::shared_ptr<const dolfinx::mesh::Mesh> mesh = V.mesh();
   assert(mesh);
-  const std::size_t gdim = mesh->geometry().dim();
-  const std::size_t tdim = mesh->topology().dim();
-  auto map = mesh->topology().index_map((int)tdim);
+  const dolfinx::mesh::Geometry& geometry = mesh->geometry();
+  const dolfinx::mesh::Topology& topology = mesh->topology();
+
+  // Get topology data
+  const std::size_t tdim = topology.dim();
+  auto map = topology.index_map((int)tdim);
 
   // Get geometry data
+  const std::size_t gdim = geometry.dim();
+  xtl::span<const double> x_g = geometry.x();
   const dolfinx::graph::AdjacencyList<std::int32_t>& x_dofmap
-      = mesh->geometry().dofmap();
-  // FIXME: Add proper interface for num coordinate dofs
-  const std::size_t num_dofs_g = x_dofmap.num_links(0);
-  xtl::span<const double> x_g = mesh->geometry().x();
-
-  // Get coordinate map
-  const dolfinx::fem::CoordinateElement& cmap = mesh->geometry().cmap();
+      = geometry.dofmap();
+  const dolfinx::fem::CoordinateElement& cmap = geometry.cmap();
+  const std::size_t num_dofs_g = cmap.dim();
 
   // Get element
   assert(V.element());
@@ -326,7 +327,7 @@ void dolfinx_contact::evaluate_basis_functions(
   if (element->needs_dof_transformations())
   {
     mesh->topology_mutable().create_entity_permutations();
-    cell_info = xtl::span(mesh->topology().get_cell_permutation_info());
+    cell_info = xtl::span(topology.get_cell_permutation_info());
   }
 
   xt::xtensor<double, 2> coordinate_dofs
@@ -435,7 +436,7 @@ void dolfinx_contact::evaluate_basis_functions(
     apply_dof_transformation(
         xtl::span(basis_reference_values.data() + p * num_basis_values,
                   num_basis_values),
-        cell_info, cell_index, reference_value_size);
+        cell_info, cell_index, (int)reference_value_size);
 
     // Push basis forward to physical element
     auto _K = xt::view(K, p, xt::all(), xt::all());
