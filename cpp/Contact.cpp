@@ -153,15 +153,16 @@ void dolfinx_contact::Contact::assemble_matrix(
     const xtl::span<const PetscScalar>& constants)
 {
   auto mesh = _marker->mesh();
-  const int gdim = mesh->geometry().dim(); // geometrical dimension
+  assert(mesh);
 
-  // Prepare cell geometry
+  // Extract geometry data
+  const dolfinx::mesh::Geometry& geometry = mesh->geometry();
+  const int gdim = geometry.dim();
   const dolfinx::graph::AdjacencyList<std::int32_t>& x_dofmap
-      = mesh->geometry().dofmap();
-
-  // FIXME: Add proper interface for num coordinate dofs
-  const std::size_t num_dofs_g = x_dofmap.num_links(0);
-  xtl::span<const double> x_g = mesh->geometry().x();
+      = geometry.dofmap();
+  xtl::span<const double> x_g = geometry.x();
+  const dolfinx::fem::CoordinateElement& cmap = geometry.cmap();
+  const std::size_t num_dofs_g = cmap.dim();
 
   // Extract function space data (assuming same test and trial space)
   std::shared_ptr<const dolfinx::fem::DofMap> dofmap = _V->dofmap();
@@ -235,15 +236,17 @@ void dolfinx_contact::Contact::assemble_vector(
 {
   // Extract mesh
   auto mesh = _marker->mesh();
-  const int gdim = mesh->geometry().dim(); // geometrical dimension
+  assert(mesh);
+  const dolfinx::mesh::Geometry& geometry = mesh->geometry();
+  const int gdim = geometry.dim(); // geometrical dimension
 
   // Prepare cell geometry
   const dolfinx::graph::AdjacencyList<std::int32_t>& x_dofmap
-      = mesh->geometry().dofmap();
+      = geometry.dofmap();
+  xtl::span<const double> x_g = geometry.x();
 
-  // FIXME: Add proper interface for num coordinate dofs
-  const std::size_t num_dofs_g = x_dofmap.num_links(0);
-  xtl::span<const double> x_g = mesh->geometry().x();
+  const dolfinx::fem::CoordinateElement& cmap = geometry.cmap();
+  const std::size_t num_dofs_g = cmap.dim();
 
   // Extract function space data (assuming same test and trial space)
   std::shared_ptr<const dolfinx::fem::DofMap> dofmap = _V->dofmap();
