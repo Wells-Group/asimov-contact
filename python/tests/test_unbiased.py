@@ -358,7 +358,7 @@ def test_unbiased_rhs(ct, gap, q_deg):
     dx = ufl.Measure("dx", domain=mesh_cuas)
     F_cuas = ufl.inner(sigma(u1), epsilon(v1)) * dx
 
-    contact, c_0, c_1 = create_contact_data(V_cuas, u1, q_deg, gap, lmbda, mu, facets_cg)
+    contact, c_0, c_1 = create_contact_data(V_cuas, u1, q_deg, lmbda, mu, facets_cg)
     # Generate residual data structures
     F_cuas = _fem.form(F)
     kernel_rhs = contact.generate_kernel(kt.Rhs)
@@ -473,7 +473,7 @@ def test_unbiased_jac(ct, gap, q_deg):
     dx = ufl.Measure("dx", domain=mesh_cuas)
     J_cuas = ufl.inner(sigma(w1), epsilon(v1)) * dx
 
-    contact, c_0, c_1 = create_contact_data(V_cuas, u1, q_deg, gap, lmbda, mu, facets_cg)
+    contact, c_0, c_1 = create_contact_data(V_cuas, u1, q_deg, lmbda, mu, facets_cg)
     # Generate residual data structures
     J_cuas = _fem.form(J_cuas)
     kernel_jac = contact.generate_kernel(kt.Jac)
