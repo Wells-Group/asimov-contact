@@ -1,4 +1,4 @@
-// Copyright (C) 2021 Sarah Roggendorf and Jørgen S. Dokken
+// Copyright (C) 2021-2022 Sarah Roggendorf and Jørgen S. Dokken
 //
 // This file is part of DOLFINx_CONTACT
 //
@@ -12,12 +12,21 @@
 namespace dolfinx_contact
 {
 
+/// @brief Pack a coefficient at quadrature points.
+///
 /// Prepare a coefficient (dolfinx::fem::Function) for assembly with custom
-/// kernels by packing them as an array, where j corresponds to the jth entity
-/// active_entities and c[j*cstride + q * (block_size * value_size) + k + c] =
-/// sum_i c^i[k] * phi^i(x_q)[c] where c^i[k] is the ith coefficient's kth
-/// vector component, phi^i(x_q)[c] is the ith basis function's c-th value
-/// component at the quadrature point x_q.
+/// kernels by packing them as a vector. The vector is packed such that the
+/// coefficients for the jth entry in active_entities is in the range
+/// c[j*cstride:(j+1)*cstride] where
+/// cstride=(num_quadrature_points)*block_size*value_size, where
+/// block_size*value_size is the number of components in coeff.
+///
+/// @note For the `j`th entry, the coefficients are packed per quadrature point,
+/// i.e. c[j*cstride + q * (block_size * value_size) + k + c] = sum_i c^i[k] *
+/// phi^i(x_q)[c] where c^i[k] is the ith coefficient's kth vector component,
+/// phi^i(x_q)[c] is the ith basis function's c-th value component at the
+/// quadrature point x_q.
+///
 /// @param[in] coeff The coefficient to pack
 /// @param[in] q_degree The quadrature degree
 /// @param[in] integral The integral type (cell or exterior facet)
