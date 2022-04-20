@@ -57,7 +57,7 @@ double compute_circumradius(const dolfinx::mesh::Mesh& mesh, double detJ,
 template <class E, class F, class G>
 void physical_facet_normal(E&& physical_normal, F&& K, G&& reference_normal)
 {
-  assert(physical_normal.shape(0) == K.shape(0));
+  assert(physical_normal.shape(0) == K.shape(1));
   const std::size_t gdim = K.shape(0);
   const std::size_t tdim = K.shape(1);
   for (std::size_t i = 0; i < gdim; i++)

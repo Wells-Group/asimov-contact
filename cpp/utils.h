@@ -116,4 +116,31 @@ void evaluate_basis_functions(const dolfinx::fem::FunctionSpace& V,
                               const xtl::span<const std::int32_t>& cells,
                               xt::xtensor<double, 3>& basis_values);
 
+/// Compute physical normal
+/// @param[in] n_ref facet normal on reference element
+/// @param[in] K inverse Jacobian
+/// @param[in,out] n_phys facet normal on physical element
+void compute_normal(const xt::xtensor<double, 1>& n_ref,
+                    const xt::xtensor<double, 2>& K,
+                    xt::xarray<double>& n_phys);
+
+/// Compute the following jacobians on a given facet:
+/// J: physical cell -> reference cell (and its inverse)
+/// J_tot: physical facet -> reference facet
+/// @param[in] q - index of quadrature points
+/// @param[in] dphi - derivatives of coordinate basis tabulated for quardrature
+/// points
+/// @param[in] coords - the coordinates of the facet
+/// @param[in] J_f - the Jacobian between reference facet and reference cell
+/// @param[in,out] J - Jacboian between reference cell and physical cell
+/// @param[in,out] K - inverse of J
+/// @param[in,out] J_tot - J_f*J
+/// @return absolute value of determinant of J_tot
+double compute_facet_jacobians(int q, const xt::xtensor<double, 3>& dphi,
+                               const xt::xtensor<double, 2>& coords,
+                               const xt::xtensor<double, 2> J_f,
+                               xt::xtensor<double, 2>& J,
+                               xt::xtensor<double, 2>& K,
+                               xt::xtensor<double, 2>& J_tot);
+
 } // namespace dolfinx_contact

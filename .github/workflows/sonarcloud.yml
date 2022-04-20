@@ -3,9 +3,9 @@ on:
   push:
     branches-ignore:
       - "**"
-    # branches:
-    #   - main
-    #   - dokken/*
+    #branches:
+    #  - main
+    #  - dokken/*
   # pull_request:
   #   branches:
   #     - main
@@ -16,7 +16,7 @@ jobs:
     container: dolfinx/dev-env
     env:
       SONAR_SCANNER_VERSION:
-        4.6.2.2472 # Find the latest version at:
+        4.7.0.2747 # Find the latest version at:
         # https://github.com/SonarSource/sonar-scanner-cli/tags
         # https://sonarcloud.io/documentation/analysis/scan/sonarscanner/
       SONAR_SERVER_URL: "https://sonarcloud.io"

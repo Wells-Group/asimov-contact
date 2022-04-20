@@ -447,3 +447,22 @@ void dolfinx_contact::evaluate_basis_functions(
     push_forward_fn(_u, _U, _J, detJ[p], _K);
   }
 };
+
+double dolfinx_contact::compute_facet_jacobians(
+    int q, const xt::xtensor<double, 3>& dphi,
+    const xt::xtensor<double, 2>& coords, const xt::xtensor<double, 2> J_f,
+    xt::xtensor<double, 2>& J, xt::xtensor<double, 2>& K,
+    xt::xtensor<double, 2>& J_tot)
+{
+  std::size_t gdim = J.shape(0);
+  const xt::xtensor<double, 2>& dphi0_c
+      = xt::view(dphi, xt::all(), q, xt::all());
+  auto c_view = xt::view(coords, xt::all(), xt::range(0, gdim));
+  std::fill(J.begin(), J.end(), 0.0);
+  dolfinx::fem::CoordinateElement::compute_jacobian(dphi0_c, c_view, J);
+  dolfinx::fem::CoordinateElement::compute_jacobian_inverse(J, K);
+  std::fill(J_tot.begin(), J_tot.end(), 0.0);
+  dolfinx::math::dot(J, J_f, J_tot);
+  return std::fabs(
+      dolfinx::fem::CoordinateElement::compute_jacobian_determinant(J_tot));
+}
