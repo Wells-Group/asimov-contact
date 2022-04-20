@@ -138,6 +138,7 @@ public:
     auto mesh = _marker->mesh();
     const std::size_t gdim = mesh->geometry().dim(); // geometrical dimension
     const int tdim = mesh->topology().dim();         // topological dimension
+    bool affine = mesh->geometry().cmap().is_affine();
 
     // Extract function space data (assuming same test and trial space)
     std::shared_ptr<const dolfinx::fem::DofMap> dofmap = _V->dofmap();
@@ -249,29 +250,29 @@ public:
       // Extract the first derivative of the coordinate element (cell) of
       // degrees of freedom on the facet
       const xt::xtensor<double, 3>& dphi_fc = dphi_c[facet_index];
-      const xt::xtensor<double, 2>& dphi0_c = xt::view(
-          dphi_fc, xt::all(), 0,
-          xt::all()); // FIXME: Assumed constant, i.e. only works for simplices
-      // NOTE: Affine cell assumption
-      // Compute Jacobian and determinant at first quadrature point
+
+      // Create data structures for jacobians
       xt::xtensor<double, 2> J = xt::zeros<double>({gdim, (std::size_t)tdim});
       xt::xtensor<double, 2> K = xt::zeros<double>({(std::size_t)tdim, gdim});
+      // J_f facet jacobian, J_tot = J * J_f
+      xt::xtensor<double, 2> J_f
+          = xt::view(ref_jacobians, facet_index, xt::all(), xt::all());
+      xt::xtensor<double, 2> J_tot
+          = xt::zeros<double>({J.shape(0), J_f.shape(1)});
+      double detJ;
       auto c_view = xt::view(coord, xt::all(), xt::range(0, gdim));
-      dolfinx::fem::CoordinateElement::compute_jacobian(dphi0_c, c_view, J);
-      dolfinx::fem::CoordinateElement::compute_jacobian_inverse(J, K);
 
-      // Compute normal of physical facet using a normalized covariant Piola
-      // transform n_phys = J^{-T} n_ref / ||J^{-T} n_ref|| See for instance
-      // DOI: 10.1137/08073901X
+      // normal vector
       xt::xarray<double> n_phys = xt::zeros<double>({gdim});
-      auto facet_normal = xt::row(facet_normals, facet_index);
-      for (std::size_t i = 0; i < gdim; i++)
-        for (int j = 0; j < tdim; j++)
-          n_phys[i] += K(j, i) * facet_normal[j];
-      double n_norm = 0;
-      for (std::size_t i = 0; i < gdim; i++)
-        n_norm += n_phys[i] * n_phys[i];
-      n_phys /= std::sqrt(n_norm);
+
+      // pre-compute jacobians and normals for affine meshes
+      if (affine)
+      {
+        detJ = dolfinx_contact::compute_facet_jacobians(0, dphi_fc, coord, J_f,
+                                                        J, K, J_tot);
+        auto facet_normal = xt::row(facet_normals, facet_index);
+        dolfinx_contact::compute_normal(facet_normal, K, n_phys);
+      }
 
       // h/gamma
       double gamma = c[2] / w[0];
@@ -281,21 +282,22 @@ public:
       double mu = c[0];
       double lmbda = c[1];
 
-      // Compute det(J_C J_f) as it is the mapping to the reference facet
-      xt::xtensor<double, 2> J_f
-          = xt::view(ref_jacobians, facet_index, xt::all(), xt::all());
-      xt::xtensor<double, 2> J_tot
-          = xt::zeros<double>({J.shape(0), J_f.shape(1)});
-      dolfinx::math::dot(J, J_f, J_tot);
-      double detJ = std::fabs(
-          dolfinx::fem::CoordinateElement::compute_jacobian_determinant(J_tot));
-
       const xt::xtensor<double, 3>& dphi_f = dphi[facet_index];
       const xt::xtensor<double, 2>& phi_f = phi[facet_index];
       const std::vector<double>& weights = _qw_ref_facet[facet_index];
       xt::xarray<double> n_surf = xt::zeros<double>({gdim});
       for (std::size_t q = 0; q < weights.size(); q++)
       {
+
+        // Compute jacobians and normals for non-affine geometries
+        if (!affine)
+        {
+          detJ = dolfinx_contact::compute_facet_jacobians(q, dphi_fc, coord,
+                                                          J_f, J, K, J_tot);
+          auto facet_normal = xt::row(facet_normals, facet_index);
+          dolfinx_contact::compute_normal(facet_normal, K, n_phys);
+        }
+
         double n_dot = 0;
         double gap = 0;
         const std::size_t gap_offset = 3;
@@ -405,31 +407,30 @@ public:
       // Extract the first derivative of the coordinate element (cell) of
       // degrees of freedom on the facet
       const xt::xtensor<double, 3>& dphi_fc = dphi_c[facet_index];
-      const xt::xtensor<double, 2>& dphi0_c = xt::view(
-          dphi_fc, xt::all(), 0,
-          xt::all()); // FIXME: Assumed constant, i.e. only works for simplices
-      // NOTE: Affine cell assumption
-      // Compute Jacobian and determinant at first quadrature point
+
+      // Create data structures for jacobians
       xt::xtensor<double, 2> J = xt::zeros<double>({gdim, (std::size_t)tdim});
       xt::xtensor<double, 2> K = xt::zeros<double>({(std::size_t)tdim, gdim});
+      // J_f facet jacobian, J_tot = J * J_f
+      xt::xtensor<double, 2> J_f
+          = xt::view(ref_jacobians, facet_index, xt::all(), xt::all());
+      xt::xtensor<double, 2> J_tot
+          = xt::zeros<double>({J.shape(0), J_f.shape(1)});
+      double detJ;
       auto c_view = xt::view(coord, xt::all(), xt::range(0, gdim));
-      dolfinx::fem::CoordinateElement::compute_jacobian(dphi0_c, c_view, J);
-      dolfinx::fem::CoordinateElement::compute_jacobian_inverse(J, K);
 
-      // Compute normal of physical facet using a normalized covariant Piola
-      // transform n_phys = J^{-T} n_ref / ||J^{-T} n_ref|| See for instance
-      // DOI: 10.1137/08073901X
+      // normal vector
       xt::xarray<double> n_phys = xt::zeros<double>({gdim});
-      auto facet_normal = xt::row(facet_normals, facet_index);
-      for (std::size_t i = 0; i < gdim; i++)
-        for (int j = 0; j < tdim; j++)
-          n_phys[i] += K(j, i) * facet_normal[j];
-      double n_norm = 0;
 
-      for (std::size_t i = 0; i < gdim; i++)
-        n_norm += n_phys[i] * n_phys[i];
-      n_phys /= std::sqrt(n_norm);
-
+      // pre-compute jacobians and normals for affine meshes
+      // pre-compute jacobians and normals for affine meshes
+      if (affine)
+      {
+        detJ = dolfinx_contact::compute_facet_jacobians(0, dphi_fc, coord, J_f,
+                                                        J, K, J_tot);
+        auto facet_normal = xt::row(facet_normals, facet_index);
+        dolfinx_contact::compute_normal(facet_normal, K, n_phys);
+      }
       // Extract scaled gamma (h/gamma) and its inverse
       double gamma = c[2] / w[0];
       double gamma_inv = w[0] / c[2];
@@ -438,21 +439,20 @@ public:
       double mu = c[0];
       double lmbda = c[1];
 
-      // Compute det(J_C J_f) as it is the mapping to the reference facet
-      xt::xtensor<double, 2> J_f
-          = xt::view(ref_jacobians, facet_index, xt::all(), xt::all());
-      xt::xtensor<double, 2> J_tot
-          = xt::zeros<double>({J.shape(0), J_f.shape(1)});
-      dolfinx::math::dot(J, J_f, J_tot);
-      double detJ = std::fabs(
-          dolfinx::fem::CoordinateElement::compute_jacobian_determinant(J_tot));
-
       const xt::xtensor<double, 3>& dphi_f = dphi[facet_index];
       const xt::xtensor<double, 2>& phi_f = phi[facet_index];
       const std::vector<double>& weights = _qw_ref_facet[facet_index];
       xt::xarray<double> n_surf = xt::zeros<double>({gdim});
       for (std::size_t q = 0; q < weights.size(); q++)
       {
+        // Compute jacobians and normals for non-affine geometries
+        if (!affine)
+        {
+          detJ = dolfinx_contact::compute_facet_jacobians(q, dphi_fc, coord,
+                                                          J_f, J, K, J_tot);
+          auto facet_normal = xt::row(facet_normals, facet_index);
+          dolfinx_contact::compute_normal(facet_normal, K, n_phys);
+        }
         double n_dot = 0;
         double gap = 0;
         const std::size_t gap_offset = 3;

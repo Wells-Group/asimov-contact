@@ -383,19 +383,20 @@ void dolfinx_contact::evaluate_basis_functions(
   // Get mesh
   std::shared_ptr<const dolfinx::mesh::Mesh> mesh = V.mesh();
   assert(mesh);
-  const std::size_t gdim = mesh->geometry().dim();
-  const std::size_t tdim = mesh->topology().dim();
-  auto map = mesh->topology().index_map((int)tdim);
+  const dolfinx::mesh::Geometry& geometry = mesh->geometry();
+  const dolfinx::mesh::Topology& topology = mesh->topology();
+
+  // Get topology data
+  const std::size_t tdim = topology.dim();
+  auto map = topology.index_map((int)tdim);
 
   // Get geometry data
+  const std::size_t gdim = geometry.dim();
+  xtl::span<const double> x_g = geometry.x();
   const dolfinx::graph::AdjacencyList<std::int32_t>& x_dofmap
-      = mesh->geometry().dofmap();
-  // FIXME: Add proper interface for num coordinate dofs
-  const std::size_t num_dofs_g = x_dofmap.num_links(0);
-  xtl::span<const double> x_g = mesh->geometry().x();
-
-  // Get coordinate map
-  const dolfinx::fem::CoordinateElement& cmap = mesh->geometry().cmap();
+      = geometry.dofmap();
+  const dolfinx::fem::CoordinateElement& cmap = geometry.cmap();
+  const std::size_t num_dofs_g = cmap.dim();
 
   // Get element
   assert(V.element());
@@ -423,7 +424,7 @@ void dolfinx_contact::evaluate_basis_functions(
   if (element->needs_dof_transformations())
   {
     mesh->topology_mutable().create_entity_permutations();
-    cell_info = xtl::span(mesh->topology().get_cell_permutation_info());
+    cell_info = xtl::span(topology.get_cell_permutation_info());
   }
 
   xt::xtensor<double, 2> coordinate_dofs
@@ -549,3 +550,42 @@ void dolfinx_contact::evaluate_basis_functions(
     }
   }
 };
+
+void dolfinx_contact::compute_normal(const xt::xtensor<double, 1>& n_ref,
+                                     const xt::xtensor<double, 2>& K,
+                                     xt::xarray<double>& n_phys)
+
+{
+  // Compute normal of physical facet using a normalized covariant Piola
+  // transform n_phys = J^{-T} n_ref / ||J^{-T} n_ref|| See for instance
+  // DOI: 10.1137/08073901X
+  std::size_t tdim = K.shape(0);
+  std::size_t gdim = K.shape(1);
+  std::fill(n_phys.begin(), n_phys.end(), 0.0);
+  for (std::size_t i = 0; i < gdim; i++)
+    for (std::size_t j = 0; j < tdim; j++)
+      n_phys[i] += K(j, i) * n_ref[j];
+  double n_norm = 0;
+  for (std::size_t i = 0; i < gdim; i++)
+    n_norm += n_phys[i] * n_phys[i];
+  n_phys /= std::sqrt(n_norm);
+}
+
+double dolfinx_contact::compute_facet_jacobians(
+    int q, const xt::xtensor<double, 3>& dphi,
+    const xt::xtensor<double, 2>& coords, const xt::xtensor<double, 2> J_f,
+    xt::xtensor<double, 2>& J, xt::xtensor<double, 2>& K,
+    xt::xtensor<double, 2>& J_tot)
+{
+  std::size_t gdim = J.shape(0);
+  const xt::xtensor<double, 2>& dphi0_c
+      = xt::view(dphi, xt::all(), q, xt::all());
+  auto c_view = xt::view(coords, xt::all(), xt::range(0, gdim));
+  std::fill(J.begin(), J.end(), 0.0);
+  dolfinx::fem::CoordinateElement::compute_jacobian(dphi0_c, c_view, J);
+  dolfinx::fem::CoordinateElement::compute_jacobian_inverse(J, K);
+  std::fill(J_tot.begin(), J_tot.end(), 0.0);
+  dolfinx::math::dot(J, J_f, J_tot);
+  return std::fabs(
+      dolfinx::fem::CoordinateElement::compute_jacobian_determinant(J_tot));
+}

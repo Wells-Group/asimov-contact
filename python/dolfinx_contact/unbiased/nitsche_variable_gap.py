@@ -12,6 +12,7 @@ import dolfinx_cuas
 import numpy as np
 import ufl
 from dolfinx.io import XDMFFile
+from petsc4py.PETSc import Viewer
 
 import dolfinx_contact
 import dolfinx_contact.cpp
@@ -27,7 +28,7 @@ def nitsche_variable_gap(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTagsMetaCl
                          nitsche_parameters: dict[str, np.float64],
                          displacement: Tuple[list[float], list[float]] = [[0, 0, 0], [0, 0, 0]],
                          quadrature_degree: int = 5, form_compiler_params: dict = None, jit_params: dict = None,
-                         petsc_options: dict = None, newton_options: dict = None, initGuess=None):
+                         petsc_options: dict = None, newton_options: dict = None, initGuess=None, outfile=None):
     """
     Use custom kernel to compute the contact problem with two elastic bodies coming into contact.
     The gap function is non-linear in u and based on closest point projection on the deformed body.
@@ -71,6 +72,8 @@ def nitsche_variable_gap(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTagsMetaCl
         Dictionary with Newton-solver options. Valid (key, item) tuples are:
         ("atol", float), ("rtol", float), ("convergence_criterion", "str"),
         ("max_it", int), ("error_on_nonconvergence", bool), ("relaxation_parameter", float)
+    outfile
+        File to append solver summary
     """
     form_compiler_params = {} if form_compiler_params is None else form_compiler_params
     jit_params = {} if jit_params is None else jit_params
@@ -297,7 +300,7 @@ def nitsche_variable_gap(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTagsMetaCl
     if newton_options.get("atol") is not None:
         newton_solver.atol = newton_options.get("atol")
     if newton_options.get("rtol") is not None:
-        newton_solver.atol = newton_options.get("rtol")
+        newton_solver.rtol = newton_options.get("rtol")
 
     if newton_options.get("convergence_criterion") is not None:
         conv_crit = newton_options.get("convergence_criterion")
@@ -311,7 +314,7 @@ def nitsche_variable_gap(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTagsMetaCl
     # TODO: restore options after debugging
     # if newton_options.get("max_it") is not None:
     #     newton_solver.max_it = newton_options.get("max_it")
-    newton_solver.max_it = 0
+    newton_solver.max_it = 1
     # if newton_options.get("error_on_nonconvergence") is not None:
     #     newton_solver.error_on_nonconvergence = newton_options.get("error_on_nonconvergence")
     newton_solver.error_on_nonconvergence = False
@@ -333,12 +336,18 @@ def nitsche_variable_gap(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTagsMetaCl
     _log.set_log_level(_log.LogLevel.OFF)
 
     # Solve non-linear problem
-    with _common.Timer(f"~Contact: {dofs_global} Solve Nitsche"):
+    timing_str = f"~Contact: {id(dofs_global)} Solve Nitsche"
+    with _common.Timer(timing_str):
         n, converged = newton_solver.solve(u)
+
+    if outfile is not None:
+        viewer = Viewer().createASCII(outfile, "a")
+        newton_solver.krylov_solver.view(viewer)
+    newton_time = _common.timing(timing_str)
     # if not converged:
     #     raise RuntimeError("Newton solver did not converge")
     u.x.scatter_forward()
 
     print(f"{dofs_global}\n Number of Newton iterations: {n:d}\n",
           f"Number of Krylov iterations {newton_solver.krylov_iterations}\n", flush=True)
-    return u, n, newton_solver.krylov_iterations
+    return u, n, newton_solver.krylov_iterations, newton_time[1]

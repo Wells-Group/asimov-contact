@@ -7,10 +7,10 @@
 #include "coefficients.h"
 #include "geometric_quantities.h"
 #include <basix/quadrature.h>
+#include <dolfinx/mesh/cell_types.h>
 #include <dolfinx_cuas/QuadratureRule.hpp>
 #include <xtensor/xslice.hpp>
 #include <xtl/xspan.hpp>
-
 using namespace dolfinx_contact;
 
 std::pair<std::vector<PetscScalar>, int>
@@ -26,26 +26,24 @@ dolfinx_contact::pack_coefficient_quadrature(
       = coeff->function_space()->mesh();
   assert(mesh);
 
+  // Get topology data
+  const dolfinx::mesh::Topology& topology = mesh->topology();
+  const int tdim = topology.dim();
+  const dolfinx::mesh::CellType cell_type = topology.cell_type();
+
   // Create quadrature rule
-  const int tdim = mesh->topology().dim();
-  const int gdim = mesh->geometry().dim();
-  const dolfinx::mesh::CellType cell_type = mesh->topology().cell_type();
-  std::shared_ptr<dolfinx_cuas::QuadratureRule> q_rule;
+  int entity_dim;
   std::visit(
-      [&q_rule, q_degree, tdim, cell_type](auto& entities)
+      [&entity_dim, tdim](auto& entities)
       {
         using U = std::decay_t<decltype(entities)>;
         if constexpr (std::is_same_v<U, tcb::span<const std::int32_t>>)
-        {
-          q_rule = std::make_shared<dolfinx_cuas::QuadratureRule>(
-              cell_type, q_degree, tdim);
-        }
+          entity_dim = tdim;
         else if constexpr (std::is_same_v<
                                U,
                                tcb::span<const std::pair<std::int32_t, int>>>)
         {
-          q_rule = std::make_shared<dolfinx_cuas::QuadratureRule>(
-              cell_type, q_degree, tdim - 1);
+          entity_dim = tdim - 1;
         }
         else
         {
@@ -54,47 +52,34 @@ dolfinx_contact::pack_coefficient_quadrature(
         }
       },
       active_entities);
+  dolfinx_cuas::QuadratureRule q_rule(cell_type, q_degree, entity_dim);
 
-  // Get the dofmap and finite element
-  const dolfinx::fem::DofMap* dofmap = coeff->function_space()->dofmap().get();
+  // Get finite element
   const dolfinx::fem::FiniteElement* element
       = coeff->function_space()->element().get();
 
-  // Get the coeffs to pack
-  const xtl::span<const double> data = coeff->x()->array();
-
-  // Get dof transformations
-  const bool needs_dof_transformations = element->needs_dof_transformations();
-  xtl::span<const std::uint32_t> cell_info;
-  if (needs_dof_transformations)
-  {
-    cell_info = xtl::span(mesh->topology().get_cell_permutation_info());
-    mesh->topology_mutable().create_entity_permutations();
-  }
-  const std::function<void(const xtl::span<PetscScalar>&,
-                           const xtl::span<const std::uint32_t>&, std::int32_t,
-                           int)>
-      transformation = element->get_dof_transformation_function<PetscScalar>();
-
-  const std::size_t num_dofs = element->space_dimension();
-  const std::size_t bs = dofmap->bs();
-  const int vs = element->reference_value_size() / element->block_size();
+  // Get element information
+  const std::size_t bs = element->block_size();
+  const std::size_t num_basis_functions = element->space_dimension() / bs;
+  const int reference_value_size = element->reference_value_size();
+  const int vs = reference_value_size / bs;
 
   // Tabulate function at quadrature points (assuming no derivatives)
-  auto weights = q_rule->weights_ref();
-  auto points = q_rule->points_ref();
-  const std::size_t num_entities = points.size();
+  const std::size_t num_entities
+      = dolfinx::mesh::cell_num_entities(cell_type, entity_dim);
   // NOTE: Does not work for facet integrals on prisms
-  const std::size_t num_points = weights[0].size();
+  auto q_points = q_rule.points_ref();
+  auto q_weights = q_rule.weights_ref();
+  const std::size_t num_q_points = q_weights[0].size();
   xt::xtensor<double, 4> reference_basis_values(
-      {num_entities, num_points, num_dofs / bs, (std::size_t)vs});
+      {num_entities, num_q_points, num_basis_functions, (std::size_t)vs});
 
   // Temporary variable to fill in loop
   xt::xtensor<double, 4> coeff_basis(
-      {1, num_points, num_dofs / bs, (std::size_t)vs});
+      {1, num_q_points, num_basis_functions, (std::size_t)vs});
   for (std::size_t i = 0; i < num_entities; i++)
   {
-    const xt::xarray<double>& q_ent = points[i];
+    const xt::xarray<double>& q_ent = q_points[i];
     element->tabulate(coeff_basis, q_ent, 0);
     auto basis_ref
         = xt::view(reference_basis_values, i, xt::all(), xt::all(), xt::all());
@@ -134,46 +119,62 @@ dolfinx_contact::pack_coefficient_quadrature(
         }
       },
       active_entities);
-
   // Create output array
-  std::vector<PetscScalar> coefficients(
-      num_active_entities * vs * bs * num_points, 0.0);
-  const auto cstride = int(vs * bs * num_points);
+  const auto cstride = int(reference_value_size * num_q_points);
+  std::vector<PetscScalar> coefficients(num_active_entities * cstride, 0.0);
+
+  // Get the coeffs to pack
+  const xtl::span<const double> data = coeff->x()->array();
+
+  // Get dofmap info
+  const dolfinx::fem::DofMap* dofmap = coeff->function_space()->dofmap().get();
+  const std::size_t dofmap_bs = dofmap->bs();
+
+  // Get dof transformations
+  const bool needs_dof_transformations = element->needs_dof_transformations();
+  xtl::span<const std::uint32_t> cell_info;
+  if (needs_dof_transformations)
+  {
+    mesh->topology_mutable().create_entity_permutations();
+    cell_info = topology.get_cell_permutation_info();
+  }
+  const std::function<void(const xtl::span<PetscScalar>&,
+                           const xtl::span<const std::uint32_t>&, std::int32_t,
+                           int)>
+      transformation = element->get_dof_transformation_function<PetscScalar>();
 
   if (needs_dof_transformations)
   {
     // Prepare basis function data structures
     xt::xtensor<double, 3> basis_values(
-        {num_points, num_dofs / bs, (std::size_t)vs});
+        {num_q_points, num_basis_functions, (std::size_t)vs});
     xt::xtensor<double, 2> point_basis_values(
         {basis_values.shape(0), basis_values.shape(1)});
 
     // Get geometry data
+    const dolfinx::mesh::Geometry& geometry = mesh->geometry();
+    const int gdim = geometry.dim();
     const dolfinx::graph::AdjacencyList<std::int32_t>& x_dofmap
         = mesh->geometry().dofmap();
-
-    // FIXME: Add proper interface for num coordinate dofs
-    const std::size_t num_dofs_g = x_dofmap.num_links(0);
-    xtl::span<const double> x_g = mesh->geometry().x();
+    const dolfinx::fem::CoordinateElement& cmap = geometry.cmap();
+    const std::size_t num_dofs_g = cmap.dim();
+    xtl::span<const double> x_g = geometry.x();
 
     // Prepare geometry data structures
-    xt::xtensor<double, 2> X({num_points, (std::size_t)tdim});
-    xt::xtensor<double, 3> J
-        = xt::zeros<double>({num_points, (std::size_t)gdim, (std::size_t)tdim});
-    xt::xtensor<double, 3> K
-        = xt::zeros<double>({num_points, (std::size_t)tdim, (std::size_t)gdim});
-    xt::xtensor<double, 1> detJ = xt::zeros<double>({num_points});
+    xt::xtensor<double, 2> X({num_q_points, (std::size_t)tdim});
+    xt::xtensor<double, 3> J = xt::zeros<double>(
+        {num_q_points, (std::size_t)gdim, (std::size_t)tdim});
+    xt::xtensor<double, 3> K = xt::zeros<double>(
+        {num_q_points, (std::size_t)tdim, (std::size_t)gdim});
+    xt::xtensor<double, 1> detJ = xt::zeros<double>({num_q_points});
     xt::xtensor<double, 2> coordinate_dofs
         = xt::zeros<double>({num_dofs_g, (std::size_t)gdim});
 
-    // Get coordinate map
-    const dolfinx::fem::CoordinateElement& cmap = mesh->geometry().cmap();
-
     xt::xtensor<double, 5> dphi_c(
-        {num_entities, (std::size_t)tdim, num_points, num_dofs_g / bs, 1});
+        {num_entities, (std::size_t)tdim, num_q_points, num_dofs_g / bs, 1});
     for (std::size_t i = 0; i < num_entities; i++)
     {
-      const xt::xarray<double>& q_ent = points[i];
+      const xt::xarray<double>& q_ent = q_points[i];
       xt::xtensor<double, 4> cmap_basis_functions = cmap.tabulate(1, q_ent);
       auto dphi_ci
           = xt::view(dphi_c, i, xt::all(), xt::all(), xt::all(), xt::all());
@@ -209,7 +210,7 @@ dolfinx_contact::pack_coefficient_quadrature(
                               xt::all(), xt::all());
 
       // NOTE: This can be simplified in affine case
-      for (std::size_t q = 0; q < num_points; ++q)
+      for (std::size_t q = 0; q < num_q_points; ++q)
       {
         J.fill(0);
         xt::xtensor<double, 2> dphi
@@ -224,8 +225,9 @@ dolfinx_contact::pack_coefficient_quadrature(
         // Permute the reference values to account for the cell's orientation
         point_basis_values = xt::view(reference_basis_values, entity_index, q,
                                       xt::all(), xt::all());
-        transformation(xtl::span(point_basis_values.data(), num_dofs / bs * vs),
-                       cell_info, cell, vs);
+        transformation(
+            xtl::span(point_basis_values.data(), num_basis_functions * vs),
+            cell_info, cell, vs);
 
         // Push basis forward to physical element
         auto _u = xt::view(basis_values, q, xt::all(), xt::all());
@@ -237,34 +239,47 @@ dolfinx_contact::pack_coefficient_quadrature(
       auto dofs = dofmap->cell_dofs(cell);
       for (std::size_t d = 0; d < dofs.size(); ++d)
       {
-        const int pos_v = (int)bs * dofs[d];
+        const int pos_v = (int)dofmap_bs * dofs[d];
 
-        for (std::size_t q = 0; q < num_points; ++q)
-          for (std::size_t k = 0; k < bs; ++k)
+        for (std::size_t q = 0; q < num_q_points; ++q)
+          for (std::size_t k = 0; k < dofmap_bs; ++k)
             for (int j = 0; j < vs; j++)
-              coefficients[cstride * i + q * (bs * vs) + k + j]
+              coefficients[cstride * i + q * reference_value_size + k + j]
                   += basis_values(q, d, j) * data[pos_v + k];
       }
     }
   }
   else
   {
+    // Loop over all entities
     for (std::size_t i = 0; i < num_active_entities; i++)
     {
       auto [cell, entity_index] = get_cell_info(i);
       auto dofs = dofmap->cell_dofs(cell);
+
+      // Loop over all dofs in cell
       for (std::size_t d = 0; d < dofs.size(); ++d)
       {
-        const int pos_v = (int)bs * dofs[d];
+        const int pos_v = (int)dofmap_bs * dofs[d];
+        // Unroll dofmap
+        for (std::size_t b = 0; b < dofmap_bs; ++b)
+        {
+          auto coeff = data[pos_v + b];
+          std::div_t pos = std::div(int(d * dofmap_bs + b), (int)bs);
 
-        for (std::size_t q = 0; q < num_points; ++q)
-          for (std::size_t k = 0; k < bs; ++k)
-            for (int l = 0; l < vs; l++)
+          // Pack coefficients for each quadrature point
+          for (std::size_t q = 0; q < num_q_points; ++q)
+          {
+            // Access each component of the reference basis function (in the
+            // case of vector spaces)
+            for (int l = 0; l < vs; ++l)
             {
-              coefficients[cstride * i + q * (bs * vs) + k + l]
-                  += reference_basis_values(entity_index, q, d, l)
-                     * data[pos_v + k];
+              coefficients[cstride * i + q * bs * vs + l + pos.rem]
+                  += reference_basis_values(entity_index, q, pos.quot, l)
+                     * coeff;
             }
+          }
+        }
       }
     }
   }
@@ -282,10 +297,13 @@ std::pair<std::vector<PetscScalar>, int> dolfinx_contact::pack_circumradius(
   // NOTE: Assuming no derivatives for now, should be reconsidered later
   const dolfinx::mesh::CellType cell_type = mesh.topology().cell_type();
 
-  // NOTE: This is not correct for non-affine geometries, then the quadrature
-  // rule has to be passed in Quadrature points for piecewise constant
-  const int tdim = mesh.topology().dim();
-  const int gdim = mesh.geometry().dim();
+  // NOTE: This is not correct for non-affine geometries, then the
+  // quadrature rule has to be passed in Quadrature points for piecewise
+  // constant
+  const dolfinx::mesh::Geometry& geometry = mesh.geometry();
+  const dolfinx::mesh::Topology& topology = mesh.topology();
+  const int tdim = topology.dim();
+  const int gdim = geometry.dim();
   const int fdim = tdim - 1;
   dolfinx_cuas::QuadratureRule q_rule(cell_type, 0, fdim);
 
@@ -298,11 +316,10 @@ std::pair<std::vector<PetscScalar>, int> dolfinx_contact::pack_circumradius(
 
   // Get geometry data
   const dolfinx::graph::AdjacencyList<std::int32_t>& x_dofmap
-      = mesh.geometry().dofmap();
-
-  // FIXME: Add proper interface for num coordinate dofs
-  const std::size_t num_dofs_g = x_dofmap.num_links(0);
-  xtl::span<const double> x_g = mesh.geometry().x();
+      = geometry.dofmap();
+  xtl::span<const double> x_g = geometry.x();
+  const dolfinx::fem::CoordinateElement& cmap = geometry.cmap();
+  const std::size_t num_dofs_g = cmap.dim();
 
   // Prepare geometry data structures
   xt::xtensor<double, 3> J = xt::zeros<double>(
@@ -310,9 +327,6 @@ std::pair<std::vector<PetscScalar>, int> dolfinx_contact::pack_circumradius(
   xt::xtensor<double, 1> detJ = xt::zeros<double>({std::size_t(1)});
   xt::xtensor<double, 2> coordinate_dofs
       = xt::zeros<double>({num_dofs_g, (std::size_t)gdim});
-
-  // Get coordinate map
-  const dolfinx::fem::CoordinateElement& cmap = mesh.geometry().cmap();
 
   xt::xtensor<double, 5> dphi_c(
       {num_local_facets, (std::size_t)tdim, num_points, num_dofs_g, 1});
@@ -343,8 +357,8 @@ std::pair<std::vector<PetscScalar>, int> dolfinx_contact::pack_circumradius(
         coordinate_dofs(i, j) = x_g[pos + j];
     }
 
-    // Compute determinant of Jacobian which is used to compute the area/volume
-    // of the cell
+    // Compute determinant of Jacobian which is used to compute the
+    // area/volume of the cell
     J.fill(0);
     auto _J = xt::view(J, 0, xt::all(), xt::all());
 
@@ -354,8 +368,8 @@ std::pair<std::vector<PetscScalar>, int> dolfinx_contact::pack_circumradius(
     detJ[0] = dolfinx::fem::CoordinateElement::compute_jacobian_determinant(_J);
 
     // Sum up quadrature contributions
-    // NOTE: Consider refactoring (moving in Jacobian computation when we start
-    // supporting non-affine geoemtries)
+    // NOTE: Consider refactoring (moving in Jacobian computation when we
+    // start supporting non-affine geoemtries)
     circumradius.push_back(
         compute_circumradius(mesh, detJ[0], coordinate_dofs));
   }
