@@ -6,6 +6,7 @@ import basix
 import dolfinx_cuas.cpp
 import numpy as np
 import pytest
+from dolfinx.cpp.mesh import cell_num_entities
 from dolfinx.fem import (Expression, Function, FunctionSpace, IntegralType,
                          VectorFunctionSpace)
 from dolfinx.mesh import (create_unit_cube, create_unit_square,
@@ -82,41 +83,35 @@ def test_pack_coeff_on_facet(quadrature_degree, space, degree):
     facets = locate_entities_boundary(mesh, mesh.topology.dim - 1,
                                       lambda x: np.logical_or(np.isclose(x[0], 0.0),
                                                               np.isclose(x[0], 1.0)))
-
     # Pack coeffs with cuas
     integration_entities = dolfinx_cuas.compute_active_entities(mesh, facets,
                                                                 IntegralType.exterior_facet)
+
     coeffs_cuas = dolfinx_contact.cpp.pack_coefficient_quadrature(
         v._cpp_object, quadrature_degree, integration_entities)
-
-    # Use prepare quadrature points and geometry for eval
-    qp_test, wts = basix.make_quadrature(basix.QuadratureType.Default,
-                                         basix.CellType.triangle, quadrature_degree)
+    cstride = coeffs_cuas.shape[1]
     x_g = mesh.geometry.x
     tdim = mesh.topology.dim
     fdim = tdim - 1
     coord_dofs = mesh.geometry.dofmap
 
-    # Connectivity to evaluate at quadrature points
-    mesh.topology.create_connectivity(fdim, tdim)
-    f_to_c = mesh.topology.connectivity(fdim, tdim)
-    mesh.topology.create_connectivity(tdim, fdim)
-    c_to_f = mesh.topology.connectivity(tdim, fdim)
+    # Create quadrature points for integration on facets
+    ct = mesh.topology.cell_type
+    q_rule = dolfinx_cuas.cpp.QuadratureRule(ct, quadrature_degree, fdim)
+    num_facets = cell_num_entities(ct, fdim)
+    q_points = []
+    for i in range(num_facets):
+        q_points.append(q_rule.points(i))
 
-    q_rule = dolfinx_cuas.cpp.QuadratureRule(mesh.topology.cell_type, quadrature_degree, mesh.topology.dim - 1)
-    # Eval for each cell
-    for index, facet in enumerate(facets):
-        cell = f_to_c.links(facet)[0]
-        xg = x_g[coord_dofs.links(cell)]
-        # find local index of facet
-        cell_facets = c_to_f.links(cell)
-        local_index = np.where(cell_facets == facet)[0]
-        quadrature_points = q_rule.points(local_index)
-        x = mesh.geometry.cmap.push_forward(quadrature_points, xg)
-        v_ex = v.eval(x, np.full(x.shape[0], cell))
+    # Compute coefficients at quadrature points using Expression
+    q_points = np.array(q_points).reshape((-1, tdim))
+    expr = Expression(v, q_points)
+    expr_vals = expr.eval(integration_entities[:, 0])
 
-        # Compare
-        assert(np.allclose(v_ex.reshape(-1), coeffs_cuas[index]))
+    for i, entity in enumerate(integration_entities):
+        local_index = entity[1]
+        assert np.allclose(coeffs_cuas[i],
+                           expr_vals[i, cstride * local_index:cstride * (local_index + 1)])
 
 
 @pytest.mark.parametrize("quadrature_degree", range(1, 5))
