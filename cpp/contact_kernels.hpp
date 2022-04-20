@@ -1,12 +1,14 @@
 // Copyright (C) 2021 Sarah Roggendorf
 //
-// This file is part of DOLFINx_CUAS
+// This file is part of DOLFINx_CONTACT
 //
 // SPDX-License-Identifier:    MIT
 
 #pragma once
 
 #include "Contact.h"
+#include "geometric_quantities.h"
+#include <basix/cell.h>
 #include <dolfinx/fem/FiniteElement.h>
 #include <dolfinx/fem/FunctionSpace.h>
 #include <dolfinx_cuas/QuadratureRule.hpp>
@@ -25,16 +27,24 @@ dolfinx_cuas::kernel_fn<T> generate_contact_kernel(
 {
 
   auto mesh = V->mesh();
+  assert(mesh);
 
   // Get mesh info
-  const std::uint32_t gdim = mesh->geometry().dim(); // geometrical dimension
-  const std::uint32_t tdim = mesh->topology().dim(); // topological dimension
-  const int fdim = tdim - 1; // topological dimension of facet
+  const dolfinx::mesh::Geometry& geometry = mesh->geometry();
+  auto cmap = geometry.cmap();
+  if (!cmap.is_affine())
+  {
+    throw std::runtime_error(
+        "This kernel has not been implemented for non-affine geometries");
+  }
+  const std::uint32_t gdim = geometry.dim();
+  const dolfinx::mesh::Topology& topology = mesh->topology();
+  const std::uint32_t tdim = topology.dim();
+  const int fdim = tdim - 1;
+  const int num_coordinate_dofs = cmap.dim();
 
-  // Create coordinate elements (for facet and cell) _marker->mesh()
-  const basix::FiniteElement basix_element
-      = dolfinx_cuas::mesh_to_basix_element(mesh, tdim);
-  const int num_coordinate_dofs = basix_element.dim();
+  basix::cell::type basix_cell
+      = dolfinx::mesh::cell_type_to_basix_type(topology.cell_type());
 
   // Create quadrature points on reference facet
   const std::vector<std::vector<double>>& q_weights
@@ -47,8 +57,8 @@ dolfinx_cuas::kernel_fn<T> generate_contact_kernel(
   std::shared_ptr<const dolfinx::fem::FiniteElement> element = V->element();
   const std::uint32_t bs = element->block_size();
   std::uint32_t ndofs_cell = element->space_dimension() / bs;
-  auto facets = basix::cell::topology(
-      basix_element.cell_type())[tdim - 1]; // Topology of basix facets
+  auto facets
+      = basix::cell::topology(basix_cell)[tdim - 1]; // Topology of basix facets
   const std::uint32_t num_facets = facets.size();
   std::vector<xt::xtensor<double, 2>> phi;
   phi.reserve(num_facets);
@@ -92,9 +102,9 @@ dolfinx_cuas::kernel_fn<T> generate_contact_kernel(
 
     // Tabulate at quadrature points on facet
     const int num_quadrature_points = q_facet.shape(0);
-
-    xt::xtensor<double, 4> cell_tab(
-        {tdim + 1, num_quadrature_points, ndofs_cell, bs});
+    std::array<std::size_t, 4> tabulate_shape
+        = cmap.tabulate_shape(1, num_quadrature_points);
+    xt::xtensor<double, 4> cell_tab(tabulate_shape);
     element->tabulate(cell_tab, q_facet, 1);
     xt::xtensor<double, 2> phi_i
         = xt::view(cell_tab, 0, xt::all(), xt::all(), 0);
@@ -104,12 +114,12 @@ dolfinx_cuas::kernel_fn<T> generate_contact_kernel(
     dphi.push_back(dphi_i);
 
     // Tabulate coordinate element of reference cell
-    auto c_tab = basix_element.tabulate(1, q_facet);
+    auto c_tab = cmap.tabulate(1, q_facet);
     xt::xtensor<double, 3> dphi_ci
         = xt::view(c_tab, xt::range(1, tdim + 1), xt::all(), xt::all(), 0);
     dphi_c.push_back(dphi_ci);
 
-    // Create Finite elements for coefficient functions and tabulate shape
+    // Create finite elements for coefficient functions and tabulate shape
     // functions
     for (int j = 0; j < num_coeffs; j++)
     {
@@ -131,11 +141,11 @@ dolfinx_cuas::kernel_fn<T> generate_contact_kernel(
 
   // As reference facet and reference cell are affine, we do not need to compute
   // this per quadrature point
-  auto ref_jacobians = basix::cell::facet_jacobians(basix_element.cell_type());
+  auto ref_jacobians = basix::cell::facet_jacobians(basix_cell);
 
   // Get facet normals on reference cell
-  auto facet_normals
-      = basix::cell::facet_outward_normals(basix_element.cell_type());
+  auto facet_normals = basix::cell::facet_outward_normals(basix_cell);
+
   // Define kernels
   // RHS for contact with rigid surface
   // =====================================================================================
@@ -176,18 +186,11 @@ dolfinx_cuas::kernel_fn<T> generate_contact_kernel(
     dolfinx::fem::CoordinateElement::compute_jacobian(dphi0_c, c_view, J);
     dolfinx::fem::CoordinateElement::compute_jacobian_inverse(J, K);
 
-    // Compute normal of physical facet using a normalized covariant Piola
-    // transform n_phys = J^{-T} n_ref / ||J^{-T} n_ref|| See for instance
-    // DOI: 10.1137/08073901X
-    xt::xarray<double> n_phys = xt::zeros<double>({gdim});
-    auto facet_normal = xt::row(facet_normals, facet_index);
-    for (std::size_t i = 0; i < gdim; i++)
-      for (std::size_t j = 0; j < tdim; j++)
-        n_phys[i] += K(j, i) * facet_normal[j];
-    double n_norm = 0;
-    for (std::size_t i = 0; i < gdim; i++)
-      n_norm += n_phys[i] * n_phys[i];
-    n_phys /= std::sqrt(n_norm);
+    // Compute push forward of reference facet normal
+    // NOTE: Affine cell assumption
+    xt::xtensor<double, 1> n_phys = xt::zeros<double>({gdim});
+    dolfinx_contact::physical_facet_normal(n_phys, K,
+                                           xt::row(facet_normals, facet_index));
 
     // Retrieve normal of rigid surface if constant
     xt::xarray<double> n_surf = xt::zeros<double>({gdim});
@@ -205,7 +208,8 @@ dolfinx_cuas::kernel_fn<T> generate_contact_kernel(
       }
     }
     int c_offset = (bs - 1) * offsets[1];
-    double gamma = w[0] / c[c_offset + offsets[3]]; // This is gamma/h
+    // This is gamma/h
+    double gamma = w[0] / c[c_offset + offsets[3]];
     double gamma_inv = c[c_offset + offsets[3]] / w[0];
     double theta = w[1];
 
@@ -301,10 +305,8 @@ dolfinx_cuas::kernel_fn<T> generate_contact_kernel(
       // Multiply  by weight
       double sign_u = (lmbda * n_dot * tr_u + mu * epsn_u);
       double R_minus = gamma_inv * sign_u + (gap - u_dot_nsurf);
-      if (R_minus > 0)
-        R_minus = 0;
-      else
-        R_minus = R_minus * detJ * weights[q];
+
+      R_minus = (R_minus > 0) ? 0 : R_minus * detJ * weights[q];
       sign_u *= detJ * weights[q];
       for (int j = 0; j < ndofs_cell; j++)
       {
@@ -361,21 +363,14 @@ dolfinx_cuas::kernel_fn<T> generate_contact_kernel(
     dolfinx::fem::CoordinateElement::compute_jacobian(dphi0_c, c_view, J);
     dolfinx::fem::CoordinateElement::compute_jacobian_inverse(J, K);
 
-    // Compute normal of physical facet using a normalized covariant Piola
-    // transform n_phys = J^{-T} n_ref / ||J^{-T} n_ref|| See for instance
-    // DOI: 10.1137/08073901X
-    xt::xarray<double> n_phys = xt::zeros<double>({gdim});
-    auto facet_normal = xt::row(facet_normals, facet_index);
-    for (std::size_t i = 0; i < gdim; i++)
-      for (std::size_t j = 0; j < tdim; j++)
-        n_phys[i] += K(j, i) * facet_normal[j];
-    double n_norm = 0;
-    for (std::size_t i = 0; i < gdim; i++)
-      n_norm += n_phys[i] * n_phys[i];
-    n_phys /= std::sqrt(n_norm);
+    // Compute push forward of reference facet normal
+    // NOTE: Affine cell assumption
+    xt::xtensor<double, 1> n_phys = xt::zeros<double>({gdim});
+    dolfinx_contact::physical_facet_normal(n_phys, K,
+                                           xt::row(facet_normals, facet_index));
 
     // Retrieve normal of rigid surface if constant
-    xt::xarray<double> n_surf = xt::zeros<double>({gdim});
+    xt::xtensor<double, 1> n_surf = xt::zeros<double>({gdim});
     // FIXME: Code duplication from previous kernel, and should be made into a
     // lambda function
     double n_dot = 0;
@@ -489,9 +484,10 @@ dolfinx_cuas::kernel_fn<T> generate_contact_kernel(
         for (int l = 0; l < bs; l++)
         {
           double sign_u = (lmbda * tr(j, l) * n_dot + mu * epsn(j, l));
-          double term2 = 0;
-          if (temp < 0)
-            term2 = (gamma_inv * sign_u - n_surf(l) * phi_f(q, j)) * w0;
+          double term2
+              = (temp >= 0)
+                    ? 0
+                    : (gamma_inv * sign_u - n_surf(l) * phi_f(q, j)) * w0;
           sign_u *= w0;
           for (int i = 0; i < ndofs_cell; i++)
           { // Insert over block size in matrix

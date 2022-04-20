@@ -46,4 +46,35 @@ push_forward_facet_normal(const xt::xtensor<double, 2>& x,
 double compute_circumradius(const dolfinx::mesh::Mesh& mesh, double detJ,
                             const xt::xtensor<double, 2>& coordinate_dofs);
 
+/// @brief Push forward facet normal
+///
+/// Compute normal of physical facet using a normalized covariant Piola
+/// transform n_phys = J^{-T} n_ref / ||J^{-T} n_ref||
+/// See: DOI: 10.1137/08073901X
+/// @param[in, out] physical_normal The physical normal
+/// @param[in] K The inverse of the Jacobian
+/// @param[in] reference_normal The reference normal
+template <class E, class F, class G>
+void physical_facet_normal(E&& physical_normal, F&& K, G&& reference_normal)
+{
+  assert(physical_normal.shape(0) == K.shape(0));
+  const std::size_t gdim = K.shape(0);
+  const std::size_t tdim = K.shape(1);
+  for (std::size_t i = 0; i < gdim; i++)
+  {
+    // FIXME: Replace with math-dot
+    for (std::size_t j = 0; j < tdim; j++)
+      physical_normal[i] += K(j, i) * reference_normal[j];
+  }
+  // Normalize vector
+  double norm = 0;
+  std::for_each(physical_normal.cbegin(), physical_normal.cend(),
+                [&norm](auto ni) { norm += std::pow(ni, 2); });
+  norm = std::sqrt(norm);
+  std::for_each(physical_normal.begin(), physical_normal.end(),
+                [norm](auto& ni) { ni = ni / norm; });
+}
+
+//-----------------------------------------------------------------------------
+
 } // namespace dolfinx_contact

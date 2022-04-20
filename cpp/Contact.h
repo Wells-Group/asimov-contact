@@ -258,18 +258,9 @@ public:
       dolfinx::fem::CoordinateElement::compute_jacobian(dphi0_c, c_view, J);
       dolfinx::fem::CoordinateElement::compute_jacobian_inverse(J, K);
 
-      // Compute normal of physical facet using a normalized covariant Piola
-      // transform n_phys = J^{-T} n_ref / ||J^{-T} n_ref|| See for instance
-      // DOI: 10.1137/08073901X
-      xt::xarray<double> n_phys = xt::zeros<double>({gdim});
-      auto facet_normal = xt::row(facet_normals, facet_index);
-      for (std::size_t i = 0; i < gdim; i++)
-        for (int j = 0; j < tdim; j++)
-          n_phys[i] += K(j, i) * facet_normal[j];
-      double n_norm = 0;
-      for (std::size_t i = 0; i < gdim; i++)
-        n_norm += n_phys[i] * n_phys[i];
-      n_phys /= std::sqrt(n_norm);
+      // Push reference facet normal forward to physical facet
+      xt::xtensor<double, 1> n_phys = xt::zeros<double>({gdim});
+      physical_facet_normal(n_phys, K, xt::row(facet_normals, facet_index));
 
       // h/gamma
       double gamma = c[2] / w[0];
@@ -403,9 +394,10 @@ public:
       // Extract the first derivative of the coordinate element (cell) of
       // degrees of freedom on the facet
       const xt::xtensor<double, 3>& dphi_fc = dphi_c[facet_index];
-      const xt::xtensor<double, 2>& dphi0_c = xt::view(
-          dphi_fc, xt::all(), 0,
-          xt::all()); // FIXME: Assumed constant, i.e. only works for simplices
+      const xt::xtensor<double, 2>& dphi0_c
+          = xt::view(dphi_fc, xt::all(), 0, xt::all());
+
+      // FIXME: Assumed constant, i.e. only works for simplices
       // NOTE: Affine cell assumption
       // Compute Jacobian and determinant at first quadrature point
       xt::xtensor<double, 2> J = xt::zeros<double>({gdim, (std::size_t)tdim});
@@ -414,19 +406,9 @@ public:
       dolfinx::fem::CoordinateElement::compute_jacobian(dphi0_c, c_view, J);
       dolfinx::fem::CoordinateElement::compute_jacobian_inverse(J, K);
 
-      // Compute normal of physical facet using a normalized covariant Piola
-      // transform n_phys = J^{-T} n_ref / ||J^{-T} n_ref|| See for instance
-      // DOI: 10.1137/08073901X
-      xt::xarray<double> n_phys = xt::zeros<double>({gdim});
-      auto facet_normal = xt::row(facet_normals, facet_index);
-      for (std::size_t i = 0; i < gdim; i++)
-        for (int j = 0; j < tdim; j++)
-          n_phys[i] += K(j, i) * facet_normal[j];
-      double n_norm = 0;
-
-      for (std::size_t i = 0; i < gdim; i++)
-        n_norm += n_phys[i] * n_phys[i];
-      n_phys /= std::sqrt(n_norm);
+      // Push reference facet normal forward to physical facet
+      xt::xtensor<double, 1> n_phys = xt::zeros<double>({gdim});
+      physical_facet_normal(n_phys, K, xt::row(facet_normals, facet_index));
 
       // Extract scaled gamma (h/gamma) and its inverse
       double gamma = c[2] / w[0];
