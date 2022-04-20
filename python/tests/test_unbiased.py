@@ -341,7 +341,7 @@ def test_unbiased_rhs(ct, gap, q_deg):
     def _u1(x):
         values = np.zeros((gdim, x.shape[1]))
         for i in range(tdim):
-            values[i] = np.sin(x[i] + gap) if i == tdim - 1 else  np.sin(x[i])
+            values[i] = np.sin(x[i] + gap) if i == tdim - 1 else np.sin(x[i])
         return values
 
     u1 = _fem.Function(V_cuas)
@@ -349,7 +349,7 @@ def test_unbiased_rhs(ct, gap, q_deg):
 
     u1.interpolate(_u0, cells[0])
     u1.interpolate(_u1, cells[1])
-u1.x.scatter_forward()
+    u1.x.scatter_forward()
     # dummy form for creating vector/matrix
     dx = ufl.Measure("dx", domain=mesh_cuas)
     F_cuas = ufl.inner(sigma(u1), epsilon(v1)) * dx
