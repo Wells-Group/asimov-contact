@@ -90,10 +90,8 @@ def test_pack_coeff_on_facet(quadrature_degree, space, degree):
     coeffs_cuas = dolfinx_contact.cpp.pack_coefficient_quadrature(
         v._cpp_object, quadrature_degree, integration_entities)
     cstride = coeffs_cuas.shape[1]
-    x_g = mesh.geometry.x
     tdim = mesh.topology.dim
     fdim = tdim - 1
-    coord_dofs = mesh.geometry.dofmap
 
     # Create quadrature points for integration on facets
     ct = mesh.topology.cell_type
@@ -137,8 +135,6 @@ def test_sub_coeff(quadrature_degree, degree):
     # Use prepare quadrature points and geometry for eval
     quadrature_points, wts = basix.make_quadrature(
         basix.QuadratureType.Default, basix.CellType.tetrahedron, quadrature_degree)
-    x_g = mesh.geometry.x
-    coord_dofs = mesh.geometry.dofmap
     num_sub_spaces = V.num_sub_spaces
     for i in range(num_sub_spaces):
         vi = v.sub(i)
