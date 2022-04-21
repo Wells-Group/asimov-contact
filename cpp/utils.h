@@ -143,4 +143,26 @@ double compute_facet_jacobians(int q, const xt::xtensor<double, 3>& dphi,
                                xt::xtensor<double, 2>& K,
                                xt::xtensor<double, 2>& J_tot);
 
+/// @brief Convenience function to update Jacobians
+///
+/// For affine geometries, the input determinant is returned.
+/// For non-affine geometries, the Jacobian, it's inverse and the total Jacobian
+/// (J*J_f) is computed.
+/// @param[in] cmap The coordinate element
+std::function<double(std::size_t, const xt::xtensor<double, 3>&,
+                     const xt::xtensor<double, 2>&,
+                     const xt::xtensor<double, 2>&, xt::xtensor<double, 2>&,
+                     xt::xtensor<double, 2>&, xt::xtensor<double, 2>&, double&)>
+get_update_jacobian_dependencies(const dolfinx::fem::CoordinateElement& cmap);
+
+/// @brief Convenience function to update facet normals
+///
+/// For affine geometries, a do nothing function is returned.
+/// For non-affine geometries, a function updating the physical facet normal is
+/// returned.
+/// @param[in] cmap The coordinate element
+std::function<void(xt::xtensor<double, 1>&, const xt::xtensor<double, 2>&,
+                   const xt::xtensor<double, 2>&, std::size_t)>
+get_update_normal(const dolfinx::fem::CoordinateElement& cmap);
+
 } // namespace dolfinx_contact

@@ -368,8 +368,9 @@ std::pair<std::vector<PetscScalar>, int> dolfinx_contact::pack_circumradius(
     detJ[0] = dolfinx::fem::CoordinateElement::compute_jacobian_determinant(_J);
 
     // Sum up quadrature contributions
+
     // NOTE: Consider refactoring (moving in Jacobian computation when we
-    // start supporting non-affine geoemtries)
+    // start supporting non-affine geometries)
     circumradius.push_back(
         compute_circumradius(mesh, detJ[0], coordinate_dofs));
   }
