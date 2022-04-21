@@ -90,9 +90,16 @@ void update_geometry(const dolfinx::fem::Function<PetscScalar>& u,
 /// Compute the positive restriction of a double, i.e. f(x)= x if x>0 else 0
 double R_plus(double x);
 
+/// Compute the negative restriction of a double, i.e. f(x)= x if x<0 else 0
+double R_minus(double x);
+
 /// Compute the derivative of the positive restriction (i.e.) the step function.
 /// @note Evaluates to 0 at x=0
 double dR_plus(double x);
+
+/// Compute the derivative of the negative restriction (i.e.) the step function.
+/// @note Evaluates to 0 at x=0
+double dR_minus(double x);
 
 /// Get shape of in,out variable for filling basis functions in for
 /// evaluate_basis_functions

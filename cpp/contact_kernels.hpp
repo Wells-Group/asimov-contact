@@ -301,9 +301,9 @@ dolfinx_cuas::kernel_fn<T> generate_contact_kernel(
 
       // Multiply  by weight
       double sign_u = (lmbda * n_dot * tr_u + mu * epsn_u);
-      double R_minus = gamma_inv * sign_u + (gap - u_dot_nsurf);
-
-      R_minus = (R_minus > 0) ? 0 : R_minus * detJ * weights[q];
+      double R_minus_scaled
+          = dolfinx_contact::R_minus(gamma_inv * sign_u + (gap - u_dot_nsurf))
+            * detJ * weights[q];
       sign_u *= detJ * weights[q];
       for (int j = 0; j < ndofs_cell; j++)
       {
@@ -312,8 +312,9 @@ dolfinx_cuas::kernel_fn<T> generate_contact_kernel(
         {
           double sign_v = lmbda * tr(j, l) * n_dot + mu * epsn(j, l);
           double v_dot_nsurf = n_surf(l) * phi_f(q, j);
-          b[j * bs + l] += -theta * gamma_inv * sign_v * sign_u
-                           + R_minus * (theta * sign_v - gamma * v_dot_nsurf);
+          b[j * bs + l]
+              += -theta * gamma_inv * sign_v * sign_u
+                 + R_minus_scaled * (theta * sign_v - gamma * v_dot_nsurf);
         }
       }
     }
@@ -466,19 +467,20 @@ dolfinx_cuas::kernel_fn<T> generate_contact_kernel(
           u_dot_nsurf += c[block_index + j] * n_surf(j) * phi_f(q, i);
         }
       }
-      double temp
-          = (lmbda * n_dot * tr_u + mu * epsn_u) + gamma * (gap - u_dot_nsurf);
+
+      double sign_u = lmbda * tr_u * n_dot + mu * epsn_u;
+      double Pn_u
+          = dolfinx_contact::dR_minus(sign_u + gamma * (gap - u_dot_nsurf));
       const double w0 = weights[q] * detJ;
       for (int j = 0; j < ndofs_cell; j++)
       {
         for (int l = 0; l < bs; l++)
         {
-          double sign_u = (lmbda * tr(j, l) * n_dot + mu * epsn(j, l));
-          double term2
-              = (temp >= 0)
-                    ? 0
-                    : (gamma_inv * sign_u - n_surf(l) * phi_f(q, j)) * w0;
-          sign_u *= w0;
+          double sign_du = (lmbda * tr(j, l) * n_dot + mu * epsn(j, l));
+          double Pn_du
+              = (gamma_inv * sign_du - n_surf(l) * phi_f(q, j)) * -Pn_u * w0;
+          std::cout << Pn_du << "\n";
+          sign_du *= w0;
           for (int i = 0; i < ndofs_cell; i++)
           { // Insert over block size in matrix
             for (int b = 0; b < bs; b++)
@@ -486,8 +488,8 @@ dolfinx_cuas::kernel_fn<T> generate_contact_kernel(
               double v_dot_nsurf = n_surf(b) * phi_f(q, i);
               double sign_v = (lmbda * tr(i, b) * n_dot + mu * epsn(i, b));
               A[(b + i * bs) * ndofs_cell * bs + l + j * bs]
-                  += -theta * gamma_inv * sign_u * sign_v
-                     + term2 * (theta * sign_v - gamma * v_dot_nsurf);
+                  += -theta * gamma_inv * sign_du * sign_v
+                     + Pn_du * (theta * sign_v - gamma * v_dot_nsurf);
             }
           }
         }
