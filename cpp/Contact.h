@@ -23,7 +23,7 @@
 #include <dolfinx_cuas/utils.hpp>
 #include <xtensor/xadapt.hpp>
 #include <xtensor/xindex_view.hpp>
-#include <xtensor/xio.hpp>
+
 using contact_kernel_fn = std::function<void(
     std::vector<std::vector<PetscScalar>>&, const double*, const double*,
     const double*, const int*, const std::uint8_t*, const std::size_t)>;
