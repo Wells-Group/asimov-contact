@@ -272,8 +272,8 @@ public:
       // Pre-compute jacobians and normals for affine meshes
       if (affine)
       {
-        detJ = dolfinx_contact::compute_facet_jacobians(0, dphi_fc, coord, J_f,
-                                                        J, K, J_tot);
+        detJ = dolfinx_contact::compute_facet_jacobians(0, J, K, J_tot, J_f,
+                                                        dphi_fc, coord);
         dolfinx_contact::physical_facet_normal(
             n_phys, K, xt::row(facet_normals, facet_index));
       }
@@ -296,7 +296,8 @@ public:
       {
 
         // Update Jacobian and physical normal
-        detJ = update_jacobian(q, dphi_fc, coord, J_f, J, K, J_tot, detJ);
+        detJ = update_jacobian(q, detJ, J, K, J_tot, J_f, dphi_fc, coord);
+
         update_normal(n_phys, K, facet_normals, facet_index);
 
         double n_dot = 0;
@@ -427,8 +428,8 @@ public:
       // Pre-compute jacobians and normals for affine meshes
       if (affine)
       {
-        detJ = dolfinx_contact::compute_facet_jacobians(0, dphi_fc, coord, J_f,
-                                                        J, K, J_tot);
+        detJ = dolfinx_contact::compute_facet_jacobians(0, J, K, J_tot, J_f,
+                                                        dphi_fc, coord);
         dolfinx_contact::physical_facet_normal(
             n_phys, K, xt::row(facet_normals, facet_index));
       }
@@ -450,7 +451,7 @@ public:
       for (std::size_t q = 0; q < weights.size(); q++)
       {
         // Update Jacobian and physical normal
-        detJ = update_jacobian(q, dphi_fc, coord, J_f, J, K, J_tot, detJ);
+        detJ = update_jacobian(q, detJ, J, K, J_tot, J_f, dphi_fc, coord);
         update_normal(n_phys, K, facet_normals, facet_index);
 
         double n_dot = 0;
@@ -563,7 +564,7 @@ public:
     case dolfinx_contact::Kernel::Jac:
       return unbiased_jac;
     default:
-      throw std::runtime_error("Unrecognized kernel");
+      throw std::invalid_argument("Unrecognized kernel");
     }
   }
   /// Tabulate the basis function at the quadrature points _qp_ref_facet

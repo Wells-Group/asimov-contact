@@ -90,9 +90,16 @@ void update_geometry(const dolfinx::fem::Function<PetscScalar>& u,
 /// Compute the positive restriction of a double, i.e. f(x)= x if x>0 else 0
 double R_plus(double x);
 
+/// Compute the negative restriction of a double, i.e. f(x)= x if x<0 else 0
+double R_minus(double x);
+
 /// Compute the derivative of the positive restriction (i.e.) the step function.
 /// @note Evaluates to 0 at x=0
 double dR_plus(double x);
+
+/// Compute the derivative of the negative restriction (i.e.) the step function.
+/// @note Evaluates to 0 at x=0
+double dR_minus(double x);
 
 /// Get shape of in,out variable for filling basis functions in for
 /// evaluate_basis_functions
@@ -128,20 +135,20 @@ void compute_normal(const xt::xtensor<double, 1>& n_ref,
 /// J: physical cell -> reference cell (and its inverse)
 /// J_tot: physical facet -> reference facet
 /// @param[in] q - index of quadrature points
-/// @param[in] dphi - derivatives of coordinate basis tabulated for quardrature
-/// points
-/// @param[in] coords - the coordinates of the facet
-/// @param[in] J_f - the Jacobian between reference facet and reference cell
 /// @param[in,out] J - Jacboian between reference cell and physical cell
 /// @param[in,out] K - inverse of J
 /// @param[in,out] J_tot - J_f*J
+/// @param[in] J_f - the Jacobian between reference facet and reference cell
+/// @param[in] dphi - derivatives of coordinate basis tabulated for quardrature
+/// points
+/// @param[in] coords - the coordinates of the facet
 /// @return absolute value of determinant of J_tot
-double compute_facet_jacobians(int q, const xt::xtensor<double, 3>& dphi,
-                               const xt::xtensor<double, 2>& coords,
-                               const xt::xtensor<double, 2> J_f,
-                               xt::xtensor<double, 2>& J,
+double compute_facet_jacobians(std::size_t q, xt::xtensor<double, 2>& J,
                                xt::xtensor<double, 2>& K,
-                               xt::xtensor<double, 2>& J_tot);
+                               xt::xtensor<double, 2>& J_tot,
+                               const xt::xtensor<double, 2>& J_f,
+                               const xt::xtensor<double, 3>& dphi,
+                               const xt::xtensor<double, 2>& coords);
 
 /// @brief Convenience function to update Jacobians
 ///
@@ -149,10 +156,10 @@ double compute_facet_jacobians(int q, const xt::xtensor<double, 3>& dphi,
 /// For non-affine geometries, the Jacobian, it's inverse and the total Jacobian
 /// (J*J_f) is computed.
 /// @param[in] cmap The coordinate element
-std::function<double(std::size_t, const xt::xtensor<double, 3>&,
-                     const xt::xtensor<double, 2>&,
-                     const xt::xtensor<double, 2>&, xt::xtensor<double, 2>&,
-                     xt::xtensor<double, 2>&, xt::xtensor<double, 2>&, double&)>
+std::function<double(
+    std::size_t, double&, xt::xtensor<double, 2>&, xt::xtensor<double, 2>&,
+    xt::xtensor<double, 2>&, const xt::xtensor<double, 2>&,
+    const xt::xtensor<double, 3>&, const xt::xtensor<double, 2>&)>
 get_update_jacobian_dependencies(const dolfinx::fem::CoordinateElement& cmap);
 
 /// @brief Convenience function to update facet normals

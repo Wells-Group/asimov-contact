@@ -250,6 +250,11 @@ void dolfinx_contact::update_geometry(
 //-------------------------------------------------------------------------------------
 double dolfinx_contact::R_plus(double x) { return 0.5 * (std::abs(x) + x); }
 //-------------------------------------------------------------------------------------
+double dolfinx_contact::R_minus(double x) { return 0.5 * (x - std::abs(x)); }
+//-------------------------------------------------------------------------------------
+double dolfinx_contact::dR_minus(double x) { return -double(x < 0); }
+//-------------------------------------------------------------------------------------
+
 double dolfinx_contact::dR_plus(double x) { return double(x > 0); }
 //-------------------------------------------------------------------------------------
 std::array<std::size_t, 3>
@@ -273,13 +278,13 @@ void dolfinx_contact::evaluate_basis_functions(
 {
   if (x.shape(0) != cells.size())
   {
-    throw std::runtime_error(
+    throw std::invalid_argument(
         "Number of points and number of cells must be equal.");
   }
   if (x.shape(0) != basis_values.shape(0))
   {
-    throw std::runtime_error("Length of array for basis values must be the "
-                             "same as the number of points.");
+    throw std::invalid_argument("Length of array for basis values must be the "
+                                "same as the number of points.");
   }
   if (x.shape(0) == 0)
     return;
@@ -316,8 +321,8 @@ void dolfinx_contact::evaluate_basis_functions(
   if (const int num_sub_elements = element->num_sub_elements();
       num_sub_elements > 1 && num_sub_elements != bs_element)
   {
-    throw std::runtime_error("Canot evaluate basis functions for mixed "
-                             "function spaces. Extract subspaces.");
+    throw std::invalid_argument("Canot evaluate basis functions for mixed "
+                                "function spaces. Extract subspaces.");
   }
 
   // Get dofmap
@@ -450,10 +455,9 @@ void dolfinx_contact::evaluate_basis_functions(
 };
 
 double dolfinx_contact::compute_facet_jacobians(
-    int q, const xt::xtensor<double, 3>& dphi,
-    const xt::xtensor<double, 2>& coords, const xt::xtensor<double, 2> J_f,
-    xt::xtensor<double, 2>& J, xt::xtensor<double, 2>& K,
-    xt::xtensor<double, 2>& J_tot)
+    std::size_t q, xt::xtensor<double, 2>& J, xt::xtensor<double, 2>& K,
+    xt::xtensor<double, 2>& J_tot, const xt::xtensor<double, 2>& J_f,
+    const xt::xtensor<double, 3>& dphi, const xt::xtensor<double, 2>& coords)
 {
   std::size_t gdim = J.shape(0);
   const xt::xtensor<double, 2>& dphi0_c
@@ -468,47 +472,52 @@ double dolfinx_contact::compute_facet_jacobians(
       dolfinx::fem::CoordinateElement::compute_jacobian_determinant(J_tot));
 }
 //-------------------------------------------------------------------------------------
-std::function<double(std::size_t, const xt::xtensor<double, 3>&,
-                     const xt::xtensor<double, 2>&,
-                     const xt::xtensor<double, 2>&, xt::xtensor<double, 2>&,
-                     xt::xtensor<double, 2>&, xt::xtensor<double, 2>&, double&)>
+std::function<double(
+    std::size_t, double&, xt::xtensor<double, 2>&, xt::xtensor<double, 2>&,
+    xt::xtensor<double, 2>&, const xt::xtensor<double, 2>&,
+    const xt::xtensor<double, 3>&, const xt::xtensor<double, 2>&)>
 dolfinx_contact::get_update_jacobian_dependencies(
     const dolfinx::fem::CoordinateElement& cmap)
 {
   if (cmap.is_affine())
   {
     // Return function that returns the input determinant
-    return [](std::size_t q, const xt::xtensor<double, 3>& dphi,
-              const xt::xtensor<double, 2>& coords,
-              const xt::xtensor<double, 2>& J_f, xt::xtensor<double, 2>& J,
-              xt::xtensor<double, 2>& K, xt::xtensor<double, 2>& J_tot,
-              double detJ) { return detJ; };
+    return []([[maybe_unused]] std::size_t q, double detJ,
+              [[maybe_unused]] xt::xtensor<double, 2>& J,
+              [[maybe_unused]] xt::xtensor<double, 2>& K,
+              [[maybe_unused]] xt::xtensor<double, 2>& J_tot,
+              [[maybe_unused]] const xt::xtensor<double, 2>& J_f,
+              [[maybe_unused]] const xt::xtensor<double, 3>& dphi,
+              [[maybe_unused]] const xt::xtensor<double, 2>& coords)
+    { return detJ; };
   }
   else
   {
     // Return function that returns the input determinant
-    return [](std::size_t q, const xt::xtensor<double, 3>& dphi,
-              const xt::xtensor<double, 2>& coords,
-              const xt::xtensor<double, 2>& J_f, xt::xtensor<double, 2>& J,
-              xt::xtensor<double, 2>& K, xt::xtensor<double, 2>& J_tot,
-              double detJ)
+    return [](std::size_t q, [[maybe_unused]] double detJ,
+              xt::xtensor<double, 2>& J, xt::xtensor<double, 2>& K,
+              xt::xtensor<double, 2>& J_tot, const xt::xtensor<double, 2>& J_f,
+              const xt::xtensor<double, 3>& dphi,
+              const xt::xtensor<double, 2>& coords)
     {
       double new_detJ = dolfinx_contact::compute_facet_jacobians(
-          q, dphi, coords, J_f, J, K, J_tot);
+          q, J, K, J_tot, J_f, dphi, coords);
       return new_detJ;
     };
   }
 }
 //-------------------------------------------------------------------------------------
 std::function<void(xt::xtensor<double, 1>&, const xt::xtensor<double, 2>&,
-                   const xt::xtensor<double, 2>&, std::size_t)>
+                   const xt::xtensor<double, 2>&, const std::size_t)>
 dolfinx_contact::get_update_normal(const dolfinx::fem::CoordinateElement& cmap)
 {
   if (cmap.is_affine())
   {
     // Return function that returns the input determinant
-    return [](xt::xtensor<double, 1>& n, const xt::xtensor<double, 2>& K,
-              const xt::xtensor<double, 2>& n_ref, std::size_t local_index)
+    return []([[maybe_unused]] xt::xtensor<double, 1>& n,
+              [[maybe_unused]] const xt::xtensor<double, 2>& K,
+              [[maybe_unused]] const xt::xtensor<double, 2>& n_ref,
+              [[maybe_unused]] const std::size_t local_index)
     {
       // Do nothing
     };
@@ -517,7 +526,8 @@ dolfinx_contact::get_update_normal(const dolfinx::fem::CoordinateElement& cmap)
   {
     // Return function that updates the physical normal based on K
     return [](xt::xtensor<double, 1>& n, const xt::xtensor<double, 2>& K,
-              const xt::xtensor<double, 2>& n_ref, std::size_t local_index) {
+              const xt::xtensor<double, 2>& n_ref,
+              const std::size_t local_index) {
       dolfinx_contact::physical_facet_normal(n, K, xt::row(n_ref, local_index));
     };
   }
