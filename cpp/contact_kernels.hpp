@@ -142,8 +142,9 @@ dolfinx_cuas::kernel_fn<T> generate_contact_kernel(
   // Get facet normals on reference cell
   auto facet_normals = basix::cell::facet_outward_normals(basix_cell);
 
-  auto update_jacobian = get_update_jacobian_dependencies(cmap);
-  auto update_normal = get_update_normal(cmap);
+  auto update_jacobian
+      = dolfinx_contact::get_update_jacobian_dependencies(cmap);
+  auto update_normal = dolfinx_contact::get_update_normal(cmap);
   const bool affine = cmap.is_affine();
   // Define kernels
   // RHS for contact with rigid surface
