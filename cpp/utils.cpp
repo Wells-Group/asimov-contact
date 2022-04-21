@@ -278,13 +278,13 @@ void dolfinx_contact::evaluate_basis_functions(
 {
   if (x.shape(0) != cells.size())
   {
-    throw std::logic_error(
+    throw std::invalid_argument(
         "Number of points and number of cells must be equal.");
   }
   if (x.shape(0) != basis_values.shape(0))
   {
-    throw std::logic_error("Length of array for basis values must be the "
-                           "same as the number of points.");
+    throw std::invalid_argument("Length of array for basis values must be the "
+                                "same as the number of points.");
   }
   if (x.shape(0) == 0)
     return;
@@ -455,9 +455,9 @@ void dolfinx_contact::evaluate_basis_functions(
 };
 
 double dolfinx_contact::compute_facet_jacobians(
-    int q, xt::xtensor<double, 2>& J, xt::xtensor<double, 2>& K,
-    xt::xtensor<double, 2>& J_tot, const xt::xtensor<double, 3>& dphi,
-    const xt::xtensor<double, 2>& coords, const xt::xtensor<double, 2>& J_f)
+    std::size_t q, xt::xtensor<double, 2>& J, xt::xtensor<double, 2>& K,
+    xt::xtensor<double, 2>& J_tot, const xt::xtensor<double, 2>& J_f,
+    const xt::xtensor<double, 3>& dphi, const xt::xtensor<double, 2>& coords)
 {
   std::size_t gdim = J.shape(0);
   const xt::xtensor<double, 2>& dphi0_c
@@ -474,8 +474,8 @@ double dolfinx_contact::compute_facet_jacobians(
 //-------------------------------------------------------------------------------------
 std::function<double(
     std::size_t, double&, xt::xtensor<double, 2>&, xt::xtensor<double, 2>&,
-    xt::xtensor<double, 2>&, 
-    const xt::xtensor<double, 2>&, const xt::xtensor<double, 3>&,const xt::xtensor<double, 2>&)>
+    xt::xtensor<double, 2>&, const xt::xtensor<double, 2>&,
+    const xt::xtensor<double, 3>&, const xt::xtensor<double, 2>&)>
 dolfinx_contact::get_update_jacobian_dependencies(
     const dolfinx::fem::CoordinateElement& cmap)
 {
@@ -501,7 +501,7 @@ dolfinx_contact::get_update_jacobian_dependencies(
               const xt::xtensor<double, 2>& coords)
     {
       double new_detJ = dolfinx_contact::compute_facet_jacobians(
-          q, J, K, J_tot, dphi, coords, J_f);
+          q, J, K, J_tot, J_f, dphi, coords);
       return new_detJ;
     };
   }

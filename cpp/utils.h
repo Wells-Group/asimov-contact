@@ -138,17 +138,17 @@ void compute_normal(const xt::xtensor<double, 1>& n_ref,
 /// @param[in,out] J - Jacboian between reference cell and physical cell
 /// @param[in,out] K - inverse of J
 /// @param[in,out] J_tot - J_f*J
+/// @param[in] J_f - the Jacobian between reference facet and reference cell
 /// @param[in] dphi - derivatives of coordinate basis tabulated for quardrature
 /// points
 /// @param[in] coords - the coordinates of the facet
-/// @param[in] J_f - the Jacobian between reference facet and reference cell
 /// @return absolute value of determinant of J_tot
-double compute_facet_jacobians(int q, xt::xtensor<double, 2>& J,
+double compute_facet_jacobians(std::size_t q, xt::xtensor<double, 2>& J,
                                xt::xtensor<double, 2>& K,
                                xt::xtensor<double, 2>& J_tot,
+                               const xt::xtensor<double, 2>& J_f,
                                const xt::xtensor<double, 3>& dphi,
-                               const xt::xtensor<double, 2>& coords,
-                               const xt::xtensor<double, 2>& J_f);
+                               const xt::xtensor<double, 2>& coords);
 
 /// @brief Convenience function to update Jacobians
 ///

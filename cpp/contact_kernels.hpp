@@ -191,7 +191,7 @@ dolfinx_cuas::kernel_fn<T> generate_contact_kernel(
     if (affine)
     {
       detJ = std::fabs(dolfinx_contact::compute_facet_jacobians(
-          0, J, K, J_tot, dphi_fc, coord, J_f));
+          0, J, K, J_tot, J_f, dphi_fc, coord));
       dolfinx_contact::physical_facet_normal(
           n_phys, K, xt::row(facet_normals, facet_index));
     }
@@ -361,7 +361,7 @@ dolfinx_cuas::kernel_fn<T> generate_contact_kernel(
     if (affine)
     {
       detJ = std::fabs(dolfinx_contact::compute_facet_jacobians(
-          0, J, K, J_tot, dphi_fc, coord, J_f));
+          0, J, K, J_tot, J_f, dphi_fc, coord));
       dolfinx_contact::physical_facet_normal(
           n_phys, K, xt::row(facet_normals, facet_index));
     }

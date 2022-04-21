@@ -272,8 +272,8 @@ public:
       // Pre-compute jacobians and normals for affine meshes
       if (affine)
       {
-        detJ = dolfinx_contact::compute_facet_jacobians(0, J, K, J_tot, dphi_fc,
-                                                        coord, J_f);
+        detJ = dolfinx_contact::compute_facet_jacobians(0, J, K, J_tot, J_f,
+                                                        dphi_fc, coord);
         dolfinx_contact::physical_facet_normal(
             n_phys, K, xt::row(facet_normals, facet_index));
       }
@@ -428,8 +428,8 @@ public:
       // Pre-compute jacobians and normals for affine meshes
       if (affine)
       {
-        detJ = dolfinx_contact::compute_facet_jacobians(0, J, K, J_tot, dphi_fc,
-                                                        coord, J_f);
+        detJ = dolfinx_contact::compute_facet_jacobians(0, J, K, J_tot, J_f,
+                                                        dphi_fc, coord);
         dolfinx_contact::physical_facet_normal(
             n_phys, K, xt::row(facet_normals, facet_index));
       }
