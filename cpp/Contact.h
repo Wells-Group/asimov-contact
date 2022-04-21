@@ -92,12 +92,16 @@ public:
     return _marker;
   }
 
+  /// @brief Create a PETSc matrix with contact sparsity pattern
+  ///
   /// Create a PETSc matrix with the sparsity pattern of the input form and the
   /// coupling contact interfaces
+  ///
   /// @param[in] The bilinear form
   /// @param[in] The matrix type, see:
   /// https://petsc.org/main/docs/manualpages/Mat/MatType.html#MatType for
   /// available types
+  /// @returns Mat The PETSc matrix
   Mat create_petsc_matrix(const dolfinx::fem::Form<PetscScalar>& a,
                           const std::string& type);
 
@@ -131,14 +135,17 @@ public:
                        const xtl::span<const PetscScalar>& coeffs, int cstride,
                        const xtl::span<const PetscScalar>& constants);
 
+  /// Generate contact kernel
   contact_kernel_fn generate_kernel(dolfinx_contact::Kernel type)
   {
-    // mesh data
+    // Extract mesh data
     auto mesh = _marker->mesh();
+    assert(mesh);
     const std::size_t gdim = mesh->geometry().dim(); // geometrical dimension
     const int tdim = mesh->topology().dim();         // topological dimension
     const dolfinx::fem::CoordinateElement& cmap = mesh->geometry().cmap();
     bool affine = cmap.is_affine();
+    const int num_coordinate_dofs = cmap.dim();
 
     // Extract function space data (assuming same test and trial space)
     std::shared_ptr<const dolfinx::fem::DofMap> dofmap = _V->dofmap();
@@ -150,19 +157,19 @@ public:
     const std::size_t max_links
         = *std::max_element(_max_links.begin(), _max_links.end());
 
-    // Create coordinate elements (for facet and cell) _marker->mesh()
-    const basix::FiniteElement basix_element
-        = dolfinx_cuas::mesh_to_basix_element(mesh, tdim);
-    const int num_coordinate_dofs = basix_element.dim();
     // Structures needed for basis function tabulation
     // phi and grad(phi) at quadrature points
+    const std::size_t num_facets = dolfinx::mesh::cell_num_entities(
+        mesh->topology().cell_type(), tdim - 1);
+    assert(num_facets == _qp_ref_facet.size());
+
     std::shared_ptr<const dolfinx::fem::FiniteElement> element = _V->element();
     std::vector<xt::xtensor<double, 2>> phi;
-    phi.reserve(_qp_ref_facet.size());
+    phi.reserve(num_facets);
     std::vector<xt::xtensor<double, 3>> dphi;
-    phi.reserve(_qp_ref_facet.size());
+    phi.reserve(num_facets);
     std::vector<xt ::xtensor<double, 3>> dphi_c;
-    dphi_c.reserve(_qp_ref_facet.size());
+    dphi_c.reserve(num_facets);
 
     // Temporary structures used in loop
     xt::xtensor<double, 4> cell_tab(
@@ -171,7 +178,7 @@ public:
     xt::xtensor<double, 3> dphi_i(
         {(std::size_t)tdim, num_q_points, ndofs_cell});
     std::array<std::size_t, 4> tabulate_shape
-        = basix_element.tabulate_shape(1, num_q_points);
+        = cmap.tabulate_shape(1, num_q_points);
     xt::xtensor<double, 4> c_tab(tabulate_shape);
     xt::xtensor<double, 3> dphi_ci(
         {(std::size_t)tdim, tabulate_shape[1], tabulate_shape[2]});
@@ -194,7 +201,7 @@ public:
           dphi.push_back(dphi_i);
 
           // Tabulate coordinate element of reference cell
-          basix_element.tabulate(1, q_facet, c_tab);
+          cmap.tabulate(1, q_facet, c_tab);
           dphi_ci = xt::view(c_tab, xt::range(1, (std::size_t)tdim + 1),
                              xt::all(), xt::all(), 0);
           dphi_c.push_back(dphi_ci);
@@ -220,12 +227,14 @@ public:
            num_q_points * bs};
     // As reference facet and reference cell are affine, we do not need to
     // compute this per quadrature point
+    basix::cell::type basix_cell
+        = dolfinx::mesh::cell_type_to_basix_type(mesh->topology().cell_type());
     xt::xtensor<double, 3> ref_jacobians
-        = basix::cell::facet_jacobians(basix_element.cell_type());
+        = basix::cell::facet_jacobians(basix_cell);
 
     // Get facet normals on reference cell
     xt::xtensor<double, 2> facet_normals
-        = basix::cell::facet_outward_normals(basix_element.cell_type());
+        = basix::cell::facet_outward_normals(basix_cell);
 
     auto update_jacobian
         = dolfinx_contact::get_update_jacobian_dependencies(cmap);
@@ -764,16 +773,20 @@ public:
   std::pair<std::vector<PetscScalar>, int> pack_gap(int origin_meshtag)
   {
     // Mesh info
-    auto puppet_mesh = _submeshes[origin_meshtag].mesh(); // mesh
-    auto candidate_mesh = _submeshes[_opposites[origin_meshtag]].mesh();
-    const int gdim = candidate_mesh->geometry().dim(); // geometrical dimension
+    const std::shared_ptr<const dolfinx::mesh::Mesh>& candidate_mesh
+        = _submeshes[_opposites[origin_meshtag]].mesh();
+    assert(candidate_mesh);
+    const dolfinx::mesh::Geometry& geometry = candidate_mesh->geometry();
+    const int gdim = geometry.dim(); // geometrical dimension
+    xtl::span<const double> mesh_geometry = geometry.x();
+
     const int tdim = candidate_mesh->topology().dim();
     const int fdim = tdim - 1;
-    xtl::span<const double> mesh_geometry = candidate_mesh->geometry().x();
 
     // Select which side of the contact interface to loop from and get the
     // correct map
     auto map = _facet_maps[origin_meshtag];
+    assert(map);
     auto qp_phys = _qp_phys[origin_meshtag];
     const std::size_t num_facets = _cell_facet_pairs[origin_meshtag].size();
     const std::size_t num_q_point = _qp_ref_facet[0].shape(0);
