@@ -47,8 +47,9 @@ dolfinx_contact::pack_coefficient_quadrature(
         }
         else
         {
-          throw std::runtime_error("Could not pack coefficients. Input entity "
-                                   "type is not supported.");
+          throw std::invalid_argument(
+              "Could not pack coefficients. Input entity "
+              "type is not supported.");
         }
       },
       active_entities);
@@ -114,8 +115,9 @@ dolfinx_contact::pack_coefficient_quadrature(
         }
         else
         {
-          throw std::runtime_error("Could not pack coefficient. Input entity "
-                                   "type is not supported.");
+          throw std::invalid_argument(
+              "Could not pack coefficient. Input entity "
+              "type is not supported.");
         }
       },
       active_entities);
@@ -291,7 +293,7 @@ std::pair<std::vector<PetscScalar>, int> dolfinx_contact::pack_circumradius(
     const tcb::span<const std::pair<std::int32_t, int>>& active_facets)
 {
   if (!mesh.geometry().cmap().is_affine())
-    throw std::runtime_error("Non-affine circumradius is not implemented");
+    throw std::invalid_argument("Non-affine circumradius is not implemented");
 
   // Tabulate element at quadrature points
   // NOTE: Assuming no derivatives for now, should be reconsidered later
@@ -368,8 +370,9 @@ std::pair<std::vector<PetscScalar>, int> dolfinx_contact::pack_circumradius(
     detJ[0] = dolfinx::fem::CoordinateElement::compute_jacobian_determinant(_J);
 
     // Sum up quadrature contributions
+
     // NOTE: Consider refactoring (moving in Jacobian computation when we
-    // start supporting non-affine geoemtries)
+    // start supporting non-affine geometries)
     circumradius.push_back(
         compute_circumradius(mesh, detJ[0], coordinate_dofs));
   }

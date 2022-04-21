@@ -23,6 +23,7 @@
 #include <dolfinx_cuas/utils.hpp>
 #include <xtensor/xadapt.hpp>
 #include <xtensor/xindex_view.hpp>
+
 using contact_kernel_fn = std::function<void(
     std::vector<std::vector<PetscScalar>>&, const double*, const double*,
     const double*, const int*, const std::uint8_t*, const std::size_t)>;
@@ -136,11 +137,12 @@ public:
     auto mesh = _marker->mesh();
     const std::size_t gdim = mesh->geometry().dim(); // geometrical dimension
     const int tdim = mesh->topology().dim();         // topological dimension
-    bool affine = mesh->geometry().cmap().is_affine();
+    const dolfinx::fem::CoordinateElement& cmap = mesh->geometry().cmap();
+    bool affine = cmap.is_affine();
 
     // Extract function space data (assuming same test and trial space)
     std::shared_ptr<const dolfinx::fem::DofMap> dofmap = _V->dofmap();
-    const std::size_t ndofs_cell = dofmap->cell_dofs(0).size();
+    const std::size_t ndofs_cell = dofmap->element_dof_layout().num_dofs();
     const std::size_t bs = dofmap->bs();
 
     // NOTE: Assuming same number of quadrature points on each cell
@@ -225,6 +227,10 @@ public:
     xt::xtensor<double, 2> facet_normals
         = basix::cell::facet_outward_normals(basix_element.cell_type());
 
+    auto update_jacobian
+        = dolfinx_contact::get_update_jacobian_dependencies(cmap);
+    auto update_normal = dolfinx_contact::get_update_normal(cmap);
+
     // right hand side kernel
     contact_kernel_fn unbiased_rhs
         = [=](std::vector<std::vector<PetscScalar>>& b, const double* c,
@@ -260,16 +266,16 @@ public:
       double detJ;
       auto c_view = xt::view(coord, xt::all(), xt::range(0, gdim));
 
-      // normal vector
-      xt::xarray<double> n_phys = xt::zeros<double>({gdim});
+      // Normal vector on physical facet at a single quadrature point
+      xt::xtensor<double, 1> n_phys = xt::zeros<double>({gdim});
 
-      // pre-compute jacobians and normals for affine meshes
+      // Pre-compute jacobians and normals for affine meshes
       if (affine)
       {
-        detJ = dolfinx_contact::compute_facet_jacobians(0, dphi_fc, coord, J_f,
-                                                        J, K, J_tot);
-        auto facet_normal = xt::row(facet_normals, facet_index);
-        dolfinx_contact::compute_normal(facet_normal, K, n_phys);
+        detJ = dolfinx_contact::compute_facet_jacobians(0, J, K, J_tot, J_f,
+                                                        dphi_fc, coord);
+        dolfinx_contact::physical_facet_normal(
+            n_phys, K, xt::row(facet_normals, facet_index));
       }
 
       // h/gamma
@@ -283,18 +289,16 @@ public:
       const xt::xtensor<double, 3>& dphi_f = dphi[facet_index];
       const xt::xtensor<double, 2>& phi_f = phi[facet_index];
       const std::vector<double>& weights = _qw_ref_facet[facet_index];
-      xt::xarray<double> n_surf = xt::zeros<double>({gdim});
+      xt::xtensor<double, 1> n_surf = xt::zeros<double>({gdim});
+      xt::xtensor<double, 2> tr = xt::zeros<double>({ndofs_cell, gdim});
+      xt::xtensor<double, 2> epsn = xt::zeros<double>({ndofs_cell, gdim});
       for (std::size_t q = 0; q < weights.size(); q++)
       {
 
-        // Compute jacobians and normals for non-affine geometries
-        if (!affine)
-        {
-          detJ = dolfinx_contact::compute_facet_jacobians(q, dphi_fc, coord,
-                                                          J_f, J, K, J_tot);
-          auto facet_normal = xt::row(facet_normals, facet_index);
-          dolfinx_contact::compute_normal(facet_normal, K, n_phys);
-        }
+        // Update Jacobian and physical normal
+        detJ = update_jacobian(q, detJ, J, K, J_tot, J_f, dphi_fc, coord);
+
+        update_normal(n_phys, K, facet_normals, facet_index);
 
         double n_dot = 0;
         double gap = 0;
@@ -310,9 +314,9 @@ public:
           gap += c[gap_offset + q * gdim + i] * n_surf(i);
         }
 
-        xt::xtensor<double, 2> tr = xt::zeros<double>({ndofs_cell, gdim});
-        xt::xtensor<double, 2> epsn = xt::zeros<double>({ndofs_cell, gdim});
         // precompute tr(eps(phi_j e_l)), eps(phi^j e_l)n*n2
+        std::fill(tr.begin(), tr.end(), 0.0);
+        std::fill(epsn.begin(), epsn.end(), 0.0);
         for (std::size_t j = 0; j < ndofs_cell; j++)
         {
           for (std::size_t l = 0; l < bs; l++)
@@ -340,9 +344,10 @@ public:
           std::size_t block_index = offset_u + i * bs;
           for (std::size_t j = 0; j < bs; j++)
           {
-            tr_u += c[block_index + j] * tr(i, j);
-            epsn_u += c[block_index + j] * epsn(i, j);
-            jump_un += c[block_index + j] * phi_f(q, i) * n_surf(j);
+            auto coeff = c[block_index + j];
+            tr_u += coeff * tr(i, j);
+            epsn_u += coeff * epsn(i, j);
+            jump_un += coeff * phi_f(q, i) * n_surf(j);
           }
         }
         std::size_t offset_u_opp = offset_u + cstrides[6] + q * bs;
@@ -417,18 +422,18 @@ public:
       double detJ;
       auto c_view = xt::view(coord, xt::all(), xt::range(0, gdim));
 
-      // normal vector
-      xt::xarray<double> n_phys = xt::zeros<double>({gdim});
+      // Normal vector on physical facet at a single quadrature point
+      xt::xtensor<double, 1> n_phys = xt::zeros<double>({gdim});
 
-      // pre-compute jacobians and normals for affine meshes
-      // pre-compute jacobians and normals for affine meshes
+      // Pre-compute jacobians and normals for affine meshes
       if (affine)
       {
-        detJ = dolfinx_contact::compute_facet_jacobians(0, dphi_fc, coord, J_f,
-                                                        J, K, J_tot);
-        auto facet_normal = xt::row(facet_normals, facet_index);
-        dolfinx_contact::compute_normal(facet_normal, K, n_phys);
+        detJ = dolfinx_contact::compute_facet_jacobians(0, J, K, J_tot, J_f,
+                                                        dphi_fc, coord);
+        dolfinx_contact::physical_facet_normal(
+            n_phys, K, xt::row(facet_normals, facet_index));
       }
+
       // Extract scaled gamma (h/gamma) and its inverse
       double gamma = c[2] / w[0];
       double gamma_inv = w[0] / c[2];
@@ -440,17 +445,15 @@ public:
       const xt::xtensor<double, 3>& dphi_f = dphi[facet_index];
       const xt::xtensor<double, 2>& phi_f = phi[facet_index];
       const std::vector<double>& weights = _qw_ref_facet[facet_index];
-      xt::xarray<double> n_surf = xt::zeros<double>({gdim});
+      xt::xtensor<double, 1> n_surf = xt::zeros<double>({gdim});
+      xt::xtensor<double, 2> tr = xt::zeros<double>({ndofs_cell, gdim});
+      xt::xtensor<double, 2> epsn = xt::zeros<double>({ndofs_cell, gdim});
       for (std::size_t q = 0; q < weights.size(); q++)
       {
-        // Compute jacobians and normals for non-affine geometries
-        if (!affine)
-        {
-          detJ = dolfinx_contact::compute_facet_jacobians(q, dphi_fc, coord,
-                                                          J_f, J, K, J_tot);
-          auto facet_normal = xt::row(facet_normals, facet_index);
-          dolfinx_contact::compute_normal(facet_normal, K, n_phys);
-        }
+        // Update Jacobian and physical normal
+        detJ = update_jacobian(q, detJ, J, K, J_tot, J_f, dphi_fc, coord);
+        update_normal(n_phys, K, facet_normals, facet_index);
+
         double n_dot = 0;
         double gap = 0;
         const std::size_t gap_offset = 3;
@@ -465,9 +468,9 @@ public:
           gap += c[gap_offset + q * gdim + i] * n_surf(i);
         }
 
-        xt::xtensor<double, 2> tr = xt::zeros<double>({ndofs_cell, gdim});
-        xt::xtensor<double, 2> epsn = xt::zeros<double>({ndofs_cell, gdim});
         // precompute tr(eps(phi_j e_l)), eps(phi^j e_l)n*n2
+        std::fill(tr.begin(), tr.end(), 0.0);
+        std::fill(epsn.begin(), epsn.end(), 0.0);
         for (std::size_t j = 0; j < ndofs_cell; j++)
         {
           for (std::size_t l = 0; l < bs; l++)
@@ -527,8 +530,6 @@ public:
                 double Pn_v = gamma_inv * v_dot_nsurf - theta * sign_v;
                 A[0][(b + i * bs) * ndofs_cell * bs + l + j * bs]
                     += 0.5 * Pn_du * Pn_v;
-                // FIXME: Why is this commented out?
-                // 0.5 * (-theta * gamma * sign_du * sign_v + Pn_du * Pn_v);
 
                 // entries corresponding to u and v on the other surface
                 for (std::size_t k = 0; k < num_links; k++)
@@ -563,7 +564,7 @@ public:
     case dolfinx_contact::Kernel::Jac:
       return unbiased_jac;
     default:
-      throw std::runtime_error("Unrecognized kernel");
+      throw std::invalid_argument("Unrecognized kernel");
     }
   }
   /// Tabulate the basis function at the quadrature points _qp_ref_facet

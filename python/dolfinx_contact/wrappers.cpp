@@ -239,7 +239,7 @@ PYBIND11_MODULE(cpp, m)
           }
           else
           {
-            throw std::runtime_error("Unsupported entities");
+            throw std::invalid_argument("Unsupported entities");
           }
         });
 

@@ -75,20 +75,10 @@ xt::xtensor<double, 2> dolfinx_contact::push_forward_facet_normal(
   xt::xtensor<double, 2> normals = xt::zeros<double>({num_points, gdim});
   for (std::size_t q = 0; q < num_points; ++q)
   {
-    // Compute normal of physical facet using a normalized covariant Piola
-    // transform n_phys = J^{-T} n_ref / ||J^{-T} n_ref|| See for instance
-    // DOI: 10.1137/08073901X
-    auto _K = xt::view(K, q, xt::all(), xt::all());
-    auto facet_normal = xt::row(reference_normals, facet_indices[q]);
-    for (std::size_t i = 0; i < gdim; i++)
-    {
-      for (std::size_t j = 0; j < tdim; j++)
-        normals(q, i) += _K(j, i) * facet_normal[j];
-    }
-    // Normalize vector
-    auto n_q = xt::row(normals, q);
-    auto n_norm = xt::norm_l2(n_q);
-    n_q /= n_norm;
+    // Push forward reference facet normal
+    physical_facet_normal(xt::row(normals, q),
+                          xt::view(K, q, xt::all(), xt::all()),
+                          xt::row(reference_normals, facet_indices[q]));
   }
   return normals;
 }
@@ -165,7 +155,7 @@ double dolfinx_contact::compute_circumradius(
     return h;
   }
   default:
-    throw std::runtime_error("Unsupported cell_type "
-                             + dolfinx::mesh::to_string(cell_type));
+    throw std::invalid_argument("Unsupported cell_type "
+                                + dolfinx::mesh::to_string(cell_type));
   }
 }
