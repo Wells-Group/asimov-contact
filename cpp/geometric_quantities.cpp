@@ -155,7 +155,7 @@ double dolfinx_contact::compute_circumradius(
     return h;
   }
   default:
-    throw std::runtime_error("Unsupported cell_type "
-                             + dolfinx::mesh::to_string(cell_type));
+    throw std::invalid_argument("Unsupported cell_type "
+                                + dolfinx::mesh::to_string(cell_type));
   }
 }

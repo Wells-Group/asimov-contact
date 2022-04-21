@@ -191,7 +191,7 @@ dolfinx_cuas::kernel_fn<T> generate_contact_kernel(
     if (affine)
     {
       detJ = std::fabs(dolfinx_contact::compute_facet_jacobians(
-          0, dphi_fc, coord, J_f, J, K, J_tot));
+          0, J, K, J_tot, dphi_fc, coord, J_f));
       dolfinx_contact::physical_facet_normal(
           n_phys, K, xt::row(facet_normals, facet_index));
     }
@@ -235,7 +235,7 @@ dolfinx_cuas::kernel_fn<T> generate_contact_kernel(
 
       // Update Jacobian and physical normal
       detJ = std::fabs(
-          update_jacobian(q, dphi_fc, coord, J_f, J, K, J_tot, detJ));
+          update_jacobian(q, detJ, J, K, J_tot, J_f, dphi_fc, coord));
       update_normal(n_phys, K, facet_normals, facet_index);
 
       double mu = 0;
@@ -361,7 +361,7 @@ dolfinx_cuas::kernel_fn<T> generate_contact_kernel(
     if (affine)
     {
       detJ = std::fabs(dolfinx_contact::compute_facet_jacobians(
-          0, dphi_fc, coord, J_f, J, K, J_tot));
+          0, J, K, J_tot, dphi_fc, coord, J_f));
       dolfinx_contact::physical_facet_normal(
           n_phys, K, xt::row(facet_normals, facet_index));
     }
@@ -405,7 +405,7 @@ dolfinx_cuas::kernel_fn<T> generate_contact_kernel(
 
       // Update Jacobian and physical normal
       detJ = std::fabs(
-          update_jacobian(q, dphi_fc, coord, J_f, J, K, J_tot, detJ));
+          update_jacobian(q, detJ, J, K, J_tot, J_f, dphi_fc, coord));
       update_normal(n_phys, K, facet_normals, facet_index);
 
       // if normal not constant, get surface normal at current quadrature point
@@ -479,7 +479,6 @@ dolfinx_cuas::kernel_fn<T> generate_contact_kernel(
           double sign_du = (lmbda * tr(j, l) * n_dot + mu * epsn(j, l));
           double Pn_du
               = (gamma_inv * sign_du - n_surf(l) * phi_f(q, j)) * -Pn_u * w0;
-          std::cout << Pn_du << "\n";
           sign_du *= w0;
           for (int i = 0; i < ndofs_cell; i++)
           { // Insert over block size in matrix
@@ -503,7 +502,7 @@ dolfinx_cuas::kernel_fn<T> generate_contact_kernel(
   case dolfinx_contact::Kernel::Jac:
     return nitsche_rigid_jacobian;
   default:
-    throw std::runtime_error("Unrecognized kernel");
+    throw std::invalid_argument("Unrecognized kernel");
   }
 }
 } // namespace dolfinx_contact
