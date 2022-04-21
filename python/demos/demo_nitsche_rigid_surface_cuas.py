@@ -130,10 +130,10 @@ if __name__ == "__main__":
         else:
             fname = "twomeshes"
             if simplex:
-                create_circle_plane_mesh(filename=f"{fname}.msh")
+                create_circle_plane_mesh(filename=f"{fname}.msh", res=0.05)
                 convert_mesh(fname, f"{fname}.xdmf", "triangle", prune_z=True)
             else:
-                create_circle_plane_mesh(filename=f"{fname}.msh", quads=True)
+                create_circle_plane_mesh(filename=f"{fname}.msh", quads=True, res=0.05)
                 convert_mesh(fname, f"{fname}.xdmf", "quad", prune_z=True)
             convert_mesh(fname, f"{fname}_facets.xdmf", "line", prune_z=True)
 
@@ -176,7 +176,7 @@ if __name__ == "__main__":
             facet_marker = meshtags(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
 
     # Solver options
-    newton_options = {"relaxation_parameter": 1.0}
+    newton_options = {"relaxation_parameter": 1.0, "max_it": 50}
     # petsc_options = {"ksp_type": "preonly", "pc_type": "lu"}
     petsc_options = {"ksp_type": "cg", "pc_type": "gamg", "rtol": 1e-6, "pc_gamg_coarse_eq_limit": 1000,
                      "mg_levels_ksp_type": "chebyshev", "mg_levels_pc_type": "jacobi",

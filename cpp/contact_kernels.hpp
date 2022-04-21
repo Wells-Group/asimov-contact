@@ -32,11 +32,7 @@ dolfinx_cuas::kernel_fn<T> generate_contact_kernel(
   // Get mesh info
   const dolfinx::mesh::Geometry& geometry = mesh->geometry();
   auto cmap = geometry.cmap();
-  if (!cmap.is_affine())
-  {
-    throw std::runtime_error(
-        "This kernel has not been implemented for non-affine geometries");
-  }
+
   const std::uint32_t gdim = geometry.dim();
   const dolfinx::mesh::Topology& topology = mesh->topology();
   const std::uint32_t tdim = topology.dim();
@@ -146,6 +142,9 @@ dolfinx_cuas::kernel_fn<T> generate_contact_kernel(
   // Get facet normals on reference cell
   auto facet_normals = basix::cell::facet_outward_normals(basix_cell);
 
+  auto update_jacobian = get_update_jacobian_dependencies(cmap);
+  auto update_normal = get_update_normal(cmap);
+  const bool affine = cmap.is_affine();
   // Define kernels
   // RHS for contact with rigid surface
   // =====================================================================================
@@ -160,6 +159,7 @@ dolfinx_cuas::kernel_fn<T> generate_contact_kernel(
     // assumption that u lives in the same space as v
     assert(phi[0].shape(1) == offsets[1] - offsets[0]);
     std::size_t facet_index = size_t(*entity_local_index);
+    assert(phi[facet_index].shape(1) == ndofs_cell);
 
     // Reshape coordinate dofs to two dimensional array
     // NOTE: DOLFINx has 3D input coordinate dofs
@@ -174,23 +174,26 @@ dolfinx_cuas::kernel_fn<T> generate_contact_kernel(
     // Extract the first derivative of the coordinate element (cell) of degrees
     // of freedom on the facet
     const xt::xtensor<double, 3>& dphi_fc = dphi_c[facet_index];
-    const xt::xtensor<double, 2>& dphi0_c = xt::view(
-        dphi_fc, xt::all(), 0,
-        xt::all()); // FIXME: Assumed constant, i.e. only works for simplices
 
-    // NOTE: Affine cell assumption
     // Compute Jacobian and determinant at first quadrature point
     xt::xtensor<double, 2> J = xt::zeros<double>({gdim, tdim});
     xt::xtensor<double, 2> K = xt::zeros<double>({tdim, gdim});
+    xt::xtensor<double, 2> J_f
+        = xt::view(ref_jacobians, facet_index, xt::all(), xt::all());
+    xt::xtensor<double, 2> J_tot
+        = xt::zeros<double>({J.shape(0), J_f.shape(1)});
 
-    dolfinx::fem::CoordinateElement::compute_jacobian(dphi0_c, c_view, J);
-    dolfinx::fem::CoordinateElement::compute_jacobian_inverse(J, K);
-
-    // Compute push forward of reference facet normal
-    // NOTE: Affine cell assumption
+    double detJ;
+    // Normal vector on physical facet at a single quadrature point
     xt::xtensor<double, 1> n_phys = xt::zeros<double>({gdim});
-    dolfinx_contact::physical_facet_normal(n_phys, K,
-                                           xt::row(facet_normals, facet_index));
+    // Pre-compute jacobians and normals for affine meshes
+    if (affine)
+    {
+      detJ = std::fabs(dolfinx_contact::compute_facet_jacobians(
+          0, dphi_fc, coord, J_f, J, K, J_tot));
+      dolfinx_contact::physical_facet_normal(
+          n_phys, K, xt::row(facet_normals, facet_index));
+    }
 
     // Retrieve normal of rigid surface if constant
     xt::xarray<double> n_surf = xt::zeros<double>({gdim});
@@ -213,29 +216,26 @@ dolfinx_cuas::kernel_fn<T> generate_contact_kernel(
     double gamma_inv = c[c_offset + offsets[3]] / w[0];
     double theta = w[1];
 
-    // Compute det(J_C J_f) as it is the mapping to the reference facet
-    const xt::xtensor<double, 2>& J_f
-        = xt::view(ref_jacobians, facet_index, xt::all(), xt::all());
-    xt::xtensor<double, 2> J_tot
-        = xt::zeros<double>({J.shape(0), J_f.shape(1)});
-    dolfinx::math::dot(J, J_f, J_tot);
-    double detJ = std::fabs(
-        dolfinx::fem::CoordinateElement::compute_jacobian_determinant(J_tot));
-
     const xt::xtensor<double, 3>& dphi_f = dphi[facet_index];
     const xt::xtensor<double, 2>& phi_f = phi[facet_index];
     const std::vector<double>& weights = q_weights[facet_index];
 
-    // Get number of dofs per cell
-    // FIXME: Should be templated
-    const std::uint32_t ndofs_cell = phi[*entity_local_index].shape(1);
     // Temporary variable for grad(phi) on physical cell
     xt::xtensor<double, 2> dphi_phys({bs, ndofs_cell});
+
+    // Temporary work arrays
+    xt::xtensor<double, 2> tr({std::uint32_t(offsets[1] - offsets[0]), gdim});
+    xt::xtensor<double, 2> epsn({std::uint32_t(offsets[1] - offsets[0]), gdim});
 
     // Loop over quadrature points
     const int num_points = phi[*entity_local_index].shape(0);
     for (std::size_t q = 0; q < num_points; q++)
     {
+
+      // Update Jacobian and physical normal
+      detJ = std::fabs(
+          update_jacobian(q, dphi_fc, coord, J_f, J, K, J_tot, detJ));
+      update_normal(n_phys, K, facet_normals, facet_index);
 
       double mu = 0;
       for (int j = offsets[1]; j < offsets[2]; j++)
@@ -265,13 +265,9 @@ dolfinx_cuas::kernel_fn<T> generate_contact_kernel(
         gap += c[gap_offset + q * gdim + i] * n_surf(i);
       }
 
-      xt::xtensor<double, 2> tr
-          = xt::zeros<double>({std::uint32_t(offsets[1] - offsets[0]), gdim});
-      xt::xtensor<double, 2> epsn
-          = xt::zeros<double>({std::uint32_t(offsets[1] - offsets[0]), gdim});
-      xt::xtensor<double, 2> v_dot_nsurf
-          = xt::zeros<double>({std::uint32_t(offsets[1] - offsets[0]), gdim});
-      // precompute tr(eps(phi_j e_l)), eps(phi^j e_l)n*n2, ufl.dot(v, n_surf)
+      // precompute tr(eps(phi_j e_l)), eps(phi^j e_l)n*n2
+      std::fill(tr.begin(), tr.end(), 0);
+      std::fill(epsn.begin(), epsn.end(), 0);
       for (int j = 0; j < offsets[1] - offsets[0]; j++)
       {
         for (int l = 0; l < bs; l++)
@@ -324,13 +320,13 @@ dolfinx_cuas::kernel_fn<T> generate_contact_kernel(
 
   // Jacobian for contact with rigid surface
   // =====================================================================================
-  dolfinx_cuas::kernel_fn<T> nitsche_rigid_jacobian
-      = [dphi_c, phi, dphi, phi_coeffs, dphi_coeffs, offsets, num_coeffs, gdim,
-         tdim, fdim, q_weights, num_coordinate_dofs, ref_jacobians, bs,
-         facet_normals, constant_normal](
-            double* A, const double* c, const double* w,
-            const double* coordinate_dofs, const int* entity_local_index,
-            const std::uint8_t* quadrature_permutation)
+  dolfinx_cuas::kernel_fn<T> nitsche_rigid_jacobian =
+      [dphi_c, phi, dphi, phi_coeffs, dphi_coeffs, offsets, num_coeffs, gdim,
+       tdim, fdim, q_weights, num_coordinate_dofs, ref_jacobians, bs,
+       facet_normals, constant_normal, affine, update_jacobian, update_normal,
+       ndofs_cell](double* A, const double* c, const double* w,
+                   const double* coordinate_dofs, const int* entity_local_index,
+                   const std::uint8_t* quadrature_permutation)
   {
     // assumption that the vector function space has block size tdim
     assert(bs == gdim);
@@ -338,6 +334,7 @@ dolfinx_cuas::kernel_fn<T> generate_contact_kernel(
     // assumption that u lives in the same space as v
     assert(phi[0].shape(1) == offsets[1] - offsets[0]);
     std::size_t facet_index = size_t(*entity_local_index);
+    assert(phi[facet_index].shape(1) == ndofs_cell);
 
     // Reshape coordinate dofs to two dimensional array
     // NOTE: DOLFINx has 3D input coordinate dofs
@@ -351,23 +348,21 @@ dolfinx_cuas::kernel_fn<T> generate_contact_kernel(
     // Extract the first derivative of the coordinate element (cell) of degrees
     // of freedom on the facet
     const xt::xtensor<double, 3>& dphi_fc = dphi_c[facet_index];
-    const xt::xtensor<double, 2>& dphi0_c = xt::view(
-        dphi_fc, xt::all(), 0,
-        xt::all()); // FIXME: Assumed constant, i.e. only works for simplices
-
-    // NOTE: Affine cell assumption
-    // Compute Jacobian and determinant at first quadrature point
     xt::xtensor<double, 2> J = xt::zeros<double>({gdim, tdim});
     xt::xtensor<double, 2> K = xt::zeros<double>({tdim, gdim});
-    auto c_view = xt::view(coord, xt::all(), xt::range(0, gdim));
-    dolfinx::fem::CoordinateElement::compute_jacobian(dphi0_c, c_view, J);
-    dolfinx::fem::CoordinateElement::compute_jacobian_inverse(J, K);
-
-    // Compute push forward of reference facet normal
-    // NOTE: Affine cell assumption
     xt::xtensor<double, 1> n_phys = xt::zeros<double>({gdim});
-    dolfinx_contact::physical_facet_normal(n_phys, K,
-                                           xt::row(facet_normals, facet_index));
+    xt::xtensor<double, 2> J_f
+        = xt::view(ref_jacobians, facet_index, xt::all(), xt::all());
+    xt::xtensor<double, 2> J_tot
+        = xt::zeros<double>({J.shape(0), J_f.shape(1)});
+    double detJ;
+    if (affine)
+    {
+      detJ = std::fabs(dolfinx_contact::compute_facet_jacobians(
+          0, dphi_fc, coord, J_f, J, K, J_tot));
+      dolfinx_contact::physical_facet_normal(
+          n_phys, K, xt::row(facet_normals, facet_index));
+    }
 
     // Retrieve normal of rigid surface if constant
     xt::xtensor<double, 1> n_surf = xt::zeros<double>({gdim});
@@ -393,28 +388,24 @@ dolfinx_cuas::kernel_fn<T> generate_contact_kernel(
     double gamma_inv = c[c_offset + offsets[3]] / w[0];
     double theta = w[1];
 
-    // Compute det(J_C J_f) as it is the mapping to the reference facet
-    xt::xtensor<double, 2> J_f
-        = xt::view(ref_jacobians, facet_index, xt::all(), xt::all());
-    xt::xtensor<double, 2> J_tot
-        = xt::zeros<double>({J.shape(0), J_f.shape(1)});
-    dolfinx::math::dot(J, J_f, J_tot);
-    double detJ = std::fabs(
-        dolfinx::fem::CoordinateElement::compute_jacobian_determinant(J_tot));
-
     const xt::xtensor<double, 3>& dphi_f = dphi[facet_index];
     const xt::xtensor<double, 2>& phi_f = phi[facet_index];
     const std::vector<double>& weights = q_weights[facet_index];
 
     // Get number of dofs per cell
-    // FIXME: Should be templated
-    const std::uint32_t ndofs_cell = phi[*entity_local_index].shape(1);
     // Temporary variable for grad(phi) on physical cell
     xt::xtensor<double, 2> dphi_phys({bs, ndofs_cell});
-
-    const std::uint32_t num_points = phi[*entity_local_index].shape(0);
+    xt::xtensor<double, 2> tr = xt::zeros<double>({ndofs_cell, gdim});
+    xt::xtensor<double, 2> epsn = xt::zeros<double>({ndofs_cell, gdim});
+    const std::uint32_t num_points = phi[facet_index].shape(0);
     for (std::size_t q = 0; q < num_points; q++)
     {
+
+      // Update Jacobian and physical normal
+      detJ = std::fabs(
+          update_jacobian(q, dphi_fc, coord, J_f, J, K, J_tot, detJ));
+      update_normal(n_phys, K, facet_normals, facet_index);
+
       // if normal not constant, get surface normal at current quadrature point
       int normal_offset = c_offset + offsets[5];
       if (!constant_normal)
@@ -432,13 +423,11 @@ dolfinx_cuas::kernel_fn<T> generate_contact_kernel(
       int gap_offset = c_offset + offsets[4];
       double gap = 0;
       for (int i = 0; i < gdim; i++)
-      {
         gap += c[gap_offset + q * gdim + i] * n_surf(i);
-      }
 
-      xt::xtensor<double, 2> tr = xt::zeros<double>({ndofs_cell, gdim});
-      xt::xtensor<double, 2> epsn = xt::zeros<double>({ndofs_cell, gdim});
       // precompute tr(eps(phi_j e_l)), eps(phi^j e_l)n*n2
+      std::fill(tr.begin(), tr.end(), 0);
+      std::fill(epsn.begin(), epsn.end(), 0);
       for (int j = 0; j < ndofs_cell; j++)
       {
         for (int l = 0; l < bs; l++)
