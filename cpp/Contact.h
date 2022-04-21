@@ -40,77 +40,6 @@ enum class Kernel
   Jac
 };
 
-namespace
-{
-
-/// @brief Convenience function to update Jacobians
-///
-/// For affine geometries, the input determinant is returned.
-/// For non-affine geometries, the Jacobian, it's inverse and the total Jacobian
-/// (J*J_f) is computed.
-/// @param[in] cmap The coordinate element
-std::function<double(std::size_t, const xt::xtensor<double, 3>&,
-                     const xt::xtensor<double, 2>&,
-                     const xt::xtensor<double, 2>&, xt::xtensor<double, 2>&,
-                     xt::xtensor<double, 2>&, xt::xtensor<double, 2>&, double&)>
-get_update_jacobian_dependencies(const dolfinx::fem::CoordinateElement& cmap)
-{
-  if (cmap.is_affine())
-  {
-    // Return function that returns the input determinant
-    return [](std::size_t q, const xt::xtensor<double, 3>& dphi,
-              const xt::xtensor<double, 2>& coords,
-              const xt::xtensor<double, 2>& J_f, xt::xtensor<double, 2>& J,
-              xt::xtensor<double, 2>& K, xt::xtensor<double, 2>& J_tot,
-              double detJ) { return detJ; };
-  }
-  else
-  {
-    // Return function that returns the input determinant
-    return [](std::size_t q, const xt::xtensor<double, 3>& dphi,
-              const xt::xtensor<double, 2>& coords,
-              const xt::xtensor<double, 2>& J_f, xt::xtensor<double, 2>& J,
-              xt::xtensor<double, 2>& K, xt::xtensor<double, 2>& J_tot,
-              double detJ)
-    {
-      double new_detJ = dolfinx_contact::compute_facet_jacobians(
-          q, dphi, coords, J_f, J, K, J_tot);
-      return new_detJ;
-    };
-  }
-}
-
-/// @brief Convenience function to update facet normals
-///
-/// For affine geometries, a do nothing function is returned.
-/// For non-affine geometries, a function updating the physical facet normal is
-/// returned.
-/// @param[in] cmap The coordinate element
-std::function<void(xt::xtensor<double, 1>&, const xt::xtensor<double, 2>&,
-                   const xt::xtensor<double, 2>&, std::size_t)>
-get_update_normal(const dolfinx::fem::CoordinateElement& cmap)
-{
-  if (cmap.is_affine())
-  {
-    // Return function that returns the input determinant
-    return [](xt::xtensor<double, 1>& n, const xt::xtensor<double, 2>& K,
-              const xt::xtensor<double, 2>& n_ref, std::size_t local_index)
-    {
-      // Do nothing
-    };
-  }
-  else
-  {
-    // Return function that updates the physical normal based on K
-    return [](xt::xtensor<double, 1>& n, const xt::xtensor<double, 2>& K,
-              const xt::xtensor<double, 2>& n_ref, std::size_t local_index) {
-      dolfinx_contact::physical_facet_normal(n, K, xt::row(n_ref, local_index));
-    };
-  }
-}
-
-} // namespace
-
 class Contact
 {
 public:
@@ -298,8 +227,9 @@ public:
     xt::xtensor<double, 2> facet_normals
         = basix::cell::facet_outward_normals(basix_element.cell_type());
 
-    auto update_jacobian = get_update_jacobian_dependencies(cmap);
-    auto update_normal = get_update_normal(cmap);
+    auto update_jacobian
+        = dolfinx_contact::get_update_jacobian_dependencies(cmap);
+    auto update_normal = dolfinx_contact::get_update_normal(cmap);
 
     // right hand side kernel
     contact_kernel_fn unbiased_rhs

@@ -1,9 +1,10 @@
-// Copyright (C) 2021 Jørgen S. Dokken and Sarah Roggendorf
+// Copyright (C) 2021-2022 Jørgen S. Dokken and Sarah Roggendorf
 //
 // This file is part of DOLFINx_CONTACT
 //
 // SPDX-License-Identifier:    MIT
 #include "utils.h"
+#include "geometric_quantities.h"
 
 using namespace dolfinx_contact;
 
@@ -466,3 +467,59 @@ double dolfinx_contact::compute_facet_jacobians(
   return std::fabs(
       dolfinx::fem::CoordinateElement::compute_jacobian_determinant(J_tot));
 }
+//-------------------------------------------------------------------------------------
+std::function<double(std::size_t, const xt::xtensor<double, 3>&,
+                     const xt::xtensor<double, 2>&,
+                     const xt::xtensor<double, 2>&, xt::xtensor<double, 2>&,
+                     xt::xtensor<double, 2>&, xt::xtensor<double, 2>&, double&)>
+dolfinx_contact::get_update_jacobian_dependencies(
+    const dolfinx::fem::CoordinateElement& cmap)
+{
+  if (cmap.is_affine())
+  {
+    // Return function that returns the input determinant
+    return [](std::size_t q, const xt::xtensor<double, 3>& dphi,
+              const xt::xtensor<double, 2>& coords,
+              const xt::xtensor<double, 2>& J_f, xt::xtensor<double, 2>& J,
+              xt::xtensor<double, 2>& K, xt::xtensor<double, 2>& J_tot,
+              double detJ) { return detJ; };
+  }
+  else
+  {
+    // Return function that returns the input determinant
+    return [](std::size_t q, const xt::xtensor<double, 3>& dphi,
+              const xt::xtensor<double, 2>& coords,
+              const xt::xtensor<double, 2>& J_f, xt::xtensor<double, 2>& J,
+              xt::xtensor<double, 2>& K, xt::xtensor<double, 2>& J_tot,
+              double detJ)
+    {
+      double new_detJ = dolfinx_contact::compute_facet_jacobians(
+          q, dphi, coords, J_f, J, K, J_tot);
+      return new_detJ;
+    };
+  }
+}
+//-------------------------------------------------------------------------------------
+std::function<void(xt::xtensor<double, 1>&, const xt::xtensor<double, 2>&,
+                   const xt::xtensor<double, 2>&, std::size_t)>
+dolfinx_contact::get_update_normal(const dolfinx::fem::CoordinateElement& cmap)
+{
+  if (cmap.is_affine())
+  {
+    // Return function that returns the input determinant
+    return [](xt::xtensor<double, 1>& n, const xt::xtensor<double, 2>& K,
+              const xt::xtensor<double, 2>& n_ref, std::size_t local_index)
+    {
+      // Do nothing
+    };
+  }
+  else
+  {
+    // Return function that updates the physical normal based on K
+    return [](xt::xtensor<double, 1>& n, const xt::xtensor<double, 2>& K,
+              const xt::xtensor<double, 2>& n_ref, std::size_t local_index) {
+      dolfinx_contact::physical_facet_normal(n, K, xt::row(n_ref, local_index));
+    };
+  }
+}
+//-------------------------------------------------------------------------------------
