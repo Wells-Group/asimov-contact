@@ -162,8 +162,9 @@ public:
     const int num_coordinate_dofs = cmap.dim();
 
     std::shared_ptr<const dolfinx::fem::FiniteElement> element = _V->element();
-    const bool needs_dof_transformations = element->needs_dof_transformations();
-    if (needs_dof_transformations)
+    if (const bool needs_dof_transformations
+        = element->needs_dof_transformations();
+        needs_dof_transformations)
     {
       throw std::invalid_argument("Contact-kernels are not supporting finite "
                                   "elements requiring dof transformations.");
@@ -416,8 +417,9 @@ public:
             // entries corresponding to v on the other surface
             for (std::size_t k = 0; k < num_links; k++)
             {
-              int index = offsets[5] + k * num_q_points * ndofs_cell * bs
-                          + i * num_q_points * bs + q * bs + n;
+              std::size_t index = offsets[5]
+                                  + k * num_q_points * ndofs_cell * bs
+                                  + i * num_q_points * bs + q * bs + n;
               double v_n_opp = c[index] * n_surf[n];
 
               b[k + 1][n + i * bs] -= 0.5 * gamma_inv * v_n_opp * Pn_u;
