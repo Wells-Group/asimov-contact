@@ -223,7 +223,7 @@ PYBIND11_MODULE(cpp, m)
                                                 std::array{shape0, cstride});
           },
           py::arg("origin_meshtag"), py::arg("u"), py::arg("gap"),
-          py::arg("nd"))
+          py::arg("nd") = 0)
       .def("pack_surface_derivatives",
            [](dolfinx_contact::Contact& self, int origin_meshtag,
               const py::array_t<PetscScalar, py::array::c_style>& gap)
@@ -305,7 +305,7 @@ PYBIND11_MODULE(cpp, m)
           }
           else
           {
-            throw std::runtime_error("Unsupported entities");
+            throw std::invalid_argument("Unsupported entities");
           }
         });
 
