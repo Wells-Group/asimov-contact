@@ -273,8 +273,8 @@ if __name__ == "__main__":
 
     # Solver options
     ksp_tol = 1e-10
-    newton_tol = 1e-7
-    newton_options = {"relaxation_parameter": 1,
+    newton_tol = 1e-6
+    newton_options = {"relaxation_parameter": 0.3,
                       "atol": newton_tol,
                       "rtol": newton_tol,
                       "convergence_criterion": "residual",
