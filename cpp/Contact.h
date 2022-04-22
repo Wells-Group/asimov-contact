@@ -323,8 +323,8 @@ public:
       }
 
       // Extract constants used inside quadrature loop
-      double gamma = c[2] / w[0];
-      double gamma_inv = w[0] / c[2];
+      double gamma = c[2] / w[0]; // h/gamma
+      double gamma_inv = w[0] / c[2]; // gamma/h
       double theta = w[1];
       double mu = c[0];
       double lmbda = c[1];
