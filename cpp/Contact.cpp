@@ -164,13 +164,19 @@ void dolfinx_contact::Contact::assemble_matrix(
   const dolfinx::fem::CoordinateElement& cmap = geometry.cmap();
   const std::size_t num_dofs_g = cmap.dim();
 
+  std::shared_ptr<const dolfinx::fem::FiniteElement> element = _V->element();
+  const bool needs_dof_transformations = element->needs_dof_transformations();
+  if (needs_dof_transformations)
+  {
+    throw std::invalid_argument(
+        "Function-space requiring dof-transformations is not supported.");
+  }
+
   // Extract function space data (assuming same test and trial space)
   std::shared_ptr<const dolfinx::fem::DofMap> dofmap = _V->dofmap();
   const std::size_t ndofs_cell = dofmap->cell_dofs(0).size();
   const int bs = dofmap->bs();
 
-  // FIXME: Need to reconsider facet permutations for jump integrals
-  std::uint8_t perm = 0;
   std::size_t max_links = std::max(_max_links[0], _max_links[1]);
   auto active_facets = _cell_facet_pairs[origin_meshtag];
   auto map = _facet_maps[origin_meshtag];
@@ -207,14 +213,10 @@ void dolfinx_contact::Contact::assemble_matrix(
     }
 
     kernel(Aes, coeffs.data() + i * cstride, constants.data(),
-           coordinate_dofs.data(), &local_index, &perm, num_linked_cells);
+           coordinate_dofs.data(), &local_index, num_linked_cells);
 
     // FIXME: We would have to handle possible Dirichlet conditions here, if we
     // think that we can have a case with contact and Dirichlet
-
-    // NOTE  Normally
-    // dof transform needs to be applied to the elements in Aes at this
-    // stage This is not need for the function spaces we currently consider
     auto dmap_cell = dofmap->cell_dofs(cell);
     mat_set(dmap_cell, dmap_cell, Aes[0]);
 
@@ -234,6 +236,15 @@ void dolfinx_contact::Contact::assemble_vector(
     const contact_kernel_fn& kernel, const xtl::span<const PetscScalar>& coeffs,
     int cstride, const xtl::span<const PetscScalar>& constants)
 {
+  /// Check that we support the function space
+  std::shared_ptr<const dolfinx::fem::FiniteElement> element = _V->element();
+  const bool needs_dof_transformations = element->needs_dof_transformations();
+  if (needs_dof_transformations)
+  {
+    throw std::invalid_argument(
+        "Function-space requiring dof-transformations is not supported.");
+  }
+
   // Extract mesh
   auto mesh = _marker->mesh();
   assert(mesh);
@@ -253,8 +264,6 @@ void dolfinx_contact::Contact::assemble_vector(
   const std::size_t ndofs_cell = dofmap->cell_dofs(0).size();
   const int bs = dofmap->bs();
 
-  // FIXME: Need to reconsider facet permutations for jump integrals
-  std::uint8_t perm = 0;
   // Select which side of the contact interface to loop from and get the
   // correct map
   auto active_facets = _cell_facet_pairs[origin_meshtag];
@@ -291,10 +300,7 @@ void dolfinx_contact::Contact::assemble_vector(
     for (std::size_t j = 0; j < num_linked_cells; j++)
       std::fill(bes[j + 1].begin(), bes[j + 1].end(), 0);
     kernel(bes, coeffs.data() + i * cstride, constants.data(),
-           coordinate_dofs.data(), &local_index, &perm, num_linked_cells);
-    // NOTE: Normally dof transform needs to be applied to the elements in
-    // bes at this stage This is not need for the function spaces
-    // we currently consider
+           coordinate_dofs.data(), &local_index, num_linked_cells);
 
     // Add element vector to global vector
     auto dofs_cell = dofmap->cell_dofs(cell);

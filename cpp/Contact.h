@@ -23,10 +23,9 @@
 #include <dolfinx_cuas/utils.hpp>
 #include <xtensor/xadapt.hpp>
 #include <xtensor/xindex_view.hpp>
-
 using contact_kernel_fn = std::function<void(
     std::vector<std::vector<PetscScalar>>&, const double*, const double*,
-    const double*, const int*, const std::uint8_t*, const std::size_t)>;
+    const double*, const int*, const std::size_t)>;
 
 using mat_set_fn = const std::function<int(
     const xtl::span<const std::int32_t>&, const xtl::span<const std::int32_t>&,
@@ -135,7 +134,22 @@ public:
                        const xtl::span<const PetscScalar>& coeffs, int cstride,
                        const xtl::span<const PetscScalar>& constants);
 
-  /// Generate contact kernel
+  /// @brief Generate contact kernel
+  ///
+  /// The kernel will expect input on the form
+  /// @param[in] type The kernel type (Either `Jac` or `Rhs`).
+  /// @returns Kernel function that takes in a vector (b) to assemble into, the
+  /// coefficients (`c`), the constants (`w`), the local facet entity (`entity
+  /// _local_index`), the quadrature permutation and the number of cells on the
+  /// other contact boundary coefficients are extracted from.
+  /// @note The ordering of coefficients are expected to be `mu`, `lmbda`, `h`,
+  /// `gap`, `normals` `test_fn`, `u`, `u_opposite`.
+  /// @note The scalar valued coefficients `mu`,`lmbda` and `h` are expected to
+  /// be DG-0 functions, with a single value per facet.
+  /// @note The coefficients `gap`, `normals`,`test_fn` and `u_opposite` is
+  /// packed at quadrature points. The coefficient `u` is packed at dofs.
+  /// @note The vector valued coefficents `gap`, `test_fn`, `u`, `u_opposite`
+  /// has dimension `bs == gdim`.
   contact_kernel_fn generate_kernel(dolfinx_contact::Kernel type)
   {
     // Extract mesh data
@@ -147,10 +161,24 @@ public:
     bool affine = cmap.is_affine();
     const int num_coordinate_dofs = cmap.dim();
 
+    std::shared_ptr<const dolfinx::fem::FiniteElement> element = _V->element();
+    const bool needs_dof_transformations = element->needs_dof_transformations();
+    if (needs_dof_transformations)
+    {
+      throw std::invalid_argument("Contact-kernels are not supporting finite "
+                                  "elements requiring dof transformations.");
+    }
+
     // Extract function space data (assuming same test and trial space)
     std::shared_ptr<const dolfinx::fem::DofMap> dofmap = _V->dofmap();
     const std::size_t ndofs_cell = dofmap->element_dof_layout().num_dofs();
     const std::size_t bs = dofmap->bs();
+    if (bs != gdim)
+    {
+      throw std::invalid_argument(
+          "The geometric dimension of the mesh is not equal to the block size "
+          "of the function space.");
+    }
 
     // NOTE: Assuming same number of quadrature points on each cell
     const std::size_t num_q_points = _qp_ref_facet[0].shape(0);
@@ -163,7 +191,6 @@ public:
         mesh->topology().cell_type(), tdim - 1);
     assert(num_facets == _qp_ref_facet.size());
 
-    std::shared_ptr<const dolfinx::fem::FiniteElement> element = _V->element();
     std::vector<xt::xtensor<double, 2>> phi;
     phi.reserve(num_facets);
     std::vector<xt::xtensor<double, 3>> dphi;
@@ -180,43 +207,37 @@ public:
     std::array<std::size_t, 4> tabulate_shape
         = cmap.tabulate_shape(1, num_q_points);
     xt::xtensor<double, 4> c_tab(tabulate_shape);
+    assert(tabulate_shape[0] - 1 == (std::size_t)tdim);
     xt::xtensor<double, 3> dphi_ci(
-        {(std::size_t)tdim, tabulate_shape[1], tabulate_shape[2]});
+        {tabulate_shape[0] - 1, tabulate_shape[1], tabulate_shape[2]});
 
     // Tabulate basis functions and first order derivatives for each facet in
     // the reference cell. This tabulation is done both for the finite element
     // of the unknown and the coordinate element (which might differ)
-    std::for_each(
-        _qp_ref_facet.cbegin(), _qp_ref_facet.cend(),
-        [&](const auto& q_facet)
-        {
-          assert(q_facet.shape(0) == num_q_points);
-          element->tabulate(cell_tab, q_facet, 1);
+    std::for_each(_qp_ref_facet.cbegin(), _qp_ref_facet.cend(),
+                  [&](const auto& q_facet)
+                  {
+                    assert(q_facet.shape(0) == num_q_points);
+                    element->tabulate(cell_tab, q_facet, 1);
 
-          phi_i = xt::view(cell_tab, 0, xt::all(), xt::all(), 0);
-          phi.push_back(phi_i);
+                    phi_i = xt::view(cell_tab, 0, xt::all(), xt::all(), 0);
+                    phi.push_back(phi_i);
 
-          dphi_i = xt::view(cell_tab, xt::range(1, (std::size_t)tdim + 1),
-                            xt::all(), xt::all(), 0);
-          dphi.push_back(dphi_i);
+                    dphi_i = xt::view(cell_tab, xt::range(1, tabulate_shape[0]),
+                                      xt::all(), xt::all(), 0);
+                    dphi.push_back(dphi_i);
 
-          // Tabulate coordinate element of reference cell
-          cmap.tabulate(1, q_facet, c_tab);
-          dphi_ci = xt::view(c_tab, xt::range(1, (std::size_t)tdim + 1),
-                             xt::all(), xt::all(), 0);
-          dphi_c.push_back(dphi_ci);
-        });
-    // coefficient offsets
-    // expecting coefficients in following order:
+                    // Tabulate coordinate element of reference cell
+                    cmap.tabulate(1, q_facet, c_tab);
+                    dphi_ci = xt::view(c_tab, xt::range(1, tabulate_shape[0]),
+                                       xt::all(), xt::all(), 0);
+                    dphi_c.push_back(dphi_ci);
+                  });
+
+    // Coefficient offsets
+    // Expecting coefficients in following order:
     // mu, lmbda, h, gap, normals, test_fn, u, u_opposite
-    // mu, lmbda, h - DG0 one value per  facet
-    // gap, normals, test_fn,  u_opposite
-    // packed at quadrature points
-    // u packed at dofs
-    // mu, lmbda, h scalar
-    // gap vector valued gdim
-    // test_fn, u, u_opposite vector valued bs (should be bs = gdim)
-    std::vector<std::size_t> cstrides
+    std::array<std::size_t, 8> cstrides
         = {1,
            1,
            1,
@@ -225,6 +246,11 @@ public:
            num_q_points * ndofs_cell * bs * max_links,
            ndofs_cell * bs,
            num_q_points * bs};
+    std::array<std::size_t, 9> offsets;
+    offsets[0] = 0;
+    std::partial_sum(cstrides.cbegin(), cstrides.cend(),
+                     std::next(offsets.begin()));
+
     // As reference facet and reference cell are affine, we do not need to
     // compute this per quadrature point
     basix::cell::type basix_cell
@@ -236,23 +262,31 @@ public:
     xt::xtensor<double, 2> facet_normals
         = basix::cell::facet_outward_normals(basix_cell);
 
+    // Get update Jacobian function (for each quadrature point)
     auto update_jacobian
         = dolfinx_contact::get_update_jacobian_dependencies(cmap);
+
+    // Get update FacetNormal function (for each quadrature point)
     auto update_normal = dolfinx_contact::get_update_normal(cmap);
 
-    // right hand side kernel
+    /// @brief Assemble kernel for RHS of unbiased contact problem
+    ///
+    /// Assemble of the residual of the unbiased contact problem into vector
+    /// `b`.
+    /// @param[in,out] b The vector to assemble the residual into
+    /// @param[in] c The coefficients used in kernel. Assumed to be
+    /// ordered as mu, lmbda, h, gap, normals, test_fn, u, u_opposite.
+    /// @param[in] w The constants used in kernel. Assumed to be ordered as
+    /// `gamma`, `theta`.
+    /// @param[in] coordinate_dofs The physical coordinates of cell. Assumed to
+    /// be padded to 3D, (shape (num_nodes, 3)).
     contact_kernel_fn unbiased_rhs
         = [=](std::vector<std::vector<PetscScalar>>& b, const double* c,
               const double* w, const double* coordinate_dofs,
-              const int* entity_local_index,
-              [[maybe_unused]] const std::uint8_t* quadrature_permutation,
-              const std::size_t num_links)
+              const int* entity_local_index, const std::size_t num_links)
     {
-      // assumption that the vector function space has block size tdim
-      assert(bs == gdim);
       const auto facet_index = size_t(*entity_local_index);
 
-      // Reshape coordinate dofs to two dimensional array
       // NOTE: DOLFINx has 3D input coordinate dofs
       // FIXME: These array should be views (when compute_jacobian doesn't use
       // xtensor)
@@ -287,40 +321,42 @@ public:
             n_phys, K, xt::row(facet_normals, facet_index));
       }
 
-      // h/gamma
+      // Extract constants used inside quadrature loop
       double gamma = c[2] / w[0];
-      // gamma/h
       double gamma_inv = w[0] / c[2];
       double theta = w[1];
       double mu = c[0];
       double lmbda = c[1];
 
-      const xt::xtensor<double, 3>& dphi_f = dphi[facet_index];
+      // Extract reference to the tabulated basis function at the local
+      // facet
       const xt::xtensor<double, 2>& phi_f = phi[facet_index];
+      const xt::xtensor<double, 3>& dphi_f = dphi[facet_index];
+
+      // Extract reference to quadrature weights for the local facet
       const std::vector<double>& weights = _qw_ref_facet[facet_index];
-      xt::xtensor<double, 1> n_surf = xt::zeros<double>({gdim});
-      xt::xtensor<double, 2> tr = xt::zeros<double>({ndofs_cell, gdim});
-      xt::xtensor<double, 2> epsn = xt::zeros<double>({ndofs_cell, gdim});
+
+      // Temporary data structures used inside quadrature loop
+      std::array<double, 3> n_surf = {0, 0, 0};
+      xt::xtensor<double, 2> tr({ndofs_cell, gdim});
+      xt::xtensor<double, 2> epsn({ndofs_cell, gdim});
       for (std::size_t q = 0; q < weights.size(); q++)
       {
 
         // Update Jacobian and physical normal
         detJ = update_jacobian(q, detJ, J, K, J_tot, J_f, dphi_fc, coord);
-
         update_normal(n_phys, K, facet_normals, facet_index);
 
         double n_dot = 0;
         double gap = 0;
-        const std::size_t gap_offset = 3;
-        const std::size_t normal_offset = gap_offset + cstrides[3];
         for (std::size_t i = 0; i < gdim; i++)
         {
           // For closest point projection the gap function is given by
           // (-n_y)* (Pi(x) - x), where n_y is the outward unit normal
           // in y = Pi(x)
-          n_surf(i) = -c[normal_offset + q * gdim + i];
-          n_dot += n_phys(i) * n_surf(i);
-          gap += c[gap_offset + q * gdim + i] * n_surf(i);
+          n_surf[i] = -c[offsets[4] + q * gdim + i];
+          n_dot += n_phys(i) * n_surf[i];
+          gap += c[offsets[3] + q * gdim + i] * n_surf[i];
         }
 
         // precompute tr(eps(phi_j e_l)), eps(phi^j e_l)n*n2
@@ -336,7 +372,7 @@ public:
               for (std::size_t s = 0; s < gdim; s++)
               {
                 epsn(j, l) += K(k, s) * dphi_f(k, q, j)
-                              * (n_phys(s) * n_surf(l) + n_phys(l) * n_surf(s));
+                              * (n_phys(s) * n_surf[l] + n_phys(l) * n_surf[s]);
               }
             }
           }
@@ -345,23 +381,20 @@ public:
         double tr_u = 0;
         double epsn_u = 0;
         double jump_un = 0;
-        std::size_t offset_u = cstrides[0] + cstrides[1] + cstrides[2]
-                               + cstrides[3] + cstrides[4] + cstrides[5];
-
         for (std::size_t i = 0; i < ndofs_cell; i++)
         {
-          std::size_t block_index = offset_u + i * bs;
+          std::size_t block_index = offsets[6] + i * bs;
           for (std::size_t j = 0; j < bs; j++)
           {
             auto coeff = c[block_index + j];
             tr_u += coeff * tr(i, j);
             epsn_u += coeff * epsn(i, j);
-            jump_un += coeff * phi_f(q, i) * n_surf(j);
+            jump_un += coeff * phi_f(q, i) * n_surf[j];
           }
         }
-        std::size_t offset_u_opp = offset_u + cstrides[6] + q * bs;
+        std::size_t offset_u_opp = offsets[7] + q * bs;
         for (std::size_t j = 0; j < bs; ++j)
-          jump_un += -c[offset_u_opp + j] * n_surf(j);
+          jump_un += -c[offset_u_opp + j] * n_surf[j];
         double sign_u = lmbda * tr_u * n_dot + mu * epsn_u;
         const double w0 = weights[q] * detJ;
         double Pn_u
@@ -373,7 +406,7 @@ public:
         {
           for (std::size_t n = 0; n < bs; n++)
           {
-            double v_dot_nsurf = n_surf(n) * phi_f(q, i);
+            double v_dot_nsurf = n_surf[n] * phi_f(q, i);
             double sign_v = (lmbda * tr(i, n) * n_dot + mu * epsn(i, n));
             // This is (1./gamma)*Pn_v to avoid the product gamma*(1./gamma)
             double Pn_v = gamma_inv * v_dot_nsurf - theta * sign_v;
@@ -383,10 +416,9 @@ public:
             // entries corresponding to v on the other surface
             for (std::size_t k = 0; k < num_links; k++)
             {
-              int index = 3 + cstrides[3] + cstrides[4]
-                          + k * num_q_points * ndofs_cell * bs
+              int index = offsets[5] + k * num_q_points * ndofs_cell * bs
                           + i * num_q_points * bs + q * bs + n;
-              double v_n_opp = c[index] * n_surf(n);
+              double v_n_opp = c[index] * n_surf[n];
 
               b[k + 1][n + i * bs] -= 0.5 * gamma_inv * v_n_opp * Pn_u;
             }
@@ -395,24 +427,31 @@ public:
       }
     };
 
-    // jacobian kernel
+    /// @brief Assemble kernel for Jacobian (LHS) of unbiased contact
+    /// problem
+    ///
+    /// Assemble of the residual of the unbiased contact problem into matrix
+    /// `A`.
+    /// @param[in,out] A The matrix to assemble the Jacobian into
+    /// @param[in] c The coefficients used in kernel. Assumed to be
+    /// ordered as mu, lmbda, h, gap, normals, test_fn, u, u_opposite.
+    /// @param[in] w The constants used in kernel. Assumed to be ordered as
+    /// `gamma`, `theta`.
+    /// @param[in] coordinate_dofs The physical coordinates of cell. Assumed
+    /// to be padded to 3D, (shape (num_nodes, 3)).
     contact_kernel_fn unbiased_jac
         = [=](std::vector<std::vector<PetscScalar>>& A, const double* c,
               const double* w, const double* coordinate_dofs,
-              const int* entity_local_index,
-              [[maybe_unused]] const std::uint8_t* quadrature_permutation,
-              const std::size_t num_links)
+              const int* entity_local_index, const std::size_t num_links)
     {
-      // assumption that the vector function space has block size tdim
-      assert(bs == gdim);
       const auto facet_index = std::size_t(*entity_local_index);
 
       // Reshape coordinate dofs to two dimensional array
       // NOTE: DOLFINx has 3D input coordinate dofs
       std::array<std::size_t, 2> shape = {(std::size_t)num_coordinate_dofs, 3};
 
-      // FIXME: These array should be views (when compute_jacobian doesn't use
-      // xtensor)
+      // FIXME: These array should be views (when compute_jacobian doesn't
+      // use xtensor)
       xt::xtensor<double, 2> coord = xt::adapt(
           coordinate_dofs, num_coordinate_dofs * 3, xt::no_ownership(), shape);
 
@@ -465,16 +504,14 @@ public:
 
         double n_dot = 0;
         double gap = 0;
-        const std::size_t gap_offset = 3;
-        const std::size_t normal_offset = gap_offset + cstrides[3];
         for (std::size_t i = 0; i < gdim; i++)
         {
           // For closest point projection the gap function is given by
           // (-n_y)* (Pi(x) - x), where n_y is the outward unit normal
           // in y = Pi(x)
-          n_surf(i) = -c[normal_offset + q * gdim + i];
+          n_surf(i) = -c[offsets[4] + q * gdim + i];
           n_dot += n_phys(i) * n_surf(i);
-          gap += c[gap_offset + q * gdim + i] * n_surf(i);
+          gap += c[offsets[3] + q * gdim + i] * n_surf(i);
         }
 
         // precompute tr(eps(phi_j e_l)), eps(phi^j e_l)n*n2
@@ -500,11 +537,10 @@ public:
         double tr_u = 0;
         double epsn_u = 0;
         double jump_un = 0;
-        std::size_t offset_u = cstrides[0] + cstrides[1] + cstrides[2]
-                               + cstrides[3] + cstrides[4] + cstrides[5];
+
         for (std::size_t i = 0; i < ndofs_cell; i++)
         {
-          std::size_t block_index = offset_u + i * bs;
+          std::size_t block_index = offsets[6] + i * bs;
           for (std::size_t j = 0; j < bs; j++)
           {
             tr_u += c[block_index + j] * tr(i, j);
@@ -512,7 +548,7 @@ public:
             jump_un += c[block_index + j] * phi_f(q, i) * n_surf(j);
           }
         }
-        std::size_t offset_u_opp = offset_u + cstrides[6] + q * bs;
+        std::size_t offset_u_opp = offsets[7] + q * bs;
         for (std::size_t j = 0; j < bs; ++j)
           jump_un += -c[offset_u_opp + j] * n_surf(j);
         double sign_u = lmbda * tr_u * n_dot + mu * epsn_u;
@@ -543,14 +579,13 @@ public:
                 // entries corresponding to u and v on the other surface
                 for (std::size_t k = 0; k < num_links; k++)
                 {
-                  std::size_t index = 3 + cstrides[3] + cstrides[4]
+                  std::size_t index = offsets[5]
                                       + k * num_q_points * ndofs_cell * bs
                                       + j * num_q_points * bs + q * bs + l;
                   double du_n_opp = c[index] * n_surf(l);
 
                   du_n_opp *= w0 * Pn_u;
-                  index = 3 + cstrides[3] + cstrides[4]
-                          + k * num_q_points * ndofs_cell * bs
+                  index = offsets[5] + k * num_q_points * ndofs_cell * bs
                           + i * num_q_points * bs + q * bs + b;
                   double v_n_opp = c[index] * n_surf(b);
                   A[3 * k + 1][(b + i * bs) * ndofs_cell * bs + l + j * bs]
@@ -599,9 +634,9 @@ public:
     return phi;
   }
 
-  /// Compute push forward of quadrature points _qp_ref_facet to the physical
-  /// facet for each facet in _facet_"origin_meshtag" Creates and fills
-  /// _qp_phys_"origin_meshtag"
+  /// Compute push forward of quadrature points _qp_ref_facet to the
+  /// physical facet for each facet in _facet_"origin_meshtag" Creates and
+  /// fills _qp_phys_"origin_meshtag"
   /// @param[in] origin_meshtag flag to choose the surface
   void create_q_phys(int origin_meshtag)
   {
@@ -677,7 +712,8 @@ public:
   /// Compute closest candidate_facet for each quadrature point in
   /// _qp_phys[origin_meshtag]
   /// This is saved as an adjacency list in _facet_maps[origin_meshtag]
-  /// and an xtensor containing cell_facet_pairs in  _cell_maps[origin_mesthtag]
+  /// and an xtensor containing cell_facet_pairs in
+  /// _cell_maps[origin_mesthtag]
   void create_distance_map(int puppet_mt, int candidate_mt)
   {
     // save opposite surface
@@ -768,8 +804,8 @@ public:
   /// distance vector
   /// @param[in] orgin_meshtag - surface on which to integrate
   /// @param[out] c - gap packed on facets. c[i*cstride +  gdim * k+ j]
-  /// contains the jth component of the Gap on the ith facet at kth quadrature
-  /// point
+  /// contains the jth component of the Gap on the ith facet at kth
+  /// quadrature point
   std::pair<std::vector<PetscScalar>, int> pack_gap(int origin_meshtag)
   {
     // Mesh info
@@ -911,7 +947,8 @@ public:
       {
 
         std::int32_t linked_cell = unique_cells[j];
-        // Extract indices of all occurances of cell in the unsorted cell array
+        // Extract indices of all occurances of cell in the unsorted cell
+        // array
         auto indices
             = xtl::span(perm.data() + offsets[j], offsets[j + 1] - offsets[j]);
         // Extract local dofs
