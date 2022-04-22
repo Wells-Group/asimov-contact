@@ -11,8 +11,9 @@ import numpy
 import ufl
 from petsc4py import PETSc
 
-__all__ = ["lame_parameters", "epsilon", "sigma_func", "R_minus", "ball_projection",
-           "tangential_proj", "NonlinearPDE_SNESProblem", "rigid_motions_nullspace"]
+__all__ = ["lame_parameters", "epsilon", "sigma_func", "R_minus", "dR_minus", "R_plus",
+           "dR_plus", "ball_projection", "tangential_proj", "NonlinearPDE_SNESProblem",
+           "rigid_motions_nullspace"]
 
 
 def lame_parameters(plane_strain: bool = False):
@@ -46,6 +47,27 @@ def R_minus(x):
     Negative restriction of variable (x if x<0 else 0)
     """
     return 0.5 * (x - abs(x))
+
+
+def dR_minus(x):
+    """
+    Derivative of the negative restriction of variable (-1 if x<0 else 0)
+    """
+    return 0.5 * (1.0 - ufl.sign(x))
+
+
+def R_plus(x):
+    """
+    Positive restriction of variable (x if x>0 else 0)
+    """
+    return 0.5 * (x + numpy.abs(x))
+
+
+def dR_plus(x):
+    """
+    Derivative of positive restriction of variable (1 if x>0 else 0)
+    """
+    return 0.5 * (1 + ufl.sign(x))
 
 
 def ball_projection(x, s):
