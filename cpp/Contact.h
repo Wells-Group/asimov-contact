@@ -23,6 +23,7 @@
 #include <dolfinx_cuas/utils.hpp>
 #include <xtensor/xadapt.hpp>
 #include <xtensor/xindex_view.hpp>
+
 using contact_kernel_fn = std::function<void(
     std::vector<std::vector<PetscScalar>>&, const double*, const double*,
     const double*, const int*, const std::size_t)>;
@@ -323,7 +324,7 @@ public:
       }
 
       // Extract constants used inside quadrature loop
-      double gamma = c[2] / w[0]; // h/gamma
+      double gamma = c[2] / w[0];     // h/gamma
       double gamma_inv = w[0] / c[2]; // gamma/h
       double theta = w[1];
       double mu = c[0];
@@ -347,14 +348,14 @@ public:
         // Update Jacobian and physical normal
         detJ = update_jacobian(q, detJ, J, K, J_tot, J_f, dphi_fc, coord);
         update_normal(n_phys, K, facet_normals, facet_index);
-
         double n_dot = 0;
         double gap = 0;
+        // For closest point projection the gap function is given by
+        // (-n_y)* (Pi(x) - x), where n_y is the outward unit normal
+        // in y = Pi(x)
         for (std::size_t i = 0; i < gdim; i++)
         {
-          // For closest point projection the gap function is given by
-          // (-n_y)* (Pi(x) - x), where n_y is the outward unit normal
-          // in y = Pi(x)
+
           n_surf[i] = -c[offsets[4] + q * gdim + i];
           n_dot += n_phys(i) * n_surf[i];
           gap += c[offsets[3] + q * gdim + i] * n_surf[i];
@@ -401,6 +402,7 @@ public:
         double Pn_u
             = dolfinx_contact::R_plus((jump_un - gap) - gamma * sign_u) * w0;
         sign_u *= w0;
+
         // Fill contributions of facet with itself
 
         for (std::size_t i = 0; i < ndofs_cell; i++)
@@ -1118,17 +1120,17 @@ public:
     const std::size_t num_q_points = _qp_ref_facet[0].shape(0);
     std::vector<PetscScalar> c(num_facets * num_q_points * gdim, 0.0);
     const auto cstride = (int)num_q_points * gdim;
-    xt::xtensor<double, 2> point = xt::zeros<double>(
-        {std::size_t(1), std::size_t(gdim)}); // To store Pi(x)
-
     // Needed for pull_back in get_facet_normals
-    xt::xtensor<double, 3> J = xt::zeros<double>(
-        {std::size_t(num_q_points), std::size_t(gdim), std::size_t(tdim)});
-    xt::xtensor<double, 3> K = xt::zeros<double>(
-        {std::size_t(1), std::size_t(tdim), std::size_t(gdim)});
-    xt::xtensor<double, 1> detJ = xt::zeros<double>({std::size_t(1)});
-    xt::xtensor<std::int32_t, 1> facet_indices
-        = xt::zeros<std::int32_t>({std::size_t(1)});
+    xt::xtensor<double, 2> J
+        = xt::zeros<double>({std::size_t(gdim), std::size_t(tdim)});
+    xt::xtensor<double, 2> K
+        = xt::zeros<double>({std::size_t(tdim), std::size_t(gdim)});
+
+    const std::size_t num_dofs_g = cmap.dim();
+    xt::xtensor<double, 2> coordinate_dofs
+        = xt::zeros<double>({num_dofs_g, std::size_t(gdim)});
+    std::array<double, 3> normals = {0, 0, 0};
+    std::array<double, 3> point = {0, 0, 0}; // To store Pi(x)
 
     // Loop over quadrature points
     for (std::size_t i = 0; i < num_facets; i++)
@@ -1140,18 +1142,16 @@ public:
         // Extract linked cell and facet at quadrature point q
         auto linked_pair = facet_map->links(links[q]);
         std::int32_t linked_cell = linked_pair[0];
-        facet_indices(0) = linked_pair[1];
 
         // Compute Pi(x) from x, and gap = Pi(x) - x
         for (int k = 0; k < gdim; ++k)
-          point(0, k)
+          point[k]
               = qp_phys[i](q, k) + gap[i * gdim * num_q_points + q * gdim + k];
 
         // extract local dofs
         auto x_dofs = x_dofmap.links(linked_cell);
-        const std::size_t num_dofs_g = x_dofmap.num_links(linked_cell);
-        xt::xtensor<double, 2> coordinate_dofs
-            = xt::zeros<double>({num_dofs_g, std::size_t(gdim)});
+        assert(num_dofs_g == (std::size_t)x_dofmap.num_links(linked_cell));
+
         for (std::size_t j = 0; j < x_dofs.size(); ++j)
         {
           std::copy_n(std::next(mesh_geometry.begin(), 3 * x_dofs[j]), gdim,
@@ -1162,16 +1162,14 @@ public:
         // Note: in the affine case potential gains can be made
         //       if the cells are sorted like in pack_test_functions
         assert(linked_cell >= 0);
-        xt::xtensor<double, 2> normals
-            = dolfinx_contact::push_forward_facet_normal(
-                point, J, K, coordinate_dofs, facet_indices, cmap,
-                facet_normals);
+
+        normals = dolfinx_contact::push_forward_facet_normal(
+            J, K, point, coordinate_dofs, linked_pair[1], cmap, facet_normals);
 
         // Copy normal into c
+        const std::size_t c_offset = i * cstride + q * gdim;
         for (int l = 0; l < gdim; l++)
-        {
-          c[i * cstride + q * gdim + l] = normals(0, l);
-        }
+          c[c_offset + l] = normals[l];
       }
     }
 
