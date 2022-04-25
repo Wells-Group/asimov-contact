@@ -314,7 +314,7 @@ def nitsche_variable_gap(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTagsMetaCl
     # TODO: restore options after debugging
     # if newton_options.get("max_it") is not None:
     #     newton_solver.max_it = newton_options.get("max_it")
-    newton_solver.max_it = 50
+    newton_solver.max_it = 10
     # if newton_options.get("error_on_nonconvergence") is not None:
     #     newton_solver.error_on_nonconvergence = newton_options.get("error_on_nonconvergence")
     newton_solver.error_on_nonconvergence = False

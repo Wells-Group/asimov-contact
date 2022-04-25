@@ -478,7 +478,7 @@ dolfinx_cuas::kernel_fn<T> generate_contact_kernel(
         {
           double sign_du = (lmbda * tr(j, l) * n_dot + mu * epsn(j, l));
           double Pn_du
-              = (gamma_inv * sign_du - n_surf(l) * phi_f(q, j)) * -Pn_u * w0;
+              = (gamma_inv * sign_du - n_surf(l) * phi_f(q, j)) * Pn_u * w0;
           sign_du *= w0;
           for (int i = 0; i < ndofs_cell; i++)
           { // Insert over block size in matrix

@@ -336,6 +336,7 @@ contact_kernel_fn dolfinx_contact::generate_kernel(
         = xt::zeros<double>({J_link.shape(0), J_link.shape(1) - 1});
     xt::xarray<double> du_tan(bs);
     xt::xarray<double> du_tan_opp(bs);
+    xt::xarray<double> n_dot_grad(gdim);
     xt::xarray<double> grad_v(gdim);
     for (std::size_t q = 0; q < weights.size(); q++)
     {
@@ -394,24 +395,28 @@ contact_kernel_fn dolfinx_contact::generate_kernel(
 
       double sign_u = lmbda * tr_u * n_dot + mu * epsn_u;
       double dPn_u = dolfinx_contact::dR_minus(gap + gamma * sign_u);
-      // double Pn_u = dolfinx_contact::R_minus(gap + gamma * sign_u);
+      double Pn_u = dolfinx_contact::R_minus(gap + gamma * sign_u);
+      def_grad.fill(0);
       for (std::size_t j = 0; j < bs; ++j)
       {
-        def_grad.fill(0);
 
-        for (std::size_t f = 0; f < tdim; ++f)
+        def_grad(j, j) += 1;
+        for (std::size_t l = 0; l < gdim; ++l)
         {
-          for (std::size_t l = 0; l < gdim; ++l)
+
+          for (std::size_t f = 0; f < tdim; ++f)
           {
             std::size_t index_u_opp_grad
                 = offsets[7] + (f + 1) * num_q_points * bs + q * bs + j;
-            def_grad(l, l) += 1;
-            def_grad(j, l) -= K_link(l, f) * c[index_u_opp_grad];
+
+            def_grad(j, l) += K_link(f, l) * c[index_u_opp_grad];
           }
         }
       }
+
       dolfinx::fem::CoordinateElement::compute_jacobian_inverse(def_grad,
                                                                 def_grad_inv);
+
       // Fill contributions of facet with itself
       const double w0 = weights[q] * detJ;
 
@@ -473,29 +478,32 @@ contact_kernel_fn dolfinx_contact::generate_kernel(
                           + i * num_q_points * bs + q * bs + b;
                     grad_v(r) += K_link(s, r) * c[index_v_grad];
                   }
-                double n_dot_grad = 0;
-                for (std::size_t r = 0; r < gdim; ++r)
-                  n_dot_grad += n_surf(r) * grad_v(r);
+                n_dot_grad.fill(0.0);
+                for (std::size_t r = 0; r < bs; ++r)
+                  n_dot_grad(r) = n_surf(b) * grad_v(r);
                 du_n_opp *= w0 * dPn_u;
                 double grad_v_u_tan = 0;
                 double grad_v_u_tan_opp = 0;
                 for (std::size_t r = 0; r < gdim; ++r)
                 {
+                  for (std::size_t s = 0; s < gdim; ++s)
 
-                  grad_v_u_tan += n_dot_grad * def_grad_inv(b, r) * du_tan(r);
-                  grad_v_u_tan_opp
-                      += n_dot_grad * def_grad_inv(b, r) * du_tan_opp(r);
+                  {
+                    grad_v_u_tan
+                        += n_dot_grad(s) * def_grad_inv(s, r) * du_tan(r);
+                    grad_v_u_tan_opp
+                        += n_dot_grad(s) * def_grad_inv(s, r) * du_tan_opp(r);
+                  }
                 }
 
                 A[3 * k + 1][(b + i * bs) * ndofs_cell * bs + l + j * bs]
                     += 0.5 * du_n_opp * Pn_v;
                 A[3 * k + 2][(b + i * bs) * ndofs_cell * bs + l + j * bs]
                     += 0.5 * gamma_inv
-                       * (Pn_du * v_n_opp); // + w0 * Pn_u * grad_v_u_tan);
+                       * (Pn_du * v_n_opp - w0 * Pn_u * grad_v_u_tan);
                 A[3 * k + 3][(b + i * bs) * ndofs_cell * bs + l + j * bs]
                     += 0.5 * gamma_inv
-                       * (du_n_opp
-                          * v_n_opp); // - w0 * Pn_u * grad_v_u_tan_opp);
+                       * (du_n_opp * v_n_opp + w0 * Pn_u * grad_v_u_tan_opp);
               }
             }
           }

@@ -274,13 +274,13 @@ if __name__ == "__main__":
     # Solver options
     ksp_tol = 1e-10
     newton_tol = 1e-6
-    newton_options = {"relaxation_parameter": 0.3,
+    newton_options = {"relaxation_parameter": 1.0,
                       "atol": newton_tol,
                       "rtol": newton_tol,
                       "convergence_criterion": "residual",
                       "max_it": 50,
                       "error_on_nonconvergence": True}
-    # petsc_options = {"ksp_type": "preonly", "pc_type": "lu"}
+    petsc_options = {"ksp_type": "preonly", "pc_type": "lu"}
     petsc_options = {
         "matptap_via": "scalable",
         "ksp_type": "cg",
