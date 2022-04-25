@@ -112,9 +112,8 @@ contact_kernel_fn dolfinx_contact::generate_kernel(
   contact_kernel_fn unbiased_rhs
       = [=](std::vector<std::vector<PetscScalar>>& b, const double* c,
             const double* w, const double* coordinate_dofs,
-            const int* entity_local_index,
-            [[maybe_unused]] const std::uint8_t* quadrature_permutation,
-            const std::size_t num_links, const std::int32_t* facet_indices)
+            const int* entity_local_index, const std::size_t num_links,
+            const std::int32_t* facet_indices)
   {
     // assumption that the vector function space has block size tdim
     assert(bs == gdim);
@@ -258,9 +257,8 @@ contact_kernel_fn dolfinx_contact::generate_kernel(
   contact_kernel_fn unbiased_jac
       = [=](std::vector<std::vector<PetscScalar>>& A, const double* c,
             const double* w, const double* coordinate_dofs,
-            const int* entity_local_index,
-            [[maybe_unused]] const std::uint8_t* quadrature_permutation,
-            const std::size_t num_links, const std::int32_t* facet_indices)
+            const int* entity_local_index, const std::size_t num_links,
+            const std::int32_t* facet_indices)
   {
     // assumption that the vector function space has block size tdim
     assert(bs == gdim);

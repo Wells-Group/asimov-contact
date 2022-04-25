@@ -572,7 +572,7 @@ double dolfinx_contact::compute_facet_jacobians(
 }
 //-------------------------------------------------------------------------------------
 std::function<double(
-    std::size_t, double&, xt::xtensor<double, 2>&, xt::xtensor<double, 2>&,
+    std::size_t, double, xt::xtensor<double, 2>&, xt::xtensor<double, 2>&,
     xt::xtensor<double, 2>&, const xt::xtensor<double, 2>&,
     const xt::xtensor<double, 3>&, const xt::xtensor<double, 2>&)>
 dolfinx_contact::get_update_jacobian_dependencies(
