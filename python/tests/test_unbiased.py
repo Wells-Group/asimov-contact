@@ -310,7 +310,6 @@ def create_contact_data(V, u, quadrature_degree, lmbda, mu, facets_cg):
     gap_1 = contact.pack_gap(1)
     n_1 = contact.pack_ny(1, gap_1)
     test_fn_1 = contact.pack_test_functions(1, gap_1)
-
     # Concatenate all coeffs
     coeff_0 = np.hstack([material_0, h_0, gap_0, n_0, test_fn_0])
     coeff_1 = np.hstack([material_1, h_1, gap_1, n_1, test_fn_1])

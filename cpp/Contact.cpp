@@ -144,6 +144,101 @@ Mat dolfinx_contact::Contact::create_petsc_matrix(
   return dolfinx::la::petsc::create_matrix(a.mesh()->comm(), pattern, type);
 }
 //------------------------------------------------------------------------------------------------
+std::pair<std::vector<PetscScalar>, int>
+dolfinx_contact::Contact::pack_ny(int origin_meshtag,
+                                  const xtl::span<const PetscScalar> gap)
+{
+
+  // Get information from candidate mesh
+
+  // Get mesh and submesh
+  const dolfinx_contact::SubMesh& submesh
+      = _submeshes[_opposites[origin_meshtag]];
+  auto candidate_mesh = submesh.mesh(); // mesh
+
+  // Geometrical info
+  const dolfinx::mesh::Geometry& geometry = candidate_mesh->geometry();
+  const int gdim = geometry.dim(); // geometrical dimension
+  auto cmap = geometry.cmap();
+  auto x_dofmap = geometry.dofmap();
+  xtl::span<const double> mesh_geometry = geometry.x();
+
+  // Topological info
+  const int tdim = candidate_mesh->topology().dim();
+  auto cell_type = dolfinx::mesh::cell_type_to_basix_type(
+      candidate_mesh->topology().cell_type());
+
+  // Get facet normals on reference cell
+  const xt::xtensor<double, 2> reference_normals
+      = basix::cell::facet_outward_normals(cell_type);
+
+  // Select which side of the contact interface to loop from and get the
+  // correct map
+  auto facet_map = submesh.facet_map();
+  auto map = _facet_maps[origin_meshtag];
+  auto qp_phys = _qp_phys[origin_meshtag];
+
+  const std::size_t num_facets = _cell_facet_pairs[origin_meshtag].size();
+  const std::size_t num_q_points = _qp_ref_facet[0].shape(0);
+
+  // Needed for pull_back in get_facet_normals
+  xt::xtensor<double, 2> J
+      = xt::zeros<double>({std::size_t(gdim), std::size_t(tdim)});
+  xt::xtensor<double, 2> K
+      = xt::zeros<double>({std::size_t(tdim), std::size_t(gdim)});
+
+  const std::size_t num_dofs_g = cmap.dim();
+  xt::xtensor<double, 2> coordinate_dofs
+      = xt::zeros<double>({num_dofs_g, std::size_t(gdim)});
+  std::array<double, 3> normal = {0, 0, 0};
+  std::array<double, 3> point = {0, 0, 0}; // To store Pi(x)
+
+  // Loop over quadrature points
+  const auto cstride = (int)num_q_points * gdim;
+  std::vector<PetscScalar> normals(num_facets * num_q_points * gdim, 0.0);
+
+  for (std::size_t i = 0; i < num_facets; ++i)
+  {
+    const xt::xtensor<double, 2>& qp_i = qp_phys[i];
+    auto links = map->links((int)i);
+    assert(links.size() == num_q_points);
+    for (std::size_t q = 0; q < num_q_points; ++q)
+    {
+
+      // Extract linked cell and facet at quadrature point q
+      auto linked_pair = facet_map->links(links[q]);
+      std::int32_t linked_cell = linked_pair[0];
+      // Compute Pi(x) from x, and gap = Pi(x) - x
+      auto qp_iq = xt::row(qp_i, q);
+      for (int k = 0; k < gdim; ++k)
+        point[k] = qp_iq[k] + gap[i * gdim * num_q_points + q * gdim + k];
+
+      // Extract local dofs
+      auto x_dofs = x_dofmap.links(linked_cell);
+      assert(num_dofs_g == (std::size_t)x_dofmap.num_links(linked_cell));
+
+      for (std::size_t j = 0; j < x_dofs.size(); ++j)
+      {
+        std::copy_n(std::next(mesh_geometry.begin(), 3 * x_dofs[j]), gdim,
+                    std::next(coordinate_dofs.begin(), j * gdim));
+      }
+
+      // Compute outward unit normal in point = Pi(x)
+      // Note: in the affine case potential gains can be made
+      //       if the cells are sorted like in pack_test_functions
+      assert(linked_cell >= 0);
+      normal = dolfinx_contact::push_forward_facet_normal(
+          J, K, point, coordinate_dofs, linked_pair[1], cmap,
+          reference_normals);
+      // Copy normal into c
+      const std::size_t offset = i * cstride + q * gdim;
+      for (int l = 0; l < gdim; ++l)
+        normals[offset + l] = normal[l];
+    }
+  }
+  return {std::move(normals), cstride};
+}
+//------------------------------------------------------------------------------------------------
 void dolfinx_contact::Contact::assemble_matrix(
     mat_set_fn& mat_set,
     [[maybe_unused]] const std::vector<
@@ -164,13 +259,20 @@ void dolfinx_contact::Contact::assemble_matrix(
   const dolfinx::fem::CoordinateElement& cmap = geometry.cmap();
   const std::size_t num_dofs_g = cmap.dim();
 
+  std::shared_ptr<const dolfinx::fem::FiniteElement> element = _V->element();
+  if (const bool needs_dof_transformations
+      = element->needs_dof_transformations();
+      needs_dof_transformations)
+  {
+    throw std::invalid_argument(
+        "Function-space requiring dof-transformations is not supported.");
+  }
+
   // Extract function space data (assuming same test and trial space)
   std::shared_ptr<const dolfinx::fem::DofMap> dofmap = _V->dofmap();
   const std::size_t ndofs_cell = dofmap->cell_dofs(0).size();
   const int bs = dofmap->bs();
 
-  // FIXME: Need to reconsider facet permutations for jump integrals
-  std::uint8_t perm = 0;
   std::size_t max_links = std::max(_max_links[0], _max_links[1]);
   auto active_facets = _cell_facet_pairs[origin_meshtag];
   auto map = _facet_maps[origin_meshtag];
@@ -207,14 +309,10 @@ void dolfinx_contact::Contact::assemble_matrix(
     }
 
     kernel(Aes, coeffs.data() + i * cstride, constants.data(),
-           coordinate_dofs.data(), &local_index, &perm, num_linked_cells);
+           coordinate_dofs.data(), &local_index, num_linked_cells);
 
     // FIXME: We would have to handle possible Dirichlet conditions here, if we
     // think that we can have a case with contact and Dirichlet
-
-    // NOTE  Normally
-    // dof transform needs to be applied to the elements in Aes at this
-    // stage This is not need for the function spaces we currently consider
     auto dmap_cell = dofmap->cell_dofs(cell);
     mat_set(dmap_cell, dmap_cell, Aes[0]);
 
@@ -234,6 +332,16 @@ void dolfinx_contact::Contact::assemble_vector(
     const contact_kernel_fn& kernel, const xtl::span<const PetscScalar>& coeffs,
     int cstride, const xtl::span<const PetscScalar>& constants)
 {
+  /// Check that we support the function space
+  std::shared_ptr<const dolfinx::fem::FiniteElement> element = _V->element();
+  if (const bool needs_dof_transformations
+      = element->needs_dof_transformations();
+      needs_dof_transformations)
+  {
+    throw std::invalid_argument(
+        "Function-space requiring dof-transformations is not supported.");
+  }
+
   // Extract mesh
   auto mesh = _marker->mesh();
   assert(mesh);
@@ -253,8 +361,6 @@ void dolfinx_contact::Contact::assemble_vector(
   const std::size_t ndofs_cell = dofmap->cell_dofs(0).size();
   const int bs = dofmap->bs();
 
-  // FIXME: Need to reconsider facet permutations for jump integrals
-  std::uint8_t perm = 0;
   // Select which side of the contact interface to loop from and get the
   // correct map
   auto active_facets = _cell_facet_pairs[origin_meshtag];
@@ -291,10 +397,7 @@ void dolfinx_contact::Contact::assemble_vector(
     for (std::size_t j = 0; j < num_linked_cells; j++)
       std::fill(bes[j + 1].begin(), bes[j + 1].end(), 0);
     kernel(bes, coeffs.data() + i * cstride, constants.data(),
-           coordinate_dofs.data(), &local_index, &perm, num_linked_cells);
-    // NOTE: Normally dof transform needs to be applied to the elements in
-    // bes at this stage This is not need for the function spaces
-    // we currently consider
+           coordinate_dofs.data(), &local_index, num_linked_cells);
 
     // Add element vector to global vector
     auto dofs_cell = dofmap->cell_dofs(cell);

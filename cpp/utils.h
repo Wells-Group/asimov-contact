@@ -157,7 +157,7 @@ double compute_facet_jacobians(std::size_t q, xt::xtensor<double, 2>& J,
 /// (J*J_f) is computed.
 /// @param[in] cmap The coordinate element
 std::function<double(
-    std::size_t, double&, xt::xtensor<double, 2>&, xt::xtensor<double, 2>&,
+    std::size_t, double, xt::xtensor<double, 2>&, xt::xtensor<double, 2>&,
     xt::xtensor<double, 2>&, const xt::xtensor<double, 2>&,
     const xt::xtensor<double, 3>&, const xt::xtensor<double, 2>&)>
 get_update_jacobian_dependencies(const dolfinx::fem::CoordinateElement& cmap);
