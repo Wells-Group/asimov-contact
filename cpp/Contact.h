@@ -620,9 +620,8 @@ public:
           = dolfinx_cuas::mesh_to_basix_element(_marker->mesh(), tdim);
       const std::size_t max_links
           = *std::max_element(_max_links.begin(), _max_links.end());
-      return dolfinx_contact::generate_kernel(type, _marker->mesh(), _V,
-                                              _qp_ref_facet, _qw_ref_facet,
-                                              max_links, basix_element);
+      return dolfinx_contact::generate_kernel(
+          type, _marker->mesh(), _V, _qp_ref_facet, _qw_ref_facet, max_links);
     }
     case dolfinx_contact::Kernel::Jac_variable_gap:
     {
@@ -630,9 +629,8 @@ public:
           = dolfinx_cuas::mesh_to_basix_element(_marker->mesh(), tdim);
       const std::size_t max_links
           = *std::max_element(_max_links.begin(), _max_links.end());
-      return dolfinx_contact::generate_kernel(type, _marker->mesh(), _V,
-                                              _qp_ref_facet, _qw_ref_facet,
-                                              max_links, basix_element);
+      return dolfinx_contact::generate_kernel(
+          type, _marker->mesh(), _V, _qp_ref_facet, _qw_ref_facet, max_links);
     }
     default:
       throw std::invalid_argument("Unrecognized kernel");
