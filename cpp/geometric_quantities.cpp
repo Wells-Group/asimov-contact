@@ -16,7 +16,7 @@ void dolfinx_contact::pull_back_nonaffine(
     const std::array<double, 3>& x, const dolfinx::fem::CoordinateElement& cmap,
     const xt::xtensor<double, 2>& cell_geometry, double tol, int max_it)
 {
-  assert(cmap.dim() == cell_geometry.shape(0));
+  assert((std::size_t)cmap.dim() == cell_geometry.shape(0));
   assert(X.shape(0) == 1);
   assert(X.shape(1) == J.shape(1));
   // Temporary data structures for Newton iteration
