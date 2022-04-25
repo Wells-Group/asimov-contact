@@ -37,8 +37,33 @@ push_forward_facet_normal(xt::xtensor<double, 2>& J, xt::xtensor<double, 2>& K,
                           const dolfinx::fem::CoordinateElement& cmap,
                           const xt::xtensor<double, 2>& reference_normals);
 
-/// Compute circumradius for a cell with given coordinates and determinant of
-/// Jacobian
+/// @brief Pull back a single point of a non-affine cell to the reference cell.
+///
+/// Given a single cell and a point in the fell, pull it back to the reference
+/// element. To compute this pull back Newton's method is employed.
+/// @note The data structures `J`, `K` and `basis_values` does not correspond to
+/// the Jacobian, its inverse and phi(X). They are sent in to avoid dynamic
+/// memory allocation.
+/// @param[in, out] X The point on the reference cell
+/// @param[in, out] J The Jacobian
+/// @param[in, out] K The inverse of the Jacobian
+/// @param[in,out] basis Tabulated basis functions (and first order derivatives)
+/// at a single point
+/// @param[in] x The physical point
+/// @param[in] cmap The coordinate element
+/// @param[in] cell_geometry The cell geometry
+/// @param[in] tol The tolerance for the Newton solver
+/// @param[in] max_it The maximum number of Newton iterations
+void pull_back_nonaffine(xt::xtensor<double, 2>& X, xt::xtensor<double, 2>& J,
+                         xt::xtensor<double, 2>& K,
+                         xt::xtensor<double, 4>& basis,
+                         const std::array<double, 3>& x,
+                         const dolfinx::fem::CoordinateElement& cmap,
+                         const xt::xtensor<double, 2>& cell_geometry,
+                         double tol = 1e-8, const int max_it = 10);
+
+/// Compute circumradius for a cell with given coordinates and determinant
+/// of Jacobian
 /// @param[in] mesh The mesh
 /// @param[in] detJ The determinant of the Jacobian of the mapping to the
 /// reference cell
