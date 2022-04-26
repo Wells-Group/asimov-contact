@@ -6,7 +6,6 @@
 
 #pragma once
 
-#include "SubMesh.h"
 #include "geometric_quantities.h"
 #include "utils.h"
 #include <basix/cell.h>
@@ -19,8 +18,8 @@
 #include <dolfinx/mesh/Mesh.h>
 #include <dolfinx/mesh/MeshTags.h>
 #include <dolfinx/mesh/cell_types.h>
+#include <dolfinx_contact/SubMesh.h>
 #include <dolfinx_cuas/QuadratureRule.hpp>
-#include <dolfinx_cuas/utils.hpp>
 #include <xtensor/xadapt.hpp>
 #include <xtensor/xbuilder.hpp>
 #include <xtensor/xindex_view.hpp>

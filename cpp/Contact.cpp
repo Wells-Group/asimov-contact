@@ -5,6 +5,7 @@
 // SPDX-License-Identifier:    MIT
 
 #include "Contact.h"
+#include <dolfinx_cuas/utils.hpp>
 using namespace dolfinx_contact;
 
 namespace
