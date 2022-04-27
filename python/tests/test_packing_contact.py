@@ -179,7 +179,8 @@ def test_pack_test_fn(ct, gap, q_deg, delta, surface):
                         for n in range(tdim):
                             # retrieve values from packed derivativs
                             dv_ref[n] = test_fn[f][offset + n
-                                                   * len(dofs) * num_q_points * bs * num_q_points + i * num_q_points * bs + q * bs + k]
+                                                   * len(dofs) * num_q_points * bs * num_q_points
+                                                   + i * num_q_points * bs + q * bs + k]
                             for m in range(gdim):
                                 # retrieve entries of jacobian
                                 J[m, n] = surf_der[f][q * tdim * gdim + m * tdim + n]
@@ -203,7 +204,8 @@ def test_pack_test_fn(ct, gap, q_deg, delta, surface):
                         for n in range(tdim):
                             # retrieve values from packed derivativs
                             dv_ref[n] = test_fn[f][offset + n
-                                                   * len(dofs) * num_q_points * bs * num_q_points + i * num_q_points * bs + q * bs + k]
+                                                   * len(dofs) * num_q_points * bs * num_q_points
+                                                   + i * num_q_points * bs + q * bs + k]
                             assert(np.isclose(0, dv_ref[n]))
 
 
@@ -287,11 +289,10 @@ def test_pack_u(ct, gap, q_deg, delta, surface):
         unique_facets = np.unique(np.sort(connected_facets))
 
         # loop over unique connected facets
-        for link, facet_o in enumerate(unique_facets):
+        for facet_o in enumerate(unique_facets):
 
             # retrieve cell index and cell dofs for facet_o
             cell = f_to_c.links(facet_o)
-            dofs = V.dofmap.cell_dofs(cell)
 
             # find quadrature points linked to facet_o
             q_indices = np.argwhere(connected_facets == facet_o).reshape(-1)
@@ -335,8 +336,8 @@ def test_pack_u(ct, gap, q_deg, delta, surface):
                         index = (j + 1) * num_q_points * bs + q * bs + k
                         vals2[j] = u_opposite[f][index]
                         # retrieve jacobian
-                        for l in range(gdim):
-                            J[l, j] = surf_der[f][q * tdim * gdim + l * tdim + j]
+                        for n in range(gdim):
+                            J[n, j] = surf_der[f][q * tdim * gdim + n * tdim + j]
 
                 # compare gradient from expression and u_opposite
                 assert(np.allclose(np.dot(np.transpose(J), vals1), vals2))
