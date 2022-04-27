@@ -11,6 +11,8 @@ on:
   #     - main
 jobs:
   build:
+    if: ${{ github.repository != 'Wells-Group/asimov-custom-assemblers' }}
+
     name: Sonarcloud analysis
     runs-on: ubuntu-latest
     container: dolfinx/dev-env
