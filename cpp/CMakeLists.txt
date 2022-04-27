@@ -2,7 +2,7 @@
 cmake_minimum_required(VERSION 3.10)
 
 # Set project name and version number
-project(DOLFINX_CONTACT VERSION 0.4.1.0)
+project(DOLFINX_CONTACT VERSION 0.4.0.0)
 
 #------------------------------------------------------------------------------
 # Set CMake options, see `cmake --help-policy CMP00xx`
@@ -38,8 +38,8 @@ add_feature_info(CMAKE_INSTALL_RPATH_USE_LINK_PATH CMAKE_INSTALL_RPATH_USE_LINK_
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_CURRENT_SOURCE_DIR})
 
 # Find packages
-find_package(DOLFINX 0.3.1...0.4.1 REQUIRED)
-find_package(Basix 0.3.1...0.4.1 REQUIRED)
+find_package(DOLFINX 0.4.1.0 REQUIRED)
+find_package(Basix 0.4.1.0 REQUIRED)
 find_package(xtensor REQUIRED)
 find_package(DOLFINX_CUAS 0.3.1.0 REQUIRED)
 
