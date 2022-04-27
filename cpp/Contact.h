@@ -923,9 +923,10 @@ public:
   {
     // Mesh info
     auto mesh = _submeshes[_opposites[origin_meshtag]].mesh(); // mesh
+    assert(mesh);
     const int gdim = mesh->geometry().dim(); // geometrical dimension
     const int tdim = mesh->topology().dim();
-    auto cmap = mesh->geometry().cmap();
+    const dolfinx::fem::CoordinateElement& cmap = mesh->geometry().cmap();
     auto x_dofmap = mesh->geometry().dofmap();
     xtl::span<const double> mesh_geometry = mesh->geometry().x();
     auto element = _V->element();
