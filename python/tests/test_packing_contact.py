@@ -289,10 +289,10 @@ def test_pack_u(ct, gap, q_deg, delta, surface):
         unique_facets = np.unique(np.sort(connected_facets))
 
         # loop over unique connected facets
-        for facet_o in enumerate(unique_facets):
+        for facet_o in unique_facets:
 
             # retrieve cell index and cell dofs for facet_o
-            cell = f_to_c.links(facet_o)
+            cell = f_to_c.links(facet_o)[0]
 
             # find quadrature points linked to facet_o
             q_indices = np.argwhere(connected_facets == facet_o).reshape(-1)
