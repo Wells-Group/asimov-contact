@@ -89,7 +89,7 @@ jobs:
         with:
           path: ./asimov-custom-assemblers
           repository: Wells-Group/asimov-custom-assemblers
-          ref: dokken/separate_functions
+          ref: main
 
       - name: Install custom assemblers
         run: |
