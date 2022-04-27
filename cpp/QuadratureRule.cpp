@@ -1,7 +1,7 @@
 
 // Copyright (C) 2021-2022 Jørgen S. Dokken
 //
-// This file is part of DOLFINx_CUAS
+// This file is part of DOLFINx_CONTACT
 //
 // SPDX-License-Identifier:    MIT
 
