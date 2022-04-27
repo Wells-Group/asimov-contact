@@ -452,7 +452,8 @@ contact_kernel_fn dolfinx_contact::generate_kernel(
       double sign_u = lmbda * tr_u * n_dot + mu * epsn_u;
       const double w0 = weights[q] * detJ;
       double dPn_u = dolfinx_contact::dR_minus(gap + gamma * sign_u);
-      double Pn_u = dolfinx_contact::R_minus(gap + gamma * sign_u) * w0;
+      double Pn_u
+          = gamma_inv * dolfinx_contact::R_minus(gap + gamma * sign_u) * w0;
 
       // extract deformation gradient
       def_grad.fill(0);
@@ -516,7 +517,7 @@ contact_kernel_fn dolfinx_contact::generate_kernel(
                 du_tan_opp.fill(0);
                 du_tan_opp(l) = c[index_u];
                 for (std::size_t f = 0; f < bs; ++f)
-                  du_tan(f) -= n_surf[f] * du_n_opp;
+                  du_tan_opp(f) -= n_surf[f] * du_n_opp;
 
                 double v_n_opp = c[index_v] * n_surf[b];
 
@@ -557,11 +558,12 @@ contact_kernel_fn dolfinx_contact::generate_kernel(
                 A[3 * k + 1][(b + i * bs) * ndofs_cell * bs + l + j * bs]
                     += 0.5 * du_n_opp * Pn_v;
                 A[3 * k + 2][(b + i * bs) * ndofs_cell * bs + l + j * bs]
-                    += 0.5 * gamma_inv
-                       * (Pn_du * v_n_opp - Pn_u * grad_v_u_tan);
+                    += 0.5
+                       * (gamma_inv * Pn_du * v_n_opp + Pn_u * grad_v_u_tan);
                 A[3 * k + 3][(b + i * bs) * ndofs_cell * bs + l + j * bs]
-                    += 0.5 * gamma_inv
-                       * (du_n_opp * v_n_opp + Pn_u * grad_v_u_tan_opp);
+                    += 0.5
+                       * (gamma_inv * du_n_opp * v_n_opp
+                          - Pn_u * grad_v_u_tan_opp);
               }
             }
           }

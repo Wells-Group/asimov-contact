@@ -311,10 +311,8 @@ def nitsche_variable_gap(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTagsMetaCl
         else:
             raise RuntimeError(f"Unknown convergence criterion '{conv_crit}'")
         newton_solver.convergence_criterion = crit
-    # TODO: restore options after debugging
-    # if newton_options.get("max_it") is not None:
-    #     newton_solver.max_it = newton_options.get("max_it")
-    newton_solver.max_it = 10
+    if newton_options.get("max_it") is not None:
+        newton_solver.max_it = newton_options.get("max_it")
     # if newton_options.get("error_on_nonconvergence") is not None:
     #     newton_solver.error_on_nonconvergence = newton_options.get("error_on_nonconvergence")
     newton_solver.error_on_nonconvergence = False
