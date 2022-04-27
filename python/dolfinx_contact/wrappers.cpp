@@ -257,11 +257,10 @@ PYBIND11_MODULE(cpp, m)
             facets.emplace_back(ents(i, 0), ents(i, 1));
           auto facet_span = xtl::span<const std::pair<std::int32_t, int>>(
               facets.data(), facets.size());
-          auto [coeffs, cstride]
+          std::vector<double> coeffs
               = dolfinx_contact::pack_circumradius(mesh, facet_span);
-          int shape0 = cstride == 0 ? 0 : coeffs.size() / cstride;
-          return dolfinx_wrappers::as_pyarray(std::move(coeffs),
-                                              std::array{shape0, cstride});
+          return dolfinx_wrappers::as_pyarray(
+              std::move(coeffs), std::array{shape_0, (std::size_t)1});
         });
   m.def("update_geometry", [](const dolfinx::fem::Function<PetscScalar>& u,
                               std::shared_ptr<dolfinx::mesh::Mesh> mesh)
