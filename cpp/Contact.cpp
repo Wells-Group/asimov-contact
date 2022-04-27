@@ -62,6 +62,9 @@ dolfinx_contact::Contact::Contact(
   for (std::size_t s = 0; s < _surfaces.size(); ++s)
   {
     auto facets = _marker->find(_surfaces[s]);
+    if (facets.size() < 1)
+      throw std::runtime_error("Surface contains no facets.");
+
     std::variant<std::vector<std::int32_t>,
                  std::vector<std::pair<std::int32_t, int>>,
                  std::vector<std::tuple<std::int32_t, int, std::int32_t, int>>>
@@ -437,8 +440,8 @@ dolfinx_contact::Contact::pack_surface_derivatives(
 {
   // Mesh info
   auto mesh = _submeshes[_opposites[origin_meshtag]].mesh(); // mesh
-  const int gdim = mesh->geometry().dim(); // geometrical dimension
-  const int tdim = mesh->topology().dim();
+  const std::size_t gdim = mesh->geometry().dim(); // geometrical dimension
+  const std::size_t tdim = mesh->topology().dim();
   auto cmap = mesh->geometry().cmap();
   auto x_dofmap = mesh->geometry().dofmap();
   xtl::span<const double> mesh_geometry = mesh->geometry().x();
@@ -484,7 +487,7 @@ dolfinx_contact::Contact::pack_surface_derivatives(
     {
       auto linked_pair = facet_map->links(links[j]);
       linked_cells[j] = linked_pair[0];
-      for (int k = 0; k < gdim; k++)
+      for (std::size_t k = 0; k < gdim; k++)
         q_points(j, k)
             = qp_phys[i](j, k) + gap[i * gdim * num_q_points + j * gdim + k];
     }
@@ -520,14 +523,14 @@ dolfinx_contact::Contact::pack_surface_derivatives(
       // Extract all physical points Pi(x) on a facet of linked_cell
       auto qp = xt::view(q_points, xt::keep(indices), xt::all());
       // Compute hessian/jacobian for all  y = Pi(x) in qp
-      xt::xtensor<double, 2> qp_ref({qp.shape(0), qp.shape(1)});
+      xt::xtensor<double, 2> qp_ref({qp.shape(0), tdim});
       dolfinx_contact::pull_back_2(J, K, H, qp, qp_ref, coordinate_dofs, cmap);
 
       // Insert basis function values into c
-      for (std::int32_t k = 0; k < gdim; k++)
+      for (std::size_t k = 0; k < gdim; k++)
         for (std::size_t q = 0; q < qp.shape(0); ++q)
         {
-          for (std::int32_t l = 0; l < tdim; l++)
+          for (std::size_t l = 0; l < tdim; l++)
             c[i * cstride + indices[q] * tdim * gdim + k * tdim + l]
                 = J(q, k, l);
           int offset = gdim * num_q_points * tdim;

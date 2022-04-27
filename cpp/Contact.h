@@ -671,39 +671,39 @@ public:
     xtl::span<const double> mesh_geometry = mesh->geometry().x();
     auto cmap = mesh->geometry().cmap();
     auto x_dofmap = mesh->geometry().dofmap();
-    const int gdim = mesh->geometry().dim(); // geometrical dimensions
+    const std::size_t gdim = mesh->geometry().dim(); // geometrical dimensions
     auto puppet_facets = _cell_facet_pairs[origin_meshtag];
     _qp_phys[origin_meshtag].reserve(puppet_facets.size());
     _qp_phys[origin_meshtag].clear();
     // push forward of quadrature points _qp_ref_facet to physical facet for
     // each facet in _facet_"origin_meshtag"
-    std::for_each(
-        puppet_facets.cbegin(), puppet_facets.cend(),
-        [&](const auto& facet_pair)
-        {
-          auto [cell, local_index] = facet_pair;
+    std::for_each(puppet_facets.cbegin(), puppet_facets.cend(),
+                  [&](const auto& facet_pair)
+                  {
+                    auto [cell, local_index] = facet_pair;
 
-          // extract local dofs
-          assert(cell_map->num_links(cell) == 1);
-          const std::int32_t submesh_cell = cell_map->links(cell)[0];
-          auto x_dofs = x_dofmap.links(submesh_cell);
-          const std::size_t num_dofs_g = x_dofs.size();
-          xt::xtensor<double, 2> coordinate_dofs
-              = xt::zeros<double>({num_dofs_g, std::size_t(gdim)});
-          for (std::size_t i = 0; i < num_dofs_g; ++i)
-          {
-            std::copy_n(std::next(mesh_geometry.begin(), 3 * x_dofs[i]), gdim,
-                        std::next(coordinate_dofs.begin(), i * gdim));
-          }
-          xt::xtensor<double, 2> q_phys({_qp_ref_facet[local_index].shape(0),
-                                         _qp_ref_facet[local_index].shape(1)});
+                    // extract local dofs
+                    assert(cell_map->num_links(cell) == 1);
+                    const std::int32_t submesh_cell = cell_map->links(cell)[0];
+                    auto x_dofs = x_dofmap.links(submesh_cell);
+                    const std::size_t num_dofs_g = x_dofs.size();
+                    xt::xtensor<double, 2> coordinate_dofs
+                        = xt::zeros<double>({num_dofs_g, std::size_t(gdim)});
+                    for (std::size_t i = 0; i < num_dofs_g; ++i)
+                    {
+                      std::copy_n(
+                          std::next(mesh_geometry.begin(), 3 * x_dofs[i]), gdim,
+                          std::next(coordinate_dofs.begin(), i * gdim));
+                    }
+                    xt::xtensor<double, 2> q_phys(
+                        {_qp_ref_facet[local_index].shape(0), gdim});
 
-          // push forward of quadrature points _qp_ref_facet to the physical
-          // facet
-          cmap.push_forward(q_phys, coordinate_dofs,
-                            _phi_ref_facets[local_index]);
-          _qp_phys[origin_meshtag].push_back(q_phys);
-        });
+                    // push forward of quadrature points _qp_ref_facet to the
+                    // physical facet
+                    cmap.push_forward(q_phys, coordinate_dofs,
+                                      _phi_ref_facets[local_index]);
+                    _qp_phys[origin_meshtag].push_back(q_phys);
+                  });
   }
   /// Compute maximum number of links
   /// I think this should actually be part of create_distance_map
@@ -822,7 +822,6 @@ public:
             data, offset);
     // max_links(puppet_mt);
     _max_links[puppet_mt] = qp_phys[0].shape(0);
-    std::cout << "max links" << _max_links[puppet_mt] << "\n";
   }
 
   /// Compute and pack the gap function for each quadrature point the set of
