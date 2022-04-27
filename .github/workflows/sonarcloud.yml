@@ -1,14 +1,13 @@
 name: Run sonarcloud analysis
 on:
   push:
-    branches-ignore:
+    # branches-ignore:
+    #   - "**"
+    branches:
       - "**"
-    # branches:
-    #   - main
-    #   - dokken/*
-  # pull_request:
-  #   branches:
-  #     - main
+  pull_request:
+    branches:
+      - main
 jobs:
   build:
     if: ${{ github.repository != 'Wells-Group/asimov-custom-assemblers' }}
