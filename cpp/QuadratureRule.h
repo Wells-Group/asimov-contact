@@ -10,9 +10,6 @@
 #include <basix/finite-element.h>
 #include <basix/quadrature.h>
 #include <dolfinx/mesh/cell_types.h>
-#include <dolfinx/mesh/utils.h>
-#include <xtensor/xadapt.hpp>
-#include <xtensor/xarray.hpp>
 
 namespace dolfinx_contact
 {
@@ -61,6 +58,9 @@ public:
   /// Return the quadrature points for the ith entity
   /// @param[in] i The local entity index
   xt::xtensor<double, 2> points(int i) const;
+
+  /// Return offset for quadrature rule of the ith entity
+  const std::vector<std::int32_t>& offset() const { return _entity_offset; }
 
 private:
   dolfinx::mesh::CellType _cell_type;

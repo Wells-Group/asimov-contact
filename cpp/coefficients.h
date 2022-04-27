@@ -41,12 +41,13 @@ std::pair<std::vector<PetscScalar>, int> pack_coefficient_quadrature(
         active_entities);
 
 /// Prepare circumradii of triangle/tetrahedron for assembly with custom
-/// kernels by packing them as an array, where the j*cstride to the ith facet
-/// int active_facets.
+/// kernels by packing them as an array, where the ith entry of the output
+/// corresponds to the circumradius of the ith cell facet pair.
 /// @param[in] mesh The mesh
 /// @param[in] active_facets List of (cell, local_facet_index) tuples
-/// @returns[out] c The packed coefficients and the number of coeffs per facet
-std::pair<std::vector<PetscScalar>, int> pack_circumradius(
+/// @returns[out] The packed coefficients
+/// @note Circumradius is constant and therefore the cstride is 1
+std::vector<PetscScalar> pack_circumradius(
     const dolfinx::mesh::Mesh& mesh,
     const tcb::span<const std::pair<std::int32_t, int>>& active_facets);
 } // namespace dolfinx_contact

@@ -1,5 +1,5 @@
 
-// Copyright (C) 2021 Jørgen S. Dokken
+// Copyright (C) 2021-2022 Jørgen S. Dokken
 //
 // This file is part of DOLFINx_CUAS
 //
@@ -11,8 +11,6 @@
 #include <dolfinx/common/math.h>
 #include <dolfinx/mesh/cell_types.h>
 #include <dolfinx/mesh/utils.h>
-#include <xtensor/xadapt.hpp>
-#include <xtensor/xarray.hpp>
 
 using namespace dolfinx_contact;
 
@@ -35,11 +33,11 @@ dolfinx_contact::QuadratureRule::QuadratureRule(dolfinx::mesh::CellType ct,
     std::size_t num_points = q_points.shape(0);
     _points = xt::empty<double>(
         {std::size_t(num_points * _num_sub_entities), (std::size_t)tdim});
-    std::vector<std::int32_t> offset(_num_sub_entities + 1, 0);
+    _entity_offset = std::vector<std::int32_t>(_num_sub_entities + 1, 0);
     std::vector<double> weights(num_points * _num_sub_entities);
     for (std::int32_t i = 0; i < _num_sub_entities; i++)
     {
-      offset[i + 1] = i * _num_sub_entities;
+      _entity_offset[i + 1] = (i + 1) * q_weights.size();
       for (std::size_t j = 0; j < num_points; ++j)
       {
         weights[i * num_points * _num_sub_entities + j] = q_weights[j];
@@ -49,7 +47,6 @@ dolfinx_contact::QuadratureRule::QuadratureRule(dolfinx::mesh::CellType ct,
       }
     }
     _weights = weights;
-    _entity_offset = offset;
   }
   else
   {
@@ -62,8 +59,7 @@ dolfinx_contact::QuadratureRule::QuadratureRule(dolfinx::mesh::CellType ct,
     std::vector<std::vector<double>> quadrature_weights;
     quadrature_points.reserve(_num_sub_entities);
     quadrature_weights.reserve(_num_sub_entities);
-    std::vector<std::int32_t> offset(_num_sub_entities + 1, 0);
-
+    std::vector<std::int32_t> num_points_per_entity(_num_sub_entities);
     for (std::int32_t i = 0; i < _num_sub_entities; i++)
     {
       basix::cell::type et = basix::cell::sub_entity_type(b_ct, dim, i);
@@ -73,7 +69,7 @@ dolfinx_contact::QuadratureRule::QuadratureRule(dolfinx::mesh::CellType ct,
       // Create quadrature and tabulate on entity
       auto [q_points, q_weights]
           = basix::quadrature::make_quadrature(et, degree);
-      offset[i + 1] = (std::int32_t)q_weights.size();
+      num_points_per_entity[i] = (std::int32_t)q_weights.size();
 
       auto c_tab = entity_element.tabulate(0, q_points);
       xt::xtensor<double, 2> phi_s
@@ -91,18 +87,20 @@ dolfinx_contact::QuadratureRule::QuadratureRule(dolfinx::mesh::CellType ct,
       quadrature_points.push_back(entity_qp);
       quadrature_weights.push_back(q_weights);
     }
-    _points
-        = xt::empty<double>({(std::size_t)offset.back(), (std::size_t)tdim});
-    std::vector<double> weights(offset.back());
+    _entity_offset = std::vector<std::int32_t>(_num_sub_entities + 1, 0);
+    std::partial_sum(num_points_per_entity.begin(), num_points_per_entity.end(),
+                     std::next(_entity_offset.begin()));
+    _points = xt::empty<double>(
+        {(std::size_t)_entity_offset.back(), (std::size_t)tdim});
+    std::vector<double> weights(_entity_offset.back());
     for (std::int32_t i = 0; i < _num_sub_entities; i++)
     {
-      const std::int32_t num_points = offset[i + 1] - offset[i];
+      const std::int32_t num_points = _entity_offset[i + 1] - _entity_offset[i];
       for (std::size_t j = 0; j < (std::size_t)num_points; ++j)
       {
-        weights[i * num_points * _num_sub_entities + j]
-            = quadrature_weights[i][j];
+        weights[i * num_points + j] = quadrature_weights[i][j];
         for (std::size_t k = 0; k < tdim; ++k)
-          _points[i * num_points * _num_sub_entities + j * tdim + k]
+          _points[i * num_points + j * tdim + k]
               = quadrature_points[i][j * tdim + k];
       }
     }
