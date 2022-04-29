@@ -213,7 +213,7 @@ dolfinx_contact::pack_coefficient_quadrature(
         double detJ
             = dolfinx::fem::CoordinateElement::compute_jacobian_determinant(J);
 
-        for (std::size_t q = 0; q < num_points_per_entity; ++q)
+        for (std::int32_t q = 0; q < num_points_per_entity; ++q)
         {
 
           // Permute the reference values to account for the cell's
