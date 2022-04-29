@@ -55,12 +55,11 @@ tabulate(const dolfinx::fem::CoordinateElement& cmap,
   const int tdim = dolfinx::mesh::cell_dim(cell_type);
   assert(tdim - 1 == q_rule.dim());
 
-  const std::size_t num_facets
-      = dolfinx::mesh::cell_num_entities(cell_type, tdim - 1);
+  const int num_facets = dolfinx::mesh::cell_num_entities(cell_type, tdim - 1);
 
   // Check that we only have one cell type in quadrature rule
   const dolfinx::mesh::CellType f_type = q_rule.cell_type(0);
-  for (std::size_t i = 0; i < num_facets; i++)
+  for (int i = 0; i < num_facets; i++)
     if (q_rule.cell_type(i) != f_type)
       throw std::invalid_argument("Prism meshes are currently not supported.");
 
@@ -77,7 +76,7 @@ tabulate(const dolfinx::fem::CoordinateElement& cmap,
   // facet of the reference cell.
   std::vector<xt::xtensor<double, 2>> phi;
   phi.reserve(num_facets);
-  for (std::size_t i = 0; i < num_facets; ++i)
+  for (int i = 0; i < num_facets; ++i)
   {
     cmap.tabulate(0, q_points[i], basis_values);
     phi_i = xt::view(basis_values, 0, xt::all(), xt::all(), 0);
@@ -695,7 +694,7 @@ public:
         = dolfinx::mesh::cell_num_entities(topology.cell_type(), tdim - 1);
     assert(num_facets == ref_facet_points.size());
     for (std::size_t i = 0; i < num_facets; ++i)
-      if (ref_facet_points[0]].shape(0) != ref_facet_points[i].shape(0))
+      if (ref_facet_points[0].shape(0) != ref_facet_points[i].shape(0))
         throw std::invalid_argument("Quadrature rule on prisms not supported");
 
     // Temporary data array

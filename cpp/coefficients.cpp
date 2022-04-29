@@ -145,7 +145,6 @@ dolfinx_contact::pack_coefficient_quadrature(
     const auto num_points = (std::size_t)q_offsets.back();
 
     // Prepare basis function data structures
-    const std::size_t num_points_per_entity = q_offsets[1] - q_offsets[0];
     xt::xtensor<double, 3> basis_values(
         {num_points_per_entity, num_basis_functions, (std::size_t)vs});
     xt::xtensor<double, 2> element_basis_values(

@@ -37,7 +37,7 @@ dolfinx_contact::QuadratureRule::QuadratureRule(dolfinx::mesh::CellType ct,
     std::vector<double> weights(num_points * _num_sub_entities);
     for (std::int32_t i = 0; i < _num_sub_entities; i++)
     {
-      _entity_offset[i + 1] = (i + 1) * q_weights.size();
+      _entity_offset[i + 1] = (i + 1) * (std::int32_t)q_weights.size();
       for (std::size_t j = 0; j < num_points; ++j)
       {
         weights[i * num_points * _num_sub_entities + j] = q_weights[j];
@@ -80,8 +80,8 @@ dolfinx_contact::QuadratureRule::QuadratureRule(dolfinx::mesh::CellType ct,
       // Push forward quadrature point from reference entity to reference
       // entity on cell
       const size_t num_quadrature_pts = q_weights.size();
-      xt::xtensor<double, 2> entity_qp = xt::zeros<double>(
-          {num_quadrature_pts, static_cast<std::size_t>(ref_geom.shape(1))});
+      xt::xtensor<double, 2> entity_qp
+          = xt::zeros<double>({num_quadrature_pts, ref_geom.shape(1)});
       dolfinx::math::dot(phi_s, coords, entity_qp);
 
       quadrature_points.push_back(entity_qp);
