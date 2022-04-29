@@ -116,7 +116,7 @@ dolfinx_contact::pack_coefficient_quadrature(
       active_entities);
 
   // Create output array
-  const std::int32_t num_points_per_entity = q_offsets[1] - q_offsets[0];
+  const std::size_t num_points_per_entity = q_offsets[1] - q_offsets[0];
   const auto cstride = int(reference_value_size * num_points_per_entity);
   std::vector<PetscScalar> coefficients(num_active_entities * cstride, 0.0);
 
@@ -213,7 +213,7 @@ dolfinx_contact::pack_coefficient_quadrature(
         double detJ
             = dolfinx::fem::CoordinateElement::compute_jacobian_determinant(J);
 
-        for (std::int32_t q = 0; q < num_points_per_entity; ++q)
+        for (std::size_t q = 0; q < num_points_per_entity; ++q)
         {
 
           // Permute the reference values to account for the cell's
@@ -226,8 +226,7 @@ dolfinx_contact::pack_coefficient_quadrature(
               cell_info, cell, vs);
 
           // Push basis forward to physical element
-          auto _u
-              = xt::view(basis_values, (std::size_t)q, xt::all(), xt::all());
+          auto _u = xt::view(basis_values, q, xt::all(), xt::all());
           auto _U = xt::view(element_basis_values, xt::all(), xt::all());
           push_forward_fn(_u, _U, J, detJ, K);
         }

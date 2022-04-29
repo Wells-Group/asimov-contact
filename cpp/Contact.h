@@ -695,7 +695,7 @@ public:
         = dolfinx::mesh::cell_num_entities(topology.cell_type(), tdim - 1);
     assert(num_facets == ref_facet_points.size());
     for (std::size_t i = 0; i < num_facets; ++i)
-      if (ref_facet_points[i].shape(0) != ref_facet_points[i].shape(0))
+      if (ref_facet_points[0]].shape(0) != ref_facet_points[i].shape(0))
         throw std::invalid_argument("Quadrature rule on prisms not supported");
 
     // Temporary data array
