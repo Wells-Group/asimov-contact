@@ -43,7 +43,7 @@ dolfinx_contact::QuadratureRule::QuadratureRule(dolfinx::mesh::CellType ct,
         weights[i * num_points * _num_sub_entities + j] = q_weights[j];
         for (std::size_t k = 0; k < tdim; ++k)
           _points[i * num_points * _num_sub_entities + j * tdim + k]
-              = q_points[j * tdim + k];
+              = q_points(j, k);
       }
     }
     _weights = weights;
@@ -100,8 +100,7 @@ dolfinx_contact::QuadratureRule::QuadratureRule(dolfinx::mesh::CellType ct,
       {
         weights[i * num_points + j] = quadrature_weights[i][j];
         for (std::size_t k = 0; k < tdim; ++k)
-          _points[i * num_points + j * tdim + k]
-              = quadrature_points[i][j * tdim + k];
+          _points(i * num_points + j, k) = quadrature_points[i](j, k);
       }
     }
     _weights = weights;

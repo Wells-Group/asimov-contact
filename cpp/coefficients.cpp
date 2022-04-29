@@ -226,7 +226,8 @@ dolfinx_contact::pack_coefficient_quadrature(
               cell_info, cell, vs);
 
           // Push basis forward to physical element
-          auto _u = xt::view(basis_values, q, xt::all(), xt::all());
+          auto _u
+              = xt::view(basis_values, (std::size_t)q, xt::all(), xt::all());
           auto _U = xt::view(element_basis_values, xt::all(), xt::all());
           push_forward_fn(_u, _U, J, detJ, K);
         }
