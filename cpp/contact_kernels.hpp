@@ -31,7 +31,7 @@ dolfinx_cuas::kernel_fn<T> generate_contact_kernel(
 
   // Get mesh info
   const dolfinx::mesh::Geometry& geometry = mesh->geometry();
-  auto cmap = geometry.cmap();
+  const dolfinx::fem::CoordinateElement& cmap = geometry.cmap();
 
   const std::uint32_t gdim = geometry.dim();
   const dolfinx::mesh::Topology& topology = mesh->topology();

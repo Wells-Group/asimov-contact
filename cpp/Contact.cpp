@@ -5,6 +5,7 @@
 // SPDX-License-Identifier:    MIT
 
 #include "Contact.h"
+#include <dolfinx_cuas/utils.hpp>
 using namespace dolfinx_contact;
 
 namespace
@@ -171,7 +172,7 @@ dolfinx_contact::Contact::pack_ny(int origin_meshtag,
   // Geometrical info
   const dolfinx::mesh::Geometry& geometry = candidate_mesh->geometry();
   const int gdim = geometry.dim(); // geometrical dimension
-  auto cmap = geometry.cmap();
+  const dolfinx::fem::CoordinateElement& cmap = geometry.cmap();
   auto x_dofmap = geometry.dofmap();
   xtl::span<const double> mesh_geometry = geometry.x();
 

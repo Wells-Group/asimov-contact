@@ -9,23 +9,26 @@ import pytest
 from dolfinx.cpp.mesh import cell_num_entities
 from dolfinx.fem import (Expression, Function, FunctionSpace, IntegralType,
                          VectorFunctionSpace)
-from dolfinx.mesh import (create_unit_cube, create_unit_square,
-                          locate_entities_boundary)
+from dolfinx.mesh import (CellType, create_unit_cube, create_unit_square,
+                          locate_entities_boundary, to_string)
 from mpi4py import MPI
 from ufl import FiniteElement, MixedElement, VectorElement
 
 import dolfinx_contact.cpp
 
 
+@pytest.mark.parametrize("ct", [CellType.triangle, CellType.quadrilateral])
 @pytest.mark.parametrize("quadrature_degree", range(1, 6))
 @pytest.mark.parametrize("degree", range(1, 6))
 @pytest.mark.parametrize("space", ["CG", "N1curl", "DG"])
-def test_pack_coeff_at_quadrature(quadrature_degree, space, degree):
+def test_pack_coeff_at_quadrature(ct, quadrature_degree, space, degree):
     N = 15
-    mesh = create_unit_square(MPI.COMM_WORLD, N, N)
+    mesh = create_unit_square(MPI.COMM_WORLD, N, N, cell_type=ct)
     if space == "CG":
         V = VectorFunctionSpace(mesh, (space, degree))
     elif space == "N1curl":
+        if ct == CellType.quadrilateral:
+            space = "RTCE"
         V = FunctionSpace(mesh, (space, degree))
     elif space == "DG":
         V = FunctionSpace(mesh, (space, degree - 1))
@@ -49,12 +52,11 @@ def test_pack_coeff_at_quadrature(quadrature_degree, space, degree):
 
     # Use prepare quadrature points and geometry for eval
     quadrature_points, wts = basix.make_quadrature(
-        basix.QuadratureType.Default, basix.CellType.triangle, quadrature_degree)
+        basix.QuadratureType.Default, basix.cell.string_to_type(to_string(ct)), quadrature_degree)
 
     # Use Expression to verify packing
     expr = Expression(v, quadrature_points)
     expr_vals = expr.eval(cells)
-
     assert np.allclose(coeffs_cuas, expr_vals)
 
 
