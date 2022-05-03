@@ -20,8 +20,8 @@
 #include <dolfinx/mesh/MeshTags.h>
 #include <dolfinx/mesh/cell_types.h>
 #include <dolfinx_cuas/QuadratureRule.hpp>
-#include <dolfinx_cuas/utils.hpp>
 #include <xtensor/xadapt.hpp>
+#include <xtensor/xbuilder.hpp>
 #include <xtensor/xindex_view.hpp>
 
 using contact_kernel_fn = std::function<void(
@@ -39,6 +39,52 @@ enum class Kernel
   Rhs,
   Jac
 };
+
+namespace
+{
+/// Tabulate the coordinate element basis functions at quadrature points
+///
+/// @param[in] cmap The coordinate element
+/// @param[in] cell_type The cell type of the coordiante element
+/// @param[in] q_rule The quadrature rule
+std::vector<xt::xtensor<double, 2>>
+tabulate(const dolfinx::fem::CoordinateElement& cmap,
+         const dolfinx::mesh::CellType cell_type,
+         const dolfinx_cuas::QuadratureRule& q_rule)
+{
+  const int tdim = dolfinx::mesh::cell_dim(cell_type);
+  assert(tdim - 1 == q_rule.dim());
+
+  const int num_facets = dolfinx::mesh::cell_num_entities(cell_type, tdim - 1);
+
+  // Check that we only have one cell type in quadrature rule
+  const dolfinx::mesh::CellType f_type = q_rule.cell_type(0);
+  for (int i = 0; i < num_facets; i++)
+    if (q_rule.cell_type(i) != f_type)
+      throw std::invalid_argument("Prism meshes are currently not supported.");
+
+  const std::vector<xt::xarray<double>>& q_points = q_rule.points_ref();
+  assert((std::size_t)num_facets == q_points.size());
+
+  const std::array<std::size_t, 4> tab_shape
+      = cmap.tabulate_shape(0, q_points[0].shape(0));
+
+  xt::xtensor<double, 4> basis_values(tab_shape);
+  xt::xtensor<double, 2> phi_i({tab_shape[1], tab_shape[2]});
+
+  // Tabulate basis functions at quadrature points  for each
+  // facet of the reference cell.
+  std::vector<xt::xtensor<double, 2>> phi;
+  phi.reserve(num_facets);
+  for (int i = 0; i < num_facets; ++i)
+  {
+    cmap.tabulate(0, q_points[i], basis_values);
+    phi_i = xt::view(basis_values, 0, xt::all(), xt::all(), 0);
+    phi.push_back(phi_i);
+  }
+  return phi;
+}
+} // namespace
 
 class Contact
 {
@@ -615,28 +661,6 @@ public:
       throw std::invalid_argument("Unrecognized kernel");
     }
   }
-  /// Tabulate the basis function at the quadrature points _qp_ref_facet
-  /// creates and fills _phi_ref_facets
-  std::vector<xt::xtensor<double, 2>>
-  tabulate_on_ref_cell(const basix::FiniteElement& element)
-  {
-
-    // Create _phi_ref_facets
-    std::size_t num_facets = _qp_ref_facet.size();
-    std::vector<xt::xtensor<double, 2>> phi;
-    phi.reserve(num_facets);
-
-    // Tabulate basis functions at quadrature points _qp_ref_facet for each
-    // facet of the reference cell. Fill _phi_ref_facets
-    for (std::size_t i = 0; i < num_facets; ++i)
-    {
-      auto cell_tab = element.tabulate(0, _qp_ref_facet[i]);
-      const xt::xtensor<double, 2> _phi_i
-          = xt::view(cell_tab, 0, xt::all(), xt::all(), 0);
-      phi.push_back(_phi_i);
-    }
-    return phi;
-  }
 
   /// Compute push forward of quadrature points _qp_ref_facet to the
   /// physical facet for each facet in _facet_"origin_meshtag" Creates and
@@ -644,46 +668,68 @@ public:
   /// @param[in] origin_meshtag flag to choose the surface
   void create_q_phys(int origin_meshtag)
   {
-    // Mesh info
+    // Get information depending on surface
     auto mesh = _submeshes[origin_meshtag].mesh();
     auto cell_map = _submeshes[origin_meshtag].cell_map();
-    xtl::span<const double> mesh_geometry = mesh->geometry().x();
-    auto cmap = mesh->geometry().cmap();
-    auto x_dofmap = mesh->geometry().dofmap();
-    const int gdim = mesh->geometry().dim(); // geometrical dimensions
     auto puppet_facets = _cell_facet_pairs[origin_meshtag];
+
+    // Geometrical info
+    const dolfinx::mesh::Geometry& geometry = mesh->geometry();
+    xtl::span<const double> mesh_geometry = geometry.x();
+    const dolfinx::fem::CoordinateElement& cmap = geometry.cmap();
+    const dolfinx::graph::AdjacencyList<std::int32_t>& x_dofmap
+        = geometry.dofmap();
+    const int gdim = geometry.dim();
+    const std::size_t num_dofs_g = cmap.dim();
+
+    // Create storage for output quadrature points
+    const std::vector<xt::xarray<double>>& ref_facet_points = _qp_ref_facet;
+    xt::xtensor<double, 2> q_phys(
+        {ref_facet_points[0].shape(0), (std::size_t)gdim});
+
+    // Check that we have a constant number of points per facet
+    const dolfinx::mesh::Topology& topology = mesh->topology();
+    const int tdim = topology.dim();
+    const std::size_t num_facets
+        = dolfinx::mesh::cell_num_entities(topology.cell_type(), tdim - 1);
+    assert(num_facets == ref_facet_points.size());
+    for (std::size_t i = 0; i < num_facets; ++i)
+      if (ref_facet_points[0].shape(0) != ref_facet_points[i].shape(0))
+        throw std::invalid_argument("Quadrature rule on prisms not supported");
+
+    // Temporary data array
+    xt::xtensor<double, 2> coordinate_dofs
+        = xt::zeros<double>({num_dofs_g, std::size_t(gdim)});
+
+    // Push forward of quadrature points _qp_ref_facet to physical facet
+    // for each facet in _facet_"origin_meshtag"
     _qp_phys[origin_meshtag].reserve(puppet_facets.size());
     _qp_phys[origin_meshtag].clear();
-    // push forward of quadrature points _qp_ref_facet to physical facet for
-    // each facet in _facet_"origin_meshtag"
-    std::for_each(
-        puppet_facets.cbegin(), puppet_facets.cend(),
-        [&](const auto& facet_pair)
-        {
-          auto [cell, local_index] = facet_pair;
+    std::for_each(puppet_facets.cbegin(), puppet_facets.cend(),
+                  [&](const auto& facet_pair)
+                  {
+                    auto [cell, local_index] = facet_pair;
 
-          // extract local dofs
-          assert(cell_map->num_links(cell) == 1);
-          const std::int32_t submesh_cell = cell_map->links(cell)[0];
-          auto x_dofs = x_dofmap.links(submesh_cell);
-          const std::size_t num_dofs_g = x_dofs.size();
-          xt::xtensor<double, 2> coordinate_dofs
-              = xt::zeros<double>({num_dofs_g, std::size_t(gdim)});
-          for (std::size_t i = 0; i < num_dofs_g; ++i)
-          {
-            std::copy_n(std::next(mesh_geometry.begin(), 3 * x_dofs[i]), gdim,
-                        std::next(coordinate_dofs.begin(), i * gdim));
-          }
-          xt::xtensor<double, 2> q_phys({_qp_ref_facet[local_index].shape(0),
-                                         _qp_ref_facet[local_index].shape(1)});
+                    // Extract local coordinate dofs
+                    auto submesh_cells = cell_map->links(cell);
+                    assert(submesh_cells.size() == 1);
+                    auto x_dofs = x_dofmap.links(submesh_cells[0]);
+                    assert(x_dofs.size() == num_dofs_g);
+                    for (std::size_t i = 0; i < num_dofs_g; ++i)
+                    {
+                      std::copy_n(
+                          std::next(mesh_geometry.begin(), 3 * x_dofs[i]), gdim,
+                          std::next(coordinate_dofs.begin(), i * gdim));
+                    }
 
-          // push forward of quadrature points _qp_ref_facet to the physical
-          // facet
-          cmap.push_forward(q_phys, coordinate_dofs,
-                            _phi_ref_facets[local_index]);
-          _qp_phys[origin_meshtag].push_back(q_phys);
-        });
+                    // push forward of quadrature points _qp_ref_facet to the
+                    // physical facet
+                    cmap.push_forward(q_phys, coordinate_dofs,
+                                      _phi_ref_facets[local_index]);
+                    _qp_phys[origin_meshtag].push_back(q_phys);
+                  });
   }
+
   /// Compute maximum number of links
   /// I think this should actually be part of create_distance_map
   /// which should be easier after the rewrite of contact
@@ -713,6 +759,7 @@ public:
     }
     _max_links[origin_meshtag] = max_links;
   }
+
   /// Compute closest candidate_facet for each quadrature point in
   /// _qp_phys[origin_meshtag]
   /// This is saved as an adjacency list in _facet_maps[origin_meshtag]
@@ -722,40 +769,32 @@ public:
   {
     // save opposite surface
     _opposites[puppet_mt] = candidate_mt;
+
     // Mesh info
     auto mesh = _marker->mesh();
     const int gdim = mesh->geometry().dim();
-    const int tdim = mesh->topology().dim();
+    const dolfinx::fem::CoordinateElement& cmap = mesh->geometry().cmap();
+    const dolfinx::mesh::Topology& topology = mesh->topology();
+
+    const int tdim = topology.dim();
     const int fdim = tdim - 1;
+    const dolfinx::mesh::CellType cell_type = topology.cell_type();
 
     // submesh info
     auto candidate_mesh = _submeshes[candidate_mt].mesh();
     auto c_to_f = candidate_mesh->topology().connectivity(tdim, tdim - 1);
     assert(c_to_f);
-
     // Create _qp_ref_facet (quadrature points on reference facet)
-    dolfinx_cuas::QuadratureRule q_rule(mesh->topology().cell_type(),
-                                        _quadrature_degree, fdim);
+    dolfinx_cuas::QuadratureRule q_rule(cell_type, _quadrature_degree, fdim);
     _qp_ref_facet = q_rule.points();
     _qw_ref_facet = q_rule.weights();
 
-    // Tabulate basis function on reference cell (_phi_ref_facets)// Create
-    // coordinate element
-    // FIXME: For higher order geometry need basix element public in mesh
-    // auto degree = mesh->geometry().cmap()._element->degree;
-    int degree = 1;
-    auto dolfinx_cell = mesh->topology().cell_type();
-    auto coordinate_element = basix::create_element(
-        basix::element::family::P,
-        dolfinx::mesh::cell_type_to_basix_type(dolfinx_cell), degree,
-        basix::element::lagrange_variant::gll_warped);
-    _phi_ref_facets = tabulate_on_ref_cell(coordinate_element);
+    _phi_ref_facets = tabulate(cmap, cell_type, q_rule);
 
     // Compute quadrature points on physical facet _qp_phys_"origin_meshtag"
     create_q_phys(puppet_mt);
 
     xt::xtensor<double, 2> point = xt::zeros<double>({1, 3});
-    point[2] = 0;
 
     // assign puppet_ and candidate_facets
     auto candidate_facets = _cell_facet_pairs[candidate_mt];
@@ -883,9 +922,10 @@ public:
   {
     // Mesh info
     auto mesh = _submeshes[_opposites[origin_meshtag]].mesh(); // mesh
+    assert(mesh);
     const int gdim = mesh->geometry().dim(); // geometrical dimension
     const int tdim = mesh->topology().dim();
-    auto cmap = mesh->geometry().cmap();
+    const dolfinx::fem::CoordinateElement& cmap = mesh->geometry().cmap();
     auto x_dofmap = mesh->geometry().dofmap();
     xtl::span<const double> mesh_geometry = mesh->geometry().x();
     auto element = _V->element();
@@ -1109,27 +1149,24 @@ public:
                                                           double g)
   {
     // Mesh info
-    auto mesh = _marker->mesh();             // mesh
+    auto mesh = _marker->mesh();
+    assert(mesh);
+
     const int gdim = mesh->geometry().dim(); // geometrical dimension
     const int tdim = mesh->topology().dim();
     const int fdim = tdim - 1;
 
     // Create _qp_ref_facet (quadrature points on reference facet)
-    dolfinx_cuas::QuadratureRule facet_quadrature(
-        _marker->mesh()->topology().cell_type(), _quadrature_degree, fdim);
+    auto cell_type = mesh->topology().cell_type();
+    dolfinx_cuas::QuadratureRule facet_quadrature(cell_type, _quadrature_degree,
+                                                  fdim);
     _qp_ref_facet = facet_quadrature.points();
     _qw_ref_facet = facet_quadrature.weights();
 
-    // Tabulate basis function on reference cell (_phi_ref_facets)// Create
-    // coordinate element
-    const int degree = mesh->geometry().cmap().degree();
-    auto dolfinx_cell = _marker->mesh()->topology().cell_type();
-    auto coordinate_element = basix::create_element(
-        basix::element::family::P,
-        dolfinx::mesh::cell_type_to_basix_type(dolfinx_cell), degree,
-        basix::element::lagrange_variant::gll_warped);
+    // Tabulate basis function on reference cell (_phi_ref_facets)
+    const dolfinx::fem::CoordinateElement& cmap = mesh->geometry().cmap();
+    _phi_ref_facets = tabulate(cmap, cell_type, facet_quadrature);
 
-    _phi_ref_facets = tabulate_on_ref_cell(coordinate_element);
     // Compute quadrature points on physical facet _qp_phys_"origin_meshtag"
     create_q_phys(origin_meshtag);
     auto qp_phys = _qp_phys[origin_meshtag];

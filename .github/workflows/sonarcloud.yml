@@ -1,16 +1,17 @@
 name: Run sonarcloud analysis
 on:
   push:
-    branches-ignore:
+    # branches-ignore:
+    #   - "**"
+    branches:
       - "**"
-    # branches:
-    #   - main
-    #   - dokken/*
-  # pull_request:
-  #   branches:
-  #     - main
+  pull_request:
+    branches:
+      - main
 jobs:
   build:
+    if: ${{ github.repository != 'Wells-Group/asimov-contact' }}
+
     name: Sonarcloud analysis
     runs-on: ubuntu-latest
     container: dolfinx/dev-env
