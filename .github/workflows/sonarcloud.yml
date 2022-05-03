@@ -10,7 +10,7 @@ on:
       - main
 jobs:
   build:
-    if: ${{ github.repository != 'Wells-Group/asimov-custom-assemblers' }}
+    if: ${{ github.repository != 'Wells-Group/asimov-contact' }}
 
     name: Sonarcloud analysis
     runs-on: ubuntu-latest
