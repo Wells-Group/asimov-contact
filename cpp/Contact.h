@@ -64,7 +64,7 @@ tabulate(const dolfinx::fem::CoordinateElement& cmap,
       throw std::invalid_argument("Prism meshes are currently not supported.");
 
   const std::vector<xt::xarray<double>>& q_points = q_rule.points_ref();
-  assert(num_facets == q_points.size());
+  assert((std::size_t)num_facets == q_points.size());
 
   const std::array<std::size_t, 4> tab_shape
       = cmap.tabulate_shape(0, q_points[0].shape(0));
