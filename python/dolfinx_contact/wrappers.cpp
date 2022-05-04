@@ -10,10 +10,10 @@
 #include <dolfinx/la/petsc.h>
 #include <dolfinx/mesh/MeshTags.h>
 #include <dolfinx_contact/Contact.h>
+#include <dolfinx_contact/QuadratureRule.h>
 #include <dolfinx_contact/coefficients.h>
 #include <dolfinx_contact/contact_kernels.hpp>
 #include <dolfinx_contact/utils.h>
-#include <dolfinx_cuas/kernelwrapper.h>
 #include <iostream>
 #include <pybind11/functional.h>
 #include <pybind11/operators.h>
@@ -28,6 +28,9 @@ namespace py = pybind11;
 
 PYBIND11_MODULE(cpp, m)
 {
+  // Load basix and dolfinx to use Pybindings
+  py::module basix = py::module::import("basix");
+
   // Create module for C++ wrappers
   m.doc() = "DOLFINX Contact Python interface";
 #ifdef VERSION_INFO
@@ -39,7 +42,24 @@ PYBIND11_MODULE(cpp, m)
   // Kernel wrapper class
   py::class_<contact_wrappers::KernelWrapper,
              std::shared_ptr<contact_wrappers::KernelWrapper>>(
-      m, "KernelWrapper", "Wrapper for C++ integration kernels");
+      m, "KernelWrapper", "Wrapper for C++ contact integration kernels");
+
+  // QuadratureRule
+  py::class_<dolfinx_contact::QuadratureRule,
+             std::shared_ptr<dolfinx_contact::QuadratureRule>>(
+      m, "QuadratureRule", "QuadratureRule object")
+      .def(py::init<dolfinx::mesh::CellType, int, int,
+                    basix::quadrature::type>(),
+           py::arg("cell_type"), py::arg("degree"), py::arg("dim"),
+           py::arg("type") = basix::quadrature::type::Default)
+      .def("points",
+           [](dolfinx_contact::QuadratureRule& self) {
+             return dolfinx_wrappers::xt_as_pyarray(std::move(self.points()));
+           })
+      .def("weights", [](dolfinx_contact::QuadratureRule& self)
+           { return dolfinx_wrappers::as_pyarray(std::move(self.weights())); });
+
+  // Contact
   py::class_<dolfinx_contact::Contact,
              std::shared_ptr<dolfinx_contact::Contact>>(m, "Contact",
                                                         "Contact object")
@@ -85,9 +105,10 @@ PYBIND11_MODULE(cpp, m)
       .def("facet_map",
            [](dolfinx_contact::Contact& self, int mt)
            {
-             // This exposes facet_map() to python but replaces the facet
-             // indices on the submesh with the facet indices in the parent mesh
-             // This is only exposed for testing (in particular
+             // This exposes facet_map() to python but replaces the
+             // facet indices on the submesh with the facet indices in
+             // the parent mesh This is only exposed for testing (in
+             // particular
              // nitsche_rigid_surface.py/demo_nitsche_rigid_surface_ufl.py)
              auto mesh = self.meshtags()->mesh();
              const int tdim = mesh->topology().dim(); // topological dimension
@@ -187,12 +208,12 @@ PYBIND11_MODULE(cpp, m)
   m.def(
       "generate_contact_kernel",
       [](std::shared_ptr<const dolfinx::fem::FunctionSpace> V,
-         dolfinx_contact::Kernel type, dolfinx_cuas::QuadratureRule& q_rule,
+         dolfinx_contact::Kernel type, dolfinx_contact::QuadratureRule& q_rule,
          std::vector<std::shared_ptr<const dolfinx::fem::Function<PetscScalar>>>
              coeffs,
          bool constant_normal)
       {
-        return cuas_wrappers::KernelWrapper<PetscScalar>(
+        return contact_wrappers::KernelWrapper(
             dolfinx_contact::generate_contact_kernel<PetscScalar>(
                 V, type, q_rule, coeffs, constant_normal));
       },

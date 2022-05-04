@@ -6,7 +6,6 @@ from typing import Dict, Tuple
 
 import basix
 import dolfinx_cuas
-import dolfinx_cuas.cpp
 import numpy as np
 import ufl
 from dolfinx import common as _common
@@ -127,8 +126,8 @@ def nitsche_cuas(mesh: dmesh.Mesh, mesh_data: Tuple[dmesh.meshtags, int, int],
         raise RuntimeError("Dirichlet bc not implemented in custom assemblers yet.")
 
     # Custom assembly of contact boundary condition
-    q_rule = dolfinx_cuas.QuadratureRule(mesh.topology.cell_type, quadrature_degree,
-                                         mesh.topology.dim - 1, basix.QuadratureType.Default)
+    q_rule = dolfinx_contact.QuadratureRule(mesh.topology.cell_type, quadrature_degree,
+                                            mesh.topology.dim - 1, basix.QuadratureType.Default)
     consts = np.array([E * gamma, theta])
     consts = np.hstack((consts, n_vec))
 
@@ -169,7 +168,7 @@ def nitsche_cuas(mesh: dmesh.Mesh, mesh_data: Tuple[dmesh.meshtags, int, int],
         u.vector[:] = x.array
         u_packed = dolfinx_cuas.pack_coefficients([u._cpp_object], integral_entities)
         c = np.hstack([u_packed, coeffs])
-        dolfinx_cuas.assemble_vector(b, V, bottom_facets, kernel_rhs, c, consts, integral)
+        contact.assemble_vector(b, 0, kernel_rhs, c, consts)
         _fem.petsc.assemble_vector(b, L_cuas)
 
     # Create Jacobian kernels
@@ -184,7 +183,7 @@ def nitsche_cuas(mesh: dmesh.Mesh, mesh_data: Tuple[dmesh.meshtags, int, int],
         u.vector[:] = x.array
         u_packed = dolfinx_cuas.pack_coefficients([u._cpp_object], integral_entities)
         c = np.hstack([u_packed, coeffs])
-        dolfinx_cuas.assemble_matrix(A, V, bottom_facets, kernel_J, c, consts, integral)
+        contact.assemble_matrix(A, [], 0, kernel_J, c, consts)
         _fem.petsc.assemble_matrix(A, a_cuas)
 
     # Setup non-linear problem and Newton-solver

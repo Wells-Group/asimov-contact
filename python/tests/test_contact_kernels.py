@@ -132,8 +132,8 @@ def test_vector_surface_kernel(dim, kernel_type, P, Q):
     contact.set_quadrature_degree(2 * P + Q + 1)
     g_vec = contact.pack_gap_plane(0, -g)
     # FIXME: assuming all facets are the same type
-    q_rule = dolfinx_cuas.cpp.QuadratureRule(mesh.topology.cell_type, 2 * P
-                                             + Q + 1, mesh.topology.dim - 1, basix.QuadratureType.Default)
+    q_rule = dolfinx_contact.QuadratureRule(mesh.topology.cell_type, 2 * P
+                                            + Q + 1, mesh.topology.dim - 1, basix.QuadratureType.Default)
     coeffs = np.hstack([coeffs, h_facets, g_vec])
 
     L_cuas = ufl.inner(sigma(u), epsilon(v)) * dx
@@ -243,8 +243,8 @@ def test_matrix_surface_kernel(dim, kernel_type, P, Q):
     A.assemble()
 
     # Custom assembly
-    q_rule = dolfinx_cuas.cpp.QuadratureRule(mesh.topology.cell_type, 2 * P
-                                             + Q + 1, mesh.topology.dim - 1, basix.QuadratureType.Default)
+    q_rule = dolfinx_contact.QuadratureRule(mesh.topology.cell_type, 2 * P
+                                            + Q + 1, mesh.topology.dim - 1, basix.QuadratureType.Default)
     consts = np.array([gamma, theta])
     consts = np.hstack((consts, n_vec))
     integral_entities = dolfinx_cuas.cpp.compute_active_entities(mesh, facets, IntegralType.exterior_facet)

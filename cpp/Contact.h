@@ -24,10 +24,6 @@
 #include <xtensor/xbuilder.hpp>
 #include <xtensor/xindex_view.hpp>
 
-using contact_kernel_fn = std::function<void(
-    std::vector<std::vector<PetscScalar>>&, const double*, const double*,
-    const double*, const int*, const std::size_t)>;
-
 using mat_set_fn = const std::function<int(
     const xtl::span<const std::int32_t>&, const xtl::span<const std::int32_t>&,
     const xtl::span<const PetscScalar>&)>;
@@ -164,7 +160,7 @@ public:
       const mat_set_fn& mat_set,
       const std::vector<
           std::shared_ptr<const dolfinx::fem::DirichletBC<PetscScalar>>>& bcs,
-      int origin_meshtag, const contact_kernel_fn& kernel,
+      int origin_meshtag, const kernel_fn<PetscScalar>& kernel,
       const xtl::span<const PetscScalar> coeffs, int cstride,
       const xtl::span<const PetscScalar>& constants);
 
@@ -177,7 +173,7 @@ public:
   /// @param[in] cstride Number of coefficients per facet
   /// @param[in] constants used in the variational form
   void assemble_vector(xtl::span<PetscScalar> b, int origin_meshtag,
-                       const contact_kernel_fn& kernel,
+                       const kernel_fn<PetscScalar>& kernel,
                        const xtl::span<const PetscScalar>& coeffs, int cstride,
                        const xtl::span<const PetscScalar>& constants);
 
@@ -197,7 +193,7 @@ public:
   /// packed at quadrature points. The coefficient `u` is packed at dofs.
   /// @note The vector valued coefficents `gap`, `test_fn`, `u`, `u_opposite`
   /// has dimension `bs == gdim`.
-  contact_kernel_fn generate_kernel(dolfinx_contact::Kernel type)
+  kernel_fn<PetscScalar> generate_kernel(dolfinx_contact::Kernel type)
   {
     // Extract mesh data
     auto mesh = _marker->mesh();
@@ -328,13 +324,11 @@ public:
     /// `gamma`, `theta`.
     /// @param[in] coordinate_dofs The physical coordinates of cell. Assumed to
     /// be padded to 3D, (shape (num_nodes, 3)).
-    contact_kernel_fn unbiased_rhs
-        = [=](std::vector<std::vector<PetscScalar>>& b, const double* c,
-              const double* w, const double* coordinate_dofs,
-              const int* entity_local_index, const std::size_t num_links)
+    kernel_fn<PetscScalar> unbiased_rhs
+        = [=](std::vector<std::vector<PetscScalar>>& b, const PetscScalar* c,
+              const PetscScalar* w, const double* coordinate_dofs,
+              const int facet_index, const std::size_t num_links)
     {
-      const auto facet_index = size_t(*entity_local_index);
-
       // NOTE: DOLFINx has 3D input coordinate dofs
       // FIXME: These array should be views (when compute_jacobian doesn't use
       // xtensor)
@@ -489,13 +483,11 @@ public:
     /// `gamma`, `theta`.
     /// @param[in] coordinate_dofs The physical coordinates of cell. Assumed
     /// to be padded to 3D, (shape (num_nodes, 3)).
-    contact_kernel_fn unbiased_jac
+    kernel_fn<PetscScalar> unbiased_jac
         = [=](std::vector<std::vector<PetscScalar>>& A, const double* c,
               const double* w, const double* coordinate_dofs,
-              const int* entity_local_index, const std::size_t num_links)
+              const int facet_index, const std::size_t num_links)
     {
-      const auto facet_index = std::size_t(*entity_local_index);
-
       // Reshape coordinate dofs to two dimensional array
       // NOTE: DOLFINx has 3D input coordinate dofs
       std::array<std::size_t, 2> shape = {(std::size_t)num_coordinate_dofs, 3};

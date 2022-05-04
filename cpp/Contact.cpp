@@ -5,6 +5,8 @@
 // SPDX-License-Identifier:    MIT
 
 #include "Contact.h"
+#include "utils.h"
+#include <dolfinx/common/log.h>
 #include <dolfinx_cuas/utils.hpp>
 using namespace dolfinx_contact;
 
@@ -244,7 +246,7 @@ void dolfinx_contact::Contact::assemble_matrix(
     mat_set_fn& mat_set,
     [[maybe_unused]] const std::vector<
         std::shared_ptr<const dolfinx::fem::DirichletBC<PetscScalar>>>& bcs,
-    int origin_meshtag, const contact_kernel_fn& kernel,
+    int origin_meshtag, const dolfinx_contact::kernel_fn<PetscScalar>& kernel,
     const xtl::span<const PetscScalar> coeffs, int cstride,
     const xtl::span<const PetscScalar>& constants)
 {
@@ -261,9 +263,7 @@ void dolfinx_contact::Contact::assemble_matrix(
   const std::size_t num_dofs_g = cmap.dim();
 
   std::shared_ptr<const dolfinx::fem::FiniteElement> element = _V->element();
-  if (const bool needs_dof_transformations
-      = element->needs_dof_transformations();
-      needs_dof_transformations)
+  if (element->needs_dof_transformations())
   {
     throw std::invalid_argument(
         "Function-space requiring dof-transformations is not supported.");
@@ -275,6 +275,12 @@ void dolfinx_contact::Contact::assemble_matrix(
   const int bs = dofmap->bs();
 
   std::size_t max_links = std::max(_max_links[0], _max_links[1]);
+  if (max_links == 0)
+  {
+    LOG(WARNING)
+        << "No links between interfaces, compute_linked_cell will be skipped";
+  }
+
   auto active_facets = _cell_facet_pairs[origin_meshtag];
   auto map = _facet_maps[origin_meshtag];
   auto facet_map = _submeshes[_opposites[origin_meshtag]].facet_map();
@@ -295,10 +301,13 @@ void dolfinx_contact::Contact::assemble_matrix(
       std::copy_n(std::next(x_g.begin(), 3 * x_dofs[j]), gdim,
                   std::next(coordinate_dofs.begin(), j * 3));
     }
-    // Compute the unique set of cells linked to the current facet
-    compute_linked_cells(linked_cells, map->links((int)i), facet_map,
-                         parent_cells);
 
+    if (max_links > 0)
+    {
+      // Compute the unique set of cells linked to the current facet
+      compute_linked_cells(linked_cells, map->links((int)i), facet_map,
+                           parent_cells);
+    }
     // Fill initial local element matrices with zeros prior to assembly
     const std::size_t num_linked_cells = linked_cells.size();
     std::fill(Aes[0].begin(), Aes[0].end(), 0);
@@ -310,7 +319,7 @@ void dolfinx_contact::Contact::assemble_matrix(
     }
 
     kernel(Aes, coeffs.data() + i * cstride, constants.data(),
-           coordinate_dofs.data(), &local_index, num_linked_cells);
+           coordinate_dofs.data(), local_index, num_linked_cells);
 
     // FIXME: We would have to handle possible Dirichlet conditions here, if we
     // think that we can have a case with contact and Dirichlet
@@ -330,8 +339,9 @@ void dolfinx_contact::Contact::assemble_matrix(
 
 void dolfinx_contact::Contact::assemble_vector(
     xtl::span<PetscScalar> b, int origin_meshtag,
-    const contact_kernel_fn& kernel, const xtl::span<const PetscScalar>& coeffs,
-    int cstride, const xtl::span<const PetscScalar>& constants)
+    const dolfinx_contact::kernel_fn<PetscScalar>& kernel,
+    const xtl::span<const PetscScalar>& coeffs, int cstride,
+    const xtl::span<const PetscScalar>& constants)
 {
   /// Check that we support the function space
   std::shared_ptr<const dolfinx::fem::FiniteElement> element = _V->element();
@@ -369,6 +379,11 @@ void dolfinx_contact::Contact::assemble_vector(
   auto facet_map = _submeshes[_opposites[origin_meshtag]].facet_map();
   auto parent_cells = _submeshes[_opposites[origin_meshtag]].parent_cells();
   std::size_t max_links = std::max(_max_links[0], _max_links[1]);
+  if (max_links == 0)
+  {
+    LOG(WARNING)
+        << "No links between interfaces, compute_linked_cell will be skipped";
+  }
   // Data structures used in assembly
   std::vector<double> coordinate_dofs(3 * num_dofs_g);
   std::vector<std::vector<PetscScalar>> bes(
@@ -389,8 +404,11 @@ void dolfinx_contact::Contact::assemble_vector(
     }
 
     // Compute the unique set of cells linked to the current facet
-    compute_linked_cells(linked_cells, map->links((int)i), facet_map,
-                         parent_cells);
+    if (max_links > 0)
+    {
+      compute_linked_cells(linked_cells, map->links((int)i), facet_map,
+                           parent_cells);
+    }
 
     // Using integer loop here to reduce number of zeroed vectors
     const std::size_t num_linked_cells = linked_cells.size();
@@ -398,7 +416,7 @@ void dolfinx_contact::Contact::assemble_vector(
     for (std::size_t j = 0; j < num_linked_cells; j++)
       std::fill(bes[j + 1].begin(), bes[j + 1].end(), 0);
     kernel(bes, coeffs.data() + i * cstride, constants.data(),
-           coordinate_dofs.data(), &local_index, num_linked_cells);
+           coordinate_dofs.data(), local_index, num_linked_cells);
 
     // Add element vector to global vector
     auto dofs_cell = dofmap->cell_dofs(cell);

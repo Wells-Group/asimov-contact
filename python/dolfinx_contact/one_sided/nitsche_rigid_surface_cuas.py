@@ -10,7 +10,6 @@ import dolfinx.fem as _fem
 import dolfinx.log as _log
 import dolfinx.mesh as _mesh
 import dolfinx_cuas
-import dolfinx_cuas.cpp
 import numpy as np
 import ufl
 from petsc4py import PETSc as _PETSc
@@ -139,8 +138,8 @@ def nitsche_rigid_surface_cuas(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTags
 
     # Custom assembly of contact boundary conditions
     _log.set_log_level(_log.LogLevel.OFF)  # avoid large amounts of output
-    q_rule = dolfinx_cuas.cpp.QuadratureRule(mesh.topology.cell_type, quadrature_degree,
-                                             mesh.topology.dim - 1, basix.QuadratureType.Default)
+    q_rule = dolfinx_contact.QuadratureRule(mesh.topology.cell_type, quadrature_degree,
+                                            mesh.topology.dim - 1, basix.QuadratureType.Default)
     consts = np.array([gamma * E, theta])
 
     # Compute coefficients for mu and lambda as DG-0 functions
@@ -182,6 +181,11 @@ def nitsche_rigid_surface_cuas(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTags
                                                              [u._cpp_object, mu2._cpp_object, lmbda2._cpp_object],
                                                              False)
 
+    # NOTE: HACK to make "one-sided" contact work with assemble_matrix/assemble_vector
+    contact_assembler = dolfinx_contact.cpp.Contact(
+        facet_marker, [contact_value_elastic, contact_value_rigid], V._cpp_object)
+    contact_assembler.set_quadrature_degree(quadrature_degree)
+
     def create_b():
         return _fem.petsc.create_vector(F_cuas)
 
@@ -189,7 +193,7 @@ def nitsche_rigid_surface_cuas(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTags
         u.vector[:] = x.array
         u_packed = dolfinx_cuas.cpp.pack_coefficients([u._cpp_object], integral_entities)
         c = np.hstack([u_packed, coeffs])
-        dolfinx_cuas.assemble_vector(b, V, contact_facets, kernel_rhs, c, consts, integral)
+        contact_assembler.assemble_vector(b, 0, kernel_rhs, c, consts)
         _fem.petsc.assemble_vector(b, F_cuas)
 
     # Create Jacobian kernels
@@ -204,7 +208,7 @@ def nitsche_rigid_surface_cuas(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTags
         u.vector[:] = x.array
         u_packed = dolfinx_cuas.cpp.pack_coefficients([u._cpp_object], integral_entities)
         c = np.hstack([u_packed, coeffs])
-        dolfinx_cuas.assemble_matrix(A, V, contact_facets, kernel_J, c, consts, integral)
+        contact_assembler.assemble_matrix(A, [], 0, kernel_J, c, consts)
         _fem.petsc.assemble_matrix(A, J_cuas)
 
     # Setup non-linear problem and Newton-solver
