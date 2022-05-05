@@ -584,7 +584,7 @@ dolfinx_contact::compute_active_entities(
           assert(f_to_c);
           auto c_to_f = topology.connectivity(tdim, tdim - 1);
           assert(c_to_f);
-          for (std::int32_t f = 0; f < entities.size(); f++)
+          for (std::size_t f = 0; f < entities.size(); f++)
           {
             assert(f_to_c->num_links(entities[f]) == 1);
             const std::int32_t cell = f_to_c->links(entities[f])[0];
@@ -607,11 +607,11 @@ dolfinx_contact::compute_active_entities(
           auto c_to_f = topology.connectivity(tdim, tdim - 1);
           assert(c_to_f);
           std::array<std::pair<std::int32_t, int>, 2> interior_facets;
-          for (std::int32_t f = 0; f < entities.size(); f++)
+          for (std::size_t f = 0; f < entities.size(); f++)
           {
             assert(f_to_c->num_links(entities[f]) == 2);
             auto cells = f_to_c->links(entities[f]);
-            for (std::int32_t i = 0; i < 2; i++)
+            for (std::size_t i = 0; i < 2; i++)
             {
               auto cell_facets = c_to_f->links(cells[i]);
               auto facet_it = std::find(cell_facets.begin(), cell_facets.end(),
