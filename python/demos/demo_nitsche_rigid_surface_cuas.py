@@ -187,8 +187,9 @@ if __name__ == "__main__":
 
     # Solve contact problem using Nitsche's method
     u1 = nitsche_rigid_surface_custom(mesh=mesh, mesh_data=mesh_data, physical_parameters=physical_parameters,
-                                      nitsche_parameters=nitsche_parameters, vertical_displacement=vertical_displacement,
-                                      nitsche_bc=True, quadrature_degree=3, petsc_options=petsc_options,
+                                      nitsche_parameters=nitsche_parameters,
+                                      vertical_displacement=vertical_displacement, nitsche_bc=True,
+                                      quadrature_degree=3, petsc_options=petsc_options,
                                       newton_options=newton_options)
 
     with XDMFFile(mesh.comm, "results/u_custom_rigid.xdmf", "w") as xdmf:

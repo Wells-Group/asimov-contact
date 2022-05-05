@@ -23,10 +23,11 @@ kt = dolfinx_contact.cpp.Kernel
 
 
 def nitsche_rigid_surface_custom(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTagsMetaClass, int, int, int, int],
-                                 physical_parameters: dict = {}, nitsche_parameters: Dict[str, float] = {},
-                                 vertical_displacement: float = -0.1, nitsche_bc: bool = True, quadrature_degree: int = 5,
-                                 form_compiler_params: Dict = {}, jit_params: Dict = {}, petsc_options: Dict = {},
-                                 newton_options: Dict = {}):
+                                 physical_parameters: dict = None, nitsche_parameters: Dict[str, float] = None,
+                                 vertical_displacement: float = -0.1, nitsche_bc: bool = True,
+                                 quadrature_degree: int = 5, form_compiler_params: Dict = None,
+                                 jit_params: Dict = None, petsc_options: Dict = None,
+                                 newton_options: Dict = None):
     """
     Use custom kernel to compute the one sided contact problem with a mesh coming into contact
     with a rigid surface (meshed).
@@ -73,6 +74,20 @@ def nitsche_rigid_surface_custom(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTa
         ("atol", float), ("rtol", float), ("convergence_criterion", "str"),
         ("max_it", int), ("error_on_nonconvergence", bool), ("relaxation_parameter", float)
     """
+    # Check input dictionaries
+    if form_compiler_params is None:
+        form_compiler_params = {}
+    if jit_params is None:
+        jit_params = {}
+    if petsc_options is None:
+        petsc_options = {}
+    if newton_options is None:
+        newton_options = {}
+    if nitsche_parameters is None:
+        nitsche_parameters = {}
+    if physical_parameters is None:
+        physical_parameters = {}
+
     # Compute lame parameters
     plane_strain = physical_parameters.get("strain", False)
     E = physical_parameters.get("E", 1e3)
