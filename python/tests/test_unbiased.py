@@ -287,8 +287,8 @@ def create_contact_data(V, u, quadrature_degree, lmbda, mu, facets_cg):
 
     # compute active entities
     integral = _fem.IntegralType.exterior_facet
-    entities_0 = dolfinx_cuas.compute_active_entities(mesh, facets_cg[0], integral)
-    entities_1 = dolfinx_cuas.compute_active_entities(mesh, facets_cg[1], integral)
+    entities_0 = dolfinx_contact.compute_active_entities(mesh, facets_cg[0], integral)
+    entities_1 = dolfinx_contact.compute_active_entities(mesh, facets_cg[1], integral)
 
     # pack coeffs mu, lambda
     material_0 = dolfinx_cuas.pack_coefficients([mu2, lmbda2], entities_0)

@@ -286,4 +286,64 @@ PYBIND11_MODULE(cpp, m)
   m.def("update_geometry", [](const dolfinx::fem::Function<PetscScalar>& u,
                               std::shared_ptr<dolfinx::mesh::Mesh> mesh)
         { dolfinx_contact::update_geometry(u, mesh); });
+
+  m.def(
+      "compute_active_entities",
+      [](std::shared_ptr<const dolfinx::mesh::Mesh> mesh,
+         py::array_t<std::int32_t, py::array::c_style>& entities,
+         dolfinx::fem::IntegralType integral)
+      {
+        auto entity_span
+            = xtl::span<const std::int32_t>(entities.data(), entities.size());
+        std::variant<
+            std::vector<std::int32_t>,
+            std::vector<std::pair<std::int32_t, int>>,
+            std::vector<std::tuple<std::int32_t, int, std::int32_t, int>>>
+            active_entities = dolfinx_contact::compute_active_entities(
+                mesh, entity_span, integral);
+        py::array_t<std::int32_t> output = std::visit(
+            [&](auto&& output)
+            {
+              using U = std::decay_t<decltype(output)>;
+              if constexpr (std::is_same_v<U, std::vector<std::int32_t>>)
+              {
+                py::array_t<std::int32_t> domains(output.size(), output.data());
+                return domains;
+              }
+              else if constexpr (std::is_same_v<
+                                     U,
+                                     std::vector<std::pair<std::int32_t, int>>>)
+              {
+                std::array<py::ssize_t, 2> shape
+                    = {py::ssize_t(output.size()), 2};
+                py::array_t<std::int32_t> domains(shape);
+                auto d = domains.mutable_unchecked<2>();
+                for (py::ssize_t i = 0; i < d.shape(0); ++i)
+                {
+                  d(i, 0) = output[i].first;
+                  d(i, 1) = output[i].second;
+                }
+                return domains;
+              }
+              else if constexpr (std::is_same_v<U, std::vector<std::tuple<
+                                                       std::int32_t, int,
+                                                       std::int32_t, int>>>)
+              {
+                std::array<py::ssize_t, 3> shape
+                    = {py::ssize_t(output.size()), 2, 2};
+                py::array_t<std::int32_t> domains(shape);
+                auto d = domains.mutable_unchecked<3>();
+                for (py::ssize_t i = 0; i < d.shape(0); ++i)
+                {
+                  d(i, 0, 0) = std::get<0>(output[i]);
+                  d(i, 0, 1) = std::get<1>(output[i]);
+                  d(i, 1, 0) = std::get<2>(output[i]);
+                  d(i, 1, 1) = std::get<3>(output[i]);
+                }
+                return domains;
+              }
+            },
+            active_entities);
+        return output;
+      });
 }

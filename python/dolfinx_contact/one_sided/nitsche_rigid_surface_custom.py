@@ -12,22 +12,21 @@ import dolfinx.mesh as _mesh
 import dolfinx_cuas
 import numpy as np
 import ufl
-from petsc4py import PETSc as _PETSc
 
 import dolfinx_contact
 import dolfinx_contact.cpp
 from dolfinx_contact.helpers import (epsilon, lame_parameters,
                                      rigid_motions_nullspace, sigma_func)
 
-__all__ = ["nitsche_rigid_surface_cuas"]
+__all__ = ["nitsche_rigid_surface_custom"]
 kt = dolfinx_contact.cpp.Kernel
 
 
-def nitsche_rigid_surface_cuas(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTagsMetaClass, int, int, int, int],
-                               physical_parameters: dict = {}, nitsche_parameters: Dict[str, float] = {},
-                               vertical_displacement: float = -0.1, nitsche_bc: bool = True, quadrature_degree: int = 5,
-                               form_compiler_params: Dict = {}, jit_params: Dict = {}, petsc_options: Dict = {},
-                               newton_options: Dict = {}):
+def nitsche_rigid_surface_custom(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTagsMetaClass, int, int, int, int],
+                                 physical_parameters: dict = {}, nitsche_parameters: Dict[str, float] = {},
+                                 vertical_displacement: float = -0.1, nitsche_bc: bool = True, quadrature_degree: int = 5,
+                                 form_compiler_params: Dict = {}, jit_params: Dict = {}, petsc_options: Dict = {},
+                                 newton_options: Dict = {}):
     """
     Use custom kernel to compute the one sided contact problem with a mesh coming into contact
     with a rigid surface (meshed).
@@ -152,7 +151,7 @@ def nitsche_rigid_surface_cuas(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTags
     # Compute integral entities on exterior facets (cell_index, local_index)
     contact_facets = facet_marker.indices[facet_marker.values == contact_value_elastic]
     integral = _fem.IntegralType.exterior_facet
-    integral_entities = dolfinx_cuas.cpp.compute_active_entities(mesh, contact_facets, integral)
+    integral_entities = dolfinx_contact.compute_active_entities(mesh, contact_facets, integral)
 
     # Pack mu and lambda on facets
     coeffs = dolfinx_cuas.pack_coefficients([mu2, lmbda2], integral_entities)
@@ -172,60 +171,77 @@ def nitsche_rigid_surface_cuas(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTags
     g_vec = contact.pack_gap(0)
     n_surf = contact.pack_ny(0, g_vec)
 
-    # Concatenate coefficients
-    coeffs = np.hstack([coeffs, h_facets, g_vec, n_surf])
+    # Concatenate "constant" coefficients
+    constant_coeffs = np.hstack([coeffs, h_facets, g_vec, n_surf])
 
     # Create RHS kernels
-    F_cuas = _fem.form(F, jit_params=jit_params, form_compiler_params=form_compiler_params)
+    F_custom = _fem.form(F, jit_params=jit_params, form_compiler_params=form_compiler_params)
     kernel_rhs = dolfinx_contact.cpp.generate_contact_kernel(V._cpp_object, kt.Rhs, q_rule,
                                                              [u._cpp_object, mu2._cpp_object, lmbda2._cpp_object],
                                                              False)
+
+    # Create Jacobian kernels
+    J_custom = _fem.form(J, jit_params=jit_params, form_compiler_params=form_compiler_params)
+    kernel_J = dolfinx_contact.cpp.generate_contact_kernel(
+        V._cpp_object, kt.Jac, q_rule, [u._cpp_object, mu2._cpp_object, lmbda2._cpp_object], False)
 
     # NOTE: HACK to make "one-sided" contact work with assemble_matrix/assemble_vector
     contact_assembler = dolfinx_contact.cpp.Contact(
         facet_marker, [contact_value_elastic, contact_value_rigid], V._cpp_object)
     contact_assembler.set_quadrature_degree(quadrature_degree)
 
-    def create_b():
-        return _fem.petsc.create_vector(F_cuas)
-
-    def F(x, b):
+    def pack_coefficients(x, solver_coeffs):
+        """
+        Function for updating pack coefficients inside the Newton solver.
+        As only u is varying withing the Newton solver, we only update it.
+        """
         u.vector[:] = x.array
         u_packed = dolfinx_cuas.cpp.pack_coefficients([u._cpp_object], integral_entities)
-        c = np.hstack([u_packed, coeffs])
-        contact_assembler.assemble_vector(b, 0, kernel_rhs, c, consts)
-        _fem.petsc.assemble_vector(b, F_cuas)
+        solver_coeffs[:, :u_packed.shape[1]] = u_packed
 
-    # Create Jacobian kernels
-    J_cuas = _fem.form(J, jit_params=jit_params, form_compiler_params=form_compiler_params)
-    kernel_J = dolfinx_contact.cpp.generate_contact_kernel(
-        V._cpp_object, kt.Jac, q_rule, [u._cpp_object, mu2._cpp_object, lmbda2._cpp_object], False)
+    def compute_residual(x, b, coeffs):
+        """
+        Compute residual for Newton solver RHS, given precomputed coefficients
+        """
+        with b.localForm() as b_local:
+            b_local.set(0.0)
+        contact_assembler.assemble_vector(b, 0, kernel_rhs, coeffs, consts)
+        _fem.petsc.assemble_vector(b, F_custom)
 
-    def create_A():
-        return _fem.petsc.create_matrix(J_cuas)
+    def compute_jacobian(x, A, coeffs):
+        """
+        Compute Jacobian for Newton solver LHS, given precomputed coefficients
+        """
+        A.zeroEntries()
+        contact_assembler.assemble_matrix(A, [], 0, kernel_J, coeffs, consts)
+        _fem.petsc.assemble_matrix(A, J_custom)
+        A.assemble()
 
-    def A(x, A):
-        u.vector[:] = x.array
-        u_packed = dolfinx_cuas.cpp.pack_coefficients([u._cpp_object], integral_entities)
-        c = np.hstack([u_packed, coeffs])
-        contact_assembler.assemble_matrix(A, [], 0, kernel_J, c, consts)
-        _fem.petsc.assemble_matrix(A, J_cuas)
+    # Pack coefficients to get numpy array of correct size for Newton solver
+    u_packed = dolfinx_cuas.cpp.pack_coefficients([u._cpp_object], integral_entities)
 
     # Setup non-linear problem and Newton-solver
-    problem = dolfinx_cuas.NonlinearProblemCUAS(F, A, create_b, create_A)
-    solver = dolfinx_cuas.NewtonSolver(mesh.comm, problem)
+    A = _fem.petsc.create_matrix(J_custom)
+    b = _fem.petsc.create_vector(F_custom)
+
+    solver = dolfinx_contact.NewtonSolver(mesh.comm, A, b, np.hstack([u_packed, constant_coeffs]))
+    solver.setJ(compute_jacobian)
+    solver.setF(compute_residual)
+    solver.setCoeffs(pack_coefficients)
+    solver.set_krylov_options(petsc_options)
 
     # Create rigid motion null-space
     null_space = rigid_motions_nullspace(V)
     solver.A.setNearNullSpace(null_space)
 
     # Set Newton solver options
-    solver.atol = newton_options.get("atol", 1e-9)
-    solver.rtol = newton_options.get("rtol", 1e-9)
-    solver.convergence_criterion = newton_options.get("convergence_criterion", "incremental")
-    solver.max_it = newton_options.get("max_it", 50)
-    solver.error_on_nonconvergence = newton_options.get("error_on_nonconvergence", True)
-    solver.relaxation_parameter = newton_options.get("relaxation_parameter", 1.0)
+
+    # Create rigid motion null - space
+    null_space = rigid_motions_nullspace(V)
+    solver.A.setNearNullSpace(null_space)
+
+    # Set Newton solver options
+    solver.setNewtonOptions(newton_options)
 
     # Set initial condition
     def _u_initial(x):
@@ -233,19 +249,6 @@ def nitsche_rigid_surface_cuas(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTags
         values[-1] = -vertical_displacement
         return values
     u.interpolate(_u_initial)
-
-    # Define solver and options
-    ksp = solver.krylov_solver
-    opts = _PETSc.Options()
-    option_prefix = ksp.getOptionsPrefix()
-
-    # Set PETSc options
-    opts = _PETSc.Options()
-    opts.prefixPush(option_prefix)
-    for k, v in petsc_options.items():
-        opts[k] = v
-    opts.prefixPop()
-    ksp.setFromOptions()
 
     dofs_global = V.dofmap.index_map_bs * V.dofmap.index_map.size_global
     _log.set_log_level(_log.LogLevel.INFO)

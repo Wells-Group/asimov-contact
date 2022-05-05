@@ -178,4 +178,22 @@ std::function<void(xt::xtensor<double, 1>&, const xt::xtensor<double, 2>&,
                    const xt::xtensor<double, 2>&, std::size_t)>
 get_update_normal(const dolfinx::fem::CoordinateElement& cmap);
 
+/// @brief Convert local entity indices to integration entities
+///
+/// Compute the active entities in DOLFINx format for a given integral type over
+/// a set of entities If the integral type is cell, return the input, if it is
+/// exterior facets, return a list of pairs (cell, local_facet_index), and if it
+/// is interior facets, return a list of tuples (cell_0, local_facet_index_0,
+/// cell_1, local_facet_index_1) for each entity.
+///
+/// @param[in] mesh The mesh
+/// @param[in] entities List of mesh entities
+/// @param[in] integral The type of integral
+std::variant<std::vector<std::int32_t>,
+             std::vector<std::pair<std::int32_t, int>>,
+             std::vector<std::tuple<std::int32_t, int, std::int32_t, int>>>
+compute_active_entities(std::shared_ptr<const dolfinx::mesh::Mesh> mesh,
+                        tcb::span<const std::int32_t> entities,
+                        dolfinx::fem::IntegralType integral);
+
 } // namespace dolfinx_contact

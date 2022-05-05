@@ -19,14 +19,14 @@ import dolfinx_contact.cpp
 from dolfinx_contact.helpers import (epsilon, lame_parameters,
                                      rigid_motions_nullspace, sigma_func)
 
-__all__ = ["nitsche_cuas"]
+__all__ = ["nitsche_custom"]
 
 
-def nitsche_cuas(mesh: dmesh.Mesh, mesh_data: Tuple[dmesh.meshtags, int, int],
-                 physical_parameters: dict = {}, nitsche_parameters: Dict[str, float] = {},
-                 plane_loc: float = 0.0, vertical_displacement: float = -0.1,
-                 nitsche_bc: bool = True, quadrature_degree: int = 5, form_compiler_params: Dict = {},
-                 jit_params: Dict = {}, petsc_options: Dict = {}, newton_options: Dict = {}) -> _fem.Function:
+def nitsche_custom(mesh: dmesh.Mesh, mesh_data: Tuple[dmesh.meshtags, int, int],
+                   physical_parameters: dict = {}, nitsche_parameters: Dict[str, float] = {},
+                   plane_loc: float = 0.0, vertical_displacement: float = -0.1,
+                   nitsche_bc: bool = True, quadrature_degree: int = 5, form_compiler_params: Dict = {},
+                   jit_params: Dict = {}, petsc_options: Dict = {}, newton_options: Dict = {}) -> _fem.Function:
     """
     Use custom kernel to compute the one sided contact problem with a mesh coming into contact
     with a rigid surface (not meshed).
@@ -141,7 +141,7 @@ def nitsche_cuas(mesh: dmesh.Mesh, mesh_data: Tuple[dmesh.meshtags, int, int],
     # Compute integral entities on exterior facets (cell_index, local_index)
     bottom_facets = facet_marker.indices[facet_marker.values == contact_value]
     integral = _fem.IntegralType.exterior_facet
-    integral_entities = dolfinx_cuas.compute_active_entities(mesh, bottom_facets, integral)
+    integral_entities = dolfinx_contact.compute_active_entities(mesh, bottom_facets, integral)
     # Pack mu and lambda on facets
     coeffs = dolfinx_cuas.pack_coefficients([mu2, lmbda2], integral_entities)
     # Pack circumradius of facets
@@ -157,34 +157,34 @@ def nitsche_cuas(mesh: dmesh.Mesh, mesh_data: Tuple[dmesh.meshtags, int, int],
     coeffs = np.hstack([coeffs, h_facets, g_vec])
 
     # Create RHS kernels
-    L_cuas = _fem.form(F, jit_params=jit_params, form_compiler_params=form_compiler_params)
+    L_custom = _fem.form(F, jit_params=jit_params, form_compiler_params=form_compiler_params)
     kernel_rhs = dolfinx_contact.cpp.generate_contact_kernel(V._cpp_object, dolfinx_contact.Kernel.Rhs, q_rule,
                                                              [u._cpp_object, mu2._cpp_object, lmbda2._cpp_object])
 
     def create_b():
-        return _fem.petsc.create_vector(L_cuas)
+        return _fem.petsc.create_vector(L_custom)
 
     def F(x, b):
         u.vector[:] = x.array
         u_packed = dolfinx_cuas.pack_coefficients([u._cpp_object], integral_entities)
         c = np.hstack([u_packed, coeffs])
         contact.assemble_vector(b, 0, kernel_rhs, c, consts)
-        _fem.petsc.assemble_vector(b, L_cuas)
+        _fem.petsc.assemble_vector(b, L_custom)
 
     # Create Jacobian kernels
-    a_cuas = _fem.form(J, jit_params=jit_params, form_compiler_params=form_compiler_params)
+    a_custom = _fem.form(J, jit_params=jit_params, form_compiler_params=form_compiler_params)
     kernel_J = dolfinx_contact.cpp.generate_contact_kernel(
         V._cpp_object, dolfinx_contact.Kernel.Jac, q_rule, [u._cpp_object, mu2._cpp_object, lmbda2._cpp_object])
 
     def create_A():
-        return _fem.petsc.create_matrix(a_cuas)
+        return _fem.petsc.create_matrix(a_custom)
 
     def A(x, A):
         u.vector[:] = x.array
         u_packed = dolfinx_cuas.pack_coefficients([u._cpp_object], integral_entities)
         c = np.hstack([u_packed, coeffs])
         contact.assemble_matrix(A, [], 0, kernel_J, c, consts)
-        _fem.petsc.assemble_matrix(A, a_cuas)
+        _fem.petsc.assemble_matrix(A, a_custom)
 
     # Setup non-linear problem and Newton-solver
     problem = dolfinx_cuas.NonlinearProblemCUAS(F, A, create_b, create_A)
