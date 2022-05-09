@@ -187,7 +187,7 @@ def test_contact_kernel(theta, gamma, dim, gap):
         mu2.interpolate(mu_func2)
         u.interpolate(_u_initial)
 
-        integral_entities = dolfinx_cuas.cpp.compute_active_entities(
+        integral_entities = dolfinx_contact.compute_active_entities(
             mesh, bottom_facets, dolfinx.fem.IntegralType.exterior_facet)
         coeffs = dolfinx_cuas.cpp.pack_coefficients(
             [u._cpp_object, mu2._cpp_object, lmbda2._cpp_object], integral_entities)
@@ -203,8 +203,9 @@ def test_contact_kernel(theta, gamma, dim, gap):
         kernel = dolfinx_contact.cpp.generate_contact_kernel(V._cpp_object, kt.Rhs, q_rule,
                                                              [u._cpp_object, mu2._cpp_object, lmbda2._cpp_object])
         b2.zeroEntries()
-        dolfinx_cuas.assemble_vector(b2, V, bottom_facets, kernel, coeffs, consts,
-                                     dolfinx.fem.IntegralType.exterior_facet)
+        contact_assembler = dolfinx_contact.cpp.Contact(facet_marker, [bottom_value, top_value], V._cpp_object)
+        contact_assembler.set_quadrature_degree(q_deg)
+        contact_assembler.assemble_vector(b2, 0, kernel, coeffs, consts)
         dolfinx.fem.petsc.assemble_vector(b2, L_cuas)
         b2.assemble()
         # Jacobian
@@ -214,8 +215,7 @@ def test_contact_kernel(theta, gamma, dim, gap):
         kernel = dolfinx_contact.cpp.generate_contact_kernel(
             V._cpp_object, kt.Jac, q_rule, [u._cpp_object, mu2._cpp_object, lmbda2._cpp_object])
         B.zeroEntries()
-        dolfinx_cuas.assemble_matrix(B, V, bottom_facets, kernel, coeffs, consts,
-                                     dolfinx.fem.IntegralType.exterior_facet)
+        contact_assembler.assemble_matrix(B, [], 0, kernel, coeffs, consts)
         dolfinx.fem.petsc.assemble_matrix(B, a_cuas)
         B.assemble()
         assert(np.allclose(b.array, b2.array))
