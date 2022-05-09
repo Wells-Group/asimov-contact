@@ -10,10 +10,10 @@
 #include <dolfinx/la/petsc.h>
 #include <dolfinx/mesh/MeshTags.h>
 #include <dolfinx_contact/Contact.h>
+#include <dolfinx_contact/QuadratureRule.h>
 #include <dolfinx_contact/coefficients.h>
 #include <dolfinx_contact/contact_kernels.hpp>
 #include <dolfinx_contact/utils.h>
-#include <dolfinx_cuas/kernelwrapper.h>
 #include <iostream>
 #include <pybind11/functional.h>
 #include <pybind11/operators.h>
@@ -28,6 +28,9 @@ namespace py = pybind11;
 
 PYBIND11_MODULE(cpp, m)
 {
+  // Load basix and dolfinx to use Pybindings
+  py::module basix = py::module::import("basix");
+
   // Create module for C++ wrappers
   m.doc() = "DOLFINX Contact Python interface";
 #ifdef VERSION_INFO
@@ -39,7 +42,24 @@ PYBIND11_MODULE(cpp, m)
   // Kernel wrapper class
   py::class_<contact_wrappers::KernelWrapper,
              std::shared_ptr<contact_wrappers::KernelWrapper>>(
-      m, "KernelWrapper", "Wrapper for C++ integration kernels");
+      m, "KernelWrapper", "Wrapper for C++ contact integration kernels");
+
+  // QuadratureRule
+  py::class_<dolfinx_contact::QuadratureRule,
+             std::shared_ptr<dolfinx_contact::QuadratureRule>>(
+      m, "QuadratureRule", "QuadratureRule object")
+      .def(py::init<dolfinx::mesh::CellType, int, int,
+                    basix::quadrature::type>(),
+           py::arg("cell_type"), py::arg("degree"), py::arg("dim"),
+           py::arg("type") = basix::quadrature::type::Default)
+      .def("points",
+           [](dolfinx_contact::QuadratureRule& self) {
+             return dolfinx_wrappers::xt_as_pyarray(std::move(self.points()));
+           })
+      .def("weights", [](dolfinx_contact::QuadratureRule& self)
+           { return dolfinx_wrappers::as_pyarray(std::move(self.weights())); });
+
+  // Contact
   py::class_<dolfinx_contact::Contact,
              std::shared_ptr<dolfinx_contact::Contact>>(m, "Contact",
                                                         "Contact object")
@@ -85,9 +105,10 @@ PYBIND11_MODULE(cpp, m)
       .def("facet_map",
            [](dolfinx_contact::Contact& self, int mt)
            {
-             // This exposes facet_map() to python but replaces the facet
-             // indices on the submesh with the facet indices in the parent mesh
-             // This is only exposed for testing (in particular
+             // This exposes facet_map() to python but replaces the
+             // facet indices on the submesh with the facet indices in
+             // the parent mesh This is only exposed for testing (in
+             // particular
              // nitsche_rigid_surface.py/demo_nitsche_rigid_surface_ufl.py)
              auto mesh = self.meshtags()->mesh();
              const int tdim = mesh->topology().dim(); // topological dimension
@@ -187,12 +208,12 @@ PYBIND11_MODULE(cpp, m)
   m.def(
       "generate_contact_kernel",
       [](std::shared_ptr<const dolfinx::fem::FunctionSpace> V,
-         dolfinx_contact::Kernel type, dolfinx_cuas::QuadratureRule& q_rule,
+         dolfinx_contact::Kernel type, dolfinx_contact::QuadratureRule& q_rule,
          std::vector<std::shared_ptr<const dolfinx::fem::Function<PetscScalar>>>
              coeffs,
          bool constant_normal)
       {
-        return cuas_wrappers::KernelWrapper<PetscScalar>(
+        return contact_wrappers::KernelWrapper(
             dolfinx_contact::generate_contact_kernel<PetscScalar>(
                 V, type, q_rule, coeffs, constant_normal));
       },
@@ -265,4 +286,64 @@ PYBIND11_MODULE(cpp, m)
   m.def("update_geometry", [](const dolfinx::fem::Function<PetscScalar>& u,
                               std::shared_ptr<dolfinx::mesh::Mesh> mesh)
         { dolfinx_contact::update_geometry(u, mesh); });
+
+  m.def(
+      "compute_active_entities",
+      [](std::shared_ptr<const dolfinx::mesh::Mesh> mesh,
+         py::array_t<std::int32_t, py::array::c_style>& entities,
+         dolfinx::fem::IntegralType integral)
+      {
+        auto entity_span
+            = xtl::span<const std::int32_t>(entities.data(), entities.size());
+        std::variant<
+            std::vector<std::int32_t>,
+            std::vector<std::pair<std::int32_t, int>>,
+            std::vector<std::tuple<std::int32_t, int, std::int32_t, int>>>
+            active_entities = dolfinx_contact::compute_active_entities(
+                mesh, entity_span, integral);
+        py::array_t<std::int32_t> output = std::visit(
+            [&](auto&& output)
+            {
+              using U = std::decay_t<decltype(output)>;
+              if constexpr (std::is_same_v<U, std::vector<std::int32_t>>)
+              {
+                py::array_t<std::int32_t> domains(output.size(), output.data());
+                return domains;
+              }
+              else if constexpr (std::is_same_v<
+                                     U,
+                                     std::vector<std::pair<std::int32_t, int>>>)
+              {
+                std::array<py::ssize_t, 2> shape
+                    = {py::ssize_t(output.size()), 2};
+                py::array_t<std::int32_t> domains(shape);
+                auto d = domains.mutable_unchecked<2>();
+                for (py::ssize_t i = 0; i < d.shape(0); ++i)
+                {
+                  d(i, 0) = output[i].first;
+                  d(i, 1) = output[i].second;
+                }
+                return domains;
+              }
+              else if constexpr (std::is_same_v<U, std::vector<std::tuple<
+                                                       std::int32_t, int,
+                                                       std::int32_t, int>>>)
+              {
+                std::array<py::ssize_t, 3> shape
+                    = {py::ssize_t(output.size()), 2, 2};
+                py::array_t<std::int32_t> domains(shape);
+                auto d = domains.mutable_unchecked<3>();
+                for (py::ssize_t i = 0; i < d.shape(0); ++i)
+                {
+                  d(i, 0, 0) = std::get<0>(output[i]);
+                  d(i, 0, 1) = std::get<1>(output[i]);
+                  d(i, 1, 0) = std::get<2>(output[i]);
+                  d(i, 1, 1) = std::get<3>(output[i]);
+                }
+                return domains;
+              }
+            },
+            active_entities);
+        return output;
+      });
 }

@@ -10,8 +10,8 @@ from dolfinx_contact import update_geometry
 from dolfinx_contact.meshing import (convert_mesh, create_circle_circle_mesh,
                                      create_circle_plane_mesh,
                                      create_sphere_plane_mesh)
-from dolfinx_contact.one_sided.nitsche_rigid_surface_cuas import \
-    nitsche_rigid_surface_cuas
+from dolfinx_contact.one_sided.nitsche_rigid_surface_custom import \
+    nitsche_rigid_surface_custom
 
 if __name__ == "__main__":
     desc = "Nitsche's method with rigid surface using custom assemblers and apply gradual loading in non-linear solve"
@@ -189,11 +189,11 @@ if __name__ == "__main__":
         displacement = load_increment
 
         # Solve contact problem using Nitsche's method
-        u1 = nitsche_rigid_surface_cuas(mesh=mesh, mesh_data=mesh_data, physical_parameters=physical_parameters,
-                                        nitsche_parameters=nitsche_parameters, vertical_displacement=displacement,
-                                        nitsche_bc=True, quadrature_degree=3, petsc_options=petsc_options,
-                                        newton_options=newton_options)
-        with XDMFFile(mesh.comm, f"results/u_cuas_{j}.xdmf", "w") as xdmf:
+        u1 = nitsche_rigid_surface_custom(mesh=mesh, mesh_data=mesh_data, physical_parameters=physical_parameters,
+                                          nitsche_parameters=nitsche_parameters, vertical_displacement=displacement,
+                                          nitsche_bc=True, quadrature_degree=3, petsc_options=petsc_options,
+                                          newton_options=newton_options)
+        with XDMFFile(mesh.comm, f"results/u_custom_{j}.xdmf", "w") as xdmf:
             xdmf.write_mesh(mesh)
             u1.name = "u"
             xdmf.write_function(u1)
@@ -206,7 +206,7 @@ if __name__ == "__main__":
 
     # Reset mesh to initial state and write accumulated solution
     mesh.geometry.x[:] = geometry
-    with XDMFFile(mesh.comm, "results/u_cuas_total.xdmf", "w") as xdmf:
+    with XDMFFile(mesh.comm, "results/u_custom_total.xdmf", "w") as xdmf:
         xdmf.write_mesh(mesh)
         u.name = "u"
         xdmf.write_function(u)

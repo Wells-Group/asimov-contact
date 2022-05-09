@@ -175,8 +175,8 @@ def nitsche_unbiased(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTagsMetaClass,
         facets_0 = facet_marker.indices[facet_marker.values == surface_value_0]
         facets_1 = facet_marker.indices[facet_marker.values == surface_value_1]
         integral = _fem.IntegralType.exterior_facet
-        entities_0 = dolfinx_cuas.compute_active_entities(mesh, facets_0, integral)
-        entities_1 = dolfinx_cuas.compute_active_entities(mesh, facets_1, integral)
+        entities_0 = dolfinx_contact.compute_active_entities(mesh, facets_0, integral)
+        entities_1 = dolfinx_contact.compute_active_entities(mesh, facets_1, integral)
 
     with _common.Timer("~Contact: Pack coeffs (mu, lmbda"):
         material_0 = dolfinx_cuas.pack_coefficients([mu2, lmbda2], entities_0)
@@ -205,18 +205,18 @@ def nitsche_unbiased(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTagsMetaClass,
     coeff_1 = np.hstack([material_1, h_1, gap_1, n_1, test_fn_1])
 
     # Generate Jacobian data structures
-    J_cuas = _fem.form(J, form_compiler_params=form_compiler_params, jit_params=jit_params)
+    J_custom = _fem.form(J, form_compiler_params=form_compiler_params, jit_params=jit_params)
     with _common.Timer("~Contact: Generate Jacobian kernel"):
         kernel_jac = contact.generate_kernel(kt.Jac)
     with _common.Timer("~Contact: Create matrix"):
-        J = contact.create_matrix(J_cuas)
+        J = contact.create_matrix(J_custom)
 
     # Generate residual data structures
-    F_cuas = _fem.form(F, form_compiler_params=form_compiler_params, jit_params=jit_params)
+    F_custom = _fem.form(F, form_compiler_params=form_compiler_params, jit_params=jit_params)
     with _common.Timer("~Contact: Generate residual kernel"):
         kernel_rhs = contact.generate_kernel(kt.Rhs)
     with _common.Timer("~Contact: Create vector"):
-        b = _fem.petsc.create_vector(F_cuas)
+        b = _fem.petsc.create_vector(F_custom)
 
     @_common.timed("~Contact: Update coefficients")
     def compute_coefficients(x, coeffs):
@@ -235,22 +235,20 @@ def nitsche_unbiased(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTagsMetaClass,
     @_common.timed("~Contact: Assemble residual")
     def compute_residual(x, b, coeffs):
         b.zeroEntries()
-        u.vector[:] = x.array
         with _common.Timer("~~Contact: Contact contributions (in assemble vector)"):
             contact.assemble_vector(b, 0, kernel_rhs, coeffs[0], consts)
             contact.assemble_vector(b, 1, kernel_rhs, coeffs[1], consts)
         with _common.Timer("~~Contact: Standard contributions (in assemble vector)"):
-            _fem.petsc.assemble_vector(b, F_cuas)
+            _fem.petsc.assemble_vector(b, F_custom)
 
     @_common.timed("~Contact: Assemble matrix")
     def compute_jacobian_matrix(x, A, coeffs):
-        u.vector[:] = x.array
         A.zeroEntries()
         with _common.Timer("~~Contact: Contact contributions (in assemble matrix)"):
             contact.assemble_matrix(A, [], 0, kernel_jac, coeffs[0], consts)
             contact.assemble_matrix(A, [], 1, kernel_jac, coeffs[1], consts)
         with _common.Timer("~~Contact: Standard contributions (in assemble matrix)"):
-            _fem.petsc.assemble_matrix(A, J_cuas)
+            _fem.petsc.assemble_matrix(A, J_custom)
         A.assemble()
 
     # coefficient arrays
@@ -268,26 +266,7 @@ def nitsche_unbiased(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTagsMetaClass,
     newton_solver.A.setNearNullSpace(null_space)
 
     # Set Newton solver options
-    if newton_options.get("atol") is not None:
-        newton_solver.atol = newton_options.get("atol")
-    if newton_options.get("rtol") is not None:
-        newton_solver.rtol = newton_options.get("rtol")
-
-    if newton_options.get("convergence_criterion") is not None:
-        conv_crit = newton_options.get("convergence_criterion")
-        if conv_crit == "incremental":
-            crit = dolfinx_contact.ConvergenceCriterion.incremental
-        elif conv_crit == "residual":
-            crit = dolfinx_contact.ConvergenceCriterion.residual
-        else:
-            raise RuntimeError(f"Unknown convergence criterion '{conv_crit}'")
-        newton_solver.convergence_criterion = crit
-    if newton_options.get("max_it") is not None:
-        newton_solver.max_it = newton_options.get("max_it")
-    if newton_options.get("error_on_nonconvergence") is not None:
-        newton_solver.error_on_nonconvergence = newton_options.get("error_on_nonconvergence")
-    if newton_options.get("relaxation_parameter") is not None:
-        newton_solver.relaxation_parameter = newton_options.get("relaxation_parameter")
+    newton_solver.setNewtonOptions(newton_options)
 
     # Set initial guess
     if initGuess is None:

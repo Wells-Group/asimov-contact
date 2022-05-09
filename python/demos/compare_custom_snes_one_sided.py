@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier:    MIT
 #
-# Compare our own Nitsche implementation using dolfinx_cuas with SNES
+# Compare our own Nitsche implementation using custom integration kernels with SNES
 
 import argparse
 
@@ -17,7 +17,7 @@ from mpi4py import MPI
 
 from dolfinx_contact.meshing import (convert_mesh, create_disk_mesh,
                                      create_sphere_mesh)
-from dolfinx_contact.one_sided.nitsche_cuas import nitsche_cuas
+from dolfinx_contact.one_sided.nitsche_custom import nitsche_custom
 from dolfinx_contact.one_sided.snes_against_plane import snes_solver
 
 if __name__ == "__main__":
@@ -136,10 +136,10 @@ if __name__ == "__main__":
         mesh_data = (facet_marker, top_value, bottom_value)
 
         # Solve contact problem using Nitsche's method
-        u1 = nitsche_cuas(mesh=mesh, mesh_data=mesh_data, physical_parameters=physical_parameters,
-                          vertical_displacement=vertical_displacement, nitsche_parameters=nitsche_parameters,
-                          plane_loc=gap, nitsche_bc=nitsche_bc, petsc_options=petsc_options)
-        with XDMFFile(mesh.comm, f"results/u_cuas_{i}.xdmf", "w") as xdmf:
+        u1 = nitsche_custom(mesh=mesh, mesh_data=mesh_data, physical_parameters=physical_parameters,
+                            vertical_displacement=vertical_displacement, nitsche_parameters=nitsche_parameters,
+                            plane_loc=gap, nitsche_bc=nitsche_bc, petsc_options=petsc_options)
+        with XDMFFile(mesh.comm, f"results/u_custom_{i}.xdmf", "w") as xdmf:
             xdmf.write_mesh(mesh)
             xdmf.write_function(u1)
 

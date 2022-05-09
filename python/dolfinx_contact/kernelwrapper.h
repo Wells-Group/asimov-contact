@@ -4,11 +4,8 @@
 //
 // SPDX-License-Identifier:    MIT
 #include <caster_petsc.h>
+#include <dolfinx_contact/utils.h>
 #include <functional>
-
-using contact_kernel_fn = std::function<void(
-    std::vector<std::vector<PetscScalar>>&, const double*, const double*,
-    const double*, const int*, const std::size_t)>;
 
 namespace contact_wrappers
 {
@@ -21,20 +18,24 @@ class KernelWrapper
 {
 public:
   /// Wrap a Kernel
-  KernelWrapper(contact_kernel_fn kernel) : _kernel(kernel) {}
+  KernelWrapper(dolfinx_contact::kernel_fn<PetscScalar> kernel)
+      : _kernel(kernel)
+  {
+  }
 
   /// Assignment operator
-  KernelWrapper& operator=(contact_kernel_fn kernel)
+  KernelWrapper& operator=(dolfinx_contact::kernel_fn<PetscScalar> kernel)
   {
     this->_kernel = kernel;
     return *this;
   }
 
   /// Get the C++ kernel
-  contact_kernel_fn get() { return _kernel; }
+  dolfinx_contact::kernel_fn<PetscScalar> get() { return _kernel; }
 
 private:
   // The underlying communicator
-  contact_kernel_fn _kernel;
+  dolfinx_contact::kernel_fn<PetscScalar> _kernel;
 };
+
 } // namespace contact_wrappers

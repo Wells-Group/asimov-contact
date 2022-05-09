@@ -50,6 +50,7 @@ class NewtonSolver():
         self.krylov_solver = PETSc.KSP()
         self.krylov_solver.create(self.comm)
         self.krylov_solver.setOptionsPrefix("Newton_solver_")
+        self.error_on_nonconvergence = False
 
     def set_krylov_options(self, options: dict[str, str]):
         """
@@ -139,6 +140,30 @@ class NewtonSolver():
             Coeffs: Function to compute coefficients coeffs(x)
         """
         self._compute_coefficients = Coeffs
+
+    def setNewtonOptions(self, options: dict):
+        """
+        Set Newton options from a dictionary
+        """
+        if options.get("atol") is not None:
+            self.atol = options.get("atol")
+        if options.get("rtol") is not None:
+            self.rtol = options.get("rtol")
+
+        if options.get("convergence_criterion") is not None:
+            conv_crit = options.get("convergence_criterion")
+            if conv_crit == "residual":
+                self.convergence_criterion = ConvergenceCriterion.residual
+            elif conv_crit == "incremental":
+                self.convergence_criterion = ConvergenceCriterion.incremental
+            else:
+                raise RuntimeError("Unknown Convergence criterion")
+        if options.get("max_it") is not None:
+            self.max_it = options.get("max_it")
+        if options.get("error_on_nonconvergence") is not None:
+            self.error_on_nonconvergence = options.get("error_on_nonconvergence")
+        if options.get("relaxation_parameter") is not None:
+            self.relaxation_parameter = options.get("relaxation_parameter")
 
     def _pre_computation(self, x: PETSc.Vec):
         x.ghostUpdate(addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD)

@@ -17,10 +17,16 @@
 #include <dolfinx/fem/petsc.h>
 #include <dolfinx/fem/utils.h>
 #include <dolfinx/mesh/Mesh.h>
-#include <dolfinx_cuas/QuadratureRule.hpp>
 #include <xtensor/xtensor.hpp>
+
 namespace dolfinx_contact
 {
+// NOTE: this function should change signature to T * ,..... , num_links,
+// num_dofs_per_link
+template <typename T>
+using kernel_fn
+    = std::function<void(std::vector<std::vector<T>>&, const T*, const T*,
+                         const double*, const int, const std::size_t)>;
 
 /// This function computes the pull back for a set of points x on a cell
 /// described by coordinate_dofs as well as the corresponding Jacobian, their
@@ -171,5 +177,23 @@ get_update_jacobian_dependencies(const dolfinx::fem::CoordinateElement& cmap);
 std::function<void(xt::xtensor<double, 1>&, const xt::xtensor<double, 2>&,
                    const xt::xtensor<double, 2>&, std::size_t)>
 get_update_normal(const dolfinx::fem::CoordinateElement& cmap);
+
+/// @brief Convert local entity indices to integration entities
+///
+/// Compute the active entities in DOLFINx format for a given integral type over
+/// a set of entities If the integral type is cell, return the input, if it is
+/// exterior facets, return a list of pairs (cell, local_facet_index), and if it
+/// is interior facets, return a list of tuples (cell_0, local_facet_index_0,
+/// cell_1, local_facet_index_1) for each entity.
+///
+/// @param[in] mesh The mesh
+/// @param[in] entities List of mesh entities
+/// @param[in] integral The type of integral
+std::variant<std::vector<std::int32_t>,
+             std::vector<std::pair<std::int32_t, int>>,
+             std::vector<std::tuple<std::int32_t, int, std::int32_t, int>>>
+compute_active_entities(std::shared_ptr<const dolfinx::mesh::Mesh> mesh,
+                        tcb::span<const std::int32_t> entities,
+                        dolfinx::fem::IntegralType integral);
 
 } // namespace dolfinx_contact

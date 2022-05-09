@@ -12,8 +12,8 @@ from mpi4py import MPI
 from dolfinx_contact.meshing import (convert_mesh, create_circle_circle_mesh,
                                      create_circle_plane_mesh,
                                      create_sphere_plane_mesh)
-from dolfinx_contact.one_sided.nitsche_rigid_surface_cuas import \
-    nitsche_rigid_surface_cuas
+from dolfinx_contact.one_sided.nitsche_rigid_surface_custom import \
+    nitsche_rigid_surface_custom
 
 if __name__ == "__main__":
     desc = "Nitsche's method with rigid surface using custom assemblers"
@@ -186,11 +186,12 @@ if __name__ == "__main__":
     mesh_data = (facet_marker, top_value, bottom_value, surface_value, surface_bottom)
 
     # Solve contact problem using Nitsche's method
-    u1 = nitsche_rigid_surface_cuas(mesh=mesh, mesh_data=mesh_data, physical_parameters=physical_parameters,
-                                    nitsche_parameters=nitsche_parameters, vertical_displacement=vertical_displacement,
-                                    nitsche_bc=True, quadrature_degree=3, petsc_options=petsc_options,
-                                    newton_options=newton_options)
+    u1 = nitsche_rigid_surface_custom(mesh=mesh, mesh_data=mesh_data, physical_parameters=physical_parameters,
+                                      nitsche_parameters=nitsche_parameters,
+                                      vertical_displacement=vertical_displacement, nitsche_bc=True,
+                                      quadrature_degree=3, petsc_options=petsc_options,
+                                      newton_options=newton_options)
 
-    with XDMFFile(mesh.comm, "results/u_cuas_rigid.xdmf", "w") as xdmf:
+    with XDMFFile(mesh.comm, "results/u_custom_rigid.xdmf", "w") as xdmf:
         xdmf.write_mesh(mesh)
         xdmf.write_function(u1)
