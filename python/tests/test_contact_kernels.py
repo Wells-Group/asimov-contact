@@ -5,7 +5,6 @@
 import basix
 import dolfinx.mesh
 import dolfinx_cuas
-import dolfinx_cuas.cpp
 import numpy as np
 import pytest
 import ufl
@@ -125,7 +124,7 @@ def test_vector_surface_kernel(dim, kernel_type, P, Q):
     # num_local_cells = mesh.topology.index_map(mesh.topology.dim).size_local
     consts = np.array([gamma, theta])
     consts = np.hstack((consts, n_vec))
-    integral_entities = dolfinx_cuas.cpp.compute_active_entities(mesh, ft.indices, IntegralType.exterior_facet)
+    integral_entities = dolfinx_contact.compute_active_entities(mesh, ft.indices, IntegralType.exterior_facet)
     coeffs = dolfinx_cuas.cpp.pack_coefficients([u._cpp_object, mu._cpp_object, lmbda._cpp_object], integral_entities)
     h_facets = dolfinx_contact.pack_circumradius(mesh, integral_entities)
     contact = dolfinx_contact.cpp.Contact(ft, [1, 1], V._cpp_object)
@@ -136,15 +135,15 @@ def test_vector_surface_kernel(dim, kernel_type, P, Q):
                                             + Q + 1, mesh.topology.dim - 1, basix.QuadratureType.Default)
     coeffs = np.hstack([coeffs, h_facets, g_vec])
 
-    L_cuas = ufl.inner(sigma(u), epsilon(v)) * dx
-    L_cuas = form(L_cuas)
-    b2 = create_vector(L_cuas)
+    L_custom = ufl.inner(sigma(u), epsilon(v)) * dx
+    L_custom = form(L_custom)
+    b2 = create_vector(L_custom)
     kernel = dolfinx_contact.cpp.generate_contact_kernel(V._cpp_object, kernel_type, q_rule,
                                                          [u._cpp_object, mu._cpp_object, lmbda._cpp_object])
 
     b2.zeroEntries()
-    dolfinx_cuas.assemble_vector(b2, V, ft.indices, kernel, coeffs, consts, IntegralType.exterior_facet)
-    assemble_vector(b2, L_cuas)
+    contact.assemble_vector(b2, 0, kernel, coeffs, consts)
+    assemble_vector(b2, L_custom)
     b2.assemble()
     assert np.allclose(b.array, b2.array)
 
@@ -247,21 +246,22 @@ def test_matrix_surface_kernel(dim, kernel_type, P, Q):
                                             + Q + 1, mesh.topology.dim - 1, basix.QuadratureType.Default)
     consts = np.array([gamma, theta])
     consts = np.hstack((consts, n_vec))
-    integral_entities = dolfinx_cuas.cpp.compute_active_entities(mesh, facets, IntegralType.exterior_facet)
+    integral_entities = dolfinx_contact.compute_active_entities(mesh, facets, IntegralType.exterior_facet)
     coeffs = dolfinx_cuas.cpp.pack_coefficients([u._cpp_object, mu._cpp_object, lmbda._cpp_object], integral_entities)
     h_facets = dolfinx_contact.pack_circumradius(mesh, integral_entities)
     contact = dolfinx_contact.cpp.Contact(ft, [1, 1], V._cpp_object)
     contact.set_quadrature_degree(2 * P + Q + 1)
     g_vec = contact.pack_gap_plane(0, -g)
     coeffs = np.hstack([coeffs, h_facets, g_vec])
-    a_cuas = ufl.inner(sigma(du), epsilon(v)) * dx
-    a_cuas = form(a_cuas)
-    B = create_matrix(a_cuas)
+    a_custom = ufl.inner(sigma(du), epsilon(v)) * dx
+    a_custom = form(a_custom)
+    B = create_matrix(a_custom)
     kernel = dolfinx_contact.cpp.generate_contact_kernel(
         V._cpp_object, kernel_type, q_rule, [u._cpp_object, mu._cpp_object, lmbda._cpp_object])
     B.zeroEntries()
-    dolfinx_cuas.assemble_matrix(B, V, ft.indices, kernel, coeffs, consts, IntegralType.exterior_facet)
-    assemble_matrix(B, a_cuas)
+
+    contact.assemble_matrix(B, [], 0, kernel, coeffs, consts)
+    assemble_matrix(B, a_custom)
     B.assemble()
 
     # Compare matrices, first norm, then entries
