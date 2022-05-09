@@ -262,8 +262,7 @@ void dolfinx_contact::Contact::assemble_matrix(
   const dolfinx::fem::CoordinateElement& cmap = geometry.cmap();
   const std::size_t num_dofs_g = cmap.dim();
 
-  std::shared_ptr<const dolfinx::fem::FiniteElement> element = _V->element();
-  if (element->needs_dof_transformations())
+  if (_V->element()->needs_dof_transformations())
   {
     throw std::invalid_argument(
         "Function-space requiring dof-transformations is not supported.");
@@ -344,10 +343,7 @@ void dolfinx_contact::Contact::assemble_vector(
     const xtl::span<const PetscScalar>& constants)
 {
   /// Check that we support the function space
-  std::shared_ptr<const dolfinx::fem::FiniteElement> element = _V->element();
-  if (const bool needs_dof_transformations
-      = element->needs_dof_transformations();
-      needs_dof_transformations)
+  if (_V->element()->needs_dof_transformations())
   {
     throw std::invalid_argument(
         "Function-space requiring dof-transformations is not supported.");

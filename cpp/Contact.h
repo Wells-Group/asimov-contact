@@ -313,6 +313,9 @@ public:
     // Get update FacetNormal function (for each quadrature point)
     auto update_normal = dolfinx_contact::get_update_normal(cmap);
 
+    // Get quadrature weights;
+    const std::vector<std::vector<double>>& qweights = _qw_ref_facet;
+
     /// @brief Assemble kernel for RHS of unbiased contact problem
     ///
     /// Assemble of the residual of the unbiased contact problem into vector
@@ -325,7 +328,10 @@ public:
     /// @param[in] coordinate_dofs The physical coordinates of cell. Assumed to
     /// be padded to 3D, (shape (num_nodes, 3)).
     kernel_fn<PetscScalar> unbiased_rhs
-        = [=](std::vector<std::vector<PetscScalar>>& b, const PetscScalar* c,
+        = [num_coordinate_dofs, gdim, tdim, ref_jacobians, dphi_c,
+           facet_normals, phi, dphi, qweights, ndofs_cell, offsets, affine,
+           update_jacobian, update_normal, bs, num_q_points](
+              std::vector<std::vector<PetscScalar>>& b, const PetscScalar* c,
               const PetscScalar* w, const double* coordinate_dofs,
               const int facet_index, const std::size_t num_links)
     {
@@ -376,7 +382,8 @@ public:
       const xt::xtensor<double, 3>& dphi_f = dphi[facet_index];
 
       // Extract reference to quadrature weights for the local facet
-      const std::vector<double>& weights = _qw_ref_facet[facet_index];
+      const std::vector<double>& weights = qweights[facet_index];
+      assert(weights.size() == num_q_points);
 
       // Temporary data structures used inside quadrature loop
       std::array<double, 3> n_surf = {0, 0, 0};

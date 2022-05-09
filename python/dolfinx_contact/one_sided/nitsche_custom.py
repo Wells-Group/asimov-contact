@@ -212,7 +212,6 @@ def nitsche_custom(mesh: dmesh.Mesh, mesh_data: Tuple[dmesh.meshtags, int, int],
 
     # Define solver and options
     ksp = solver.krylov_solver
-    opts = _PETSc.Options()
     option_prefix = ksp.getOptionsPrefix()
 
     # Set PETSc options

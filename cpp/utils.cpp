@@ -593,8 +593,8 @@ dolfinx_contact::compute_active_entities(
             auto facet_it = std::find(cell_facets.begin(), cell_facets.end(),
                                       entities[f]);
             assert(facet_it != cell_facets.end());
-            int local_f = std::distance(cell_facets.begin(), facet_it);
-            output[f] = {cell, local_f};
+            const auto local_f = std::distance(cell_facets.begin(), facet_it);
+            output[f] = {cell, (int)local_f};
           }
         }
         else if constexpr (std::is_same_v<
@@ -617,7 +617,8 @@ dolfinx_contact::compute_active_entities(
               auto facet_it = std::find(cell_facets.begin(), cell_facets.end(),
                                         entities[f]);
               assert(facet_it != cell_facets.end());
-              int local_f = std::distance(cell_facets.begin(), facet_it);
+              const auto local_f
+                  = (int)std::distance(cell_facets.begin(), facet_it);
               interior_facets[i] = {cells[i], local_f};
             }
             output[f] = {interior_facets[0].first, interior_facets[0].second,
