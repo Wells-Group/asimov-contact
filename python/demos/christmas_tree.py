@@ -58,6 +58,7 @@ xv = np.concatenate((x[1:], xb, np.flip(x[1:])))
 yv = np.concatenate((y[1:], yb, np.flip(-y[1:])))
 
 awful_gmsh_output("xmas_inner.geo", (xv, yv))
+offset = len(xv)
 
 dx = 0.01
 dy = 0.1
@@ -71,12 +72,11 @@ yg = np.linspace(yf[0], -yf[0], nc)[1:-1]
 xg = np.ones_like(yg) * -1
 
 yh = np.linspace(y[-1], y[-1] * 1.2, 8)[1:-1]
-xh = np.ones_like(yh)*x[-1]
+xh = np.ones_like(yh) * x[-1]
 
 xv = np.concatenate((xh, np.flip(x), x, xh, np.flip(xf), xg, xf))
 yv = np.concatenate((-np.flip(yh), np.flip(-y), y, yh, yf, yg, -yf))
 
-offset = 1000
 awful_gmsh_output("xmas_outer.geo", (xv, yv), offset)
 
 plt.plot(xv, yv, marker='o')
