@@ -11,6 +11,7 @@
 #include <dolfinx/mesh/MeshTags.h>
 #include <dolfinx_contact/Contact.h>
 #include <dolfinx_contact/QuadratureRule.h>
+#include <dolfinx_contact/RayTracing.h>
 #include <dolfinx_contact/coefficients.h>
 #include <dolfinx_contact/contact_kernels.hpp>
 #include <dolfinx_contact/utils.h>
@@ -346,4 +347,6 @@ PYBIND11_MODULE(cpp, m)
             active_entities);
         return output;
       });
+
+  m.def("compute_3D_ray", &dolfinx_contact::compute_3D_ray);
 }
