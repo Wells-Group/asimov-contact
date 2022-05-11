@@ -2,19 +2,19 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 
-def awful_gmsh_output(filename, curve, offset=0):
+def awful_gmsh_output(curve, offset=0):
     "Creates a .geo file with the closed curve defined by a set of x,y points"
     xv, yv = curve
-    fd = open(filename, "w")
+    s = []
     for i, q in enumerate(zip(xv, yv)):
-        fd.write(f"Point({i+1 + offset}) = {{{q[0]}, {q[1]}, 0.0}};\n")
+        s += [f"Point({i+1 + offset}) = {{{q[0]}, {q[1]}, 0.0}};\n"]
     for i in range(len(xv) - 1):
-        fd.write(f"Line({i + 1 + offset}) = {{{i + 1 + offset}, {i + 2 + offset}}};\n")
-    fd.write(f"Line({len(xv) + offset}) = {{{len(xv) + offset} , {offset + 1}}};\n")
+        s += [f"Line({i + 1 + offset}) = {{{i + 1 + offset}, {i + 2 + offset}}};\n"]
+    s += [f"Line({len(xv) + offset}) = {{{len(xv) + offset} , {offset + 1}}};\n"]
     ll = ",".join([str(i + offset) for i in range(1, len(xv) + 1)])
-    fd.write(f"Line Loop ({offset + 1}) = {{{ll}}};\n")
-    fd.write(f"Plane Surface ({offset + 1}) = {{{offset + 1}}};\n")
-    fd.close()
+    s += [f"Line Loop ({offset + 1}) = {{{ll}}};\n"]
+    s += [f"Plane Surface ({offset + 1}) = {{{offset + 1}}};\n"]
+    return s
 
 
 def jagged_curve(npoints, t, r0, r1, xmax):
@@ -57,7 +57,10 @@ xb = np.ones_like(yb) * x[-1]
 xv = np.concatenate((x[1:], xb, np.flip(x[1:])))
 yv = np.concatenate((y[1:], yb, np.flip(-y[1:])))
 
-awful_gmsh_output("xmas_inner.geo", (xv, yv))
+fd = open("xmas.geo", "w")
+for s in awful_gmsh_output((xv, yv)):
+    fd.write(s)
+
 offset = len(xv)
 
 dx = 0.01
@@ -77,7 +80,9 @@ xh = np.ones_like(yh) * x[-1]
 xv = np.concatenate((xh, np.flip(x), x, xh, np.flip(xf), xg, xf))
 yv = np.concatenate((-np.flip(yh), np.flip(-y), y, yh, yf, yg, -yf))
 
-awful_gmsh_output("xmas_outer.geo", (xv, yv), offset)
+for s in awful_gmsh_output((xv, yv), offset):
+    fd.write(s)
+fd.close()
 
 plt.plot(xv, yv, marker='o')
 plt.show()
