@@ -348,5 +348,40 @@ PYBIND11_MODULE(cpp, m)
         return output;
       });
 
-  m.def("compute_3D_ray", &dolfinx_contact::compute_3D_ray);
+  m.def(
+      "compute_3D_ray",
+      [](const dolfinx::mesh::Mesh& mesh,
+         py::array_t<double, py::array::c_style>& point,
+         py::array_t<double, py::array::c_style>& tangents,
+         py::array_t<std::int32_t, py::array::c_style>& cells, int max_iter,
+         double tol)
+      {
+        // FIXME: How to avoid copy here
+        auto ents = cells.unchecked();
+        const std::size_t shape_0 = cells.shape(0);
+        std::vector<std::pair<std::int32_t, int>> facets;
+        facets.reserve(shape_0);
+        for (std::size_t i = 0; i < shape_0; i++)
+          facets.emplace_back(ents(i, 0), ents(i, 1));
+
+        std::array<std::size_t, 1> s_p = {(std::size_t)point.shape(0)};
+        auto _point
+            = xt::adapt(point.data(), point.size(), xt::no_ownership(), s_p);
+        std::array<std::size_t, 2> s_t;
+        std::copy_n(tangents.shape(), 2, s_t.begin());
+        auto _tangents = xt::adapt(tangents.data(), tangents.size(),
+                                   xt::no_ownership(), s_t);
+        std::tuple<int, std::int32_t,
+                   xt::xtensor_fixed<double, xt::xshape<2, 3>>>
+            output = dolfinx_contact::compute_3D_ray(mesh, _point, _tangents,
+                                                     facets, max_iter, tol);
+        int status = std::get<0>(output);
+        xt::xtensor<double, 2> x = std::get<2>(output);
+        std::int32_t idx = std::get<1>(output);
+
+        return py::make_tuple(status, idx,
+                              dolfinx_wrappers::xt_as_pyarray(std::move(x)));
+      },
+      py::arg("mesh"), py::arg("point"), py::arg("tangents"), py::arg("cells"),
+      py::arg("max_iter") = 25, py::arg("tol") = 1e-8);
 }
