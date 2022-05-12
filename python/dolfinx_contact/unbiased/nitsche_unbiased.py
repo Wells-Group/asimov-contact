@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier:    MIT
 
-from typing import Tuple, Union
+from typing import Callable, Tuple, Union
 
 import dolfinx.common as _common
 import dolfinx.fem as _fem
@@ -22,10 +22,13 @@ kt = dolfinx_contact.cpp.Kernel
 __all__ = ["nitsche_unbiased"]
 
 
-def nitsche_unbiased(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTagsMetaClass, int, int, int, int],
+def nitsche_unbiased(mesh: _mesh.Mesh, mesh_tag: _mesh.MeshTagsMetaClass,
+                     dirichlet: list[Tuple[int, Callable[[np.ndarray], np.ndarray]]],
+                     neumann: list[Tuple[int, Callable[[np.ndarray], np.ndarray]]],
+                     contact_pairs: list[Tuple[int, int]],
+                     body_forces: list[Tuple[int, Callable[[np.ndarray], np.ndarray]]],
                      physical_parameters: dict[str, Union[bool, np.float64, int]],
-                     nitsche_parameters: dict[str, np.float64],
-                     displacement: Tuple[list[float], list[float]] = [[0, 0, 0], [0, 0, 0]],
+                     nitsche_parameters: dict[str, np.float64], domain_marker: _mesh.MeshTagsMetaClass = None,
                      quadrature_degree: int = 5, form_compiler_params: dict = None, jit_params: dict = None,
                      petsc_options: dict = None, newton_options: dict = None, initGuess=None, outfile=None):
     """
@@ -107,55 +110,58 @@ def nitsche_unbiased(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTagsMetaClass,
     else:
         gamma = E * nitsche_parameters.get("gamma")
 
-    # Unpack mesh data
-    (facet_marker, dirichlet_value_0, surface_value_0, surface_value_1, dirichlet_value_1) = mesh_data
-    assert(facet_marker.dim == mesh.topology.dim - 1)
-
     # Functions space and FEM functions
     V = _fem.VectorFunctionSpace(mesh, ("CG", 1))
-    gdim = mesh.geometry.dim
     u = _fem.Function(V)
     v = ufl.TestFunction(V)
     du = ufl.TrialFunction(V)
 
     h = ufl.CellDiameter(mesh)
     n = ufl.FacetNormal(mesh)
+
+    # contact surfaces
+    # FIXME: Currently only supporting one contact pair
+    assert(len(contact_pairs) == 1)
+    surface_value_0 = contact_pairs[0][0]
+    surface_value_1 = contact_pairs[0][1]
+
     # Integration measure and ufl part of linear/bilinear form
     # metadata = {"quadrature_degree": quadrature_degree}
-    dx = ufl.Measure("dx", domain=mesh)
+    dx = ufl.Measure("dx", domain=mesh, subdomain_data=domain_marker)
     ds = ufl.Measure("ds", domain=mesh,  # metadata=metadata,
-                     subdomain_data=facet_marker)
+                     subdomain_data=mesh_tag)
     J = ufl.inner(sigma(du), epsilon(v)) * dx - 0.5 * theta * h / gamma * ufl.inner(sigma(du) * n, sigma(v) * n) * \
         ds(surface_value_0) - 0.5 * theta * h / gamma * ufl.inner(sigma(du) * n, sigma(v) * n) * ds(surface_value_1)
     F = ufl.inner(sigma(u), epsilon(v)) * dx - 0.5 * theta * h / gamma * ufl.inner(sigma(u) * n, sigma(v) * n) * \
         ds(surface_value_0) - 0.5 * theta * h / gamma * ufl.inner(sigma(u) * n, sigma(v) * n) * ds(surface_value_1)
 
-    # Nitsche for Dirichlet, another theta-scheme.
-    # https://doi.org/10.1016/j.cma.2018.05.024
-    # Nitsche bc for body 0
-    disp_0 = displacement[0][:gdim]
-    u_D_0 = ufl.as_vector(disp_0)
-    F += - ufl.inner(sigma(u) * n, v) * ds(dirichlet_value_0)\
-        - theta * ufl.inner(sigma(v) * n, u - u_D_0) * \
-        ds(dirichlet_value_0) + gamma / h * ufl.inner(u - u_D_0, v) * ds(dirichlet_value_0)
+    # Dirichle boundary conditions
+    for bc in dirichlet:
+        f = _fem.Function(V)
+        f.interpolate(bc[1])
+        F += - ufl.inner(sigma(u) * n, v) * ds(bc[0])\
+            - theta * ufl.inner(sigma(v) * n, u - f) * \
+            ds(bc[0]) + gamma / h * ufl.inner(u - f, v) * ds(bc[0])
+        J += - ufl.inner(sigma(du) * n, v) * ds(bc[0])\
+            - theta * ufl.inner(sigma(v) * n, du) * \
+            ds(bc[0]) + gamma / h * ufl.inner(du, v) * ds(bc[0])
 
-    J += - ufl.inner(sigma(du) * n, v) * ds(dirichlet_value_0)\
-        - theta * ufl.inner(sigma(v) * n, du) * \
-        ds(dirichlet_value_0) + gamma / h * ufl.inner(du, v) * ds(dirichlet_value_0)
-    # Nitsche bc for body 1
-    disp_1 = displacement[1][:gdim]
-    u_D_1 = ufl.as_vector(disp_1)
-    F += - ufl.inner(sigma(u) * n, v) * ds(dirichlet_value_1)\
-        - theta * ufl.inner(sigma(v) * n, u - u_D_1) * \
-        ds(dirichlet_value_1) + gamma / h * ufl.inner(u - u_D_1, v) * ds(dirichlet_value_1)
-    J += - ufl.inner(sigma(du) * n, v) * ds(dirichlet_value_1)\
-        - theta * ufl.inner(sigma(v) * n, du) * \
-        ds(dirichlet_value_1) + gamma / h * ufl.inner(du, v) * ds(dirichlet_value_1)
+    # Neumann boundary conditions
+    for bc in neumann:
+        g = _fem.Function(V)
+        g.interpolate(bc[1])
+        F -= ufl.inner(g, v) * ds(bc[0])
+
+    # body forces
+    for bf in body_forces:
+        f = _fem.Function(V)
+        f.interpolate(bf[1])
+        F -= ufl.inner(f, v) * dx(bf[0])
 
     # Custom assembly
     # create contact class
     with _common.Timer("~Contact: Init"):
-        contact = dolfinx_contact.cpp.Contact(facet_marker, [surface_value_0, surface_value_1], V._cpp_object)
+        contact = dolfinx_contact.cpp.Contact(mesh_tag, [surface_value_0, surface_value_1], V._cpp_object)
     contact.set_quadrature_degree(quadrature_degree)
     with _common.Timer("~Contact: Distance maps"):
         contact.create_distance_map(0, 1)
@@ -172,8 +178,8 @@ def nitsche_unbiased(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTagsMetaClass,
         mu2.interpolate(lambda x: np.full((1, x.shape[1]), mu))
 
     with _common.Timer("~Contact: Compute active entities"):
-        facets_0 = facet_marker.indices[facet_marker.values == surface_value_0]
-        facets_1 = facet_marker.indices[facet_marker.values == surface_value_1]
+        facets_0 = mesh_tag.indices[mesh_tag.values == surface_value_0]
+        facets_1 = mesh_tag.indices[mesh_tag.values == surface_value_1]
         integral = _fem.IntegralType.exterior_facet
         entities_0 = dolfinx_contact.compute_active_entities(mesh, facets_0, integral)
         entities_1 = dolfinx_contact.compute_active_entities(mesh, facets_1, integral)

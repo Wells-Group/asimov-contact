@@ -23,7 +23,7 @@ from dolfinx_contact.meshing import (convert_mesh, create_box_mesh_2D,
 from dolfinx_contact.unbiased.nitsche_unbiased import nitsche_unbiased
 
 if __name__ == "__main__":
-    desc = "Nitsche's method with rigid surface using custom assemblers"
+    desc = "Nitsche's method for two elastic bodies using custom assemblers"
     parser = argparse.ArgumentParser(description=desc,
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument("--theta", default=1, type=np.float64, dest="theta",
@@ -65,7 +65,7 @@ if __name__ == "__main__":
     # Parse input arguments or set to defualt values
     args = parser.parse_args()
 
-    # Current formulation uses unilateral contact
+    # Current formulation uses bilateral contact
     nitsche_parameters = {"gamma": args.gamma, "theta": args.theta}
     physical_parameters = {"E": args.E, "nu": args.nu, "strain": args.plane_strain}
     threed = args.threed
@@ -121,6 +121,7 @@ if __name__ == "__main__":
             with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
                 mesh = xdmf.read_mesh(name="Grid")
             tdim = mesh.topology.dim
+            gdim = mesh.geometry.dim
             mesh.topology.create_connectivity(tdim - 1, 0)
             mesh.topology.create_connectivity(tdim - 1, tdim)
             with XDMFFile(MPI.COMM_WORLD, f"{fname}_facets.xdmf", "r") as xdmf:
@@ -137,6 +138,7 @@ if __name__ == "__main__":
             with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
                 mesh = xdmf.read_mesh(name="cylinder_cylinder")
             tdim = mesh.topology.dim
+            gdim = mesh.geometry.dim
             mesh.topology.create_connectivity(tdim - 1, 0)
             mesh.topology.create_connectivity(tdim - 1, tdim)
 
@@ -230,6 +232,7 @@ if __name__ == "__main__":
             with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
                 mesh = xdmf.read_mesh(name="Grid")
             tdim = mesh.topology.dim
+            gdim = mesh.geometry.dim
             mesh.topology.create_connectivity(tdim - 1, 0)
             mesh.topology.create_connectivity(tdim - 1, tdim)
 
@@ -296,7 +299,8 @@ if __name__ == "__main__":
         "pc_gamg_square_graph": 2,
     }
     # Pack mesh data for Nitsche solver
-    mesh_data = (facet_marker, dirichet_bdy_1, contact_bdy_1, contact_bdy_2, dirichlet_bdy_2)
+    dirichlet_vals = [dirichet_bdy_1, dirichlet_bdy_2]
+    contact = [(contact_bdy_1, contact_bdy_2)]
 
     # Solve contact problem using Nitsche's method
     load_increment = np.array(displacement) / nload_steps
@@ -316,14 +320,26 @@ if __name__ == "__main__":
     newton_time = np.zeros(nload_steps, dtype=np.float64)
 
     solver_outfile = args.outfile if args.ksp else None
+
+    def dirichlet_func(d):
+        def fn(x):
+            values = np.zeros((gdim, x.shape[1]))
+            for i in range(x.shape[1]):
+                values[:, i] = d[:gdim]
+            return values
+        return fn
     # Load geometry over multiple steps
     for j in range(nload_steps):
         displacement = load_increment
+        dirichlet = []
+        for i, disp in enumerate(displacement):
+            dirichlet.append((dirichlet_vals[i], dirichlet_func(disp)))
 
         # Solve contact problem using Nitsche's method
         u1, n, krylov_iterations, solver_time = nitsche_unbiased(
-            mesh=mesh, mesh_data=mesh_data, physical_parameters=physical_parameters,
-            nitsche_parameters=nitsche_parameters, displacement=displacement,
+            mesh=mesh, mesh_tag=facet_marker, dirichlet=dirichlet, neumann=[
+            ], contact_pairs=contact, body_forces=[], physical_parameters=physical_parameters,
+            nitsche_parameters=nitsche_parameters,
             quadrature_degree=args.q_degree, petsc_options=petsc_options,
             newton_options=newton_options, outfile=solver_outfile)
         num_newton_its[j] = n
