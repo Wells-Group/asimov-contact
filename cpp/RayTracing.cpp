@@ -6,6 +6,7 @@
 // SPDX-License-Identifier:    MIT
 
 #include "RayTracing.h"
+#include <basix/cell.h>
 #include <dolfinx/common/math.h>
 #include <xtensor/xadapt.hpp>
 #include <xtensor/xio.hpp>
@@ -24,100 +25,54 @@ std::function<xt::xtensor_fixed<double, xt::xshape<1, 3>>(
     xt::xtensor_fixed<double, xt::xshape<2>>)>
 get_3D_parameterization(dolfinx::mesh::CellType cell_type, int facet_index)
 {
-
-  std::function<xt::xtensor_fixed<double, xt::xshape<1, 3>>(
-      xt::xtensor_fixed<double, xt::xshape<2>>)>
-      func;
-  const int tdim = dolfinx::mesh::cell_dim(cell_type);
-  const int num_facets = dolfinx::mesh::cell_num_entities(cell_type, tdim - 1);
-  if (facet_index >= num_facets)
-    throw std::invalid_argument(
-        "Invalid facet index (larger than number of facets");
-
   switch (cell_type)
   {
   case dolfinx::mesh::CellType::tetrahedron:
-    if (facet_index == 0)
-    {
-      func = [](xt::xtensor_fixed<double, xt::xshape<2>> xi)
-          -> xt::xtensor_fixed<double, xt::xshape<1, 3>> {
-        return {{xi[0], xi[1], 1 - xi[0] - xi[1]}};
-      };
-    }
-    else if (facet_index == 1)
-    {
-      func = [](xt::xtensor_fixed<double, xt::xshape<2>> xi)
-          -> xt::xtensor_fixed<double, xt::xshape<1, 3>> {
-        return {{0, xi[0], xi[1]}};
-      };
-    }
-    else if (facet_index == 2)
-    {
-      func = [](xt::xtensor_fixed<double, xt::xshape<2>> xi)
-          -> xt::xtensor_fixed<double, xt::xshape<1, 3>> {
-        return {{xi[0], 0, xi[1]}};
-      };
-    }
-    else if (facet_index == 3)
-    {
-      func = [](xt::xtensor_fixed<double, xt::xshape<2>> xi)
-          -> xt::xtensor_fixed<double, xt::xshape<1, 3>> {
-        return {{xi[0], xi[1], 0}};
-      };
-    }
     break;
   case dolfinx::mesh::CellType::hexahedron:
-    if (facet_index == 0)
-    {
-      func = [](xt::xtensor_fixed<double, xt::xshape<2>> xi)
-          -> xt::xtensor_fixed<double, xt::xshape<1, 3>> {
-        return {{xi[0], xi[1], 0}};
-      };
-    }
-    else if (facet_index == 1)
-    {
-      func = [](xt::xtensor_fixed<double, xt::xshape<2>> xi)
-          -> xt::xtensor_fixed<double, xt::xshape<1, 3>> {
-        return {{xi[0], 0, xi[1]}};
-      };
-    }
-    else if (facet_index == 2)
-    {
-      func = [](xt::xtensor_fixed<double, xt::xshape<2>> xi)
-          -> xt::xtensor_fixed<double, xt::xshape<1, 3>> {
-        return {{0, xi[0], xi[1]}};
-      };
-    }
-    else if (facet_index == 3)
-    {
-      func = [](xt::xtensor_fixed<double, xt::xshape<2>> xi)
-          -> xt::xtensor_fixed<double, xt::xshape<1, 3>> {
-        return {{1, xi[0], xi[1]}};
-      };
-    }
-    else if (facet_index == 4)
-    {
-      func = [](xt::xtensor_fixed<double, xt::xshape<2>> xi)
-          -> xt::xtensor_fixed<double, xt::xshape<1, 3>> {
-        return {{xi[0], 1, xi[1]}};
-      };
-    }
-    else if (facet_index == 5)
-    {
-      func = [](xt::xtensor_fixed<double, xt::xshape<2>> xi)
-          -> xt::xtensor_fixed<double, xt::xshape<1, 3>> {
-        return {{xi[0], xi[1], 1}};
-      };
-    }
     break;
   default:
     throw std::invalid_argument("Unsupported cell type");
     break;
   }
+
+  const int tdim = dolfinx::mesh::cell_dim(cell_type);
+
+  if (tdim != 3)
+    throw std::invalid_argument("Cell does not have topological dimension 3");
+  const int num_facets = dolfinx::mesh::cell_num_entities(cell_type, 2);
+  if (facet_index >= num_facets)
+    throw std::invalid_argument(
+        "Invalid facet index (larger than number of facets");
+
+  // Get basix geometry information
+  basix::cell::type basix_cell
+      = dolfinx::mesh::cell_type_to_basix_type(cell_type);
+  const xt::xtensor<double, 2> x = basix::cell::geometry(basix_cell);
+  const std::vector<std::vector<int>> facets
+      = basix::cell::topology(basix_cell)[tdim - 1];
+
+  // Create parameterization function expoiting that the mapping between
+  // reference geoemtries are affine
+  std::function<xt::xtensor_fixed<double, xt::xshape<1, 3>>(
+      xt::xtensor_fixed<double, xt::xshape<2>>)>
+      func = [x, facet = facets[facet_index]](
+                 xt::xtensor_fixed<double, xt::xshape<2>> xi)
+      -> xt::xtensor_fixed<double, xt::xshape<1, 3>>
+  {
+    auto x0 = xt::row(x, facet[0]);
+    xt::xtensor_fixed<double, xt::xshape<1, 3>> vals = x0;
+
+    for (std::size_t i = 0; i < 2; ++i)
+      for (std::size_t j = 0; j < 2; ++j)
+        vals(0, i) += (xt::row(x, facet[1 + j])[i] - x0[i]) * xi[i];
+    return vals;
+  };
   return func;
 }
 
-/// Get derivative of the parameterization with respect to the input parameters
+/// Get derivative of the parameterization with respect to the input
+/// parameters
 /// @param[in] cell_type The cell type
 /// @param[in] facet_index The facet index (local to cell)
 /// @returns The Jacobian of the parameterization
@@ -125,39 +80,24 @@ xt::xtensor_fixed<double, xt::xshape<3, 2>>
 get_parameterization_jacobian(dolfinx::mesh::CellType cell_type,
                               int facet_index)
 {
-
-  const int tdim = dolfinx::mesh::cell_dim(cell_type);
-  const int num_facets = dolfinx::mesh::cell_num_entities(cell_type, tdim - 1);
-  if (facet_index >= num_facets)
-    throw std::invalid_argument(
-        "Invalid facet index (larger than number of facets");
-
   switch (cell_type)
   {
   case dolfinx::mesh::CellType::tetrahedron:
-    if (facet_index == 0)
-      return {{1, 0}, {0, 1}, {-1, -1}};
-    else if (facet_index == 1)
-      return {{0, 0}, {1, 0}, {0, 1}};
-
-    else if (facet_index == 2)
-      return {{1, 0}, {0, 0}, {0, 1}};
-    else if (facet_index == 3)
-      return {{1, 0}, {0, 1}, {0, 0}};
     break;
   case dolfinx::mesh::CellType::hexahedron:
-    if ((facet_index == 0) or (facet_index == 5))
-      return {{1, 0}, {0, 1}, {0, 0}};
-    else if ((facet_index == 1) or (facet_index == 4))
-      return {{1, 0}, {0, 0}, {0, 1}};
-    else if ((facet_index == 2) or (facet_index) == 3)
-      return {{0, 0}, {1, 0}, {0, 1}};
     break;
   default:
     throw std::invalid_argument("Unsupported cell type");
     break;
   }
+
+  basix::cell::type basix_cell
+      = dolfinx::mesh::cell_type_to_basix_type(cell_type);
+  xt::xtensor<double, 3> facet_jacobians
+      = basix::cell::facet_jacobians(basix_cell);
+
   xt::xtensor_fixed<double, xt::xshape<3, 2>> output;
+  output = xt::view(facet_jacobians, facet_index, xt::all(), xt::all());
   return output;
 }
 
@@ -174,9 +114,6 @@ dolfinx_contact::compute_3D_ray(
   int status = -1;
   dolfinx::mesh::CellType cell_type = mesh.topology().cell_type();
   const int tdim = mesh.topology().dim();
-
-  // Storage for facet derivative
-  xt::xtensor_fixed<double, xt::xshape<3, 2>> dxi;
 
   const dolfinx::fem::CoordinateElement& cmap = mesh.geometry().cmap();
   const std::array<std::size_t, 4> basis_shape = cmap.tabulate_shape(1, 1);
@@ -199,11 +136,11 @@ dolfinx_contact::compute_3D_ray(
   }
 
   // Temporary variables
+  xt::xtensor_fixed<double, xt::xshape<3, 2>> dxi;
   xt::xtensor<double, 2> X_k({1, 3});
   xt::xtensor<double, 2> x_k({1, 3});
   xt::xtensor_fixed<double, xt::xshape<2>> xi_k;
   xt::xtensor_fixed<double, xt::xshape<2>> dxi_k;
-
   xt::xtensor_fixed<double, xt::xshape<3, 3>> J;
   xt::xtensor<double, 2> dphi({(std::size_t)tdim, num_dofs_g});
   xt::xtensor_fixed<double, xt::xshape<3, 2>> dGk_tmp;
