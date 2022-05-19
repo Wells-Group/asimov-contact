@@ -6,6 +6,7 @@ from typing import Dict, Tuple
 
 import basix
 import dolfinx.common as _common
+from dolfinx.graph import create_adjacencylist
 import dolfinx.fem as _fem
 import dolfinx.log as _log
 import dolfinx.mesh as _mesh
@@ -177,11 +178,14 @@ def nitsche_rigid_surface_custom(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTa
     h_facets = dolfinx_cuas.pack_coefficients([h_int], integral_entities)
 
     # Create contact class
-    contact = dolfinx_contact.cpp.Contact(facet_marker, [contact_value_elastic, contact_value_rigid], V._cpp_object)
+    data = np.array([contact_value_elastic, contact_value_rigid], dtype=np.int32)
+    offsets = np.array([0, 2], dtype=np.int32)
+    surfaces = create_adjacencylist(data, offsets)
+    contact = dolfinx_contact.cpp.Contact([facet_marker], surfaces, [(0, 1)], V._cpp_object)
     contact.set_quadrature_degree(quadrature_degree)
 
     # Compute gap and normals
-    contact.create_distance_map(0, 1)
+    contact.create_distance_map(0)
     g_vec = contact.pack_gap(0)
     n_surf = contact.pack_ny(0, g_vec)
 
@@ -201,7 +205,7 @@ def nitsche_rigid_surface_custom(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTa
 
     # NOTE: HACK to make "one-sided" contact work with assemble_matrix/assemble_vector
     contact_assembler = dolfinx_contact.cpp.Contact(
-        facet_marker, [contact_value_elastic, contact_value_rigid], V._cpp_object)
+        [facet_marker], surfaces, [(0, 1)], V._cpp_object)
     contact_assembler.set_quadrature_degree(quadrature_degree)
 
     def pack_coefficients(x, solver_coeffs):

@@ -6,6 +6,7 @@
 import numpy as np
 import pytest
 import ufl
+from dolfinx.graph import create_adjacencylist
 from dolfinx import fem, graph
 from dolfinx import mesh as msh
 from mpi4py import MPI
@@ -55,12 +56,16 @@ def test_pack_u():
     arg_sort = np.argsort(facets)
     facet_marker = msh.meshtags(mesh, 1, facets[arg_sort], values[arg_sort])
 
+    data = np.array([1, 2], dtype=np.int32)
+    offsets = np.array([0, 2], dtype=np.int32)
+    surfaces = create_adjacencylist(data, offsets)
+
     # Compute contact class
     quadrature_degree = 2
-    contact = dolfinx_contact.cpp.Contact(facet_marker, [1, 2], V._cpp_object)
+    contact = dolfinx_contact.cpp.Contact([facet_marker], surfaces, [(0, 1), (1, 0)], V._cpp_object)
     contact.set_quadrature_degree(quadrature_degree)
-    contact.create_distance_map(0, 1)
-    contact.create_distance_map(1, 0)
+    contact.create_distance_map(0)
+    contact.create_distance_map(1)
 
     for i in range(2):
         gap = contact.pack_gap(i)

@@ -6,6 +6,7 @@ from typing import Tuple, Dict
 
 import dolfinx.common as _common
 import dolfinx.cpp as _cpp
+from dolfinx.graph import create_adjacencylist
 import dolfinx.fem as _fem
 import dolfinx.geometry as _geometry
 import dolfinx.log as _log
@@ -157,7 +158,10 @@ def nitsche_rigid_surface(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTagsMetaC
 
     # Create contact class
     contact_facets = facet_marker.indices[facet_marker.values == contact_value_elastic]
-    contact = dolfinx_contact.cpp.Contact(facet_marker, [contact_value_elastic, contact_value_rigid], V._cpp_object)
+    data = np.array([contact_value_elastic, contact_value_rigid], dtype=np.int32)
+    offsets = np.array([0, 2], dtype=np.int32)
+    surfaces = create_adjacencylist(data, offsets)
+    contact = dolfinx_contact.cpp.Contact([facet_marker], surfaces, [(0, 1)], V._cpp_object)
     # Ensures that we find closest facet to midpoint of facet
     contact.set_quadrature_degree(1)
 
@@ -165,7 +169,7 @@ def nitsche_rigid_surface(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTagsMetaC
     gdim = mesh.geometry.dim
     fdim = mesh.topology.dim - 1
     mesh_geometry = mesh.geometry.x
-    contact.create_distance_map(0, 1)
+    contact.create_distance_map(0)
     lookup = contact.facet_map(0)
     master_bbox = _geometry.BoundingBoxTree(mesh, fdim, contact_facets)
     midpoint_tree = _geometry.create_midpoint_tree(mesh, fdim, contact_facets)

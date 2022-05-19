@@ -8,6 +8,7 @@ import dolfinx_cuas
 import numpy as np
 import pytest
 import ufl
+from dolfinx.graph import create_adjacencylist
 from dolfinx.fem import (Function, FunctionSpace, IntegralType,
                          VectorFunctionSpace, form)
 from dolfinx.fem.petsc import (assemble_matrix, assemble_vector, create_matrix,
@@ -127,7 +128,10 @@ def test_vector_surface_kernel(dim, kernel_type, P, Q):
     integral_entities = dolfinx_contact.compute_active_entities(mesh, ft.indices, IntegralType.exterior_facet)
     coeffs = dolfinx_cuas.cpp.pack_coefficients([u._cpp_object, mu._cpp_object, lmbda._cpp_object], integral_entities)
     h_facets = dolfinx_contact.pack_circumradius(mesh, integral_entities)
-    contact = dolfinx_contact.cpp.Contact(ft, [1, 1], V._cpp_object)
+    data = np.array([1], dtype=np.int32)
+    offsets = np.array([0, 1], dtype=np.int32)
+    surfaces = create_adjacencylist(data, offsets)
+    contact = dolfinx_contact.cpp.Contact([ft], surfaces, [(0, 0)], V._cpp_object)
     contact.set_quadrature_degree(2 * P + Q + 1)
     g_vec = contact.pack_gap_plane(0, -g)
     # FIXME: assuming all facets are the same type
@@ -249,7 +253,10 @@ def test_matrix_surface_kernel(dim, kernel_type, P, Q):
     integral_entities = dolfinx_contact.compute_active_entities(mesh, facets, IntegralType.exterior_facet)
     coeffs = dolfinx_cuas.cpp.pack_coefficients([u._cpp_object, mu._cpp_object, lmbda._cpp_object], integral_entities)
     h_facets = dolfinx_contact.pack_circumradius(mesh, integral_entities)
-    contact = dolfinx_contact.cpp.Contact(ft, [1, 1], V._cpp_object)
+    data = np.array([1], dtype=np.int32)
+    offsets = np.array([0, 1], dtype=np.int32)
+    surfaces = create_adjacencylist(data, offsets)
+    contact = dolfinx_contact.cpp.Contact([ft], surfaces, [(0, 0)], V._cpp_object)
     contact.set_quadrature_degree(2 * P + Q + 1)
     g_vec = contact.pack_gap_plane(0, -g)
     coeffs = np.hstack([coeffs, h_facets, g_vec])

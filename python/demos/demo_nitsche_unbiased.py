@@ -9,6 +9,7 @@ import numpy as np
 from dolfinx import log
 from dolfinx.common import TimingType, list_timings, timing
 from dolfinx.fem import Function, VectorFunctionSpace
+from dolfinx.graph import create_adjacencylist
 from dolfinx.io import XDMFFile
 from dolfinx.mesh import locate_entities_boundary, meshtags
 from mpi4py import MPI
@@ -300,7 +301,10 @@ if __name__ == "__main__":
     }
     # Pack mesh data for Nitsche solver
     dirichlet_vals = [dirichet_bdy_1, dirichlet_bdy_2]
-    contact = [(contact_bdy_1, contact_bdy_2)]
+    contact = [(0, 1), (1, 0)]
+    data = np.array([contact_bdy_1, contact_bdy_2], dtype=np.int32)
+    offsets = np.array([0, 2], dtype=np.int32)
+    surfaces = create_adjacencylist(data, offsets)
 
     # Solve contact problem using Nitsche's method
     load_increment = np.array(displacement) / nload_steps
@@ -337,7 +341,8 @@ if __name__ == "__main__":
 
         # Solve contact problem using Nitsche's method
         u1, n, krylov_iterations, solver_time = nitsche_unbiased(
-            mesh=mesh, mesh_tag=facet_marker, dirichlet=dirichlet, neumann=[
+            mesh=mesh, mesh_tags=[facet_marker], domain_marker=None,
+            surfaces=surfaces, dirichlet=dirichlet, neumann=[
             ], contact_pairs=contact, body_forces=[], physical_parameters=physical_parameters,
             nitsche_parameters=nitsche_parameters,
             quadrature_degree=args.q_degree, petsc_options=petsc_options,

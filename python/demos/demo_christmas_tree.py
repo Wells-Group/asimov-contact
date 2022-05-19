@@ -8,7 +8,8 @@ import sys
 import numpy as np
 from dolfinx import log
 import dolfinx.fem as _fem
-from dolfinx.common import TimingType, list_timings, timing
+from dolfinx.common import TimingType, list_timings, timing, Timer
+from dolfinx.graph import create_adjacencylist
 from dolfinx.io import XDMFFile
 from mpi4py import MPI
 
@@ -64,30 +65,30 @@ if __name__ == "__main__":
     if threed:
         raise RuntimeError("Not yet implemented")
     else:
+        split = 10
+        padding = 2
         fname = "xmas_tree"
-        if simplex:
-            create_christmas_tree_mesh(filename=f"{fname}.msh", res=args.res)
-            convert_mesh(fname, f"{fname}.xdmf", "triangle", prune_z=True)
-        else:
-            create_christmas_tree_mesh(filename=f"{fname}.msh", quads=True, res=args.res)
-            convert_mesh(fname, f"{fname}.xdmf", "quad", prune_z=True)
-
-        convert_mesh(f"{fname}", f"{fname}_facets", "line", prune_z=True)
+        create_christmas_tree_mesh(filename=fname, res=args.res, split=split, padding=padding)
         with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
-            mesh = xdmf.read_mesh(name="Grid")
-            domain_marker = xdmf.read_meshtags(mesh, name="Grid")
+            mesh = xdmf.read_mesh(name="xmas")
+            domain_marker = xdmf.read_meshtags(mesh, name="domain_marker")
         tdim = mesh.topology.dim
         gdim = mesh.geometry.dim
         mesh.topology.create_connectivity(tdim - 1, 0)
         mesh.topology.create_connectivity(tdim - 1, tdim)
-        with XDMFFile(MPI.COMM_WORLD, f"{fname}_facets.xdmf", "r") as xdmf:
-            facet_marker = xdmf.read_meshtags(mesh, name="Grid")
+        with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
+            facet_marker = xdmf.read_meshtags(mesh, name="disjoint")
+
+        mts = [facet_marker]
+        for i in range(2 * split):
+            with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
+                mts.append(xdmf.read_meshtags(mesh, name=f"padded_{i}"))
 
         # zero dirichlet boundary condition on mesh boundary with tag 5
-        dirichlet = [(5, lambda x: np.zeros((gdim, x.shape[1])))]
+        dirichlet = [(4, lambda x: np.zeros((gdim, x.shape[1])))]
 
         # traction (neumann) boundary condition on mesh boundary with tag 3
-        t = [0.2, 0.3]
+        t = [0.2, 0.3, 0.0]
 
         def neumann_func(x):
             values = np.zeros((gdim, x.shape[1]))
@@ -97,7 +98,7 @@ if __name__ == "__main__":
         neumann = [(3, neumann_func)]
 
         # body forces
-        f = [1.0, -0.5]
+        f = [1.0, -0.5, 0.0]
 
         def force_func(x):
             values = np.zeros((gdim, x.shape[1]))
@@ -106,8 +107,16 @@ if __name__ == "__main__":
             return values
 
         body_forces = [(1, force_func)]
-        # contact surfaces with tags 2, 6
-        contact_pairs = [(2, 6)]
+        # contact surfaces with tags 5, 6
+        data = np.arange(5, 5 + 4 * split, dtype=np.int32)
+        offsets = np.concatenate([np.array([0, 2 * split], dtype=np.int32),
+                                 np.arange(2 * split + 1, 4 * split + 1, dtype=np.int32)])
+        surfaces = create_adjacencylist(data, offsets)
+
+        contact_pairs = []
+        for i in range(split):
+            contact_pairs.append((i, 3 * split + i))
+            contact_pairs.append((split + i, 2 * split + i))
 
         # create initial guess
         def _u_initial(x):
@@ -166,13 +175,14 @@ if __name__ == "__main__":
             increment = (bf[0], lambda x: (j + 1) * bf[1](x) / nload_steps)
             body_force_incr.append(increment)
         # Solve contact problem using Nitsche's method
-        u1, n, krylov_iterations, solver_time = nitsche_unbiased(
-            mesh=mesh, mesh_tag=facet_marker, dirichlet=dirichlet, neumann=neumann_incr,
-            contact_pairs=contact_pairs, physical_parameters=physical_parameters,
-            body_forces=body_force_incr, nitsche_parameters=nitsche_parameters,
-            quadrature_degree=args.q_degree, petsc_options=petsc_options,
-            newton_options=newton_options, initGuess=u_initial, outfile=solver_outfile,
-            domain_marker=domain_marker)
+        with Timer("~Contact: - all"):
+            u1, n, krylov_iterations, solver_time = nitsche_unbiased(
+                mesh=mesh, mesh_tags=mts, domain_marker=domain_marker,
+                surfaces=surfaces, dirichlet=dirichlet, neumann=neumann_incr,
+                contact_pairs=contact_pairs, physical_parameters=physical_parameters,
+                body_forces=body_force_incr, nitsche_parameters=nitsche_parameters,
+                quadrature_degree=args.q_degree, petsc_options=petsc_options,
+                newton_options=newton_options, initGuess=u_initial, outfile=solver_outfile)
         u_initial.x.array[:] = u1.x.array[:]
         num_newton_its[j] = n
         num_krylov_its[j] = krylov_iterations
