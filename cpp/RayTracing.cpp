@@ -38,8 +38,6 @@ get_3D_parameterization(dolfinx::mesh::CellType cell_type, int facet_index)
 
   const int tdim = dolfinx::mesh::cell_dim(cell_type);
 
-  if (tdim != 3)
-    throw std::invalid_argument("Cell does not have topological dimension 3");
   const int num_facets = dolfinx::mesh::cell_num_entities(cell_type, 2);
   if (facet_index >= num_facets)
     throw std::invalid_argument(
