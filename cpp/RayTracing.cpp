@@ -59,9 +59,9 @@ get_3D_parameterization(dolfinx::mesh::CellType cell_type, int facet_index)
     auto x0 = xt::row(x, facet[0]);
     xt::xtensor_fixed<double, xt::xshape<1, 3>> vals = x0;
 
-    for (std::size_t i = 0; i < 2; ++i)
+    for (std::size_t i = 0; i < 3; ++i)
       for (std::size_t j = 0; j < 2; ++j)
-        vals(0, i) += (xt::row(x, facet[1 + j])[i] - x0[i]) * xi[i];
+        vals(0, i) += (xt::row(x, facet[j + 1])[i] - x0[i]) * xi[j];
     return vals;
   };
   return func;
@@ -138,6 +138,7 @@ int dolfinx_contact::allocated_3D_ray_tracing(
       storage.Gk[1]
           += (storage.x_k(0, i) - storage.point[i]) * storage.tangents(1, i);
     }
+
     // Check for convergence in first iteration
     if ((k == 0) and (std::abs(storage.Gk[0]) < tol)
         and (std::abs(storage.Gk[1]) < tol))
@@ -184,16 +185,18 @@ int dolfinx_contact::allocated_3D_ray_tracing(
   // Check if converged  parameters are valid
   switch (cell_type)
   {
+
   case dolfinx::mesh::CellType::tetrahedron:
-    if ((storage.xi_k[0] < 0) or (storage.xi_k[0] > 1) or (storage.xi_k[1] < 0)
-        or (storage.xi_k[1] > 1 - storage.xi_k[0]))
+    if ((storage.xi_k[0] < -tol) or (storage.xi_k[0] > 1 + tol)
+        or (storage.xi_k[1] < -tol)
+        or (storage.xi_k[1] > 1 - storage.xi_k[0] + tol))
     {
       status = -3;
     }
     break;
   case dolfinx::mesh::CellType::hexahedron:
-    if ((storage.xi_k[0] < 0) or (storage.xi_k[0] > 1) or (storage.xi_k[1] < 0)
-        or (storage.xi_k[1] > 1))
+    if ((storage.xi_k[0] < -tol) or (storage.xi_k[0] > 1 + tol)
+        or (storage.xi_k[1] < -tol) or (storage.xi_k[1] > 1 + tol))
     {
       status = -3;
     }
@@ -255,7 +258,6 @@ dolfinx_contact::compute_3D_ray(
           std::next(x_g.begin(), 3 * x_dofs[j]),
           std::next(coordinate_dofs.begin(), 3 * j));
     }
-
     // Assign Jacobian of reference mapping
     allocated_memory.dxi
         = get_parameterization_jacobian(cell_type, facet_index);
