@@ -46,9 +46,12 @@ jobs:
     steps:
       - uses: actions/checkout@v2
 
+      # Workaround until https://github.com/h5py/h5py/pull/2101 is merged
       - name: Install meshio/h5py
         run: |
-          CC=mpicc pip3 install --no-cache-dir --no-binary=h5py h5py meshio
+          pip3 install mpi4py --no-cache-dir --upgrade
+          HDF5_MPI="ON" HDF5_DIR="/usr/local" pip3 install --no-cache-dir --no-binary=h5py git+https://github.com/julesghub/h5py.git@py310-compat-2100 --upgrade
+          pip3 install meshio --no-cache-dir --upgrade
 
       - name: Get Basix and install
         uses: actions/checkout@v2
