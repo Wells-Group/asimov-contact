@@ -70,7 +70,7 @@ get_3D_parameterization(dolfinx::mesh::CellType cell_type, int facet_index)
   };
   return func;
 }
-
+//------------------------------------------------------------------------------------------------
 /// Get derivative of the parameterization with respect to the input
 /// parameters
 /// @param[in] cell_type The cell type
@@ -102,7 +102,112 @@ get_parameterization_jacobian(dolfinx::mesh::CellType cell_type,
 }
 
 } // namespace
+//------------------------------------------------------------------------------------------------
+int dolfinx_contact::allocated_3D_ray_tracing(
+    dolfinx_contact::newton_3D_storage& storage,
+    xt::xtensor<double, 4>& basis_values, xt::xtensor<double, 2>& dphi,
+    int max_iter, double tol, const dolfinx::fem::CoordinateElement& cmap,
+    dolfinx::mesh::CellType cell_type,
+    const xt::xtensor<double, 2>& coordinate_dofs,
+    const std::function<xt::xtensor_fixed<double, xt::xshape<1, 3>>(
+        xt::xtensor_fixed<double, xt::xshape<2>>)>& reference_map)
+{
+  int status = -1;
+  constexpr int tdim = 3;
+  storage.x_k = {{0, 0, 0}};
+  storage.xi_k = {0.5, 0.25};
+  for (int k = 0; k < max_iter; ++k)
+  {
+    // Evaluate reference coordinate at current iteration
+    storage.X_k = reference_map(storage.xi_k);
 
+    // Tabulate coordinate element basis function
+    cmap.tabulate(1, storage.X_k, basis_values);
+
+    // Push forward reference coordinate
+    cmap.push_forward(storage.x_k, coordinate_dofs,
+                      xt::view(basis_values, 0, xt::all(), xt::all(), 0));
+    dphi = xt::view(basis_values, xt::xrange(1, tdim + 1), 0, xt::all(), 0);
+
+    // Compute Jacobian
+    std::fill(storage.J.begin(), storage.J.end(), 0);
+    cmap.compute_jacobian(dphi, coordinate_dofs, storage.J);
+
+    // Compute residual at current iteration
+    std::fill(storage.Gk.begin(), storage.Gk.end(), 0);
+    for (std::size_t i = 0; i < 3; ++i)
+    {
+      storage.Gk[0]
+          += (storage.x_k(0, i) - storage.point[i]) * storage.tangents(0, i);
+      storage.Gk[1]
+          += (storage.x_k(0, i) - storage.point[i]) * storage.tangents(1, i);
+    }
+    // Check for convergence in first iteration
+    if ((k == 0) and (std::abs(storage.Gk[0]) < tol)
+        and (std::abs(storage.Gk[1]) < tol))
+      break;
+
+    /// Compute dGk/dxi
+    std::fill(storage.dGk_tmp.begin(), storage.dGk_tmp.end(), 0);
+    dolfinx::math::dot(storage.J, storage.dxi, storage.dGk_tmp);
+    std::fill(storage.dGk.begin(), storage.dGk.end(), 0);
+
+    for (std::size_t i = 0; i < 2; ++i)
+      for (std::size_t j = 0; j < 2; ++j)
+        for (std::size_t l = 0; l < 3; ++l)
+          storage.dGk(i, j) += storage.dGk_tmp(l, j) * storage.tangents(i, l);
+
+    // Invert dGk/dxi
+    double det_dGk = dolfinx::math::det(storage.dGk);
+    if (std::abs(det_dGk) < tol)
+    {
+      status = -2;
+      break;
+    }
+    dolfinx::math::inv(storage.dGk, storage.dGk_inv);
+
+    // Compute dxi
+    std::fill(storage.dxi_k.begin(), storage.dxi_k.end(), 0);
+    for (std::size_t i = 0; i < 2; ++i)
+      for (std::size_t j = 0; j < 2; ++j)
+        storage.dxi_k[i] += storage.dGk_inv(i, j) * storage.Gk[j];
+    // Check for convergence
+    if ((storage.dxi_k[0] * storage.dxi_k[0]
+         + storage.dxi_k[1] * storage.dxi_k[1])
+        < tol * tol)
+    {
+      status = 1;
+      break;
+    }
+
+    // Update xi
+    std::transform(storage.xi_k.cbegin(), storage.xi_k.cend(),
+                   storage.dxi_k.cbegin(), storage.xi_k.begin(),
+                   [](auto x, auto y) { return x - y; });
+  }
+  // Check if converged  parameters are valid
+  switch (cell_type)
+  {
+  case dolfinx::mesh::CellType::tetrahedron:
+    if ((storage.xi_k[0] < 0) or (storage.xi_k[0] > 1) or (storage.xi_k[1] < 0)
+        or (storage.xi_k[1] > 1 - storage.xi_k[0]))
+    {
+      status = -3;
+    }
+    break;
+  case dolfinx::mesh::CellType::hexahedron:
+    if ((storage.xi_k[0] < 0) or (storage.xi_k[0] > 1) or (storage.xi_k[1] < 0)
+        or (storage.xi_k[1] > 1))
+    {
+      status = -3;
+    }
+    break;
+  default:
+    throw std::invalid_argument("Unsupported cell type");
+  }
+  return status;
+}
+//------------------------------------------------------------------------------------------------
 std::tuple<int, std::int32_t, xt::xtensor_fixed<double, xt::xshape<2, 3>>>
 dolfinx_contact::compute_3D_ray(
     const dolfinx::mesh::Mesh& mesh,
@@ -116,8 +221,6 @@ dolfinx_contact::compute_3D_ray(
   const int tdim = mesh.topology().dim();
 
   const dolfinx::fem::CoordinateElement& cmap = mesh.geometry().cmap();
-  const std::array<std::size_t, 4> basis_shape = cmap.tabulate_shape(1, 1);
-  xt::xtensor<double, 4> basis_values(basis_shape);
 
   // Get cell coordinates/geometry
   const dolfinx::mesh::Geometry& geometry = mesh.geometry();
@@ -127,29 +230,23 @@ dolfinx_contact::compute_3D_ray(
   xtl::span<const double> x_g = geometry.x();
   const std::size_t num_dofs_g = cmap.dim();
   xt::xtensor<double, 2> coordinate_dofs({num_dofs_g, 3});
+  xt::xtensor<double, 2> dphi({(std::size_t)tdim, num_dofs_g});
 
   if ((gdim != tdim) or (gdim != 3))
   {
-    throw std::invalid_argument(
-        "This raytracing algorithm is specialized for meshes with topological "
-        "and geometrical dimension 3");
+    throw std::invalid_argument("This raytracing algorithm is specialized "
+                                "for meshes with topological "
+                                "and geometrical dimension 3");
   }
 
   // Temporary variables
-  xt::xtensor_fixed<double, xt::xshape<3, 2>> dxi;
-  xt::xtensor<double, 2> X_k({1, 3});
-  xt::xtensor<double, 2> x_k({1, 3});
-  xt::xtensor_fixed<double, xt::xshape<2>> xi_k;
-  xt::xtensor_fixed<double, xt::xshape<2>> dxi_k;
-  xt::xtensor_fixed<double, xt::xshape<3, 3>> J;
-  xt::xtensor<double, 2> dphi({(std::size_t)tdim, num_dofs_g});
-  xt::xtensor_fixed<double, xt::xshape<3, 2>> dGk_tmp;
-  xt::xtensor_fixed<double, xt::xshape<2, 2>> dGk;
-  xt::xtensor_fixed<double, xt::xshape<2, 2>> dGk_inv;
-  xt::xtensor_fixed<double, xt::xshape<2>> Gk;
+  const std::array<std::size_t, 4> basis_shape = cmap.tabulate_shape(1, 1);
+  xt::xtensor<double, 4> basis_values(basis_shape);
 
   std::size_t cell_idx = -1;
-
+  dolfinx_contact::newton_3D_storage allocated_memory;
+  allocated_memory.tangents = tangents;
+  allocated_memory.point = point;
   for (std::size_t c = 0; c < cells.size(); ++c)
   {
 
@@ -163,98 +260,15 @@ dolfinx_contact::compute_3D_ray(
                   std::next(coordinate_dofs.begin(), j * 3));
     }
 
-    // Get facet parameterization
-    auto xi = get_3D_parameterization(cell_type, facet_index);
+    // Assign Jacobian of reference mapping
+    allocated_memory.dxi
+        = get_parameterization_jacobian(cell_type, facet_index);
+    // Get parameterization map
+    auto reference_map = get_3D_parameterization(cell_type, facet_index);
 
-    dxi = get_parameterization_jacobian(cell_type, facet_index);
-
-    // Reset initial guess
-    xi_k = {0.5, 0.25};
-    for (int k = 0; k < max_iter; ++k)
-    {
-      // Evaluate reference coordinate at current iteration
-      X_k = xi(xi_k);
-
-      // Tabulate coordinate element basis function
-      cmap.tabulate(1, X_k, basis_values);
-
-      // Push forward reference coordinate
-      cmap.push_forward(x_k, coordinate_dofs,
-                        xt::view(basis_values, 0, xt::all(), xt::all(), 0));
-      dphi = xt::view(basis_values, xt::xrange(1, tdim + 1), 0, xt::all(), 0);
-
-      // Compute Jacobian
-      std::fill(J.begin(), J.end(), 0);
-      cmap.compute_jacobian(dphi, coordinate_dofs, J);
-
-      // Compute residual at current iteration
-      std::fill(Gk.begin(), Gk.end(), 0);
-      for (std::size_t i = 0; i < 3; ++i)
-      {
-        Gk[0] += (x_k(0, i) - point[i]) * tangents(0, i);
-        Gk[1] += (x_k(0, i) - point[i]) * tangents(1, i);
-      }
-
-      // Check for convergence in first iteration
-      if ((k == 0) and (std::abs(Gk[0]) < tol) and (std::abs(Gk[1]) < tol))
-        break;
-
-      /// Compute dGk/dxi
-      std::fill(dGk_tmp.begin(), dGk_tmp.end(), 0);
-      dolfinx::math::dot(J, dxi, dGk_tmp);
-      std::fill(dGk.begin(), dGk.end(), 0);
-
-      for (std::size_t i = 0; i < 2; ++i)
-        for (std::size_t j = 0; j < 2; ++j)
-          for (std::size_t l = 0; l < 3; ++l)
-            dGk(i, j) += dGk_tmp(l, j) * tangents(i, l);
-
-      // Invert dGk/dxi
-      double det_dGk = dolfinx::math::det(dGk);
-      if (std::abs(det_dGk) < tol)
-      {
-        status = -2;
-        break;
-      }
-      dolfinx::math::inv(dGk, dGk_inv);
-
-      // Compute dxi
-      std::fill(dxi_k.begin(), dxi_k.end(), 0);
-      for (std::size_t i = 0; i < 2; ++i)
-        for (std::size_t j = 0; j < 2; ++j)
-          dxi_k[i] += dGk_inv(i, j) * Gk[j];
-
-      // Check for convergence
-      if ((dxi_k[0] * dxi_k[0] + dxi_k[1] * dxi_k[1]) < tol * tol)
-      {
-        status = 1;
-        break;
-      }
-
-      // Update xi
-      std::transform(xi_k.cbegin(), xi_k.cend(), dxi_k.cbegin(), xi_k.begin(),
-                     [](auto x, auto y) { return x - y; });
-    }
-    // Check if converged  parameters are valid
-    switch (cell_type)
-    {
-    case dolfinx::mesh::CellType::tetrahedron:
-      if ((xi_k[0] < 0) or (xi_k[0] > 1) or (xi_k[1] < 0)
-          or (xi_k[1] > 1 - xi_k[0]))
-      {
-        status = -3;
-      }
-      break;
-    case dolfinx::mesh::CellType::hexahedron:
-      if ((xi_k[0] < 0) or (xi_k[0] > 1) or (xi_k[1] < 0) or (xi_k[1] > 1))
-      {
-        status = -3;
-      }
-      break;
-    default:
-      throw std::invalid_argument("Invalid cell type");
-    }
-
+    status = dolfinx_contact::allocated_3D_ray_tracing(
+        allocated_memory, basis_values, dphi, max_iter, tol, cmap, cell_type,
+        coordinate_dofs, reference_map);
     if (status > 0)
     {
       cell_idx = c;
@@ -265,8 +279,10 @@ dolfinx_contact::compute_3D_ray(
     LOG(WARNING) << "No ray through the facets have been found";
 
   xt::xtensor_fixed<double, xt::xshape<2, 3>> output_coords;
-  std::copy(x_k.cbegin(), x_k.cend(), output_coords.begin());
-  std::copy(X_k.cbegin(), X_k.cend(), std::next(output_coords.begin(), 3));
+  std::copy(allocated_memory.x_k.cbegin(), allocated_memory.x_k.cend(),
+            output_coords.begin());
+  std::copy(allocated_memory.X_k.cbegin(), allocated_memory.X_k.cend(),
+            std::next(output_coords.begin(), 3));
 
   std::tuple<int, std::int32_t, xt::xtensor_fixed<double, xt::xshape<2, 3>>>
       output = std::make_tuple(status, cell_idx, output_coords);
