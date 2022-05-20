@@ -8,9 +8,7 @@
 #include "RayTracing.h"
 #include <basix/cell.h>
 #include <dolfinx/common/math.h>
-#include <xtensor/xadapt.hpp>
-#include <xtensor/xio.hpp>
-#include <xtensor/xslice.hpp>
+#include <dolfinx/common/utils.h>
 #include <xtensor/xview.hpp>
 
 namespace
@@ -252,10 +250,10 @@ dolfinx_contact::compute_3D_ray(
     auto [cell, facet_index] = cells[c];
     auto x_dofs = x_dofmap.links(cell);
     for (std::size_t j = 0; j < x_dofs.size(); ++j)
-
     {
-      std::copy_n(std::next(x_g.begin(), 3 * x_dofs[j]), 3,
-                  std::next(coordinate_dofs.begin(), j * 3));
+      dolfinx::common::impl::copy_N<3>(
+          std::next(x_g.begin(), 3 * x_dofs[j]),
+          std::next(coordinate_dofs.begin(), 3 * j));
     }
 
     // Assign Jacobian of reference mapping
