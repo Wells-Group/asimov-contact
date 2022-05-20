@@ -48,8 +48,8 @@ get_3D_parameterization(dolfinx::mesh::CellType cell_type, int facet_index)
   const std::vector<std::vector<int>> facets
       = basix::cell::topology(basix_cell)[tdim - 1];
 
-  // Create parameterization function expoiting that the mapping between
-  // reference geoemtries are affine
+  // Create parameterization function exploiting that the mapping between
+  // reference geometries are affine
   std::function<xt::xtensor_fixed<double, xt::xshape<1, 3>>(
       xt::xtensor_fixed<double, xt::xshape<2>>)>
       func = [x, facet = facets[facet_index]](
