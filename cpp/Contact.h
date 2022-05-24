@@ -825,9 +825,9 @@ public:
         = xt::zeros<double>({num_facets * num_q_points, (std::size_t)3});
     for (std::size_t i = 0; i < num_facets; ++i)
     {
-      assert(qp_phys[i].shape(1) == gdim);
+      assert(qp_phys[i].shape(1) == (std::size_t)gdim);
       for (std::size_t j = 0; j < num_q_points; ++j)
-        for (std::size_t k = 0; k < gdim; ++k)
+        for (std::size_t k = 0; k < (std::size_t)gdim; ++k)
           quadrature_points(i * num_q_points + j, k) = qp_phys[i](j, k);
     }
 
