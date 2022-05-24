@@ -125,7 +125,8 @@ class NewtonSolver():
         """
         self._compute_residual = func
 
-    def set_preconditioner(self, func: Callable[[PETSc.Vec, PETSc.Mat, npt.NDArray[PETSc.ScalarType]], None], P: PETSc.Mat):
+    def set_preconditioner(self, func: Callable[[PETSc.Vec, PETSc.Mat, npt.NDArray[PETSc.ScalarType]], None],
+                           P: PETSc.Mat):
         """
         Set the function for computing the preconditioner matrix
         Args:
