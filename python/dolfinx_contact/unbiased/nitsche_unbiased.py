@@ -28,7 +28,8 @@ def nitsche_unbiased(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTagsMetaClass,
                      nitsche_parameters: dict[str, np.float64],
                      displacement: npt.NDArray[ScalarType] = np.array([[0, 0, 0], [0, 0, 0]], dtype=ScalarType),
                      quadrature_degree: int = 5, form_compiler_params: dict = None, jit_params: dict = None,
-                     petsc_options: dict = None, newton_options: dict = None, initGuess=None, outfile=None) -> Tuple[_fem.Function, int, int, float]:
+                     petsc_options: dict = None, newton_options: dict = None, initGuess=None, outfile=None) -> Tuple[
+                         _fem.Function, int, int, float]:
     """
     Use custom kernel to compute the contact problem with two elastic bodies coming into contact.
 

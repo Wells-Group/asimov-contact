@@ -3,10 +3,11 @@
 # SPDX-License-Identifier:    MIT
 
 from enum import Enum
-from typing import Callable, Tuple, Union, Sequence
-import numpy.typing as npt
+from typing import Callable, Tuple, Union
+
 import numpy
-from dolfinx import fem, common
+import numpy.typing as npt
+from dolfinx import common, fem
 from mpi4py import MPI
 from petsc4py import PETSc
 
