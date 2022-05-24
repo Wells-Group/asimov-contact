@@ -629,7 +629,61 @@ dolfinx_contact::compute_active_entities(
       active_entities);
   return active_entities;
 }
+//-------------------------------------------------------------------------------------
+dolfinx::graph::AdjacencyList<std::int32_t>
+dolfinx_contact::entities_to_geometry_dofs(
+    const dolfinx::mesh::Mesh& mesh, int dim,
+    const xtl::span<const std::int32_t>& entity_list)
+{
 
+  // Get mesh geometry and topology data
+  const dolfinx::mesh::Geometry& geometry = mesh.geometry();
+  const dolfinx::fem::ElementDofLayout layout
+      = geometry.cmap().create_dof_layout();
+  // FIXME: What does this return for prisms?
+  const std::size_t num_entity_dofs = layout.num_entity_closure_dofs(dim);
+  const graph::AdjacencyList<std::int32_t>& xdofs = geometry.dofmap();
+
+  const mesh::Topology& topology = mesh.topology();
+  const int tdim = topology.dim();
+  mesh.topology_mutable().create_entities(dim);
+  mesh.topology_mutable().create_connectivity(dim, tdim);
+  mesh.topology_mutable().create_connectivity(tdim, dim);
+
+  // Create arrays for the adjacency-list
+  std::vector<std::int32_t> geometry_indices(num_entity_dofs
+                                             * entity_list.size());
+  std::vector<std::int32_t> offsets(entity_list.size() + 1, 0);
+  for (std::size_t i = 0; i < entity_list.size(); ++i)
+    offsets[i + 1] = std::int32_t((i + 1) * num_entity_dofs);
+
+  // Fetch connectivities required to get entity dofs
+  const std::vector<std::vector<std::vector<int>>>& closure_dofs
+      = layout.entity_closure_dofs_all();
+  const auto e_to_c = topology.connectivity(dim, tdim);
+  assert(e_to_c);
+  const auto c_to_e = topology.connectivity(tdim, dim);
+  assert(c_to_e);
+  for (std::size_t i = 0; i < entity_list.size(); ++i)
+  {
+    const std::int32_t idx = entity_list[i];
+    const std::int32_t cell = e_to_c->links(idx)[0];
+    auto cell_entities = c_to_e->links(cell);
+    auto it = std::find(cell_entities.begin(), cell_entities.end(), idx);
+    assert(it != cell_entities.end());
+    const auto local_entity = std::distance(cell_entities.begin(), it);
+    const std::vector<std::int32_t>& entity_dofs
+        = closure_dofs[dim][local_entity];
+
+    const auto xc = xdofs.links(cell);
+    for (std::size_t j = 0; j < num_entity_dofs; ++j)
+      geometry_indices[i * num_entity_dofs + j] = xc[entity_dofs[j]];
+  }
+
+  return dolfinx::graph::AdjacencyList<std::int32_t>(geometry_indices, offsets);
+}
+
+//-------------------------------------------------------------------------------------
 std::vector<std::int32_t> dolfinx_contact::find_candidate_surface_segment(
     std::shared_ptr<const dolfinx::mesh::Mesh> mesh,
     const std::vector<std::int32_t>& puppet_facets,
@@ -654,9 +708,10 @@ std::vector<std::int32_t> dolfinx_contact::find_candidate_surface_segment(
       // compute distance betweeen midpoints of ith candidate facet
       // and jth puppet facet
       dist = 0;
-      for (std::size_t k = 0; k < puppet_midpoints.shape(1); ++k)
+      for (std::size_t k = 0; k < 3; ++k)
       {
-        diff = std::abs(puppet_midpoints(j, k) - candidate_midpoints(i, k));
+        diff = std::abs(puppet_midpoints[j * 3 + k]
+                        - candidate_midpoints[i * 3 + k]);
         dist += diff * diff;
       }
       if (dist < r2)

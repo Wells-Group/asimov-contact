@@ -196,6 +196,19 @@ compute_active_entities(std::shared_ptr<const dolfinx::mesh::Mesh> mesh,
                         tcb::span<const std::int32_t> entities,
                         dolfinx::fem::IntegralType integral);
 
+/// @brief Compute the geometry dof indices for a set of entities
+///
+/// For a set of entities, compute the geometry closure dofs of the entity.
+///
+/// @param[in] mesh The mesh
+/// @param[in] dim The dimension of the entities
+/// @param[in] entities List of mesh entities
+/// @returns An adjacency list where the i-th link corresponds to the closure
+/// dofs of the i-th input entity
+dolfinx::graph::AdjacencyList<std::int32_t>
+entities_to_geometry_dofs(const mesh::Mesh& mesh, int dim,
+                          const xtl::span<const std::int32_t>& entity_list);
+
 /// @brief find candidate facets within a given radius of puppet facets
 ///
 /// Given a list of puppet facets and a list of candidate facets return

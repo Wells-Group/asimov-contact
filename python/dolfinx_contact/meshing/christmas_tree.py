@@ -2,15 +2,9 @@
 #
 # SPDX-License-Identifier:    MIT
 
-from scipy.misc import face
 import numpy as np
 import gmsh
 from mpi4py import MPI
-from dolfinx.graph import create_adjacencylist
-from dolfinx.io import (XDMFFile, cell_perm_gmsh, distribute_entity_data,
-                        extract_gmsh_geometry,
-                        extract_gmsh_topology_and_markers, ufl_mesh_from_gmsh)
-from dolfinx.mesh import CellType, create_mesh, meshtags_from_entities
 
 __all__ = ["create_christmas_tree_mesh"]
 
