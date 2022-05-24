@@ -196,4 +196,19 @@ compute_active_entities(std::shared_ptr<const dolfinx::mesh::Mesh> mesh,
                         tcb::span<const std::int32_t> entities,
                         dolfinx::fem::IntegralType integral);
 
+/// @brief find candidate facets within a given radius of puppet facets
+///
+/// Given a list of puppet facets and a list of candidate facets return
+/// only those candidate facet within the given radius
+///
+/// @param[in] mesh The mesh
+/// @param[in] puppet_facets Puppet facets
+/// @param[in] candidate_facets Candidate facets
+/// @param[in] radius The search radius
+/// @return candidate facets within radius of puppet facets
+std::vector<std::int32_t> find_candidate_surface_segment(
+    std::shared_ptr<const dolfinx::mesh::Mesh> mesh,
+    const std::vector<std::int32_t>& puppet_facets,
+    const std::vector<std::int32_t>& candidate_facets, const double radius);
+
 } // namespace dolfinx_contact

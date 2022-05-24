@@ -11,11 +11,12 @@ import dolfinx.fem as _fem
 from dolfinx.common import TimingType, list_timings, timing, Timer
 from dolfinx.graph import create_adjacencylist
 from dolfinx.io import XDMFFile
+from dolfinx.mesh import meshtags
 from mpi4py import MPI
 
-from dolfinx_contact.meshing import (convert_mesh,
-                                     create_christmas_tree_mesh)
+from dolfinx_contact.meshing import convert_mesh, create_christmas_tree_mesh
 from dolfinx_contact.unbiased.nitsche_unbiased import nitsche_unbiased
+from dolfinx_contact.cpp import find_candidate_surface_segment
 
 if __name__ == "__main__":
     desc = "Nitsche's method for two elastic bodies using custom assemblers"
@@ -52,6 +53,8 @@ if __name__ == "__main__":
                         help="Mesh resolution")
     parser.add_argument("--outfile", type=str, default=None, required=False,
                         help="File for appending results", dest="outfile")
+    parser.add_argument("--split", type=np.int32, default=1, required=False,
+                        help="number of surface segments", dest="split")
     # Parse input arguments or set to defualt values
     args = parser.parse_args()
 
@@ -65,24 +68,38 @@ if __name__ == "__main__":
     if threed:
         raise RuntimeError("Not yet implemented")
     else:
-        split = 10
-        padding = 2
+        split = args.split
         fname = "xmas_tree"
-        create_christmas_tree_mesh(filename=fname, res=args.res, split=split, padding=padding)
+        create_christmas_tree_mesh(filename=fname, res=args.res, split=split)
+        convert_mesh(fname, fname, "triangle")
+        convert_mesh(f"{fname}", f"{fname}_facets", "line")
         with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
-            mesh = xdmf.read_mesh(name="xmas")
-            domain_marker = xdmf.read_meshtags(mesh, name="domain_marker")
+            mesh = xdmf.read_mesh(name="Grid")
+            domain_marker = xdmf.read_meshtags(mesh, name="Grid")
         tdim = mesh.topology.dim
         gdim = mesh.geometry.dim
         mesh.topology.create_connectivity(tdim - 1, 0)
         mesh.topology.create_connectivity(tdim - 1, tdim)
-        with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
-            facet_marker = xdmf.read_meshtags(mesh, name="disjoint")
+        with XDMFFile(MPI.COMM_WORLD, f"{fname}_facets.xdmf", "r") as xdmf:
+            facet_marker = xdmf.read_meshtags(mesh, name="Grid")
 
+        # create meshtags for candidate segments
         mts = [facet_marker]
-        for i in range(2 * split):
-            with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
-                mts.append(xdmf.read_meshtags(mesh, name=f"padded_{i}"))
+        cand_facets_0 = np.sort(np.hstack([facet_marker.indices[facet_marker.values == 5 + i] for i in range(split)]))
+        cand_facets_1 = np.sort(
+            np.hstack([facet_marker.indices[facet_marker.values == 5 + split + i] for i in range(split)]))
+
+        for i in range(split):
+            fcts = np.array(find_candidate_surface_segment(
+                mesh, facet_marker.indices[facet_marker.values == 5 + split + i], cand_facets_0, 0.8), dtype=np.int32)
+            vls = np.full(len(fcts), 5 + 2 * split + i, dtype=np.int32)
+            mts.append(meshtags(mesh, tdim - 1, fcts, vls))
+
+        for i in range(split):
+            fcts = np.array(find_candidate_surface_segment(
+                mesh, facet_marker.indices[facet_marker.values == 5 + i], cand_facets_1, 0.8), dtype=np.int32)
+            vls = np.full(len(fcts), 5 + 3 * split + i, dtype=np.int32)
+            mts.append(meshtags(mesh, tdim - 1, fcts, vls))
 
         # zero dirichlet boundary condition on mesh boundary with tag 5
         dirichlet = [(4, lambda x: np.zeros((gdim, x.shape[1])))]
@@ -110,7 +127,7 @@ if __name__ == "__main__":
         # contact surfaces with tags 5, 6
         data = np.arange(5, 5 + 4 * split, dtype=np.int32)
         offsets = np.concatenate([np.array([0, 2 * split], dtype=np.int32),
-                                 np.arange(2 * split + 1, 4 * split + 1, dtype=np.int32)])
+                                  np.arange(2 * split + 1, 4 * split + 1, dtype=np.int32)])
         surfaces = create_adjacencylist(data, offsets)
 
         contact_pairs = []

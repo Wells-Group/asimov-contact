@@ -368,6 +368,15 @@ PYBIND11_MODULE(cpp, m)
         return output;
       });
 
+  m.def("find_candidate_surface_segment",
+        [](std::shared_ptr<const dolfinx::mesh::Mesh> mesh,
+           const std::vector<std::int32_t>& puppet_facets,
+           const std::vector<std::int32_t>& candidate_facets,
+           const double radius)
+        {
+          return dolfinx_contact::find_candidate_surface_segment(
+              mesh, puppet_facets, candidate_facets, radius);
+        });
   m.def(
       "compute_3D_ray",
       [](const dolfinx::mesh::Mesh& mesh,

@@ -629,3 +629,44 @@ dolfinx_contact::compute_active_entities(
       active_entities);
   return active_entities;
 }
+
+std::vector<std::int32_t> dolfinx_contact::find_candidate_surface_segment(
+    std::shared_ptr<const dolfinx::mesh::Mesh> mesh,
+    const std::vector<std::int32_t>& puppet_facets,
+    const std::vector<std::int32_t>& candidate_facets, const double radius)
+{
+  // Find midpoints of puppet and candidate facets
+  auto puppet_midpoints = dolfinx::mesh::compute_midpoints(
+      *mesh, mesh->topology().dim() - 1, puppet_facets);
+  auto candidate_midpoints = dolfinx::mesh::compute_midpoints(
+      *mesh, mesh->topology().dim() - 1, candidate_facets);
+
+  double r2 = radius * radius; // radius squared
+  double dist; // used for squared distance between two midpoints
+  double diff; // used for squared difference between two coordinates
+
+  std::vector<std::int32_t> cand_patch;
+
+  for (std::size_t i = 0; i < candidate_facets.size(); ++i)
+  {
+    for (std::size_t j = 0; j < puppet_facets.size(); ++j)
+    {
+      // compute distance betweeen midpoints of ith candidate facet
+      // and jth puppet facet
+      dist = 0;
+      for (std::size_t k = 0; k < puppet_midpoints.shape(1); ++k)
+      {
+        diff = std::abs(puppet_midpoints(j, k) - candidate_midpoints(i, k));
+        dist += diff * diff;
+      }
+      if (dist < r2)
+      {
+        // if distance < radius add candidate_facet to output
+        cand_patch.push_back(candidate_facets[i]);
+        // break to avoid adding the same facet more than once
+        break;
+      }
+    }
+  }
+  return cand_patch;
+}

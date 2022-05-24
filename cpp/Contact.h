@@ -86,9 +86,11 @@ class Contact
 {
 public:
   /// Constructor
-  /// @param[in] marker The meshtags defining the contact surfaces
-  /// @param[in] surfaces Array of the values of the meshtags marking the
-  /// surfaces
+  /// @param[in] markers List of meshtags defining the contact surfaces
+  /// @param[in] surfaces Adjacency list. Links of i contains meshtag values
+  /// associated with ith meshtag in markers
+  /// @param[in] contact_pairs list of pairs (i, j) marking the ith and jth
+  /// surface in surfaces->array() as a contact pair
   /// @param[in] V The functions space
   Contact(std::vector<std::shared_ptr<dolfinx::mesh::MeshTags<std::int32_t>>>
               markers,
@@ -102,7 +104,7 @@ public:
   int surface_mt(int surface) const { return _surfaces[surface]; }
 
   /// Return contact pair
-  /// @param[in] pair - the index of the scontact pair
+  /// @param[in] pair - the index of the contact pair
   std::array<int, 2> contact_pair(int pair) const
   {
     return _contact_pairs[pair];
@@ -775,7 +777,7 @@ public:
   /// _qp_phys[puppet_mt]
   /// This is saved as an adjacency list in _facet_maps[puppet_mt]
   /// and an xtensor containing cell_facet_pairs in
-  /// _cell_maps[origin_mesthtag]
+  /// _cell_maps[pair]
   void create_distance_map(int pair)
   {
     int puppet_mt = _contact_pairs[pair][0];

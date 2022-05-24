@@ -65,12 +65,16 @@ dolfinx_contact::Contact::Contact(
   assert(f_to_c);
   auto c_to_f = topology.connectivity(tdim, fdim);
   assert(c_to_f);
+  // used to store list of (cell, facet) for each surface
   _cell_facet_pairs.resize(num_surfaces);
+  // used to store submesh for each surface
   _submeshes.resize(num_surfaces);
+  // used to store map from puppet to candidate surface for each contact pair
   _facet_maps.resize(contact_pairs.size());
+  // store physical quadrature points for each surface
   _qp_phys.resize(num_surfaces);
+  // store max number of links for each puppet surface
   _max_links.resize(contact_pairs.size());
-  _cell_facet_pairs.resize(num_surfaces);
   for (std::size_t s = 0; s < markers.size(); ++s)
   {
     auto marker = _markers[s];

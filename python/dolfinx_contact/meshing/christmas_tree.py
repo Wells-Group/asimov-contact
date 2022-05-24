@@ -54,7 +54,7 @@ def jagged_curve(npoints, t, r0, r1, xmax):
     return np.array(xvals), np.array(yvals)
 
 
-def create_christmas_tree_mesh(filename: str, quads: bool = False, res=0.2, split=1, padding=1):
+def create_christmas_tree_mesh(filename: str, res=0.2, split=1):
     # TODO: Some of the curve parameters should probably be input
     nc = 101
     x, y = jagged_curve(nc, -0.95, lambda x: 0.8 * x / 5.0, lambda x: 0.6, 8.0)
@@ -68,6 +68,7 @@ def create_christmas_tree_mesh(filename: str, quads: bool = False, res=0.2, spli
     yv = np.concatenate((y[1:], yb[1:-1], np.flip(-y[1:])))
 
     gmsh.initialize()
+    gmsh.option.setNumber("General.Terminal", 0)
     if MPI.COMM_WORLD.rank == 0:
         gmsh.option.setNumber("Mesh.CharacteristicLengthFactor", res)
         model = gmsh.model()
@@ -82,11 +83,7 @@ def create_christmas_tree_mesh(filename: str, quads: bool = False, res=0.2, spli
         num_lines = len(tree_inner) // split
         for i in range(split - 1):
             model.addPhysicalGroup(1, tree_inner[i * num_lines:(i + 1) * num_lines], tag=4 + i + 1)
-            start = max(0, i * (num_lines) - padding)
-            end = min((i + 1) * num_lines + padding, len(tree_inner))
-            model.addPhysicalGroup(1, tree_inner[start:end], tag=4 + 2 * split + i + 1)
         model.addPhysicalGroup(1, tree_inner[(split - 1) * num_lines:], tag=4 + split)
-        model.addPhysicalGroup(1, tree_inner[max(0, (split - 1) * num_lines - padding):], tag=4 + 3 * split)
         model.addPhysicalGroup(1, tree_bottom, tag=3)
 
         dx = 0.01
@@ -111,8 +108,7 @@ def create_christmas_tree_mesh(filename: str, quads: bool = False, res=0.2, spli
         model.occ.synchronize()
         tree_outer = lines2[len(xh) + 1:len(xh) + 2 * len(x)]
         box = lines2[:len(xh) + 1] + lines2[len(xh) + 2 * len(x):]
-        print(tree_outer)
-        print(box)
+
         model.addPhysicalGroup(2, [surface2], tag=2)
         model.addPhysicalGroup(1, box, tag=4)
         for i in range(split):
@@ -125,79 +121,9 @@ def create_christmas_tree_mesh(filename: str, quads: bool = False, res=0.2, spli
             else:
                 end = (i + 1) * num_lines + 1
             model.addPhysicalGroup(1, tree_outer[start:end], tag=4 + split + i + 1)
-            start = max(0, start - padding)
-            end = min(end + padding, len(tree_outer))
-            model.addPhysicalGroup(1, tree_outer[start:end], tag=4 + 3 * split + i + 1)
-            print(tree_outer[start:end])
-
         model.mesh.field.setAsBackgroundMesh(2)
         model.mesh.generate(2)
-        # Sort mesh nodes according to their index in gmsh
-        x = extract_gmsh_geometry(model, model_name="xmas")
+        gmsh.write(f"{filename}.msh")
 
-        # Broadcast cell type data and geometric dimension
-        gmsh_cell_id = MPI.COMM_WORLD.bcast(model.mesh.getElementType("triangle", 1), root=0)
-
-        # Get mesh data for dim (0, tdim) for all physical entities
-        topologies = extract_gmsh_topology_and_markers(model, "xmas")
-        cells = topologies[gmsh_cell_id]["topology"].astype(np.int64)
-        cell_values = topologies[gmsh_cell_id]["cell_data"].astype(np.int32)
-        num_nodes = MPI.COMM_WORLD.bcast(cells.shape[1], root=0)
-
-        gmsh_facet_id = model.mesh.getElementType("line", 1)
-        marked_facets = topologies[gmsh_facet_id]["topology"].astype(np.int64)
-        facet_values = topologies[gmsh_facet_id]["cell_data"].astype(np.int32)
-        # gmsh.write(filename)
-    else:
-        gmsh_cell_id = MPI.COMM_WORLD.bcast(None, root=0)
-        num_nodes = MPI.COMM_WORLD.bcast(None, root=0)
-        cells, x = np.empty([0, num_nodes]), np.empty([0, 3])
-        cell_values = np.empty((0,), dtype=np.int32)
-        marked_facets, facet_values = np.empty((0, 3), dtype=np.int64), np.empty((0,), dtype=np.int32)
-
-    msh = create_mesh(MPI.COMM_WORLD, cells, x, ufl_mesh_from_gmsh(gmsh_cell_id, 3))
-    msh.name = "xmas"
-
-    msh.topology.create_connectivity(1, 0)
-
-    padded_mts = []
-    for i in range(2 * split):
-        entities, values = distribute_entity_data(
-            msh, 1, marked_facets[facet_values == 4 + 2 * split + i + 1], facet_values[facet_values == 4 + 2 * split + i + 1])
-        mt = meshtags_from_entities(msh, 1, create_adjacencylist(entities), np.int32(values))
-        mt.name = f"padded_{i}"
-        padded_mts.append(mt)
-
-    entities, values = distribute_entity_data(
-        msh, 1, marked_facets[facet_values <= 4 + 2 * split], facet_values[facet_values <= 4 + 2 * split])
-
-    bc_mt = meshtags_from_entities(msh, 1, create_adjacencylist(entities), np.int32(values))
-    bc_mt.name = "disjoint"
-
-    entities, values = distribute_entity_data(msh, 2, cells, cell_values)
-    domain_mt = meshtags_from_entities(msh, 2, create_adjacencylist(entities), np.int32(values))
-    domain_mt.name = "domain_marker"
-    with XDMFFile(MPI.COMM_WORLD, f"{filename}.xdmf", "w") as file:
-        file.write_mesh(msh)
-        msh.topology.create_connectivity(1, 2)
-        file.write_meshtags(bc_mt)
-        file.write_meshtags(domain_mt)
-        for mt in padded_mts:
-            file.write_meshtags(mt)
-
-    # for i, mt2 in enumerate(padded_mts):
-    #     with XDMFFile(MPI.COMM_WORLD, f"test_mt_{i}.xdmf", "w") as file:
-    #         file.write_mesh(msh)
-    #         file.write_meshtags(mt2)
-    # with XDMFFile(MPI.COMM_WORLD, "test_mt.xdmf", "r") as xdmf:
-    #     mesh = xdmf.read_mesh(name="xmas")
-    #     tdim = mesh.topology.dim
-    #     mesh.topology.create_connectivity(tdim - 1, 0)
-    #     mesh.topology.create_connectivity(tdim - 1, tdim)
-    #     mt = xdmf.read_meshtags(mesh, name="disjoint")
-        # mt2 = xdmf.read_meshtags(mesh, name="extra")
-        # facets1 = mt.indices[mt.values == 5]
-        # facets2 = mt2.indices[mt2.values == 12]
-        # print(facets1, facets2)
     MPI.COMM_WORLD.Barrier()
     gmsh.finalize()
