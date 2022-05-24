@@ -55,7 +55,7 @@ def test_projection(q_deg, surf, dim):
         if surf == 0:
             return np.logical_and(x[tdim - 1] > -0.3, x[tdim - 1] < 0.15)
         else:
-            return np.logical_and(x[tdim - 1] > -0.3, x[tdim - 1] < 0.15)
+            return np.logical_and(x[tdim - 1] > -0.5, x[tdim - 1] < 0.15)
 
     surface_0_val = 1
     surface_1_val = 2

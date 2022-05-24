@@ -262,16 +262,16 @@ def nitsche_unbiased(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTagsMetaClass,
     newton_solver = dolfinx_contact.NewtonSolver(mesh.comm, J, b, coeffs)
 
     # Set matrix-vector computations
-    newton_solver.setF(compute_residual)
-    newton_solver.setJ(compute_jacobian_matrix)
-    newton_solver.setCoeffs(compute_coefficients)
+    newton_solver.set_residual(compute_residual)
+    newton_solver.set_jacobian(compute_jacobian_matrix)
+    newton_solver.set_coefficients(compute_coefficients)
 
     # Set rigid motion nullspace
     null_space = rigid_motions_nullspace(V)
     newton_solver.A.setNearNullSpace(null_space)
 
     # Set Newton solver options
-    newton_solver.setNewtonOptions(newton_options)
+    newton_solver.set_newton_options(newton_options)
 
     # Set initial guess
     if initGuess is None:

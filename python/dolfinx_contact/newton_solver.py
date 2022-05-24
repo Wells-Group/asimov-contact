@@ -109,41 +109,41 @@ class NewtonSolver():
         """Get the residual vector"""
         return self._b
 
-    def setJ(self, J: Callable[[PETSc.Vec, PETSc.Mat, npt.NDArray[PETSc.ScalarType]], None]):
+    def set_jacobian(self, func: Callable[[PETSc.Vec, PETSc.Mat, npt.NDArray[PETSc.ScalarType]], None]):
         """
         Set the function for computing the Jacobian
         Args:
-            J: Function to compute the Jacobian matrix.
+            func: Function to compute the Jacobian matrix.
         """
-        self._compute_jacobian = J
+        self._compute_jacobian = func
 
-    def setF(self, F: Callable[[PETSc.Vec, PETSc.Vec, npt.NDArray[PETSc.ScalarType]], None]):
+    def set_residual(self, func: Callable[[PETSc.Vec, PETSc.Vec, npt.NDArray[PETSc.ScalarType]], None]):
         """
         Set the function for computing the residual
         Args:
-            J: Function to compute the residual
+            func: Function to compute the residual
         """
-        self._compute_residual = F
+        self._compute_residual = func
 
-    def setP(self, P: Callable[[PETSc.Vec, PETSc.Mat, npt.NDArray[PETSc.ScalarType]], None], Pmat: PETSc.Mat):
+    def set_preconditioner(self, func: Callable[[PETSc.Vec, PETSc.Mat, npt.NDArray[PETSc.ScalarType]], None], P: PETSc.Mat):
         """
         Set the function for computing the preconditioner matrix
         Args:
-            P: Function to compute the preconditioner matrix b (x, P)
-            Pmat: The matrix to assemble the preconditioner into
+            func: Function to compute the preconditioner matrix b (x, P)
+            P: The matrix to assemble the preconditioner into
         """
-        self._compute_preconditioner = P
-        self._P = Pmat
+        self._compute_preconditioner = func
+        self._P = P
 
-    def setCoeffs(self, Coeffs: Callable[[PETSc.Vec, npt.NDArray[PETSc.ScalarType]], None]):
+    def set_coefficients(self, func: Callable[[PETSc.Vec, npt.NDArray[PETSc.ScalarType]], None]):
         """
         Set the function for computing the coefficients needed for assembly
         Args:
-            Coeffs: Function to compute coefficients coeffs(x)
+            func: Function to compute coefficients coeffs(x)
         """
-        self._compute_coefficients = Coeffs
+        self._compute_coefficients = func
 
-    def setNewtonOptions(self, options: dict):
+    def set_newton_options(self, options: dict):
         """
         Set Newton options from a dictionary
         """

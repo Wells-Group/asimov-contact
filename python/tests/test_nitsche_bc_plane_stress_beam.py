@@ -7,7 +7,7 @@ import os
 import numpy as np
 import pytest
 import ufl
-from dolfinx.fem import (DirichletBC, Function, VectorFunctionSpace,
+from dolfinx.fem import (DirichletBCMetaClass, Function, VectorFunctionSpace,
                          assemble_scalar, form)
 from dolfinx.fem.petsc import LinearProblem, NonlinearProblem
 from dolfinx.io import XDMFFile
@@ -90,7 +90,7 @@ def solve_manufactured(nx: int, ny: int, theta: float, gamma: float,
     F += -ufl.inner(sigma(u) * n, v) * ds(left_marker)\
         - theta * ufl.inner(sigma(v) * n, u - u_D) * ds(left_marker)\
         + gamma / h * ufl.inner(u - u_D, v) * ds(left_marker)
-    bcs: DirichletBC = []
+    bcs: DirichletBCMetaClass = []
 
     if linear_solver:
         problem = LinearProblem(ufl.lhs(F), ufl.rhs(F), bcs=bcs,

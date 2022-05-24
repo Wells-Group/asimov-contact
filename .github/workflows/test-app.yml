@@ -115,7 +115,8 @@ jobs:
       - name: Run mypy checks
         run: |
           pip install mypy
-          python -m mypy python/
+          cd python
+          python3 -m mypy .
 
       - name: Run demos
         run: |
