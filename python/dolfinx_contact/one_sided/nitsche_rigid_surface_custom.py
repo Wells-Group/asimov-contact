@@ -238,7 +238,8 @@ def nitsche_rigid_surface_custom(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTa
     A = _fem.petsc.create_matrix(J_custom)
     b = _fem.petsc.create_vector(F_custom)
 
-    solver = dolfinx_contact.NewtonSolver(mesh.comm, A, b, np.hstack([u_packed, constant_coeffs]))
+    coefficients = np.hstack([u_packed, constant_coeffs])
+    solver = dolfinx_contact.NewtonSolver(mesh.comm, A, b, coefficients)
     solver.setJ(compute_jacobian)
     solver.setF(compute_residual)
     solver.setCoeffs(pack_coefficients)

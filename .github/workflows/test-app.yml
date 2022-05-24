@@ -112,6 +112,11 @@ jobs:
       - name: Flake8 code
         run: flake8 python/
 
+      - name: Run mypy checks
+        run: |
+          pip install mypy
+          python -m mypy python/
+
       - name: Run demos
         run: |
           cd python/demos

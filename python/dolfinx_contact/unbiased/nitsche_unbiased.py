@@ -10,8 +10,9 @@ import dolfinx.log as _log
 import dolfinx.mesh as _mesh
 import dolfinx_cuas
 import numpy as np
+import numpy.typing as npt
 import ufl
-from petsc4py.PETSc import Viewer
+from petsc4py.PETSc import Viewer, ScalarType
 
 import dolfinx_contact
 import dolfinx_contact.cpp
@@ -23,11 +24,11 @@ __all__ = ["nitsche_unbiased"]
 
 
 def nitsche_unbiased(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTagsMetaClass, int, int, int, int],
-                     physical_parameters: dict[str, Union[bool, np.float64, int]],
+                     physical_parameters: dict[str, Union[np.float64, int, bool]],
                      nitsche_parameters: dict[str, np.float64],
-                     displacement: Tuple[list[float], list[float]] = [[0, 0, 0], [0, 0, 0]],
+                     displacement: npt.NDArray[ScalarType] = np.array([[0, 0, 0], [0, 0, 0]], dtype=ScalarType),
                      quadrature_degree: int = 5, form_compiler_params: dict = None, jit_params: dict = None,
-                     petsc_options: dict = None, newton_options: dict = None, initGuess=None, outfile=None):
+                     petsc_options: dict = None, newton_options: dict = None, initGuess=None, outfile=None) -> Tuple[_fem.Function, int, int, float]:
     """
     Use custom kernel to compute the contact problem with two elastic bodies coming into contact.
 
@@ -78,14 +79,17 @@ def nitsche_unbiased(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTagsMetaClass,
     petsc_options = {} if petsc_options is None else petsc_options
     newton_options = {} if newton_options is None else newton_options
 
-    if physical_parameters.get("strain") is None:
+    strain = physical_parameters.get("strain")
+    if strain is None:
         raise RuntimeError("Need to supply if problem is plane strain (True) or plane stress (False)")
     else:
-        plane_strain = physical_parameters.get("strain")
-    if physical_parameters.get("E") is None:
-        raise RuntimeError("Need to supply Youngs modulus")
+        plane_strain = bool(strain)
+    _E = physical_parameters.get("E")
+    if _E is not None:
+        E = np.float64(_E)
     else:
-        E = physical_parameters.get("E")
+        raise RuntimeError("Need to supply Youngs modulus")
+
     if physical_parameters.get("nu") is None:
         raise RuntimeError("Need to supply Poisson's ratio")
     else:
@@ -98,14 +102,14 @@ def nitsche_unbiased(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTagsMetaClass,
     sigma = sigma_func(mu, lmbda)
 
     # Nitche parameters and variables
-    if nitsche_parameters.get("theta") is None:
+    theta = nitsche_parameters.get("theta")
+    if theta is None:
         raise RuntimeError("Need to supply theta for Nitsche imposition of boundary conditions")
-    else:
-        theta = nitsche_parameters.get("theta")
-    if nitsche_parameters.get("gamma") is None:
+    _gamma = nitsche_parameters.get("gamma")
+    if _gamma is None:
         raise RuntimeError("Need to supply Coercivity/Stabilization parameter for Nitsche condition")
     else:
-        gamma = E * nitsche_parameters.get("gamma")
+        gamma: np.float64 = _gamma * E
 
     # Unpack mesh data
     (facet_marker, dirichlet_value_0, surface_value_0, surface_value_1, dirichlet_value_1) = mesh_data
@@ -133,7 +137,7 @@ def nitsche_unbiased(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTagsMetaClass,
     # Nitsche for Dirichlet, another theta-scheme.
     # https://doi.org/10.1016/j.cma.2018.05.024
     # Nitsche bc for body 0
-    disp_0 = displacement[0][:gdim]
+    disp_0 = displacement[0, :gdim]
     u_D_0 = ufl.as_vector(disp_0)
     F += - ufl.inner(sigma(u) * n, v) * ds(dirichlet_value_0)\
         - theta * ufl.inner(sigma(v) * n, u - u_D_0) * \
@@ -143,7 +147,7 @@ def nitsche_unbiased(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTagsMetaClass,
         - theta * ufl.inner(sigma(v) * n, du) * \
         ds(dirichlet_value_0) + gamma / h * ufl.inner(du, v) * ds(dirichlet_value_0)
     # Nitsche bc for body 1
-    disp_1 = displacement[1][:gdim]
+    disp_1 = displacement[1, :gdim]
     u_D_1 = ufl.as_vector(disp_1)
     F += - ufl.inner(sigma(u) * n, v) * ds(dirichlet_value_1)\
         - theta * ufl.inner(sigma(v) * n, u - u_D_1) * \
@@ -253,7 +257,7 @@ def nitsche_unbiased(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTagsMetaClass,
 
     # coefficient arrays
     num_coeffs = contact.coefficients_size()
-    coeffs = [np.zeros((facets_0.size, num_coeffs)), np.zeros((facets_1.size, num_coeffs))]
+    coeffs = np.hstack([np.zeros((facets_0.size, num_coeffs)), np.zeros((facets_1.size, num_coeffs))])
     newton_solver = dolfinx_contact.NewtonSolver(mesh.comm, J, b, coeffs)
 
     # Set matrix-vector computations

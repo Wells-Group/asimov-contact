@@ -164,7 +164,7 @@ def nitsche_custom(mesh: dmesh.Mesh, mesh_data: Tuple[dmesh.meshtags, int, int],
     def create_b():
         return _fem.petsc.create_vector(L_custom)
 
-    def F(x, b):
+    def assemble_residual(x, b):
         u.vector[:] = x.array
         u_packed = dolfinx_cuas.pack_coefficients([u._cpp_object], integral_entities)
         c = np.hstack([u_packed, coeffs])
@@ -179,7 +179,7 @@ def nitsche_custom(mesh: dmesh.Mesh, mesh_data: Tuple[dmesh.meshtags, int, int],
     def create_A():
         return _fem.petsc.create_matrix(a_custom)
 
-    def A(x, A):
+    def assemble_jacobian(x, A):
         u.vector[:] = x.array
         u_packed = dolfinx_cuas.pack_coefficients([u._cpp_object], integral_entities)
         c = np.hstack([u_packed, coeffs])
@@ -187,7 +187,7 @@ def nitsche_custom(mesh: dmesh.Mesh, mesh_data: Tuple[dmesh.meshtags, int, int],
         _fem.petsc.assemble_matrix(A, a_custom)
 
     # Setup non-linear problem and Newton-solver
-    problem = dolfinx_cuas.NonlinearProblemCUAS(F, A, create_b, create_A)
+    problem = dolfinx_cuas.NonlinearProblemCUAS(assemble_residual, assemble_jacobian, create_b, create_A)
     solver = dolfinx_cuas.NewtonSolver(mesh.comm, problem)
 
     # Create rigid motion null-space
