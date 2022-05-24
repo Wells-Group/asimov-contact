@@ -28,8 +28,8 @@ def nitsche_unbiased(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTagsMetaClass,
                      nitsche_parameters: dict[str, np.float64],
                      displacement: npt.NDArray[ScalarType] = np.array([[0, 0, 0], [0, 0, 0]], dtype=ScalarType),
                      quadrature_degree: int = 5, form_compiler_params: dict = None, jit_params: dict = None,
-                     petsc_options: dict = None, newton_options: dict = None, initGuess=None, outfile=None) -> Tuple[
-                         _fem.Function, int, int, float]:
+                     petsc_options: dict = None, newton_options: dict = None, initial_guess=None,
+                     outfile: str = None) -> Tuple[_fem.Function, int, int, float]:
     """
     Use custom kernel to compute the contact problem with two elastic bodies coming into contact.
 
@@ -72,6 +72,8 @@ def nitsche_unbiased(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTagsMetaClass,
         Dictionary with Newton-solver options. Valid (key, item) tuples are:
         ("atol", float), ("rtol", float), ("convergence_criterion", "str"),
         ("max_it", int), ("error_on_nonconvergence", bool), ("relaxation_parameter", float)
+    initial_guess
+        A functon containing an intial guess to use for the Newton-solver
     outfile
         File to append solver summary
     """
@@ -274,10 +276,10 @@ def nitsche_unbiased(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTagsMetaClass,
     newton_solver.set_newton_options(newton_options)
 
     # Set initial guess
-    if initGuess is None:
+    if initial_guess is None:
         u.x.array[:] = 0
     else:
-        u.x.array[:] = initGuess.x.array[:]
+        u.x.array[:] = initial_guess.x.array[:]
 
     # Set Krylov solver options
     newton_solver.set_krylov_options(petsc_options)
