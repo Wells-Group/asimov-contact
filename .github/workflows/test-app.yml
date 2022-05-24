@@ -115,7 +115,7 @@ jobs:
         run: |
           pip install mypy
           cd python
-          python3 -m mypy .
+          python3 -m mypy . --exclude=build
 
       - name: Run demos
         run: |
