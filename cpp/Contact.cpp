@@ -49,7 +49,8 @@ void compute_linked_cells(
 } // namespace
 
 dolfinx_contact::Contact::Contact(
-    std::vector<std::shared_ptr<dolfinx::mesh::MeshTags<std::int32_t>>> markers,
+    const std::vector<std::shared_ptr<dolfinx::mesh::MeshTags<std::int32_t>>>&
+        markers,
     std::shared_ptr<const dolfinx::graph::AdjacencyList<std::int32_t>> surfaces,
     const std::vector<std::array<int, 2>>& contact_pairs,
     std::shared_ptr<dolfinx::fem::FunctionSpace> V)
@@ -78,12 +79,12 @@ dolfinx_contact::Contact::Contact(
   for (std::size_t s = 0; s < markers.size(); ++s)
   {
     auto marker = _markers[s];
-    auto links = surfaces->links(s);
+    auto links = surfaces->links(int(s));
     for (std::size_t i = 0; i < links.size(); ++i)
     {
       auto surf = links[i];
       auto facets = marker->find(surf);
-      int index = surfaces->offsets()[s] + i;
+      int index = surfaces->offsets()[s] + int(i);
       std::variant<
           std::vector<std::int32_t>, std::vector<std::pair<std::int32_t, int>>,
           std::vector<std::tuple<std::int32_t, int, std::int32_t, int>>>

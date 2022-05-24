@@ -38,12 +38,6 @@ if __name__ == "__main__":
     _ksp = parser.add_mutually_exclusive_group(required=False)
     _ksp.add_argument('--ksp-view', dest='ksp', action='store_true',
                       help="List ksp options", default=False)
-    _simplex = parser.add_mutually_exclusive_group(required=False)
-    _simplex.add_argument('--simplex', dest='simplex', action='store_true',
-                          help="Use triangle/tet mesh", default=False)
-    _strain = parser.add_mutually_exclusive_group(required=False)
-    _strain.add_argument('--strain', dest='plane_strain', action='store_true',
-                         help="Use plane strain formulation", default=False)
     parser.add_argument("--E", default=1e3, type=np.float64, dest="E",
                         help="Youngs modulus of material")
     parser.add_argument("--nu", default=0.1, type=np.float64, dest="nu", help="Poisson's ratio")

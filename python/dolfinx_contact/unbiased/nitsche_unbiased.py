@@ -40,12 +40,22 @@ def nitsche_unbiased(mesh: _mesh.Mesh, mesh_tags: list[_mesh.MeshTagsMetaClass],
     ==========
     mesh
         The input mesh
-    mesh_data
-        A quinteplet with a mesh tag for facets and values v0, v1, v2, v3. v0
-        and v3 should be the values in the mesh tags for facets to apply a Dirichlet
-        condition on, where v0 corresponds to the first elastic body and v3 to the second.
-        v1 is the value for facets on the first body that is in the potential contact zone.
-        v2 is the value for facets on the second body in potential contact zone
+    mesh_tags
+        A list of meshtags. The first element must contain the mesh_tags for all puppet surfaces,
+        Dirichlet-surfaces and Neumann-surfaces
+        All further elements may contain candidate_surfaces
+    domain_marker
+        marker for subdomains where a body force is applied
+    surfaces
+        Adjacency list. Links of i are meshtag values for contact surfaces in ith mesh_tag in mesh_tags
+    dirichlet
+        List of Dirichlet boundary conditions as pairs of (meshtag value, function), where function
+        is a function to be interpolated into the dolfinx function space
+    neumann
+        Same as dirichlet for Neumann boundary conditions
+    contact_pairs: 
+        list of pairs (i, j) marking the ith surface as a puppet surface and the jth surface
+        as the corresponding candidate surface
     physical_parameters
         Optional dictionary with information about the linear elasticity problem.
         Valid (key, value) tuples are: ('E': float), ('nu', float), ('strain', bool)
@@ -75,6 +85,8 @@ def nitsche_unbiased(mesh: _mesh.Mesh, mesh_tags: list[_mesh.MeshTagsMetaClass],
         Dictionary with Newton-solver options. Valid (key, item) tuples are:
         ("atol", float), ("rtol", float), ("convergence_criterion", "str"),
         ("max_it", int), ("error_on_nonconvergence", bool), ("relaxation_parameter", float)
+    initGuess
+        allows the user to supply an initial guess
     outfile
         File to append solver summary
     """

@@ -92,8 +92,8 @@ public:
   /// @param[in] contact_pairs list of pairs (i, j) marking the ith and jth
   /// surface in surfaces->array() as a contact pair
   /// @param[in] V The functions space
-  Contact(std::vector<std::shared_ptr<dolfinx::mesh::MeshTags<std::int32_t>>>
-              markers,
+  Contact(const std::vector<
+              std::shared_ptr<dolfinx::mesh::MeshTags<std::int32_t>>>& markers,
           std::shared_ptr<const dolfinx::graph::AdjacencyList<std::int32_t>>
               surfaces,
           const std::vector<std::array<int, 2>>& contact_pairs,
@@ -785,6 +785,8 @@ public:
 
     // Mesh info
     auto mesh = _V->mesh();
+    assert(mesh);
+
     const int gdim = mesh->geometry().dim();
     const dolfinx::fem::CoordinateElement& cmap = mesh->geometry().cmap();
     const dolfinx::mesh::Topology& topology = mesh->topology();
