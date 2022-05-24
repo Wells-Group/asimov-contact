@@ -655,7 +655,7 @@ dolfinx_contact::entities_to_geometry_dofs(
                                              * entity_list.size());
   std::vector<std::int32_t> offsets(entity_list.size() + 1, 0);
   for (std::size_t i = 0; i < entity_list.size(); ++i)
-    offsets[i + 1] = (i + 1) * num_entity_dofs;
+    offsets[i + 1] = std::int32_t((i + 1) * num_entity_dofs);
 
   // Fetch connectivities required to get entity dofs
   const std::vector<std::vector<std::vector<int>>>& closure_dofs
@@ -671,7 +671,7 @@ dolfinx_contact::entities_to_geometry_dofs(
     auto cell_entities = c_to_e->links(cell);
     auto it = std::find(cell_entities.begin(), cell_entities.end(), idx);
     assert(it != cell_entities.end());
-    const int local_entity = std::distance(cell_entities.begin(), it);
+    const auto local_entity = std::distance(cell_entities.begin(), it);
     const std::vector<std::int32_t>& entity_dofs
         = closure_dofs[dim][local_entity];
 

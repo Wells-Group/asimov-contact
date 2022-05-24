@@ -834,7 +834,7 @@ public:
     // Create structures used to create adjacency list of closest entity
     std::vector<std::int32_t> offset(puppet_facets.size() + 1, 0);
     for (std::size_t i = 0; i < puppet_facets.size(); ++i)
-      offset[i + 1] = (i + 1) * num_q_points;
+      offset[i + 1] = std::int32_t((i + 1) * num_q_points);
 
     std::vector<std::int32_t> closest_entity
         = dolfinx::geometry::compute_closest_entity(
@@ -916,14 +916,15 @@ public:
           point(0, k) = qp_phys[i](q, k);
 
         // Get the geometry dofs for the ith facet, qth quadrature point
-        auto master_facets = master_facets_geometry.links(i * num_q_point + q);
-        assert(num_facet_dofs == master_facets.size());
+        auto master_facet
+            = master_facets_geometry.links(int(i * num_q_point + q));
+        assert(num_facet_dofs == master_facet.size());
 
         // Get the coordinates of the geometry on the other interface,
         // and compute the distance of the convex hull created by the points
         for (std::size_t l = 0; l < num_facet_dofs; ++l)
         {
-          const int pos = 3 * master_facets[l];
+          const int pos = 3 * master_facet[l];
           for (int k = 0; k < gdim; ++k)
             master_coords(l, k) = mesh_geometry[pos + k];
         }
