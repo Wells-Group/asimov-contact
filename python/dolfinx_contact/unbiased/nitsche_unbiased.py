@@ -10,10 +10,9 @@ import dolfinx.log as _log
 import dolfinx.mesh as _mesh
 import dolfinx_cuas
 import numpy as np
-import numpy.typing as npt
 import ufl
 from dolfinx.cpp.graph import AdjacencyList_int32
-from petsc4py.PETSc import Viewer, ScalarType
+from petsc4py.PETSc import Viewer
 
 import dolfinx_contact
 import dolfinx_contact.cpp
