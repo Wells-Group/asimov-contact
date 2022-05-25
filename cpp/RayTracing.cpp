@@ -9,98 +9,10 @@
 #include <basix/cell.h>
 #include <dolfinx/common/math.h>
 #include <dolfinx/common/utils.h>
-#include <xtensor/xview.hpp>
 
-namespace
-{
-
-/// Get function that parameterizes a facet of a given cell
-/// @param[in] cell_type The cell type
-/// @param[in] facet_index The facet index (local to cell)
-/// @returns Function that computes the coordinate parameterization of the local
-/// facet on the reference cell.
-std::function<xt::xtensor_fixed<double, xt::xshape<1, 3>>(
-    xt::xtensor_fixed<double, xt::xshape<2>>)>
-get_3D_parameterization(dolfinx::mesh::CellType cell_type, int facet_index)
-{
-  switch (cell_type)
-  {
-  case dolfinx::mesh::CellType::tetrahedron:
-    break;
-  case dolfinx::mesh::CellType::hexahedron:
-    break;
-  default:
-    throw std::invalid_argument("Unsupported cell type");
-    break;
-  }
-
-  const int tdim = dolfinx::mesh::cell_dim(cell_type);
-
-  const int num_facets = dolfinx::mesh::cell_num_entities(cell_type, 2);
-  if (facet_index >= num_facets)
-    throw std::invalid_argument(
-        "Invalid facet index (larger than number of facets");
-
-  // Get basix geometry information
-  basix::cell::type basix_cell
-      = dolfinx::mesh::cell_type_to_basix_type(cell_type);
-  const xt::xtensor<double, 2> x = basix::cell::geometry(basix_cell);
-  const std::vector<std::vector<int>> facets
-      = basix::cell::topology(basix_cell)[tdim - 1];
-
-  // Create parameterization function exploiting that the mapping between
-  // reference geometries are affine
-  std::function<xt::xtensor_fixed<double, xt::xshape<1, 3>>(
-      xt::xtensor_fixed<double, xt::xshape<2>>)>
-      func = [x, facet = facets[facet_index]](
-                 xt::xtensor_fixed<double, xt::xshape<2>> xi)
-      -> xt::xtensor_fixed<double, xt::xshape<1, 3>>
-  {
-    auto x0 = xt::row(x, facet[0]);
-    xt::xtensor_fixed<double, xt::xshape<1, 3>> vals = x0;
-
-    for (std::size_t i = 0; i < 3; ++i)
-      for (std::size_t j = 0; j < 2; ++j)
-        vals(0, i) += (xt::row(x, facet[j + 1])[i] - x0[i]) * xi[j];
-    return vals;
-  };
-  return func;
-}
-//------------------------------------------------------------------------------------------------
-/// Get derivative of the parameterization with respect to the input
-/// parameters
-/// @param[in] cell_type The cell type
-/// @param[in] facet_index The facet index (local to cell)
-/// @returns The Jacobian of the parameterization
-xt::xtensor_fixed<double, xt::xshape<3, 2>>
-get_parameterization_jacobian(dolfinx::mesh::CellType cell_type,
-                              int facet_index)
-{
-  switch (cell_type)
-  {
-  case dolfinx::mesh::CellType::tetrahedron:
-    break;
-  case dolfinx::mesh::CellType::hexahedron:
-    break;
-  default:
-    throw std::invalid_argument("Unsupported cell type");
-    break;
-  }
-
-  basix::cell::type basix_cell
-      = dolfinx::mesh::cell_type_to_basix_type(cell_type);
-  xt::xtensor<double, 3> facet_jacobians
-      = basix::cell::facet_jacobians(basix_cell);
-
-  xt::xtensor_fixed<double, xt::xshape<3, 2>> output;
-  output = xt::view(facet_jacobians, facet_index, xt::all(), xt::all());
-  return output;
-}
-
-} // namespace
 //------------------------------------------------------------------------------------------------
 int dolfinx_contact::allocated_3D_ray_tracing(
-    dolfinx_contact::newton_3D_storage& storage,
+    dolfinx_contact::newton_storage<3>& storage,
     xt::xtensor<double, 4>& basis_values, xt::xtensor<double, 2>& dphi,
     int max_iter, double tol, const dolfinx::fem::CoordinateElement& cmap,
     dolfinx::mesh::CellType cell_type,
@@ -243,7 +155,7 @@ dolfinx_contact::compute_3D_ray(
   xt::xtensor<double, 4> basis_values(basis_shape);
 
   std::size_t cell_idx = -1;
-  dolfinx_contact::newton_3D_storage allocated_memory;
+  dolfinx_contact::newton_storage<3> allocated_memory;
   allocated_memory.tangents = tangents;
   allocated_memory.point = point;
   for (std::size_t c = 0; c < cells.size(); ++c)
@@ -259,10 +171,11 @@ dolfinx_contact::compute_3D_ray(
           std::next(coordinate_dofs.begin(), 3 * j));
     }
     // Assign Jacobian of reference mapping
-    allocated_memory.dxi
-        = get_parameterization_jacobian(cell_type, facet_index);
+    allocated_memory.dxi = dolfinx_contact::get_parameterization_jacobian<3>(
+        cell_type, facet_index);
     // Get parameterization map
-    auto reference_map = get_3D_parameterization(cell_type, facet_index);
+    auto reference_map
+        = dolfinx_contact::get_parameterization<3>(cell_type, facet_index);
 
     status = dolfinx_contact::allocated_3D_ray_tracing(
         allocated_memory, basis_values, dphi, max_iter, tol, cmap, cell_type,
