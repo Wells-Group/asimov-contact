@@ -14,7 +14,7 @@
 namespace dolfinx_contact
 {
 
-template <int tdim>
+template <std::size_t tdim>
 struct newton_storage
 {
   xt::xtensor_fixed<double, xt::xshape<tdim, tdim - 1>>
@@ -41,11 +41,13 @@ struct newton_storage
 };
 
 /// Get function that parameterizes a facet of a given cell
+///
 /// @param[in] cell_type The cell type
 /// @param[in] facet_index The facet index (local to cell)
 /// @returns Function that computes the coordinate parameterization of the local
 /// facet on the reference cell.
-template <int tdim>
+/// @tparam tdim The topological dimension of the cell
+template <std::size_t tdim>
 std::function<xt::xtensor_fixed<double, xt::xshape<1, tdim>>(
     xt::xtensor_fixed<double, xt::xshape<2>>)>
 get_parameterization(dolfinx::mesh::CellType cell_type, int facet_index)
@@ -104,7 +106,8 @@ get_parameterization(dolfinx::mesh::CellType cell_type, int facet_index)
 /// @param[in] cell_type The cell type
 /// @param[in] facet_index The facet index (local to cell)
 /// @returns The Jacobian of the parameterization
-template <int tdim>
+/// @tparam tdim The topological dimension of the cell
+template <std::size_t tdim>
 xt::xtensor_fixed<double, xt::xshape<tdim, tdim - 1>>
 get_parameterization_jacobian(dolfinx::mesh::CellType cell_type,
                               int facet_index)
@@ -136,14 +139,21 @@ get_parameterization_jacobian(dolfinx::mesh::CellType cell_type,
   return output;
 }
 
-/// @brief Compute raytracing with no dynamic memory allocation
+/// @brief Compute the solution to the ray tracing problem for a single cell
 ///
-/// Implementation of 3D ray-tracing, using no dynamic memory allocation
+/// The implementation solves dot(\Phi(\xi, \eta)-p, t_i)=0, i=1,..,, tdim-1
+/// where \Phi(\xi,\eta) is the parameterized mapping from the reference
+/// facet to the physical facet, p the point of origin of the ray, and t_i
+/// is the ith tangents defining the ray. For more details, see
+/// DOI: 10.1016/j.compstruc.2015.02.027 (eq 14).
+///
+/// @note The problem is solved using Newton's method
 ///
 /// @param[in,out] storage Structure holding all memory required for
 /// the newton iteration.
 /// @note It is expected that the variables tangents, point, xi is filled with
-/// appropriate values
+/// appropriate input values
+/// @note All other variables of the class is updated.
 /// @param[in, out] basis_values Four-dimensional array to write basis values
 /// into.
 /// @param[in, out] dphi Two-dimensional matrix to write the derviative of the
@@ -156,8 +166,8 @@ get_parameterization_jacobian(dolfinx::mesh::CellType cell_type,
 /// @param[in] reference_map Function mapping from reference parameters (xi,
 /// eta) to the physical element
 /// @tparam tdim The topological dimension of the cell
-template <int tdim>
-int allocated_ray_tracing(
+template <std::size_t tdim>
+int raytracing_cell(
     newton_storage<tdim>& storage, xt::xtensor<double, 4>& basis_values,
     xt::xtensor<double, 2>& dphi, int max_iter, double tol,
     const dolfinx::fem::CoordinateElement& cmap,
@@ -192,7 +202,8 @@ int allocated_ray_tracing(
     // Push forward reference coordinate
     cmap.push_forward(storage.x_k, coordinate_dofs,
                       xt::view(basis_values, 0, xt::all(), xt::all(), 0));
-    dphi = xt::view(basis_values, xt::xrange(1, tdim + 1), 0, xt::all(), 0);
+    dphi = xt::view(basis_values, xt::xrange((std::size_t)1, tdim + 1), 0,
+                    xt::all(), 0);
 
     // Compute Jacobian
     std::fill(storage.J.begin(), storage.J.end(), 0);
@@ -257,7 +268,6 @@ int allocated_ray_tracing(
   // Check if converged  parameters are valid
   switch (cell_type)
   {
-
   case dolfinx::mesh::CellType::tetrahedron:
     if ((storage.xi_k[0] < -tol) or (storage.xi_k[0] > 1 + tol)
         or (storage.xi_k[1] < -tol)
@@ -273,21 +283,26 @@ int allocated_ray_tracing(
       status = -3;
     }
     break;
+  case dolfinx::mesh::CellType::triangle:
+    if ((storage.xi_k[0] < -tol) or (storage.xi_k[0] > 1 + tol))
+    {
+      status = -3;
+    }
+    break;
+  case dolfinx::mesh::CellType::quadrilateral:
+    if ((storage.xi_k[0] < -tol) or (storage.xi_k[0] > 1 + tol))
+    {
+      status = -3;
+    }
+    break;
   default:
     throw std::invalid_argument("Unsupported cell type");
   }
   return status;
 }
 
-/// @brief Compute the intersection between a ray and a facet in the mesh.
-///
-/// The implementation solves dot(\Phi(\xi, \eta)-p, t_i)=0, i=1,..,, tdim-1
-/// where \Phi(\xi,\eta) is the parameterized mapping from the reference
-/// facet to the physical facet, p the point of origin of the ray, and t_i
-/// is the ith tangents defining the ray. For more details, see
-/// DOI: 10.1016/j.compstruc.2015.02.027 (eq 14).
-///
-/// @note The problem is solved using Newton's method
+/// @brief Compute the first intersection between a ray and a set of facets in
+/// the mesh templated for the topological dimension.
 ///
 /// @param[in] mesh The mesh
 /// @param[in] point The point of origin for the ray
@@ -307,8 +322,8 @@ int allocated_ray_tracing(
 /// parallel with the tangent, -3 if the Newton solver finds a solution
 /// outside the element.
 /// @tparam tdim The topological dimension of the cell
-template <int tdim>
-std::tuple<int, std::int32_t, xt::xtensor_fixed<double, xt::xshape<2, 3>>>
+template <std::size_t tdim>
+std::tuple<int, std::int32_t, xt::xtensor_fixed<double, xt::xshape<2, tdim>>>
 compute_ray(const dolfinx::mesh::Mesh& mesh,
             const xt::xtensor_fixed<double, xt::xshape<tdim>>& point,
             const xt::xtensor_fixed<double, xt::xshape<2, tdim>>& tangents,
@@ -340,6 +355,7 @@ compute_ray(const dolfinx::mesh::Mesh& mesh,
   newton_storage<tdim> allocated_memory;
   allocated_memory.tangents = tangents;
   allocated_memory.point = point;
+
   for (std::size_t c = 0; c < cells.size(); ++c)
   {
 
@@ -355,12 +371,13 @@ compute_ray(const dolfinx::mesh::Mesh& mesh,
     // Assign Jacobian of reference mapping
     allocated_memory.dxi
         = get_parameterization_jacobian<tdim>(cell_type, facet_index);
+
     // Get parameterization map
     auto reference_map = get_parameterization<tdim>(cell_type, facet_index);
 
-    status = allocated_ray_tracing<tdim>(allocated_memory, basis_values, dphi,
-                                         max_iter, tol, cmap, cell_type,
-                                         coordinate_dofs, reference_map);
+    status = raytracing_cell<tdim>(allocated_memory, basis_values, dphi,
+                                   max_iter, tol, cmap, cell_type,
+                                   coordinate_dofs, reference_map);
     if (status > 0)
     {
       cell_idx = c;
@@ -381,15 +398,8 @@ compute_ray(const dolfinx::mesh::Mesh& mesh,
   return output;
 }
 
-/// @brief Compute the intersection between a ray and a facet in the mesh.
-///
-/// The implementation solves dot(\Phi(\xi, \eta)-p, t_i)=0, i=1,..,, tdim-1
-/// where \Phi(\xi,\eta) is the parameterized mapping from the reference
-/// facet to the physical facet, p the point of origin of the ray, and t_i
-/// is the ith tangents defining the ray. For more details, see
-/// DOI: 10.1016/j.compstruc.2015.02.027 (eq 14).
-///
-/// @note The problem is solved using Newton's method
+/// @brief Compute the first intersection between a ray and a set of facets in
+/// the mesh.
 ///
 /// @param[in] mesh The mesh
 /// @param[in] point The point of origin for the ray
@@ -408,7 +418,6 @@ compute_ray(const dolfinx::mesh::Mesh& mesh,
 /// the maximum number of iterations are reached, -2 if the facet is
 /// parallel with the tangent, -3 if the Newton solver finds a solution
 /// outside the element.
-/// @tparam tdim The topological dimension of the cell
 std::tuple<int, std::int32_t, xt::xtensor<double, 2>>
 raytracing(const dolfinx::mesh::Mesh& mesh, const xt::xtensor<double, 1>& point,
            const xt::xtensor<double, 2>& tangents,

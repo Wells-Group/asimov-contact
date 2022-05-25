@@ -6,7 +6,7 @@
 // SPDX-License-Identifier:    MIT
 
 #include "RayTracing.h"
-
+#include <xtensor/xio.hpp>
 //------------------------------------------------------------------------------------------------
 std::tuple<int, std::int32_t, xt::xtensor<double, 2>>
 dolfinx_contact::raytracing(
@@ -17,10 +17,10 @@ dolfinx_contact::raytracing(
 {
   const int tdim = mesh.topology().dim();
   const int gdim = mesh.geometry().dim();
-  assert(tdim == point.shape(0));
+  assert((std::size_t)tdim == point.shape(0));
   assert(gdim == tdim);
-  assert(tangents.shape(0) == tdim - 1);
-  assert(tangents.shape(1) == tdim);
+  assert(tangents.shape(0) == std::size_t(tdim - 1));
+  assert(tangents.shape(1) == (std::size_t)tdim);
   std::tuple<int, std::int32_t, xt::xtensor<double, 2>> output;
   if (tdim == 2)
   {
