@@ -236,15 +236,15 @@ def nitsche_unbiased(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTagsMetaClass,
             u_1 = dolfinx_cuas.pack_coefficients([u], entities_1)
         c_0 = np.hstack([coeff_0, u_0, u_opp_0])
         c_1 = np.hstack([coeff_1, u_1, u_opp_1])
-        coeffs[0][:, :] = c_0[:, :]
-        coeffs[1][:, :] = c_1[:, :]
+        coeffs[:facets_0.size, :] = c_0
+        coeffs[facets_0.size:, :] = c_1
 
     @_common.timed("~Contact: Assemble residual")
     def compute_residual(x, b, coeffs):
         b.zeroEntries()
         with _common.Timer("~~Contact: Contact contributions (in assemble vector)"):
-            contact.assemble_vector(b, 0, kernel_rhs, coeffs[0], consts)
-            contact.assemble_vector(b, 1, kernel_rhs, coeffs[1], consts)
+            contact.assemble_vector(b, 0, kernel_rhs, coeffs[:facets_0.size, :], consts)
+            contact.assemble_vector(b, 1, kernel_rhs, coeffs[facets_0.size:, :], consts)
         with _common.Timer("~~Contact: Standard contributions (in assemble vector)"):
             _fem.petsc.assemble_vector(b, F_custom)
 
@@ -252,15 +252,15 @@ def nitsche_unbiased(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTagsMetaClass,
     def compute_jacobian_matrix(x, A, coeffs):
         A.zeroEntries()
         with _common.Timer("~~Contact: Contact contributions (in assemble matrix)"):
-            contact.assemble_matrix(A, [], 0, kernel_jac, coeffs[0], consts)
-            contact.assemble_matrix(A, [], 1, kernel_jac, coeffs[1], consts)
+            contact.assemble_matrix(A, [], 0, kernel_jac, coeffs[:facets_0.size, :], consts)
+            contact.assemble_matrix(A, [], 1, kernel_jac, coeffs[facets_0.size:, :], consts)
         with _common.Timer("~~Contact: Standard contributions (in assemble matrix)"):
             _fem.petsc.assemble_matrix(A, J_custom)
         A.assemble()
 
     # coefficient arrays
     num_coeffs = contact.coefficients_size()
-    coeffs = np.hstack([np.zeros((facets_0.size, num_coeffs)), np.zeros((facets_1.size, num_coeffs))])
+    coeffs = np.zeros((facets_0.size + facets_1.size, num_coeffs), dtype=ScalarType)
     newton_solver = dolfinx_contact.NewtonSolver(mesh.comm, J, b, coeffs)
 
     # Set matrix-vector computations
