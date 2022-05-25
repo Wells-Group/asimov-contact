@@ -141,14 +141,14 @@ def solve_euler_bernoulli(nx: int, ny: int, theta: float, gamma: float, linear_s
 
 
 if __name__ == "__main__":
-    desc = description = "Verification of Nitsche-Dirichlet boundary conditions for linear elasticity solving" +\
-        "the Euler-Bernoulli equiation",
+    desc = "Verification of Nitsche-Dirichlet boundary conditions for linear elasticity solving "
+    desc += "the Euler-Bernoulli equiation"
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
                                      description=desc)
-    parser.add_argument("--theta", default=1, type=np.float64, dest="theta",
+    parser.add_argument("--theta", default=1., type=float, dest="theta",
                         help="Theta parameter for Nitsche, 1 symmetric, -1 skew symmetric, 0 Penalty-like",
-                        choices=[-1, 0, 1])
-    parser.add_argument("--gamma", default=10, type=np.float64, dest="gamma",
+                        choices=[-1., 0., 1.])
+    parser.add_argument("--gamma", default=10, type=float, dest="gamma",
                         help="Coercivity/Stabilization parameter for Nitsche condition")
     _solve = parser.add_mutually_exclusive_group(required=False)
     _solve.add_argument('--linear', dest='linear_solver', action='store_true',

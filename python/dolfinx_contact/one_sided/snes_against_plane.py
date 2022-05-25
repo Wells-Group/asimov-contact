@@ -85,8 +85,9 @@ def snes_solver(mesh: dmesh.Mesh, mesh_data: Tuple[dmesh.MeshTagsMetaClass, int,
     u = _fem.Function(V)
     v = ufl.TestFunction(V)
     dx = ufl.Measure("dx", domain=mesh)
+    zero = np.asarray([0, ] * mesh.geometry.dim, dtype=np.float64)
     F = ufl.inner(sigma(u), epsilon(v)) * dx - \
-        ufl.inner(_fem.Constant(mesh, np.float64([0, ] * mesh.geometry.dim)), v) * dx
+        ufl.inner(_fem.Constant(mesh, zero), v) * dx
 
     # Stored strain energy density (linear elasticity model)    # penalty = 0
     # psi = 1/2*ufl.inner(sigma(u), epsilon(u))

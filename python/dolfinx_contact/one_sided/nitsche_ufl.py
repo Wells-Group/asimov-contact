@@ -110,8 +110,9 @@ def nitsche_ufl(mesh: dmesh.Mesh, mesh_data: Tuple[dmesh.MeshTagsMetaClass, int,
     dx = ufl.Measure("dx", domain=mesh)
     ds = ufl.Measure("ds", domain=mesh, metadata=metadata,
                      subdomain_data=facet_marker)
+    zero = np.asarray([0, ] * mesh.geometry.dim, dtype=np.float64)
     a = ufl.inner(sigma(u), epsilon(v)) * dx
-    L = ufl.inner(_fem.Constant(mesh, np.float64([0, ] * mesh.geometry.dim)), v) * dx
+    L = ufl.inner(_fem.Constant(mesh, zero), v) * dx
 
     # Derivation of one sided Nitsche with gap function
     n = ufl.FacetNormal(mesh)

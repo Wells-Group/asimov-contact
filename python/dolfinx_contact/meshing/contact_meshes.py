@@ -78,7 +78,7 @@ def create_circle_plane_mesh(filename: str, quads: bool = False, res=0.1):
     gmsh.finalize()
 
 
-def create_circle_circle_mesh(filename: str, quads: bool = False, res: np.float64 = 0.1):
+def create_circle_circle_mesh(filename: str, quads: bool = False, res: float = 0.1):
     """
     Create two circular meshes, with radii 0.3 and 0.6 with centers (0.5,0.5) and (0.5, -0.5)
     """
