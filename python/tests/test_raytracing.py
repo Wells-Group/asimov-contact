@@ -109,7 +109,6 @@ def test_raytracing_2D(cell_type):
             cell_geometry[i, :] = mesh.geometry.x[dof, :]
         distance = dolfinx.geometry.compute_distance_gjk(cell_geometry, origin)
         assert np.allclose(points[0], origin + distance[:2])
-        print(points)
 
 
 @pytest.mark.parametrize("cell_type", [dolfinx.mesh.CellType.triangle, dolfinx.mesh.CellType.quadrilateral])

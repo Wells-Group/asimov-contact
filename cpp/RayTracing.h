@@ -11,35 +11,9 @@
 #include <dolfinx/mesh/Mesh.h>
 #include <xtensor/xtensor.hpp>
 #include <xtensor/xview.hpp>
-namespace dolfinx_contact
-{
 
-template <std::size_t tdim>
-struct newton_storage
+namespace
 {
-  xt::xtensor_fixed<double, xt::xshape<tdim, tdim - 1>>
-      dxi; // Jacobian of reference mapping
-  xt::xtensor<double, 2>
-      X_k; // Solution on reference domain (for Newton solver)
-  xt::xtensor<double, 2> x_k; // Solution in physical space (for Newton solver)
-  xt::xtensor_fixed<double, xt::xshape<tdim - 1>>
-      xi_k; // Reference parameters (for Newton solver)
-  xt::xtensor_fixed<double, xt::xshape<tdim - 1>>
-      dxi_k; // Gradient of reference parameters (for Newton Solver)
-  xt::xtensor_fixed<double, xt::xshape<tdim, tdim>> J; // Jacobian of the cell
-  xt::xtensor_fixed<double, xt::xshape<tdim, tdim - 1>>
-      dGk_tmp; // Temporary variable to invert Jacobian of Newton solver LHS
-  xt::xtensor_fixed<double, xt::xshape<tdim - 1, tdim - 1>>
-      dGk; // Newton solver LHS Jacobian
-  xt::xtensor_fixed<double, xt::xshape<tdim - 1, tdim - 1>>
-      dGk_inv; // Inverse of Newton solver LHS Jacobian
-  xt::xtensor_fixed<double, xt::xshape<tdim - 1>>
-      Gk; // Residual (RHS) of Newton solver
-  xt::xtensor_fixed<double, xt::xshape<tdim - 1, tdim>>
-      tangents;                                      // Tangents of ray
-  xt::xtensor_fixed<double, xt::xshape<tdim>> point; // Point of origin for ray
-};
-
 /// Get function that parameterizes a facet of a given cell
 ///
 /// @param[in] cell_type The cell type
@@ -138,6 +112,37 @@ get_parameterization_jacobian(dolfinx::mesh::CellType cell_type,
   output = xt::view(facet_jacobians, facet_index, xt::all(), xt::all());
   return output;
 }
+
+} // namespace
+
+namespace dolfinx_contact
+{
+
+template <std::size_t tdim>
+struct newton_storage
+{
+  xt::xtensor_fixed<double, xt::xshape<tdim, tdim - 1>>
+      dxi; // Jacobian of reference mapping
+  xt::xtensor<double, 2>
+      X_k; // Solution on reference domain (for Newton solver)
+  xt::xtensor<double, 2> x_k; // Solution in physical space (for Newton solver)
+  xt::xtensor_fixed<double, xt::xshape<tdim - 1>>
+      xi_k; // Reference parameters (for Newton solver)
+  xt::xtensor_fixed<double, xt::xshape<tdim - 1>>
+      dxi_k; // Gradient of reference parameters (for Newton Solver)
+  xt::xtensor_fixed<double, xt::xshape<tdim, tdim>> J; // Jacobian of the cell
+  xt::xtensor_fixed<double, xt::xshape<tdim, tdim - 1>>
+      dGk_tmp; // Temporary variable to invert Jacobian of Newton solver LHS
+  xt::xtensor_fixed<double, xt::xshape<tdim - 1, tdim - 1>>
+      dGk; // Newton solver LHS Jacobian
+  xt::xtensor_fixed<double, xt::xshape<tdim - 1, tdim - 1>>
+      dGk_inv; // Inverse of Newton solver LHS Jacobian
+  xt::xtensor_fixed<double, xt::xshape<tdim - 1>>
+      Gk; // Residual (RHS) of Newton solver
+  xt::xtensor_fixed<double, xt::xshape<tdim - 1, tdim>>
+      tangents;                                      // Tangents of ray
+  xt::xtensor_fixed<double, xt::xshape<tdim>> point; // Point of origin for ray
+};
 
 /// @brief Compute the solution to the ray tracing problem for a single cell
 ///
