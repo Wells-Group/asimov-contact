@@ -23,7 +23,7 @@ def test_raytracing(cell_type):
 
     integral_pairs = dolfinx_contact.cpp.compute_active_entities(mesh, facets, dolfinx.fem.IntegralType.exterior_facet)
 
-    status, cell_idx, points = dolfinx_contact.cpp.compute_3D_ray(
+    status, cell_idx, points = dolfinx_contact.cpp.raytracing(
         mesh, origin, tangent, integral_pairs, 10, 1e-6)
 
     if status > 0:
@@ -56,7 +56,7 @@ def test_raytracing_corner(cell_type):
     facets = dolfinx.mesh.locate_entities_boundary(mesh, tdim - 1, lambda x: np.isclose(x[2], 1))
 
     integral_pairs = dolfinx_contact.cpp.compute_active_entities(mesh, facets, dolfinx.fem.IntegralType.exterior_facet)
-    status, cell_idx, points = dolfinx_contact.cpp.compute_3D_ray(
+    status, cell_idx, points = dolfinx_contact.cpp.raytracing(
         mesh, origin, tangent, integral_pairs, 10, 1e-6)
     if status > 0:
         # Create structures needed for closest point projections

@@ -349,7 +349,7 @@ PYBIND11_MODULE(cpp, m)
       });
 
   m.def(
-      "compute_3D_ray",
+      "raytracing",
       [](const dolfinx::mesh::Mesh& mesh,
          py::array_t<double, py::array::c_style>& point,
          py::array_t<double, py::array::c_style>& tangents,
@@ -373,8 +373,8 @@ PYBIND11_MODULE(cpp, m)
                                    xt::no_ownership(), s_t);
         std::tuple<int, std::int32_t,
                    xt::xtensor_fixed<double, xt::xshape<2, 3>>>
-            output = dolfinx_contact::compute_3D_ray(mesh, _point, _tangents,
-                                                     facets, max_iter, tol);
+            output = dolfinx_contact::raytracing(mesh, _point, _tangents,
+                                                 facets, max_iter, tol);
         int status = std::get<0>(output);
         xt::xtensor<double, 2> x = std::get<2>(output);
         std::int32_t idx = std::get<1>(output);
