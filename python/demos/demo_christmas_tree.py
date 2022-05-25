@@ -22,9 +22,9 @@ if __name__ == "__main__":
     desc = "Nitsche's method for two elastic bodies using custom assemblers"
     parser = argparse.ArgumentParser(description=desc,
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument("--theta", default=1, type=np.float64, dest="theta",
+    parser.add_argument("--theta", default=1., type=float, dest="theta",
                         help="Theta parameter for Nitsche, 1 symmetric, -1 skew symmetric, 0 Penalty-like",
-                        choices=[1, -1, 0])
+                        choices=[1., -1., 0.])
     parser.add_argument("--gamma", default=10, type=np.float64, dest="gamma",
                         help="Coercivity/Stabilization parameter for Nitsche condition")
     parser.add_argument("--quadrature", default=5, type=int, dest="q_degree",
@@ -54,10 +54,9 @@ if __name__ == "__main__":
 
     # Current formulation uses bilateral contact
     nitsche_parameters = {"gamma": args.gamma, "theta": args.theta}
-    physical_parameters = {"E": args.E, "nu": args.nu, "strain": args.plane_strain}
+    physical_parameters = {"E": args.E, "nu": args.nu, "strain": False}
     threed = args.threed
     nload_steps = args.nload_steps
-    simplex = args.simplex
 
     if threed:
         raise RuntimeError("Not yet implemented")
@@ -193,7 +192,7 @@ if __name__ == "__main__":
                 contact_pairs=contact_pairs, physical_parameters=physical_parameters,
                 body_forces=body_force_incr, nitsche_parameters=nitsche_parameters,
                 quadrature_degree=args.q_degree, petsc_options=petsc_options,
-                newton_options=newton_options, initGuess=u_initial, outfile=solver_outfile)
+                newton_options=newton_options, initial_guess=u_initial, outfile=solver_outfile)
         u_initial.x.array[:] = u1.x.array[:]
         num_newton_its[j] = n
         num_krylov_its[j] = krylov_iterations

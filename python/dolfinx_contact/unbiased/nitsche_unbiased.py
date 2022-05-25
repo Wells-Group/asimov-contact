@@ -12,6 +12,7 @@ import dolfinx_cuas
 import numpy as np
 import numpy.typing as npt
 import ufl
+from dolfinx.cpp.graph import AdjacencyList_int32
 from petsc4py.PETSc import Viewer, ScalarType
 
 import dolfinx_contact
@@ -25,7 +26,7 @@ __all__ = ["nitsche_unbiased"]
 
 def nitsche_unbiased(mesh: _mesh.Mesh, mesh_tags: list[_mesh.MeshTagsMetaClass],
                      domain_marker: _mesh.MeshTagsMetaClass,
-                     surfaces,
+                     surfaces: AdjacencyList_int32,
                      dirichlet: list[Tuple[int, Callable[[np.ndarray], np.ndarray]]],
                      neumann: list[Tuple[int, Callable[[np.ndarray], np.ndarray]]],
                      contact_pairs: list[Tuple[int, int]],
@@ -280,7 +281,7 @@ def nitsche_unbiased(mesh: _mesh.Mesh, mesh_tags: list[_mesh.MeshTagsMetaClass],
 
     # coefficient arrays
     num_coeffs = contact.coefficients_size()
-    coeffs = [np.zeros((len(entities[i]), num_coeffs)) for i in range(len(contact_pairs))]
+    coeffs = np.array([np.zeros((len(entities[i]), num_coeffs)) for i in range(len(contact_pairs))])
     newton_solver = dolfinx_contact.NewtonSolver(mesh.comm, J, b, coeffs)
 
     # Set matrix-vector computations
