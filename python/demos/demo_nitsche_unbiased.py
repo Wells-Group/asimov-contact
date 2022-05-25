@@ -27,10 +27,10 @@ if __name__ == "__main__":
     desc = "Nitsche's method for two elastic bodies using custom assemblers"
     parser = argparse.ArgumentParser(description=desc,
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument("--theta", default=1, type=np.float64, dest="theta",
+    parser.add_argument("--theta", default=1., type=float, dest="theta",
                         help="Theta parameter for Nitsche, 1 symmetric, -1 skew symmetric, 0 Penalty-like",
-                        choices=[1, -1, 0])
-    parser.add_argument("--gamma", default=10, type=np.float64, dest="gamma",
+                        choices=[1., -1., 0.])
+    parser.add_argument("--gamma", default=10, type=float, dest="gamma",
                         help="Coercivity/Stabilization parameter for Nitsche condition")
     parser.add_argument("--quadrature", default=5, type=int, dest="q_degree",
                         help="Quadrature degree used for contact integrals")
@@ -77,7 +77,7 @@ if __name__ == "__main__":
     # Load mesh and create identifier functions for the top (Displacement condition)
     # and the bottom (contact condition)
     if threed:
-        displacement = ([0, 0, -args.disp], [0, 0, 0])
+        displacement = [[0, 0, -args.disp], [0, 0, 0]]
         if problem == 1:
             fname = "box_3D"
             create_box_mesh_3D(f"{fname}.msh", simplex)
@@ -134,7 +134,7 @@ if __name__ == "__main__":
 
         elif problem == 3:
             fname = "cylinder_cylinder_3D"
-            displacement = ([-1, 0, 0], [0, 0, 0])
+            displacement = [[-1, 0, 0], [0, 0, 0]]
             create_cylinder_cylinder_mesh(fname, res=args.res, simplex=simplex)
             with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
                 mesh = xdmf.read_mesh(name="cylinder_cylinder")
@@ -175,7 +175,7 @@ if __name__ == "__main__":
             facet_marker = meshtags(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
 
     else:
-        displacement = ([0, -args.disp], [0, 0])
+        displacement = [[0, -args.disp], [0, 0]]
         if problem == 1:
             fname = "box_2D"
             create_box_mesh_2D(filename=f"{fname}.msh", quads=not simplex, res=args.res)
@@ -307,7 +307,7 @@ if __name__ == "__main__":
     surfaces = create_adjacencylist(data, offsets)
 
     # Solve contact problem using Nitsche's method
-    load_increment = np.array(displacement) / nload_steps
+    load_increment = np.asarray(displacement, dtype=np.float64) / nload_steps
 
     # Define function space for problem
     V = VectorFunctionSpace(mesh, ("CG", 1))
@@ -376,7 +376,7 @@ if __name__ == "__main__":
         outfile = open(args.outfile, "a")
     print("-" * 25, file=outfile)
     print(f"Newton options {newton_options}", file=outfile)
-    print(f"num_dofs: {u1.function_space.dofmap.index_map_bs*u1.function_space.dofmap.index_map.size_global}"
+    print(f"num_dofs: {u.function_space.dofmap.index_map_bs*u.function_space.dofmap.index_map.size_global}"
           + f", {mesh.topology.cell_type}", file=outfile)
     print(f"Newton solver {timing('~Contact: Newton (Newton solver)')[1]}", file=outfile)
     print(f"Krylov solver {timing('~Contact: Newton (Krylov solver)')[1]}", file=outfile)

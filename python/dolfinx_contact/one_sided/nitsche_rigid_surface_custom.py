@@ -242,10 +242,11 @@ def nitsche_rigid_surface_custom(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTa
     A = _fem.petsc.create_matrix(J_custom)
     b = _fem.petsc.create_vector(F_custom)
 
-    solver = dolfinx_contact.NewtonSolver(mesh.comm, A, b, np.hstack([u_packed, constant_coeffs]))
-    solver.setJ(compute_jacobian)
-    solver.setF(compute_residual)
-    solver.setCoeffs(pack_coefficients)
+    coefficients = np.hstack([u_packed, constant_coeffs])
+    solver = dolfinx_contact.NewtonSolver(mesh.comm, A, b, coefficients)
+    solver.set_jacobian(compute_jacobian)
+    solver.set_residual(compute_residual)
+    solver.set_coefficients(pack_coefficients)
     solver.set_krylov_options(petsc_options)
 
     # Create rigid motion null-space
@@ -259,7 +260,7 @@ def nitsche_rigid_surface_custom(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTa
     solver.A.setNearNullSpace(null_space)
 
     # Set Newton solver options
-    solver.setNewtonOptions(newton_options)
+    solver.set_newton_options(newton_options)
 
     # Set initial condition
     def _u_initial(x):

@@ -10,8 +10,9 @@ import dolfinx.log as _log
 import dolfinx.mesh as _mesh
 import dolfinx_cuas
 import numpy as np
+import numpy.typing as npt
 import ufl
-from petsc4py.PETSc import Viewer
+from petsc4py.PETSc import Viewer, ScalarType
 
 import dolfinx_contact
 import dolfinx_contact.cpp
@@ -32,7 +33,8 @@ def nitsche_unbiased(mesh: _mesh.Mesh, mesh_tags: list[_mesh.MeshTagsMetaClass],
                      physical_parameters: dict[str, Union[bool, np.float64, int]],
                      nitsche_parameters: dict[str, np.float64],
                      quadrature_degree: int = 5, form_compiler_params: dict = None, jit_params: dict = None,
-                     petsc_options: dict = None, newton_options: dict = None, initGuess=None, outfile=None):
+                     petsc_options: dict = None, newton_options: dict = None, initial_guess=None,
+                     outfile: str = None) -> Tuple[_fem.Function, int, int, float]:
     """
     Use custom kernel to compute the contact problem with two elastic bodies coming into contact.
 
@@ -85,8 +87,8 @@ def nitsche_unbiased(mesh: _mesh.Mesh, mesh_tags: list[_mesh.MeshTagsMetaClass],
         Dictionary with Newton-solver options. Valid (key, item) tuples are:
         ("atol", float), ("rtol", float), ("convergence_criterion", "str"),
         ("max_it", int), ("error_on_nonconvergence", bool), ("relaxation_parameter", float)
-    initGuess
-        allows the user to supply an initial guess
+    initial_guess
+        A functon containing an intial guess to use for the Newton-solver
     outfile
         File to append solver summary
     """
@@ -95,14 +97,17 @@ def nitsche_unbiased(mesh: _mesh.Mesh, mesh_tags: list[_mesh.MeshTagsMetaClass],
     petsc_options = {} if petsc_options is None else petsc_options
     newton_options = {} if newton_options is None else newton_options
 
-    if physical_parameters.get("strain") is None:
+    strain = physical_parameters.get("strain")
+    if strain is None:
         raise RuntimeError("Need to supply if problem is plane strain (True) or plane stress (False)")
     else:
-        plane_strain = physical_parameters.get("strain")
-    if physical_parameters.get("E") is None:
-        raise RuntimeError("Need to supply Youngs modulus")
+        plane_strain = bool(strain)
+    _E = physical_parameters.get("E")
+    if _E is not None:
+        E = np.float64(_E)
     else:
-        E = physical_parameters.get("E")
+        raise RuntimeError("Need to supply Youngs modulus")
+
     if physical_parameters.get("nu") is None:
         raise RuntimeError("Need to supply Poisson's ratio")
     else:
@@ -115,14 +120,14 @@ def nitsche_unbiased(mesh: _mesh.Mesh, mesh_tags: list[_mesh.MeshTagsMetaClass],
     sigma = sigma_func(mu, lmbda)
 
     # Nitche parameters and variables
-    if nitsche_parameters.get("theta") is None:
+    theta = nitsche_parameters.get("theta")
+    if theta is None:
         raise RuntimeError("Need to supply theta for Nitsche imposition of boundary conditions")
-    else:
-        theta = nitsche_parameters.get("theta")
-    if nitsche_parameters.get("gamma") is None:
+    _gamma = nitsche_parameters.get("gamma")
+    if _gamma is None:
         raise RuntimeError("Need to supply Coercivity/Stabilization parameter for Nitsche condition")
     else:
-        gamma = E * nitsche_parameters.get("gamma")
+        gamma: np.float64 = _gamma * E
 
     # Functions space and FEM functions
     V = _fem.VectorFunctionSpace(mesh, ("CG", 1))
@@ -279,22 +284,22 @@ def nitsche_unbiased(mesh: _mesh.Mesh, mesh_tags: list[_mesh.MeshTagsMetaClass],
     newton_solver = dolfinx_contact.NewtonSolver(mesh.comm, J, b, coeffs)
 
     # Set matrix-vector computations
-    newton_solver.setF(compute_residual)
-    newton_solver.setJ(compute_jacobian_matrix)
-    newton_solver.setCoeffs(compute_coefficients)
+    newton_solver.set_residual(compute_residual)
+    newton_solver.set_jacobian(compute_jacobian_matrix)
+    newton_solver.set_coefficients(compute_coefficients)
 
     # Set rigid motion nullspace
     null_space = rigid_motions_nullspace(V)
     newton_solver.A.setNearNullSpace(null_space)
 
     # Set Newton solver options
-    newton_solver.setNewtonOptions(newton_options)
+    newton_solver.set_newton_options(newton_options)
 
     # Set initial guess
-    if initGuess is None:
+    if initial_guess is None:
         u.x.array[:] = 0
     else:
-        u.x.array[:] = initGuess.x.array[:]
+        u.x.array[:] = initial_guess.x.array[:]
 
     # Set Krylov solver options
     newton_solver.set_krylov_options(petsc_options)

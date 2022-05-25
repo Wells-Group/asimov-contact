@@ -3,10 +3,11 @@
 # SPDX-License-Identifier:    MIT
 
 from enum import Enum
-from typing import Callable, Tuple, Union, Sequence
+from typing import Callable, Tuple, Union
 
 import numpy
-from dolfinx import fem, common
+import numpy.typing as npt
+from dolfinx import common, fem
 from mpi4py import MPI
 from petsc4py import PETSc
 
@@ -25,7 +26,7 @@ class NewtonSolver():
                  "iteration", "residual", "initial_residual", "krylov_solver", "_dx", "comm",
                  "_A", "_b", "_coeffs", "_P"]
 
-    def __init__(self, comm: MPI.Comm, J: PETSc.Mat, b: PETSc.Vec, coeffs: Sequence[list[float]]):
+    def __init__(self, comm: MPI.Comm, J: PETSc.Mat, b: PETSc.Vec, coeffs: npt.NDArray[PETSc.ScalarType]):
         """
         Create a Newton solver
 
@@ -47,6 +48,7 @@ class NewtonSolver():
         self._A = J
         self._b = b
         self._coeffs = coeffs
+        self._dx: PETSc.Vec = None
         self.krylov_solver = PETSc.KSP()
         self.krylov_solver.create(self.comm)
         self.krylov_solver.setOptionsPrefix("Newton_solver_")
@@ -107,63 +109,70 @@ class NewtonSolver():
         """Get the residual vector"""
         return self._b
 
-    def setJ(self, J: Callable[[PETSc.Vec, PETSc.Mat, list[numpy.ndarray]], None]):
+    def set_jacobian(self, func: Callable[[PETSc.Vec, PETSc.Mat, npt.NDArray[PETSc.ScalarType]], None]):
         """
         Set the function for computing the Jacobian
         Args:
-            J: Function to compute the Jacobian matrix.
+            func: Function to compute the Jacobian matrix.
         """
-        self._compute_jacobian = J
+        self._compute_jacobian = func
 
-    def setF(self, F: Callable[[PETSc.Vec, PETSc.Vec, list[numpy.ndarray]], None]):
+    def set_residual(self, func: Callable[[PETSc.Vec, PETSc.Vec, npt.NDArray[PETSc.ScalarType]], None]):
         """
         Set the function for computing the residual
         Args:
-            J: Function to compute the residual
+            func: Function to compute the residual
         """
-        self._compute_residual = F
+        self._compute_residual = func
 
-    def setP(self, P: Callable[[PETSc.Vec, PETSc.Mat, list[numpy.ndarray]], None], Pmat: PETSc.Mat):
+    def set_preconditioner(self, func: Callable[[PETSc.Vec, PETSc.Mat, npt.NDArray[PETSc.ScalarType]], None],
+                           P: PETSc.Mat):
         """
         Set the function for computing the preconditioner matrix
         Args:
-            P: Function to compute the preconditioner matrix b (x, P)
-            Pmat: The matrix to assemble the preconditioner into
+            func: Function to compute the preconditioner matrix b (x, P)
+            P: The matrix to assemble the preconditioner into
         """
-        self._compute_preconditioner = P
-        self._P = Pmat
+        self._compute_preconditioner = func
+        self._P = P
 
-    def setCoeffs(self, Coeffs: Callable[[PETSc.Vec, list[numpy.ndarray]], None]):
+    def set_coefficients(self, func: Callable[[PETSc.Vec, npt.NDArray[PETSc.ScalarType]], None]):
         """
         Set the function for computing the coefficients needed for assembly
         Args:
-            Coeffs: Function to compute coefficients coeffs(x)
+            func: Function to compute coefficients coeffs(x)
         """
-        self._compute_coefficients = Coeffs
+        self._compute_coefficients = func
 
-    def setNewtonOptions(self, options: dict):
+    def set_newton_options(self, options: dict):
         """
         Set Newton options from a dictionary
         """
-        if options.get("atol") is not None:
-            self.atol = options.get("atol")
-        if options.get("rtol") is not None:
-            self.rtol = options.get("rtol")
+        atol = options.get("atol")
+        if atol is not None:
+            self.atol = atol
 
-        if options.get("convergence_criterion") is not None:
-            conv_crit = options.get("convergence_criterion")
-            if conv_crit == "residual":
+        rtol = options.get("rtol")
+        if rtol is not None:
+            self.rtol = rtol
+
+        crit = options.get("convergence_criterion")
+        if crit is not None:
+            if crit == "residual":
                 self.convergence_criterion = ConvergenceCriterion.residual
-            elif conv_crit == "incremental":
+            elif crit == "incremental":
                 self.convergence_criterion = ConvergenceCriterion.incremental
             else:
                 raise RuntimeError("Unknown Convergence criterion")
-        if options.get("max_it") is not None:
-            self.max_it = options.get("max_it")
-        if options.get("error_on_nonconvergence") is not None:
-            self.error_on_nonconvergence = options.get("error_on_nonconvergence")
-        if options.get("relaxation_parameter") is not None:
-            self.relaxation_parameter = options.get("relaxation_parameter")
+        max_it = options.get("max_it")
+        if max_it is not None:
+            self.max_it = max_it
+        e_convg = options.get("error_on_nonconvergence")
+        if e_convg is not None:
+            self.error_on_nonconvergence = e_convg
+        relax = options.get("relaxation_parameter")
+        if relax is not None:
+            self.relaxation_parameter = relax
 
     def _pre_computation(self, x: PETSc.Vec):
         x.ghostUpdate(addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD)
@@ -231,9 +240,7 @@ class NewtonSolver():
         except AttributeError:
             self.krylov_solver.setOperators(self._A, self._A)
 
-        try:
-            self._dx
-        except AttributeError:
+        if self._dx is None:
             self._dx = self._A.createVecRight()
 
         # Start iterations
@@ -244,7 +251,7 @@ class NewtonSolver():
                 raise RuntimeError("Function for computing Jacobian has not been provided")
 
             try:
-                self._compute_preconditioner(x_vec, self._P)
+                self._compute_preconditioner(x_vec, self._P, self._coeffs)
             except AttributeError:
                 pass
 
