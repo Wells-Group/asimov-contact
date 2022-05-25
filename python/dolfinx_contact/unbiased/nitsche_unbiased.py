@@ -53,7 +53,7 @@ def nitsche_unbiased(mesh: _mesh.Mesh, mesh_tags: list[_mesh.MeshTagsMetaClass],
         is a function to be interpolated into the dolfinx function space
     neumann
         Same as dirichlet for Neumann boundary conditions
-    contact_pairs: 
+    contact_pairs:
         list of pairs (i, j) marking the ith surface as a puppet surface and the jth surface
         as the corresponding candidate surface
     physical_parameters
