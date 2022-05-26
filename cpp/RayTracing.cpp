@@ -6,7 +6,6 @@
 // SPDX-License-Identifier:    MIT
 
 #include "RayTracing.h"
-#include <xtensor/xio.hpp>
 //------------------------------------------------------------------------------------------------
 std::tuple<int, std::int32_t, xt::xtensor<double, 2>>
 dolfinx_contact::raytracing(
