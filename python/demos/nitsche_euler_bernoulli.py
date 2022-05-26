@@ -88,9 +88,9 @@ def solve_euler_bernoulli(nx: int, ny: int, theta: float, gamma: float, linear_s
 
     # Solve as linear problem
     if linear_solver:
-        problem = LinearProblem(ufl.lhs(F), ufl.rhs(F), bcs=bcs,
-                                petsc_options={"ksp_type": "preonly", "pc_type": "lu"})
-        u = problem.solve()
+        linear_problem = LinearProblem(ufl.lhs(F), ufl.rhs(F), bcs=bcs,
+                                       petsc_options={"ksp_type": "preonly", "pc_type": "lu"})
+        u = linear_problem.solve()
     else:
         # Create nonlinear problem and Newton solver
         problem = NonlinearProblem(F, u, bcs)

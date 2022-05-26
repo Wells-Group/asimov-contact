@@ -13,7 +13,7 @@ from dolfinx import fem as _fem
 from dolfinx import log as _log
 from dolfinx import mesh as dmesh
 from petsc4py import PETSc as _PETSc
-
+from dolfinx.cpp.mesh import MeshTags_int32
 import dolfinx_contact
 import dolfinx_contact.cpp
 from dolfinx_contact.helpers import (epsilon, lame_parameters,
@@ -22,7 +22,7 @@ from dolfinx_contact.helpers import (epsilon, lame_parameters,
 __all__ = ["nitsche_custom"]
 
 
-def nitsche_custom(mesh: dmesh.Mesh, mesh_data: Tuple[dmesh.meshtags, int, int],
+def nitsche_custom(mesh: dmesh.Mesh, mesh_data: Tuple[MeshTags_int32, int, int],
                    physical_parameters: dict = {}, nitsche_parameters: Dict[str, float] = {},
                    plane_loc: float = 0.0, vertical_displacement: float = -0.1,
                    nitsche_bc: bool = True, quadrature_degree: int = 5, form_compiler_params: Dict = {},
