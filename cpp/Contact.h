@@ -86,22 +86,35 @@ class Contact
 {
 public:
   /// Constructor
-  /// @param[in] marker The meshtags defining the contact surfaces
-  /// @param[in] surfaces Array of the values of the meshtags marking the
-  /// surfaces
+  /// @param[in] markers List of meshtags defining the contact surfaces
+  /// @param[in] surfaces Adjacency list. Links of i contains meshtag values
+  /// associated with ith meshtag in markers
+  /// @param[in] contact_pairs list of pairs (i, j) marking the ith and jth
+  /// surface in surfaces->array() as a contact pair
   /// @param[in] V The functions space
-  Contact(std::shared_ptr<dolfinx::mesh::MeshTags<std::int32_t>> marker,
-          const std::array<int, 2>& surfaces,
+  Contact(const std::vector<
+              std::shared_ptr<dolfinx::mesh::MeshTags<std::int32_t>>>& markers,
+          std::shared_ptr<const dolfinx::graph::AdjacencyList<std::int32_t>>
+              surfaces,
+          const std::vector<std::array<int, 2>>& contact_pairs,
           std::shared_ptr<dolfinx::fem::FunctionSpace> V);
 
   /// Return meshtag value for surface with index surface
   /// @param[in] surface - the index of the surface
   int surface_mt(int surface) const { return _surfaces[surface]; }
 
-  /// Return index of candidate surface
-  /// @param[in] surface - the index of the surface
-  int opposite(int surface) const { return _opposites[surface]; }
+  /// Return contact pair
+  /// @param[in] pair - the index of the contact pair
+  const std::array<int, 2>& contact_pair(int pair) const
+  {
+    return _contact_pairs[pair];
+  }
 
+  // Return active entities for surface s
+  const std::vector<std::pair<std::int32_t, int>>& active_entities(int s) const
+  {
+    return _cell_facet_pairs[s];
+  }
   // return quadrature degree
   int quadrature_degree() const { return _quadrature_degree; }
   void set_quadrature_degree(int deg) { _quadrature_degree = deg; }
@@ -128,12 +141,8 @@ public:
   /// Return the submesh corresponding to surface
   /// @param[in] surface The index of the surface (0 or 1).
   SubMesh submesh(int surface) { return _submeshes[surface]; }
-  // Return meshtags
-  std::shared_ptr<dolfinx::mesh::MeshTags<std::int32_t>> meshtags() const
-  {
-    return _marker;
-  }
-
+  // Return mesh
+  std::shared_ptr<const dolfinx::mesh::Mesh> mesh() const { return _V->mesh(); }
   /// @brief Create a PETSc matrix with contact sparsity pattern
   ///
   /// Create a PETSc matrix with the sparsity pattern of the input form and the
@@ -150,7 +159,7 @@ public:
   /// Assemble matrix over exterior facets (for contact facets)
   /// @param[in] mat_set the function for setting the values in the matrix
   /// @param[in] bcs List of Dirichlet BCs
-  /// @param[in] origin_meshtag Tag indicating with interface to integrate over
+  /// @param[in] pair index of contact pair
   /// @param[in] kernel The integration kernel
   /// @param[in] coeffs coefficients used in the variational form packed on
   /// facets
@@ -160,19 +169,19 @@ public:
       const mat_set_fn& mat_set,
       const std::vector<
           std::shared_ptr<const dolfinx::fem::DirichletBC<PetscScalar>>>& bcs,
-      int origin_meshtag, const kernel_fn<PetscScalar>& kernel,
+      int pair, const kernel_fn<PetscScalar>& kernel,
       const xtl::span<const PetscScalar> coeffs, int cstride,
       const xtl::span<const PetscScalar>& constants);
 
   /// Assemble vector over exterior facet (for contact facets)
   /// @param[in] b The vector
-  /// @param[in] origin_meshtag Tag indicating with interface to integrate over
+  /// @param[in] pair index of contact pair
   /// @param[in] kernel The integration kernel
   /// @param[in] coeffs coefficients used in the variational form packed on
   /// facets
   /// @param[in] cstride Number of coefficients per facet
   /// @param[in] constants used in the variational form
-  void assemble_vector(xtl::span<PetscScalar> b, int origin_meshtag,
+  void assemble_vector(xtl::span<PetscScalar> b, int pair,
                        const kernel_fn<PetscScalar>& kernel,
                        const xtl::span<const PetscScalar>& coeffs, int cstride,
                        const xtl::span<const PetscScalar>& constants);
@@ -196,7 +205,7 @@ public:
   kernel_fn<PetscScalar> generate_kernel(dolfinx_contact::Kernel type)
   {
     // Extract mesh data
-    auto mesh = _marker->mesh();
+    std::shared_ptr<const dolfinx::mesh::Mesh> mesh = _V->mesh();
     assert(mesh);
     const std::size_t gdim = mesh->geometry().dim(); // geometrical dimension
     const int tdim = mesh->topology().dim();         // topological dimension
@@ -435,7 +444,7 @@ public:
           std::size_t block_index = offsets[6] + i * bs;
           for (std::size_t j = 0; j < bs; j++)
           {
-            auto coeff = c[block_index + j];
+            PetscScalar coeff = c[block_index + j];
             tr_u += coeff * tr(i, j);
             epsn_u += coeff * epsn(i, j);
             jump_un += coeff * phi_f(q, i) * n_surf[j];
@@ -668,9 +677,12 @@ public:
   void create_q_phys(int origin_meshtag)
   {
     // Get information depending on surface
-    auto mesh = _submeshes[origin_meshtag].mesh();
-    auto cell_map = _submeshes[origin_meshtag].cell_map();
-    auto puppet_facets = _cell_facet_pairs[origin_meshtag];
+    std::shared_ptr<const dolfinx::mesh::Mesh> mesh
+        = _submeshes[origin_meshtag].mesh();
+    std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> cell_map
+        = _submeshes[origin_meshtag].cell_map();
+    const std::vector<std::pair<std::int32_t, int>>& puppet_facets
+        = _cell_facet_pairs[origin_meshtag];
 
     // Geometrical info
     const dolfinx::mesh::Geometry& geometry = mesh->geometry();
@@ -733,21 +745,25 @@ public:
   /// I think this should actually be part of create_distance_map
   /// which should be easier after the rewrite of contact
   /// It is therefore called inside create_distance_map
-  void max_links(int origin_meshtag)
+  void max_links(int pair)
   {
     std::size_t max_links = 0;
     // Select which side of the contact interface to loop from and get the
     // correct map
-    auto active_facets = _cell_facet_pairs[origin_meshtag];
-    auto map = _facet_maps[origin_meshtag];
-    auto facet_map = _submeshes[_opposites[origin_meshtag]].facet_map();
+    const std::array<int, 2>& contact_pair = _contact_pairs[pair];
+    const std::vector<std::pair<std::int32_t, int>>& active_facets
+        = _cell_facet_pairs[contact_pair[0]];
+    std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> map
+        = _facet_maps[pair];
+    std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> facet_map
+        = _submeshes[contact_pair[1]].facet_map();
     for (std::size_t i = 0; i < active_facets.size(); i++)
     {
       std::vector<std::int32_t> linked_cells;
-      auto links = map->links(i);
+      const tcb::span<const int> links = map->links((int)i);
       for (auto link : links)
       {
-        auto facet_pair = facet_map->links(link);
+        const tcb::span<const int> facet_pair = facet_map->links(link);
         linked_cells.push_back(facet_pair[0]);
       }
       // Remove duplicates
@@ -756,21 +772,23 @@ public:
                          linked_cells.end());
       max_links = std::max(max_links, linked_cells.size());
     }
-    _max_links[origin_meshtag] = max_links;
+    _max_links[pair] = max_links;
   }
 
   /// Compute closest candidate_facet for each quadrature point in
-  /// _qp_phys[origin_meshtag]
-  /// This is saved as an adjacency list in _facet_maps[origin_meshtag]
+  /// _qp_phys[puppet_mt]
+  /// This is saved as an adjacency list in _facet_maps[puppet_mt]
   /// and an xtensor containing cell_facet_pairs in
-  /// _cell_maps[origin_mesthtag]
-  void create_distance_map(int puppet_mt, int candidate_mt)
+  /// _cell_maps[pair]
+  void create_distance_map(int pair)
   {
-    // save opposite surface
-    _opposites[puppet_mt] = candidate_mt;
+    int puppet_mt = _contact_pairs[pair][0];
+    int candidate_mt = _contact_pairs[pair][1];
 
     // Mesh info
-    auto mesh = _marker->mesh();
+    std::shared_ptr<const dolfinx::mesh::Mesh> mesh = _V->mesh();
+    assert(mesh);
+
     const int gdim = mesh->geometry().dim();
     const dolfinx::fem::CoordinateElement& cmap = mesh->geometry().cmap();
     const dolfinx::mesh::Topology& topology = mesh->topology();
@@ -785,8 +803,10 @@ public:
     }
 
     // submesh info
-    auto candidate_mesh = _submeshes[candidate_mt].mesh();
-    auto c_to_f = candidate_mesh->topology().connectivity(tdim, tdim - 1);
+    std::shared_ptr<const dolfinx::mesh::Mesh> candidate_mesh
+        = _submeshes[candidate_mt].mesh();
+    std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> c_to_f
+        = candidate_mesh->topology().connectivity(tdim, tdim - 1);
     assert(c_to_f);
     // Create _qp_ref_facet (quadrature points on reference facet)
     dolfinx_cuas::QuadratureRule q_rule(cell_type, _quadrature_degree, fdim);
@@ -799,24 +819,26 @@ public:
     create_q_phys(puppet_mt);
 
     // assign puppet_ and candidate_facets
-    auto candidate_facets = _cell_facet_pairs[candidate_mt];
-    auto puppet_facets = _cell_facet_pairs[puppet_mt];
-    auto cell_map = _submeshes[candidate_mt].cell_map();
-    auto qp_phys = _qp_phys[puppet_mt];
+    const std::vector<std::pair<std::int32_t, int>>& candidate_facets
+        = _cell_facet_pairs[candidate_mt];
+    const std::vector<std::pair<std::int32_t, int>>& puppet_facets
+        = _cell_facet_pairs[puppet_mt];
+    std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> cell_map
+        = _submeshes[candidate_mt].cell_map();
+    const std::vector<xt::xtensor<double, 2>>& qp_phys = _qp_phys[puppet_mt];
     std::vector<std::int32_t> submesh_facets(candidate_facets.size());
     for (std::size_t i = 0; i < candidate_facets.size(); ++i)
     {
-      auto facet_pair = candidate_facets[i];
-      submesh_facets[i] = c_to_f->links(
-          cell_map->links(facet_pair.first)[0])[facet_pair.second];
+      auto [f_cell, facet] = candidate_facets[i];
+      submesh_facets[i] = c_to_f->links(cell_map->links(f_cell)[0])[facet];
     }
-
     // Create midpoint tree as compute_closest_entity will be called many
     // times
     dolfinx::geometry::BoundingBoxTree master_bbox(*candidate_mesh, fdim,
                                                    submesh_facets);
-    auto master_midpoint_tree = dolfinx::geometry::create_midpoint_tree(
-        *candidate_mesh, fdim, submesh_facets);
+    dolfinx::geometry::BoundingBoxTree master_midpoint_tree
+        = dolfinx::geometry::create_midpoint_tree(*candidate_mesh, fdim,
+                                                  submesh_facets);
 
     // Copy quadrature points to 2D structure
     const std::size_t num_facets = qp_phys.size();
@@ -840,28 +862,29 @@ public:
         = dolfinx::geometry::compute_closest_entity(
             master_bbox, master_midpoint_tree, *candidate_mesh,
             quadrature_points);
-    _facet_maps[puppet_mt]
+    _facet_maps[pair]
         = std::make_shared<const dolfinx::graph::AdjacencyList<std::int32_t>>(
             closest_entity, offset);
 
-    max_links(puppet_mt);
+    max_links(pair);
   }
 
   /// Compute and pack the gap function for each quadrature point the set of
   /// facets. For a set of facets; go through the quadrature points on each
   /// facet find the closest facet on the other surface and compute the
   /// distance vector
-  /// @param[in] orgin_meshtag - surface on which to integrate
+  /// @param[in] pair - surface on which to integrate
   /// @param[out] c - gap packed on facets. c[i*cstride +  gdim * k+ j]
   /// contains the jth component of the Gap on the ith facet at kth
   /// quadrature point
-  std::pair<std::vector<PetscScalar>, int> pack_gap(int origin_meshtag)
+  std::pair<std::vector<PetscScalar>, int> pack_gap(int pair)
   {
-    // Get submesh for current meshtag
+    int puppet_mt = _contact_pairs[pair][0];
+    int candidate_mt = _contact_pairs[pair][1];
+    // Mesh info
     const std::shared_ptr<const dolfinx::mesh::Mesh>& candidate_mesh
-        = _submeshes[_opposites[origin_meshtag]].mesh();
+        = _submeshes[candidate_mt].mesh();
     assert(candidate_mesh);
-
     // Get information about submesh geometry and topology
     const dolfinx::mesh::Geometry& geometry = candidate_mesh->geometry();
     const int gdim = geometry.dim();
@@ -873,10 +896,11 @@ public:
 
     // Select which side of the contact interface to loop from and get the
     // correct map
-    auto map = _facet_maps[origin_meshtag];
+    std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> map
+        = _facet_maps[pair];
     assert(map);
-    auto qp_phys = _qp_phys[origin_meshtag];
-    const std::size_t num_facets = _cell_facet_pairs[origin_meshtag].size();
+    const std::vector<xt::xtensor<double, 2>>& qp_phys = _qp_phys[puppet_mt];
+    const std::size_t num_facets = _cell_facet_pairs[puppet_mt].size();
     const std::size_t num_q_point = _qp_ref_facet[0].shape(0);
 
     // Get information aboute cell type and number of closure dofs on the facet
@@ -904,7 +928,7 @@ public:
 
     // Pack gap function for each quadrature point on each facet
     std::vector<PetscScalar> c(num_facets * num_q_point * gdim, 0.0);
-    const auto cstride = (int)num_q_point * gdim;
+    const int cstride = (int)num_q_point * gdim;
     for (std::size_t i = 0; i < num_facets; ++i)
     {
       int offset = (int)i * cstride;
@@ -916,7 +940,7 @@ public:
           point(0, k) = qp_phys[i](q, k);
 
         // Get the geometry dofs for the ith facet, qth quadrature point
-        auto master_facet
+        const tcb::span<const int> master_facet
             = master_facets_geometry.links(int(i * num_q_point + q));
         assert(num_facet_dofs == master_facet.size());
 
@@ -943,22 +967,25 @@ public:
 
   /// Compute test functions on opposite surface at quadrature points of
   /// facets
-  /// @param[in] orgin_meshtag - surface on which to integrate
+  /// @param[in] pair - index of contact pair
   /// @param[in] gap - gap packed on facets per quadrature point
   /// @param[out] c - test functions packed on facets.
   std::pair<std::vector<PetscScalar>, int>
-  pack_test_functions(int origin_meshtag,
-                      const xtl::span<const PetscScalar>& gap)
+  pack_test_functions(int pair, const xtl::span<const PetscScalar>& gap)
   {
+    int puppet_mt = _contact_pairs[pair][0];
+    int candidate_mt = _contact_pairs[pair][1];
     // Mesh info
-    auto mesh = _submeshes[_opposites[origin_meshtag]].mesh(); // mesh
+    std::shared_ptr<const dolfinx::mesh::Mesh> mesh
+        = _submeshes[candidate_mt].mesh(); // mesh
     assert(mesh);
     const int gdim = mesh->geometry().dim(); // geometrical dimension
     const int tdim = mesh->topology().dim();
     const dolfinx::fem::CoordinateElement& cmap = mesh->geometry().cmap();
-    auto x_dofmap = mesh->geometry().dofmap();
+    const dolfinx::graph::AdjacencyList<int>& x_dofmap
+        = mesh->geometry().dofmap();
     xtl::span<const double> mesh_geometry = mesh->geometry().x();
-    auto element = _V->element();
+    std::shared_ptr<const dolfinx::fem::FiniteElement> element = _V->element();
     const std::uint32_t bs = element->block_size();
     mesh->topology_mutable().create_entity_permutations();
 
@@ -967,10 +994,13 @@ public:
 
     // Select which side of the contact interface to loop from and get the
     // correct map
-    auto map = _facet_maps[origin_meshtag];
-    auto qp_phys = _qp_phys[origin_meshtag];
-    auto puppet_facets = _cell_facet_pairs[origin_meshtag];
-    auto facet_map = _submeshes[_opposites[origin_meshtag]].facet_map();
+    std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> map
+        = _facet_maps[pair];
+    const std::vector<xt::xtensor<double, 2>>& qp_phys = _qp_phys[puppet_mt];
+    const std::vector<std::pair<std::int32_t, int>>& puppet_facets
+        = _cell_facet_pairs[puppet_mt];
+    std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> facet_map
+        = _submeshes[candidate_mt].facet_map();
     const std::size_t max_links
         = *std::max_element(_max_links.begin(), _max_links.end());
     const std::size_t num_facets = puppet_facets.size();
@@ -994,13 +1024,13 @@ public:
     // Loop over all facets
     for (std::size_t i = 0; i < num_facets; i++)
     {
-      auto links = map->links((int)i);
+      const tcb::span<const int> links = map->links((int)i);
       assert(links.size() == num_q_points);
 
       // Compute Pi(x) form points x and gap funtion Pi(x) - x
       for (std::size_t j = 0; j < num_q_points; j++)
       {
-        auto linked_pair = facet_map->links(links[j]);
+        const tcb::span<const int> linked_pair = facet_map->links(links[j]);
         linked_cells[j] = linked_pair[0];
         for (int k = 0; k < gdim; k++)
           q_points(j, k)
@@ -1013,8 +1043,8 @@ public:
           sorted_cells = dolfinx_contact::sort_cells(
               xtl::span(linked_cells.data(), linked_cells.size()),
               xtl::span(perm.data(), perm.size()));
-      auto unique_cells = sorted_cells.first;
-      auto offsets = sorted_cells.second;
+      const std::vector<std::int32_t>& unique_cells = sorted_cells.first;
+      const std::vector<std::int32_t>& offsets = sorted_cells.second;
 
       // Loop over sorted array of unique cells
       for (std::size_t j = 0; j < unique_cells.size(); ++j)
@@ -1026,7 +1056,7 @@ public:
         auto indices
             = xtl::span(perm.data() + offsets[j], offsets[j + 1] - offsets[j]);
         // Extract local dofs
-        auto x_dofs = x_dofmap.links(linked_cell);
+        const tcb::span<const int> x_dofs = x_dofmap.links(linked_cell);
         const std::size_t num_dofs_g = x_dofs.size();
         xt::xtensor<double, 2> coordinate_dofs
             = xt::zeros<double>({num_dofs_g, std::size_t(gdim)});
@@ -1039,7 +1069,7 @@ public:
         // Extract all physical points Pi(x) on a facet of linked_cell
         auto qp = xt::view(q_points, xt::keep(indices), xt::all());
         // Compute values of basis functions for all y = Pi(x) in qp
-        auto test_fn = dolfinx_contact::get_basis_functions(
+        xt::xtensor<double, 3> test_fn = dolfinx_contact::get_basis_functions(
             J, K, detJ, qp, coordinate_dofs, linked_cell,
             permutation_info[linked_cell], element, cmap);
 
@@ -1058,32 +1088,36 @@ public:
 
   /// Compute function on opposite surface at quadrature points of
   /// facets
-  /// @param[in] orgin_meshtag - surface on which to integrate
+  /// @param[in] pair - index of contact pair
   /// @param[in] - gap packed on facets per quadrature point
   /// @param[out] c - test functions packed on facets.
   std::pair<std::vector<PetscScalar>, int>
-  pack_u_contact(int origin_meshtag,
+  pack_u_contact(int pair,
                  std::shared_ptr<dolfinx::fem::Function<PetscScalar>> u,
                  const xtl::span<const PetscScalar> gap)
   {
+    int puppet_mt = _contact_pairs[pair][0];
+    int candidate_mt = _contact_pairs[pair][1];
     dolfinx::common::Timer t("Pack contact u");
     // Mesh info
-    auto submesh = _submeshes[_opposites[origin_meshtag]];
-    auto mesh = submesh.mesh();                      // mesh
+    dolfinx_contact::SubMesh submesh = _submeshes[candidate_mt];
+    std::shared_ptr<const dolfinx::mesh::Mesh> mesh = submesh.mesh(); // mesh
     const std::size_t gdim = mesh->geometry().dim(); // geometrical dimension
     const std::size_t bs_element = _V->element()->block_size();
 
     // Select which side of the contact interface to loop from and get the
     // correct map
-    auto map = _facet_maps[origin_meshtag];
-    auto qp_phys = _qp_phys[origin_meshtag];
-    auto facet_map = submesh.facet_map();
-    const std::size_t num_facets = _cell_facet_pairs[origin_meshtag].size();
+    std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> map
+        = _facet_maps[pair];
+    const std::vector<xt::xtensor<double, 2>>& qp_phys = _qp_phys[puppet_mt];
+    std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> facet_map
+        = submesh.facet_map();
+    const std::size_t num_facets = _cell_facet_pairs[puppet_mt].size();
     const std::size_t num_q_points = _qp_ref_facet[0].shape(0);
     auto V_sub = std::make_shared<dolfinx::fem::FunctionSpace>(
         submesh.create_functionspace(_V));
-    auto u_sub = dolfinx::fem::Function<PetscScalar>(V_sub);
-    auto sub_dofmap = V_sub->dofmap();
+    dolfinx::fem::Function<PetscScalar> u_sub(V_sub);
+    std::shared_ptr<const dolfinx::fem::DofMap> sub_dofmap = V_sub->dofmap();
     assert(sub_dofmap);
     const int bs_dof = sub_dofmap->bs();
 
@@ -1100,7 +1134,7 @@ public:
           = xt::zeros<double>({num_facets * num_q_points, gdim});
       for (std::size_t i = 0; i < num_facets; ++i)
       {
-        auto links = map->links(i);
+        const tcb::span<const int> links = map->links((int)i);
         assert(links.size() == num_q_points);
         for (std::size_t q = 0; q < num_q_points; ++q)
         {
@@ -1109,7 +1143,8 @@ public:
           {
             points(row + q, j)
                 = qp_phys[i](q, j) + gap[row * gdim + q * gdim + j];
-            auto linked_pair = facet_map->links(links[q]);
+            const tcb::span<const int> linked_pair
+                = facet_map->links(links[(int)q]);
             cells[row + q] = linked_pair[0];
           }
         }
@@ -1160,26 +1195,26 @@ public:
   }
 
   /// Compute inward surface normal at Pi(x)
-  /// @param[in] orgin_meshtag - surface on which to integrate
+  /// @param[in] pair - index of contact pair
   /// @param[in] gap - gap function: Pi(x)-x packed at quadrature points,
   /// where Pi(x) is the chosen projection of x onto the contact surface of
   /// the body coming into contact
   /// @param[out] c - normals ny packed on facets.
   std::pair<std::vector<PetscScalar>, int>
-  pack_ny(int origin_meshtag, const xtl::span<const PetscScalar> gap);
+  pack_ny(int pair, const xtl::span<const PetscScalar> gap);
 
   /// Pack gap with rigid surface defined by x[gdim-1] = -g.
   /// g_vec = zeros(gdim), g_vec[gdim-1] = -g
   /// Gap = x - g_vec
-  /// @param[in] orgin_meshtag - surface on which to integrate
+  /// @param[in] pair - index of contact pair
   /// @param[in] g - defines location of plane
   /// @param[out] c - gap packed on facets. c[i, gdim * k+ j] contains the
   /// jth component of the Gap on the ith facet at kth quadrature point
-  std::pair<std::vector<PetscScalar>, int> pack_gap_plane(int origin_meshtag,
-                                                          double g)
+  std::pair<std::vector<PetscScalar>, int> pack_gap_plane(int pair, double g)
   {
+    int puppet_mt = _contact_pairs[pair][0];
     // Mesh info
-    auto mesh = _marker->mesh();
+    std::shared_ptr<const dolfinx::mesh::Mesh> mesh = _V->mesh();
     assert(mesh);
 
     const int gdim = mesh->geometry().dim(); // geometrical dimension
@@ -1187,7 +1222,7 @@ public:
     const int fdim = tdim - 1;
 
     // Create _qp_ref_facet (quadrature points on reference facet)
-    auto cell_type = mesh->topology().cell_type();
+    const dolfinx::mesh::CellType cell_type = mesh->topology().cell_type();
     dolfinx_cuas::QuadratureRule facet_quadrature(cell_type, _quadrature_degree,
                                                   fdim);
     _qp_ref_facet = facet_quadrature.points();
@@ -1197,15 +1232,15 @@ public:
     const dolfinx::fem::CoordinateElement& cmap = mesh->geometry().cmap();
     _phi_ref_facets = tabulate(cmap, cell_type, facet_quadrature);
 
-    // Compute quadrature points on physical facet _qp_phys_"origin_meshtag"
-    create_q_phys(origin_meshtag);
-    auto qp_phys = _qp_phys[origin_meshtag];
+    // Compute quadrature points on physical facet _qp_phys_"puppet_mt"
+    create_q_phys(puppet_mt);
+    const std::vector<xt::xtensor<double, 2>> qp_phys = _qp_phys[puppet_mt];
 
-    const std::size_t num_facets = _cell_facet_pairs[origin_meshtag].size();
+    const std::size_t num_facets = _cell_facet_pairs[puppet_mt].size();
     // FIXME: This does not work for prism meshes
     std::size_t num_q_point = _qp_ref_facet[0].shape(0);
     std::vector<PetscScalar> c(num_facets * num_q_point * gdim, 0.0);
-    const auto cstride = (int)num_q_point * gdim;
+    const int cstride = (int)num_q_point * gdim;
     for (std::size_t i = 0; i < num_facets; i++)
     {
       int offset = (int)i * cstride;
@@ -1217,20 +1252,19 @@ public:
 
 private:
   int _quadrature_degree = 3;
-  std::shared_ptr<dolfinx::mesh::MeshTags<std::int32_t>> _marker;
-  std::array<int, 2> _surfaces; // meshtag values for surfaces
+  std::vector<int> _surfaces; // meshtag values for surfaces
   // store index of candidate_surface for each puppet_surface
-  std::array<int, 2> _opposites = {0, 0};
+  std::vector<std::array<int, 2>> _contact_pairs;
   std::shared_ptr<dolfinx::fem::FunctionSpace> _V; // Function space
   // _facets_maps[i] = adjacency list of closest facet on candidate surface
   // for every quadrature point in _qp_phys[i] (quadrature points on every
   // facet of ith surface)
-  std::array<std::shared_ptr<const dolfinx::graph::AdjacencyList<std::int32_t>>,
-             2>
+  std::vector<
+      std::shared_ptr<const dolfinx::graph::AdjacencyList<std::int32_t>>>
       _facet_maps;
   //  _qp_phys[i] contains the quadrature points on the physical facets for
   //  each facet on ith surface in _surfaces
-  std::array<std::vector<xt::xtensor<double, 2>>, 2> _qp_phys;
+  std::vector<std::vector<xt::xtensor<double, 2>>> _qp_phys;
   // quadrature points on reference facet
   std::vector<xt::xarray<double>> _qp_ref_facet;
   // quadrature weights
@@ -1238,10 +1272,10 @@ private:
   // quadrature points on facets of reference cell
   std::vector<xt::xtensor<double, 2>> _phi_ref_facets;
   // maximum number of cells linked to a cell on ith surface
-  std::array<std::size_t, 2> _max_links = {0, 0};
+  std::vector<std::size_t> _max_links;
   // submeshes for contact surface
-  std::array<SubMesh, 2> _submeshes;
+  std::vector<SubMesh> _submeshes;
   // facets as (cell, facet) pairs
-  std::array<std::vector<std::pair<std::int32_t, int>>, 2> _cell_facet_pairs;
+  std::vector<std::vector<std::pair<std::int32_t, int>>> _cell_facet_pairs;
 };
 } // namespace dolfinx_contact

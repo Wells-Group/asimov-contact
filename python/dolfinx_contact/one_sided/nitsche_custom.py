@@ -12,6 +12,7 @@ from dolfinx import common as _common
 from dolfinx import fem as _fem
 from dolfinx import log as _log
 from dolfinx import mesh as dmesh
+from dolfinx.graph import create_adjacencylist
 from petsc4py import PETSc as _PETSc
 from dolfinx.cpp.mesh import MeshTags_int32
 import dolfinx_contact
@@ -148,7 +149,10 @@ def nitsche_custom(mesh: dmesh.Mesh, mesh_data: Tuple[MeshTags_int32, int, int],
     h_facets = dolfinx_contact.pack_circumradius(mesh, integral_entities)
 
     # Create contact class
-    contact = dolfinx_contact.cpp.Contact(facet_marker, [contact_value, dirichlet_value], V._cpp_object)
+    data = np.array([contact_value, dirichlet_value], dtype=np.int32)
+    offsets = np.array([0, 2], dtype=np.int32)
+    surfaces = create_adjacencylist(data, offsets)
+    contact = dolfinx_contact.cpp.Contact([facet_marker], surfaces, [(0, 1)], V._cpp_object)
     contact.set_quadrature_degree(quadrature_degree)
     # Compute gap from contact boundary
     g_vec = contact.pack_gap_plane(0, -plane_loc)

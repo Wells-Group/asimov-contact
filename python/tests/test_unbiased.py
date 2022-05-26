@@ -21,6 +21,7 @@ import pytest
 import ufl
 from dolfinx.cpp.mesh import to_type
 import dolfinx.fem as _fem
+from dolfinx.graph import create_adjacencylist
 from dolfinx.mesh import (CellType, locate_entities_boundary, locate_entities, create_mesh,
                           compute_midpoints, meshtags)
 from mpi4py import MPI
@@ -272,11 +273,14 @@ def create_contact_data(V, u, quadrature_degree, lmbda, mu, facets_cg):
     sorted_facets = np.argsort(indices)
     facet_marker = meshtags(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
 
+    data = np.array([0, 1], dtype=np.int32)
+    offsets = np.array([0, 2], dtype=np.int32)
+    surfaces = create_adjacencylist(data, offsets)
     # create contact class
-    contact = dolfinx_contact.cpp.Contact(facet_marker, [0, 1], V._cpp_object)
+    contact = dolfinx_contact.cpp.Contact([facet_marker], surfaces, [(0, 1), (1, 0)], V._cpp_object)
     contact.set_quadrature_degree(quadrature_degree)
-    contact.create_distance_map(0, 1)
-    contact.create_distance_map(1, 0)
+    contact.create_distance_map(0)
+    contact.create_distance_map(1)
 
     # Pack material parameters mu and lambda on each contact surface
     V2 = _fem.FunctionSpace(mesh, ("DG", 0))

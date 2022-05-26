@@ -10,6 +10,7 @@
 import dolfinx.fem as _fem
 import numpy as np
 import pytest
+from dolfinx.graph import create_adjacencylist
 from dolfinx.io import XDMFFile
 from dolfinx.mesh import meshtags, locate_entities_boundary
 from mpi4py import MPI
@@ -74,12 +75,12 @@ def test_projection(q_deg, surf, dim):
     V = _fem.VectorFunctionSpace(mesh, ("CG", 1))
 
     # Create contact class, gap function and normals
-    contact = dolfinx_contact.cpp.Contact(facet_marker, [surface_0_val, surface_1_val], V._cpp_object)
+    data = np.array([surface_0_val, surface_1_val], dtype=np.int32)
+    offsets = np.array([0, 2], dtype=np.int32)
+    surfaces = create_adjacencylist(data, offsets)
+    contact = dolfinx_contact.cpp.Contact([facet_marker], surfaces, [(0, 1), (1, 0)], V._cpp_object)
     contact.set_quadrature_degree(q_deg)
-    if surf == 0:
-        contact.create_distance_map(surf, 1)
-    else:
-        contact.create_distance_map(surf, 0)
+    contact.create_distance_map(surf)
     gap = contact.pack_gap(surf)
     normals = contact.pack_ny(surf, gap)
 

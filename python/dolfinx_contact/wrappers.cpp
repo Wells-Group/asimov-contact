@@ -63,14 +63,18 @@ PYBIND11_MODULE(cpp, m)
   py::class_<dolfinx_contact::Contact,
              std::shared_ptr<dolfinx_contact::Contact>>(m, "Contact",
                                                         "Contact object")
-      .def(py::init<std::shared_ptr<dolfinx::mesh::MeshTags<std::int32_t>>,
-                    std::array<int, 2>,
+      .def(py::init<std::vector<
+                        std::shared_ptr<dolfinx::mesh::MeshTags<std::int32_t>>>,
+                    std::shared_ptr<
+                        const dolfinx::graph::AdjacencyList<std::int32_t>>,
+                    std::vector<std::array<int, 2>>,
                     std::shared_ptr<dolfinx::fem::FunctionSpace>>(),
-           py::arg("marker"), py::arg("sufaces"), py::arg("V"))
+           py::arg("markers"), py::arg("sufaces"), py::arg("contact_pairs"),
+           py::arg("V"))
       .def("create_distance_map",
-           [](dolfinx_contact::Contact& self, int puppet_mt, int candidate_mt)
+           [](dolfinx_contact::Contact& self, int pair)
            {
-             self.create_distance_map(puppet_mt, candidate_mt);
+             self.create_distance_map(pair);
              return;
            })
       .def("pack_gap_plane",
@@ -102,24 +106,40 @@ PYBIND11_MODULE(cpp, m)
              auto qp = self.qp_phys(origin_meshtag)[facet];
              return dolfinx_wrappers::xt_as_pyarray(std::move(qp));
            })
+      .def("active_entities",
+           [](dolfinx_contact::Contact& self, int s)
+           {
+             auto active_entities = self.active_entities(s);
+             std::array<py::ssize_t, 2> shape
+                 = {py::ssize_t(active_entities.size()), 2};
+             py::array_t<std::int32_t> domains(shape);
+             auto d = domains.mutable_unchecked<2>();
+             for (py::ssize_t i = 0; i < d.shape(0); ++i)
+             {
+               d(i, 0) = active_entities[i].first;
+               d(i, 1) = active_entities[i].second;
+             }
+             return domains;
+           })
       .def("facet_map",
-           [](dolfinx_contact::Contact& self, int mt)
+           [](dolfinx_contact::Contact& self, int pair)
            {
              // This exposes facet_map() to python but replaces the
              // facet indices on the submesh with the facet indices in
              // the parent mesh This is only exposed for testing (in
              // particular
              // nitsche_rigid_surface.py/demo_nitsche_rigid_surface_ufl.py)
-             auto mesh = self.meshtags()->mesh();
+             auto contact_pair = self.contact_pair(pair);
+             auto mesh = self.mesh();
              const int tdim = mesh->topology().dim(); // topological dimension
              const int fdim = tdim - 1; // topological dimension of facet
              auto c_to_f = mesh->topology().connectivity(tdim, fdim);
              assert(c_to_f);
-             auto submesh_map = self.facet_map(mt);
+             auto submesh_map = self.facet_map(pair);
              auto offsets = submesh_map->offsets();
              auto old_data = submesh_map->array();
-             auto facet_map = self.submesh(self.opposite(mt)).facet_map();
-             auto parent_cells = self.submesh(self.opposite(mt)).parent_cells();
+             auto facet_map = self.submesh(contact_pair[1]).facet_map();
+             auto parent_cells = self.submesh(contact_pair[1]).parent_cells();
              std::vector<std::int32_t> data(old_data.size());
              for (std::size_t i = 0; i < old_data.size(); ++i)
              {
@@ -347,6 +367,17 @@ PYBIND11_MODULE(cpp, m)
         return output;
       });
 
+  m.def(
+      "find_candidate_surface_segment",
+      [](std::shared_ptr<const dolfinx::mesh::Mesh> mesh,
+         const std::vector<std::int32_t>& puppet_facets,
+         const std::vector<std::int32_t>& candidate_facets, const double radius)
+      {
+        return dolfinx_contact::find_candidate_surface_segment(
+            mesh, puppet_facets, candidate_facets, radius);
+      },
+      py::arg("mesh"), py::arg("puppet_facets"), py::arg("candidate_facets"),
+      py::arg("radius") = -1.0);
   m.def(
       "raytracing",
       [](const dolfinx::mesh::Mesh& mesh,
