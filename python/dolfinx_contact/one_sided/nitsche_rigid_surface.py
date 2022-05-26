@@ -13,6 +13,7 @@ import dolfinx.mesh as _mesh
 import dolfinx.nls as _nls
 import numpy as np
 import ufl
+from dolfinx.cpp.mesh import MeshTags_int32
 from petsc4py import PETSc as _PETSc
 
 import dolfinx_contact.cpp
@@ -20,7 +21,7 @@ from dolfinx_contact.helpers import (R_minus, epsilon, lame_parameters,
                                      rigid_motions_nullspace, sigma_func)
 
 
-def nitsche_rigid_surface(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTagsMetaClass, int, int, int, int],
+def nitsche_rigid_surface(mesh: _mesh.Mesh, mesh_data: Tuple[MeshTags_int32, int, int, int, int],
                           physical_parameters: dict = {}, nitsche_parameters: Dict[str, float] = {},
                           vertical_displacement: float = -0.1, nitsche_bc: bool = False, quadrature_degree: int = 5,
                           form_compiler_params: Dict = {}, jit_params: Dict = {}, petsc_options: Dict = {},

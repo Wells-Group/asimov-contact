@@ -13,7 +13,7 @@ import numpy as np
 import numpy.typing as npt
 import ufl
 from petsc4py.PETSc import Viewer, ScalarType
-
+from dolfinx.cpp.mesh import MeshTags_int32
 import dolfinx_contact
 import dolfinx_contact.cpp
 from dolfinx_contact.helpers import epsilon, lame_parameters, sigma_func, rigid_motions_nullspace
@@ -23,7 +23,7 @@ kt = dolfinx_contact.cpp.Kernel
 __all__ = ["nitsche_unbiased"]
 
 
-def nitsche_unbiased(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTagsMetaClass, int, int, int, int],
+def nitsche_unbiased(mesh: _mesh.Mesh, mesh_data: Tuple[MeshTags_int32, int, int, int, int],
                      physical_parameters: dict[str, Union[np.float64, int, bool]],
                      nitsche_parameters: dict[str, np.float64],
                      displacement: npt.NDArray[ScalarType] = np.array([[0, 0, 0], [0, 0, 0]], dtype=ScalarType),
