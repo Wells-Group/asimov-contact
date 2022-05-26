@@ -131,7 +131,7 @@ PYBIND11_MODULE(cpp, m)
              // particular
              // nitsche_rigid_surface.py/demo_nitsche_rigid_surface_ufl.py)
              auto contact_pair = self.contact_pair(pair);
-             auto mesh = self.meshtags()[0]->mesh();
+             auto mesh = self.mesh();
              const int tdim = mesh->topology().dim(); // topological dimension
              const int fdim = tdim - 1; // topological dimension of facet
              auto c_to_f = mesh->topology().connectivity(tdim, fdim);
