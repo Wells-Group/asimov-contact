@@ -23,7 +23,7 @@ namespace
 /// @tparam tdim The topological dimension of the cell
 template <std::size_t tdim>
 std::function<xt::xtensor_fixed<double, xt::xshape<1, tdim>>(
-    xt::xtensor_fixed<double, xt::xshape<2>>)>
+    xt::xtensor_fixed<double, xt::xshape<tdim - 1>>)>
 get_parameterization(dolfinx::mesh::CellType cell_type, int facet_index)
 {
   switch (cell_type)
@@ -182,6 +182,7 @@ int raytracing_cell(
         xt::xtensor_fixed<double, xt::xshape<tdim - 1>>)>& reference_map)
 {
 
+  // Set initial guess for Newton-iteration (midpoint of facet)
   int status = -1;
   if constexpr (tdim == 3)
   {
