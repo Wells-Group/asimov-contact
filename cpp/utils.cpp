@@ -179,7 +179,7 @@ dolfinx_contact::sort_cells(const xtl::span<const std::int32_t>& cells,
 {
   assert(perm.size() == cells.size());
 
-  const std::int32_t num_cells = (std::int32_t)cells.size();
+  const auto num_cells = (std::int32_t)cells.size();
   std::vector<std::int32_t> unique_cells(num_cells);
   std::vector<std::int32_t> offsets(num_cells + 1, 0);
   std::iota(perm.begin(), perm.end(), 0);

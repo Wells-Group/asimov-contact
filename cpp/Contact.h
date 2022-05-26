@@ -760,7 +760,7 @@ public:
     for (std::size_t i = 0; i < active_facets.size(); i++)
     {
       std::vector<std::int32_t> linked_cells;
-      const tcb::span<const int> links = map->links(i);
+      const tcb::span<const int> links = map->links((int)i);
       for (auto link : links)
       {
         const tcb::span<const int> facet_pair = facet_map->links(link);
@@ -829,9 +829,8 @@ public:
     std::vector<std::int32_t> submesh_facets(candidate_facets.size());
     for (std::size_t i = 0; i < candidate_facets.size(); ++i)
     {
-      const std::pair<std::int32_t, int>& facet_pair = candidate_facets[i];
-      submesh_facets[i] = c_to_f->links(
-          cell_map->links(facet_pair.first)[0])[facet_pair.second];
+      auto [f_cell, facet] = candidate_facets[i];
+      submesh_facets[i] = c_to_f->links(cell_map->links(f_cell)[0])[facet];
     }
     // Create midpoint tree as compute_closest_entity will be called many
     // times
@@ -1009,7 +1008,7 @@ public:
     const std::int32_t ndofs = _V->dofmap()->cell_dofs(0).size();
     std::vector<PetscScalar> c(
         num_facets * num_q_points * max_links * ndofs * bs, 0.0);
-    const int cstride = int(num_q_points * max_links * ndofs * bs);
+    const auto cstride = int(num_q_points * max_links * ndofs * bs);
     xt::xtensor<double, 2> q_points
         = xt::zeros<double>({std::size_t(num_q_points), std::size_t(gdim)});
     xt::xtensor<double, 2> dphi;
@@ -1144,7 +1143,8 @@ public:
           {
             points(row + q, j)
                 = qp_phys[i](q, j) + gap[row * gdim + q * gdim + j];
-            const tcb::span<const int> linked_pair = facet_map->links(links[q]);
+            const tcb::span<const int> linked_pair
+                = facet_map->links(links[(int)q]);
             cells[row + q] = linked_pair[0];
           }
         }
