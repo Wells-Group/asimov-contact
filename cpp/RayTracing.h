@@ -41,11 +41,11 @@ get_parameterization(dolfinx::mesh::CellType cell_type, int facet_index)
     break;
   }
 
-  const int cell_dim = dolfinx::mesh::cell_dim(cell_type);
-  assert(cell_dim == tdim);
+  assert(dolfinx::mesh::cell_dim(cell_type) == tdim);
 
-  const int num_facets = dolfinx::mesh::cell_num_entities(cell_type, tdim - 1);
-  if (facet_index >= num_facets)
+  if (const int num_facets
+      = dolfinx::mesh::cell_num_entities(cell_type, tdim - 1);
+      facet_index >= num_facets)
     throw std::invalid_argument(
         "Invalid facet index (larger than number of facets");
 
@@ -100,8 +100,8 @@ get_parameterization_jacobian(dolfinx::mesh::CellType cell_type,
   default:
     break;
   }
-  const int cell_dim = dolfinx::mesh::cell_dim(cell_type);
-  assert(cell_dim == tdim);
+
+  assert(dolfinx::mesh::cell_dim(cell_type) == tdim);
 
   basix::cell::type basix_cell
       = dolfinx::mesh::cell_type_to_basix_type(cell_type);
@@ -206,14 +206,16 @@ int raytracing_cell(
     cmap.tabulate(1, storage.X_k, basis_values);
 
     // Push forward reference coordinate
-    cmap.push_forward(storage.x_k, coordinate_dofs,
-                      xt::view(basis_values, 0, xt::all(), xt::all(), 0));
+    dolfinx::fem::CoordinateElement::push_forward(
+        storage.x_k, coordinate_dofs,
+        xt::view(basis_values, 0, xt::all(), xt::all(), 0));
     dphi = xt::view(basis_values, xt::xrange((std::size_t)1, tdim + 1), 0,
                     xt::all(), 0);
 
     // Compute Jacobian
     std::fill(storage.J.begin(), storage.J.end(), 0);
-    cmap.compute_jacobian(dphi, coordinate_dofs, storage.J);
+    dolfinx::fem::CoordinateElement::compute_jacobian(dphi, coordinate_dofs,
+                                                      storage.J);
 
     // Compute residual at current iteration
     std::fill(storage.Gk.begin(), storage.Gk.end(), 0);
@@ -242,8 +244,8 @@ int raytracing_cell(
           storage.dGk(i, j) += storage.dGk_tmp(l, j) * storage.tangents(i, l);
 
     // Invert dGk/dxi
-    double det_dGk = dolfinx::math::det(storage.dGk);
-    if (std::abs(det_dGk) < tol)
+    if (double det_dGk = dolfinx::math::det(storage.dGk);
+        std::abs(det_dGk) < tol)
     {
       status = -2;
       break;
@@ -338,16 +340,14 @@ compute_ray(const dolfinx::mesh::Mesh& mesh,
 {
   int status = -1;
   dolfinx::mesh::CellType cell_type = mesh.topology().cell_type();
-  const int cdim = mesh.topology().dim();
-  assert(cdim == tdim);
+  assert(mesh.topology().dim() == tdim);
   const dolfinx::fem::CoordinateElement& cmap = mesh.geometry().cmap();
 
   // Get cell coordinates/geometry
   const dolfinx::mesh::Geometry& geometry = mesh.geometry();
   const dolfinx::graph::AdjacencyList<std::int32_t>& x_dofmap
       = geometry.dofmap();
-  const int gdim = geometry.dim();
-  assert(gdim == tdim);
+  assert(geometry.dim() == tdim);
   xtl::span<const double> x_g = geometry.x();
   const std::size_t num_dofs_g = cmap.dim();
   xt::xtensor<double, 2> coordinate_dofs({num_dofs_g, tdim});
