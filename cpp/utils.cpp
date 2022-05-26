@@ -179,7 +179,7 @@ dolfinx_contact::sort_cells(const xtl::span<const std::int32_t>& cells,
 {
   assert(perm.size() == cells.size());
 
-  const auto num_cells = (std::int32_t)cells.size();
+  const std::int32_t num_cells = (std::int32_t)cells.size();
   std::vector<std::int32_t> unique_cells(num_cells);
   std::vector<std::int32_t> offsets(num_cells + 1, 0);
   std::iota(perm.begin(), perm.end(), 0);
@@ -208,9 +208,9 @@ void dolfinx_contact::update_geometry(
     const dolfinx::fem::Function<PetscScalar>& u,
     std::shared_ptr<dolfinx::mesh::Mesh> mesh)
 {
-  auto V = u.function_space();
+  std::shared_ptr<const dolfinx::fem::FunctionSpace> V = u.function_space();
   assert(V);
-  auto dofmap = V->dofmap();
+  std::shared_ptr<const dolfinx::fem::DofMap> dofmap = V->dofmap();
   assert(dofmap);
   // Check that mesh to be updated and underlying mesh of u are the same
   assert(mesh == V->mesh());
@@ -221,7 +221,8 @@ void dolfinx_contact::update_geometry(
          == mesh->geometry().cmap().create_dof_layout());
 
   const int tdim = mesh->topology().dim();
-  auto cell_map = mesh->topology().index_map(tdim);
+  std::shared_ptr<const dolfinx::common::IndexMap> cell_map
+      = mesh->topology().index_map(tdim);
   assert(cell_map);
   const std::int32_t num_cells
       = cell_map->size_local() + cell_map->num_ghosts();
@@ -235,8 +236,8 @@ void dolfinx_contact::update_geometry(
   std::vector<double> dx(coords.size());
   for (std::int32_t c = 0; c < num_cells; ++c)
   {
-    auto dofs = dofmap->cell_dofs(c);
-    auto dofs_x = dofmap_x.links(c);
+    const tcb::span<const int> dofs = dofmap->cell_dofs(c);
+    const tcb::span<const int> dofs_x = dofmap_x.links(c);
     for (std::size_t i = 0; i < dofs.size(); ++i)
       for (int j = 0; j < bs; ++j)
       {
@@ -297,7 +298,8 @@ void dolfinx_contact::evaluate_basis_functions(
 
   // Get topology data
   const std::size_t tdim = topology.dim();
-  auto map = topology.index_map((int)tdim);
+  std::shared_ptr<const dolfinx::common::IndexMap> map
+      = topology.index_map((int)tdim);
 
   // Get geometry data
   const std::size_t gdim = geometry.dim();
@@ -372,7 +374,7 @@ void dolfinx_contact::evaluate_basis_functions(
       continue;
 
     // Get cell geometry (coordinate dofs)
-    auto x_dofs = x_dofmap.links(cell_index);
+    const tcb::span<const int> x_dofs = x_dofmap.links(cell_index);
     for (std::size_t i = 0; i < num_dofs_g; ++i)
     {
       const int pos = 3 * x_dofs[i];
@@ -580,15 +582,17 @@ dolfinx_contact::compute_active_entities(
                                U, std::vector<std::pair<std::int32_t, int>>>)
         {
           int tdim = topology.dim();
-          auto f_to_c = topology.connectivity(tdim - 1, tdim);
+          std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> f_to_c
+              = topology.connectivity(tdim - 1, tdim);
           assert(f_to_c);
-          auto c_to_f = topology.connectivity(tdim, tdim - 1);
+          std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> c_to_f
+              = topology.connectivity(tdim, tdim - 1);
           assert(c_to_f);
           for (std::size_t f = 0; f < entities.size(); f++)
           {
             assert(f_to_c->num_links(entities[f]) == 1);
             const std::int32_t cell = f_to_c->links(entities[f])[0];
-            auto cell_facets = c_to_f->links(cell);
+            const tcb::span<const int> cell_facets = c_to_f->links(cell);
 
             auto facet_it = std::find(cell_facets.begin(), cell_facets.end(),
                                       entities[f]);
@@ -602,18 +606,20 @@ dolfinx_contact::compute_active_entities(
                                                          std::int32_t, int>>>)
         {
           int tdim = topology.dim();
-          auto f_to_c = topology.connectivity(tdim - 1, tdim);
+          std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> f_to_c
+              = topology.connectivity(tdim - 1, tdim);
           assert(f_to_c);
-          auto c_to_f = topology.connectivity(tdim, tdim - 1);
+          std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> c_to_f
+              = topology.connectivity(tdim, tdim - 1);
           assert(c_to_f);
           std::array<std::pair<std::int32_t, int>, 2> interior_facets;
           for (std::size_t f = 0; f < entities.size(); f++)
           {
             assert(f_to_c->num_links(entities[f]) == 2);
-            auto cells = f_to_c->links(entities[f]);
+            const tcb::span<const int> cells = f_to_c->links(entities[f]);
             for (std::size_t i = 0; i < 2; i++)
             {
-              auto cell_facets = c_to_f->links(cells[i]);
+              const tcb::span<const int> cell_facets = c_to_f->links(cells[i]);
               auto facet_it = std::find(cell_facets.begin(), cell_facets.end(),
                                         entities[f]);
               assert(facet_it != cell_facets.end());
@@ -660,22 +666,24 @@ dolfinx_contact::entities_to_geometry_dofs(
   // Fetch connectivities required to get entity dofs
   const std::vector<std::vector<std::vector<int>>>& closure_dofs
       = layout.entity_closure_dofs_all();
-  const auto e_to_c = topology.connectivity(dim, tdim);
+  const std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> e_to_c
+      = topology.connectivity(dim, tdim);
   assert(e_to_c);
-  const auto c_to_e = topology.connectivity(tdim, dim);
+  const std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> c_to_e
+      = topology.connectivity(tdim, dim);
   assert(c_to_e);
   for (std::size_t i = 0; i < entity_list.size(); ++i)
   {
     const std::int32_t idx = entity_list[i];
     const std::int32_t cell = e_to_c->links(idx)[0];
-    auto cell_entities = c_to_e->links(cell);
+    const tcb::span<const int> cell_entities = c_to_e->links(cell);
     auto it = std::find(cell_entities.begin(), cell_entities.end(), idx);
     assert(it != cell_entities.end());
     const auto local_entity = std::distance(cell_entities.begin(), it);
     const std::vector<std::int32_t>& entity_dofs
         = closure_dofs[dim][local_entity];
 
-    const auto xc = xdofs.links(cell);
+    const tcb::span<const int> xc = xdofs.links(cell);
     for (std::size_t j = 0; j < num_entity_dofs; ++j)
       geometry_indices[i * num_entity_dofs + j] = xc[entity_dofs[j]];
   }
@@ -690,9 +698,9 @@ std::vector<std::int32_t> dolfinx_contact::find_candidate_surface_segment(
     const std::vector<std::int32_t>& candidate_facets, const double radius)
 {
   // Find midpoints of puppet and candidate facets
-  auto puppet_midpoints = dolfinx::mesh::compute_midpoints(
+  std::vector<double> puppet_midpoints = dolfinx::mesh::compute_midpoints(
       *mesh, mesh->topology().dim() - 1, puppet_facets);
-  auto candidate_midpoints = dolfinx::mesh::compute_midpoints(
+  std::vector<double> candidate_midpoints = dolfinx::mesh::compute_midpoints(
       *mesh, mesh->topology().dim() - 1, candidate_facets);
 
   double r2 = radius * radius; // radius squared
