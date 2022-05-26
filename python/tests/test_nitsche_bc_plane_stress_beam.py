@@ -15,7 +15,7 @@ from dolfinx.mesh import (CellType, GhostMode, create_rectangle,
                           locate_entities_boundary, meshtags)
 from dolfinx.nls.petsc import NewtonSolver
 from mpi4py import MPI
-
+from typing import List
 from dolfinx_contact.helpers import epsilon, lame_parameters, sigma_func
 
 
@@ -90,17 +90,17 @@ def solve_manufactured(nx: int, ny: int, theta: float, gamma: float,
     F += -ufl.inner(sigma(u) * n, v) * ds(left_marker)\
         - theta * ufl.inner(sigma(v) * n, u - u_D) * ds(left_marker)\
         + gamma / h * ufl.inner(u - u_D, v) * ds(left_marker)
-    bcs: DirichletBCMetaClass = []
+    bcs: List[DirichletBCMetaClass] = []
 
     if linear_solver:
-        problem = LinearProblem(ufl.lhs(F), ufl.rhs(F), bcs=bcs,
-                                petsc_options={"ksp_type": "preonly", "pc_type": "lu"})
-        u = problem.solve()
+        linear_problem = LinearProblem(ufl.lhs(F), ufl.rhs(F), bcs=bcs,
+                                       petsc_options={"ksp_type": "preonly", "pc_type": "lu"})
+        u = linear_problem.solve()
         u.name = "uh"
     else:
         # Create nonlinear problem and Newton solver
-        problem = NonlinearProblem(F, u, bcs)
-        solver = NewtonSolver(MPI.COMM_WORLD, problem)
+        nonlinear_problem = NonlinearProblem(F, u, bcs)
+        solver = NewtonSolver(MPI.COMM_WORLD, nonlinear_problem)
 
         # Set Newton solver options
         solver.atol = 1e-6

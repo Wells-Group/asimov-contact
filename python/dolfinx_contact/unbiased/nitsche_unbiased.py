@@ -11,9 +11,9 @@ import dolfinx.mesh as _mesh
 import dolfinx_cuas
 import numpy as np
 import ufl
-from dolfinx.cpp.graph import AdjacencyList_int32
 from petsc4py.PETSc import Viewer
-
+from dolfinx.cpp.graph import AdjacencyList_int32
+from dolfinx.cpp.mesh import MeshTags_int32
 import dolfinx_contact
 import dolfinx_contact.cpp
 from dolfinx_contact.helpers import epsilon, lame_parameters, sigma_func, rigid_motions_nullspace
@@ -23,8 +23,8 @@ kt = dolfinx_contact.cpp.Kernel
 __all__ = ["nitsche_unbiased"]
 
 
-def nitsche_unbiased(mesh: _mesh.Mesh, mesh_tags: list[_mesh.MeshTagsMetaClass],
-                     domain_marker: _mesh.MeshTagsMetaClass,
+def nitsche_unbiased(mesh: _mesh.Mesh, mesh_tags: list[MeshTags_int32],
+                     domain_marker: MeshTags_int32,
                      surfaces: AdjacencyList_int32,
                      dirichlet: list[Tuple[int, Callable[[np.ndarray], np.ndarray]]],
                      neumann: list[Tuple[int, Callable[[np.ndarray], np.ndarray]]],

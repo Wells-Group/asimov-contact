@@ -695,8 +695,14 @@ dolfinx_contact::entities_to_geometry_dofs(
 std::vector<std::int32_t> dolfinx_contact::find_candidate_surface_segment(
     std::shared_ptr<const dolfinx::mesh::Mesh> mesh,
     const std::vector<std::int32_t>& puppet_facets,
-    const std::vector<std::int32_t>& candidate_facets, const double radius)
+    const std::vector<std::int32_t>& candidate_facets,
+    const double radius = -1.)
 {
+  if (radius < 0)
+  {
+    // return all facets for negative radius / no radius
+    return std::vector<std::int32_t>(candidate_facets);
+  }
   // Find midpoints of puppet and candidate facets
   std::vector<double> puppet_midpoints = dolfinx::mesh::compute_midpoints(
       *mesh, mesh->topology().dim() - 1, puppet_facets);
