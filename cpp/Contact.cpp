@@ -82,8 +82,7 @@ dolfinx_contact::Contact::Contact(
     auto links = surfaces->links(int(s));
     for (std::size_t i = 0; i < links.size(); ++i)
     {
-      auto surf = links[i];
-      auto facets = marker->find(surf);
+      auto facets = marker->find(links[i]);
       int index = surfaces->offsets()[s] + int(i);
       std::variant<
           std::vector<std::int32_t>, std::vector<std::pair<std::int32_t, int>>,
@@ -103,6 +102,7 @@ dolfinx_contact::Contact::Contact(
 std::size_t dolfinx_contact::Contact::coefficients_size()
 {
   // mesh data
+  assert(_V);
   auto mesh = _V->mesh();
   const std::size_t gdim = mesh->geometry().dim(); // geometrical dimension
 
@@ -137,7 +137,7 @@ Mat dolfinx_contact::Contact::create_petsc_matrix(
   // dofs on the opposite surface
   for (std::size_t k = 0; k < _contact_pairs.size(); ++k)
   {
-    auto contact_pair = _contact_pairs[k];
+    const std::array<int, 2>& contact_pair = _contact_pairs[k];
     auto facet_map = _submeshes[contact_pair[1]].facet_map();
     auto parent_cells = _submeshes[contact_pair[1]].parent_cells();
     for (int i = 0; i < (int)_cell_facet_pairs[contact_pair[0]].size(); i++)
