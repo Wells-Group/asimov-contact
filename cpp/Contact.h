@@ -1134,7 +1134,7 @@ public:
           = xt::zeros<double>({num_facets * num_q_points, gdim});
       for (std::size_t i = 0; i < num_facets; ++i)
       {
-        const tcb::span<const int> links = map->links(i);
+        const tcb::span<const int> links = map->links((int)i);
         assert(links.size() == num_q_points);
         for (std::size_t q = 0; q < num_q_points; ++q)
         {
@@ -1160,7 +1160,7 @@ public:
     std::vector<PetscScalar> c(num_facets * num_q_points * bs_element, 0.0);
 
     // Create work vector for expansion coefficients
-    const int cstride = int(num_q_points * bs_element);
+    const auto cstride = int(num_q_points * bs_element);
     const std::size_t num_basis_functions = basis_values.shape(1);
     const std::size_t value_size = basis_values.shape(2);
     std::vector<PetscScalar> coefficients(num_basis_functions * bs_element);
