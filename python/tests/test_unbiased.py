@@ -332,7 +332,8 @@ def create_contact_data(V, u, quadrature_degree, lmbda, mu, facets_cg):
 @ pytest.mark.parametrize("ct", ["quadrilateral", "triangle", "tetrahedron", "hexahedron"])
 @ pytest.mark.parametrize("gap", [1e-13, -1e-13, -0.5])
 @ pytest.mark.parametrize("q_deg", [1, 2, 3])
-def test_unbiased_rhs(ct, gap, q_deg):
+@ pytest.mark.parametrize("theta", [1, 0, -1])
+def test_unbiased_rhs(ct, gap, q_deg, theta):
 
     # set quadrature degree
     quadrature_degree = q_deg
@@ -346,8 +347,7 @@ def test_unbiased_rhs(ct, gap, q_deg):
     lmbda = lambda_func(E, nu)
     sigma = sigma_func(mu, lmbda)
 
-    # Nitche parameters and variables
-    theta = 1
+    # Nitche parameter
     gamma = 10
 
     # create meshes and function spaces
@@ -439,7 +439,8 @@ def test_unbiased_rhs(ct, gap, q_deg):
 @ pytest.mark.parametrize("ct", ["quadrilateral", "triangle", "tetrahedron", "hexahedron"])
 @ pytest.mark.parametrize("gap", [1e-13, -1e-13, -0.5])
 @ pytest.mark.parametrize("q_deg", [1, 2, 3])
-def test_unbiased_jac(ct, gap, q_deg):
+@ pytest.mark.parametrize("theta", [1, 0, -1])
+def test_unbiased_jac(ct, gap, q_deg, theta):
 
     # set quadrature degree
     quadrature_degree = q_deg
@@ -453,8 +454,7 @@ def test_unbiased_jac(ct, gap, q_deg):
     lmbda = lambda_func(E, nu)
     sigma = sigma_func(mu, lmbda)
 
-    # Nitche parameters and variables
-    theta = 1
+    # Nitche parameter
     gamma = 10
 
     # create meshes and function spaces

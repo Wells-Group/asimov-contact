@@ -223,8 +223,9 @@ PYBIND11_MODULE(cpp, m)
              int shape0 = cstride == 0 ? 0 : coeffs.size() / cstride;
              return dolfinx_wrappers::as_pyarray(std::move(coeffs),
                                                  std::array{shape0, cstride});
-           });
-
+           })
+      .def("update_submesh_geometry",
+           &dolfinx_contact::Contact::update_submesh_geometry);
   m.def(
       "generate_contact_kernel",
       [](std::shared_ptr<const dolfinx::fem::FunctionSpace> V,

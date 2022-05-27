@@ -472,3 +472,13 @@ void dolfinx_contact::Contact::assemble_vector(
     }
   }
 }
+//-----------------------------------------------------------------------------------------------
+void dolfinx_contact::Contact::update_submesh_geometry(
+    dolfinx::fem::Function<PetscScalar>& u)
+{
+
+  for (auto submesh : _submeshes)
+  {
+    submesh.update_geometry(u);
+  }
+}

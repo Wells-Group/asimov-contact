@@ -60,7 +60,7 @@ public:
   /// @param[in] V_parent - the function space on the the parent mesh
   /// @return the function space on the submesh
   dolfinx::fem::FunctionSpace create_functionspace(
-      std::shared_ptr<dolfinx::fem::FunctionSpace> V_parent) const;
+      std::shared_ptr<const dolfinx::fem::FunctionSpace> V_parent) const;
 
   // Copy of a function on the parent mesh/ in the parent function space
   // to submesh/ function space on submesh
@@ -69,6 +69,10 @@ public:
   /// copied
   void copy_function(dolfinx::fem::Function<PetscScalar>& u_parent,
                      dolfinx::fem::Function<PetscScalar>& u_sub);
+
+  /// @param[in] u: dolfinx function on function space base on basix element
+  /// Adds perturbation u to mesh
+  void update_geometry(dolfinx::fem::Function<PetscScalar>& u);
 
 private:
   // the submesh mesh

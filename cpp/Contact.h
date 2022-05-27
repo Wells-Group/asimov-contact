@@ -1249,6 +1249,10 @@ public:
     }
     return {std::move(c), cstride};
   }
+  /// This function updates the submesh geometry for all submeshes using
+  /// a function given on the parent mesh
+  /// @param[in] u - displacement
+  void update_submesh_geometry(dolfinx::fem::Function<PetscScalar>& u);
 
 private:
   int _quadrature_degree = 3;
