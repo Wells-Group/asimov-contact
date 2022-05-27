@@ -15,7 +15,7 @@ import pytest
 @pytest.mark.parametrize("cell_type", [dolfinx.mesh.CellType.hexahedron, dolfinx.mesh.CellType.tetrahedron])
 def test_raytracing_3D(cell_type):
     origin = [0.51, 0.33, -1]
-    tangent = [[1, 0, 0], [0, 1, 0]]
+    normal = [0, 0, 1]
 
     mesh = dolfinx.mesh.create_unit_cube(MPI.COMM_WORLD, 15, 15, 15, cell_type)
     tdim = mesh.topology.dim
@@ -24,7 +24,7 @@ def test_raytracing_3D(cell_type):
     integral_pairs = dolfinx_contact.cpp.compute_active_entities(mesh, facets, dolfinx.fem.IntegralType.exterior_facet)
 
     status, cell_idx, points = dolfinx_contact.cpp.raytracing(
-        mesh, origin, tangent, integral_pairs, 10, 1e-6)
+        mesh, origin, normal, integral_pairs, 10, 1e-6)
 
     if status > 0:
         # Create structures needed for closest point projections
@@ -49,7 +49,7 @@ def test_raytracing_3D(cell_type):
 @pytest.mark.parametrize("cell_type", [dolfinx.mesh.CellType.hexahedron, dolfinx.mesh.CellType.tetrahedron])
 def test_raytracing_3D_corner(cell_type):
     origin = [1.5, 1.5, 1.5]
-    tangent = [[1 / np.sqrt(2), 0, -1 / np.sqrt(2)], [-1 / np.sqrt(6), 2 / np.sqrt(6), -1 / np.sqrt(6)]]
+    normal = [1, 1, 1]
 
     mesh = dolfinx.mesh.create_unit_cube(MPI.COMM_WORLD, 13, 11, 12, cell_type)
     tdim = mesh.topology.dim
@@ -57,7 +57,7 @@ def test_raytracing_3D_corner(cell_type):
 
     integral_pairs = dolfinx_contact.cpp.compute_active_entities(mesh, facets, dolfinx.fem.IntegralType.exterior_facet)
     status, cell_idx, points = dolfinx_contact.cpp.raytracing(
-        mesh, origin, tangent, integral_pairs, 10, 1e-6)
+        mesh, origin, normal, integral_pairs, 10, 1e-6)
     if status > 0:
         # Create structures needed for closest point projections
         boundary_cells = dolfinx.mesh.compute_incident_entities(mesh, facets, tdim - 1, tdim)
@@ -80,7 +80,7 @@ def test_raytracing_3D_corner(cell_type):
 @pytest.mark.parametrize("cell_type", [dolfinx.mesh.CellType.triangle, dolfinx.mesh.CellType.quadrilateral])
 def test_raytracing_2D(cell_type):
     origin = [0.273, -0.5]
-    tangent = [[1, 0]]
+    normal = [0, 1]
 
     mesh = dolfinx.mesh.create_unit_square(MPI.COMM_WORLD, 15, 15, cell_type)
     tdim = mesh.topology.dim
@@ -89,7 +89,7 @@ def test_raytracing_2D(cell_type):
     integral_pairs = dolfinx_contact.cpp.compute_active_entities(mesh, facets, dolfinx.fem.IntegralType.exterior_facet)
 
     status, cell_idx, points = dolfinx_contact.cpp.raytracing(
-        mesh, origin, tangent, integral_pairs, 10, 1e-6)
+        mesh, origin, normal, integral_pairs, 10, 1e-6)
 
     if status > 0:
         # Create structures needed for closest point projections
@@ -114,7 +114,7 @@ def test_raytracing_2D(cell_type):
 @pytest.mark.parametrize("cell_type", [dolfinx.mesh.CellType.triangle, dolfinx.mesh.CellType.quadrilateral])
 def test_raytracing_2D_corner(cell_type):
     origin = [1.5, 1.5]
-    tangent = [[1, -1]]
+    normal = [-1, 1]
 
     mesh = dolfinx.mesh.create_unit_square(MPI.COMM_WORLD, 13, 11, cell_type)
     tdim = mesh.topology.dim
@@ -122,7 +122,7 @@ def test_raytracing_2D_corner(cell_type):
 
     integral_pairs = dolfinx_contact.cpp.compute_active_entities(mesh, facets, dolfinx.fem.IntegralType.exterior_facet)
     status, cell_idx, points = dolfinx_contact.cpp.raytracing(
-        mesh, origin, tangent, integral_pairs, 10, 1e-6)
+        mesh, origin, normal, integral_pairs, 10, 1e-6)
     if status > 0:
         # Create structures needed for closest point projections
         boundary_cells = dolfinx.mesh.compute_incident_entities(mesh, facets, tdim - 1, tdim)

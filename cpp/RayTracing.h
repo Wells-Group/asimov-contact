@@ -14,6 +14,66 @@
 
 namespace
 {
+
+/// Normalize a set of vectors by its length
+/// @tparam The number of vectors
+/// @tparam The length of the vectors
+template <std::size_t A, std::size_t B>
+void normalize(xt::xtensor_fixed<double, xt::xshape<A, B>>& vectors)
+{
+  for (std::size_t i = 0; i < A; ++i)
+  {
+    double norm = 0;
+    for (std::size_t j = 0; j < B; ++j)
+      norm += vectors(i, j) * vectors(i, j);
+    norm = std::sqrt(norm);
+    for (std::size_t j = 0; j < B; ++j)
+    {
+      vectors(i, j) = vectors(i, j) / norm;
+    }
+  }
+}
+
+/// Compute two normalized tangets of a normal vector
+///
+/// @param[in] n the normal
+/// @tparam gdim The dimension of the normal
+/// @tparam tdim The topological dimension of the surface
+/// @returns The tangent(s)
+template <std::size_t gdim, std::size_t tdim>
+xt::xtensor_fixed<double, xt::xshape<tdim - 1, gdim>>
+compute_tangents(const xt::xtensor_fixed<double, xt::xshape<gdim>>& n)
+{
+
+  // Compute local maximum and create iteration array
+  auto max_el = std::max_element(n.cbegin(), n.cend(),
+                                 [](double a, double b)
+                                 { return std::norm(a) < std::norm(b); });
+  auto max_pos = std::distance(n.cbegin(), max_el);
+  std::size_t c = 0;
+  std::vector<std::size_t> indices(gdim - 1, 0);
+  for (std::size_t i = 0; i < gdim; ++i)
+    if (i != max_pos)
+      indices[c++] = i;
+
+  /// Compute first tangent
+  xt::xtensor_fixed<double, xt::xshape<tdim - 1, gdim>> tangents;
+  std::fill(tangents.begin(), std::next(tangents.begin(), gdim), 1);
+  tangents(0, max_pos) = 0;
+  for (std::size_t i = 0; i < gdim - 1; ++i)
+    tangents(0, max_pos) -= n(0, i) / n(0, max_pos);
+
+  /// Compute second tangent by cross product
+  if constexpr (gdim == 3)
+  {
+    tangents(1, 0) = tangents(0, 1) * n(2) - tangents(0, 2) * n(1);
+    tangents(1, 1) = tangents(0, 2) * n(0) - tangents(0, 0) * n(2);
+    tangents(1, 2) = tangents(0, 0) * n(1) - tangents(0, 1) * n(0);
+  }
+  normalize<tdim - 1, gdim>(tangents);
+  return tangents;
+};
+
 /// Get function that parameterizes a facet of a given cell
 ///
 /// @param[in] cell_type The cell type
@@ -118,7 +178,7 @@ get_parameterization_jacobian(dolfinx::mesh::CellType cell_type,
 namespace dolfinx_contact
 {
 
-template <std::size_t tdim>
+template <std::size_t tdim, std::size_t gdim>
 struct newton_storage
 {
   xt::xtensor_fixed<double, xt::xshape<tdim, tdim - 1>>
@@ -130,8 +190,8 @@ struct newton_storage
       xi_k; // Reference parameters (for Newton solver)
   xt::xtensor_fixed<double, xt::xshape<tdim - 1>>
       dxi_k; // Gradient of reference parameters (for Newton Solver)
-  xt::xtensor_fixed<double, xt::xshape<tdim, tdim>> J; // Jacobian of the cell
-  xt::xtensor_fixed<double, xt::xshape<tdim, tdim - 1>>
+  xt::xtensor_fixed<double, xt::xshape<gdim, tdim>> J; // Jacobian of the cell
+  xt::xtensor_fixed<double, xt::xshape<gdim, tdim - 1>>
       dGk_tmp; // Temporary variable to invert Jacobian of Newton solver LHS
   xt::xtensor_fixed<double, xt::xshape<tdim - 1, tdim - 1>>
       dGk; // Newton solver LHS Jacobian
@@ -139,9 +199,9 @@ struct newton_storage
       dGk_inv; // Inverse of Newton solver LHS Jacobian
   xt::xtensor_fixed<double, xt::xshape<tdim - 1>>
       Gk; // Residual (RHS) of Newton solver
-  xt::xtensor_fixed<double, xt::xshape<tdim - 1, tdim>>
+  xt::xtensor_fixed<double, xt::xshape<tdim - 1, gdim>>
       tangents;                                      // Tangents of ray
-  xt::xtensor_fixed<double, xt::xshape<tdim>> point; // Point of origin for ray
+  xt::xtensor_fixed<double, xt::xshape<gdim>> point; // Point of origin for ray
 };
 
 /// @brief Compute the solution to the ray tracing problem for a single cell
@@ -171,9 +231,9 @@ struct newton_storage
 /// @param[in] reference_map Function mapping from reference parameters (xi,
 /// eta) to the physical element
 /// @tparam tdim The topological dimension of the cell
-template <std::size_t tdim>
+template <std::size_t tdim, std::size_t gdim>
 int raytracing_cell(
-    newton_storage<tdim>& storage, xt::xtensor<double, 4>& basis_values,
+    newton_storage<tdim, gdim>& storage, xt::xtensor<double, 4>& basis_values,
     xt::xtensor<double, 2>& dphi, int max_iter, double tol,
     const dolfinx::fem::CoordinateElement& cmap,
     dolfinx::mesh::CellType cell_type,
@@ -219,7 +279,7 @@ int raytracing_cell(
 
     // Compute residual at current iteration
     std::fill(storage.Gk.begin(), storage.Gk.end(), 0);
-    for (std::size_t i = 0; i < tdim; ++i)
+    for (std::size_t i = 0; i < gdim; ++i)
     {
       for (std::size_t j = 0; j < tdim - 1; ++j)
       {
@@ -240,7 +300,7 @@ int raytracing_cell(
 
     for (std::size_t i = 0; i < tdim - 1; ++i)
       for (std::size_t j = 0; j < tdim - 1; ++j)
-        for (std::size_t l = 0; l < tdim; ++l)
+        for (std::size_t l = 0; l < gdim; ++l)
           storage.dGk(i, j) += storage.dGk_tmp(l, j) * storage.tangents(i, l);
 
     // Invert dGk/dxi
@@ -330,27 +390,28 @@ int raytracing_cell(
 /// parallel with the tangent, -3 if the Newton solver finds a solution
 /// outside the element.
 /// @tparam tdim The topological dimension of the cell
-template <std::size_t tdim>
+template <std::size_t tdim, std::size_t gdim>
 std::tuple<int, std::int32_t, xt::xtensor_fixed<double, xt::xshape<2, tdim>>>
 compute_ray(const dolfinx::mesh::Mesh& mesh,
-            const xt::xtensor_fixed<double, xt::xshape<tdim>>& point,
-            const xt::xtensor_fixed<double, xt::xshape<2, tdim>>& tangents,
+            const xt::xtensor_fixed<double, xt::xshape<gdim>>& point,
+            const xt::xtensor_fixed<double, xt::xshape<gdim>>& normal,
             const std::vector<std::pair<std::int32_t, int>>& cells,
             const int max_iter = 25, const double tol = 1e-8)
 {
   int status = -1;
   dolfinx::mesh::CellType cell_type = mesh.topology().cell_type();
-  assert(mesh.topology().dim() == tdim);
+  if ((mesh.topology().dim() != tdim) or (mesh.geometry().dim() != gdim))
+    throw std::invalid_argument("Invalid topological or geometrical dimension");
+
   const dolfinx::fem::CoordinateElement& cmap = mesh.geometry().cmap();
 
   // Get cell coordinates/geometry
   const dolfinx::mesh::Geometry& geometry = mesh.geometry();
   const dolfinx::graph::AdjacencyList<std::int32_t>& x_dofmap
       = geometry.dofmap();
-  assert(geometry.dim() == tdim);
   xtl::span<const double> x_g = geometry.x();
   const std::size_t num_dofs_g = cmap.dim();
-  xt::xtensor<double, 2> coordinate_dofs({num_dofs_g, tdim});
+  xt::xtensor<double, 2> coordinate_dofs({num_dofs_g, gdim});
   xt::xtensor<double, 2> dphi({(std::size_t)tdim, num_dofs_g});
 
   // Temporary variables
@@ -358,8 +419,8 @@ compute_ray(const dolfinx::mesh::Mesh& mesh,
   xt::xtensor<double, 4> basis_values(basis_shape);
 
   std::size_t cell_idx = -1;
-  newton_storage<tdim> allocated_memory;
-  allocated_memory.tangents = tangents;
+  newton_storage<tdim, gdim> allocated_memory;
+  allocated_memory.tangents = compute_tangents<gdim, tdim>(normal);
   allocated_memory.point = point;
 
   for (std::size_t c = 0; c < cells.size(); ++c)
@@ -370,9 +431,9 @@ compute_ray(const dolfinx::mesh::Mesh& mesh,
     auto x_dofs = x_dofmap.links(cell);
     for (std::size_t j = 0; j < x_dofs.size(); ++j)
     {
-      dolfinx::common::impl::copy_N<tdim>(
+      dolfinx::common::impl::copy_N<gdim>(
           std::next(x_g.begin(), 3 * x_dofs[j]),
-          std::next(coordinate_dofs.begin(), tdim * j));
+          std::next(coordinate_dofs.begin(), gdim * j));
     }
     // Assign Jacobian of reference mapping
     allocated_memory.dxi
@@ -381,9 +442,9 @@ compute_ray(const dolfinx::mesh::Mesh& mesh,
     // Get parameterization map
     auto reference_map = get_parameterization<tdim>(cell_type, facet_index);
 
-    status = raytracing_cell<tdim>(allocated_memory, basis_values, dphi,
-                                   max_iter, tol, cmap, cell_type,
-                                   coordinate_dofs, reference_map);
+    status = raytracing_cell<tdim, gdim>(allocated_memory, basis_values, dphi,
+                                         max_iter, tol, cmap, cell_type,
+                                         coordinate_dofs, reference_map);
     if (status > 0)
     {
       cell_idx = c;
@@ -409,8 +470,7 @@ compute_ray(const dolfinx::mesh::Mesh& mesh,
 ///
 /// @param[in] mesh The mesh
 /// @param[in] point The point of origin for the ray
-/// @param[in] tangents The tangents of the ray. Each row corresponds to a
-/// tangent.
+/// @param[in] normal The vector defining the direction of the ray
 /// @param[in] cells List of tuples (cell, facet), where the cell index is
 /// local to process and the facet index is local to the cell cell
 /// @param[in] max_iter The maximum number of iterations to use for Newton's
@@ -426,7 +486,7 @@ compute_ray(const dolfinx::mesh::Mesh& mesh,
 /// outside the element.
 std::tuple<int, std::int32_t, xt::xtensor<double, 2>>
 raytracing(const dolfinx::mesh::Mesh& mesh, const xt::xtensor<double, 1>& point,
-           const xt::xtensor<double, 2>& tangents,
+           const xt::xtensor<double, 1>& normal,
            const std::vector<std::pair<std::int32_t, int>>& cells,
            const int max_iter = 25, const double tol = 1e-8);
 
