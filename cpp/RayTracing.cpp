@@ -17,8 +17,7 @@ dolfinx_contact::raytracing(
   const int tdim = mesh.topology().dim();
   const int gdim = mesh.geometry().dim();
 
-  assert((std::size_t)tdim == point.shape(0));
-  assert(mesh.geometry().dim() == tdim);
+  assert((std::size_t)gdim == point.shape(0));
   assert(normal.shape(0) == (std::size_t)gdim);
   std::tuple<int, std::int32_t, xt::xtensor<double, 2>> output;
   if (tdim == 2)

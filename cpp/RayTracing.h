@@ -460,7 +460,8 @@ compute_ray(const dolfinx::mesh::Mesh& mesh,
   std::copy(allocated_memory.X_k.cbegin(), allocated_memory.X_k.cend(),
             std::next(output_coords.begin(), tdim));
 
-  std::tuple<int, std::int32_t, xt::xtensor_fixed<double, xt::xshape<2, tdim>>>
+  std::tuple<int, std::int32_t, xt::xtensor_fixed<double, xt::xshape<gdim>>,
+             xt::xtensor_fixed<double, xt::xshape<tdim>>>
       output = std::make_tuple(status, cell_idx, output_coords);
   return output;
 }
