@@ -142,14 +142,17 @@ def test_raytracing_2D_corner(cell_type):
         assert np.allclose(x, origin + distance[:2])
 
 
+@pytest.mark.parametrize("cell_type", [dolfinx.mesh.CellType.quadrilateral, dolfinx.mesh.CellType.triangle])
 @pytest.mark.skipif(MPI.COMM_WORLD.size > 1,
                     reason="This test should only be run in serial.")
-def test_raytracing_manifold():
-    cell_type = dolfinx.mesh.CellType.quadrilateral
+def test_raytracing_manifold(cell_type):
     geometry = np.array([[0, 0, 0], [1, 0, 0], [0, 1, 0.5], [1, 1, 0.5]])
-    topology = np.array([[0, 1, 2, 3]], dtype=np.int32)
+    if cell_type == dolfinx.mesh.CellType.quadrilateral:
+        topology = np.array([[0, 1, 2, 3]], dtype=np.int32)
+    else:
+        topology = np.array([[1, 3, 2], [0, 3, 1]], dtype=np.int32)
 
-    cell = ufl.Cell(cell_type.name, geometric_dimension=2)
+    cell = ufl.Cell(cell_type.name, geometric_dimension=3)
     domain = ufl.Mesh(ufl.VectorElement("Lagrange", cell, 1))
     mesh = dolfinx.mesh.create_mesh(MPI.COMM_WORLD, topology, geometry, domain)
 
