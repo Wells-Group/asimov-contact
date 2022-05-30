@@ -8,7 +8,6 @@
 # be the same as the outward unit normal in the point Pi(x) with the opposite sign.
 
 import dolfinx.fem as _fem
-from dolfinx_contact.meshing.contact_meshes import create_box_mesh_2D, create_box_mesh_3D
 import numpy as np
 import pytest
 from dolfinx.graph import create_adjacencylist
@@ -18,7 +17,7 @@ from mpi4py import MPI
 
 import dolfinx_contact
 import dolfinx_contact.cpp
-from dolfinx_contact.meshing import convert_mesh, create_circle_circle_mesh, create_sphere_sphere_mesh
+from dolfinx_contact.meshing import convert_mesh, create_box_mesh_2D, create_box_mesh_3D
 
 
 @pytest.mark.parametrize("q_deg", range(1, 4))
