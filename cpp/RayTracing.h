@@ -52,7 +52,7 @@ compute_tangents(const xt::xtensor_fixed<double, xt::xshape<gdim>>& n)
   std::size_t c = 0;
   std::vector<std::size_t> indices(gdim - 1, 0);
   for (std::size_t i = 0; i < gdim; ++i)
-    if (i != max_pos)
+    if (i != (std::size_t)max_pos)
       indices[c++] = i;
 
   /// Compute first tangent
