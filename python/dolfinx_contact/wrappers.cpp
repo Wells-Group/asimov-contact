@@ -410,15 +410,18 @@ PYBIND11_MODULE(cpp, m)
         }
         auto _normal
             = xt::adapt(normal.data(), normal.size(), xt::no_ownership(), s_p);
-        std::tuple<int, std::int32_t, xt::xtensor<double, 2>> output
-            = dolfinx_contact::raytracing(mesh, _point, _normal, facets,
-                                          max_iter, tol);
+        std::tuple<int, std::int32_t, xt::xtensor<double, 1>,
+                   xt::xtensor<double, 1>>
+            output = dolfinx_contact::raytracing(mesh, _point, _normal, facets,
+                                                 max_iter, tol);
         int status = std::get<0>(output);
         auto x = std::get<2>(output);
+        auto X = std::get<3>(output);
         std::int32_t idx = std::get<1>(output);
 
         return py::make_tuple(status, idx,
-                              dolfinx_wrappers::xt_as_pyarray(std::move(x)));
+                              dolfinx_wrappers::xt_as_pyarray(std::move(x)),
+                              dolfinx_wrappers::xt_as_pyarray(std::move(X)));
       },
       py::arg("mesh"), py::arg("point"), py::arg("tangents"), py::arg("cells"),
       py::arg("max_iter") = 25, py::arg("tol") = 1e-8);

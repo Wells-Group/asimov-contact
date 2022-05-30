@@ -7,7 +7,7 @@
 
 #include "RayTracing.h"
 //------------------------------------------------------------------------------------------------
-std::tuple<int, std::int32_t, xt::xtensor<double, 2>>
+std::tuple<int, std::int32_t, xt::xtensor<double, 1>, xt::xtensor<double, 1>>
 dolfinx_contact::raytracing(
     const dolfinx::mesh::Mesh& mesh, const xt::xtensor<double, 1>& point,
     const xt::xtensor<double, 1>& normal,
@@ -19,27 +19,28 @@ dolfinx_contact::raytracing(
 
   assert((std::size_t)gdim == point.shape(0));
   assert(normal.shape(0) == (std::size_t)gdim);
-  std::tuple<int, std::int32_t, xt::xtensor<double, 2>> output;
+  std::tuple<int, std::int32_t, xt::xtensor<double, 1>, xt::xtensor<double, 1>>
+      output;
   if (tdim == 2)
   {
     if (gdim == 2)
     {
-      auto [status, cell_idx, coords] = dolfinx_contact::compute_ray<2, 2>(
+      auto [status, cell_idx, x, X] = dolfinx_contact::compute_ray<2, 2>(
           mesh, point, normal, cells, max_iter, tol);
-      output = std::make_tuple(status, cell_idx, coords);
+      output = std::make_tuple(status, cell_idx, x, X);
     }
     else if (gdim == 3)
     {
-      auto [status, cell_idx, coords] = dolfinx_contact::compute_ray<2, 3>(
+      auto [status, cell_idx, x, X] = dolfinx_contact::compute_ray<2, 3>(
           mesh, point, normal, cells, max_iter, tol);
-      output = std::make_tuple(status, cell_idx, coords);
+      output = std::make_tuple(status, cell_idx, x, X);
     }
   }
   else if (tdim == 3)
   {
-    auto [status, cell_idx, coords] = dolfinx_contact::compute_ray<3, 3>(
+    auto [status, cell_idx, x, X] = dolfinx_contact::compute_ray<3, 3>(
         mesh, point, normal, cells, max_iter, tol);
-    output = std::make_tuple(status, cell_idx, coords);
+    output = std::make_tuple(status, cell_idx, x, X);
   }
   return output;
 }
