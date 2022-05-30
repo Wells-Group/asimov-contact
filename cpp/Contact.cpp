@@ -95,8 +95,8 @@ dolfinx_contact::Contact::Contact(
       _cell_facet_pairs[index]
           = std::get<std::vector<std::pair<std::int32_t, int>>>(pairs);
 
-      _submeshes[index] = std::make_shared<dolfinx_contact::SubMesh>(
-          mesh, _cell_facet_pairs[index]);
+      _submeshes[index]
+          = dolfinx_contact::SubMesh(mesh, _cell_facet_pairs[index]);
     }
   }
 }
@@ -142,9 +142,9 @@ Mat dolfinx_contact::Contact::create_petsc_matrix(
   {
     const std::array<int, 2>& contact_pair = _contact_pairs[k];
     std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> facet_map
-        = _submeshes[contact_pair[1]]->facet_map();
+        = _submeshes[contact_pair[1]].facet_map();
     const std::vector<std::int32_t>& parent_cells
-        = _submeshes[contact_pair[1]]->parent_cells();
+        = _submeshes[contact_pair[1]].parent_cells();
     for (int i = 0; i < (int)_cell_facet_pairs[contact_pair[0]].size(); i++)
     {
       std::int32_t cell = _cell_facet_pairs[contact_pair[0]][i].first;
@@ -183,10 +183,9 @@ dolfinx_contact::Contact::pack_ny(int pair,
   // Get information from candidate mesh
 
   // Get mesh and submesh
-  std::shared_ptr<dolfinx_contact::SubMesh> submesh
-      = _submeshes[contact_pair[1]];
+  dolfinx_contact::SubMesh submesh = _submeshes[contact_pair[1]];
   std::shared_ptr<const dolfinx::mesh::Mesh> candidate_mesh
-      = submesh->mesh(); // mesh
+      = submesh.mesh(); // mesh
 
   // Geometrical info
   const dolfinx::mesh::Geometry& geometry = candidate_mesh->geometry();
@@ -207,7 +206,7 @@ dolfinx_contact::Contact::pack_ny(int pair,
   // Select which side of the contact interface to loop from and get the
   // correct map
   std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> facet_map
-      = submesh->facet_map();
+      = submesh.facet_map();
   std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> map
       = _facet_maps[pair];
   const std::vector<xt::xtensor<double, 2>>& qp_phys
@@ -318,9 +317,9 @@ void dolfinx_contact::Contact::assemble_matrix(
   std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> map
       = _facet_maps[pair];
   std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> facet_map
-      = _submeshes[contact_pair[1]]->facet_map();
+      = _submeshes[contact_pair[1]].facet_map();
   const std::vector<std::int32_t>& parent_cells
-      = _submeshes[_contact_pairs[pair][1]]->parent_cells();
+      = _submeshes[_contact_pairs[pair][1]].parent_cells();
   // Data structures used in assembly
   std::vector<double> coordinate_dofs(3 * num_dofs_g);
   std::vector<std::vector<PetscScalar>> Aes(
@@ -414,9 +413,9 @@ void dolfinx_contact::Contact::assemble_vector(
   std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> map
       = _facet_maps[pair];
   std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> facet_map
-      = _submeshes[contact_pair[1]]->facet_map();
+      = _submeshes[contact_pair[1]].facet_map();
   std::vector<std::int32_t> parent_cells
-      = _submeshes[contact_pair[1]]->parent_cells();
+      = _submeshes[contact_pair[1]].parent_cells();
   const std::size_t max_links
       = *std::max_element(_max_links.begin(), _max_links.end());
   if (max_links == 0)
@@ -475,11 +474,11 @@ void dolfinx_contact::Contact::assemble_vector(
 }
 //-----------------------------------------------------------------------------------------------
 void dolfinx_contact::Contact::update_submesh_geometry(
-    dolfinx::fem::Function<PetscScalar>& u)
+    dolfinx::fem::Function<PetscScalar>& u) const
 {
 
   for (auto submesh : _submeshes)
   {
-    submesh->update_geometry(u);
+    submesh.update_geometry(u);
   }
 }

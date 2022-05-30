@@ -140,9 +140,9 @@ PYBIND11_MODULE(cpp, m)
              std::vector<int> offsets = submesh_map->offsets();
              std::vector<std::int32_t> old_data = submesh_map->array();
              std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> facet_map
-                 = self.submesh(contact_pair[1])->facet_map();
+                 = self.submesh(contact_pair[1]).facet_map();
              std::vector<std::int32_t> parent_cells
-                 = self.submesh(contact_pair[1])->parent_cells();
+                 = self.submesh(contact_pair[1]).parent_cells();
              std::vector<std::int32_t> data(old_data.size());
              for (std::size_t i = 0; i < old_data.size(); ++i)
              {
