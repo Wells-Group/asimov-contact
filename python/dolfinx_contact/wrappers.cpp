@@ -382,7 +382,7 @@ PYBIND11_MODULE(cpp, m)
       "raytracing",
       [](const dolfinx::mesh::Mesh& mesh,
          py::array_t<double, py::array::c_style>& point,
-         py::array_t<double, py::array::c_style>& tangents,
+         py::array_t<double, py::array::c_style>& normal,
          py::array_t<std::int32_t, py::array::c_style>& cells, int max_iter,
          double tol)
       {
@@ -393,33 +393,35 @@ PYBIND11_MODULE(cpp, m)
         facets.reserve(shape_0);
         for (std::size_t i = 0; i < shape_0; i++)
           facets.emplace_back(ents(i, 0), ents(i, 1));
-        const std::size_t tdim = mesh.topology().dim();
+        const std::size_t gdim = mesh.geometry().dim();
         std::array<std::size_t, 1> s_p = {(std::size_t)point.shape(0)};
-        if (point.shape(0) != tdim)
+        if (point.shape(0) != gdim)
         {
           throw std::invalid_argument(
-              "Input point has to have same dimension as tdim");
+              "Input point has to have same dimension as gdim");
         }
         auto _point
             = xt::adapt(point.data(), point.size(), xt::no_ownership(), s_p);
-        std::array<std::size_t, 2> s_t;
-        std::copy_n(tangents.shape(), 2, s_t.begin());
-        auto _tangents = xt::adapt(tangents.data(), tangents.size(),
-                                   xt::no_ownership(), s_t);
-        if ((tangents.shape(0) != tdim - 1) or (tangents.shape(1) != tdim))
+
+        if (normal.shape(0) != gdim)
         {
           throw std::invalid_argument(
-              "Input tangent has to be of shape (tdim-1,tdim)");
+              "Input normal has to have dimension gdim");
         }
-        std::tuple<int, std::int32_t, xt::xtensor<double, 2>> output
-            = dolfinx_contact::raytracing(mesh, _point, _tangents, facets,
-                                          max_iter, tol);
+        auto _normal
+            = xt::adapt(normal.data(), normal.size(), xt::no_ownership(), s_p);
+        std::tuple<int, std::int32_t, xt::xtensor<double, 1>,
+                   xt::xtensor<double, 1>>
+            output = dolfinx_contact::raytracing(mesh, _point, _normal, facets,
+                                                 max_iter, tol);
         int status = std::get<0>(output);
         auto x = std::get<2>(output);
+        auto X = std::get<3>(output);
         std::int32_t idx = std::get<1>(output);
 
         return py::make_tuple(status, idx,
-                              dolfinx_wrappers::xt_as_pyarray(std::move(x)));
+                              dolfinx_wrappers::xt_as_pyarray(std::move(x)),
+                              dolfinx_wrappers::xt_as_pyarray(std::move(X)));
       },
       py::arg("mesh"), py::arg("point"), py::arg("tangents"), py::arg("cells"),
       py::arg("max_iter") = 25, py::arg("tol") = 1e-8);
