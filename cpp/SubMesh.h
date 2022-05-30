@@ -70,8 +70,9 @@ public:
   void copy_function(dolfinx::fem::Function<PetscScalar>& u_parent,
                      dolfinx::fem::Function<PetscScalar>& u_sub);
 
-  /// @param[in] u: dolfinx function on function space base on basix element
-  /// Adds perturbation u to mesh
+  /// @brief Adds perturbation u to mesh
+  /// @param[in] u: The function to perturb the mesh with. The function must be
+  /// based on the same finite element as the mesh coordinate element.
   void update_geometry(dolfinx::fem::Function<PetscScalar>& u);
 
 private:

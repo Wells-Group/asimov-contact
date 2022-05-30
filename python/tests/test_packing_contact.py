@@ -66,11 +66,11 @@ def create_functionspaces(ct, gap, delta):
     return V
 
 
-@ pytest.mark.parametrize("ct", ["quadrilateral", "triangle", "tetrahedron", "hexahedron"])
-@ pytest.mark.parametrize("gap", [0.5, -0.5])
-@ pytest.mark.parametrize("q_deg", [1, 2, 3])
-@ pytest.mark.parametrize("delta", [0.0, -0.5])
-@ pytest.mark.parametrize("surface", [0, 1])
+@pytest.mark.parametrize("ct", ["quadrilateral", "triangle", "tetrahedron", "hexahedron"])
+@pytest.mark.parametrize("gap", [0.5, -0.5])
+@pytest.mark.parametrize("q_deg", [1, 2, 3])
+@pytest.mark.parametrize("delta", [0.0, -0.5])
+@pytest.mark.parametrize("surface", [0, 1])
 def test_pack_test_fn(ct, gap, q_deg, delta, surface):
 
     # Create function space
@@ -183,11 +183,11 @@ def test_pack_test_fn(ct, gap, q_deg, delta, surface):
                     assert(np.allclose(0, test_fn[f][offset + zero_ind * bs + k]))
 
 
-@ pytest.mark.parametrize("ct", ["quadrilateral", "triangle", "tetrahedron", "hexahedron"])
-@ pytest.mark.parametrize("gap", [0.5, -0.5])
-@ pytest.mark.parametrize("q_deg", [1, 2, 3])
-@ pytest.mark.parametrize("delta", [0.0, -0.5])
-@ pytest.mark.parametrize("surface", [0, 1])
+@pytest.mark.parametrize("ct", ["quadrilateral", "triangle", "tetrahedron", "hexahedron"])
+@pytest.mark.parametrize("gap", [0.5, -0.5])
+@pytest.mark.parametrize("q_deg", [1, 2, 3])
+@pytest.mark.parametrize("delta", [0.0, -0.5])
+@pytest.mark.parametrize("surface", [0, 1])
 def test_pack_u(ct, gap, q_deg, delta, surface):
 
     # Create function space

@@ -183,7 +183,7 @@ dolfinx_contact::Contact::pack_ny(int pair,
   // Get information from candidate mesh
 
   // Get mesh and submesh
-  dolfinx_contact::SubMesh submesh = _submeshes[contact_pair[1]];
+  const dolfinx_contact::SubMesh& submesh = _submeshes[contact_pair[1]];
   std::shared_ptr<const dolfinx::mesh::Mesh> candidate_mesh
       = submesh.mesh(); // mesh
 
@@ -410,12 +410,12 @@ void dolfinx_contact::Contact::assemble_vector(
   const std::array<int, 2>& contact_pair = _contact_pairs[pair];
   const std::vector<std::pair<std::int32_t, int>>& active_facets
       = _cell_facet_pairs[contact_pair[0]];
+  const dolfinx_contact::SubMesh& submesh = _submeshes[contact_pair[1]];
   std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> map
       = _facet_maps[pair];
   std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> facet_map
-      = _submeshes[contact_pair[1]].facet_map();
-  std::vector<std::int32_t> parent_cells
-      = _submeshes[contact_pair[1]].parent_cells();
+      = submesh.facet_map();
+  std::vector<std::int32_t> parent_cells = submesh.parent_cells();
   const std::size_t max_links
       = *std::max_element(_max_links.begin(), _max_links.end());
   if (max_links == 0)
@@ -478,7 +478,5 @@ void dolfinx_contact::Contact::update_submesh_geometry(
 {
 
   for (auto submesh : _submeshes)
-  {
     submesh.update_geometry(u);
-  }
 }

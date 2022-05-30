@@ -137,11 +137,11 @@ PYBIND11_MODULE(cpp, m)
              assert(c_to_f);
              std::shared_ptr<const dolfinx::graph::AdjacencyList<std::int32_t>>
                  submesh_map = self.facet_map(pair);
-             std::vector<int> offsets = submesh_map->offsets();
-             std::vector<std::int32_t> old_data = submesh_map->array();
+             const std::vector<int>& offsets = submesh_map->offsets();
+             const std::vector<std::int32_t>& old_data = submesh_map->array();
              std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> facet_map
                  = self.submesh(contact_pair[1]).facet_map();
-             std::vector<std::int32_t> parent_cells
+             const std::vector<std::int32_t>& parent_cells
                  = self.submesh(contact_pair[1]).parent_cells();
              std::vector<std::int32_t> data(old_data.size());
              for (std::size_t i = 0; i < old_data.size(); ++i)

@@ -140,7 +140,7 @@ public:
 
   /// Return the submesh corresponding to surface
   /// @param[in] surface The index of the surface (0 or 1).
-  SubMesh submesh(int surface) const { return _submeshes[surface]; }
+  const SubMesh& submesh(int surface) const { return _submeshes[surface]; }
   // Return mesh
   std::shared_ptr<const dolfinx::mesh::Mesh> mesh() const { return _V->mesh(); }
   /// @brief Create a PETSc matrix with contact sparsity pattern
