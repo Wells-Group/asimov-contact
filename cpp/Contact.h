@@ -140,7 +140,7 @@ public:
 
   /// Return the submesh corresponding to surface
   /// @param[in] surface The index of the surface (0 or 1).
-  SubMesh submesh(int surface) { return _submeshes[surface]; }
+  std::shared_ptr<SubMesh> submesh(int surface) { return _submeshes[surface]; }
   // Return mesh
   std::shared_ptr<const dolfinx::mesh::Mesh> mesh() const { return _V->mesh(); }
   /// @brief Create a PETSc matrix with contact sparsity pattern
@@ -678,9 +678,9 @@ public:
   {
     // Get information depending on surface
     std::shared_ptr<const dolfinx::mesh::Mesh> mesh
-        = _submeshes[origin_meshtag].mesh();
+        = _submeshes[origin_meshtag]->mesh();
     std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> cell_map
-        = _submeshes[origin_meshtag].cell_map();
+        = _submeshes[origin_meshtag]->cell_map();
     const std::vector<std::pair<std::int32_t, int>>& puppet_facets
         = _cell_facet_pairs[origin_meshtag];
 
@@ -756,7 +756,7 @@ public:
     std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> map
         = _facet_maps[pair];
     std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> facet_map
-        = _submeshes[contact_pair[1]].facet_map();
+        = _submeshes[contact_pair[1]]->facet_map();
     for (std::size_t i = 0; i < active_facets.size(); i++)
     {
       std::vector<std::int32_t> linked_cells;
@@ -804,7 +804,7 @@ public:
 
     // submesh info
     std::shared_ptr<const dolfinx::mesh::Mesh> candidate_mesh
-        = _submeshes[candidate_mt].mesh();
+        = _submeshes[candidate_mt]->mesh();
     std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> c_to_f
         = candidate_mesh->topology().connectivity(tdim, tdim - 1);
     assert(c_to_f);
@@ -824,7 +824,7 @@ public:
     const std::vector<std::pair<std::int32_t, int>>& puppet_facets
         = _cell_facet_pairs[puppet_mt];
     std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> cell_map
-        = _submeshes[candidate_mt].cell_map();
+        = _submeshes[candidate_mt]->cell_map();
     const std::vector<xt::xtensor<double, 2>>& qp_phys = _qp_phys[puppet_mt];
     std::vector<std::int32_t> submesh_facets(candidate_facets.size());
     for (std::size_t i = 0; i < candidate_facets.size(); ++i)
@@ -883,7 +883,7 @@ public:
     int candidate_mt = _contact_pairs[pair][1];
     // Mesh info
     const std::shared_ptr<const dolfinx::mesh::Mesh>& candidate_mesh
-        = _submeshes[candidate_mt].mesh();
+        = _submeshes[candidate_mt]->mesh();
     assert(candidate_mesh);
     // Get information about submesh geometry and topology
     const dolfinx::mesh::Geometry& geometry = candidate_mesh->geometry();
@@ -977,7 +977,7 @@ public:
     int candidate_mt = _contact_pairs[pair][1];
     // Mesh info
     std::shared_ptr<const dolfinx::mesh::Mesh> mesh
-        = _submeshes[candidate_mt].mesh(); // mesh
+        = _submeshes[candidate_mt]->mesh(); // mesh
     assert(mesh);
     const int gdim = mesh->geometry().dim(); // geometrical dimension
     const int tdim = mesh->topology().dim();
@@ -1000,7 +1000,7 @@ public:
     const std::vector<std::pair<std::int32_t, int>>& puppet_facets
         = _cell_facet_pairs[puppet_mt];
     std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> facet_map
-        = _submeshes[candidate_mt].facet_map();
+        = _submeshes[candidate_mt]->facet_map();
     const std::size_t max_links
         = *std::max_element(_max_links.begin(), _max_links.end());
     const std::size_t num_facets = puppet_facets.size();
@@ -1100,8 +1100,9 @@ public:
     int candidate_mt = _contact_pairs[pair][1];
     dolfinx::common::Timer t("Pack contact u");
     // Mesh info
-    dolfinx_contact::SubMesh submesh = _submeshes[candidate_mt];
-    std::shared_ptr<const dolfinx::mesh::Mesh> mesh = submesh.mesh(); // mesh
+    std::shared_ptr<dolfinx_contact::SubMesh> submesh
+        = _submeshes[candidate_mt];
+    std::shared_ptr<const dolfinx::mesh::Mesh> mesh = submesh->mesh(); // mesh
     const std::size_t gdim = mesh->geometry().dim(); // geometrical dimension
     const std::size_t bs_element = _V->element()->block_size();
 
@@ -1111,11 +1112,11 @@ public:
         = _facet_maps[pair];
     const std::vector<xt::xtensor<double, 2>>& qp_phys = _qp_phys[puppet_mt];
     std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> facet_map
-        = submesh.facet_map();
+        = submesh->facet_map();
     const std::size_t num_facets = _cell_facet_pairs[puppet_mt].size();
     const std::size_t num_q_points = _qp_ref_facet[0].shape(0);
     auto V_sub = std::make_shared<dolfinx::fem::FunctionSpace>(
-        submesh.create_functionspace(_V));
+        submesh->create_functionspace(_V));
     dolfinx::fem::Function<PetscScalar> u_sub(V_sub);
     std::shared_ptr<const dolfinx::fem::DofMap> sub_dofmap = V_sub->dofmap();
     assert(sub_dofmap);
@@ -1128,7 +1129,7 @@ public:
     std::vector<std::int32_t> cells(num_facets * num_q_points, -1);
     {
       // Copy function from parent mesh
-      submesh.copy_function(*u, u_sub);
+      submesh->copy_function(*u, u_sub);
 
       xt::xtensor<double, 2> points
           = xt::zeros<double>({num_facets * num_q_points, gdim});
@@ -1278,7 +1279,7 @@ private:
   // maximum number of cells linked to a cell on ith surface
   std::vector<std::size_t> _max_links;
   // submeshes for contact surface
-  std::vector<SubMesh> _submeshes;
+  std::vector<std::shared_ptr<SubMesh>> _submeshes;
   // facets as (cell, facet) pairs
   std::vector<std::vector<std::pair<std::int32_t, int>>> _cell_facet_pairs;
 };

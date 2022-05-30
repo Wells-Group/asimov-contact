@@ -130,16 +130,19 @@ PYBIND11_MODULE(cpp, m)
              // particular
              // nitsche_rigid_surface.py/demo_nitsche_rigid_surface_ufl.py)
              auto contact_pair = self.contact_pair(pair);
-             auto mesh = self.mesh();
+             std::shared_ptr<const dolfinx::mesh::Mesh> mesh = self.mesh();
              const int tdim = mesh->topology().dim(); // topological dimension
              const int fdim = tdim - 1; // topological dimension of facet
              auto c_to_f = mesh->topology().connectivity(tdim, fdim);
              assert(c_to_f);
-             auto submesh_map = self.facet_map(pair);
-             auto offsets = submesh_map->offsets();
-             auto old_data = submesh_map->array();
-             auto facet_map = self.submesh(contact_pair[1]).facet_map();
-             auto parent_cells = self.submesh(contact_pair[1]).parent_cells();
+             std::shared_ptr<const dolfinx::graph::AdjacencyList<std::int32_t>>
+                 submesh_map = self.facet_map(pair);
+             std::vector<int> offsets = submesh_map->offsets();
+             std::vector<std::int32_t> old_data = submesh_map->array();
+             std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> facet_map
+                 = self.submesh(contact_pair[1])->facet_map();
+             std::vector<std::int32_t> parent_cells
+                 = self.submesh(contact_pair[1])->parent_cells();
              std::vector<std::int32_t> data(old_data.size());
              for (std::size_t i = 0; i < old_data.size(); ++i)
              {

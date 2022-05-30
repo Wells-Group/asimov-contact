@@ -139,9 +139,8 @@ def test_pack_test_fn(ct, gap, q_deg, delta, surface):
         num_q_points = qp_phys.shape[0]
         points = np.zeros((num_q_points, 3))
 
-        for i in range(num_q_points):
-            for j in range(gdim):
-                points[i, j] = qp_phys[i, j] + gap[f][i * gdim + j] - u_packed[f][i * gdim + j]
+        points[:, :gdim] = qp_phys[:, :gdim] + \
+            gap[f].reshape((num_q_points, gdim)) - u_packed[f].reshape((num_q_points, gdim))
 
         # retrieve connected facets
         connected_facets = lookup.links(f)
@@ -175,19 +174,13 @@ def test_pack_test_fn(ct, gap, q_deg, delta, surface):
                     expr = _fem.Expression(v, x_ref)
                     expr_vals = expr.eval([cell])
 
-                    # loop over quadrature points connected to facet_o
-                    for q in q_indices:
+                    # compare values of test functions
+                    offset = link * num_q_points * len(dofs) * bs + i * num_q_points * bs
+                    assert(np.allclose(expr_vals[0][q_indices * bs + k], test_fn[f][offset + q_indices * bs + k]))
 
-                        # compare values of test functions
-                        offset = link * num_q_points * len(dofs) * bs + i * num_q_points * bs
-                        assert(np.isclose(expr_vals[0][q * bs + k], test_fn[f][offset + q * bs + k]))
-
-                    # loop over quadrature points connected to different facet
-                    for q in zero_ind:
-
-                        # ensure values are zero if q not connected to quadrature point
-                        offset = link * num_q_points * len(dofs) * bs + i * num_q_points * bs
-                        assert(np.isclose(0, test_fn[f][offset + q * bs + k]))
+                    # ensure values are zero if q not connected to quadrature point
+                    offset = link * num_q_points * len(dofs) * bs + i * num_q_points * bs
+                    assert(np.allclose(0, test_fn[f][offset + zero_ind * bs + k]))
 
 
 @ pytest.mark.parametrize("ct", ["quadrilateral", "triangle", "tetrahedron", "hexahedron"])
@@ -264,9 +257,8 @@ def test_pack_u(ct, gap, q_deg, delta, surface):
         num_q_points = qp_phys.shape[0]
         points = np.zeros((num_q_points, 3))
 
-        for i in range(num_q_points):
-            for j in range(gdim):
-                points[i, j] = qp_phys[i, j] + gap[f][i * gdim + j] - u_opposite[f][i * gdim + j]
+        points[:, :gdim] = qp_phys[:, :gdim] + \
+            gap[f].reshape((num_q_points, gdim)) - u_opposite[f].reshape((num_q_points, gdim))
 
         # retrieve connected facets
         connected_facets = lookup.links(f)
