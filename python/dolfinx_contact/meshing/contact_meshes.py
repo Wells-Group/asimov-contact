@@ -206,7 +206,7 @@ def create_box_mesh_2D(filename: str, quads: bool = False, res=0.1):
     gmsh.finalize()
 
 
-def create_box_mesh_3D(filename: str, simplex: bool = True):
+def create_box_mesh_3D(filename: str, simplex: bool = True, res=0.1):
     """
     Create two boxes lying directly over eachother with a gap in between"""
     L = 0.5
@@ -230,7 +230,6 @@ def create_box_mesh_3D(filename: str, simplex: bool = True):
             model.occ.synchronize()
         volumes = model.getEntities(3)
 
-        res = 0.1
         model.mesh.field.add("Box", 1)
         model.mesh.field.setNumber(1, "VIn", res / 5.)
         model.mesh.field.setNumber(1, "VOut", res)
@@ -246,11 +245,11 @@ def create_box_mesh_3D(filename: str, simplex: bool = True):
         # Synchronize and create physical tags
         model.occ.synchronize()
         model.addPhysicalGroup(volumes[0][0], [volumes[0][1]])
-        bndry = model.getBoundary([(2, volumes[0][1])], oriented=False)
+        bndry = model.getBoundary([(3, volumes[0][1])], oriented=False)
         [model.addPhysicalGroup(b[0], [b[1]]) for b in bndry]
 
         model.addPhysicalGroup(3, [volumes[1][1]])
-        bndry2 = model.getBoundary([(2, volumes[1][1])], oriented=False)
+        bndry2 = model.getBoundary([(3, volumes[1][1])], oriented=False)
         [model.addPhysicalGroup(b[0], [b[1]]) for b in bndry2]
 
         if not simplex:

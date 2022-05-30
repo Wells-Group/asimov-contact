@@ -8,6 +8,7 @@
 # be the same as the outward unit normal in the point Pi(x) with the opposite sign.
 
 import dolfinx.fem as _fem
+from dolfinx_contact.meshing.contact_meshes import create_box_mesh_2D, create_box_mesh_3D
 import numpy as np
 import pytest
 from dolfinx.graph import create_adjacencylist
@@ -27,13 +28,13 @@ def test_projection(q_deg, surf, dim):
 
     # Create mesh
     if dim == 2:
-        fname = "two_disks"
-        create_circle_circle_mesh(filename=f"{fname}.msh", res=0.025)
+        fname = "box_2D"
+        create_box_mesh_2D(filename=f"{fname}.msh", res=1.0)
         convert_mesh(fname, fname, "triangle", prune_z=True)
         convert_mesh(f"{fname}", f"{fname}_facets", "line", prune_z=True)
     else:
-        fname = "two_spheres"
-        create_sphere_sphere_mesh(filename=f"{fname}.msh")
+        fname = "box_3D"
+        create_box_mesh_3D(filename=f"{fname}.msh", res=1.0)
         convert_mesh(fname, fname, "tetra")
         convert_mesh(f"{fname}", f"{fname}_facets", "triangle")
 
@@ -45,25 +46,38 @@ def test_projection(q_deg, surf, dim):
     mesh.topology.create_connectivity(tdim - 1, 0)
     mesh.topology.create_connectivity(tdim - 1, tdim)
 
+    # Surface paramters see contact_meshes.py
+    L = 0.5
+    delta = 0.1
+    disp = -0.6
+    H = 0.5
+
     # Define surfaces
     def surface_0(x):
-        if surf == 0:
-            return np.logical_and(x[tdim - 1] < 0.3, x[tdim - 1] > 0.15)
+        if dim == 2:
+            return np.logical_and(np.isclose(x[1], delta * (x[0] + delta) / L), x[1] < delta + 1e-5)
         else:
-            return np.logical_and(x[tdim - 1] < 0.5, x[tdim - 1] > 0.15)
+            return np.isclose(x[2], 0)
 
     def surface_1(x):
-        if surf == 0:
-            return np.logical_and(x[tdim - 1] > -0.3, x[tdim - 1] < 0.15)
-        else:
-            return np.logical_and(x[tdim - 1] > -0.3, x[tdim - 1] < 0.15)
+        return(np.isclose(x[dim - 1], disp + H))
+
+    # define restriced range for x coordinate to ensure closest point is on interior of opposite surface
+    def x_range(x):
+        return(np.logical_and(x[0] > delta, x[0] < L - delta))
 
     surface_0_val = 1
     surface_1_val = 2
 
-    # Create meshtags for surface
-    facets_0 = locate_entities_boundary(mesh, tdim - 1, surface_0)
-    facets_1 = locate_entities_boundary(mesh, tdim - 1, surface_1)
+    # Create meshtags for surfaces
+    # restrict range of x coordinate for origin surface
+    if surf == 0:
+        facets_0 = locate_entities_boundary(mesh, tdim - 1, lambda x: np.logical_and(surface_0(x), x_range(x)))
+        facets_1 = locate_entities_boundary(mesh, tdim - 1, surface_1)
+    else:
+        facets_0 = locate_entities_boundary(mesh, tdim - 1, surface_0)
+        facets_1 = locate_entities_boundary(mesh, tdim - 1, lambda x: np.logical_and(surface_1(x), x_range(x)))
+
     values_0 = np.full(len(facets_0), surface_0_val, dtype=np.int32)
     values_1 = np.full(len(facets_1), surface_1_val, dtype=np.int32)
     indices = np.concatenate([facets_0, facets_1])
