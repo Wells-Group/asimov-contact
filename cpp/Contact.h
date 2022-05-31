@@ -323,7 +323,7 @@ public:
     auto update_normal = dolfinx_contact::get_update_normal(cmap);
 
     // Get quadrature weights;
-    const std::vector<std::vector<double>>& qweights = _qw_ref_facet;
+    const std::vector<std::vector<double>>& q_weights = _qw_ref_facet;
 
     /// @brief Assemble kernel for RHS of unbiased contact problem
     ///
@@ -337,9 +337,9 @@ public:
     /// @param[in] coordinate_dofs The physical coordinates of cell. Assumed to
     /// be padded to 3D, (shape (num_nodes, 3)).
     kernel_fn<PetscScalar> unbiased_rhs
-        = [num_coordinate_dofs, gdim, tdim, ref_jacobians, dphi_c,
-           facet_normals, phi, dphi, qweights, ndofs_cell, offsets, affine,
-           update_jacobian, update_normal, bs, num_q_points](
+        = [dphi_c, phi, dphi, offsets, gdim, tdim, q_weights,
+           num_coordinate_dofs, ref_jacobians, bs, facet_normals, affine,
+           update_jacobian, update_normal, ndofs_cell, num_q_points](
               std::vector<std::vector<PetscScalar>>& b, const PetscScalar* c,
               const PetscScalar* w, const double* coordinate_dofs,
               const int facet_index, const std::size_t num_links)
@@ -391,7 +391,7 @@ public:
       const xt::xtensor<double, 3>& dphi_f = dphi[facet_index];
 
       // Extract reference to quadrature weights for the local facet
-      const std::vector<double>& weights = qweights[facet_index];
+      const std::vector<double>& weights = q_weights[facet_index];
       assert(weights.size() == num_q_points);
 
       // Temporary data structures used inside quadrature loop
@@ -500,7 +500,10 @@ public:
     /// @param[in] coordinate_dofs The physical coordinates of cell. Assumed
     /// to be padded to 3D, (shape (num_nodes, 3)).
     kernel_fn<PetscScalar> unbiased_jac
-        = [=](std::vector<std::vector<PetscScalar>>& A, const double* c,
+        = [dphi_c, phi, dphi, offsets, gdim, tdim, q_weights,
+           num_coordinate_dofs, ref_jacobians, bs, facet_normals, affine,
+           update_jacobian, update_normal, ndofs_cell, num_q_points](
+              std::vector<std::vector<PetscScalar>>& A, const double* c,
               const double* w, const double* coordinate_dofs,
               const int facet_index, const std::size_t num_links)
     {
@@ -550,7 +553,7 @@ public:
 
       const xt::xtensor<double, 3>& dphi_f = dphi[facet_index];
       const xt::xtensor<double, 2>& phi_f = phi[facet_index];
-      const std::vector<double>& weights = _qw_ref_facet[facet_index];
+      const std::vector<double>& weights = q_weights[facet_index];
       xt::xtensor<double, 1> n_surf = xt::zeros<double>({gdim});
       xt::xtensor<double, 2> tr = xt::zeros<double>({ndofs_cell, gdim});
       xt::xtensor<double, 2> epsn = xt::zeros<double>({ndofs_cell, gdim});

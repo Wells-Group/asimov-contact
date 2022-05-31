@@ -173,9 +173,12 @@ kernel_fn<T> generate_contact_kernel(
   /// @param[in] num_links Unused integer. In two sided contact this indicates
   /// how many cells are connected with the cell.
   dolfinx_contact::kernel_fn<T> nitsche_rigid_rhs
-      = [=](std::vector<std::vector<T>>& b, const T* c, const T* w,
-            const double* coordinate_dofs, const int facet_index,
-            [[maybe_unused]] const std::size_t num_links)
+      = [dphi_c, phi, dphi, phi_coeffs, offsets, gdim, tdim, q_weights,
+         num_coordinate_dofs, ref_jacobians, bs, facet_normals, constant_normal,
+         affine, update_jacobian, update_normal, ndofs_cell,
+         qp_offsets](std::vector<std::vector<T>>& b, const T* c, const T* w,
+                     const double* coordinate_dofs, const int facet_index,
+                     [[maybe_unused]] const std::size_t num_links)
   {
     // assumption that the vector function space has block size tdim
     std::array<std::int32_t, 2> q_offset
