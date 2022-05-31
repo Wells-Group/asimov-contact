@@ -6,6 +6,7 @@
 
 #pragma once
 
+#include "KernelData.h"
 #include "SubMesh.h"
 #include "geometric_quantities.h"
 #include "utils.h"
@@ -208,89 +209,17 @@ public:
     std::shared_ptr<const dolfinx::mesh::Mesh> mesh = _V->mesh();
     assert(mesh);
     const std::size_t gdim = mesh->geometry().dim(); // geometrical dimension
-    const int tdim = mesh->topology().dim();         // topological dimension
-    const dolfinx::fem::CoordinateElement& cmap = mesh->geometry().cmap();
-    bool affine = cmap.is_affine();
-    const int num_coordinate_dofs = cmap.dim();
-
-    std::shared_ptr<const dolfinx::fem::FiniteElement> element = _V->element();
-    if (const bool needs_dof_transformations
-        = element->needs_dof_transformations();
-        needs_dof_transformations)
-    {
-      throw std::invalid_argument("Contact-kernels are not supporting finite "
-                                  "elements requiring dof transformations.");
-    }
-
-    // Extract function space data (assuming same test and trial space)
-    std::shared_ptr<const dolfinx::fem::DofMap> dofmap = _V->dofmap();
-    const std::size_t ndofs_cell = dofmap->element_dof_layout().num_dofs();
-    const std::size_t bs = dofmap->bs();
-    if (bs != gdim)
-    {
-      throw std::invalid_argument(
-          "The geometric dimension of the mesh is not equal to the block size "
-          "of the function space.");
-    }
-
-    // NOTE: Assuming same number of quadrature points on each cell
+    const std::size_t bs = _V->dofmap()->bs();
     const std::size_t num_q_points = _qp_ref_facet[0].shape(0);
     const std::size_t max_links
         = *std::max_element(_max_links.begin(), _max_links.end());
-
-    // Structures needed for basis function tabulation
-    // phi and grad(phi) at quadrature points
-    const std::size_t num_facets = dolfinx::mesh::cell_num_entities(
-        mesh->topology().cell_type(), tdim - 1);
-    assert(num_facets == _qp_ref_facet.size());
-
-    std::vector<xt::xtensor<double, 2>> phi;
-    phi.reserve(num_facets);
-    std::vector<xt::xtensor<double, 3>> dphi;
-    phi.reserve(num_facets);
-    std::vector<xt ::xtensor<double, 3>> dphi_c;
-    dphi_c.reserve(num_facets);
-
-    // Temporary structures used in loop
-    xt::xtensor<double, 4> cell_tab(
-        {(std::size_t)tdim + 1, num_q_points, ndofs_cell, bs});
-    xt::xtensor<double, 2> phi_i({num_q_points, ndofs_cell});
-    xt::xtensor<double, 3> dphi_i(
-        {(std::size_t)tdim, num_q_points, ndofs_cell});
-    std::array<std::size_t, 4> tabulate_shape
-        = cmap.tabulate_shape(1, num_q_points);
-    xt::xtensor<double, 4> c_tab(tabulate_shape);
-    assert(tabulate_shape[0] - 1 == (std::size_t)tdim);
-    xt::xtensor<double, 3> dphi_ci(
-        {tabulate_shape[0] - 1, tabulate_shape[1], tabulate_shape[2]});
-
-    // Tabulate basis functions and first order derivatives for each facet in
-    // the reference cell. This tabulation is done both for the finite element
-    // of the unknown and the coordinate element (which might differ)
-    std::for_each(_qp_ref_facet.cbegin(), _qp_ref_facet.cend(),
-                  [&](const auto& q_facet)
-                  {
-                    assert(q_facet.shape(0) == num_q_points);
-                    element->tabulate(cell_tab, q_facet, 1);
-
-                    phi_i = xt::view(cell_tab, 0, xt::all(), xt::all(), 0);
-                    phi.push_back(phi_i);
-
-                    dphi_i = xt::view(cell_tab, xt::range(1, tabulate_shape[0]),
-                                      xt::all(), xt::all(), 0);
-                    dphi.push_back(dphi_i);
-
-                    // Tabulate coordinate element of reference cell
-                    cmap.tabulate(1, q_facet, c_tab);
-                    dphi_ci = xt::view(c_tab, xt::range(1, tabulate_shape[0]),
-                                       xt::all(), xt::all(), 0);
-                    dphi_c.push_back(dphi_ci);
-                  });
+    const std::size_t ndofs_cell
+        = _V->dofmap()->element_dof_layout().num_dofs();
 
     // Coefficient offsets
     // Expecting coefficients in following order:
     // mu, lmbda, h, gap, normals, test_fn, u, u_opposite
-    std::array<std::size_t, 8> cstrides
+    std::vector<std::size_t> cstrides
         = {1,
            1,
            1,
@@ -299,31 +228,9 @@ public:
            num_q_points * ndofs_cell * bs * max_links,
            ndofs_cell * bs,
            num_q_points * bs};
-    std::array<std::size_t, 9> offsets;
-    offsets[0] = 0;
-    std::partial_sum(cstrides.cbegin(), cstrides.cend(),
-                     std::next(offsets.begin()));
 
-    // As reference facet and reference cell are affine, we do not need to
-    // compute this per quadrature point
-    basix::cell::type basix_cell
-        = dolfinx::mesh::cell_type_to_basix_type(mesh->topology().cell_type());
-    xt::xtensor<double, 3> ref_jacobians
-        = basix::cell::facet_jacobians(basix_cell);
-
-    // Get facet normals on reference cell
-    xt::xtensor<double, 2> facet_normals
-        = basix::cell::facet_outward_normals(basix_cell);
-
-    // Get update Jacobian function (for each quadrature point)
-    auto update_jacobian
-        = dolfinx_contact::get_update_jacobian_dependencies(cmap);
-
-    // Get update FacetNormal function (for each quadrature point)
-    auto update_normal = dolfinx_contact::get_update_normal(cmap);
-
-    // Get quadrature weights;
-    const std::vector<std::vector<double>>& q_weights = _qw_ref_facet;
+    auto kd = dolfinx_contact::KernelData(_V, _qp_ref_facet, _qw_ref_facet,
+                                          cstrides);
 
     /// @brief Assemble kernel for RHS of unbiased contact problem
     ///
@@ -337,45 +244,44 @@ public:
     /// @param[in] coordinate_dofs The physical coordinates of cell. Assumed to
     /// be padded to 3D, (shape (num_nodes, 3)).
     kernel_fn<PetscScalar> unbiased_rhs
-        = [dphi_c, phi, dphi, offsets, gdim, tdim, q_weights,
-           num_coordinate_dofs, ref_jacobians, bs, facet_normals, affine,
-           update_jacobian, update_normal, ndofs_cell, num_q_points](
-              std::vector<std::vector<PetscScalar>>& b, const PetscScalar* c,
-              const PetscScalar* w, const double* coordinate_dofs,
-              const int facet_index, const std::size_t num_links)
+        = [kd](std::vector<std::vector<PetscScalar>>& b, const PetscScalar* c,
+               const PetscScalar* w, const double* coordinate_dofs,
+               const int facet_index, const std::size_t num_links)
     {
       // NOTE: DOLFINx has 3D input coordinate dofs
       // FIXME: These array should be views (when compute_jacobian doesn't use
       // xtensor)
-      std::array<std::size_t, 2> shape = {(std::size_t)num_coordinate_dofs, 3};
-      xt::xtensor<double, 2> coord = xt::adapt(
-          coordinate_dofs, num_coordinate_dofs * 3, xt::no_ownership(), shape);
+      std::array<std::size_t, 2> shape
+          = {(std::size_t)kd.num_coordinate_dofs(), 3};
+      xt::xtensor<double, 2> coord
+          = xt::adapt(coordinate_dofs, kd.num_coordinate_dofs() * 3,
+                      xt::no_ownership(), shape);
 
       // Extract the first derivative of the coordinate element (cell) of
       // degrees of freedom on the facet
-      const xt::xtensor<double, 3>& dphi_fc = dphi_c[facet_index];
+      const xt::xtensor<double, 3>& dphi_fc = kd.dphi_c(facet_index);
 
       // Create data structures for jacobians
-      xt::xtensor<double, 2> J = xt::zeros<double>({gdim, (std::size_t)tdim});
-      xt::xtensor<double, 2> K = xt::zeros<double>({(std::size_t)tdim, gdim});
+      xt::xtensor<double, 2> J = xt::zeros<double>({kd.gdim(), kd.tdim()});
+      xt::xtensor<double, 2> K = xt::zeros<double>({kd.tdim(), kd.gdim()});
       // J_f facet jacobian, J_tot = J * J_f
       xt::xtensor<double, 2> J_f
-          = xt::view(ref_jacobians, facet_index, xt::all(), xt::all());
+          = xt::view(kd.ref_jacobians(), facet_index, xt::all(), xt::all());
       xt::xtensor<double, 2> J_tot
           = xt::zeros<double>({J.shape(0), J_f.shape(1)});
       double detJ;
-      auto c_view = xt::view(coord, xt::all(), xt::range(0, gdim));
+      auto c_view = xt::view(coord, xt::all(), xt::range(0, kd.gdim()));
 
       // Normal vector on physical facet at a single quadrature point
-      xt::xtensor<double, 1> n_phys = xt::zeros<double>({gdim});
+      xt::xtensor<double, 1> n_phys = xt::zeros<double>({kd.gdim()});
 
       // Pre-compute jacobians and normals for affine meshes
-      if (affine)
+      if (kd.affine())
       {
         detJ = dolfinx_contact::compute_facet_jacobians(0, J, K, J_tot, J_f,
                                                         dphi_fc, coord);
         dolfinx_contact::physical_facet_normal(
-            n_phys, K, xt::row(facet_normals, facet_index));
+            n_phys, K, xt::row(kd.facet_normals(), facet_index));
       }
 
       // Extract constants used inside quadrature loop
@@ -387,47 +293,47 @@ public:
 
       // Extract reference to the tabulated basis function at the local
       // facet
-      const xt::xtensor<double, 2>& phi_f = phi[facet_index];
-      const xt::xtensor<double, 3>& dphi_f = dphi[facet_index];
+      const xt::xtensor<double, 2>& phi_f = kd.phi(facet_index);
+      const xt::xtensor<double, 3>& dphi_f = kd.dphi(facet_index);
 
       // Extract reference to quadrature weights for the local facet
-      const std::vector<double>& weights = q_weights[facet_index];
-      assert(weights.size() == num_q_points);
+      const std::vector<double>& weights = kd.q_weights(facet_index);
+      assert(weights.size() == kd.num_q_points());
 
       // Temporary data structures used inside quadrature loop
       std::array<double, 3> n_surf = {0, 0, 0};
-      xt::xtensor<double, 2> tr({ndofs_cell, gdim});
-      xt::xtensor<double, 2> epsn({ndofs_cell, gdim});
+      xt::xtensor<double, 2> tr({kd.ndofs_cell(), kd.gdim()});
+      xt::xtensor<double, 2> epsn({kd.ndofs_cell(), kd.gdim()});
       for (std::size_t q = 0; q < weights.size(); q++)
       {
 
         // Update Jacobian and physical normal
-        detJ = update_jacobian(q, detJ, J, K, J_tot, J_f, dphi_fc, coord);
-        update_normal(n_phys, K, facet_normals, facet_index);
+        detJ = kd.update_jacobian(q, detJ, J, K, J_tot, J_f, dphi_fc, coord);
+        kd.update_normal(n_phys, K, facet_index);
         double n_dot = 0;
         double gap = 0;
         // For closest point projection the gap function is given by
         // (-n_y)* (Pi(x) - x), where n_y is the outward unit normal
         // in y = Pi(x)
-        for (std::size_t i = 0; i < gdim; i++)
+        for (std::size_t i = 0; i < kd.gdim(); i++)
         {
 
-          n_surf[i] = -c[offsets[4] + q * gdim + i];
+          n_surf[i] = -c[kd.offsets(4) + q * kd.gdim() + i];
           n_dot += n_phys(i) * n_surf[i];
-          gap += c[offsets[3] + q * gdim + i] * n_surf[i];
+          gap += c[kd.offsets(3) + q * kd.gdim() + i] * n_surf[i];
         }
 
         // precompute tr(eps(phi_j e_l)), eps(phi^j e_l)n*n2
         std::fill(tr.begin(), tr.end(), 0.0);
         std::fill(epsn.begin(), epsn.end(), 0.0);
-        for (std::size_t j = 0; j < ndofs_cell; j++)
+        for (std::size_t j = 0; j < kd.ndofs_cell(); j++)
         {
-          for (std::size_t l = 0; l < bs; l++)
+          for (std::size_t l = 0; l < kd.bs(); l++)
           {
-            for (int k = 0; k < tdim; k++)
+            for (std::uint32_t k = 0; k < kd.tdim(); k++)
             {
               tr(j, l) += K(k, l) * dphi_f(k, q, j);
-              for (std::size_t s = 0; s < gdim; s++)
+              for (std::size_t s = 0; s < kd.gdim(); s++)
               {
                 epsn(j, l) += K(k, s) * dphi_f(k, q, j)
                               * (n_phys(s) * n_surf[l] + n_phys(l) * n_surf[s]);
@@ -439,10 +345,10 @@ public:
         double tr_u = 0;
         double epsn_u = 0;
         double jump_un = 0;
-        for (std::size_t i = 0; i < ndofs_cell; i++)
+        for (std::size_t i = 0; i < kd.ndofs_cell(); i++)
         {
-          std::size_t block_index = offsets[6] + i * bs;
-          for (std::size_t j = 0; j < bs; j++)
+          std::size_t block_index = kd.offsets(6) + i * kd.bs();
+          for (std::size_t j = 0; j < kd.bs(); j++)
           {
             PetscScalar coeff = c[block_index + j];
             tr_u += coeff * tr(i, j);
@@ -450,8 +356,8 @@ public:
             jump_un += coeff * phi_f(q, i) * n_surf[j];
           }
         }
-        std::size_t offset_u_opp = offsets[7] + q * bs;
-        for (std::size_t j = 0; j < bs; ++j)
+        std::size_t offset_u_opp = kd.offsets(7) + q * kd.bs();
+        for (std::size_t j = 0; j < kd.bs(); ++j)
           jump_un += -c[offset_u_opp + j] * n_surf[j];
         double sign_u = lmbda * tr_u * n_dot + mu * epsn_u;
         const double w0 = weights[q] * detJ;
@@ -461,26 +367,27 @@ public:
 
         // Fill contributions of facet with itself
 
-        for (std::size_t i = 0; i < ndofs_cell; i++)
+        for (std::size_t i = 0; i < kd.ndofs_cell(); i++)
         {
-          for (std::size_t n = 0; n < bs; n++)
+          for (std::size_t n = 0; n < kd.bs(); n++)
           {
             double v_dot_nsurf = n_surf[n] * phi_f(q, i);
             double sign_v = (lmbda * tr(i, n) * n_dot + mu * epsn(i, n));
             // This is (1./gamma)*Pn_v to avoid the product gamma*(1./gamma)
             double Pn_v = gamma_inv * v_dot_nsurf - theta * sign_v;
-            b[0][n + i * bs] += 0.5 * Pn_u * Pn_v;
+            b[0][n + i * kd.bs()] += 0.5 * Pn_u * Pn_v;
             // 0.5 * (-theta * gamma * sign_v * sign_u + Pn_u * Pn_v);
 
             // entries corresponding to v on the other surface
             for (std::size_t k = 0; k < num_links; k++)
             {
-              std::size_t index = offsets[5]
-                                  + k * num_q_points * ndofs_cell * bs
-                                  + i * num_q_points * bs + q * bs + n;
+              std::size_t index
+                  = kd.offsets(5)
+                    + k * kd.num_q_points() * kd.ndofs_cell() * kd.bs()
+                    + i * kd.num_q_points() * kd.bs() + q * kd.bs() + n;
               double v_n_opp = c[index] * n_surf[n];
 
-              b[k + 1][n + i * bs] -= 0.5 * gamma_inv * v_n_opp * Pn_u;
+              b[k + 1][n + i * kd.bs()] -= 0.5 * gamma_inv * v_n_opp * Pn_u;
             }
           }
         }
@@ -500,47 +407,46 @@ public:
     /// @param[in] coordinate_dofs The physical coordinates of cell. Assumed
     /// to be padded to 3D, (shape (num_nodes, 3)).
     kernel_fn<PetscScalar> unbiased_jac
-        = [dphi_c, phi, dphi, offsets, gdim, tdim, q_weights,
-           num_coordinate_dofs, ref_jacobians, bs, facet_normals, affine,
-           update_jacobian, update_normal, ndofs_cell, num_q_points](
-              std::vector<std::vector<PetscScalar>>& A, const double* c,
-              const double* w, const double* coordinate_dofs,
-              const int facet_index, const std::size_t num_links)
+        = [kd](std::vector<std::vector<PetscScalar>>& A, const double* c,
+               const double* w, const double* coordinate_dofs,
+               const int facet_index, const std::size_t num_links)
     {
       // Reshape coordinate dofs to two dimensional array
       // NOTE: DOLFINx has 3D input coordinate dofs
-      std::array<std::size_t, 2> shape = {(std::size_t)num_coordinate_dofs, 3};
+      std::array<std::size_t, 2> shape
+          = {(std::size_t)kd.num_coordinate_dofs(), 3};
 
       // FIXME: These array should be views (when compute_jacobian doesn't
       // use xtensor)
-      xt::xtensor<double, 2> coord = xt::adapt(
-          coordinate_dofs, num_coordinate_dofs * 3, xt::no_ownership(), shape);
+      xt::xtensor<double, 2> coord
+          = xt::adapt(coordinate_dofs, kd.num_coordinate_dofs() * 3,
+                      xt::no_ownership(), shape);
 
       // Extract the first derivative of the coordinate element (cell) of
       // degrees of freedom on the facet
-      const xt::xtensor<double, 3>& dphi_fc = dphi_c[facet_index];
+      const xt::xtensor<double, 3>& dphi_fc = kd.dphi_c(facet_index);
 
       // Create data structures for jacobians
-      xt::xtensor<double, 2> J = xt::zeros<double>({gdim, (std::size_t)tdim});
-      xt::xtensor<double, 2> K = xt::zeros<double>({(std::size_t)tdim, gdim});
+      xt::xtensor<double, 2> J = xt::zeros<double>({kd.gdim(), kd.tdim()});
+      xt::xtensor<double, 2> K = xt::zeros<double>({kd.tdim(), kd.gdim()});
       // J_f facet jacobian, J_tot = J * J_f
       xt::xtensor<double, 2> J_f
-          = xt::view(ref_jacobians, facet_index, xt::all(), xt::all());
+          = xt::view(kd.ref_jacobians(), facet_index, xt::all(), xt::all());
       xt::xtensor<double, 2> J_tot
           = xt::zeros<double>({J.shape(0), J_f.shape(1)});
       double detJ;
-      auto c_view = xt::view(coord, xt::all(), xt::range(0, gdim));
+      auto c_view = xt::view(coord, xt::all(), xt::range(0, kd.gdim()));
 
       // Normal vector on physical facet at a single quadrature point
-      xt::xtensor<double, 1> n_phys = xt::zeros<double>({gdim});
+      xt::xtensor<double, 1> n_phys = xt::zeros<double>({kd.gdim()});
 
       // Pre-compute jacobians and normals for affine meshes
-      if (affine)
+      if (kd.affine())
       {
         detJ = dolfinx_contact::compute_facet_jacobians(0, J, K, J_tot, J_f,
                                                         dphi_fc, coord);
         dolfinx_contact::physical_facet_normal(
-            n_phys, K, xt::row(facet_normals, facet_index));
+            n_phys, K, xt::row(kd.facet_normals(), facet_index));
       }
 
       // Extract scaled gamma (h/gamma) and its inverse
@@ -551,41 +457,43 @@ public:
       double mu = c[0];
       double lmbda = c[1];
 
-      const xt::xtensor<double, 3>& dphi_f = dphi[facet_index];
-      const xt::xtensor<double, 2>& phi_f = phi[facet_index];
-      const std::vector<double>& weights = q_weights[facet_index];
-      xt::xtensor<double, 1> n_surf = xt::zeros<double>({gdim});
-      xt::xtensor<double, 2> tr = xt::zeros<double>({ndofs_cell, gdim});
-      xt::xtensor<double, 2> epsn = xt::zeros<double>({ndofs_cell, gdim});
+      const xt::xtensor<double, 3>& dphi_f = kd.dphi(facet_index);
+      const xt::xtensor<double, 2>& phi_f = kd.phi(facet_index);
+      const std::vector<double>& weights = kd.q_weights(facet_index);
+      xt::xtensor<double, 1> n_surf = xt::zeros<double>({kd.gdim()});
+      xt::xtensor<double, 2> tr
+          = xt::zeros<double>({kd.ndofs_cell(), kd.gdim()});
+      xt::xtensor<double, 2> epsn
+          = xt::zeros<double>({kd.ndofs_cell(), kd.gdim()});
       for (std::size_t q = 0; q < weights.size(); q++)
       {
         // Update Jacobian and physical normal
-        detJ = update_jacobian(q, detJ, J, K, J_tot, J_f, dphi_fc, coord);
-        update_normal(n_phys, K, facet_normals, facet_index);
+        detJ = kd.update_jacobian(q, detJ, J, K, J_tot, J_f, dphi_fc, coord);
+        kd.update_normal(n_phys, K, facet_index);
 
         double n_dot = 0;
         double gap = 0;
-        for (std::size_t i = 0; i < gdim; i++)
+        for (std::size_t i = 0; i < kd.gdim(); i++)
         {
           // For closest point projection the gap function is given by
           // (-n_y)* (Pi(x) - x), where n_y is the outward unit normal
           // in y = Pi(x)
-          n_surf(i) = -c[offsets[4] + q * gdim + i];
+          n_surf(i) = -c[kd.offsets(4) + q * kd.gdim() + i];
           n_dot += n_phys(i) * n_surf(i);
-          gap += c[offsets[3] + q * gdim + i] * n_surf(i);
+          gap += c[kd.offsets(3) + q * kd.gdim() + i] * n_surf(i);
         }
 
         // precompute tr(eps(phi_j e_l)), eps(phi^j e_l)n*n2
         std::fill(tr.begin(), tr.end(), 0.0);
         std::fill(epsn.begin(), epsn.end(), 0.0);
-        for (std::size_t j = 0; j < ndofs_cell; j++)
+        for (std::size_t j = 0; j < kd.ndofs_cell(); j++)
         {
-          for (std::size_t l = 0; l < bs; l++)
+          for (std::size_t l = 0; l < kd.bs(); l++)
           {
-            for (int k = 0; k < tdim; k++)
+            for (std::uint32_t k = 0; k < kd.tdim(); k++)
             {
               tr(j, l) += K(k, l) * dphi_f(k, q, j);
-              for (std::size_t s = 0; s < gdim; s++)
+              for (std::size_t s = 0; s < kd.gdim(); s++)
               {
                 epsn(j, l) += K(k, s) * dphi_f(k, q, j)
                               * (n_phys(s) * n_surf(l) + n_phys(l) * n_surf(s));
@@ -599,18 +507,18 @@ public:
         double epsn_u = 0;
         double jump_un = 0;
 
-        for (std::size_t i = 0; i < ndofs_cell; i++)
+        for (std::size_t i = 0; i < kd.ndofs_cell(); i++)
         {
-          std::size_t block_index = offsets[6] + i * bs;
-          for (std::size_t j = 0; j < bs; j++)
+          std::size_t block_index = kd.offsets(6) + i * kd.bs();
+          for (std::size_t j = 0; j < kd.bs(); j++)
           {
             tr_u += c[block_index + j] * tr(i, j);
             epsn_u += c[block_index + j] * epsn(i, j);
             jump_un += c[block_index + j] * phi_f(q, i) * n_surf(j);
           }
         }
-        std::size_t offset_u_opp = offsets[7] + q * bs;
-        for (std::size_t j = 0; j < bs; ++j)
+        std::size_t offset_u_opp = kd.offsets(7) + q * kd.bs();
+        for (std::size_t j = 0; j < kd.bs(); ++j)
           jump_un += -c[offset_u_opp + j] * n_surf(j);
         double sign_u = lmbda * tr_u * n_dot + mu * epsn_u;
         double Pn_u
@@ -618,42 +526,48 @@ public:
 
         // Fill contributions of facet with itself
         const double w0 = weights[q] * detJ;
-        for (std::size_t j = 0; j < ndofs_cell; j++)
+        for (std::size_t j = 0; j < kd.ndofs_cell(); j++)
         {
-          for (std::size_t l = 0; l < bs; l++)
+          for (std::size_t l = 0; l < kd.bs(); l++)
           {
             double sign_du = (lmbda * tr(j, l) * n_dot + mu * epsn(j, l));
             double Pn_du
                 = (phi_f(q, j) * n_surf(l) - gamma * sign_du) * Pn_u * w0;
 
             sign_du *= w0;
-            for (std::size_t i = 0; i < ndofs_cell; i++)
+            for (std::size_t i = 0; i < kd.ndofs_cell(); i++)
             {
-              for (std::size_t b = 0; b < bs; b++)
+              for (std::size_t b = 0; b < kd.bs(); b++)
               {
                 double v_dot_nsurf = n_surf(b) * phi_f(q, i);
                 double sign_v = (lmbda * tr(i, b) * n_dot + mu * epsn(i, b));
                 double Pn_v = gamma_inv * v_dot_nsurf - theta * sign_v;
-                A[0][(b + i * bs) * ndofs_cell * bs + l + j * bs]
+                A[0][(b + i * kd.bs()) * kd.ndofs_cell() * kd.bs() + l
+                     + j * kd.bs()]
                     += 0.5 * Pn_du * Pn_v;
 
                 // entries corresponding to u and v on the other surface
                 for (std::size_t k = 0; k < num_links; k++)
                 {
-                  std::size_t index = offsets[5]
-                                      + k * num_q_points * ndofs_cell * bs
-                                      + j * num_q_points * bs + q * bs + l;
+                  std::size_t index
+                      = kd.offsets(5)
+                        + k * kd.num_q_points() * kd.ndofs_cell() * kd.bs()
+                        + j * kd.num_q_points() * kd.bs() + q * kd.bs() + l;
                   double du_n_opp = c[index] * n_surf(l);
 
                   du_n_opp *= w0 * Pn_u;
-                  index = offsets[5] + k * num_q_points * ndofs_cell * bs
-                          + i * num_q_points * bs + q * bs + b;
+                  index = kd.offsets(5)
+                          + k * kd.num_q_points() * kd.ndofs_cell() * kd.bs()
+                          + i * kd.num_q_points() * kd.bs() + q * kd.bs() + b;
                   double v_n_opp = c[index] * n_surf(b);
-                  A[3 * k + 1][(b + i * bs) * ndofs_cell * bs + l + j * bs]
+                  A[3 * k + 1][(b + i * kd.bs()) * kd.ndofs_cell() * kd.bs() + l
+                               + j * kd.bs()]
                       -= 0.5 * du_n_opp * Pn_v;
-                  A[3 * k + 2][(b + i * bs) * ndofs_cell * bs + l + j * bs]
+                  A[3 * k + 2][(b + i * kd.bs()) * kd.ndofs_cell() * kd.bs() + l
+                               + j * kd.bs()]
                       -= 0.5 * gamma_inv * Pn_du * v_n_opp;
-                  A[3 * k + 3][(b + i * bs) * ndofs_cell * bs + l + j * bs]
+                  A[3 * k + 3][(b + i * kd.bs()) * kd.ndofs_cell() * kd.bs() + l
+                               + j * kd.bs()]
                       += 0.5 * gamma_inv * du_n_opp * v_n_opp;
                 }
               }
