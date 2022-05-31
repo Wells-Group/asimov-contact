@@ -14,7 +14,6 @@ from dolfinx import log as _log
 from dolfinx import mesh as dmesh
 from dolfinx.graph import create_adjacencylist
 from petsc4py import PETSc as _PETSc
-from dolfinx.cpp.mesh import MeshTags_int32
 import dolfinx_contact
 import dolfinx_contact.cpp
 from dolfinx_contact.helpers import (epsilon, lame_parameters,
@@ -23,7 +22,7 @@ from dolfinx_contact.helpers import (epsilon, lame_parameters,
 __all__ = ["nitsche_custom"]
 
 
-def nitsche_custom(mesh: dmesh.Mesh, mesh_data: Tuple[MeshTags_int32, int, int],
+def nitsche_custom(mesh: dmesh.Mesh, mesh_data: Tuple[dmesh.MeshTagsMetaClass, int, int],
                    physical_parameters: dict = {}, nitsche_parameters: Dict[str, float] = {},
                    plane_loc: float = 0.0, vertical_displacement: float = -0.1,
                    nitsche_bc: bool = True, quadrature_degree: int = 5, form_compiler_params: Dict = {},
@@ -140,7 +139,7 @@ def nitsche_custom(mesh: dmesh.Mesh, mesh_data: Tuple[MeshTags_int32, int, int],
     mu2.interpolate(lambda x: np.full((1, x.shape[1]), mu))
 
     # Compute integral entities on exterior facets (cell_index, local_index)
-    bottom_facets = facet_marker.indices[facet_marker.values == contact_value]
+    bottom_facets = facet_marker.find(contact_value)
     integral = _fem.IntegralType.exterior_facet
     integral_entities = dolfinx_contact.compute_active_entities(mesh, bottom_facets, integral)
     # Pack mu and lambda on facets

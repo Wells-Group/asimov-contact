@@ -78,19 +78,18 @@ if __name__ == "__main__":
 
         # create meshtags for candidate segments
         mts = [facet_marker]
-        cand_facets_0 = np.sort(np.hstack([facet_marker.indices[facet_marker.values == 5 + i] for i in range(split)]))
-        cand_facets_1 = np.sort(
-            np.hstack([facet_marker.indices[facet_marker.values == 5 + split + i] for i in range(split)]))
+        cand_facets_0 = np.sort(np.hstack([facet_marker.find(5 + i) for i in range(split)]))
+        cand_facets_1 = np.sort(np.hstack([facet_marker.find(5 + split + i) for i in range(split)]))
 
         for i in range(split):
             fcts = np.array(find_candidate_surface_segment(
-                mesh, facet_marker.indices[facet_marker.values == 5 + split + i], cand_facets_0, 0.8), dtype=np.int32)
+                mesh, facet_marker.find(5 + split + i), cand_facets_0, 0.8), dtype=np.int32)
             vls = np.full(len(fcts), 5 + 2 * split + i, dtype=np.int32)
             mts.append(meshtags(mesh, tdim - 1, fcts, vls))
 
         for i in range(split):
             fcts = np.array(find_candidate_surface_segment(
-                mesh, facet_marker.indices[facet_marker.values == 5 + i], cand_facets_1, 0.8), dtype=np.int32)
+                mesh, facet_marker.find(5 + i), cand_facets_1, 0.8), dtype=np.int32)
             vls = np.full(len(fcts), 5 + 3 * split + i, dtype=np.int32)
             mts.append(meshtags(mesh, tdim - 1, fcts, vls))
 
