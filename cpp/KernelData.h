@@ -41,19 +41,19 @@ public:
              const std::vector<std::size_t>& cstrides);
 
   // return geometrical dimension
-  const std::uint32_t gdim() const { return _gdim; }
+  std::uint32_t gdim() const { return _gdim; }
   // return topological dimension
-  const std::uint32_t tdim() const { return _tdim; }
+  std::uint32_t tdim() const { return _tdim; }
   // return number of dofs for geometry
-  const int num_coordinate_dofs() const { return _num_coordinate_dofs; }
+  int num_coordinate_dofs() const { return _num_coordinate_dofs; }
   // return whether cell geometry is affine
-  const bool affine() const { return _affine; }
+  bool affine() const { return _affine; }
   // return number of dofs pers cell
-  const std::uint32_t ndofs_cell() const { return _ndofs_cell; }
+  std::uint32_t ndofs_cell() const { return _ndofs_cell; }
   // return block size
-  const std::size_t bs() const { return _bs; }
+  std::size_t bs() const { return _bs; }
   // return number of quadrature points
-  const std::size_t num_q_points() const { return _num_q_points; }
+  std::size_t num_q_points() const { return _num_q_points; }
   // return basis functions at quadrature points for facet f
   const xt::xtensor<double, 2>& phi(const int f) const { return _phi[f]; }
   // return grad(_phi) at quadrature points for facet f
@@ -93,7 +93,7 @@ private:
   std::uint32_t _tdim;       // topological dimension
   int _num_coordinate_dofs;  // number of dofs for geometry
   bool _affine;              // store whether cell geometry is affine
-  std::size_t _ndofs_cell;   // number of dofs per cell
+  std::uint32_t _ndofs_cell; // number of dofs per cell
   std::size_t _bs;           // block size
   std::size_t _num_q_points; // number of quadrature points
   std::vector<xt::xtensor<double, 2>>

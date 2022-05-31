@@ -30,13 +30,18 @@ dolfinx_contact::KernelData::KernelData(
                                 "elements requiring dof transformations.");
   }
 
+  if (element->value_size() / _bs != 1)
+  {
+    throw std::invalid_argument(
+        "Contact kernel not supported for spaces with value size!=1");
+  }
   _gdim = geometry.dim();
   const dolfinx::mesh::Topology& topology = mesh->topology();
   _tdim = topology.dim();
-  const dolfinx::mesh::CellType ct = topology.cell_type();
 
-  if ((ct == dolfinx::mesh::CellType::prism)
-      or (ct == dolfinx::mesh::CellType::pyramid))
+  if (const dolfinx::mesh::CellType ct = topology.cell_type();
+      (ct == dolfinx::mesh::CellType::prism)
+      || (ct == dolfinx::mesh::CellType::pyramid))
   {
     throw std::invalid_argument("Unsupported cell type");
   }
