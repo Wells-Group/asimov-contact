@@ -113,8 +113,7 @@ def test_pack_test_fn(ct, gap, q_deg, delta, surface):
     data = np.array([0, 1], dtype=np.int32)
     offsets = np.array([0, 2], dtype=np.int32)
     surfaces = create_adjacencylist(data, offsets)
-    contact = dolfinx_contact.cpp.Contact([facet_marker], surfaces, [(s, o)], V._cpp_object)
-    contact.set_quadrature_degree(q_deg)
+    contact = dolfinx_contact.cpp.Contact([facet_marker], surfaces, [(s, o)], V._cpp_object, quadrature_degree=q_deg)
     contact.update_submesh_geometry(u._cpp_object)
     contact.create_distance_map(0)
     # Pack gap on surface, pack test functions and jacobian on opposite surface
@@ -231,8 +230,7 @@ def test_pack_u(ct, gap, q_deg, delta, surface):
     data = np.array([0, 1], dtype=np.int32)
     offsets = np.array([0, 2], dtype=np.int32)
     surfaces = create_adjacencylist(data, offsets)
-    contact = dolfinx_contact.cpp.Contact([facet_marker], surfaces, [(s, o)], V._cpp_object)
-    contact.set_quadrature_degree(q_deg)
+    contact = dolfinx_contact.cpp.Contact([facet_marker], surfaces, [(s, o)], V._cpp_object, quadrature_degree=q_deg)
     contact.update_submesh_geometry(u._cpp_object)
     contact.create_distance_map(0)
 
