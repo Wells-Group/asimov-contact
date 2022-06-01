@@ -41,7 +41,6 @@ namespace
 /// Tabulate the coordinate element basis functions at quadrature points
 ///
 /// @param[in] cmap The coordinate element
-/// @param[in] cell_type The cell type of the coordiante element
 /// @param[in] q_rule The quadrature rule
 xt::xtensor<double, 2>
 tabulate(const dolfinx::fem::CoordinateElement& cmap,
@@ -728,8 +727,8 @@ public:
 
     const int tdim = topology.dim();
     const int fdim = tdim - 1;
-    const dolfinx::mesh::CellType cell_type = topology.cell_type();
-    if ((cell_type == dolfinx::mesh::CellType::pyramid)
+    if (const dolfinx::mesh::CellType cell_type = topology.cell_type();
+        (cell_type == dolfinx::mesh::CellType::pyramid)
         or (cell_type == dolfinx::mesh::CellType::prism))
     {
       throw std::invalid_argument("Pyramid and prism meshes are not supported");
