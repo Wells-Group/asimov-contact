@@ -45,7 +45,6 @@ namespace
 /// @param[in] q_rule The quadrature rule
 xt::xtensor<double, 2>
 tabulate(const dolfinx::fem::CoordinateElement& cmap,
-         const dolfinx::mesh::CellType cell_type,
          std::shared_ptr<const dolfinx_contact::QuadratureRule> q_rule)
 {
 
@@ -57,11 +56,10 @@ tabulate(const dolfinx::fem::CoordinateElement& cmap,
   std::array<std::size_t, 4> cmap_shape
       = cmap.tabulate_shape(0, q_weights.size());
   xt::xtensor<double, 2> phi_c({cmap_shape[1], cmap_shape[2]});
-  {
-    xt::xtensor<double, 4> cmap_basis(cmap_shape);
-    cmap.tabulate(0, q_points, cmap_basis);
-    phi_c = xt::view(cmap_basis, 0, xt::all(), xt::all(), 0);
-  }
+  xt::xtensor<double, 4> cmap_basis(cmap_shape);
+  cmap.tabulate(0, q_points, cmap_basis);
+  phi_c = xt::view(cmap_basis, 0, xt::all(), xt::all(), 0);
+
   return phi_c;
 }
 } // namespace
@@ -206,7 +204,7 @@ public:
     const dolfinx::mesh::CellType ct = topology.cell_type();
 
     if ((ct == dolfinx::mesh::CellType::prism)
-        or (ct == dolfinx::mesh::CellType::pyramid))
+        || (ct == dolfinx::mesh::CellType::pyramid))
     {
       throw std::invalid_argument("Unsupported cell type");
     }
@@ -244,25 +242,21 @@ public:
     /// Pack test and trial functions
     xt::xtensor<double, 2> phi({num_quadrature_pts, ndofs_cell});
     xt::xtensor<double, 3> dphi({tdim, num_quadrature_pts, ndofs_cell});
-    {
-      xt::xtensor<double, 4> basis_functions(
-          {tdim + 1, num_quadrature_pts, ndofs_cell, 1});
-      element->tabulate(basis_functions, q_points, 1);
-      phi = xt::view(basis_functions, 0, xt::all(), xt::all(), 0);
-      dphi = xt::view(basis_functions, xt::range(1, tdim + 1), xt::all(),
-                      xt::all(), 0);
-    }
+    xt::xtensor<double, 4> basis_functions(
+        {tdim + 1, num_quadrature_pts, ndofs_cell, 1});
+    element->tabulate(basis_functions, q_points, 1);
+    phi = xt::view(basis_functions, 0, xt::all(), xt::all(), 0);
+    dphi = xt::view(basis_functions, xt::range(1, tdim + 1), xt::all(),
+                    xt::all(), 0);
 
     // Tabulate Coordinate element (first derivative to compute Jacobian)
     std::array<std::size_t, 4> cmap_shape
         = cmap.tabulate_shape(1, q_weights.size());
     xt::xtensor<double, 3> dphi_c({tdim, cmap_shape[1], cmap_shape[2]});
-    {
-      xt::xtensor<double, 4> cmap_basis(cmap_shape);
-      cmap.tabulate(1, q_points, cmap_basis);
-      dphi_c = xt::view(cmap_basis, xt::range(1, tdim + 1), xt::all(),
-                        xt::all(), 0);
-    }
+    xt::xtensor<double, 4> cmap_basis(cmap_shape);
+    cmap.tabulate(1, q_points, cmap_basis);
+    dphi_c
+        = xt::view(cmap_basis, xt::range(1, tdim + 1), xt::all(), xt::all(), 0);
 
     // Coefficient offsets
     // Expecting coefficients in following order:
