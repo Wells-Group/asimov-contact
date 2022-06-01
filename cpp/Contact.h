@@ -741,7 +741,7 @@ public:
     std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> c_to_f
         = candidate_mesh->topology().connectivity(tdim, tdim - 1);
     assert(c_to_f);
-    _phi_ref_facets = tabulate(cmap, cell_type, _quadrature_rule);
+    _phi_ref_facets = tabulate(cmap, _quadrature_rule);
 
     // Compute quadrature points on physical facet _qp_phys_"origin_meshtag"
     create_q_phys(puppet_mt);
@@ -1151,12 +1151,9 @@ public:
 
     const int gdim = mesh->geometry().dim(); // geometrical dimension
 
-    // Create _qp_ref_facet (quadrature points on reference facet)
-    const dolfinx::mesh::CellType cell_type = mesh->topology().cell_type();
-
     // Tabulate basis function on reference cell (_phi_ref_facets)
     const dolfinx::fem::CoordinateElement& cmap = mesh->geometry().cmap();
-    _phi_ref_facets = tabulate(cmap, cell_type, _quadrature_rule);
+    _phi_ref_facets = tabulate(cmap, _quadrature_rule);
 
     // Compute quadrature points on physical facet _qp_phys_"puppet_mt"
     create_q_phys(puppet_mt);
