@@ -739,3 +739,55 @@ std::vector<std::int32_t> dolfinx_contact::find_candidate_surface_segment(
   }
   return cand_patch;
 }
+
+//-------------------------------------------------------------------------------------
+void dolfinx_contact::compute_physical_points(
+    std::shared_ptr<const dolfinx::mesh::Mesh> mesh,
+    const std::vector<std::pair<std::int32_t, int>>& facets,
+    const std::vector<int>& offsets, const xt::xtensor<double, 2>& phi,
+    std::vector<xt::xtensor<double, 2>>& qp_phys)
+{
+  // Geometrical info
+  const dolfinx::mesh::Geometry& geometry = mesh->geometry();
+  xtl::span<const double> mesh_geometry = geometry.x();
+  const dolfinx::fem::CoordinateElement& cmap = geometry.cmap();
+  const std::size_t num_dofs_g = cmap.dim();
+  const dolfinx::graph::AdjacencyList<std::int32_t>& x_dofmap
+      = geometry.dofmap();
+  const int gdim = geometry.dim();
+
+  // Create storage for output quadrature points
+  // NOTE: Assume that all facets have the same number of quadrature points
+  if (const dolfinx::mesh::CellType ct = mesh->topology().cell_type();
+      (ct == dolfinx::mesh::CellType::prism)
+      || (ct == dolfinx::mesh::CellType::pyramid))
+  {
+    throw std::invalid_argument("Unsupported cell type");
+  }
+  std::size_t num_q_points = offsets[1] - offsets[0];
+  xt::xtensor<double, 2> q_phys({num_q_points, (std::size_t)gdim});
+  qp_phys.reserve(facets.size());
+  qp_phys.clear();
+  // Temporary data array
+  xt::xtensor<double, 2> coordinate_dofs
+      = xt::zeros<double>({num_dofs_g, std::size_t(gdim)});
+  std::for_each(
+      facets.cbegin(), facets.cend(),
+      [&](const auto& facet_pair)
+      {
+        auto [cell, local_index] = facet_pair;
+        auto x_dofs = x_dofmap.links(cell);
+        assert(x_dofs.size() == num_dofs_g);
+        for (std::size_t i = 0; i < num_dofs_g; ++i)
+        {
+          std::copy_n(std::next(mesh_geometry.begin(), 3 * x_dofs[i]), gdim,
+                      std::next(coordinate_dofs.begin(), i * gdim));
+        }
+        // push forward points on reference element
+        const xt::xtensor<double, 2> phi_f = xt::view(
+            phi, xt::xrange(offsets[local_index], offsets[local_index + 1]),
+            xt::all());
+        cmap.push_forward(q_phys, coordinate_dofs, phi_f);
+        qp_phys.push_back(q_phys);
+      });
+}

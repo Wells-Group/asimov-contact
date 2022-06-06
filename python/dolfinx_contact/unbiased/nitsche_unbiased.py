@@ -193,8 +193,8 @@ def nitsche_unbiased(mesh: _mesh.Mesh, mesh_tags: list[MeshTags_int32],
     # Custom assembly
     # create contact class
     with _common.Timer("~Contact: Init"):
-        contact = dolfinx_contact.cpp.Contact(mesh_tags, surfaces, contact_pairs, V._cpp_object)
-    contact.set_quadrature_degree(quadrature_degree)
+        contact = dolfinx_contact.cpp.Contact(mesh_tags, surfaces, contact_pairs,
+                                              V._cpp_object, quadrature_degree=quadrature_degree)
     with _common.Timer("~Contact: Distance maps"):
         for i in range(len(contact_pairs)):
             contact.create_distance_map(i)

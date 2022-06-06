@@ -53,7 +53,7 @@ dolfinx_contact::Contact::Contact(
         markers,
     std::shared_ptr<const dolfinx::graph::AdjacencyList<std::int32_t>> surfaces,
     const std::vector<std::array<int, 2>>& contact_pairs,
-    std::shared_ptr<dolfinx::fem::FunctionSpace> V)
+    std::shared_ptr<dolfinx::fem::FunctionSpace> V, const int q_deg)
     : _surfaces(surfaces->array()), _contact_pairs(contact_pairs), _V(V)
 {
   std::size_t num_surfaces = surfaces->array().size();
@@ -99,6 +99,8 @@ dolfinx_contact::Contact::Contact(
           = dolfinx_contact::SubMesh(mesh, _cell_facet_pairs[index]);
     }
   }
+  _quadrature_rule = std::make_shared<QuadratureRule>(
+      topology.cell_type(), q_deg, fdim, basix::quadrature::type::Default);
 }
 //------------------------------------------------------------------------------------------------
 std::size_t dolfinx_contact::Contact::coefficients_size()
@@ -114,7 +116,14 @@ std::size_t dolfinx_contact::Contact::coefficients_size()
   const std::size_t bs = dofmap->bs();
 
   // NOTE: Assuming same number of quadrature points on each cell
-  const std::size_t num_q_points = _qp_ref_facet[0].shape(0);
+  if (const dolfinx::mesh::CellType ct = mesh->topology().cell_type();
+      (ct == dolfinx::mesh::CellType::prism)
+      || (ct == dolfinx::mesh::CellType::pyramid))
+  {
+    throw std::invalid_argument("Unsupported cell type");
+  }
+  const std::size_t num_q_points
+      = _quadrature_rule->offset()[1] - _quadrature_rule->offset()[0];
   const std::size_t max_links
       = *std::max_element(_max_links.begin(), _max_links.end());
 
@@ -213,7 +222,8 @@ dolfinx_contact::Contact::pack_ny(int pair,
       = _qp_phys[contact_pair[0]];
 
   const std::size_t num_facets = _cell_facet_pairs[contact_pair[0]].size();
-  const std::size_t num_q_points = _qp_ref_facet[0].shape(0);
+  const std::size_t num_q_points
+      = _quadrature_rule->offset()[1] - _quadrature_rule->offset()[0];
 
   // Needed for pull_back in get_facet_normals
   xt::xtensor<double, 2> J

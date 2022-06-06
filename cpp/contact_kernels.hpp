@@ -69,9 +69,9 @@ kernel_fn<T> generate_contact_kernel(
   xt::xtensor<double, 2> phi({num_quadrature_pts, ndofs_cell});
   xt::xtensor<double, 3> dphi({tdim, num_quadrature_pts, ndofs_cell});
   {
-    xt::xtensor<double, 4> basis_functions(
-        {(std::size_t(tdim + 1), num_quadrature_pts, (std::size_t)ndofs_cell,
-          1)});
+    xt::xtensor<double, 4> basis_functions({std::size_t(tdim + 1),
+                                            num_quadrature_pts,
+                                            (std::size_t)ndofs_cell, 1});
     element->tabulate(basis_functions, q_points, 1);
     phi = xt::view(basis_functions, 0, xt::all(), xt::all(), 0);
     dphi = xt::view(basis_functions, xt::range(1, tdim + 1), xt::all(),

@@ -224,4 +224,20 @@ std::vector<std::int32_t> find_candidate_surface_segment(
     const std::vector<std::int32_t>& puppet_facets,
     const std::vector<std::int32_t>& candidate_facets, const double radius);
 
+/// @brief compute physical points on set of facets
+///
+/// Given a list of facets and the basis functions evaluated at set of points on
+/// reference facets compute physical points
+///
+/// @param[in] mesh The mesh
+/// @param[in] facets The list of facets as (cell, local_facet)
+/// @param[in] offsets for accessing the basis_values for local_facet
+/// @param[in] phi Basis functions evaluated at desired set of point osn
+/// reference facet
+/// @param[in, out] qp_phys vector to stor physical points per facet
+void compute_physical_points(
+    std::shared_ptr<const dolfinx::mesh::Mesh>,
+    const std::vector<std::pair<std::int32_t, int>>& facets,
+    const std::vector<int>& offsets, const xt::xtensor<double, 2>& phi,
+    std::vector<xt::xtensor<double, 2>>& qp_phys);
 } // namespace dolfinx_contact
