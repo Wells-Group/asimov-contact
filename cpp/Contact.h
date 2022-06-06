@@ -73,6 +73,7 @@ public:
   /// @param[in] contact_pairs list of pairs (i, j) marking the ith and jth
   /// surface in surfaces->array() as a contact pair
   /// @param[in] V The functions space
+  /// @param[in] q_deg The quadrature degree.
   Contact(const std::vector<
               std::shared_ptr<dolfinx::mesh::MeshTags<std::int32_t>>>& markers,
           std::shared_ptr<const dolfinx::graph::AdjacencyList<std::int32_t>>
@@ -314,7 +315,6 @@ public:
               const PetscScalar* w, const double* coordinate_dofs,
               const int facet_index, const std::size_t num_links)
     {
-      // assumption that the vector function space has block size tdim
       std::array<std::int32_t, 2> q_offset
           = {qp_offsets[facet_index], qp_offsets[facet_index + 1]};
 
@@ -829,6 +829,14 @@ public:
     const std::vector<xt::xtensor<double, 2>>& qp_phys = _qp_phys[puppet_mt];
     const std::size_t num_facets = _cell_facet_pairs[puppet_mt].size();
     // NOTE: Assumes same number of quadrature points on all facets
+    // NOTE: Assuming same number of quadrature points on each cell
+    if (const dolfinx::mesh::CellType ct
+        = candidate_mesh->topology().cell_type();
+        (ct == dolfinx::mesh::CellType::prism)
+        || (ct == dolfinx::mesh::CellType::pyramid))
+    {
+      throw std::invalid_argument("Unsupported cell type");
+    }
     const std::size_t num_q_point
         = _quadrature_rule->offset()[1] - _quadrature_rule->offset()[0];
 

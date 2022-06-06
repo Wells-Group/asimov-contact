@@ -230,9 +230,9 @@ std::vector<std::int32_t> find_candidate_surface_segment(
 /// reference facets compute physical points
 ///
 /// @param[in] mesh The mesh
-/// @param[in] facets the list of facets as (cell, local_facet)
+/// @param[in] facets The list of facets as (cell, local_facet)
 /// @param[in] offsets for accessing the basis_values for local_facet
-/// @param[in] phi basis functions evaluated at desired set of point osn
+/// @param[in] phi Basis functions evaluated at desired set of point osn
 /// reference facet
 /// @param[in, out] qp_phys vector to stor physical points per facet
 void compute_physical_points(

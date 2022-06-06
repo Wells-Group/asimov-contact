@@ -116,6 +116,12 @@ std::size_t dolfinx_contact::Contact::coefficients_size()
   const std::size_t bs = dofmap->bs();
 
   // NOTE: Assuming same number of quadrature points on each cell
+  if (const dolfinx::mesh::CellType ct = mesh->topology().cell_type();
+      (ct == dolfinx::mesh::CellType::prism)
+      || (ct == dolfinx::mesh::CellType::pyramid))
+  {
+    throw std::invalid_argument("Unsupported cell type");
+  }
   const std::size_t num_q_points
       = _quadrature_rule->offset()[1] - _quadrature_rule->offset()[0];
   const std::size_t max_links
