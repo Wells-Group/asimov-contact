@@ -6,6 +6,7 @@
 
 #pragma once
 
+#include "QuadratureRule.h"
 #include "utils.h"
 #include <dolfinx.h>
 #include <dolfinx/common/sort.h>
@@ -36,8 +37,7 @@ public:
   // generates data that is common to all contact kernels
   ///@param[in]
   KernelData(std::shared_ptr<const dolfinx::fem::FunctionSpace> V,
-             const std::vector<xt::xarray<double>>& q_points,
-             const std::vector<std::vector<double>>& q_weights,
+             std::shared_ptr<const dolfinx_contact::QuadratureRule> q_rule,
              const std::vector<std::size_t>& cstrides);
 
   // return geometrical dimension
@@ -52,14 +52,14 @@ public:
   std::uint32_t ndofs_cell() const { return _ndofs_cell; }
   // return block size
   std::size_t bs() const { return _bs; }
-  // return number of quadrature points
-  std::size_t num_q_points() const { return _num_q_points; }
+  // return quadrature rule offsets for index f
+  int qp_offsets(int f) const { return _qp_offsets[f]; }
   // return basis functions at quadrature points for facet f
-  const xt::xtensor<double, 2>& phi(const int f) const { return _phi[f]; }
+  const xt::xtensor<double, 2>& phi() const { return _phi; }
   // return grad(_phi) at quadrature points for facet f
-  const xt::xtensor<double, 3>& dphi(const int f) const { return _dphi[f]; }
+  const xt::xtensor<double, 3>& dphi() const { return _dphi; }
   // return gradient of coordinate bases at quadrature points for facet f
-  const xt::xtensor<double, 3>& dphi_c(const int f) const { return _dphi_c[f]; }
+  const xt::xtensor<double, 3>& dphi_c() const { return _dphi_c; }
   // return coefficient offsets of coefficient i
   std::size_t offsets(const std::size_t i) const { return _offsets[i]; }
   // return reference facet normals
@@ -81,31 +81,27 @@ public:
     return _update_normal(n, K, _facet_normals, local_index);
   }
   // return quadrature weights for facet f
-  const std::vector<double>& q_weights(const int f) const
-  {
-    return _q_weights[f];
-  }
+  const std::vector<double>& q_weights() const { return _q_weights; }
 
   const xt::xtensor<double, 3>& ref_jacobians() const { return _ref_jacobians; }
 
 private:
-  std::uint32_t _gdim;       // geometrical dimension
-  std::uint32_t _tdim;       // topological dimension
-  int _num_coordinate_dofs;  // number of dofs for geometry
-  bool _affine;              // store whether cell geometry is affine
-  std::uint32_t _ndofs_cell; // number of dofs per cell
-  std::size_t _bs;           // block size
-  std::size_t _num_q_points; // number of quadrature points
-  std::vector<xt::xtensor<double, 2>>
-      _phi; // basis functions at quadrature points
-  std::vector<xt::xtensor<double, 3>> _dphi;   // grad(_phi)
-  std::vector<xt::xtensor<double, 3>> _dphi_c; // gradient of coordinate basis
-  std::vector<std::size_t> _offsets;           // the coefficient offsets
+  std::uint32_t _gdim;               // geometrical dimension
+  std::uint32_t _tdim;               // topological dimension
+  int _num_coordinate_dofs;          // number of dofs for geometry
+  bool _affine;                      // store whether cell geometry is affine
+  std::uint32_t _ndofs_cell;         // number of dofs per cell
+  std::size_t _bs;                   // block size
+  std::vector<int> _qp_offsets;      // quadrature point offsets
+  xt::xtensor<double, 2> _phi;       // basis functions at quadrature points
+  xt::xtensor<double, 3> _dphi;      // grad(_phi)
+  xt::xtensor<double, 3> _dphi_c;    // gradient of coordinate basis
+  std::vector<std::size_t> _offsets; // the coefficient offsets
   xt::xtensor<double, 3> _ref_jacobians;
   xt::xtensor<double, 2> _facet_normals;
   jac_fn _update_jacobian;
   normal_fn _update_normal;
-  std::vector<std::vector<double>> _q_weights;
+  std::vector<double> _q_weights;
 };
 } // namespace dolfinx_contact
 

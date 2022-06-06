@@ -39,7 +39,7 @@ kernel_fn<T> generate_contact_kernel(
 
   // Structures for coefficient data
   int num_coeffs = coeffs.size();
-  std::vector<int> cstrides(num_coeffs + 3);
+  std::vector<std::size_t> cstrides(num_coeffs + 3);
   for (int i = 0; i < num_coeffs; i++)
   {
     std::shared_ptr<const dolfinx::fem::FiniteElement> coeff_element
@@ -55,8 +55,9 @@ kernel_fn<T> generate_contact_kernel(
   cstrides[num_coeffs + 1] = gdim * num_qp_per_entity; // gap
   cstrides[num_coeffs + 2] = gdim * num_qp_per_entity; // normals
 
-  auto kd = dolfinx_contact::KernelData(V, quadrature_rule.points(),
-                                        quadrature_rule.weights(), cstrides);
+  auto kd = dolfinx_contact::KernelData(
+      V, std::make_shared<dolfinx_contact::QuadratureRule>(quadrature_rule),
+      cstrides);
 
   // Tabulate basis functions and first derivatives for all input
   // coefficients
@@ -106,14 +107,14 @@ kernel_fn<T> generate_contact_kernel(
   /// @param[in] num_links Unused integer. In two sided contact this indicates
   /// how many cells are connected with the cell.
   dolfinx_contact::kernel_fn<T> nitsche_rigid_rhs
-      = [kd, phi_coeffs, constant_normal,
-         qp_offsets](std::vector<std::vector<T>>& b, const T* c, const T* w,
-                     const double* coordinate_dofs, const int facet_index,
-                     [[maybe_unused]] const std::size_t num_links)
+      = [kd, phi_coeffs, constant_normal](
+            std::vector<std::vector<T>>& b, const T* c, const T* w,
+            const double* coordinate_dofs, const int facet_index,
+            [[maybe_unused]] const std::size_t num_links)
   {
     // assumption that the vector function space has block size tdim
     std::array<std::int32_t, 2> q_offset
-        = {qp_offsets[facet_index], qp_offsets[facet_index + 1]};
+        = {kd.qp_offsets(facet_index), kd.qp_offsets(facet_index + 1)};
 
     // Reshape coordinate dofs to two dimensional array
     // FIXME: These array should be views (when compute_jacobian doesn't use
@@ -122,11 +123,13 @@ kernel_fn<T> generate_contact_kernel(
     const xt::xtensor<double, 2>& coord
         = xt::adapt(coordinate_dofs, kd.num_coordinate_dofs() * 3,
                     xt::no_ownership(), shape);
-    auto c_view = xt::view(coord, xt::all(), xt::range(0, gdim));
+    auto c_view = xt::view(coord, xt::all(), xt::range(0, kd.gdim()));
 
-    // Extract the first derivative of the coordinate element (cell) of degrees
-    // of freedom on the facet
-    const xt::xtensor<double, 3> dphi_fc = kd.dphi(facet_index);
+    // Extract the first derivative of the coordinate element (cell) of
+    // degrees of freedom on the facet
+    const xt::xtensor<double, 3> dphi_fc
+        = xt::view(kd.dphi_c(), xt::all(), xt::xrange(q_offset[0], q_offset[1]),
+                   xt::all());
 
     // Compute Jacobian and determinant at first quadrature point
     xt::xtensor<double, 2> J = xt::zeros<double>({kd.gdim(), kd.tdim()});
@@ -219,12 +222,15 @@ kernel_fn<T> generate_contact_kernel(
         gap += c[gap_offset + q * kd.gdim() + i] * n_surf[i];
       }
 
+      // Extract reference to the tabulated basis function
+      const xt::xtensor<double, 2>& phi = kd.phi();
+      const xt::xtensor<double, 3>& dphi = kd.dphi();
       // precompute tr(eps(phi_j e_l)), eps(phi^j e_l)n*n2
       std::fill(tr.begin(), tr.end(), 0);
       std::fill(epsn.begin(), epsn.end(), 0);
       for (int j = 0; j < kd.offsets(1) - kd.offsets(0); j++)
       {
-        for (int l = 0; l < bs; l++)
+        for (int l = 0; l < kd.bs(); l++)
         {
           for (int k = 0; k < kd.tdim(); k++)
           {
@@ -243,8 +249,8 @@ kernel_fn<T> generate_contact_kernel(
       double u_dot_nsurf = 0;
       for (int i = 0; i < kd.offsets(1) - kd.offsets(0); i++)
       {
-        const std::int32_t block_index = (i + kd.offsets(0)) * bs;
-        for (int j = 0; j < bs; j++)
+        const std::int32_t block_index = (i + kd.offsets(0)) * kd.bs();
+        for (int j = 0; j < kd.bs(); j++)
         {
           tr_u += c[block_index + j] * tr(i, j);
           epsn_u += c[block_index + j] * epsn(i, j);
@@ -261,11 +267,11 @@ kernel_fn<T> generate_contact_kernel(
       for (int j = 0; j < kd.ndofs_cell(); j++)
       {
         // Insert over block size in matrix
-        for (int l = 0; l < bs; l++)
+        for (int l = 0; l < kd.bs(); l++)
         {
           double sign_v = lmbda * tr(j, l) * n_dot + mu * epsn(j, l);
           double v_dot_nsurf = n_surf[l] * phi(q_pos, j);
-          b[0][j * bs + l]
+          b[0][j * kd.bs() + l]
               += -theta * gamma_inv * sign_v * sign_u
                  + R_minus_scaled * (theta * sign_v - gamma * v_dot_nsurf);
         }
@@ -290,25 +296,28 @@ kernel_fn<T> generate_contact_kernel(
   /// @param[in] num_links Unused integer. In two sided contact this indicates
   /// how many cells are connected with the cell.
   kernel_fn<T> nitsche_rigid_jacobian
-      = [kd, phi_coeffs, dphi_coeffs, num_coeffs, constant_normal, qp_offsets](
+      = [kd, phi_coeffs, dphi_coeffs, num_coeffs, constant_normal](
             std::vector<std::vector<double>>& A, const T* c, const T* w,
             const double* coordinate_dofs, const int facet_index,
             [[maybe_unused]] const std::size_t num_links)
   {
     const int fdim = kd.tdim() - 1;
     std::array<std::int32_t, 2> q_offset
-        = {qp_offsets[facet_index], qp_offsets[facet_index + 1]};
+        = {kd.qp_offsets(facet_index), kd.qp_offsets(facet_index + 1)};
 
     // Reshape coordinate dofs to two dimensional array
     // FIXME: These array should be views (when compute_jacobian doesn't use
     // xtensor)
-    std::array<std::size_t, 2> shape = {num_coordinate_dofs, 3};
-    xt::xtensor<double, 2> coord = xt::adapt(
-        coordinate_dofs, num_coordinate_dofs * 3, xt::no_ownership(), shape);
+    std::array<std::size_t, 2> shape = {kd.num_coordinate_dofs(), 3};
+    xt::xtensor<double, 2> coord
+        = xt::adapt(coordinate_dofs, kd.num_coordinate_dofs() * 3,
+                    xt::no_ownership(), shape);
 
-    // Extract the first derivative of the coordinate element (cell) of degrees
-    // of freedom on the facet
-    const xt::xtensor<double, 3> dphi_fc = kd.dphi_c(facet_index);
+    // Extract the first derivative of the coordinate element (cell) of
+    // degrees of freedom on the facet
+    const xt::xtensor<double, 3> dphi_fc
+        = xt::view(kd.dphi_c(), xt::all(), xt::xrange(q_offset[0], q_offset[1]),
+                   xt::all());
     xt::xtensor<double, 2> J = xt::zeros<double>({kd.gdim(), kd.tdim()});
     xt::xtensor<double, 2> K = xt::zeros<double>({kd.tdim(), kd.gdim()});
     xt::xtensor<double, 1> n_phys = xt::zeros<double>({kd.gdim()});
@@ -342,19 +351,19 @@ kernel_fn<T> generate_contact_kernel(
         n_dot += n_phys(i) * n_surf[i];
       }
     }
-    int c_offset = (bs - 1) * kd.offsets(1);
+    int c_offset = (kd.bs() - 1) * kd.offsets(1);
     double gamma
         = w[0]
           / c[c_offset + kd.offsets(3)]; // This is gamma/hdouble gamma = w[0];
     double gamma_inv = c[c_offset + kd.offsets(3)] / w[0];
     double theta = w[1];
 
-    xtl::span<const double> _weights(q_weights);
+    xtl::span<const double> _weights(kd.q_weights());
     auto weights = _weights.subspan(q_offset[0], q_offset[1] - q_offset[0]);
 
     // Get number of dofs per cell
     // Temporary variable for grad(phi) on physical cell
-    xt::xtensor<double, 2> dphi_phys({bs, kd.ndofs_cell()});
+    xt::xtensor<double, 2> dphi_phys({kd.bs(), kd.ndofs_cell()});
     xt::xtensor<double, 2> tr = xt::zeros<double>({kd.ndofs_cell(), kd.gdim()});
     xt::xtensor<double, 2> epsn
         = xt::zeros<double>({kd.ndofs_cell(), kd.gdim()});
@@ -387,12 +396,15 @@ kernel_fn<T> generate_contact_kernel(
       for (int i = 0; i < kd.gdim(); i++)
         gap += c[gap_offset + q * kd.gdim() + i] * n_surf[i];
 
+      // Extract reference to the tabulated basis function
+      const xt::xtensor<double, 2>& phi = kd.phi();
+      const xt::xtensor<double, 3>& dphi = kd.dphi();
       // precompute tr(eps(phi_j e_l)), eps(phi^j e_l)n*n2
       std::fill(tr.begin(), tr.end(), 0);
       std::fill(epsn.begin(), epsn.end(), 0);
       for (int j = 0; j < kd.ndofs_cell(); j++)
       {
-        for (int l = 0; l < bs; l++)
+        for (int l = 0; l < kd.bs(); l++)
         {
           for (int k = 0; k < kd.tdim(); k++)
           {
@@ -406,7 +418,7 @@ kernel_fn<T> generate_contact_kernel(
         }
       }
       double mu = 0;
-      int c_offset = (bs - 1) * kd.offsets(1);
+      int c_offset = (kd.bs() - 1) * kd.offsets(1);
       for (int j = kd.offsets(1); j < kd.offsets(2); j++)
         mu += c[j + c_offset] * phi_coeffs(facet_index, q_pos, j);
       double lmbda = 0;
@@ -419,8 +431,8 @@ kernel_fn<T> generate_contact_kernel(
       double u_dot_nsurf = 0;
       for (int i = 0; i < kd.offsets(1) - kd.offsets(0); i++)
       {
-        const std::int32_t block_index = (i + kd.offsets(0)) * bs;
-        for (int j = 0; j < bs; j++)
+        const std::int32_t block_index = (i + kd.offsets(0)) * kd.bs();
+        for (int j = 0; j < kd.bs(); j++)
         {
           const auto c_val = c[block_index + j];
           tr_u += c_val * tr(i, j);
@@ -435,7 +447,7 @@ kernel_fn<T> generate_contact_kernel(
       const double w0 = weights[q] * detJ;
       for (int j = 0; j < kd.ndofs_cell(); j++)
       {
-        for (int l = 0; l < bs; l++)
+        for (int l = 0; l < kd.bs(); l++)
         {
           double sign_du = (lmbda * tr(j, l) * n_dot + mu * epsn(j, l));
           double Pn_du
@@ -445,11 +457,12 @@ kernel_fn<T> generate_contact_kernel(
           // Insert over block size in matrix
           for (int i = 0; i < kd.ndofs_cell(); i++)
           {
-            for (int b = 0; b < bs; b++)
+            for (int b = 0; b < kd.bs(); b++)
             {
               double v_dot_nsurf = n_surf[b] * phi(q_pos, i);
               double sign_v = (lmbda * tr(i, b) * n_dot + mu * epsn(i, b));
-              A[0][(b + i * bs) * kd.ndofs_cell() * bs + l + j * bs]
+              A[0]
+               [(b + i * kd.bs()) * kd.ndofs_cell() * kd.bs() + l + j * kd.bs()]
                   += -theta * gamma_inv * sign_du * sign_v
                      + Pn_du * (theta * sign_v - gamma * v_dot_nsurf);
             }

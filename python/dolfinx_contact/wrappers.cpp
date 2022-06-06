@@ -68,9 +68,9 @@ PYBIND11_MODULE(cpp, m)
                     std::shared_ptr<
                         const dolfinx::graph::AdjacencyList<std::int32_t>>,
                     std::vector<std::array<int, 2>>,
-                    std::shared_ptr<dolfinx::fem::FunctionSpace>>(),
+                    std::shared_ptr<dolfinx::fem::FunctionSpace>, const int>(),
            py::arg("markers"), py::arg("sufaces"), py::arg("contact_pairs"),
-           py::arg("V"))
+           py::arg("V"), py::arg("quadrature_degree") = 3)
       .def("create_distance_map",
            [](dolfinx_contact::Contact& self, int pair)
            {
@@ -156,8 +156,8 @@ PYBIND11_MODULE(cpp, m)
                  std::move(data), std::move(offsets));
            })
       .def("coefficients_size", &dolfinx_contact::Contact::coefficients_size)
-      .def("set_quadrature_degree",
-           &dolfinx_contact::Contact::set_quadrature_degree)
+      .def("set_quadrature_rule",
+           &dolfinx_contact::Contact::set_quadrature_rule)
       .def("generate_kernel",
            [](dolfinx_contact::Contact& self, dolfinx_contact::Kernel type) {
              return contact_wrappers::KernelWrapper(self.generate_kernel(type));
