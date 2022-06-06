@@ -758,6 +758,12 @@ void dolfinx_contact::compute_physical_points(
 
   // Create storage for output quadrature points
   // NOTE: Assume that all facets have the same number of quadrature points
+  if (const dolfinx::mesh::CellType ct = mesh->topology().cell_type();
+      (ct == dolfinx::mesh::CellType::prism)
+      || (ct == dolfinx::mesh::CellType::pyramid))
+  {
+    throw std::invalid_argument("Unsupported cell type");
+  }
   std::size_t num_q_points = offsets[1] - offsets[0];
   xt::xtensor<double, 2> q_phys({num_q_points, (std::size_t)gdim});
   qp_phys.reserve(facets.size());
@@ -777,8 +783,7 @@ void dolfinx_contact::compute_physical_points(
           std::copy_n(std::next(mesh_geometry.begin(), 3 * x_dofs[i]), gdim,
                       std::next(coordinate_dofs.begin(), i * gdim));
         }
-        // push forward of quadrature points _qp_ref_facet to the
-        // physical facet
+        // push forward points on reference element
         const xt::xtensor<double, 2> phi_f = xt::view(
             phi, xt::xrange(offsets[local_index], offsets[local_index + 1]),
             xt::all());

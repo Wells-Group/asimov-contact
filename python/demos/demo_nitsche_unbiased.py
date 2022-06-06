@@ -63,11 +63,15 @@ if __name__ == "__main__":
                         help="Mesh resolution")
     parser.add_argument("--outfile", type=str, default=None, required=False,
                         help="File for appending results", dest="outfile")
+    _lifting = parser.add_mutually_exclusive_group(required=False)
+    _lifting.add_argument('--lifting', dest='lifting', action='store_true',
+                          help="Apply lifting (strong enforcement of Dirichlet condition",
+                          default=False)
+
     # Parse input arguments or set to defualt values
     args = parser.parse_args()
-
     # Current formulation uses bilateral contact
-    nitsche_parameters = {"gamma": args.gamma, "theta": args.theta}
+    nitsche_parameters = {"gamma": args.gamma, "theta": args.theta, "lift_bc": args.lifting}
     physical_parameters = {"E": args.E, "nu": args.nu, "strain": args.plane_strain}
     threed = args.threed
     problem = args.problem
