@@ -6,6 +6,7 @@
 
 #pragma once
 
+#include "QuadratureRule.h"
 #include <basix/cell.h>
 #include <basix/finite-element.h>
 #include <basix/quadrature.h>
@@ -18,7 +19,6 @@
 #include <dolfinx/fem/utils.h>
 #include <dolfinx/mesh/Mesh.h>
 #include <xtensor/xtensor.hpp>
-
 namespace dolfinx_contact
 {
 // NOTE: this function should change signature to T * ,..... , num_links,
@@ -236,8 +236,19 @@ std::vector<std::int32_t> find_candidate_surface_segment(
 /// reference facet
 /// @param[in, out] qp_phys vector to stor physical points per facet
 void compute_physical_points(
-    std::shared_ptr<const dolfinx::mesh::Mesh>,
+    const dolfinx::mesh::Mesh& mesh,
     const std::vector<std::pair<std::int32_t, int>>& facets,
     const std::vector<int>& offsets, const xt::xtensor<double, 2>& phi,
     std::vector<xt::xtensor<double, 2>>& qp_phys);
+
+/// Compute the closest entity at every quadrature point on asubset of facets on
+/// one mesh, to a subset of facets on the other mesh.
+
+dolfinx::graph::AdjacencyList<std::int32_t> compute_distance_map(
+    const dolfinx::mesh::Mesh& quadrature_mesh,
+    const std::vector<std::pair<std::int32_t, int>>& quadrature_facets,
+    const dolfinx::mesh::Mesh& candidate_mesh,
+    const std::vector<std::pair<std::int32_t, int>>& candidate_facets,
+    const QuadratureRule& q_rule);
+
 } // namespace dolfinx_contact

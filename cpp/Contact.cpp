@@ -184,6 +184,75 @@ Mat dolfinx_contact::Contact::create_petsc_matrix(
   return dolfinx::la::petsc::create_matrix(a.mesh()->comm(), pattern, type);
 }
 //------------------------------------------------------------------------------------------------
+void dolfinx_contact::Contact::create_distance_map(int pair)
+{
+  // Get quadrature mesh info
+  int puppet_mt = _contact_pairs[pair][0];
+  const std::vector<std::pair<std::int32_t, int>>& puppet_facets
+      = _cell_facet_pairs[puppet_mt];
+  std::shared_ptr<const dolfinx::mesh::Mesh> puppet_mesh
+      = _submeshes[puppet_mt].mesh();
+  std::vector<std::pair<std::int32_t, int>> quadrature_facets(
+      puppet_facets.size());
+  {
+    const int tdim = puppet_mesh->topology().dim();
+    std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> c_to_f
+        = puppet_mesh->topology().connectivity(tdim, tdim - 1);
+    assert(c_to_f);
+    std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> cell_map
+        = _submeshes[puppet_mt].cell_map();
+
+    for (std::size_t i = 0; i < puppet_facets.size(); ++i)
+    {
+      auto [f_cell, facet] = puppet_facets[i];
+      quadrature_facets[i] = {cell_map->links(f_cell)[0], facet};
+    }
+  }
+
+  // Get candidate mesh information
+  int candidate_mt = _contact_pairs[pair][1];
+  const std::vector<std::pair<std::int32_t, int>>& candidate_facets
+      = _cell_facet_pairs[candidate_mt];
+  std::vector<std::pair<std::int32_t, int>> submesh_facets(
+      candidate_facets.size());
+  std::shared_ptr<const dolfinx::mesh::Mesh> candidate_mesh
+      = _submeshes[candidate_mt].mesh();
+  {
+    const int tdim = candidate_mesh->topology().dim();
+    std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> c_to_f
+        = candidate_mesh->topology().connectivity(tdim, tdim - 1);
+    assert(c_to_f);
+    std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> cell_map
+        = _submeshes[candidate_mt].cell_map();
+
+    for (std::size_t i = 0; i < candidate_facets.size(); ++i)
+    {
+      auto [f_cell, facet] = candidate_facets[i];
+      submesh_facets[i] = {cell_map->links(f_cell)[0], facet};
+    }
+  }
+
+  // Compute facet map
+  _facet_maps[pair]
+      = std::make_shared<dolfinx::graph::AdjacencyList<std::int32_t>>(
+          dolfinx_contact::compute_distance_map(*puppet_mesh, quadrature_facets,
+                                                *candidate_mesh, submesh_facets,
+                                                *_quadrature_rule));
+
+  // NOTE: More data that should be updated inside this code
+  const dolfinx::fem::CoordinateElement& cmap
+      = candidate_mesh->geometry().cmap();
+  _phi_ref_facets = tabulate(cmap, _quadrature_rule);
+
+  // NOTE: This function should be moved somwhere else, or return the actual
+  // points such that we compuld send them in to compute_distance_map.
+  // Compute quadrature points on physical facet _qp_phys_"origin_meshtag"
+  create_q_phys(puppet_mt);
+
+  // Update maximum number of connected cells
+  max_links(pair);
+}
+//------------------------------------------------------------------------------------------------
 std::pair<std::vector<PetscScalar>, int>
 dolfinx_contact::Contact::pack_ny(int pair,
                                   const xtl::span<const PetscScalar> gap)
