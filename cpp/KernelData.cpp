@@ -24,16 +24,15 @@ dolfinx_contact::KernelData::KernelData(
   _gdim = geometry.dim();
   const dolfinx::mesh::Topology& topology = mesh->topology();
   _tdim = topology.dim();
-  const dolfinx::mesh::CellType ct = topology.cell_type();
 
-  if ((ct == dolfinx::mesh::CellType::prism)
+  if (const dolfinx::mesh::CellType ct = topology.cell_type();
+      (ct == dolfinx::mesh::CellType::prism)
       || (ct == dolfinx::mesh::CellType::pyramid))
   {
     throw std::invalid_argument("Unsupported cell type");
   }
 
   // Create quadrature points on reference facet
-  const std::vector<double> _q_weights = q_rule->weights();
   const xt::xtensor<double, 2>& q_points = q_rule->points();
   const std::size_t num_quadrature_pts = _q_weights.size();
 

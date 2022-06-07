@@ -10,7 +10,7 @@ void dolfinx_contact::compute_normal_strain_basis(
     xt::xtensor<double, 2>& epsn, xt::xtensor<double, 2>& tr,
     const xt::xtensor<double, 2>& K, const xt::xtensor<double, 3>& dphi,
     const std::array<double, 3>& n_surf, const xt::xtensor<double, 1>& n_phys,
-    const int q_pos)
+    const std::size_t q_pos)
 {
   const std::size_t ndofs_cell = epsn.shape(0);
   const std::size_t bs = K.shape(1);

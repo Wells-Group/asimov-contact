@@ -77,14 +77,34 @@ public:
   /// quardrature points
   /// @param[in] coords - the coordinates of the facet
   /// @return absolute value of determinant of J_tot
-  double update_jacobian(std::size_t q, double detJ, xt::xtensor<double, 2>& J,
-                         xt::xtensor<double, 2>& K,
+  double update_jacobian(std::size_t q, const int facet_index, double detJ,
+                         xt::xtensor<double, 2>& J, xt::xtensor<double, 2>& K,
                          xt::xtensor<double, 2>& J_tot,
-                         const xt::xtensor<double, 2>& J_f,
-                         const xt::xtensor<double, 3>& dphi,
                          const xt::xtensor<double, 2>& coords) const
   {
-    return _update_jacobian(q, detJ, J, K, J_tot, J_f, dphi, coords);
+    const xt::xtensor<double, 3> dphi_fc = xt::view(
+        _dphi_c, xt::all(),
+        xt::xrange(_qp_offsets[facet_index], _qp_offsets[facet_index + 1]),
+        xt::all());
+    xt::xtensor<double, 2> J_f
+        = xt::view(_ref_jacobians, facet_index, xt::all(), xt::all());
+    return _update_jacobian(q, detJ, J, K, J_tot, J_f, dphi_fc, coords);
+  }
+
+  double compute_facet_jacobians(const int facet_index,
+                                 xt::xtensor<double, 2>& J,
+                                 xt::xtensor<double, 2>& K,
+                                 xt::xtensor<double, 2>& J_tot,
+                                 const xt::xtensor<double, 2>& coords) const
+  {
+    const xt::xtensor<double, 3> dphi_fc = xt::view(
+        _dphi_c, xt::all(),
+        xt::xrange(_qp_offsets[facet_index], _qp_offsets[facet_index + 1]),
+        xt::all());
+    xt::xtensor<double, 2> J_f
+        = xt::view(_ref_jacobians, facet_index, xt::all(), xt::all());
+    return std::fabs(dolfinx_contact::compute_facet_jacobians(
+        0, J, K, J_tot, J_f, dphi_fc, coords));
   }
   // update normal
   /// @param[in, out] n The facet normal

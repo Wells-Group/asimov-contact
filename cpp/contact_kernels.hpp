@@ -125,19 +125,11 @@ kernel_fn<T> generate_contact_kernel(
                     xt::no_ownership(), shape);
     auto c_view = xt::view(coord, xt::all(), xt::range(0, kd.gdim()));
 
-    // Extract the first derivative of the coordinate element (cell) of
-    // degrees of freedom on the facet
-    const xt::xtensor<double, 3> dphi_fc
-        = xt::view(kd.dphi_c(), xt::all(), xt::xrange(q_offset[0], q_offset[1]),
-                   xt::all());
-
     // Compute Jacobian and determinant at first quadrature point
     xt::xtensor<double, 2> J = xt::zeros<double>({kd.gdim(), kd.tdim()});
     xt::xtensor<double, 2> K = xt::zeros<double>({kd.tdim(), kd.gdim()});
-    xt::xtensor<double, 2> J_f
-        = xt::view(kd.ref_jacobians(), facet_index, xt::all(), xt::all());
     xt::xtensor<double, 2> J_tot
-        = xt::zeros<double>({J.shape(0), J_f.shape(1)});
+        = xt::zeros<double>({J.shape(0), (std::size_t)kd.tdim() - 1});
 
     double detJ;
     // Normal vector on physical facet at a single quadrature point
@@ -145,8 +137,7 @@ kernel_fn<T> generate_contact_kernel(
     // Pre-compute jacobians and normals for affine meshes
     if (kd.affine())
     {
-      detJ = std::fabs(dolfinx_contact::compute_facet_jacobians(
-          0, J, K, J_tot, J_f, dphi_fc, coord));
+      detJ = kd.compute_facet_jacobians(facet_index, J, K, J_tot, coord);
       dolfinx_contact::physical_facet_normal(
           n_phys, K, xt::row(kd.facet_normals(), facet_index));
     }
@@ -191,7 +182,7 @@ kernel_fn<T> generate_contact_kernel(
 
       // Update Jacobian and physical normal
       detJ = std::fabs(
-          kd.update_jacobian(q, detJ, J, K, J_tot, J_f, dphi_fc, coord));
+          kd.update_jacobian(q, facet_index, detJ, J, K, J_tot, coord));
       kd.update_normal(n_phys, K, facet_index);
 
       double mu = 0;
@@ -297,23 +288,15 @@ kernel_fn<T> generate_contact_kernel(
         = xt::adapt(coordinate_dofs, kd.num_coordinate_dofs() * 3,
                     xt::no_ownership(), shape);
 
-    // Extract the first derivative of the coordinate element (cell) of
-    // degrees of freedom on the facet
-    const xt::xtensor<double, 3> dphi_fc
-        = xt::view(kd.dphi_c(), xt::all(), xt::xrange(q_offset[0], q_offset[1]),
-                   xt::all());
     xt::xtensor<double, 2> J = xt::zeros<double>({kd.gdim(), kd.tdim()});
     xt::xtensor<double, 2> K = xt::zeros<double>({kd.tdim(), kd.gdim()});
     xt::xtensor<double, 1> n_phys = xt::zeros<double>({kd.gdim()});
-    xt::xtensor<double, 2> J_f
-        = xt::view(kd.ref_jacobians(), facet_index, xt::all(), xt::all());
     xt::xtensor<double, 2> J_tot
-        = xt::zeros<double>({J.shape(0), J_f.shape(1)});
+        = xt::zeros<double>({J.shape(0), (std::size_t)kd.tdim() - 1});
     double detJ;
     if (kd.affine())
     {
-      detJ = std::fabs(dolfinx_contact::compute_facet_jacobians(
-          0, J, K, J_tot, J_f, dphi_fc, coord));
+      detJ = kd.compute_facet_jacobians(facet_index, J, K, J_tot, coord);
       dolfinx_contact::physical_facet_normal(
           n_phys, K, xt::row(kd.facet_normals(), facet_index));
     }
@@ -358,7 +341,7 @@ kernel_fn<T> generate_contact_kernel(
 
       // Update Jacobian and physical normal
       detJ = std::fabs(
-          kd.update_jacobian(q, detJ, J, K, J_tot, J_f, dphi_fc, coord));
+          kd.update_jacobian(q, facet_index, detJ, J, K, J_tot, coord));
       kd.update_normal(n_phys, K, facet_index);
 
       // if normal not constant, get surface normal at current quadrature point
