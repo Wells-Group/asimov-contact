@@ -668,7 +668,7 @@ public:
       submesh_facets[f] = {cell_sub, local_index};
     }
     const std::vector<int>& qp_offsets = _quadrature_rule->offset();
-    dolfinx_contact::compute_physical_points(mesh_sub, submesh_facets,
+    dolfinx_contact::compute_physical_points(*mesh_sub, submesh_facets,
                                              qp_offsets, _phi_ref_facets,
                                              _qp_phys[origin_meshtag]);
   }
@@ -707,94 +707,12 @@ public:
     _max_links[pair] = max_links;
   }
 
-  /// Compute closest candidate_facet for each quadrature point in
-  /// _qp_phys[puppet_mt]
-  /// This is saved as an adjacency list in _facet_maps[puppet_mt]
-  /// and an xtensor containing cell_facet_pairs in
-  /// _cell_maps[pair]
-  void create_distance_map(int pair)
-  {
-    int puppet_mt = _contact_pairs[pair][0];
-    int candidate_mt = _contact_pairs[pair][1];
-
-    // Mesh info
-    std::shared_ptr<const dolfinx::mesh::Mesh> mesh = _V->mesh();
-    assert(mesh);
-
-    const int gdim = mesh->geometry().dim();
-    const dolfinx::fem::CoordinateElement& cmap = mesh->geometry().cmap();
-    const dolfinx::mesh::Topology& topology = mesh->topology();
-
-    const int tdim = topology.dim();
-    const int fdim = tdim - 1;
-    if (const dolfinx::mesh::CellType cell_type = topology.cell_type();
-        (cell_type == dolfinx::mesh::CellType::pyramid)
-        or (cell_type == dolfinx::mesh::CellType::prism))
-    {
-      throw std::invalid_argument("Pyramid and prism meshes are not supported");
-    }
-
-    // submesh info
-    std::shared_ptr<const dolfinx::mesh::Mesh> candidate_mesh
-        = _submeshes[candidate_mt].mesh();
-    std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> c_to_f
-        = candidate_mesh->topology().connectivity(tdim, tdim - 1);
-    assert(c_to_f);
-    _phi_ref_facets = tabulate(cmap, _quadrature_rule);
-
-    // Compute quadrature points on physical facet _qp_phys_"origin_meshtag"
-    create_q_phys(puppet_mt);
-
-    // assign puppet_ and candidate_facets
-    const std::vector<std::pair<std::int32_t, int>>& candidate_facets
-        = _cell_facet_pairs[candidate_mt];
-    const std::vector<std::pair<std::int32_t, int>>& puppet_facets
-        = _cell_facet_pairs[puppet_mt];
-    std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> cell_map
-        = _submeshes[candidate_mt].cell_map();
-    const std::vector<xt::xtensor<double, 2>>& qp_phys = _qp_phys[puppet_mt];
-    std::vector<std::int32_t> submesh_facets(candidate_facets.size());
-    for (std::size_t i = 0; i < candidate_facets.size(); ++i)
-    {
-      auto [f_cell, facet] = candidate_facets[i];
-      submesh_facets[i] = c_to_f->links(cell_map->links(f_cell)[0])[facet];
-    }
-    // Create midpoint tree as compute_closest_entity will be called many
-    // times
-    dolfinx::geometry::BoundingBoxTree master_bbox(*candidate_mesh, fdim,
-                                                   submesh_facets);
-    dolfinx::geometry::BoundingBoxTree master_midpoint_tree
-        = dolfinx::geometry::create_midpoint_tree(*candidate_mesh, fdim,
-                                                  submesh_facets);
-
-    // Copy quadrature points to 2D structure
-    const std::size_t num_facets = qp_phys.size();
-    const std::size_t num_q_points = qp_phys[0].shape(0);
-    xt::xtensor<double, 2> quadrature_points
-        = xt::zeros<double>({num_facets * num_q_points, (std::size_t)3});
-    for (std::size_t i = 0; i < num_facets; ++i)
-    {
-      assert(qp_phys[i].shape(1) == (std::size_t)gdim);
-      for (std::size_t j = 0; j < num_q_points; ++j)
-        for (std::size_t k = 0; k < (std::size_t)gdim; ++k)
-          quadrature_points(i * num_q_points + j, k) = qp_phys[i](j, k);
-    }
-
-    // Create structures used to create adjacency list of closest entity
-    std::vector<std::int32_t> offset(puppet_facets.size() + 1, 0);
-    for (std::size_t i = 0; i < puppet_facets.size(); ++i)
-      offset[i + 1] = std::int32_t((i + 1) * num_q_points);
-
-    std::vector<std::int32_t> closest_entity
-        = dolfinx::geometry::compute_closest_entity(
-            master_bbox, master_midpoint_tree, *candidate_mesh,
-            quadrature_points);
-    _facet_maps[pair]
-        = std::make_shared<const dolfinx::graph::AdjacencyList<std::int32_t>>(
-            closest_entity, offset);
-
-    max_links(pair);
-  }
+  /// For a given contact pair, for quadrature point on the first surface
+  /// compute the closest candidate facet on the second surface.
+  /// @param[in] pair The index of the contact pair
+  /// @note This function alters _facet_maps[pair], _max_links[pair],
+  /// _qp_phys, _phi_ref_facets
+  void create_distance_map(int pair);
 
   /// Compute and pack the gap function for each quadrature point the set of
   /// facets. For a set of facets; go through the quadrature points on each
