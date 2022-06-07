@@ -69,12 +69,10 @@ public:
   /// J: physical cell -> reference cell (and its inverse)
   /// J_tot: physical facet -> reference facet
   /// @param[in] q - index of quadrature points
+  /// @param[in] facet_index - The index of the facet local to the cell
   /// @param[in,out] J - Jacboian between reference cell and physical cell
   /// @param[in,out] K - inverse of J
   /// @param[in,out] J_tot - J_f*J
-  /// @param[in] J_f - the Jacobian between reference facet and reference cell
-  /// @param[in] dphi - derivatives of coordinate basis tabulated for
-  /// quardrature points
   /// @param[in] coords - the coordinates of the facet
   /// @return absolute value of determinant of J_tot
   double update_jacobian(std::size_t q, const int facet_index, double detJ,
@@ -91,6 +89,15 @@ public:
     return _update_jacobian(q, detJ, J, K, J_tot, J_f, dphi_fc, coords);
   }
 
+  /// Compute the following jacobians on a given facet at first quadrature
+  /// point: J: physical cell -> reference cell (and its inverse) J_tot:
+  /// physical facet -> reference facet
+  /// @param[in] facet_index - The index of the facet local to the cell
+  /// @param[in,out] J - Jacboian between reference cell and physical cell
+  /// @param[in,out] K - inverse of J
+  /// @param[in,out] J_tot - J_f*J
+  /// @param[in] coords - the coordinates of the facet
+  /// @return absolute value of determinant of J_tot
   double compute_facet_jacobians(const int facet_index,
                                  xt::xtensor<double, 2>& J,
                                  xt::xtensor<double, 2>& K,
