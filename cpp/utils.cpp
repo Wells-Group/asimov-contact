@@ -3,7 +3,9 @@
 // This file is part of DOLFINx_CONTACT
 //
 // SPDX-License-Identifier:    MIT
+
 #include "utils.h"
+#include "error_handling.h"
 #include "geometric_quantities.h"
 #include <dolfinx/geometry/BoundingBoxTree.h>
 #include <dolfinx/geometry/utils.h>
@@ -759,12 +761,8 @@ void dolfinx_contact::compute_physical_points(
 
   // Create storage for output quadrature points
   // NOTE: Assume that all facets have the same number of quadrature points
-  if (const dolfinx::mesh::CellType ct = mesh.topology().cell_type();
-      (ct == dolfinx::mesh::CellType::prism)
-      || (ct == dolfinx::mesh::CellType::pyramid))
-  {
-    throw std::invalid_argument("Unsupported cell type");
-  }
+  dolfinx_contact::error::check_cell_type(mesh.topology().cell_type());
+
   std::size_t num_q_points = offsets[1] - offsets[0];
   xt::xtensor<double, 2> q_phys({num_q_points, (std::size_t)gdim});
   qp_phys.reserve(facets.size());
@@ -809,11 +807,8 @@ dolfinx_contact::compute_distance_map(
   const std::size_t gdim = geometry.dim();
   const dolfinx::mesh::Topology& topology = quadrature_mesh.topology();
   const dolfinx::mesh::CellType cell_type = topology.cell_type();
-  if ((cell_type == dolfinx::mesh::CellType::pyramid)
-      or (cell_type == dolfinx::mesh::CellType::prism))
-  {
-    throw std::invalid_argument("Pyramid and prism meshes are not supported");
-  }
+  dolfinx_contact::error::check_cell_type(cell_type);
+
   const int tdim = topology.dim();
   const int fdim = tdim - 1;
   assert(q_rule.dim() == fdim);
