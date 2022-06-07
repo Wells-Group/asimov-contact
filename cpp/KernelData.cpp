@@ -10,7 +10,7 @@ dolfinx_contact::KernelData::KernelData(
     std::shared_ptr<const dolfinx::fem::FunctionSpace> V,
     std::shared_ptr<const dolfinx_contact::QuadratureRule> q_rule,
     const std::vector<std::size_t>& cstrides)
-    : _q_weights(q_rule->weights())
+    : _qp_offsets(q_rule->offset()), _q_weights(q_rule->weights())
 {
   // Extract mesh
   std::shared_ptr<const dolfinx::mesh::Mesh> mesh = V->mesh();
@@ -84,8 +84,8 @@ dolfinx_contact::KernelData::KernelData(
       = xt::view(cmap_basis, xt::range(1, _tdim + 1), xt::all(), xt::all(), 0);
 
   // Create offsets from cstrides
-  _offsets.reserve(cstrides.size() + 1);
-  _offsets.push_back(0);
+  _offsets.resize(cstrides.size() + 1);
+  _offsets[0] = 0;
   std::partial_sum(cstrides.cbegin(), cstrides.cend(),
                    std::next(_offsets.begin()));
 

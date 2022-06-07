@@ -9,6 +9,7 @@
 #include "Contact.h"
 #include "KernelData.h"
 #include "QuadratureRule.h"
+#include "elasticity.h"
 #include "geometric_quantities.h"
 #include "utils.h"
 #include <basix/cell.h>
@@ -43,7 +44,7 @@ kernel_fn<T> generate_contact_kernel(
   for (int i = 0; i < num_coeffs; i++)
   {
     std::shared_ptr<const dolfinx::fem::FiniteElement> coeff_element
-        = coeffs[i - 1]->function_space()->element();
+        = coeffs[i]->function_space()->element();
     cstrides[i]
         = coeff_element->space_dimension() / coeff_element->block_size();
   }
@@ -55,7 +56,7 @@ kernel_fn<T> generate_contact_kernel(
   cstrides[num_coeffs + 1] = gdim * num_qp_per_entity; // gap
   cstrides[num_coeffs + 2] = gdim * num_qp_per_entity; // normals
 
-  auto kd = dolfinx_contact::KernelData(
+  dolfinx_contact::KernelData kd(
       V, std::make_shared<dolfinx_contact::QuadratureRule>(quadrature_rule),
       cstrides);
 
@@ -112,7 +113,6 @@ kernel_fn<T> generate_contact_kernel(
             const double* coordinate_dofs, const int facet_index,
             [[maybe_unused]] const std::size_t num_links)
   {
-    // assumption that the vector function space has block size tdim
     std::array<std::int32_t, 2> q_offset
         = {kd.qp_offsets(facet_index), kd.qp_offsets(facet_index + 1)};
 
@@ -225,24 +225,8 @@ kernel_fn<T> generate_contact_kernel(
       // Extract reference to the tabulated basis function
       const xt::xtensor<double, 2>& phi = kd.phi();
       const xt::xtensor<double, 3>& dphi = kd.dphi();
-      // precompute tr(eps(phi_j e_l)), eps(phi^j e_l)n*n2
-      std::fill(tr.begin(), tr.end(), 0);
-      std::fill(epsn.begin(), epsn.end(), 0);
-      for (int j = 0; j < kd.offsets(1) - kd.offsets(0); j++)
-      {
-        for (int l = 0; l < kd.bs(); l++)
-        {
-          for (int k = 0; k < kd.tdim(); k++)
-          {
-            tr(j, l) += K(k, l) * dphi(k, q_pos, j);
-            for (int s = 0; s < kd.gdim(); s++)
-            {
-              epsn(j, l) += K(k, s) * dphi(k, q_pos, j)
-                            * (n_phys(s) * n_surf[l] + n_phys(l) * n_surf[s]);
-            }
-          }
-        }
-      }
+      compute_normal_strain_basis(epsn, tr, K, dphi, n_surf, n_phys, q_pos);
+
       // compute tr(eps(u)), epsn at q
       double tr_u = 0;
       double epsn_u = 0;
@@ -399,24 +383,8 @@ kernel_fn<T> generate_contact_kernel(
       // Extract reference to the tabulated basis function
       const xt::xtensor<double, 2>& phi = kd.phi();
       const xt::xtensor<double, 3>& dphi = kd.dphi();
-      // precompute tr(eps(phi_j e_l)), eps(phi^j e_l)n*n2
-      std::fill(tr.begin(), tr.end(), 0);
-      std::fill(epsn.begin(), epsn.end(), 0);
-      for (int j = 0; j < kd.ndofs_cell(); j++)
-      {
-        for (int l = 0; l < kd.bs(); l++)
-        {
-          for (int k = 0; k < kd.tdim(); k++)
-          {
-            tr(j, l) += K(k, l) * dphi(k, q_pos, j);
-            for (int s = 0; s < kd.gdim(); s++)
-            {
-              epsn(j, l) += K(k, s) * dphi(k, q_pos, j)
-                            * (n_phys(s) * n_surf[l] + n_phys(l) * n_surf[s]);
-            }
-          }
-        }
-      }
+      compute_normal_strain_basis(epsn, tr, K, dphi, n_surf, n_phys, q_pos);
+
       double mu = 0;
       int c_offset = (kd.bs() - 1) * kd.offsets(1);
       for (int j = kd.offsets(1); j < kd.offsets(2); j++)

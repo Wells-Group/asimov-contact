@@ -30,12 +30,12 @@ namespace dolfinx_contact
 class KernelData
 {
 public:
-  // empty constructor
-  KernelData() = default;
-
-  // kernel datea constructor
+  // kernel data constructor
   // generates data that is common to all contact kernels
-  ///@param[in]
+  ///@param[in] V The function space
+  ///@param[in] q_rule The quadrature rules
+  ///@param[in] cstrides The strides for individual coeffcients used in the
+  /// kernel
   KernelData(std::shared_ptr<const dolfinx::fem::FunctionSpace> V,
              std::shared_ptr<const dolfinx_contact::QuadratureRule> q_rule,
              const std::vector<std::size_t>& cstrides);
@@ -62,9 +62,21 @@ public:
   const xt::xtensor<double, 3>& dphi_c() const { return _dphi_c; }
   // return coefficient offsets of coefficient i
   std::size_t offsets(const std::size_t i) const { return _offsets[i]; }
+  const std::vector<std::size_t>& offsets_array() const { return _offsets; }
   // return reference facet normals
   const xt::xtensor<double, 2>& facet_normals() const { return _facet_normals; }
-  // update jacobian
+  /// Compute the following jacobians on a given facet:
+  /// J: physical cell -> reference cell (and its inverse)
+  /// J_tot: physical facet -> reference facet
+  /// @param[in] q - index of quadrature points
+  /// @param[in,out] J - Jacboian between reference cell and physical cell
+  /// @param[in,out] K - inverse of J
+  /// @param[in,out] J_tot - J_f*J
+  /// @param[in] J_f - the Jacobian between reference facet and reference cell
+  /// @param[in] dphi - derivatives of coordinate basis tabulated for
+  /// quardrature points
+  /// @param[in] coords - the coordinates of the facet
+  /// @return absolute value of determinant of J_tot
   double update_jacobian(std::size_t q, double detJ, xt::xtensor<double, 2>& J,
                          xt::xtensor<double, 2>& K,
                          xt::xtensor<double, 2>& J_tot,
@@ -75,6 +87,9 @@ public:
     return _update_jacobian(q, detJ, J, K, J_tot, J_f, dphi, coords);
   }
   // update normal
+  /// @param[in, out] n The facet normal
+  /// @param[in] K The inverse Jacobian
+  /// @param[in] local_index The facet index local to the cell
   void update_normal(xt::xtensor<double, 1>& n, const xt::xtensor<double, 2>& K,
                      const std::size_t local_index) const
   {
@@ -83,6 +98,7 @@ public:
   // return quadrature weights for facet f
   const std::vector<double>& q_weights() const { return _q_weights; }
 
+  // return the reference jacobians
   const xt::xtensor<double, 3>& ref_jacobians() const { return _ref_jacobians; }
 
 private:
@@ -104,11 +120,3 @@ private:
   std::vector<double> _q_weights;
 };
 } // namespace dolfinx_contact
-
-// nitsche_rigid_jac but not nitsche_rigid_rhs [dphi_coeffs, num_coeffs, fdim]
-// nitsche_rigid_rhs but not nitsche_unbiased_rhs [phi_coeffs, constant_normal,
-// qp_offsets]
-// nitsche_unbiased_rhs but not nitsche_rigid_rhs [ num_q_points]
-// ///[dphi_c, phi, dphi, offsets, gdim, tdim, q_weights,
-//            num_coordinate_dofs, ref_jacobians, bs, facet_normals, affine,
-//            update_jacobian, update_normal, ndofs_cell, num_q_points]

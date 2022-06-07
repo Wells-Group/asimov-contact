@@ -9,6 +9,7 @@
 #include "KernelData.h"
 #include "QuadratureRule.h"
 #include "SubMesh.h"
+#include "elasticity.h"
 #include "geometric_quantities.h"
 #include "utils.h"
 #include <basix/cell.h>
@@ -21,7 +22,7 @@
 #include <dolfinx/mesh/Mesh.h>
 #include <dolfinx/mesh/MeshTags.h>
 #include <dolfinx/mesh/cell_types.h>
-#include <xtensor/xadapt.hpp>
+
 #include <xtensor/xbuilder.hpp>
 #include <xtensor/xindex_view.hpp>
 
@@ -317,25 +318,7 @@ public:
           n_dot += n_phys(i) * n_surf[i];
           gap += c[kd.offsets(3) + q * kd.gdim() + i] * n_surf[i];
         }
-
-        // precompute tr(eps(phi_j e_l)), eps(phi^j e_l)n*n2
-        std::fill(tr.begin(), tr.end(), 0.0);
-        std::fill(epsn.begin(), epsn.end(), 0.0);
-        for (std::size_t j = 0; j < kd.ndofs_cell(); j++)
-        {
-          for (std::size_t l = 0; l < kd.bs(); l++)
-          {
-            for (std::uint32_t k = 0; k < kd.tdim(); k++)
-            {
-              tr(j, l) += K(k, l) * dphi(k, q_pos, j);
-              for (std::size_t s = 0; s < kd.gdim(); s++)
-              {
-                epsn(j, l) += K(k, s) * dphi(k, q_pos, j)
-                              * (n_phys(s) * n_surf[l] + n_phys(l) * n_surf[s]);
-              }
-            }
-          }
-        }
+        compute_normal_strain_basis(epsn, tr, K, dphi, n_surf, n_phys, q_pos);
         // compute tr(eps(u)), epsn at q
         double tr_u = 0;
         double epsn_u = 0;
@@ -459,7 +442,7 @@ public:
       const xt::xtensor<double, 2>& phi = kd.phi();
       xtl::span<const double> _weights(kd.q_weights());
       auto weights = _weights.subspan(q_offset[0], q_offset[1] - q_offset[0]);
-      xt::xtensor<double, 1> n_surf = xt::zeros<double>({kd.gdim()});
+      std::array<double, 3> n_surf = {0, 0, 0};
       xt::xtensor<double, 2> tr
           = xt::zeros<double>({kd.ndofs_cell(), kd.gdim()});
       xt::xtensor<double, 2> epsn
@@ -480,29 +463,12 @@ public:
           // For closest point projection the gap function is given by
           // (-n_y)* (Pi(x) - x), where n_y is the outward unit normal
           // in y = Pi(x)
-          n_surf(i) = -c[kd.offsets(4) + q * kd.gdim() + i];
-          n_dot += n_phys(i) * n_surf(i);
-          gap += c[kd.offsets(3) + q * kd.gdim() + i] * n_surf(i);
+          n_surf[i] = -c[kd.offsets(4) + q * kd.gdim() + i];
+          n_dot += n_phys(i) * n_surf[i];
+          gap += c[kd.offsets(3) + q * kd.gdim() + i] * n_surf[i];
         }
 
-        // precompute tr(eps(phi_j e_l)), eps(phi^j e_l)n*n2
-        std::fill(tr.begin(), tr.end(), 0.0);
-        std::fill(epsn.begin(), epsn.end(), 0.0);
-        for (std::size_t j = 0; j < kd.ndofs_cell(); j++)
-        {
-          for (std::size_t l = 0; l < kd.bs(); l++)
-          {
-            for (std::uint32_t k = 0; k < kd.tdim(); k++)
-            {
-              tr(j, l) += K(k, l) * dphi(k, q_pos, j);
-              for (std::size_t s = 0; s < kd.gdim(); s++)
-              {
-                epsn(j, l) += K(k, s) * dphi(k, q_pos, j)
-                              * (n_phys(s) * n_surf(l) + n_phys(l) * n_surf(s));
-              }
-            }
-          }
-        }
+        compute_normal_strain_basis(epsn, tr, K, dphi, n_surf, n_phys, q_pos);
 
         // compute tr(eps(u)), epsn at q
         double tr_u = 0;
@@ -516,12 +482,12 @@ public:
           {
             tr_u += c[block_index + j] * tr(i, j);
             epsn_u += c[block_index + j] * epsn(i, j);
-            jump_un += c[block_index + j] * phi(q_pos, i) * n_surf(j);
+            jump_un += c[block_index + j] * phi(q_pos, i) * n_surf[j];
           }
         }
         std::size_t offset_u_opp = kd.offsets(7) + q * kd.bs();
         for (std::size_t j = 0; j < kd.bs(); ++j)
-          jump_un += -c[offset_u_opp + j] * n_surf(j);
+          jump_un += -c[offset_u_opp + j] * n_surf[j];
         double sign_u = lmbda * tr_u * n_dot + mu * epsn_u;
         double Pn_u
             = dolfinx_contact::dR_plus((jump_un - gap) - gamma * sign_u);
@@ -534,14 +500,14 @@ public:
           {
             double sign_du = (lmbda * tr(j, l) * n_dot + mu * epsn(j, l));
             double Pn_du
-                = (phi(q_pos, j) * n_surf(l) - gamma * sign_du) * Pn_u * w0;
+                = (phi(q_pos, j) * n_surf[l] - gamma * sign_du) * Pn_u * w0;
 
             sign_du *= w0;
             for (std::size_t i = 0; i < kd.ndofs_cell(); i++)
             {
               for (std::size_t b = 0; b < kd.bs(); b++)
               {
-                double v_dot_nsurf = n_surf(b) * phi(q_pos, i);
+                double v_dot_nsurf = n_surf[b] * phi(q_pos, i);
                 double sign_v = (lmbda * tr(i, b) * n_dot + mu * epsn(i, b));
                 double Pn_v = gamma_inv * v_dot_nsurf - theta * sign_v;
                 A[0][(b + i * kd.bs()) * kd.ndofs_cell() * kd.bs() + l
@@ -555,13 +521,13 @@ public:
                       = kd.offsets(5)
                         + k * num_points * kd.ndofs_cell() * kd.bs()
                         + j * num_points * kd.bs() + q * kd.bs() + l;
-                  double du_n_opp = c[index] * n_surf(l);
+                  double du_n_opp = c[index] * n_surf[l];
 
                   du_n_opp *= w0 * Pn_u;
                   index = kd.offsets(5)
                           + k * num_points * kd.ndofs_cell() * kd.bs()
                           + i * num_points * kd.bs() + q * kd.bs() + b;
-                  double v_n_opp = c[index] * n_surf(b);
+                  double v_n_opp = c[index] * n_surf[b];
                   A[3 * k + 1][(b + i * kd.bs()) * kd.ndofs_cell() * kd.bs() + l
                                + j * kd.bs()]
                       -= 0.5 * du_n_opp * Pn_v;
