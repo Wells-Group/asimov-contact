@@ -263,7 +263,7 @@ dolfinx_contact::pack_coefficient_quadrature(
 
         for (std::size_t q = 0; q < num_points_per_entity; ++q)
           for (std::size_t k = 0; k < dofmap_bs; ++k)
-            for (int j = 0; j < vs; j++)
+            for (std::size_t j = 0; j < vs; j++)
               coefficients[cstride * i + q * value_size + k + j]
                   += basis_values(q, d, j) * data[pos_v + k];
       }
@@ -293,7 +293,7 @@ dolfinx_contact::pack_coefficient_quadrature(
           {
             // Access each component of the reference basis function (in the
             // case of vector spaces)
-            for (int l = 0; l < vs; ++l)
+            for (std::size_t l = 0; l < vs; ++l)
             {
               coefficients[cstride * i + q * bs * vs + l + pos.rem]
                   += reference_basis_values(0, q_offset + q, pos.quot, l)
