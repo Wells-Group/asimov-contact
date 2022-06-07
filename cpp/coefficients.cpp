@@ -157,11 +157,11 @@ dolfinx_contact::pack_coefficient_quadrature(
     xtl::span<const double> x_g = geometry.x();
 
     // Tabulate coordinate basis to compute Jacobian
-    std::array<std::size_t, 4> tab_shape = cmap.tabulate_shape(1, num_points);
+    std::array<std::size_t, 4> c_shape = cmap.tabulate_shape(1, num_points);
     xt::xtensor<double, 3> cmap_derivative(
-        {(std::size_t)tdim, tab_shape[1], tab_shape[2]});
+        {(std::size_t)tdim, c_shape[1], c_shape[2]});
     {
-      xt::xtensor<double, 4> cmap_basis_functions(tab_shape);
+      xt::xtensor<double, 4> cmap_basis_functions(c_shape);
       cmap.tabulate(1, q_points, cmap_basis_functions);
       cmap_derivative
           = xt::view(cmap_basis_functions, xt::xrange(1, int(tdim) + 1),
@@ -219,7 +219,7 @@ dolfinx_contact::pack_coefficient_quadrature(
                          xt::all(), xt::all());
           transformation(
               xtl::span(element_basis_values.data(), num_basis_functions * vs),
-              cell_info, cell, vs);
+              cell_info, cell, (int)vs);
 
           // Push basis forward to physical element
           auto _u = xt::view(basis_values, q, xt::all(), xt::all());
@@ -247,7 +247,7 @@ dolfinx_contact::pack_coefficient_quadrature(
                          xt::all(), xt::all());
           transformation(
               xtl::span(element_basis_values.data(), num_basis_functions * vs),
-              cell_info, cell, vs);
+              cell_info, cell, (int)vs);
 
           // Push basis forward to physical element
           auto _u = xt::view(basis_values, q, xt::all(), xt::all());

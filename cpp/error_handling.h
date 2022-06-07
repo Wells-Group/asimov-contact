@@ -7,11 +7,10 @@
 #pragma once
 #include <dolfinx/mesh/cell_types.h>
 #include <exception>
-namespace dolfinx_contact
-{
-namespace error
+namespace dolfinx_contact::error
 {
 
+// Cells not supported in DOLFINx_contact
 constexpr std::array<dolfinx::mesh::CellType, 3> unsupported_cells
     = {dolfinx::mesh::CellType::prism, dolfinx::mesh::CellType::pyramid,
        dolfinx::mesh::CellType::interval};
@@ -19,7 +18,8 @@ constexpr std::array<dolfinx::mesh::CellType, 3> unsupported_cells
 class UnsupportedCellException : public std::exception
 {
 public:
-  const char* what() const throw() { return message.c_str(); }
+  /// Throw error message
+  const char* what() const throw() override { return message.c_str(); }
 
 private:
   std::string message = "Cell-type not supported";
@@ -28,5 +28,5 @@ private:
 /// Check if cell type is supported
 /// @param[in] cell_type The cell type
 void check_cell_type(dolfinx::mesh::CellType cell_type);
-} // namespace error
-} // namespace dolfinx_contact
+
+} // namespace dolfinx_contact::error
