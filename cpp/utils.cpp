@@ -839,7 +839,7 @@ dolfinx_contact::compute_distance_map(
     reference_facet_basis_values
         = xt::view(cmap_basis, 0, xt::all(), xt::all(), 0);
 
-    quadrature_points.reserve((quadrature_facets.size()));
+    quadrature_points.reserve(quadrature_facets.size());
     compute_physical_points(quadrature_mesh, quadrature_facets, q_offset,
                             reference_facet_basis_values, quadrature_points);
   }
@@ -851,9 +851,9 @@ dolfinx_contact::compute_distance_map(
       {quadrature_facets.size() * num_q_points, (std::size_t)3});
   for (std::size_t i = 0; i < quadrature_facets.size(); ++i)
   {
-    assert(quadrature_points[i].shape(1) == (std::size_t)gdim);
+    assert(quadrature_points[i].shape(1) == gdim);
     for (std::size_t j = 0; j < num_q_points; ++j)
-      for (std::size_t k = 0; k < (std::size_t)gdim; ++k)
+      for (std::size_t k = 0; k < gdim; ++k)
         padded_quadrature_points(i * num_q_points + j, k)
             = quadrature_points[i](j, k);
   }
