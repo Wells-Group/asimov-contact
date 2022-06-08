@@ -8,6 +8,7 @@
 
 #include "QuadratureRule.h"
 #include "SubMesh.h"
+#include "error_handling.h"
 #include "geometric_quantities.h"
 #include "utils.h"
 #include <basix/cell.h>
@@ -203,11 +204,7 @@ public:
     const std::uint32_t tdim = topology.dim();
     const dolfinx::mesh::CellType ct = topology.cell_type();
 
-    if ((ct == dolfinx::mesh::CellType::prism)
-        || (ct == dolfinx::mesh::CellType::pyramid))
-    {
-      throw std::invalid_argument("Unsupported cell type");
-    }
+    error::check_cell_type(ct);
 
     // Create quadrature points on reference facet
     const std::vector<double>& q_weights = _quadrature_rule->weights();
@@ -747,14 +744,8 @@ public:
     const std::vector<xt::xtensor<double, 2>>& qp_phys = _qp_phys[puppet_mt];
     const std::size_t num_facets = _cell_facet_pairs[puppet_mt].size();
     // NOTE: Assumes same number of quadrature points on all facets
-    // NOTE: Assuming same number of quadrature points on each cell
-    if (const dolfinx::mesh::CellType ct
-        = candidate_mesh->topology().cell_type();
-        (ct == dolfinx::mesh::CellType::prism)
-        || (ct == dolfinx::mesh::CellType::pyramid))
-    {
-      throw std::invalid_argument("Unsupported cell type");
-    }
+    dolfinx_contact::error::check_cell_type(
+        candidate_mesh->topology().cell_type());
     const std::size_t num_q_point
         = _quadrature_rule->offset()[1] - _quadrature_rule->offset()[0];
 

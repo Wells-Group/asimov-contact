@@ -8,6 +8,7 @@
 
 #include "Contact.h"
 #include "QuadratureRule.h"
+#include "error_handling.h"
 #include "geometric_quantities.h"
 #include "utils.h"
 #include <basix/cell.h>
@@ -39,11 +40,7 @@ kernel_fn<T> generate_contact_kernel(
   const dolfinx::mesh::CellType ct = topology.cell_type();
   const int fdim = tdim - 1;
 
-  if ((ct == dolfinx::mesh::CellType::prism)
-      or (ct == dolfinx::mesh::CellType::pyramid))
-  {
-    throw std::invalid_argument("Unsupported cell type");
-  }
+  dolfinx_contact::error::check_cell_type(ct);
 
   // Create quadrature points on reference facet
   const std::vector<double>& q_weights = quadrature_rule.weights();

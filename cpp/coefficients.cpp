@@ -6,6 +6,7 @@
 
 #include "coefficients.h"
 #include "QuadratureRule.h"
+#include "error_handling.h"
 #include "geometric_quantities.h"
 #include <basix/quadrature.h>
 #include <dolfinx/mesh/cell_types.h>
@@ -57,27 +58,23 @@ dolfinx_contact::pack_coefficient_quadrature(
   // Create quadrature rule
   QuadratureRule q_rule(cell_type, q_degree, entity_dim);
 
-  // Get finite element
+  // Get element information
   const dolfinx::fem::FiniteElement* element
       = coeff->function_space()->element().get();
-
-  // Get element information
   const std::size_t bs = element->block_size();
-  const std::size_t num_basis_functions = element->space_dimension() / bs;
-  const int reference_value_size = element->reference_value_size();
-  const int vs = reference_value_size / bs;
+  const std::size_t value_size = element->value_size();
 
   // Tabulate function at quadrature points (assuming no derivatives)
-  if ((cell_type == dolfinx::mesh::CellType::prism)
-      or (cell_type == dolfinx::mesh::CellType::pyramid))
-  {
-    throw std::invalid_argument("Prism and pyramid meshes are not supported");
-  }
+  dolfinx_contact::error::check_cell_type(cell_type);
   const xt::xtensor<double, 2>& q_points = q_rule.points();
-  const std::vector<std::int32_t>& q_offsets = q_rule.offset();
 
-  xt::xtensor<double, 4> reference_basis_values(
-      {1, (std::size_t)q_offsets.back(), num_basis_functions, (std::size_t)vs});
+  const basix::FiniteElement& basix_element = element->basix_element();
+  std::array<std::size_t, 4> tab_shape
+      = basix_element.tabulate_shape(0, q_points.shape(0));
+  const std::size_t num_basis_functions = tab_shape[2];
+  const std::size_t vs = tab_shape[3];
+  assert(value_size / bs == vs);
+  xt::xtensor<double, 4> reference_basis_values(tab_shape);
   element->tabulate(reference_basis_values, q_points, 0);
 
   std::function<std::pair<std::int32_t, int>(std::size_t)> get_cell_info;
@@ -116,8 +113,9 @@ dolfinx_contact::pack_coefficient_quadrature(
       active_entities);
 
   // Create output array
+  const std::vector<std::int32_t>& q_offsets = q_rule.offset();
   const std::size_t num_points_per_entity = q_offsets[1] - q_offsets[0];
-  const auto cstride = int(reference_value_size * num_points_per_entity);
+  const auto cstride = int(value_size * num_points_per_entity);
   std::vector<PetscScalar> coefficients(num_active_entities * cstride, 0.0);
 
   // Get the coeffs to pack
@@ -146,9 +144,8 @@ dolfinx_contact::pack_coefficient_quadrature(
 
     // Prepare basis function data structures
     xt::xtensor<double, 3> basis_values(
-        {num_points_per_entity, num_basis_functions, (std::size_t)vs});
-    xt::xtensor<double, 2> element_basis_values(
-        {basis_values.shape(0), basis_values.shape(1)});
+        {num_points_per_entity, num_basis_functions, vs});
+    xt::xtensor<double, 2> element_basis_values({num_basis_functions, vs});
 
     // Get geometry data
     const dolfinx::mesh::Geometry& geometry = mesh->geometry();
@@ -160,11 +157,11 @@ dolfinx_contact::pack_coefficient_quadrature(
     xtl::span<const double> x_g = geometry.x();
 
     // Tabulate coordinate basis to compute Jacobian
-    std::array<std::size_t, 4> tab_shape = cmap.tabulate_shape(1, num_points);
+    std::array<std::size_t, 4> c_shape = cmap.tabulate_shape(1, num_points);
     xt::xtensor<double, 3> cmap_derivative(
-        {(std::size_t)tdim, tab_shape[1], tab_shape[2]});
+        {(std::size_t)tdim, c_shape[1], c_shape[2]});
     {
-      xt::xtensor<double, 4> cmap_basis_functions(tab_shape);
+      xt::xtensor<double, 4> cmap_basis_functions(c_shape);
       cmap.tabulate(1, q_points, cmap_basis_functions);
       cmap_derivative
           = xt::view(cmap_basis_functions, xt::xrange(1, int(tdim) + 1),
@@ -222,7 +219,7 @@ dolfinx_contact::pack_coefficient_quadrature(
                          xt::all(), xt::all());
           transformation(
               xtl::span(element_basis_values.data(), num_basis_functions * vs),
-              cell_info, cell, vs);
+              cell_info, cell, (int)vs);
 
           // Push basis forward to physical element
           auto _u = xt::view(basis_values, q, xt::all(), xt::all());
@@ -250,7 +247,7 @@ dolfinx_contact::pack_coefficient_quadrature(
                          xt::all(), xt::all());
           transformation(
               xtl::span(element_basis_values.data(), num_basis_functions * vs),
-              cell_info, cell, vs);
+              cell_info, cell, (int)vs);
 
           // Push basis forward to physical element
           auto _u = xt::view(basis_values, q, xt::all(), xt::all());
@@ -266,8 +263,8 @@ dolfinx_contact::pack_coefficient_quadrature(
 
         for (std::size_t q = 0; q < num_points_per_entity; ++q)
           for (std::size_t k = 0; k < dofmap_bs; ++k)
-            for (int j = 0; j < vs; j++)
-              coefficients[cstride * i + q * reference_value_size + k + j]
+            for (std::size_t j = 0; j < vs; j++)
+              coefficients[cstride * i + q * value_size + k + j]
                   += basis_values(q, d, j) * data[pos_v + k];
       }
     }
@@ -296,7 +293,7 @@ dolfinx_contact::pack_coefficient_quadrature(
           {
             // Access each component of the reference basis function (in the
             // case of vector spaces)
-            for (int l = 0; l < vs; ++l)
+            for (std::size_t l = 0; l < vs; ++l)
             {
               coefficients[cstride * i + q * bs * vs + l + pos.rem]
                   += reference_basis_values(0, q_offset + q, pos.quot, l)
@@ -321,11 +318,7 @@ std::vector<PetscScalar> dolfinx_contact::pack_circumradius(
 
   // Tabulate element at quadrature points
   const dolfinx::mesh::CellType cell_type = topology.cell_type();
-  if ((cell_type == dolfinx::mesh::CellType::prism)
-      or (cell_type == dolfinx::mesh::CellType::pyramid))
-  {
-    throw std::invalid_argument("Prism and pyramid meshes are not supported");
-  }
+  dolfinx_contact::error::check_cell_type(cell_type);
 
   const int tdim = topology.dim();
   const int fdim = tdim - 1;
