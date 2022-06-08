@@ -236,9 +236,13 @@ public:
                const int facet_index, const std::size_t num_links)
 
     {
-      // assumption that the vector function space has block size tdim
+      // Retrieve some data from kd
       std::array<std::int32_t, 2> q_offset
           = {kd.qp_offsets(facet_index), kd.qp_offsets(facet_index + 1)};
+      const std::size_t bs = kd.bs();
+      const std::uint32_t ndofs_cell = kd.ndofs_cell();
+      const std::uint32_t gdim = kd.gdim();
+      const std::uint32_t tdim = kd.tdim();
 
       // NOTE: DOLFINx has 3D input coordinate dofs
       // FIXME: These array should be views (when compute_jacobian doesn't use
@@ -250,15 +254,15 @@ public:
                       xt::no_ownership(), shape);
 
       // Create data structures for jacobians
-      xt::xtensor<double, 2> J = xt::zeros<double>({kd.gdim(), kd.tdim()});
-      xt::xtensor<double, 2> K = xt::zeros<double>({kd.tdim(), kd.gdim()});
+      xt::xtensor<double, 2> J = xt::zeros<double>({gdim, tdim});
+      xt::xtensor<double, 2> K = xt::zeros<double>({tdim, gdim});
       xt::xtensor<double, 2> J_tot
-          = xt::zeros<double>({J.shape(0), (std::size_t)kd.tdim() - 1});
+          = xt::zeros<double>({J.shape(0), (std::size_t)tdim - 1});
       double detJ;
-      auto c_view = xt::view(coord, xt::all(), xt::range(0, kd.gdim()));
+      auto c_view = xt::view(coord, xt::all(), xt::range(0, gdim));
 
       // Normal vector on physical facet at a single quadrature point
-      xt::xtensor<double, 1> n_phys = xt::zeros<double>({kd.gdim()});
+      xt::xtensor<double, 1> n_phys = xt::zeros<double>({gdim});
 
       // Pre-compute jacobians and normals for affine meshes
       if (kd.affine())
@@ -285,8 +289,8 @@ public:
 
       // Temporary data structures used inside quadrature loop
       std::array<double, 3> n_surf = {0, 0, 0};
-      xt::xtensor<double, 2> tr({kd.ndofs_cell(), kd.gdim()});
-      xt::xtensor<double, 2> epsn({kd.ndofs_cell(), kd.gdim()});
+      xt::xtensor<double, 2> tr({ndofs_cell, gdim});
+      xt::xtensor<double, 2> epsn({ndofs_cell, gdim});
       // Loop over quadrature points
       const int num_points = q_offset[1] - q_offset[0];
       for (int q = 0; q < num_points; q++)
@@ -301,22 +305,22 @@ public:
         // For closest point projection the gap function is given by
         // (-n_y)* (Pi(x) - x), where n_y is the outward unit normal
         // in y = Pi(x)
-        for (std::size_t i = 0; i < kd.gdim(); i++)
+        for (std::size_t i = 0; i < gdim; i++)
         {
 
-          n_surf[i] = -c[kd.offsets(4) + q * kd.gdim() + i];
+          n_surf[i] = -c[kd.offsets(4) + q * gdim + i];
           n_dot += n_phys(i) * n_surf[i];
-          gap += c[kd.offsets(3) + q * kd.gdim() + i] * n_surf[i];
+          gap += c[kd.offsets(3) + q * gdim + i] * n_surf[i];
         }
         compute_normal_strain_basis(epsn, tr, K, dphi, n_surf, n_phys, q_pos);
         // compute tr(eps(u)), epsn at q
         double tr_u = 0;
         double epsn_u = 0;
         double jump_un = 0;
-        for (std::size_t i = 0; i < kd.ndofs_cell(); i++)
+        for (std::size_t i = 0; i < ndofs_cell; i++)
         {
-          std::size_t block_index = kd.offsets(6) + i * kd.bs();
-          for (std::size_t j = 0; j < kd.bs(); j++)
+          std::size_t block_index = kd.offsets(6) + i * bs;
+          for (std::size_t j = 0; j < bs; j++)
           {
             PetscScalar coeff = c[block_index + j];
             tr_u += coeff * tr(i, j);
@@ -324,8 +328,8 @@ public:
             jump_un += coeff * phi(q_pos, i) * n_surf[j];
           }
         }
-        std::size_t offset_u_opp = kd.offsets(7) + q * kd.bs();
-        for (std::size_t j = 0; j < kd.bs(); ++j)
+        std::size_t offset_u_opp = kd.offsets(7) + q * bs;
+        for (std::size_t j = 0; j < bs; ++j)
           jump_un += -c[offset_u_opp + j] * n_surf[j];
         double sign_u = lmbda * tr_u * n_dot + mu * epsn_u;
         const double w0 = weights[q] * detJ;
@@ -335,26 +339,25 @@ public:
 
         // Fill contributions of facet with itself
 
-        for (std::size_t i = 0; i < kd.ndofs_cell(); i++)
+        for (std::size_t i = 0; i < ndofs_cell; i++)
         {
-          for (std::size_t n = 0; n < kd.bs(); n++)
+          for (std::size_t n = 0; n < bs; n++)
           {
             double v_dot_nsurf = n_surf[n] * phi(q_pos, i);
             double sign_v = (lmbda * tr(i, n) * n_dot + mu * epsn(i, n));
             // This is (1./gamma)*Pn_v to avoid the product gamma*(1./gamma)
             double Pn_v = gamma_inv * v_dot_nsurf - theta * sign_v;
-            b[0][n + i * kd.bs()] += 0.5 * Pn_u * Pn_v;
+            b[0][n + i * bs] += 0.5 * Pn_u * Pn_v;
             // 0.5 * (-theta * gamma * sign_v * sign_u + Pn_u * Pn_v);
 
             // entries corresponding to v on the other surface
             for (std::size_t k = 0; k < num_links; k++)
             {
-              std::size_t index = kd.offsets(5)
-                                  + k * num_points * kd.ndofs_cell() * kd.bs()
-                                  + i * num_points * kd.bs() + q * kd.bs() + n;
+              std::size_t index = kd.offsets(5) + k * num_points * ndofs_cell * bs
+                                  + i * num_points * bs + q * bs + n;
               double v_n_opp = c[index] * n_surf[n];
 
-              b[k + 1][n + i * kd.bs()] -= 0.5 * gamma_inv * v_n_opp * Pn_u;
+              b[k + 1][n + i * bs] -= 0.5 * gamma_inv * v_n_opp * Pn_u;
             }
           }
         }
@@ -378,8 +381,14 @@ public:
                const double* w, const double* coordinate_dofs,
                const int facet_index, const std::size_t num_links)
     {
+      // Retrieve some data from kd
       std::array<std::int32_t, 2> q_offset
           = {kd.qp_offsets(facet_index), kd.qp_offsets(facet_index + 1)};
+      const std::size_t bs = kd.bs();
+      const std::uint32_t ndofs_cell = kd.ndofs_cell();
+      const std::uint32_t gdim = kd.gdim();
+      const std::uint32_t tdim = kd.tdim();
+
       // Reshape coordinate dofs to two dimensional array
       // NOTE: DOLFINx has 3D input coordinate dofs
       std::array<std::size_t, 2> shape
@@ -392,15 +401,15 @@ public:
                       xt::no_ownership(), shape);
 
       // Create data structures for jacobians
-      xt::xtensor<double, 2> J = xt::zeros<double>({kd.gdim(), kd.tdim()});
-      xt::xtensor<double, 2> K = xt::zeros<double>({kd.tdim(), kd.gdim()});
+      xt::xtensor<double, 2> J = xt::zeros<double>({gdim, tdim});
+      xt::xtensor<double, 2> K = xt::zeros<double>({tdim, gdim});
       xt::xtensor<double, 2> J_tot
-          = xt::zeros<double>({J.shape(0), (std::size_t)kd.tdim() - 1});
+          = xt::zeros<double>({J.shape(0), (std::size_t)tdim - 1});
       double detJ;
-      auto c_view = xt::view(coord, xt::all(), xt::range(0, kd.gdim()));
+      auto c_view = xt::view(coord, xt::all(), xt::range(0, gdim));
 
       // Normal vector on physical facet at a single quadrature point
-      xt::xtensor<double, 1> n_phys = xt::zeros<double>({kd.gdim()});
+      xt::xtensor<double, 1> n_phys = xt::zeros<double>({gdim});
 
       // Pre-compute jacobians and normals for affine meshes
       if (kd.affine())
@@ -423,10 +432,8 @@ public:
       xtl::span<const double> _weights(kd.q_weights());
       auto weights = _weights.subspan(q_offset[0], q_offset[1] - q_offset[0]);
       std::array<double, 3> n_surf = {0, 0, 0};
-      xt::xtensor<double, 2> tr
-          = xt::zeros<double>({kd.ndofs_cell(), kd.gdim()});
-      xt::xtensor<double, 2> epsn
-          = xt::zeros<double>({kd.ndofs_cell(), kd.gdim()});
+      xt::xtensor<double, 2> tr = xt::zeros<double>({ndofs_cell, gdim});
+      xt::xtensor<double, 2> epsn = xt::zeros<double>({ndofs_cell, gdim});
       // Loop over quadrature points
       const int num_points = q_offset[1] - q_offset[0];
       for (int q = 0; q < num_points; q++)
@@ -438,14 +445,14 @@ public:
 
         double n_dot = 0;
         double gap = 0;
-        for (std::size_t i = 0; i < kd.gdim(); i++)
+        for (std::size_t i = 0; i < gdim; i++)
         {
           // For closest point projection the gap function is given by
           // (-n_y)* (Pi(x) - x), where n_y is the outward unit normal
           // in y = Pi(x)
-          n_surf[i] = -c[kd.offsets(4) + q * kd.gdim() + i];
+          n_surf[i] = -c[kd.offsets(4) + q * gdim + i];
           n_dot += n_phys(i) * n_surf[i];
-          gap += c[kd.offsets(3) + q * kd.gdim() + i] * n_surf[i];
+          gap += c[kd.offsets(3) + q * gdim + i] * n_surf[i];
         }
 
         compute_normal_strain_basis(epsn, tr, K, dphi, n_surf, n_phys, q_pos);
@@ -455,18 +462,18 @@ public:
         double epsn_u = 0;
         double jump_un = 0;
 
-        for (std::size_t i = 0; i < kd.ndofs_cell(); i++)
+        for (std::size_t i = 0; i < ndofs_cell; i++)
         {
-          std::size_t block_index = kd.offsets(6) + i * kd.bs();
-          for (std::size_t j = 0; j < kd.bs(); j++)
+          std::size_t block_index = kd.offsets(6) + i * bs;
+          for (std::size_t j = 0; j < bs; j++)
           {
             tr_u += c[block_index + j] * tr(i, j);
             epsn_u += c[block_index + j] * epsn(i, j);
             jump_un += c[block_index + j] * phi(q_pos, i) * n_surf[j];
           }
         }
-        std::size_t offset_u_opp = kd.offsets(7) + q * kd.bs();
-        for (std::size_t j = 0; j < kd.bs(); ++j)
+        std::size_t offset_u_opp = kd.offsets(7) + q * bs;
+        for (std::size_t j = 0; j < bs; ++j)
           jump_un += -c[offset_u_opp + j] * n_surf[j];
         double sign_u = lmbda * tr_u * n_dot + mu * epsn_u;
         double Pn_u
@@ -474,48 +481,42 @@ public:
 
         // Fill contributions of facet with itself
         const double w0 = weights[q] * detJ;
-        for (std::size_t j = 0; j < kd.ndofs_cell(); j++)
+        for (std::size_t j = 0; j < ndofs_cell; j++)
         {
-          for (std::size_t l = 0; l < kd.bs(); l++)
+          for (std::size_t l = 0; l < bs; l++)
           {
             double sign_du = (lmbda * tr(j, l) * n_dot + mu * epsn(j, l));
             double Pn_du
                 = (phi(q_pos, j) * n_surf[l] - gamma * sign_du) * Pn_u * w0;
 
             sign_du *= w0;
-            for (std::size_t i = 0; i < kd.ndofs_cell(); i++)
+            for (std::size_t i = 0; i < ndofs_cell; i++)
             {
-              for (std::size_t b = 0; b < kd.bs(); b++)
+              for (std::size_t b = 0; b < bs; b++)
               {
                 double v_dot_nsurf = n_surf[b] * phi(q_pos, i);
                 double sign_v = (lmbda * tr(i, b) * n_dot + mu * epsn(i, b));
                 double Pn_v = gamma_inv * v_dot_nsurf - theta * sign_v;
-                A[0][(b + i * kd.bs()) * kd.ndofs_cell() * kd.bs() + l
-                     + j * kd.bs()]
+                A[0][(b + i * bs) * ndofs_cell * bs + l + j * bs]
                     += 0.5 * Pn_du * Pn_v;
 
                 // entries corresponding to u and v on the other surface
                 for (std::size_t k = 0; k < num_links; k++)
                 {
-                  std::size_t index
-                      = kd.offsets(5)
-                        + k * num_points * kd.ndofs_cell() * kd.bs()
-                        + j * num_points * kd.bs() + q * kd.bs() + l;
+                  std::size_t index = kd.offsets(5)
+                                      + k * num_points * ndofs_cell * bs
+                                      + j * num_points * bs + q * bs + l;
                   double du_n_opp = c[index] * n_surf[l];
 
                   du_n_opp *= w0 * Pn_u;
-                  index = kd.offsets(5)
-                          + k * num_points * kd.ndofs_cell() * kd.bs()
-                          + i * num_points * kd.bs() + q * kd.bs() + b;
+                  index = kd.offsets(5) + k * num_points * ndofs_cell * bs
+                          + i * num_points * bs + q * bs + b;
                   double v_n_opp = c[index] * n_surf[b];
-                  A[3 * k + 1][(b + i * kd.bs()) * kd.ndofs_cell() * kd.bs() + l
-                               + j * kd.bs()]
+                  A[3 * k + 1][(b + i * bs) * bs * ndofs_cell + l + j * bs]
                       -= 0.5 * du_n_opp * Pn_v;
-                  A[3 * k + 2][(b + i * kd.bs()) * kd.ndofs_cell() * kd.bs() + l
-                               + j * kd.bs()]
+                  A[3 * k + 2][(b + i * bs) * bs * ndofs_cell + l + j * bs]
                       -= 0.5 * gamma_inv * Pn_du * v_n_opp;
-                  A[3 * k + 3][(b + i * kd.bs()) * kd.ndofs_cell() * kd.bs() + l
-                               + j * kd.bs()]
+                  A[3 * k + 3][(b + i * bs) * bs * ndofs_cell + l + j * bs]
                       += 0.5 * gamma_inv * du_n_opp * v_n_opp;
                 }
               }
@@ -638,14 +639,8 @@ public:
     const std::vector<xt::xtensor<double, 2>>& qp_phys = _qp_phys[puppet_mt];
     const std::size_t num_facets = _cell_facet_pairs[puppet_mt].size();
     // NOTE: Assumes same number of quadrature points on all facets
-    // NOTE: Assuming same number of quadrature points on each cell
-    if (const dolfinx::mesh::CellType ct
-        = candidate_mesh->topology().cell_type();
-        (ct == dolfinx::mesh::CellType::prism)
-        || (ct == dolfinx::mesh::CellType::pyramid))
-    {
-      throw std::invalid_argument("Unsupported cell type");
-    }
+    dolfinx_contact::error::check_cell_type(
+        candidate_mesh->topology().cell_type());
     const std::size_t num_q_point
         = _quadrature_rule->offset()[1] - _quadrature_rule->offset()[0];
 
