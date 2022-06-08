@@ -74,7 +74,7 @@ kernel_fn<T> generate_contact_kernel(
     std::shared_ptr<const dolfinx::fem::FiniteElement> coeff_element
         = coeffs[i]->function_space()->element();
     xt::xtensor<double, 4> coeff_basis(
-        {kd.tdim() + 1, num_quadrature_pts,
+        {tdim + 1, num_quadrature_pts,
          coeff_element->space_dimension() / coeff_element->block_size(), 1});
     if (coeff_element->value_size() / coeff_element->block_size() != 1)
     {
@@ -119,9 +119,6 @@ kernel_fn<T> generate_contact_kernel(
     const std::size_t bs = kd.bs();
     const std::uint32_t ndofs_cell = kd.ndofs_cell();
 
-
-
-
     // Reshape coordinate dofs to two dimensional array
     // FIXME: These array should be views (when compute_jacobian doesn't use
     // xtensor)
@@ -139,7 +136,7 @@ kernel_fn<T> generate_contact_kernel(
 
     double detJ;
     // Normal vector on physical facet at a single quadrature point
-    xt::xtensor<double, 1> n_phys = xt::zeros<double>({kd.gdim()});
+    xt::xtensor<double, 1> n_phys = xt::zeros<double>({gdim});
     // Pre-compute jacobians and normals for affine meshes
     if (kd.affine())
     {
@@ -154,7 +151,7 @@ kernel_fn<T> generate_contact_kernel(
     if (constant_normal)
     {
       // If surface normal constant precompute (n_phys * n_surf)
-      for (int i = 0; i < kd.gdim(); i++)
+      for (int i = 0; i < gdim; i++)
       {
         // For closest point projection the gap function is given by
         // (-n_y)* (Pi(x) - x), where n_y is the outward unit normal
@@ -172,7 +169,7 @@ kernel_fn<T> generate_contact_kernel(
     auto weights = _weights.subspan(q_offset[0], q_offset[1] - q_offset[0]);
 
     // Temporary variable for grad(phi) on physical cell
-    xt::xtensor<double, 2> dphi_phys({kd.bs(), kd.ndofs_cell()});
+    xt::xtensor<double, 2> dphi_phys({bs, ndofs_cell});
 
     // Temporary work arrays
     xt::xtensor<double, 2> tr(
@@ -207,20 +204,20 @@ kernel_fn<T> generate_contact_kernel(
       if (!constant_normal)
       {
         n_dot = 0;
-        for (int i = 0; i < kd.gdim(); i++)
+        for (int i = 0; i < gdim; i++)
         {
           // For closest point projection the gap function is given by
           // (-n_y)* (Pi(x) - x), where n_y is the outward unit normal
           // in y = Pi(x)
-          n_surf[i] = -c[normal_offset + q * kd.gdim() + i];
+          n_surf[i] = -c[normal_offset + q * gdim + i];
           n_dot += n_phys(i) * n_surf[i];
         }
       }
       int gap_offset = c_offset + kd.offsets(4);
       double gap = 0;
-      for (int i = 0; i < kd.gdim(); i++)
+      for (int i = 0; i < gdim; i++)
       {
-        gap += c[gap_offset + q * kd.gdim() + i] * n_surf[i];
+        gap += c[gap_offset + q * gdim + i] * n_surf[i];
       }
 
       compute_normal_strain_basis(epsn, tr, K, dphi, n_surf, n_phys, q_pos);
@@ -246,14 +243,14 @@ kernel_fn<T> generate_contact_kernel(
           = dolfinx_contact::R_minus(gamma_inv * sign_u + (gap - u_dot_nsurf))
             * detJ * weights[q];
       sign_u *= detJ * weights[q];
-      for (int j = 0; j < kd.ndofs_cell(); j++)
+      for (int j = 0; j < ndofs_cell; j++)
       {
         // Insert over block size in matrix
-        for (int l = 0; l < kd.bs(); l++)
+        for (int l = 0; l < bs; l++)
         {
           double sign_v = lmbda * tr(j, l) * n_dot + mu * epsn(j, l);
           double v_dot_nsurf = n_surf[l] * phi(q_pos, j);
-          b[0][j * kd.bs() + l]
+          b[0][j * bs + l]
               += -theta * gamma_inv * sign_v * sign_u
                  + R_minus_scaled * (theta * sign_v - gamma * v_dot_nsurf);
         }
@@ -278,7 +275,7 @@ kernel_fn<T> generate_contact_kernel(
   /// @param[in] num_links Unused integer. In two sided contact this indicates
   /// how many cells are connected with the cell.
   kernel_fn<T> nitsche_rigid_jacobian
-      = [kd,gdim, tdim, phi_coeffs, dphi_coeffs, num_coeffs, constant_normal](
+      = [kd, gdim, tdim, phi_coeffs, dphi_coeffs, num_coeffs, constant_normal](
             std::vector<std::vector<double>>& A, const T* c, const T* w,
             const double* coordinate_dofs, const int facet_index,
             [[maybe_unused]] const std::size_t num_links)
@@ -319,7 +316,7 @@ kernel_fn<T> generate_contact_kernel(
     if (constant_normal)
     {
       // If surface normal constant precompute (n_phys * n_surf)
-      for (int i = 0; i < kd.gdim(); i++)
+      for (int i = 0; i < gdim; i++)
       {
         // For closest point projection the gap function is given by
         // (-n_y)* (Pi(x) - x), where n_y is the outward unit normal
@@ -343,10 +340,9 @@ kernel_fn<T> generate_contact_kernel(
     const xt::xtensor<double, 3>& dphi = kd.dphi();
     // Get number of dofs per cell
     // Temporary variable for grad(phi) on physical cell
-    xt::xtensor<double, 2> dphi_phys({kd.bs(), kd.ndofs_cell()});
-    xt::xtensor<double, 2> tr = xt::zeros<double>({kd.ndofs_cell(), kd.gdim()});
-    xt::xtensor<double, 2> epsn
-        = xt::zeros<double>({kd.ndofs_cell(), kd.gdim()});
+    xt::xtensor<double, 2> dphi_phys({bs, ndofs_cell});
+    xt::xtensor<double, 2> tr = xt::zeros<double>({ndofs_cell, gdim});
+    xt::xtensor<double, 2> epsn = xt::zeros<double>({ndofs_cell, gdim});
     const std::uint32_t num_points = q_offset[1] - q_offset[0];
     for (std::size_t q = 0; q < num_points; q++)
     {
@@ -362,19 +358,19 @@ kernel_fn<T> generate_contact_kernel(
       if (!constant_normal)
       {
         n_dot = 0;
-        for (int i = 0; i < kd.gdim(); i++)
+        for (int i = 0; i < gdim; i++)
         {
           // For closest point projection the gap function is given by
           // (-n_y)* (Pi(x) - x), where n_y is the outward unit normal
           // in y = Pi(x)
-          n_surf[i] = -c[normal_offset + q * kd.gdim() + i];
+          n_surf[i] = -c[normal_offset + q * gdim + i];
           n_dot += n_phys(i) * n_surf[i];
         }
       }
       int gap_offset = c_offset + kd.offsets(4);
       double gap = 0;
-      for (int i = 0; i < kd.gdim(); i++)
-        gap += c[gap_offset + q * kd.gdim() + i] * n_surf[i];
+      for (int i = 0; i < gdim; i++)
+        gap += c[gap_offset + q * gdim + i] * n_surf[i];
 
       compute_normal_strain_basis(epsn, tr, K, dphi, n_surf, n_phys, q_pos);
 
@@ -406,9 +402,9 @@ kernel_fn<T> generate_contact_kernel(
       double Pn_u
           = dolfinx_contact::dR_minus(sign_u + gamma * (gap - u_dot_nsurf));
       const double w0 = weights[q] * detJ;
-      for (int j = 0; j < kd.ndofs_cell(); j++)
+      for (int j = 0; j < ndofs_cell; j++)
       {
-        for (int l = 0; l < kd.bs(); l++)
+        for (int l = 0; l < bs; l++)
         {
           double sign_du = (lmbda * tr(j, l) * n_dot + mu * epsn(j, l));
           double Pn_du
@@ -416,14 +412,13 @@ kernel_fn<T> generate_contact_kernel(
           sign_du *= w0;
 
           // Insert over block size in matrix
-          for (int i = 0; i < kd.ndofs_cell(); i++)
+          for (int i = 0; i < ndofs_cell; i++)
           {
-            for (int b = 0; b < kd.bs(); b++)
+            for (int b = 0; b < bs; b++)
             {
               double v_dot_nsurf = n_surf[b] * phi(q_pos, i);
               double sign_v = (lmbda * tr(i, b) * n_dot + mu * epsn(i, b));
-              A[0]
-               [(b + i * kd.bs()) * kd.ndofs_cell() * kd.bs() + l + j * kd.bs()]
+              A[0][(b + i * bs) * ndofs_cell * bs + l + j * bs]
                   += -theta * gamma_inv * sign_du * sign_v
                      + Pn_du * (theta * sign_v - gamma * v_dot_nsurf);
             }

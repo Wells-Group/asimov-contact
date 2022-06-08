@@ -227,7 +227,8 @@ public:
     /// @param[in] coordinate_dofs The physical coordinates of cell. Assumed to
     /// be padded to 3D, (shape (num_nodes, 3)).
     kernel_fn<PetscScalar> unbiased_rhs
-        = [kd, gdim, ndofs_cell, bs](std::vector<std::vector<PetscScalar>>& b, const PetscScalar* c,
+        = [kd, gdim, ndofs_cell,
+           bs](std::vector<std::vector<PetscScalar>>& b, const PetscScalar* c,
                const PetscScalar* w, const double* coordinate_dofs,
                const int facet_index, const std::size_t num_links)
 
@@ -252,10 +253,10 @@ public:
       xt::xtensor<double, 2> J_tot
           = xt::zeros<double>({J.shape(0), (std::size_t)tdim - 1});
       double detJ;
-      auto c_view = xt::view(coord, xt::all(), xt::range(0, kd.gdim()));
+      auto c_view = xt::view(coord, xt::all(), xt::range(0, gdim));
 
       // Normal vector on physical facet at a single quadrature point
-      xt::xtensor<double, 1> n_phys = xt::zeros<double>({kd.gdim()});
+      xt::xtensor<double, 1> n_phys = xt::zeros<double>({gdim});
 
       // Pre-compute jacobians and normals for affine meshes
       if (kd.affine())
@@ -298,7 +299,7 @@ public:
         // For closest point projection the gap function is given by
         // (-n_y)* (Pi(x) - x), where n_y is the outward unit normal
         // in y = Pi(x)
-        for (std::size_t i = 0; i < kd.gdim(); i++)
+        for (std::size_t i = 0; i < gdim; i++)
         {
 
           n_surf[i] = -c[kd.offsets(4) + q * gdim + i];
@@ -310,7 +311,7 @@ public:
         double tr_u = 0;
         double epsn_u = 0;
         double jump_un = 0;
-        for (std::size_t i = 0; i < kd.ndofs_cell(); i++)
+        for (std::size_t i = 0; i < ndofs_cell; i++)
         {
           std::size_t block_index = kd.offsets(6) + i * bs;
           for (std::size_t j = 0; j < bs; j++)
@@ -332,25 +333,26 @@ public:
 
         // Fill contributions of facet with itself
 
-        for (std::size_t i = 0; i < kd.ndofs_cell(); i++)
+        for (std::size_t i = 0; i < ndofs_cell; i++)
         {
-          for (std::size_t n = 0; n < kd.bs(); n++)
+          for (std::size_t n = 0; n < bs; n++)
           {
             double v_dot_nsurf = n_surf[n] * phi(q_pos, i);
             double sign_v = (lmbda * tr(i, n) * n_dot + mu * epsn(i, n));
             // This is (1./gamma)*Pn_v to avoid the product gamma*(1./gamma)
             double Pn_v = gamma_inv * v_dot_nsurf - theta * sign_v;
-            b[0][n + i * kd.bs()] += 0.5 * Pn_u * Pn_v;
+            b[0][n + i * bs] += 0.5 * Pn_u * Pn_v;
             // 0.5 * (-theta * gamma * sign_v * sign_u + Pn_u * Pn_v);
 
             // entries corresponding to v on the other surface
             for (std::size_t k = 0; k < num_links; k++)
             {
-              std::size_t index = kd.offsets(5) + k * num_points * ndofs_cell * bs
+              std::size_t index = kd.offsets(5)
+                                  + k * num_points * ndofs_cell * bs
                                   + i * num_points * bs + q * bs + n;
               double v_n_opp = c[index] * n_surf[n];
 
-              b[k + 1][n + i * kd.bs()] -= 0.5 * gamma_inv * v_n_opp * Pn_u;
+              b[k + 1][n + i * bs] -= 0.5 * gamma_inv * v_n_opp * Pn_u;
             }
           }
         }
@@ -370,7 +372,8 @@ public:
     /// @param[in] coordinate_dofs The physical coordinates of cell. Assumed
     /// to be padded to 3D, (shape (num_nodes, 3)).
     kernel_fn<PetscScalar> unbiased_jac
-        = [kd, gdim, ndofs_cell, bs](std::vector<std::vector<PetscScalar>>& A, const double* c,
+        = [kd, gdim, ndofs_cell,
+           bs](std::vector<std::vector<PetscScalar>>& A, const double* c,
                const double* w, const double* coordinate_dofs,
                const int facet_index, const std::size_t num_links)
     {
@@ -396,10 +399,10 @@ public:
       xt::xtensor<double, 2> J_tot
           = xt::zeros<double>({J.shape(0), (std::size_t)tdim - 1});
       double detJ;
-      auto c_view = xt::view(coord, xt::all(), xt::range(0, kd.gdim()));
+      auto c_view = xt::view(coord, xt::all(), xt::range(0, gdim));
 
       // Normal vector on physical facet at a single quadrature point
-      xt::xtensor<double, 1> n_phys = xt::zeros<double>({kd.gdim()});
+      xt::xtensor<double, 1> n_phys = xt::zeros<double>({gdim});
 
       // Pre-compute jacobians and normals for affine meshes
       if (kd.affine())
@@ -435,7 +438,7 @@ public:
 
         double n_dot = 0;
         double gap = 0;
-        for (std::size_t i = 0; i < kd.gdim(); i++)
+        for (std::size_t i = 0; i < gdim; i++)
         {
           // For closest point projection the gap function is given by
           // (-n_y)* (Pi(x) - x), where n_y is the outward unit normal
@@ -452,7 +455,7 @@ public:
         double epsn_u = 0;
         double jump_un = 0;
 
-        for (std::size_t i = 0; i < kd.ndofs_cell(); i++)
+        for (std::size_t i = 0; i < ndofs_cell; i++)
         {
           std::size_t block_index = kd.offsets(6) + i * bs;
           for (std::size_t j = 0; j < bs; j++)
@@ -471,24 +474,23 @@ public:
 
         // Fill contributions of facet with itself
         const double w0 = weights[q] * detJ;
-        for (std::size_t j = 0; j < kd.ndofs_cell(); j++)
+        for (std::size_t j = 0; j < ndofs_cell; j++)
         {
-          for (std::size_t l = 0; l < kd.bs(); l++)
+          for (std::size_t l = 0; l < bs; l++)
           {
             double sign_du = (lmbda * tr(j, l) * n_dot + mu * epsn(j, l));
             double Pn_du
                 = (phi(q_pos, j) * n_surf[l] - gamma * sign_du) * Pn_u * w0;
 
             sign_du *= w0;
-            for (std::size_t i = 0; i < kd.ndofs_cell(); i++)
+            for (std::size_t i = 0; i < ndofs_cell; i++)
             {
-              for (std::size_t b = 0; b < kd.bs(); b++)
+              for (std::size_t b = 0; b < bs; b++)
               {
                 double v_dot_nsurf = n_surf[b] * phi(q_pos, i);
                 double sign_v = (lmbda * tr(i, b) * n_dot + mu * epsn(i, b));
                 double Pn_v = gamma_inv * v_dot_nsurf - theta * sign_v;
-                A[0][(b + i * kd.bs()) * kd.ndofs_cell() * kd.bs() + l
-                     + j * kd.bs()]
+                A[0][(b + i * bs) * ndofs_cell * bs + l + j * bs]
                     += 0.5 * Pn_du * Pn_v;
 
                 // entries corresponding to u and v on the other surface
@@ -817,7 +819,8 @@ public:
         std::array<std::size_t, 4> b_shape
             = evaluate_basis_shape(*V_sub, indices.size(), 0);
         if (b_shape[3] > 1)
-          throw std::runtime_error("pack_test_functions assumes values size 1");
+          throw std::invalid_argument(
+              "pack_test_functions assumes values size 1");
         xt::xtensor<double, 4> basis_values(b_shape);
         std::fill(basis_values.begin(), basis_values.end(), 0);
         std::vector<std::int32_t> cells(indices.size(), linked_cell);
@@ -925,7 +928,7 @@ public:
     const std::size_t num_basis_functions = basis_values.shape(2);
     const std::size_t value_size = basis_values.shape(3);
     if (value_size > 1)
-      throw std::runtime_error("pack_u_contact assumes values size 1");
+      throw std::invalid_argument("pack_u_contact assumes values size 1");
     std::vector<PetscScalar> coefficients(num_basis_functions * bs_element);
     for (std::size_t i = 0; i < num_facets; ++i)
     {
