@@ -66,19 +66,19 @@ def create_functionspaces(ct, gap, delta):
     return V
 
 
-def compare_test_fn(V, grad_test_fn, test_fn, q_indices, link, x_ref, cell):
+def compare_test_fn(fn_space, test_fn, grad_test_fn, q_indices, link, x_ref, cell):
     # Retrieve mesh and mesh data
-    mesh = V.mesh
+    mesh = fn_space.mesh
     gdim = mesh.geometry.dim
-    bs = V.dofmap.index_map_bs
-    dofs = V.dofmap.cell_dofs(cell)
+    bs = fn_space.dofmap.index_map_bs
+    dofs = fn_space.dofmap.cell_dofs(cell)
 
     num_q_points = x_ref.shape[0]
 
     for i, dof in enumerate(dofs):
         for k in range(bs):
             # Create fem function that is identical with desired test function
-            v = _fem.Function(V)
+            v = _fem.Function(fn_space)
             v.x.array[:] = 0
             v.x.array[dof * bs + k] = 1
 
@@ -102,12 +102,12 @@ def compare_test_fn(V, grad_test_fn, test_fn, q_indices, link, x_ref, cell):
             assert(np.allclose(dv1, dv2))
 
 
-def assert_zero_test_fn(V, test_fn, grad_test_fn, link, num_q_points, zero_ind, cell):
+def assert_zero_test_fn(fn_space, test_fn, grad_test_fn, num_q_points, zero_ind, link, cell):
     # Retrieve mesh and mesh data
-    mesh = V.mesh
+    mesh = fn_space.mesh
     gdim = mesh.geometry.dim
-    bs = V.dofmap.index_map_bs
-    dofs = V.dofmap.cell_dofs(cell)
+    bs = fn_space.dofmap.index_map_bs
+    dofs = fn_space.dofmap.cell_dofs(cell)
     for i in range(len(dofs)):
         for k in range(bs):
             # ensure values are zero if q not connected to quadrature point
@@ -122,9 +122,9 @@ def assert_zero_test_fn(V, test_fn, grad_test_fn, link, num_q_points, zero_ind, 
                 assert(np.allclose(np.zeros((len(zero_ind), gdim)), dv2))
 
 
-def compare_u(V, u, x_ref, cell, q_indices, u_opposite, grad_u_opposite):
-    bs = V.dofmap.index_map_bs
-    gdim = V.mesh.geometry.dim
+def compare_u(fn_space, u, u_opposite, grad_u_opposite, q_indices, x_ref, cell):
+    bs = fn_space.dofmap.index_map_bs
+    gdim = fn_space.mesh.geometry.dim
 
     # use expression to evaluate u
     expr = _fem.Expression(u, x_ref[q_indices, :])
@@ -258,6 +258,6 @@ def test_packing(ct, gap, q_deg, delta, surface):
             xg = mesh.geometry.x[gdofs]
             x_ref = cmap.pull_back(points, xg)
 
-            compare_test_fn(V, grad_test_fn[f], test_fn[f], q_indices, link, x_ref, cell)
-            compare_u(V, u, x_ref, cell, q_indices, u_packed[f], grad_u[f])
-            assert_zero_test_fn(V, test_fn[f], grad_test_fn[f], link, num_q_points, zero_ind, cell)
+            compare_test_fn(V, test_fn[f], grad_test_fn[f], q_indices, link, x_ref, cell)
+            compare_u(V, u, u_packed[f], grad_u[f], q_indices, x_ref, cell)
+            assert_zero_test_fn(V, test_fn[f], grad_test_fn[f], num_q_points, zero_ind, link, cell)

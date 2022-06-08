@@ -231,7 +231,8 @@ public:
     /// @param[in] coordinate_dofs The physical coordinates of cell. Assumed to
     /// be padded to 3D, (shape (num_nodes, 3)).
     kernel_fn<PetscScalar> unbiased_rhs
-        = [kd, gdim, ndofs_cell, bs](std::vector<std::vector<PetscScalar>>& b, const PetscScalar* c,
+        = [kd, gdim, ndofs_cell,
+           bs](std::vector<std::vector<PetscScalar>>& b, const PetscScalar* c,
                const PetscScalar* w, const double* coordinate_dofs,
                const int facet_index, const std::size_t num_links)
 
@@ -350,7 +351,8 @@ public:
             // entries corresponding to v on the other surface
             for (std::size_t k = 0; k < num_links; k++)
             {
-              std::size_t index = kd.offsets(5) + k * num_points * ndofs_cell * bs
+              std::size_t index = kd.offsets(5)
+                                  + k * num_points * ndofs_cell * bs
                                   + i * num_points * bs + q * bs + n;
               double v_n_opp = c[index] * n_surf[n];
 
@@ -374,7 +376,8 @@ public:
     /// @param[in] coordinate_dofs The physical coordinates of cell. Assumed
     /// to be padded to 3D, (shape (num_nodes, 3)).
     kernel_fn<PetscScalar> unbiased_jac
-        = [kd, gdim, ndofs_cell, bs](std::vector<std::vector<PetscScalar>>& A, const double* c,
+        = [kd, gdim, ndofs_cell,
+           bs](std::vector<std::vector<PetscScalar>>& A, const double* c,
                const double* w, const double* coordinate_dofs,
                const int facet_index, const std::size_t num_links)
     {
@@ -804,7 +807,8 @@ public:
         std::array<std::size_t, 4> b_shape
             = evaluate_basis_shape(*V_sub, indices.size(), 0);
         if (b_shape[3] > 1)
-          throw std::runtime_error("pack_test_functions assumes values size 1");
+          throw std::invalid_argument(
+              "pack_test_functions assumes values size 1");
         xt::xtensor<double, 4> basis_values(b_shape);
         std::fill(basis_values.begin(), basis_values.end(), 0);
         std::vector<std::int32_t> cells(indices.size(), linked_cell);
@@ -912,7 +916,7 @@ public:
     const std::size_t num_basis_functions = basis_values.shape(2);
     const std::size_t value_size = basis_values.shape(3);
     if (value_size > 1)
-      throw std::runtime_error("pack_u_contact assumes values size 1");
+      throw std::invalid_argument("pack_u_contact assumes values size 1");
     std::vector<PetscScalar> coefficients(num_basis_functions * bs_element);
     for (std::size_t i = 0; i < num_facets; ++i)
     {

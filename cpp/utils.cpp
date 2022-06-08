@@ -330,7 +330,7 @@ void dolfinx_contact::evaluate_basis_functions(
                                                  reference_value_size});
 
   // Compute basis on reference element
-  element->tabulate(basis_reference_values, X, num_derivatives);
+  element->tabulate(basis_reference_values, X, (int)num_derivatives);
 
   // temporary data structure
   std::array<std::size_t, 4> shape = basis_values.shape();

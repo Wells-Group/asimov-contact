@@ -566,10 +566,13 @@ dolfinx_contact::Contact::pack_grad_test_functions(
 
   // Select which side of the contact interface to loop from and get the
   // correct map
-  std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> map = _facet_maps[pair];
+  std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> map
+      = _facet_maps[pair];
   const std::vector<xt::xtensor<double, 2>>& qp_phys = _qp_phys[puppet_mt];
-  const std::vector<std::pair<std::int32_t, int>>&  puppet_facets = _cell_facet_pairs[puppet_mt];
-  std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> facet_map = submesh.facet_map();
+  const std::vector<std::pair<std::int32_t, int>>& puppet_facets
+      = _cell_facet_pairs[puppet_mt];
+  std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> facet_map
+      = submesh.facet_map();
   const std::size_t max_links
       = *std::max_element(_max_links.begin(), _max_links.end());
   const std::size_t num_facets = puppet_facets.size();
@@ -605,12 +608,9 @@ dolfinx_contact::Contact::pack_grad_test_functions(
     }
     // Sort linked cells
     assert(linked_cells.size() == num_q_points);
-    std::pair<std::vector<std::int32_t>, std::vector<std::int32_t>> sorted_cells
-        = dolfinx_contact::sort_cells(
-            xtl::span(linked_cells.data(), linked_cells.size()),
-            xtl::span(perm.data(), perm.size()));
-    const std::vector<std::int32_t>& unique_cells = sorted_cells.first;
-    const std::vector<std::int32_t>& offsets = sorted_cells.second;
+    const auto [unique_cells, offsets] = dolfinx_contact::sort_cells(
+        xtl::span(linked_cells.data(), linked_cells.size()),
+        xtl::span(perm.data(), perm.size()));
 
     // Loop over sorted array of unique cells
     for (std::size_t j = 0; j < unique_cells.size(); ++j)
@@ -628,7 +628,8 @@ dolfinx_contact::Contact::pack_grad_test_functions(
       std::array<std::size_t, 4> b_shape
           = evaluate_basis_shape(*_V, indices.size(), 1);
       if (b_shape[3] > 1)
-        throw std::runtime_error("pack_test_functions assumes values size 1");
+        throw std::invalid_argument(
+            "pack_test_functions assumes values size 1");
       xt::xtensor<double, 4> basis_values(b_shape);
       std::fill(basis_values.begin(), basis_values.end(), 0);
       std::vector<std::int32_t> cells(indices.size(), linked_cell);
@@ -668,9 +669,11 @@ dolfinx_contact::Contact::pack_grad_u_contact(
   const int bs_dof = dofmap->bs();
   // Select which side of the contact interface to loop from and get the
   // correct map
-  std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> map = _facet_maps[pair];
+  std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> map
+      = _facet_maps[pair];
   const std::vector<xt::xtensor<double, 2>>& qp_phys = _qp_phys[puppet_mt];
-  std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> facet_map = submesh.facet_map();
+  std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> facet_map
+      = submesh.facet_map();
   const std::size_t num_facets = _cell_facet_pairs[puppet_mt].size();
   const std::size_t num_q_points
       = _quadrature_rule->offset()[1] - _quadrature_rule->offset()[0];
@@ -679,7 +682,7 @@ dolfinx_contact::Contact::pack_grad_u_contact(
   std::vector<std::int32_t> cells(num_facets * num_q_points, -1);
   for (std::size_t i = 0; i < num_facets; ++i)
   {
-    const tcb::span<const int> links = map->links(i);
+    const tcb::span<const int> links = map->links((int)i);
     assert(links.size() == num_q_points);
     for (std::size_t q = 0; q < num_q_points; ++q)
     {
