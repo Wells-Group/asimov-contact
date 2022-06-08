@@ -7,6 +7,7 @@
 #pragma once
 
 #include "QuadratureRule.h"
+#include "error_handling.h"
 #include "utils.h"
 #include <dolfinx.h>
 #include <dolfinx/common/sort.h>
@@ -30,8 +31,8 @@ namespace dolfinx_contact
 class KernelData
 {
 public:
-  // kernel data constructor
-  // generates data that is common to all contact kernels
+  // Kernel data constructor
+  // Generates data that is common to all contact kernels
   ///@param[in] V The function space
   ///@param[in] q_rule The quadrature rules
   ///@param[in] cstrides The strides for individual coeffcients used in the
@@ -40,37 +41,50 @@ public:
              std::shared_ptr<const dolfinx_contact::QuadratureRule> q_rule,
              const std::vector<std::size_t>& cstrides);
 
-  // return geometrical dimension
+  // Return geometrical dimension
   std::uint32_t gdim() const { return _gdim; }
-  // return topological dimension
+
+  // Return topological dimension
   std::uint32_t tdim() const { return _tdim; }
-  // return number of dofs for geometry
+
+  // Return number of dofs for geometry
   int num_coordinate_dofs() const { return _num_coordinate_dofs; }
+
   // return whether cell geometry is affine
   bool affine() const { return _affine; }
+
   // return number of dofs pers cell
   std::uint32_t ndofs_cell() const { return _ndofs_cell; }
-  // return block size
+
+  // Return block size
   std::size_t bs() const { return _bs; }
-  // return quadrature rule offsets for index f
+
+  // Return quadrature rule offsets for index f
   int qp_offsets(int f) const { return _qp_offsets[f]; }
-  // return basis functions at quadrature points for facet f
+
+  // Return basis functions at quadrature points for facet f
   const xt::xtensor<double, 2>& phi() const { return _phi; }
-  // return grad(_phi) at quadrature points for facet f
+
+  // Return grad(_phi) at quadrature points for facet f
   const xt::xtensor<double, 3>& dphi() const { return _dphi; }
-  // return gradient of coordinate bases at quadrature points for facet f
+
+  // Return gradient of coordinate bases at quadrature points for facet f
   const xt::xtensor<double, 3>& dphi_c() const { return _dphi_c; }
-  // return coefficient offsets of coefficient i
+
+  // Return coefficient offsets of coefficient i
   std::size_t offsets(const std::size_t i) const { return _offsets[i]; }
+
   const std::vector<std::size_t>& offsets_array() const { return _offsets; }
-  // return reference facet normals
+
+  // Return reference facet normals
   const xt::xtensor<double, 2>& facet_normals() const { return _facet_normals; }
+
   /// Compute the following jacobians on a given facet:
   /// J: physical cell -> reference cell (and its inverse)
   /// J_tot: physical facet -> reference facet
   /// @param[in] q - index of quadrature points
   /// @param[in] facet_index - The index of the facet local to the cell
-  /// @param[in,out] J - Jacboian between reference cell and physical cell
+  /// @param[in,out] J - Jacobian between reference cell and physical cell
   /// @param[in,out] K - inverse of J
   /// @param[in,out] J_tot - J_f*J
   /// @param[in] coords - the coordinates of the facet
@@ -113,7 +127,8 @@ public:
     return std::fabs(dolfinx_contact::compute_facet_jacobians(
         0, J, K, J_tot, J_f, dphi_fc, coords));
   }
-  // update normal
+
+  /// update normal
   /// @param[in, out] n The facet normal
   /// @param[in] K The inverse Jacobian
   /// @param[in] local_index The facet index local to the cell

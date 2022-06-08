@@ -13,7 +13,7 @@
 
 namespace dolfinx_contact
 {
-/// @brief compute dot(eps*n_2, n_1) and tr(eps)
+/// @brief compute dot(eps(dphi(q_pos))*n_2, n_1) and tr(eps)
 ///
 /// Given the gradient of the basis functions, compute dot(eps*n_1, n_2) and
 /// tr(eps) for the basis function
@@ -31,7 +31,5 @@ void compute_normal_strain_basis(xt::xtensor<double, 2>& epsn,
                                  const std::array<double, 3>& n_1,
                                  const xt::xtensor<double, 1>& n_2,
                                  const std::size_t q_pos);
-
-
 
 } // namespace dolfinx_contact

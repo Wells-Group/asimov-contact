@@ -25,13 +25,7 @@ dolfinx_contact::KernelData::KernelData(
   const dolfinx::mesh::Topology& topology = mesh->topology();
   _tdim = topology.dim();
 
-  if (const dolfinx::mesh::CellType ct = topology.cell_type();
-      (ct == dolfinx::mesh::CellType::prism)
-      || (ct == dolfinx::mesh::CellType::pyramid))
-  {
-    throw std::invalid_argument("Unsupported cell type");
-  }
-
+  dolfinx_contact::error::check_cell_type(topology.cell_type());
   // Create quadrature points on reference facet
   const xt::xtensor<double, 2>& q_points = q_rule->points();
   const std::size_t num_quadrature_pts = _q_weights.size();
@@ -64,10 +58,12 @@ dolfinx_contact::KernelData::KernelData(
   }
 
   /// Pack test and trial functions
+  const basix::FiniteElement& basix_element = element->basix_element();
+  std::array<std::size_t, 4> tab_shape
+      = basix_element.tabulate_shape(0, num_quadrature_pts);
   _phi = xt::xtensor<double, 2>({num_quadrature_pts, _ndofs_cell});
   _dphi = xt::xtensor<double, 3>({_tdim, num_quadrature_pts, _ndofs_cell});
-  xt::xtensor<double, 4> basis_functions(
-      {_tdim + 1, num_quadrature_pts, _ndofs_cell, 1});
+  xt::xtensor<double, 4> basis_functions(tab_shape);
   element->tabulate(basis_functions, q_points, 1);
   _phi = xt::view(basis_functions, 0, xt::all(), xt::all(), 0);
   _dphi = xt::view(basis_functions, xt::range(1, _tdim + 1), xt::all(),

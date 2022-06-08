@@ -65,7 +65,7 @@ kernel_fn<T> generate_contact_kernel(
   xt::xtensor<double, 2> phi_coeffs(
       {num_quadrature_pts, kd.offsets(num_coeffs)});
   xt::xtensor<double, 3> dphi_coeffs(
-      {kd.tdim(), num_quadrature_pts, kd.offsets(num_coeffs)});
+      {tdim, num_quadrature_pts, kd.offsets(num_coeffs)});
 
   // Create finite elements for coefficient functions and tabulate shape
   // functions
@@ -87,8 +87,8 @@ kernel_fn<T> generate_contact_kernel(
     phi_i = xt::view(coeff_basis, 0, xt::all(), xt::all(), 0);
     auto dphi_i = xt::view(dphi_coeffs, xt::all(), xt::all(),
                            xt::range(kd.offsets(i), kd.offsets(i + 1)));
-    dphi_i = xt::view(coeff_basis, xt::range(1, kd.tdim() + 1), xt::all(),
-                      xt::all(), 0);
+    dphi_i = xt::view(coeff_basis, xt::range(1, tdim + 1), xt::all(), xt::all(),
+                      0);
   }
 
   /// @brief Kernel for contact with rigid surface (RHS).
@@ -108,13 +108,19 @@ kernel_fn<T> generate_contact_kernel(
   /// @param[in] num_links Unused integer. In two sided contact this indicates
   /// how many cells are connected with the cell.
   dolfinx_contact::kernel_fn<T> nitsche_rigid_rhs
-      = [kd, phi_coeffs, constant_normal](
+      = [kd, gdim, tdim, phi_coeffs, constant_normal](
             std::vector<std::vector<T>>& b, const T* c, const T* w,
             const double* coordinate_dofs, const int facet_index,
             [[maybe_unused]] const std::size_t num_links)
   {
+    // Retrieve some data form kd
     std::array<std::int32_t, 2> q_offset
         = {kd.qp_offsets(facet_index), kd.qp_offsets(facet_index + 1)};
+    const std::size_t bs = kd.bs();
+    const std::uint32_t ndofs_cell = kd.ndofs_cell();
+
+
+
 
     // Reshape coordinate dofs to two dimensional array
     // FIXME: These array should be views (when compute_jacobian doesn't use
@@ -123,13 +129,13 @@ kernel_fn<T> generate_contact_kernel(
     const xt::xtensor<double, 2>& coord
         = xt::adapt(coordinate_dofs, kd.num_coordinate_dofs() * 3,
                     xt::no_ownership(), shape);
-    auto c_view = xt::view(coord, xt::all(), xt::range(0, kd.gdim()));
+    auto c_view = xt::view(coord, xt::all(), xt::range(0, gdim));
 
     // Compute Jacobian and determinant at first quadrature point
-    xt::xtensor<double, 2> J = xt::zeros<double>({kd.gdim(), kd.tdim()});
-    xt::xtensor<double, 2> K = xt::zeros<double>({kd.tdim(), kd.gdim()});
+    xt::xtensor<double, 2> J = xt::zeros<double>({gdim, tdim});
+    xt::xtensor<double, 2> K = xt::zeros<double>({tdim, gdim});
     xt::xtensor<double, 2> J_tot
-        = xt::zeros<double>({J.shape(0), (std::size_t)kd.tdim() - 1});
+        = xt::zeros<double>({J.shape(0), (std::size_t)tdim - 1});
 
     double detJ;
     // Normal vector on physical facet at a single quadrature point
@@ -157,7 +163,7 @@ kernel_fn<T> generate_contact_kernel(
         n_dot += n_phys(i) * n_surf[i];
       }
     }
-    int c_offset = (kd.bs() - 1) * kd.offsets(1);
+    int c_offset = (bs - 1) * kd.offsets(1);
     // This is gamma/h
     double gamma = w[0] / c[c_offset + kd.offsets(3)];
     double gamma_inv = c[c_offset + kd.offsets(3)] / w[0];
@@ -170,9 +176,13 @@ kernel_fn<T> generate_contact_kernel(
 
     // Temporary work arrays
     xt::xtensor<double, 2> tr(
-        {std::uint32_t(kd.offsets(1) - kd.offsets(0)), kd.gdim()});
+        {std::uint32_t(kd.offsets(1) - kd.offsets(0)), gdim});
     xt::xtensor<double, 2> epsn(
-        {std::uint32_t(kd.offsets(1) - kd.offsets(0)), kd.gdim()});
+        {std::uint32_t(kd.offsets(1) - kd.offsets(0)), gdim});
+
+    // Extract reference to the tabulated basis function
+    const xt::xtensor<double, 2>& phi = kd.phi();
+    const xt::xtensor<double, 3>& dphi = kd.dphi();
 
     // Loop over quadrature points
     const int num_points = q_offset[1] - q_offset[0];
@@ -213,9 +223,6 @@ kernel_fn<T> generate_contact_kernel(
         gap += c[gap_offset + q * kd.gdim() + i] * n_surf[i];
       }
 
-      // Extract reference to the tabulated basis function
-      const xt::xtensor<double, 2>& phi = kd.phi();
-      const xt::xtensor<double, 3>& dphi = kd.dphi();
       compute_normal_strain_basis(epsn, tr, K, dphi, n_surf, n_phys, q_pos);
 
       // compute tr(eps(u)), epsn at q
@@ -224,8 +231,8 @@ kernel_fn<T> generate_contact_kernel(
       double u_dot_nsurf = 0;
       for (int i = 0; i < kd.offsets(1) - kd.offsets(0); i++)
       {
-        const std::int32_t block_index = (i + kd.offsets(0)) * kd.bs();
-        for (int j = 0; j < kd.bs(); j++)
+        const std::int32_t block_index = (i + kd.offsets(0)) * bs;
+        for (int j = 0; j < bs; j++)
         {
           tr_u += c[block_index + j] * tr(i, j);
           epsn_u += c[block_index + j] * epsn(i, j);
@@ -271,14 +278,17 @@ kernel_fn<T> generate_contact_kernel(
   /// @param[in] num_links Unused integer. In two sided contact this indicates
   /// how many cells are connected with the cell.
   kernel_fn<T> nitsche_rigid_jacobian
-      = [kd, phi_coeffs, dphi_coeffs, num_coeffs, constant_normal](
+      = [kd,gdim, tdim, phi_coeffs, dphi_coeffs, num_coeffs, constant_normal](
             std::vector<std::vector<double>>& A, const T* c, const T* w,
             const double* coordinate_dofs, const int facet_index,
             [[maybe_unused]] const std::size_t num_links)
   {
-    const int fdim = kd.tdim() - 1;
+    // Retrieve some data from kd
     std::array<std::int32_t, 2> q_offset
         = {kd.qp_offsets(facet_index), kd.qp_offsets(facet_index + 1)};
+    const std::size_t bs = kd.bs();
+    const std::uint32_t ndofs_cell = kd.ndofs_cell();
+    const int fdim = tdim - 1;
 
     // Reshape coordinate dofs to two dimensional array
     // FIXME: These array should be views (when compute_jacobian doesn't use
@@ -288,11 +298,11 @@ kernel_fn<T> generate_contact_kernel(
         = xt::adapt(coordinate_dofs, kd.num_coordinate_dofs() * 3,
                     xt::no_ownership(), shape);
 
-    xt::xtensor<double, 2> J = xt::zeros<double>({kd.gdim(), kd.tdim()});
-    xt::xtensor<double, 2> K = xt::zeros<double>({kd.tdim(), kd.gdim()});
-    xt::xtensor<double, 1> n_phys = xt::zeros<double>({kd.gdim()});
+    xt::xtensor<double, 2> J = xt::zeros<double>({gdim, tdim});
+    xt::xtensor<double, 2> K = xt::zeros<double>({tdim, gdim});
+    xt::xtensor<double, 1> n_phys = xt::zeros<double>({gdim});
     xt::xtensor<double, 2> J_tot
-        = xt::zeros<double>({J.shape(0), (std::size_t)kd.tdim() - 1});
+        = xt::zeros<double>({J.shape(0), (std::size_t)tdim - 1});
     double detJ;
     if (kd.affine())
     {
@@ -318,7 +328,7 @@ kernel_fn<T> generate_contact_kernel(
         n_dot += n_phys(i) * n_surf[i];
       }
     }
-    int c_offset = (kd.bs() - 1) * kd.offsets(1);
+    int c_offset = (bs - 1) * kd.offsets(1);
     double gamma
         = w[0]
           / c[c_offset + kd.offsets(3)]; // This is gamma/hdouble gamma = w[0];
@@ -328,6 +338,9 @@ kernel_fn<T> generate_contact_kernel(
     xtl::span<const double> _weights(kd.q_weights());
     auto weights = _weights.subspan(q_offset[0], q_offset[1] - q_offset[0]);
 
+    // Extract reference to the tabulated basis function
+    const xt::xtensor<double, 2>& phi = kd.phi();
+    const xt::xtensor<double, 3>& dphi = kd.dphi();
     // Get number of dofs per cell
     // Temporary variable for grad(phi) on physical cell
     xt::xtensor<double, 2> dphi_phys({kd.bs(), kd.ndofs_cell()});
@@ -363,13 +376,10 @@ kernel_fn<T> generate_contact_kernel(
       for (int i = 0; i < kd.gdim(); i++)
         gap += c[gap_offset + q * kd.gdim() + i] * n_surf[i];
 
-      // Extract reference to the tabulated basis function
-      const xt::xtensor<double, 2>& phi = kd.phi();
-      const xt::xtensor<double, 3>& dphi = kd.dphi();
       compute_normal_strain_basis(epsn, tr, K, dphi, n_surf, n_phys, q_pos);
 
       double mu = 0;
-      int c_offset = (kd.bs() - 1) * kd.offsets(1);
+      int c_offset = (bs - 1) * kd.offsets(1);
       for (int j = kd.offsets(1); j < kd.offsets(2); j++)
         mu += c[j + c_offset] * phi_coeffs(facet_index, q_pos, j);
       double lmbda = 0;
@@ -382,8 +392,8 @@ kernel_fn<T> generate_contact_kernel(
       double u_dot_nsurf = 0;
       for (int i = 0; i < kd.offsets(1) - kd.offsets(0); i++)
       {
-        const std::int32_t block_index = (i + kd.offsets(0)) * kd.bs();
-        for (int j = 0; j < kd.bs(); j++)
+        const std::int32_t block_index = (i + kd.offsets(0)) * bs;
+        for (int j = 0; j < bs; j++)
         {
           const auto c_val = c[block_index + j];
           tr_u += c_val * tr(i, j);
