@@ -231,7 +231,7 @@ public:
     /// @param[in] coordinate_dofs The physical coordinates of cell. Assumed to
     /// be padded to 3D, (shape (num_nodes, 3)).
     kernel_fn<PetscScalar> unbiased_rhs
-        = [kd](std::vector<std::vector<PetscScalar>>& b, const PetscScalar* c,
+        = [kd, gdim, ndofs_cell, bs](std::vector<std::vector<PetscScalar>>& b, const PetscScalar* c,
                const PetscScalar* w, const double* coordinate_dofs,
                const int facet_index, const std::size_t num_links)
 
@@ -239,9 +239,6 @@ public:
       // Retrieve some data from kd
       std::array<std::int32_t, 2> q_offset
           = {kd.qp_offsets(facet_index), kd.qp_offsets(facet_index + 1)};
-      const std::size_t bs = kd.bs();
-      const std::uint32_t ndofs_cell = kd.ndofs_cell();
-      const std::uint32_t gdim = kd.gdim();
       const std::uint32_t tdim = kd.tdim();
 
       // NOTE: DOLFINx has 3D input coordinate dofs
@@ -254,8 +251,8 @@ public:
                       xt::no_ownership(), shape);
 
       // Create data structures for jacobians
-      xt::xtensor<double, 2> J = xt::zeros<double>({gdim, tdim});
-      xt::xtensor<double, 2> K = xt::zeros<double>({tdim, gdim});
+      xt::xtensor<double, 2> J = xt::zeros<double>({gdim, (std::size_t)tdim});
+      xt::xtensor<double, 2> K = xt::zeros<double>({(std::size_t)tdim, gdim});
       xt::xtensor<double, 2> J_tot
           = xt::zeros<double>({J.shape(0), (std::size_t)tdim - 1});
       double detJ;
@@ -377,16 +374,13 @@ public:
     /// @param[in] coordinate_dofs The physical coordinates of cell. Assumed
     /// to be padded to 3D, (shape (num_nodes, 3)).
     kernel_fn<PetscScalar> unbiased_jac
-        = [kd](std::vector<std::vector<PetscScalar>>& A, const double* c,
+        = [kd, gdim, ndofs_cell, bs](std::vector<std::vector<PetscScalar>>& A, const double* c,
                const double* w, const double* coordinate_dofs,
                const int facet_index, const std::size_t num_links)
     {
       // Retrieve some data from kd
       std::array<std::int32_t, 2> q_offset
           = {kd.qp_offsets(facet_index), kd.qp_offsets(facet_index + 1)};
-      const std::size_t bs = kd.bs();
-      const std::uint32_t ndofs_cell = kd.ndofs_cell();
-      const std::uint32_t gdim = kd.gdim();
       const std::uint32_t tdim = kd.tdim();
 
       // Reshape coordinate dofs to two dimensional array
@@ -401,8 +395,8 @@ public:
                       xt::no_ownership(), shape);
 
       // Create data structures for jacobians
-      xt::xtensor<double, 2> J = xt::zeros<double>({gdim, tdim});
-      xt::xtensor<double, 2> K = xt::zeros<double>({tdim, gdim});
+      xt::xtensor<double, 2> J = xt::zeros<double>({gdim, (std::size_t)tdim});
+      xt::xtensor<double, 2> K = xt::zeros<double>({(std::size_t)tdim, gdim});
       xt::xtensor<double, 2> J_tot
           = xt::zeros<double>({J.shape(0), (std::size_t)tdim - 1});
       double detJ;

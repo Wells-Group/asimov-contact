@@ -108,7 +108,7 @@ kernel_fn<T> generate_contact_kernel(
   /// @param[in] num_links Unused integer. In two sided contact this indicates
   /// how many cells are connected with the cell.
   dolfinx_contact::kernel_fn<T> nitsche_rigid_rhs
-      = [kd, phi_coeffs, constant_normal](
+      = [kd, gdim, tdim, phi_coeffs, constant_normal](
             std::vector<std::vector<T>>& b, const T* c, const T* w,
             const double* coordinate_dofs, const int facet_index,
             [[maybe_unused]] const std::size_t num_links)
@@ -118,8 +118,9 @@ kernel_fn<T> generate_contact_kernel(
         = {kd.qp_offsets(facet_index), kd.qp_offsets(facet_index + 1)};
     const std::size_t bs = kd.bs();
     const std::uint32_t ndofs_cell = kd.ndofs_cell();
-    const std::uint32_t gdim = kd.gdim();
-    const std::uint32_t tdim = kd.tdim();
+
+
+
 
     // Reshape coordinate dofs to two dimensional array
     // FIXME: These array should be views (when compute_jacobian doesn't use
@@ -277,7 +278,7 @@ kernel_fn<T> generate_contact_kernel(
   /// @param[in] num_links Unused integer. In two sided contact this indicates
   /// how many cells are connected with the cell.
   kernel_fn<T> nitsche_rigid_jacobian
-      = [kd, phi_coeffs, dphi_coeffs, num_coeffs, constant_normal](
+      = [kd,gdim, tdim, phi_coeffs, dphi_coeffs, num_coeffs, constant_normal](
             std::vector<std::vector<double>>& A, const T* c, const T* w,
             const double* coordinate_dofs, const int facet_index,
             [[maybe_unused]] const std::size_t num_links)
@@ -287,8 +288,6 @@ kernel_fn<T> generate_contact_kernel(
         = {kd.qp_offsets(facet_index), kd.qp_offsets(facet_index + 1)};
     const std::size_t bs = kd.bs();
     const std::uint32_t ndofs_cell = kd.ndofs_cell();
-    const std::uint32_t gdim = kd.gdim();
-    const std::uint32_t tdim = kd.tdim();
     const int fdim = tdim - 1;
 
     // Reshape coordinate dofs to two dimensional array
