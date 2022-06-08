@@ -120,6 +120,7 @@ def test_pack_test_fn(ct, gap, q_deg, delta, surface):
     gap = contact.pack_gap(0)
     test_fn = contact.pack_test_functions(0, gap)
     u_packed = contact.pack_u_contact(0, u._cpp_object, gap)
+    grad_test_fn = contact.pack_grad_test_functions(0, gap, u_packed)
 
     # Retrieve surface facets
     s_facets = np.sort(facets[s])
@@ -173,13 +174,30 @@ def test_pack_test_fn(ct, gap, q_deg, delta, surface):
                     expr = _fem.Expression(v, x_ref)
                     expr_vals = expr.eval([cell])
 
+                    # Create expression vor evaluating derivative of test function and evaluate
+                    expr2 = _fem.Expression(ufl.grad(v.sub(k)), x_ref)
+                    expr_vals2 = expr2.eval([cell])
                     # compare values of test functions
                     offset = link * num_q_points * len(dofs) * bs + i * num_q_points * bs
                     assert(np.allclose(expr_vals[0][q_indices * bs + k], test_fn[f][offset + q_indices * bs + k]))
-
+                    # retrieve dv from expression values and packed test fn
+                    dv1 = np.zeros((len(q_indices), gdim))
+                    dv2 = np.zeros((len(q_indices), gdim))
+                    offset = link * num_q_points * len(dofs) * gdim + i * gdim * num_q_points
+                    for m in range(gdim):
+                        dv1[:, m] = expr_vals2[0][q_indices * gdim + m][:, 0]
+                        dv2[:, m] = grad_test_fn[f][offset + q_indices * gdim + m][:, 0]
+                    assert(np.allclose(dv1, dv2))
                     # ensure values are zero if q not connected to quadrature point
                     offset = link * num_q_points * len(dofs) * bs + i * num_q_points * bs
                     assert(np.allclose(0, test_fn[f][offset + zero_ind * bs + k]))
+                    # retrieve dv from expression values and packed test fn
+                    if len(zero_ind) > 0:
+                        dv2 = np.zeros((len(zero_ind), gdim))
+                        offset = link * num_q_points * len(dofs) * gdim + i * gdim * num_q_points
+                        for m in range(gdim):
+                            dv2[:, m] = grad_test_fn[f][offset + zero_ind * gdim + m][:, 0]
+                        assert(np.allclose(np.zeros((len(zero_ind), gdim)), dv2))
 
 
 @pytest.mark.parametrize("ct", ["quadrilateral", "triangle", "tetrahedron", "hexahedron"])
@@ -237,6 +255,7 @@ def test_pack_u(ct, gap, q_deg, delta, surface):
     # Pack gap on surface, pack u opposite surface
     gap = contact.pack_gap(0)
     u_opposite = contact.pack_u_contact(0, u._cpp_object, gap)
+    grad_u_opposite = contact.pack_grad_u_contact(0, u._cpp_object, gap, u_opposite)
 
     # Retrieve surface facets
     s_facets = np.sort(facets[s])
@@ -288,3 +307,25 @@ def test_pack_u(ct, gap, q_deg, delta, surface):
 
             # compare expression and packed u
             assert(np.allclose(expr_vals, vals))
+
+            # loop over block
+            for k in range(bs):
+
+                # use expression to evaluate gradient
+                expr = _fem.Expression(ufl.grad(u.sub(k)), x_ref)
+                expr_vals = expr.eval([cell]).reshape(-1)
+
+                # extract jacobian from surf_der and gradient from u_opposite and expr_vals
+                for i, q in enumerate(q_indices):
+                    # gradient from expression
+                    vals1 = np.zeros(gdim)
+                    for j in range(gdim):
+                        vals1[j] = expr_vals[i * gdim + j]
+
+                    vals2 = np.zeros(gdim)
+                    for j in range(gdim):
+                        index = gdim * bs * q + k * gdim + j
+                        vals2[j] = grad_u_opposite[f][index]
+
+                # compare gradient from expression and u_opposite
+                assert(np.allclose(vals1, vals2))

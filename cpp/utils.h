@@ -21,6 +21,13 @@
 #include <xtensor/xtensor.hpp>
 namespace dolfinx_contact
 {
+enum class Kernel
+{
+  Rhs,
+  Jac,
+  MeshTieRhs,
+  MeshTieJac
+};
 // NOTE: this function should change signature to T * ,..... , num_links,
 // num_dofs_per_link
 template <typename T>
@@ -47,28 +54,6 @@ void pull_back(xt::xtensor<double, 3>& J, xt::xtensor<double, 3>& K,
                const xt::xtensor<double, 2>& coordinate_dofs,
                const dolfinx::fem::CoordinateElement& cmap);
 
-//-----------------------------------------------------------------------------
-/// This function computes the basis function values on a given cell at a
-/// given set of points
-/// @param[in, out] J: Jacobians of transformation from reference element to
-/// physical element. Shape = (num_points, tdim, gdim). Computed at each point
-/// in x
-/// @param[in, out] K: inverse of J at each point.
-/// @param[in, out] detJ: determinant of J at each  point
-/// @param[in] x: points on physical element
-/// @param[in] coordinate_dofs: geometry coordinates of cell
-/// @param[in] index: the index of the cell (local to process)
-/// @param[in] perm: permutation infor for cell
-/// @param[in] element: the corresponding finite element
-/// @param[in] cmap: the coordinate element
-xt::xtensor<double, 3>
-get_basis_functions(xt::xtensor<double, 3>& J, xt::xtensor<double, 3>& K,
-                    xt::xtensor<double, 1>& detJ,
-                    const xt::xtensor<double, 2>& x,
-                    const xt::xtensor<double, 2>& coordinate_dofs,
-                    const std::int32_t index, const std::int32_t perm,
-                    std::shared_ptr<const dolfinx::fem::FiniteElement> element,
-                    const dolfinx::fem::CoordinateElement& cmap);
 
 /// @param[in] cells: the cells to be sorted
 /// @param[in, out] perm: the permutation for the sorted cells
@@ -109,9 +94,10 @@ double dR_minus(double x);
 
 /// Get shape of in,out variable for filling basis functions in for
 /// evaluate_basis_functions
-std::array<std::size_t, 3>
-evaulate_basis_shape(const dolfinx::fem::FunctionSpace& V,
-                     const std::size_t num_points);
+std::array<std::size_t, 4>
+evaluate_basis_shape(const dolfinx::fem::FunctionSpace& V,
+                     const std::size_t num_points,
+                     const std::size_t num_derivatives);
 
 /// Get basis values (not unrolled for block size) for a set of points and
 /// corresponding cells.
@@ -127,7 +113,8 @@ evaulate_basis_shape(const dolfinx::fem::FunctionSpace& V,
 void evaluate_basis_functions(const dolfinx::fem::FunctionSpace& V,
                               const xt::xtensor<double, 2>& x,
                               const xtl::span<const std::int32_t>& cells,
-                              xt::xtensor<double, 3>& basis_values);
+                              xt::xtensor<double, 4>& basis_values,
+                              std::size_t num_derivatives);
 
 /// Compute physical normal
 /// @param[in] n_ref facet normal on reference element

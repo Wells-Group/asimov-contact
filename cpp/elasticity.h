@@ -32,4 +32,6 @@ void compute_normal_strain_basis(xt::xtensor<double, 2>& epsn,
                                  const xt::xtensor<double, 1>& n_2,
                                  const std::size_t q_pos);
 
+
+
 } // namespace dolfinx_contact
