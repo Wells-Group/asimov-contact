@@ -557,20 +557,19 @@ dolfinx_contact::Contact::pack_grad_test_functions(
   const int puppet_mt = _contact_pairs[pair][0];
   const int candidate_mt = _contact_pairs[pair][1];
   // Mesh info
-  auto submesh = _submeshes[candidate_mt];
-  auto mesh = _V->mesh(); // mesh
+  const dolfinx_contact::SubMesh& submesh = _submeshes[candidate_mt];
+  std::shared_ptr<const dolfinx::mesh::Mesh> mesh = _V->mesh(); // mesh
   assert(mesh);
   const std::size_t gdim = mesh->geometry().dim(); // geometrical dimension
   std::vector<std::int32_t> parent_cells = submesh.parent_cells();
-  auto x_dofmap = mesh->geometry().dofmap();
   const std::size_t ndofs = _V->dofmap()->cell_dofs(0).size();
 
   // Select which side of the contact interface to loop from and get the
   // correct map
-  auto map = _facet_maps[pair];
-  auto qp_phys = _qp_phys[puppet_mt];
-  auto puppet_facets = _cell_facet_pairs[puppet_mt];
-  auto facet_map = submesh.facet_map();
+  std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> map = _facet_maps[pair];
+  const std::vector<xt::xtensor<double, 2>>& qp_phys = _qp_phys[puppet_mt];
+  const std::vector<std::pair<std::int32_t, int>>&  puppet_facets = _cell_facet_pairs[puppet_mt];
+  std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> facet_map = submesh.facet_map();
   const std::size_t max_links
       = *std::max_element(_max_links.begin(), _max_links.end());
   const std::size_t num_facets = puppet_facets.size();
@@ -591,13 +590,13 @@ dolfinx_contact::Contact::pack_grad_test_functions(
   // Loop over all facets
   for (std::size_t i = 0; i < num_facets; i++)
   {
-    auto links = map->links((int)i);
+    const tcb::span<const int> links = map->links((int)i);
     assert(links.size() == num_q_points);
 
     // Compute Pi(x) form points x and gap funtion Pi(x) - x
     for (std::size_t j = 0; j < num_q_points; j++)
     {
-      auto linked_pair = facet_map->links(links[j]);
+      const tcb::span<const int> linked_pair = facet_map->links(links[j]);
       linked_cells[j] = linked_pair[0];
       const std::size_t row = i * num_q_points;
       for (std::size_t k = 0; k < gdim; k++)
@@ -610,8 +609,8 @@ dolfinx_contact::Contact::pack_grad_test_functions(
         = dolfinx_contact::sort_cells(
             xtl::span(linked_cells.data(), linked_cells.size()),
             xtl::span(perm.data(), perm.size()));
-    auto unique_cells = sorted_cells.first;
-    auto offsets = sorted_cells.second;
+    const std::vector<std::int32_t>& unique_cells = sorted_cells.first;
+    const std::vector<std::int32_t>& offsets = sorted_cells.second;
 
     // Loop over sorted array of unique cells
     for (std::size_t j = 0; j < unique_cells.size(); ++j)
@@ -669,9 +668,9 @@ dolfinx_contact::Contact::pack_grad_u_contact(
   const int bs_dof = dofmap->bs();
   // Select which side of the contact interface to loop from and get the
   // correct map
-  auto map = _facet_maps[pair];
-  auto qp_phys = _qp_phys[puppet_mt];
-  auto facet_map = submesh.facet_map();
+  std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> map = _facet_maps[pair];
+  const std::vector<xt::xtensor<double, 2>>& qp_phys = _qp_phys[puppet_mt];
+  std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> facet_map = submesh.facet_map();
   const std::size_t num_facets = _cell_facet_pairs[puppet_mt].size();
   const std::size_t num_q_points
       = _quadrature_rule->offset()[1] - _quadrature_rule->offset()[0];
@@ -680,7 +679,7 @@ dolfinx_contact::Contact::pack_grad_u_contact(
   std::vector<std::int32_t> cells(num_facets * num_q_points, -1);
   for (std::size_t i = 0; i < num_facets; ++i)
   {
-    auto links = map->links(i);
+    const tcb::span<const int> links = map->links(i);
     assert(links.size() == num_q_points);
     for (std::size_t q = 0; q < num_q_points; ++q)
     {
@@ -689,7 +688,7 @@ dolfinx_contact::Contact::pack_grad_u_contact(
       {
         points(row + q, j) = qp_phys[i](q, j) + gap[row * gdim + q * gdim + j]
                              - u_packed[row * gdim + q * gdim + j];
-        auto linked_pair = facet_map->links(links[q]);
+        const tcb::span<const int> linked_pair = facet_map->links(links[q]);
         cells[row + q] = parent_cells[linked_pair[0]];
       }
     }

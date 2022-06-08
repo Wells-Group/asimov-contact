@@ -11,7 +11,6 @@
 #include "SubMesh.h"
 #include "elasticity.h"
 #include "geometric_quantities.h"
-#include "meshtie_kernels.h"
 #include "utils.h"
 #include <basix/cell.h>
 #include <basix/finite-element.h>
@@ -33,6 +32,11 @@ using mat_set_fn = const std::function<int(
 
 namespace dolfinx_contact
 {
+enum class Kernel
+{
+  Rhs,
+  Jac
+};
 
 namespace
 {
@@ -252,10 +256,10 @@ public:
       xt::xtensor<double, 2> J_tot
           = xt::zeros<double>({J.shape(0), (std::size_t)tdim - 1});
       double detJ;
-      auto c_view = xt::view(coord, xt::all(), xt::range(0, kd.gdim()));
+      auto c_view = xt::view(coord, xt::all(), xt::range(0, gdim));
 
       // Normal vector on physical facet at a single quadrature point
-      xt::xtensor<double, 1> n_phys = xt::zeros<double>({kd.gdim()});
+      xt::xtensor<double, 1> n_phys = xt::zeros<double>({gdim});
 
       // Pre-compute jacobians and normals for affine meshes
       if (kd.affine())
@@ -298,7 +302,7 @@ public:
         // For closest point projection the gap function is given by
         // (-n_y)* (Pi(x) - x), where n_y is the outward unit normal
         // in y = Pi(x)
-        for (std::size_t i = 0; i < kd.gdim(); i++)
+        for (std::size_t i = 0; i < gdim; i++)
         {
 
           n_surf[i] = -c[kd.offsets(4) + q * gdim + i];
@@ -310,7 +314,7 @@ public:
         double tr_u = 0;
         double epsn_u = 0;
         double jump_un = 0;
-        for (std::size_t i = 0; i < kd.ndofs_cell(); i++)
+        for (std::size_t i = 0; i < ndofs_cell; i++)
         {
           std::size_t block_index = kd.offsets(6) + i * bs;
           for (std::size_t j = 0; j < bs; j++)
@@ -332,15 +336,15 @@ public:
 
         // Fill contributions of facet with itself
 
-        for (std::size_t i = 0; i < kd.ndofs_cell(); i++)
+        for (std::size_t i = 0; i < ndofs_cell; i++)
         {
-          for (std::size_t n = 0; n < kd.bs(); n++)
+          for (std::size_t n = 0; n < bs; n++)
           {
             double v_dot_nsurf = n_surf[n] * phi(q_pos, i);
             double sign_v = (lmbda * tr(i, n) * n_dot + mu * epsn(i, n));
             // This is (1./gamma)*Pn_v to avoid the product gamma*(1./gamma)
             double Pn_v = gamma_inv * v_dot_nsurf - theta * sign_v;
-            b[0][n + i * kd.bs()] += 0.5 * Pn_u * Pn_v;
+            b[0][n + i * bs] += 0.5 * Pn_u * Pn_v;
             // 0.5 * (-theta * gamma * sign_v * sign_u + Pn_u * Pn_v);
 
             // entries corresponding to v on the other surface
@@ -350,7 +354,7 @@ public:
                                   + i * num_points * bs + q * bs + n;
               double v_n_opp = c[index] * n_surf[n];
 
-              b[k + 1][n + i * kd.bs()] -= 0.5 * gamma_inv * v_n_opp * Pn_u;
+              b[k + 1][n + i * bs] -= 0.5 * gamma_inv * v_n_opp * Pn_u;
             }
           }
         }
@@ -396,10 +400,10 @@ public:
       xt::xtensor<double, 2> J_tot
           = xt::zeros<double>({J.shape(0), (std::size_t)tdim - 1});
       double detJ;
-      auto c_view = xt::view(coord, xt::all(), xt::range(0, kd.gdim()));
+      auto c_view = xt::view(coord, xt::all(), xt::range(0, gdim));
 
       // Normal vector on physical facet at a single quadrature point
-      xt::xtensor<double, 1> n_phys = xt::zeros<double>({kd.gdim()});
+      xt::xtensor<double, 1> n_phys = xt::zeros<double>({gdim});
 
       // Pre-compute jacobians and normals for affine meshes
       if (kd.affine())
@@ -435,7 +439,7 @@ public:
 
         double n_dot = 0;
         double gap = 0;
-        for (std::size_t i = 0; i < kd.gdim(); i++)
+        for (std::size_t i = 0; i < gdim; i++)
         {
           // For closest point projection the gap function is given by
           // (-n_y)* (Pi(x) - x), where n_y is the outward unit normal
@@ -452,7 +456,7 @@ public:
         double epsn_u = 0;
         double jump_un = 0;
 
-        for (std::size_t i = 0; i < kd.ndofs_cell(); i++)
+        for (std::size_t i = 0; i < ndofs_cell; i++)
         {
           std::size_t block_index = kd.offsets(6) + i * bs;
           for (std::size_t j = 0; j < bs; j++)
@@ -471,24 +475,23 @@ public:
 
         // Fill contributions of facet with itself
         const double w0 = weights[q] * detJ;
-        for (std::size_t j = 0; j < kd.ndofs_cell(); j++)
+        for (std::size_t j = 0; j < ndofs_cell; j++)
         {
-          for (std::size_t l = 0; l < kd.bs(); l++)
+          for (std::size_t l = 0; l < bs; l++)
           {
             double sign_du = (lmbda * tr(j, l) * n_dot + mu * epsn(j, l));
             double Pn_du
                 = (phi(q_pos, j) * n_surf[l] - gamma * sign_du) * Pn_u * w0;
 
             sign_du *= w0;
-            for (std::size_t i = 0; i < kd.ndofs_cell(); i++)
+            for (std::size_t i = 0; i < ndofs_cell; i++)
             {
-              for (std::size_t b = 0; b < kd.bs(); b++)
+              for (std::size_t b = 0; b < bs; b++)
               {
                 double v_dot_nsurf = n_surf[b] * phi(q_pos, i);
                 double sign_v = (lmbda * tr(i, b) * n_dot + mu * epsn(i, b));
                 double Pn_v = gamma_inv * v_dot_nsurf - theta * sign_v;
-                A[0][(b + i * kd.bs()) * kd.ndofs_cell() * kd.bs() + l
-                     + j * kd.bs()]
+                A[0][(b + i * bs) * ndofs_cell * bs + l + j * bs]
                     += 0.5 * Pn_du * Pn_v;
 
                 // entries corresponding to u and v on the other surface
@@ -522,22 +525,6 @@ public:
       return unbiased_rhs;
     case dolfinx_contact::Kernel::Jac:
       return unbiased_jac;
-    case dolfinx_contact::Kernel::MeshTieRhs:
-    {
-
-      const std::size_t max_links
-          = *std::max_element(_max_links.begin(), _max_links.end());
-      return dolfinx_contact::generate_meshtie_kernel(
-          type, _V, _quadrature_rule, max_links);
-    }
-    case dolfinx_contact::Kernel::MeshTieJac:
-    {
-
-      const std::size_t max_links
-          = *std::max_element(_max_links.begin(), _max_links.end());
-      return dolfinx_contact::generate_meshtie_kernel(
-          type, _V, _quadrature_rule, max_links);
-    }
     default:
       throw std::invalid_argument("Unrecognized kernel");
     }
