@@ -580,7 +580,8 @@ std::vector<std::int32_t> dolfinx_contact::compute_active_entities(
           = std::find(cell_facets.begin(), cell_facets.end(), entities[f]);
       assert(facet_it != cell_facets.end());
       active_entities[2 * f] = cell;
-      active_entities[2 * f + 1] = std::distance(cell_facets.begin(), facet_it);
+      active_entities[2 * f + 1]
+          = (std::int32_t)std::distance(cell_facets.begin(), facet_it);
     }
     return active_entities;
   }
@@ -607,7 +608,7 @@ std::vector<std::int32_t> dolfinx_contact::compute_active_entities(
         assert(facet_it != cell_facets.end());
         active_entities[4 * f + 2 * i] = cells[i];
         active_entities[4 * f + 2 * i + 1]
-            = std::distance(cell_facets.begin(), facet_it);
+            = (std::int32_t)std::distance(cell_facets.begin(), facet_it);
       }
     }
     return active_entities;
