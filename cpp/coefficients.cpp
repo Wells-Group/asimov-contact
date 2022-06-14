@@ -174,12 +174,12 @@ dolfinx_contact::pack_coefficient_quadrature(
       // Get cell geometry (coordinate dofs)
       auto x_dofs = x_dofmap.links(cell);
       assert(x_dofs.size() == num_dofs_g);
-      for (std::size_t k = 0; k < num_dofs_g; ++k)
+      for (std::size_t j = 0; j < num_dofs_g; ++j)
       {
-        const int pos = 3 * x_dofs[k];
-        for (int j = 0; j < gdim; ++j)
-          coordinate_dofs(k, j) = x_g[pos + j];
+        std::copy_n(std::next(x_g.begin(), 3 * x_dofs[j]), gdim,
+                    std::next(coordinate_dofs.begin(), j * gdim));
       }
+
       if (cmap.is_affine())
       {
         std::fill(J.begin(), J.end(), 0);

@@ -379,15 +379,14 @@ void dolfinx_contact::evaluate_basis_functions(
 
     // Get cell geometry (coordinate dofs)
     const tcb::span<const int> x_dofs = x_dofmap.links(cell_index);
-    for (std::size_t i = 0; i < num_dofs_g; ++i)
+    for (std::size_t j = 0; j < num_dofs_g; ++j)
     {
-      const int pos = 3 * x_dofs[i];
-      for (std::size_t j = 0; j < gdim; ++j)
-        coordinate_dofs(i, j) = x_g[pos + j];
+      std::copy_n(std::next(x_g.begin(), 3 * x_dofs[j]), gdim,
+                  std::next(coordinate_dofs.begin(), j * gdim));
     }
 
-    for (std::size_t j = 0; j < gdim; ++j)
-      xp(0, j) = x(p, j);
+    // Copy data to padded (3D) structure
+    std::copy_n(std::next(x.begin(), p * gdim), gdim, xp.begin());
 
     auto _J = xt::view(J, p, xt::all(), xt::all());
     auto _K = xt::view(K, p, xt::all(), xt::all());
@@ -753,12 +752,11 @@ void dolfinx_contact::compute_physical_points(
   for (std::size_t i = 0; i < facets.size(); i += 2)
   {
     auto x_dofs = x_dofmap.links(facets[i]);
-
     assert(x_dofs.size() == num_dofs_g);
-    for (std::size_t i = 0; i < num_dofs_g; ++i)
+    for (std::size_t j = 0; j < num_dofs_g; ++j)
     {
-      std::copy_n(std::next(mesh_geometry.begin(), 3 * x_dofs[i]), gdim,
-                  std::next(coordinate_dofs.begin(), i * gdim));
+      std::copy_n(std::next(mesh_geometry.begin(), 3 * x_dofs[j]), gdim,
+                  std::next(coordinate_dofs.begin(), j * gdim));
     }
     // push forward points on reference element
     const xt::xtensor<double, 2> phi_f = xt::view(

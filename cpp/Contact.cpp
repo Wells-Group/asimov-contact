@@ -332,9 +332,8 @@ dolfinx_contact::Contact::pack_ny(int pair,
           J, K, point, coordinate_dofs, linked_pair[1], cmap,
           reference_normals);
       // Copy normal into c
-      const std::size_t offset = i * cstride + q * gdim;
-      for (int l = 0; l < gdim; ++l)
-        normals[offset + l] = normal[l];
+      std::copy_n(normal.begin(), gdim,
+                  std::next(normals.begin(), i * cstride + q * gdim));
     }
   }
   return {std::move(normals), cstride};

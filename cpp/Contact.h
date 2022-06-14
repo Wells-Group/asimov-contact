@@ -661,8 +661,7 @@ public:
     // Temporary data structures used in loops
     xt::xtensor<double, 2> point = {{0, 0, 0}};
     xt::xtensor_fixed<double, xt::xshape<3>> dist_vec;
-    xt::xtensor<double, 2> master_coords
-        = xt::zeros<double>({num_facet_dofs, std::size_t(3)});
+    xt::xtensor<double, 2> master_coords({num_facet_dofs, std::size_t(3)});
 
     // Pack gap function for each quadrature point on each facet
     std::vector<PetscScalar> c(num_facets * num_q_point * gdim, 0.0);
@@ -686,9 +685,10 @@ public:
         // and compute the distance of the convex hull created by the points
         for (std::size_t l = 0; l < num_facet_dofs; ++l)
         {
-          const int pos = 3 * master_facet[l];
-          for (int k = 0; k < gdim; ++k)
-            master_coords(l, k) = mesh_geometry[pos + k];
+          // Copy mesh geometry of facets into standalone array
+          dolfinx::common::impl::copy_N<3>(
+              std::next(mesh_geometry.begin(), 3 * master_facet[l]),
+              std::next(master_coords.begin(), 3 * l));
         }
 
         dist_vec
@@ -877,18 +877,18 @@ public:
           = xt::zeros<double>({num_facets * num_q_points, gdim});
       for (std::size_t i = 0; i < num_facets; ++i)
       {
-        const tcb::span<const int> links = map->links((int)i);
+        auto links = map->links((int)i);
         assert(links.size() == num_q_points);
         for (std::size_t q = 0; q < num_q_points; ++q)
         {
+          auto linked_pair = facet_map->links(links[(int)q]);
+          assert(!linked_pair.empty());
           const std::size_t row = i * num_q_points;
           for (std::size_t j = 0; j < gdim; ++j)
           {
             points(row + q, j)
                 = qp_phys[i](q, j) + gap[row * gdim + q * gdim + j];
-            const tcb::span<const int> linked_pair
-                = facet_map->links(links[(int)q]);
-            cells[row + q] = linked_pair[0];
+            cells[row + q] = linked_pair.front();
           }
         }
       }

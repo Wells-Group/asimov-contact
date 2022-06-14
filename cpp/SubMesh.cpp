@@ -195,14 +195,13 @@ void dolfinx_contact::SubMesh::update_geometry(
       = u.function_space()->mesh();
   tcb::span<double> sub_geometry = _mesh->geometry().x();
   tcb::span<const double> parent_geometry = parent_mesh->geometry().x();
-  std::size_t gdim = _mesh->geometry().dim();
   std::size_t num_x_dofs = sub_geometry.size() / 3;
   for (std::size_t i = 0; i < num_x_dofs; ++i)
-    for (std::size_t j = 0; j < gdim; ++j)
-    {
-      std::size_t parent_index = _submesh_to_mesh_x_dof_map[i];
-      sub_geometry[3 * i + j] = parent_geometry[3 * parent_index + j];
-    }
+  {
+    dolfinx::common::impl::copy_N<3>(
+        std::next(parent_geometry.begin(), 3 * _submesh_to_mesh_x_dof_map[i]),
+        std::next(sub_geometry.begin(), 3 * i));
+  }
   // use u to update geometry
   std::shared_ptr<const dolfinx::fem::FunctionSpace> V_parent
       = u.function_space();
