@@ -596,7 +596,7 @@ std::vector<std::int32_t> dolfinx_contact::compute_active_entities(
     auto c_to_f = topology.connectivity(tdim, tdim - 1);
     if (!c_to_f)
       throw std::runtime_error("Cell to facet connecitivty missing");
-    for (std::int32_t f = 0; f < entities.size(); f++)
+    for (std::size_t f = 0; f < entities.size(); f++)
     {
       assert(f_to_c->num_links(entities[f]) == 2);
       auto cells = f_to_c->links(entities[f]);

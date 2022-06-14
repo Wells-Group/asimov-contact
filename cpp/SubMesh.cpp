@@ -94,7 +94,7 @@ dolfinx_contact::SubMesh::SubMesh(
       // cell facet index the same for both meshes: use c_to_f to
       // get submesh facet index
       auto facets = c_to_f->links(sub_cells.front());
-      assert(cell_facet_pairs[i + 1] < facets.size());
+      assert((std::size_t)cell_facet_pairs[i + 1] < facets.size());
       std::int32_t submesh_facet = facets[cell_facet_pairs[i + 1]];
       marked_facets[submesh_facet] = 2;
     }
