@@ -11,21 +11,21 @@ using namespace dolfinx_contact;
 
 dolfinx_contact::SubMesh::SubMesh(
     std::shared_ptr<const dolfinx::mesh::Mesh> mesh,
-    std::vector<std::pair<std::int32_t, int>>& cell_facet_pairs)
+    xtl::span<const std::int32_t> cell_facet_pairs)
 {
   const int tdim = mesh->topology().dim(); // topological dimension
 
   // create sorted vector of unique cells adjacent to the input facets
-  std::vector<std::int32_t> cells(cell_facet_pairs.size());
-  for (std::size_t f = 0; f < cell_facet_pairs.size(); ++f)
-    cells[f] = cell_facet_pairs[f].first;              // retrieve cells
+  std::vector<std::int32_t> cells(cell_facet_pairs.size() / 2);
+  for (std::size_t f = 0; f < cell_facet_pairs.size(); f += 2)
+    cells[f / 2] = cell_facet_pairs[f];                // retrieve cells
   dolfinx::radix_sort<std::int32_t>(xtl::span(cells)); // sort cells
   cells.erase(std::unique(cells.begin(), cells.end()),
               cells.end()); // remove duplicates
 
   // save sorted cell vector as _parent_cells
 
-  // call doflinx::mesh::create_submesh and save ouput to member variables
+  // call dolfinx::mesh::create_submesh and save ouput to member variables
   auto [submesh, cell_map, vertex_map, x_dof_map]
       = dolfinx::mesh::create_submesh(*mesh, tdim,
                                       xtl::span(cells.data(), cells.size()));
@@ -58,64 +58,72 @@ dolfinx_contact::SubMesh::SubMesh(
   std::vector<std::int32_t> marked_cells(num_cells, 0);
   for (auto cell : cells)
     marked_cells[cell] = 1;
-  // Create offsets
-  std::vector<int32_t> offsets(num_cells + 1, 0);
-  std::partial_sum(marked_cells.begin(), marked_cells.end(),
-                   offsets.begin() + 1);
-  // fill data array
-  std::vector<std::int32_t> data(offsets.back());
-  for (std::size_t c = 0; c < cells.size(); ++c)
-  {
-    data[offsets[cells[c]]] = (std::int32_t)c;
-  }
 
-  // create adjacency list
-  _mesh_to_submesh_cell_map
-      = std::make_shared<dolfinx::graph::AdjacencyList<std::int32_t>>(
-          std::move(data), std::move(offsets));
+  {
+    // Create offsets
+    std::vector<int32_t> offsets(num_cells + 1, 0);
+    std::partial_sum(marked_cells.begin(), marked_cells.end(),
+                     offsets.begin() + 1);
+    // fill data array
+    std::vector<std::int32_t> data(offsets.back());
+    for (std::size_t c = 0; c < cells.size(); ++c)
+      data[offsets[cells[c]]] = (std::int32_t)c;
+
+    // create adjacency list
+    _mesh_to_submesh_cell_map
+        = std::make_shared<dolfinx::graph::AdjacencyList<std::int32_t>>(
+            std::move(data), std::move(offsets));
+  }
 
   // Create facet to (cell, local_facet) map for exterior facet from the
   // original input
+  {
+    // Retrieve number of facets on process
+    std::shared_ptr<const dolfinx::common::IndexMap> map_f
+        = _mesh->topology().index_map(tdim - 1);
+    const int num_facets = map_f->size_local() + map_f->num_ghosts();
 
-  // Retrieve number of facets on process
-  std::shared_ptr<const dolfinx::common::IndexMap> map_f
-      = _mesh->topology().index_map(tdim - 1);
-  const int num_facets = map_f->size_local() + map_f->num_ghosts();
+    // mark which facets are in any of the facet lists
 
-  // mark which facets are in any of the facet lists
-  std::vector<std::int32_t> marked_facets(num_facets, 0);
-  std::for_each(cell_facet_pairs.cbegin(), cell_facet_pairs.cend(),
-                [&](const auto& facet_pair)
-                {
-                  auto [parent_cell, parent_facet] = facet_pair;
-                  // get submesh cell from parent cell
-                  auto cell = _mesh_to_submesh_cell_map->links(parent_cell)[0];
-                  // cell facet index the same for both meshes: use c_to_f to
-                  // get submesh facet index
-                  std::int32_t facet = c_to_f->links(cell)[parent_facet];
-                  marked_facets[facet] = 2;
-                });
-  // Create offsets
-  std::vector<int32_t> offsets2(num_facets + 1, 0);
-  std::partial_sum(marked_facets.begin(), marked_facets.end(),
-                   offsets2.begin() + 1);
+    std::vector<std::int32_t> marked_facets(num_facets, 0);
+    for (std::size_t i = 0; i < cell_facet_pairs.size(); i += 2)
+    {
+      // get submesh cell from parent cell
+      auto sub_cells = _mesh_to_submesh_cell_map->links(cell_facet_pairs[i]);
+      assert(!sub_cells.empty());
+      // cell facet index the same for both meshes: use c_to_f to
+      // get submesh facet index
+      auto facets = c_to_f->links(sub_cells.front());
+      assert(cell_facet_pairs[i + 1] < facets.size());
+      std::int32_t submesh_facet = facets[cell_facet_pairs[i + 1]];
+      marked_facets[submesh_facet] = 2;
+    }
 
-  // fill data
-  std::vector<std::int32_t> data2(offsets2.back());
-  std::for_each(cell_facet_pairs.cbegin(), cell_facet_pairs.cend(),
-                [&](const auto& facet_pair)
-                {
-                  auto [parent_cell, parent_facet] = facet_pair;
-                  auto cell = _mesh_to_submesh_cell_map->links(parent_cell)[0];
-                  std::int32_t facet = c_to_f->links(cell)[parent_facet];
-                  data2[offsets2[facet]] = cell;
-                  data2[offsets2[facet] + 1] = parent_facet;
-                });
+    // Create offsets
+    std::vector<int32_t> offsets(num_facets + 1, 0);
+    std::partial_sum(marked_facets.begin(), marked_facets.end(),
+                     offsets.begin() + 1);
 
-  // create adjacency list
-  _facets_to_cells
-      = std::make_shared<dolfinx::graph::AdjacencyList<std::int32_t>>(
-          std::move(data2), std::move(offsets2));
+    std::vector<std::int32_t> data(offsets.back());
+    for (std::size_t i = 0; i < cell_facet_pairs.size(); i += 2)
+    {
+
+      // get submesh cell from parent cell
+      auto sub_cells = _mesh_to_submesh_cell_map->links(cell_facet_pairs[i]);
+      assert(!sub_cells.empty());
+      // cell facet index the same for both meshes: use c_to_f to
+      // get submesh facet index
+      auto facets = c_to_f->links(sub_cells.front());
+      assert(cell_facet_pairs[i + 1] < facets.size());
+      std::int32_t submesh_facet = facets[cell_facet_pairs[i + 1]];
+      data[offsets[submesh_facet]] = sub_cells.front();
+      data[offsets[submesh_facet] + 1] = cell_facet_pairs[i + 1];
+    }
+    // create adjacency list
+    _facets_to_cells
+        = std::make_shared<dolfinx::graph::AdjacencyList<std::int32_t>>(
+            std::move(data), std::move(offsets));
+  }
 }
 
 //------------------------------------------------------------------------------------------------
