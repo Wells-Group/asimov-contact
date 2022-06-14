@@ -570,7 +570,7 @@ std::vector<std::int32_t> dolfinx_contact::compute_active_entities(
     assert(f_to_c);
     auto c_to_f = topology.connectivity(tdim, tdim - 1);
     assert(c_to_f);
-    for (std::int32_t f = 0; f < entities.size(); f++)
+    for (std::size_t f = 0; f < entities.size(); f++)
     {
       assert(f_to_c->num_links(entities[f]) == 1);
       const std::int32_t cell = f_to_c->links(entities[f])[0];
@@ -846,7 +846,7 @@ dolfinx_contact::compute_distance_map(
     {
       auto local_facets = c_to_f->links(candidate_facets[i]);
       assert(!local_facets.empty());
-      assert(candidate_facets[i + 1] < local_facets.size());
+      assert((std::size_t)candidate_facets[i + 1] < local_facets.size());
       facets[i / 2] = local_facets[candidate_facets[i + 1]];
     }
     // Compute closest entity for each quadrature point
