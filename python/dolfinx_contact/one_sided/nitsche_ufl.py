@@ -11,6 +11,7 @@ import dolfinx.mesh as dmesh
 import dolfinx.nls as _nls
 import numpy as np
 import ufl
+from dolfinx.cpp.mesh import MeshTags_int32
 from petsc4py import PETSc as _PETSc
 
 from dolfinx_contact.helpers import (R_minus, epsilon, lame_parameters,
@@ -19,7 +20,7 @@ from dolfinx_contact.helpers import (R_minus, epsilon, lame_parameters,
 __all__ = ["nitsche_ufl"]
 
 
-def nitsche_ufl(mesh: dmesh.Mesh, mesh_data: Tuple[dmesh.MeshTagsMetaClass, int, int],
+def nitsche_ufl(mesh: dmesh.Mesh, mesh_data: Tuple[MeshTags_int32, int, int],
                 physical_parameters: dict = {}, nitsche_parameters: Dict[str, float] = {},
                 plane_loc: float = 0.0, vertical_displacement: float = -0.1,
                 nitsche_bc: bool = True, quadrature_degree: int = 5, form_compiler_params: Dict = {},
