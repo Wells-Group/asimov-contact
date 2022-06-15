@@ -161,11 +161,11 @@ def compare_u(fn_space, u, u_opposite, grad_u_opposite, q_indices, x_ref, cell):
         assert(np.allclose(vals1, vals2))
 
 
-@ pytest.mark.parametrize("ct", ["quadrilateral", "triangle", "tetrahedron", "hexahedron"])
-@ pytest.mark.parametrize("gap", [0.5, -0.5])
-@ pytest.mark.parametrize("q_deg", [1, 2, 3])
-@ pytest.mark.parametrize("delta", [0.0, -0.5])
-@ pytest.mark.parametrize("surface", [0, 1])
+@pytest.mark.parametrize("ct", ["quadrilateral", "triangle", "tetrahedron", "hexahedron"])
+@pytest.mark.parametrize("gap", [0.5, -0.5])
+@pytest.mark.parametrize("q_deg", [1, 2, 3])
+@pytest.mark.parametrize("delta", [0.0, -0.5])
+@pytest.mark.parametrize("surface", [0, 1])
 def test_packing(ct, gap, q_deg, delta, surface):
 
     # Create function space

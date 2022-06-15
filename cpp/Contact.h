@@ -711,8 +711,7 @@ public:
   std::pair<std::vector<PetscScalar>, int>
   pack_test_functions(int pair, const xtl::span<const PetscScalar>& gap)
   {
-    int puppet_mt = _contact_pairs[pair][0];
-    int candidate_mt = _contact_pairs[pair][1];
+    auto [puppet_mt, candidate_mt] = _contact_pairs[pair];
     // Mesh info
     std::shared_ptr<const dolfinx::mesh::Mesh> mesh
         = _submeshes[candidate_mt].mesh(); // mesh
@@ -723,7 +722,7 @@ public:
     xtl::span<const double> mesh_geometry = mesh->geometry().x();
     std::shared_ptr<const dolfinx::fem::FiniteElement> element = _V->element();
     const std::uint32_t bs = element->block_size();
-    const std::size_t ndofs = _V->dofmap()->cell_dofs(0).size();
+    const std::size_t ndofs = (std::size_t)element->space_dimension() / bs;
     mesh->topology_mutable().create_entity_permutations();
 
     const std::vector<std::uint32_t> permutation_info
@@ -756,6 +755,8 @@ public:
         num_facets * num_q_points * max_links * ndofs * bs, 0.0);
     const auto cstride = int(num_q_points * max_links * ndofs * bs);
 
+    // temporary data structure used inside loop
+    std::vector<std::int32_t> cells(max_links);
     // Loop over all facets
     for (std::size_t i = 0; i < num_facets; i++)
     {
@@ -816,7 +817,8 @@ public:
         std::fill(basis_values.begin(), basis_values.end(), 0);
         std::vector<std::int32_t> cells(indices.size(), linked_cell);
         evaluate_basis_functions(*V_sub, qp, cells, basis_values, 0);
-
+        cells.resize(indices.size());
+        std::fill(cells.begin(), cells.end(), linked_cell);
         // Insert basis function values into c
         for (std::size_t k = 0; k < ndofs; k++)
           for (std::size_t q = 0; q < indices.size(); ++q)
@@ -869,6 +871,8 @@ public:
     const std::size_t num_facets = _cell_facet_pairs[puppet_mt].size() / 2;
     const std::size_t num_q_points
         = _quadrature_rule->offset()[1] - _quadrature_rule->offset()[0];
+    // NOTE: Assuming same number of quadrature points on each cell
+    dolfinx_contact::error::check_cell_type(mesh->topology().cell_type());
     auto V_sub = std::make_shared<dolfinx::fem::FunctionSpace>(
         submesh.create_functionspace(_V));
     dolfinx::fem::Function<PetscScalar> u_sub(V_sub);
@@ -896,11 +900,11 @@ public:
           auto linked_pair = facet_map->links(links[(int)q]);
           assert(!linked_pair.empty());
           const std::size_t row = i * num_q_points;
+          cells[row + q] = linked_pair.front();
           for (std::size_t j = 0; j < gdim; ++j)
           {
             points(row + q, j)
                 = qp_phys[i](q, j) + gap[row * gdim + q * gdim + j];
-            cells[row + q] = linked_pair.front();
           }
         }
       }
