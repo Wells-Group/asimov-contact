@@ -59,7 +59,7 @@ dolfinx_contact::KernelData::KernelData(
 
   /// Pack test and trial functions
   const basix::FiniteElement& basix_element = element->basix_element();
-std::array<std::size_t, 4> tab_shape
+  std::array<std::size_t, 4> tab_shape
       = basix_element.tabulate_shape(0, num_quadrature_pts);
   _phi = xt::xtensor<double, 2>({num_quadrature_pts, _ndofs_cell});
   _dphi = xt::xtensor<double, 3>({_tdim, num_quadrature_pts, _ndofs_cell});

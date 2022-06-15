@@ -84,98 +84,6 @@ void dolfinx_contact::pull_back(xt::xtensor<double, 3>& J,
 }
 
 //-----------------------------------------------------------------------------
-xt::xtensor<double, 3> dolfinx_contact::get_basis_functions(
-    xt::xtensor<double, 3>& J, xt::xtensor<double, 3>& K,
-    xt::xtensor<double, 1>& detJ, const xt::xtensor<double, 2>& x,
-    const xt::xtensor<double, 2>& coordinate_dofs, const std::int32_t index,
-    const std::int32_t perm,
-    std::shared_ptr<const dolfinx::fem::FiniteElement> element,
-    const dolfinx::fem::CoordinateElement& cmap)
-{
-  // number of points
-  const std::size_t num_points = x.shape(0);
-  assert(J.shape(0) >= num_points);
-  assert(K.shape(0) >= num_points);
-  assert(detJ.shape(0) >= num_points);
-
-  // Get mesh data from input
-  const size_t tdim = K.shape(1);
-
-  // Get element data
-  const size_t block_size = element->block_size();
-  const size_t reference_value_size
-      = element->reference_value_size() / block_size;
-  const size_t value_size = element->value_size() / block_size;
-  const size_t space_dimension = element->space_dimension() / block_size;
-
-  xt::xtensor<double, 2> X({x.shape(0), tdim});
-
-  // Skip negative cell indices
-  xt::xtensor<double, 3> basis_array = xt::zeros<double>(
-      {num_points, space_dimension * block_size, value_size * block_size});
-  if (index < 0)
-    return basis_array;
-
-  pull_back(J, K, detJ, x, X, coordinate_dofs, cmap);
-  // Prepare basis function data structures
-  xt::xtensor<double, 4> tabulated_data(
-      {1, num_points, space_dimension, reference_value_size});
-  xt::xtensor<double, 3> basis_values(
-      {num_points, space_dimension, value_size});
-
-  // Get push forward function
-  xt::xtensor<double, 2> point_basis_values({space_dimension, value_size});
-  using u_t = xt::xview<decltype(basis_values)&, std::size_t,
-                        xt::xall<std::size_t>, xt::xall<std::size_t>>;
-  using U_t = xt::xview<decltype(point_basis_values)&, xt::xall<std::size_t>,
-                        xt::xall<std::size_t>>;
-  using J_t = xt::xview<decltype(J)&, std::size_t, xt::xall<std::size_t>,
-                        xt::xall<std::size_t>>;
-  using K_t = xt::xview<decltype(K)&, std::size_t, xt::xall<std::size_t>,
-                        xt::xall<std::size_t>>;
-  // FIXME: These should be moved out of this function
-  auto push_forward_fn = element->map_fn<u_t, U_t, J_t, K_t>();
-  const std::function<void(const xtl::span<PetscScalar>&,
-                           const xtl::span<const std::uint32_t>&, std::int32_t,
-                           int)>
-      transformation = element->get_dof_transformation_function<PetscScalar>();
-
-  // Compute basis on reference element
-  element->tabulate(tabulated_data, X, 0);
-  for (std::size_t q = 0; q < num_points; ++q)
-  {
-    // Permute the reference values to account for the cell's orientation
-    point_basis_values = xt::view(tabulated_data, 0, q, xt::all(), xt::all());
-    element->apply_dof_transformation(
-        xtl::span<double>(point_basis_values.data(), point_basis_values.size()),
-        perm, 1);
-    // Push basis forward to physical element
-    auto _J = xt::view(J, q, xt::all(), xt::all());
-    auto _K = xt::view(K, q, xt::all(), xt::all());
-    auto _u = xt::view(basis_values, q, xt::all(), xt::all());
-    auto _U = xt::view(point_basis_values, xt::all(), xt::all());
-    push_forward_fn(_u, _U, _J, detJ[q], _K);
-  }
-
-  // Expand basis values for each dof
-  for (std::size_t p = 0; p < num_points; ++p)
-  {
-    for (std::size_t block = 0; block < block_size; ++block)
-    {
-      for (std::size_t i = 0; i < space_dimension; ++i)
-      {
-        for (std::size_t j = 0; j < value_size; ++j)
-        {
-          basis_array(p, i * block_size + block, j * block_size + block)
-              = basis_values(p, i, j);
-        }
-      }
-    }
-  }
-  return basis_array;
-}
-
-//-----------------------------------------------------------------------------
 std::pair<std::vector<std::int32_t>, std::vector<std::int32_t>>
 dolfinx_contact::sort_cells(const xtl::span<const std::int32_t>& cells,
                             const xtl::span<std::int32_t>& perm)
@@ -261,31 +169,35 @@ double dolfinx_contact::dR_minus(double x) { return double(x < 0); }
 
 double dolfinx_contact::dR_plus(double x) { return double(x > 0); }
 //-------------------------------------------------------------------------------------
-std::array<std::size_t, 3>
-dolfinx_contact::evaulate_basis_shape(const dolfinx::fem::FunctionSpace& V,
-                                      const std::size_t num_points)
+std::array<std::size_t, 4>
+dolfinx_contact::evaluate_basis_shape(const dolfinx::fem::FunctionSpace& V,
+                                      const std::size_t num_points,
+                                      const std::size_t num_derivatives)
 {
   // Get element
   assert(V.element());
+  std::size_t gdim = V.mesh()->geometry().dim();
   std::shared_ptr<const dolfinx::fem::FiniteElement> element = V.element();
   assert(element);
   const int bs_element = element->block_size();
   const std::size_t value_size = element->value_size() / bs_element;
   const std::size_t space_dimension = element->space_dimension() / bs_element;
-  return {num_points, space_dimension, value_size};
+  return {num_derivatives * gdim + 1, num_points, space_dimension, value_size};
 }
 //-----------------------------------------------------------------------------
 void dolfinx_contact::evaluate_basis_functions(
     const dolfinx::fem::FunctionSpace& V, const xt::xtensor<double, 2>& x,
     const xtl::span<const std::int32_t>& cells,
-    xt::xtensor<double, 3>& basis_values)
+    xt::xtensor<double, 4>& basis_values, std::size_t num_derivatives)
 {
+
+  assert(num_derivatives < 2);
   if (x.shape(0) != cells.size())
   {
     throw std::invalid_argument(
         "Number of points and number of cells must be equal.");
   }
-  if (x.shape(0) != basis_values.shape(0))
+  if (x.shape(0) != basis_values.shape(1))
   {
     throw std::invalid_argument("Length of array for basis values must be the "
                                 "same as the number of points.");
@@ -413,13 +325,23 @@ void dolfinx_contact::evaluate_basis_functions(
   }
 
   // Prepare basis function data structures
-  xt::xtensor<double, 4> basis_reference_values(
-      {1, x.shape(0), space_dimension, reference_value_size});
+  xt::xtensor<double, 4> basis_reference_values({1 + num_derivatives * tdim,
+                                                 x.shape(0), space_dimension,
+                                                 reference_value_size});
 
   // Compute basis on reference element
-  element->tabulate(basis_reference_values, X, 0);
+  element->tabulate(basis_reference_values, X, (int)num_derivatives);
 
-  using u_t = xt::xview<decltype(basis_values)&, std::size_t,
+  // temporary data structure
+  std::array<std::size_t, 4> shape = basis_values.shape();
+  if (num_derivatives == 1)
+    shape[0] = tdim + 1;
+
+  xt::xtensor<double, 4> temp(shape);
+  std::fill(basis_values.begin(), basis_values.end(), 0);
+  std::fill(temp.begin(), temp.end(), 0);
+
+  using u_t = xt::xview<decltype(temp)&, std::size_t, std::size_t,
                         xt::xall<std::size_t>, xt::xall<std::size_t>>;
   using U_t
       = xt::xview<decltype(basis_reference_values)&, std::size_t, std::size_t,
@@ -435,27 +357,52 @@ void dolfinx_contact::evaluate_basis_functions(
       apply_dof_transformation
       = element->get_dof_transformation_function<double>();
   const std::size_t num_basis_values = space_dimension * reference_value_size;
+
   for (std::size_t p = 0; p < cells.size(); ++p)
   {
-    const int cell_index = cells[p];
-
-    // Skip negative cell indices
-    if (cell_index < 0)
-      continue;
-
-    // Permute the reference values to account for the cell's orientation
-    apply_dof_transformation(
-        xtl::span(basis_reference_values.data() + p * num_basis_values,
-                  num_basis_values),
-        cell_info, cell_index, (int)reference_value_size);
-
-    // Push basis forward to physical element
     auto _K = xt::view(K, p, xt::all(), xt::all());
     auto _J = xt::view(J, p, xt::all(), xt::all());
-    auto _u = xt::view(basis_values, p, xt::all(), xt::all());
-    auto _U = xt::view(basis_reference_values, (std::size_t)0, p, xt::all(),
-                       xt::all());
-    push_forward_fn(_u, _U, _J, detJ[p], _K);
+    /// NOTE: loop size correct for num_derivatives = 0,1
+    for (std::size_t j = 0; j < num_derivatives * tdim + 1; ++j)
+    {
+      const int cell_index = cells[p];
+
+      // Skip negative cell indices
+      if (cell_index < 0)
+        continue;
+
+      // Permute the reference values to account for the cell's orientation
+      apply_dof_transformation(
+          xtl::span(basis_reference_values.data()
+                        + j * cells.size() * num_basis_values
+                        + p * num_basis_values,
+                    num_basis_values),
+          cell_info, cell_index, (int)reference_value_size);
+
+      // Push basis forward to physical element
+
+      auto _U = xt::view(basis_reference_values, j, p, xt::all(), xt::all());
+      if (j == 0)
+      {
+        auto _u = xt::view(basis_values, j, p, xt::all(), xt::all());
+        push_forward_fn(_u, _U, _J, detJ[p], _K);
+      }
+      else
+      {
+        auto _u = xt::view(temp, j, p, xt::all(), xt::all());
+        push_forward_fn(_u, _U, _J, detJ[p], _K);
+      }
+    }
+
+    for (std::size_t k = 0; k < gdim * num_derivatives; ++k)
+    {
+      auto du = xt::view(basis_values, k + 1, p, xt::all(), xt::all());
+      for (std::size_t j = 0; j < num_derivatives * tdim; ++j)
+      {
+        auto du_temp = xt::view(temp, j + 1, p, xt::all(), xt::all());
+        du += _K(j, k) * du_temp;
+      }
+    }
   }
 };
 
