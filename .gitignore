@@ -65,3 +65,5 @@ core
 *.png
 **/CMakeFiles
 CMakeCache.txt
+*.txt
+*.cache

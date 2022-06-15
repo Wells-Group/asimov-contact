@@ -37,6 +37,8 @@ if __name__ == "__main__":
     parser.add_argument("--problem", default=1, type=int, dest="problem",
                         help="Which problem to solve: 1. Flat surfaces, 2. One curved surface, 3. Two curved surfaces",
                         choices=[1, 2, 3])
+    parser.add_argument("--order", default=1, type=int, dest="order",
+                        help="Order of mesh geometry", choices=[1, 2, 3])
     _3D = parser.add_mutually_exclusive_group(required=False)
     _3D.add_argument('--3D', dest='threed', action='store_true',
                      help="Use 3D mesh", default=False)
@@ -77,15 +79,22 @@ if __name__ == "__main__":
     problem = args.problem
     nload_steps = args.nload_steps
     simplex = args.simplex
-
+    triangle_ext = {1: "", 2: "6", 3: "10"}
+    tetra_ext = {1: "", 2: "10", 3: "20"}
+    hex_ext = {1: "", 2: "27"}
+    quad_ext = {1: "", 2: "9", 3: "16"}
+    line_ext = {1: "", 2: "3", 3: "4"}
+    if args.order > 1:
+        raise NotImplementedError("More work in DOLFINx (SubMesh) required for this to work.")
     # Load mesh and create identifier functions for the top (Displacement condition)
     # and the bottom (contact condition)
     if threed:
         displacement = [[0, 0, -args.disp], [0, 0, 0]]
         if problem == 1:
             fname = "box_3D"
-            create_box_mesh_3D(f"{fname}.msh", simplex)
+            create_box_mesh_3D(f"{fname}.msh", simplex, order=args.order)
             ct = "tetra" if simplex else "hexahedron"
+            ct += tetra_ext[args.order] if simplex else hex_ext[args.order]
             convert_mesh(fname, fname, ct)
 
             with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
@@ -120,9 +129,9 @@ if __name__ == "__main__":
 
         elif problem == 2:
             fname = "sphere"
-            create_sphere_plane_mesh(filename=f"{fname}.msh")
-            convert_mesh(fname, fname, "tetra")
-            convert_mesh(f"{fname}", f"{fname}_facets", "triangle")
+            create_sphere_plane_mesh(filename=f"{fname}.msh", order=args.order)
+            convert_mesh(fname, fname, "tetra" + tetra_ext[args.order])
+            convert_mesh(f"{fname}", f"{fname}_facets", "triangle" + triangle_ext[args.order])
             with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
                 mesh = xdmf.read_mesh(name="Grid")
             tdim = mesh.topology.dim
@@ -182,12 +191,13 @@ if __name__ == "__main__":
         displacement = [[0, -args.disp], [0, 0]]
         if problem == 1:
             fname = "box_2D"
-            create_box_mesh_2D(filename=f"{fname}.msh", quads=not simplex, res=args.res)
+            create_box_mesh_2D(filename=f"{fname}.msh", quads=not simplex, res=args.res,
+                               order=args.order)
             if simplex:
-                convert_mesh(fname, f"{fname}.xdmf", "triangle", prune_z=True)
+                convert_mesh(fname, f"{fname}.xdmf", "triangle" + triangle_ext[args.order], prune_z=True)
             else:
-                convert_mesh(fname, f"{fname}.xdmf", "quad", prune_z=True)
-            convert_mesh(f"{fname}", f"{fname}_facets", "line", prune_z=True)
+                convert_mesh(fname, f"{fname}.xdmf", "quad" + quad_ext[args.order], prune_z=True)
+            convert_mesh(f"{fname}", f"{fname}_facets", "line" + line_ext[args.order], prune_z=True)
 
             with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
                 mesh = xdmf.read_mesh(name="Grid")
@@ -205,12 +215,12 @@ if __name__ == "__main__":
         elif problem == 2:
             fname = "twomeshes"
             if simplex:
-                create_circle_plane_mesh(filename=f"{fname}.msh")
-                convert_mesh(fname, f"{fname}.xdmf", "triangle", prune_z=True)
+                create_circle_plane_mesh(filename=f"{fname}.msh", order=args.order)
+                convert_mesh(fname, f"{fname}.xdmf", "triangle" + triangle_ext[args.order], prune_z=True)
             else:
-                create_circle_plane_mesh(filename=f"{fname}.msh", quads=True)
-                convert_mesh(fname, f"{fname}.xdmf", "quad", prune_z=True)
-            convert_mesh(f"{fname}", f"{fname}_facets", "line", prune_z=True)
+                create_circle_plane_mesh(filename=f"{fname}.msh", quads=True, order=args.order)
+                convert_mesh(fname, f"{fname}.xdmf", "quad" + quad_ext[args.order], prune_z=True)
+            convert_mesh(f"{fname}", f"{fname}_facets", "line" + line_ext[args.order], prune_z=True)
 
             with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
                 mesh = xdmf.read_mesh(name="Grid")
@@ -227,12 +237,12 @@ if __name__ == "__main__":
         elif problem == 3:
             fname = "two_disks"
             if simplex:
-                create_circle_circle_mesh(filename=f"{fname}.msh", res=args.res)
-                convert_mesh(fname, f"{fname}.xdmf", "triangle", prune_z=True)
+                create_circle_circle_mesh(filename=f"{fname}.msh", res=args.res, order=args.order)
+                convert_mesh(fname, f"{fname}.xdmf", "triangle" + triangle_ext[args.order], prune_z=True)
             else:
-                create_circle_circle_mesh(filename=f"{fname}.msh", quads=True, res=args.res)
-                convert_mesh(fname, f"{fname}.xdmf", "quad", prune_z=True)
-            convert_mesh(f"{fname}", f"{fname}_facets", "line", prune_z=True)
+                create_circle_circle_mesh(filename=f"{fname}.msh", quads=True, res=args.res, order=args.order)
+                convert_mesh(fname, f"{fname}.xdmf", "quad" + quad_ext[args.order], prune_z=True)
+            convert_mesh(f"{fname}", f"{fname}_facets", "line" + line_ext[args.order], prune_z=True)
 
             with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
                 mesh = xdmf.read_mesh(name="Grid")
@@ -350,7 +360,7 @@ if __name__ == "__main__":
             ], contact_pairs=contact, body_forces=[], physical_parameters=physical_parameters,
             nitsche_parameters=nitsche_parameters,
             quadrature_degree=args.q_degree, petsc_options=petsc_options,
-            newton_options=newton_options, outfile=solver_outfile)
+            newton_options=newton_options, outfile=solver_outfile, order=args.order)
         num_newton_its[j] = n
         num_krylov_its[j] = krylov_iterations
         newton_time[j] = solver_time

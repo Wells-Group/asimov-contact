@@ -391,7 +391,8 @@ int raytracing_cell(
 /// @param[in] tangents The tangents of the ray. Each row corresponds to a
 /// tangent.
 /// @param[in] cells List of tuples (cell, facet), where the cell index is
-/// local to process and the facet index is local to the cell cell
+/// local to process and the facet index is local to the cell. Data is flattened
+/// row-major.
 /// @param[in] max_iter The maximum number of iterations to use for Newton's
 /// method
 /// @param[in] tol The tolerance for convergence in Newton's method
@@ -410,8 +411,8 @@ std::tuple<int, std::int32_t, xt::xtensor_fixed<double, xt::xshape<gdim>>,
 compute_ray(const dolfinx::mesh::Mesh& mesh,
             const xt::xtensor_fixed<double, xt::xshape<gdim>>& point,
             const xt::xtensor_fixed<double, xt::xshape<gdim>>& normal,
-            const std::vector<std::pair<std::int32_t, int>>& cells,
-            const int max_iter = 25, const double tol = 1e-8)
+            xtl::span<const std::int32_t> cells, const int max_iter = 25,
+            const double tol = 1e-8)
 {
   int status = -1;
   dolfinx::mesh::CellType cell_type = mesh.topology().cell_type();
@@ -438,12 +439,11 @@ compute_ray(const dolfinx::mesh::Mesh& mesh,
   allocated_memory.tangents = compute_tangents<gdim>(normal);
   allocated_memory.point = point;
 
-  for (std::size_t c = 0; c < cells.size(); ++c)
+  for (std::size_t c = 0; c < cells.size(); c += 2)
   {
 
     // Get cell geometry
-    auto [cell, facet_index] = cells[c];
-    auto x_dofs = x_dofmap.links(cell);
+    auto x_dofs = x_dofmap.links(cells[c]);
     for (std::size_t j = 0; j < x_dofs.size(); ++j)
     {
       dolfinx::common::impl::copy_N<gdim>(
@@ -452,15 +452,15 @@ compute_ray(const dolfinx::mesh::Mesh& mesh,
     }
     // Assign Jacobian of reference mapping
     allocated_memory.dxi
-        = get_parameterization_jacobian<tdim>(cell_type, facet_index);
+        = get_parameterization_jacobian<tdim>(cell_type, cells[c + 1]);
     // Get parameterization map
-    auto reference_map = get_parameterization<tdim>(cell_type, facet_index);
+    auto reference_map = get_parameterization<tdim>(cell_type, cells[c + 1]);
     status = raytracing_cell<tdim, gdim>(allocated_memory, basis_values, dphi,
                                          max_iter, tol, cmap, cell_type,
                                          coordinate_dofs, reference_map);
     if (status > 0)
     {
-      cell_idx = c;
+      cell_idx = c / 2;
       break;
     }
   }
@@ -481,7 +481,8 @@ compute_ray(const dolfinx::mesh::Mesh& mesh,
 /// @param[in] point The point of origin for the ray
 /// @param[in] normal The vector defining the direction of the ray
 /// @param[in] cells List of tuples (cell, facet), where the cell index is
-/// local to process and the facet index is local to the cell cell
+/// local to process and the facet index is local to the cell cell. Data is
+/// flattened row-major.
 /// @param[in] max_iter The maximum number of iterations to use for Newton's
 /// method
 /// @param[in] tol The tolerance for convergence in Newton's method
@@ -496,7 +497,7 @@ compute_ray(const dolfinx::mesh::Mesh& mesh,
 std::tuple<int, std::int32_t, xt::xtensor<double, 1>, xt::xtensor<double, 1>>
 raytracing(const dolfinx::mesh::Mesh& mesh, const xt::xtensor<double, 1>& point,
            const xt::xtensor<double, 1>& normal,
-           const std::vector<std::pair<std::int32_t, int>>& cells,
-           const int max_iter = 25, const double tol = 1e-8);
+           xtl::span<const std::int32_t> cells, const int max_iter = 25,
+           const double tol = 1e-8);
 
 } // namespace dolfinx_contact

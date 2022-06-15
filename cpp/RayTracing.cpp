@@ -8,11 +8,11 @@
 #include "RayTracing.h"
 //------------------------------------------------------------------------------------------------
 std::tuple<int, std::int32_t, xt::xtensor<double, 1>, xt::xtensor<double, 1>>
-dolfinx_contact::raytracing(
-    const dolfinx::mesh::Mesh& mesh, const xt::xtensor<double, 1>& point,
-    const xt::xtensor<double, 1>& normal,
-    const std::vector<std::pair<std::int32_t, int>>& cells, const int max_iter,
-    const double tol)
+dolfinx_contact::raytracing(const dolfinx::mesh::Mesh& mesh,
+                            const xt::xtensor<double, 1>& point,
+                            const xt::xtensor<double, 1>& normal,
+                            xtl::span<const std::int32_t> cells,
+                            const int max_iter, const double tol)
 {
   const int tdim = mesh.topology().dim();
   const int gdim = mesh.geometry().dim();

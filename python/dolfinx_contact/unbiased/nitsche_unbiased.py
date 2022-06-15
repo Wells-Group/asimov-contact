@@ -36,7 +36,7 @@ def nitsche_unbiased(mesh: _mesh.Mesh, mesh_tags: list[MeshTags_int32],
                      nitsche_parameters: dict[str, np.float64],
                      quadrature_degree: int = 5, form_compiler_params: dict = None, jit_params: dict = None,
                      petsc_options: dict = None, newton_options: dict = None, initial_guess=None,
-                     outfile: str = None) -> Tuple[_fem.Function, int, int, float]:
+                     outfile: str = None, order: int = 1) -> Tuple[_fem.Function, int, int, float]:
     """
     Use custom kernel to compute the contact problem with two elastic bodies coming into contact.
 
@@ -93,6 +93,8 @@ def nitsche_unbiased(mesh: _mesh.Mesh, mesh_tags: list[MeshTags_int32],
         A functon containing an intial guess to use for the Newton-solver
     outfile
         File to append solver summary
+    order
+        The order of mesh and function space
     """
     form_compiler_params = {} if form_compiler_params is None else form_compiler_params
     jit_params = {} if jit_params is None else jit_params
@@ -131,9 +133,8 @@ def nitsche_unbiased(mesh: _mesh.Mesh, mesh_tags: list[MeshTags_int32],
     else:
         gamma: np.float64 = _gamma * E
     lifting = nitsche_parameters.get("lift_bc", False)
-
     # Functions space and FEM functions
-    V = _fem.VectorFunctionSpace(mesh, ("CG", 1))
+    V = _fem.VectorFunctionSpace(mesh, ("CG", order))
     u = _fem.Function(V)
     v = ufl.TestFunction(V)
     du = ufl.TrialFunction(V)

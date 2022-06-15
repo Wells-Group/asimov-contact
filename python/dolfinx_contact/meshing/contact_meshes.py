@@ -14,7 +14,7 @@ __all__ = ["create_circle_plane_mesh", "create_circle_circle_mesh", "create_box_
            "create_cylinder_cylinder_mesh"]
 
 
-def create_circle_plane_mesh(filename: str, quads: bool = False, res=0.1):
+def create_circle_plane_mesh(filename: str, quads: bool = False, res=0.1, order: int = 1):
     """
     Create a circular mesh, with center at (0.5,0.5,0) with radius 3 and a box [0,1]x[0,0.1]
     """
@@ -72,13 +72,15 @@ def create_circle_plane_mesh(filename: str, quads: bool = False, res=0.1):
         gmsh.model.mesh.field.setAsBackgroundMesh(2)
 
         gmsh.model.mesh.generate(2)
+        gmsh.model.mesh.setOrder(order)
+
         # gmsh.option.setNumber("Mesh.SaveAll", 1)
         gmsh.write(filename)
     MPI.COMM_WORLD.Barrier()
     gmsh.finalize()
 
 
-def create_circle_circle_mesh(filename: str, quads: bool = False, res: float = 0.1):
+def create_circle_circle_mesh(filename: str, quads: bool = False, res: float = 0.1, order: int = 1):
     """
     Create two circular meshes, with radii 0.3 and 0.6 with centers (0.5,0.5) and (0.5, -0.5)
     """
@@ -136,15 +138,16 @@ def create_circle_circle_mesh(filename: str, quads: bool = False, res: float = 0
             gmsh.option.setNumber("Mesh.RecombineAll", 2)
             gmsh.option.setNumber("Mesh.SubdivisionAlgorithm", 1)
         gmsh.model.mesh.field.setAsBackgroundMesh(2)
-
         gmsh.model.mesh.generate(2)
+        gmsh.model.mesh.setOrder(order)
+
         # gmsh.option.setNumber("Mesh.SaveAll", 1)
         gmsh.write(filename)
     MPI.COMM_WORLD.Barrier()
     gmsh.finalize()
 
 
-def create_box_mesh_2D(filename: str, quads: bool = False, res=0.1):
+def create_box_mesh_2D(filename: str, quads: bool = False, res=0.1, order: int = 1):
     """
     Create two boxes, one slightly skewed
     """
@@ -194,11 +197,14 @@ def create_box_mesh_2D(filename: str, quads: bool = False, res=0.1):
         gmsh.model.addPhysicalGroup(2, [surface2], 2)
         bndry2 = gmsh.model.getBoundary([(2, surface2)], oriented=False)
         [gmsh.model.addPhysicalGroup(b[0], [b[1]]) for b in bndry2]
+
         if quads:
             gmsh.option.setNumber("Mesh.RecombinationAlgorithm", 8)
             gmsh.option.setNumber("Mesh.RecombineAll", 2)
             gmsh.option.setNumber("Mesh.SubdivisionAlgorithm", 1)
         gmsh.model.mesh.generate(2)
+        gmsh.model.mesh.setOrder(order)
+
         # gmsh.option.setNumber("Mesh.SaveAll", 1)
         gmsh.write(filename)
     MPI.COMM_WORLD.Barrier()
@@ -206,7 +212,8 @@ def create_box_mesh_2D(filename: str, quads: bool = False, res=0.1):
     gmsh.finalize()
 
 
-def create_box_mesh_3D(filename: str, simplex: bool = True, res=0.1, gap=0.1, W=0.5):
+def create_box_mesh_3D(filename: str, simplex: bool = True, order: int = 1,
+                       res: float = 0.1, gap: float = 0.1, W: float = 0.5):
     """
     Create two boxes lying directly over eachother with a gap in between"""
     L = 0.5
@@ -250,19 +257,19 @@ def create_box_mesh_3D(filename: str, simplex: bool = True, res=0.1, gap=0.1, W=
         model.addPhysicalGroup(3, [volumes[1][1]])
         bndry2 = model.getBoundary([(3, volumes[1][1])], oriented=False)
         [model.addPhysicalGroup(b[0], [b[1]]) for b in bndry2]
-
         if not simplex:
             gmsh.option.setNumber("Mesh.RecombinationAlgorithm", 2)
             gmsh.option.setNumber("Mesh.RecombineAll", 2)
             gmsh.option.setNumber("Mesh.SubdivisionAlgorithm", 1)
         model.mesh.generate(3)
+        model.mesh.setOrder(order)
         # gmsh.option.setNumber("Mesh.SaveAll", 1)
         gmsh.write(filename)
     MPI.COMM_WORLD.Barrier()
     gmsh.finalize()
 
 
-def create_sphere_plane_mesh(filename: str):
+def create_sphere_plane_mesh(filename: str, order: int = 1):
     """
     Create a 3D sphere with center (0,0,0), r=0.3
     with a box at [-0.3, 0.6] x [-0.3, 0.6] x [ -0.1, -0.5]
@@ -315,13 +322,15 @@ def create_sphere_plane_mesh(filename: str):
         gmsh.model.mesh.field.setAsBackgroundMesh(2)
 
         gmsh.model.mesh.generate(3)
+        gmsh.model.mesh.setOrder(order)
+
         # gmsh.option.setNumber("Mesh.SaveAll", 1)
         gmsh.write(filename)
     MPI.COMM_WORLD.Barrier()
     gmsh.finalize()
 
 
-def create_sphere_sphere_mesh(filename: str):
+def create_sphere_sphere_mesh(filename: str, order: int = 1):
     """
     Create a 3D mesh consisting of two spheres with radii 0.3 and 0.6 and
     centers (0.5,0.5,0.5) and (0.5,0.5,-0.5)
@@ -374,6 +383,8 @@ def create_sphere_sphere_mesh(filename: str):
         gmsh.model.mesh.field.setAsBackgroundMesh(2)
 
         gmsh.model.mesh.generate(3)
+        gmsh.model.mesh.setOrder(order)
+
         # gmsh.option.setNumber("Mesh.SaveAll", 1)
         gmsh.write(filename)
     MPI.COMM_WORLD.Barrier()
