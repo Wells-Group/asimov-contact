@@ -12,6 +12,7 @@ from dolfinx import common as _common
 from dolfinx import fem as _fem
 from dolfinx import log as _log
 from dolfinx import mesh as dmesh
+from dolfinx import cpp as _cpp
 from dolfinx.graph import create_adjacencylist
 from petsc4py import PETSc as _PETSc
 import dolfinx_contact
@@ -22,7 +23,7 @@ from dolfinx_contact.helpers import (epsilon, lame_parameters,
 __all__ = ["nitsche_custom"]
 
 
-def nitsche_custom(mesh: dmesh.Mesh, mesh_data: Tuple[dmesh.MeshTagsMetaClass, int, int],
+def nitsche_custom(mesh: dmesh.Mesh, mesh_data: Tuple[_cpp.mesh.MeshTags_int32, int, int],
                    physical_parameters: dict = {}, nitsche_parameters: Dict[str, float] = {},
                    plane_loc: float = 0.0, vertical_displacement: float = -0.1,
                    nitsche_bc: bool = True, quadrature_degree: int = 5, form_compiler_params: Dict = {},

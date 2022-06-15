@@ -6,13 +6,14 @@ from typing import Dict, Tuple
 
 import basix
 import dolfinx.common as _common
-from dolfinx.graph import create_adjacencylist
+import dolfinx.cpp as _cpp
 import dolfinx.fem as _fem
 import dolfinx.log as _log
 import dolfinx.mesh as _mesh
 import dolfinx_cuas
 import numpy as np
 import ufl
+from dolfinx.graph import create_adjacencylist
 
 import dolfinx_contact
 import dolfinx_contact.cpp
@@ -23,7 +24,7 @@ __all__ = ["nitsche_rigid_surface_custom"]
 kt = dolfinx_contact.cpp.Kernel
 
 
-def nitsche_rigid_surface_custom(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTagsMetaClass, int, int, int, int],
+def nitsche_rigid_surface_custom(mesh: _mesh.Mesh, mesh_data: Tuple[_cpp.mesh.MeshTags_int32, int, int, int, int],
                                  physical_parameters: dict = None, nitsche_parameters: Dict[str, float] = None,
                                  vertical_displacement: float = -0.1, nitsche_bc: bool = True,
                                  quadrature_degree: int = 5, form_compiler_params: Dict = None,

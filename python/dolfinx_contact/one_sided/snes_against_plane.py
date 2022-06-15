@@ -7,6 +7,7 @@ from typing import Dict, Tuple
 import dolfinx.common as _common
 import dolfinx.fem as _fem
 import dolfinx.la as _la
+import dolfinx.cpp as _cpp
 import dolfinx.mesh as dmesh
 import numpy as np
 import ufl
@@ -17,7 +18,7 @@ from dolfinx_contact.helpers import (NonlinearPDE_SNESProblem, epsilon,
                                      sigma_func)
 
 
-def snes_solver(mesh: dmesh.Mesh, mesh_data: Tuple[dmesh.MeshTagsMetaClass, int, int],
+def snes_solver(mesh: dmesh.Mesh, mesh_data: Tuple[_cpp.mesh.MeshTags_int32, int, int],
                 physical_parameters: dict = {}, plane_loc: float = 0.0, vertical_displacement: float = -0.1,
                 quadrature_degree: int = 5, form_compiler_params: Dict = {},
                 jit_params: Dict = {}, petsc_options: Dict = {}, snes_options: Dict = {}) -> _fem.Function:
