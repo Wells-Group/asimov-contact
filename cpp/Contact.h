@@ -815,9 +815,10 @@ public:
               "pack_test_functions assumes values size 1");
         xt::xtensor<double, 4> basis_values(b_shape);
         std::fill(basis_values.begin(), basis_values.end(), 0);
-        evaluate_basis_functions(*V_sub, qp, cells, basis_values, 0);
         cells.resize(indices.size());
         std::fill(cells.begin(), cells.end(), linked_cell);
+        evaluate_basis_functions(*V_sub, qp, cells, basis_values, 0);
+
         // Insert basis function values into c
         for (std::size_t k = 0; k < ndofs; k++)
           for (std::size_t q = 0; q < indices.size(); ++q)
