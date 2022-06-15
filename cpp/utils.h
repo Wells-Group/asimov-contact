@@ -165,15 +165,12 @@ get_update_normal(const dolfinx::fem::CoordinateElement& cmap);
 /// exterior facets, return a list of pairs (cell, local_facet_index), and if it
 /// is interior facets, return a list of tuples (cell_0, local_facet_index_0,
 /// cell_1, local_facet_index_1) for each entity.
-///
 /// @param[in] mesh The mesh
 /// @param[in] entities List of mesh entities
 /// @param[in] integral The type of integral
-std::variant<std::vector<std::int32_t>,
-             std::vector<std::pair<std::int32_t, int>>,
-             std::vector<std::tuple<std::int32_t, int, std::int32_t, int>>>
+std::vector<std::int32_t>
 compute_active_entities(std::shared_ptr<const dolfinx::mesh::Mesh> mesh,
-                        tcb::span<const std::int32_t> entities,
+                        xtl::span<const std::int32_t> entities,
                         dolfinx::fem::IntegralType integral);
 
 /// @brief Compute the geometry dof indices for a set of entities
@@ -183,8 +180,8 @@ compute_active_entities(std::shared_ptr<const dolfinx::mesh::Mesh> mesh,
 /// @param[in] mesh The mesh
 /// @param[in] dim The dimension of the entities
 /// @param[in] entities List of mesh entities
-/// @returns An adjacency list where the i-th link corresponds to the closure
-/// dofs of the i-th input entity
+/// @returns An adjacency list where the i-th link corresponds to the
+/// closure dofs of the i-th input entity
 dolfinx::graph::AdjacencyList<std::int32_t>
 entities_to_geometry_dofs(const mesh::Mesh& mesh, int dim,
                           const xtl::span<const std::int32_t>& entity_list);
@@ -210,25 +207,35 @@ std::vector<std::int32_t> find_candidate_surface_segment(
 /// reference facets compute physical points
 ///
 /// @param[in] mesh The mesh
-/// @param[in] facets The list of facets as (cell, local_facet)
+/// @param[in] facets The list of facets as (cell, local_facet). The data is
+/// flattened row-major
 /// @param[in] offsets for accessing the basis_values for local_facet
 /// @param[in] phi Basis functions evaluated at desired set of point osn
 /// reference facet
 /// @param[in, out] qp_phys vector to stor physical points per facet
-void compute_physical_points(
-    const dolfinx::mesh::Mesh& mesh,
-    const std::vector<std::pair<std::int32_t, int>>& facets,
-    const std::vector<int>& offsets, const xt::xtensor<double, 2>& phi,
-    std::vector<xt::xtensor<double, 2>>& qp_phys);
+void compute_physical_points(const dolfinx::mesh::Mesh& mesh,
+                             xtl::span<const std::int32_t> facets,
+                             const std::vector<int>& offsets,
+                             const xt::xtensor<double, 2>& phi,
+                             std::vector<xt::xtensor<double, 2>>& qp_phys);
 
-/// Compute the closest entity at every quadrature point on asubset of facets on
-/// one mesh, to a subset of facets on the other mesh.
-
-dolfinx::graph::AdjacencyList<std::int32_t> compute_distance_map(
-    const dolfinx::mesh::Mesh& quadrature_mesh,
-    const std::vector<std::pair<std::int32_t, int>>& quadrature_facets,
-    const dolfinx::mesh::Mesh& candidate_mesh,
-    const std::vector<std::pair<std::int32_t, int>>& candidate_facets,
-    const QuadratureRule& q_rule);
+/// Compute the closest entity at every quadrature point on a subset of facets
+/// on one mesh, to a subset of facets on the other mesh.
+/// @param[in] quadrature_mesh The mesh to compute quadrature points on
+/// @param[in] quadrature_facets The facets to compute quadrature points on,
+/// defined as (cell, local_facet_index). Flattened row-major.
+/// @param[in] candidate_mesh The mesh with the facets we want to compute the
+/// distance to
+/// @param[in] candidate_facets The facets on candidate_mesh,defined as (cell,
+/// local_facet_index). Flattened row-major.
+/// @returns An adjacency list for each input facet in quadrature facets, where
+/// the links indicate which facet on the other mesh is closest for each
+/// quadrature point.
+dolfinx::graph::AdjacencyList<std::int32_t>
+compute_distance_map(const dolfinx::mesh::Mesh& quadrature_mesh,
+                     xtl::span<const std::int32_t> quadrature_facets,
+                     const dolfinx::mesh::Mesh& candidate_mesh,
+                     xtl::span<const std::int32_t> candidate_facets,
+                     const QuadratureRule& q_rule);
 
 } // namespace dolfinx_contact
