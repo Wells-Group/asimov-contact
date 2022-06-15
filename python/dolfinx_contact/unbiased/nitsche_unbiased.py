@@ -11,19 +11,22 @@ import dolfinx.mesh as _mesh
 import dolfinx_cuas
 import numpy as np
 import ufl
-from petsc4py.PETSc import Viewer
 from dolfinx.cpp.graph import AdjacencyList_int32
+from dolfinx.cpp.mesh import MeshTags_int32
+from petsc4py import PETSc as _PETSc
+
 import dolfinx_contact
 import dolfinx_contact.cpp
-from dolfinx_contact.helpers import epsilon, lame_parameters, sigma_func, rigid_motions_nullspace
+from dolfinx_contact.helpers import (epsilon, lame_parameters,
+                                     rigid_motions_nullspace, sigma_func)
 
 kt = dolfinx_contact.cpp.Kernel
 
 __all__ = ["nitsche_unbiased"]
 
 
-def nitsche_unbiased(mesh: _mesh.Mesh, mesh_tags: list[_mesh.MeshTagsMetaClass],
-                     domain_marker: Union[_mesh.MeshTagsMetaClass, None],
+def nitsche_unbiased(mesh: _mesh.Mesh, mesh_tags: list[MeshTags_int32],
+                     domain_marker: Union[MeshTags_int32, None],
                      surfaces: AdjacencyList_int32,
                      dirichlet: list[Tuple[int, Callable[[np.ndarray], np.ndarray]]],
                      neumann: list[Tuple[int, Callable[[np.ndarray], np.ndarray]]],
@@ -33,7 +36,7 @@ def nitsche_unbiased(mesh: _mesh.Mesh, mesh_tags: list[_mesh.MeshTagsMetaClass],
                      nitsche_parameters: dict[str, np.float64],
                      quadrature_degree: int = 5, form_compiler_params: dict = None, jit_params: dict = None,
                      petsc_options: dict = None, newton_options: dict = None, initial_guess=None,
-                     outfile: str = None) -> Tuple[_fem.Function, int, int, float]:
+                     outfile: str = None, order: int = 1) -> Tuple[_fem.Function, int, int, float]:
     """
     Use custom kernel to compute the contact problem with two elastic bodies coming into contact.
 
@@ -90,6 +93,8 @@ def nitsche_unbiased(mesh: _mesh.Mesh, mesh_tags: list[_mesh.MeshTagsMetaClass],
         A functon containing an intial guess to use for the Newton-solver
     outfile
         File to append solver summary
+    order
+        The order of mesh and function space
     """
     form_compiler_params = {} if form_compiler_params is None else form_compiler_params
     jit_params = {} if jit_params is None else jit_params
@@ -127,9 +132,9 @@ def nitsche_unbiased(mesh: _mesh.Mesh, mesh_tags: list[_mesh.MeshTagsMetaClass],
         raise RuntimeError("Need to supply Coercivity/Stabilization parameter for Nitsche condition")
     else:
         gamma: np.float64 = _gamma * E
-
+    lifting = nitsche_parameters.get("lift_bc", False)
     # Functions space and FEM functions
-    V = _fem.VectorFunctionSpace(mesh, ("CG", 1))
+    V = _fem.VectorFunctionSpace(mesh, ("CG", order))
     u = _fem.Function(V)
     v = ufl.TestFunction(V)
     du = ufl.TrialFunction(V)
@@ -156,15 +161,26 @@ def nitsche_unbiased(mesh: _mesh.Mesh, mesh_tags: list[_mesh.MeshTagsMetaClass],
             ds(surface_value)
 
     # Dirichle boundary conditions
-    for bc in dirichlet:
-        f = _fem.Function(V)
-        f.interpolate(bc[1])
-        F += - ufl.inner(sigma(u) * n, v) * ds(bc[0])\
-            - theta * ufl.inner(sigma(v) * n, u - f) * \
-            ds(bc[0]) + gamma / h * ufl.inner(u - f, v) * ds(bc[0])
-        J += - ufl.inner(sigma(du) * n, v) * ds(bc[0])\
-            - theta * ufl.inner(sigma(v) * n, du) * \
-            ds(bc[0]) + gamma / h * ufl.inner(du, v) * ds(bc[0])
+    bcs = []
+    if lifting:
+        tdim = mesh.topology.dim
+        for bc in dirichlet:
+            facets = mesh_tags[0].find(bc[0])
+            cells = _mesh.compute_incident_entities(mesh, facets, tdim - 1, tdim)
+            u_bc = _fem.Function(V)
+            u_bc.interpolate(bc[1], cells)
+            u_bc.x.scatter_forward()
+            bcs.append(_fem.dirichletbc(u_bc, _fem.locate_dofs_topological(V, tdim - 1, facets)))
+    else:
+        for bc in dirichlet:
+            f = _fem.Function(V)
+            f.interpolate(bc[1])
+            F += - ufl.inner(sigma(u) * n, v) * ds(bc[0])\
+                - theta * ufl.inner(sigma(v) * n, u - f) * \
+                ds(bc[0]) + gamma / h * ufl.inner(u - f, v) * ds(bc[0])
+            J += - ufl.inner(sigma(du) * n, v) * ds(bc[0])\
+                - theta * ufl.inner(sigma(v) * n, du) * \
+                ds(bc[0]) + gamma / h * ufl.inner(du, v) * ds(bc[0])
 
     # Neumann boundary conditions
     for bc in neumann:
@@ -181,8 +197,8 @@ def nitsche_unbiased(mesh: _mesh.Mesh, mesh_tags: list[_mesh.MeshTagsMetaClass],
     # Custom assembly
     # create contact class
     with _common.Timer("~Contact: Init"):
-        contact = dolfinx_contact.cpp.Contact(mesh_tags, surfaces, contact_pairs, V._cpp_object)
-    contact.set_quadrature_degree(quadrature_degree)
+        contact = dolfinx_contact.cpp.Contact(mesh_tags, surfaces, contact_pairs,
+                                              V._cpp_object, quadrature_degree=quadrature_degree)
     with _common.Timer("~Contact: Distance maps"):
         for i in range(len(contact_pairs)):
             contact.create_distance_map(i)
@@ -270,6 +286,12 @@ def nitsche_unbiased(mesh: _mesh.Mesh, mesh_tags: list[_mesh.MeshTagsMetaClass],
         with _common.Timer("~~Contact: Standard contributions (in assemble vector)"):
             _fem.petsc.assemble_vector(b, F_custom)
 
+        # Apply boundary condition
+        if lifting:
+            _fem.petsc.apply_lifting(b, [J_custom], bcs=[bcs], x0=[x], scale=-1.0)
+            b.ghostUpdate(addv=_PETSc.InsertMode.ADD, mode=_PETSc.ScatterMode.REVERSE)
+            _fem.petsc.set_bc(b, bcs, x, -1.0)
+
     @_common.timed("~Contact: Assemble matrix")
     def compute_jacobian_matrix(x, A, coeffs):
         A.zeroEntries()
@@ -277,7 +299,7 @@ def nitsche_unbiased(mesh: _mesh.Mesh, mesh_tags: list[_mesh.MeshTagsMetaClass],
             for i in range(len(contact_pairs)):
                 contact.assemble_matrix(A, [], i, kernel_jac, coeffs[i], consts)
         with _common.Timer("~~Contact: Standard contributions (in assemble matrix)"):
-            _fem.petsc.assemble_matrix(A, J_custom)
+            _fem.petsc.assemble_matrix(A, J_custom, bcs=bcs)
         A.assemble()
 
     # coefficient arrays
@@ -314,7 +336,7 @@ def nitsche_unbiased(mesh: _mesh.Mesh, mesh_tags: list[_mesh.MeshTagsMetaClass],
         n, converged = newton_solver.solve(u)
 
     if outfile is not None:
-        viewer = Viewer().createASCII(outfile, "a")
+        viewer = _PETSc.Viewer().createASCII(outfile, "a")
         newton_solver.krylov_solver.view(viewer)
     newton_time = _common.timing(timing_str)
     if not converged:
