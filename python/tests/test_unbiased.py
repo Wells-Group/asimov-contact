@@ -34,6 +34,16 @@ from dolfinx_contact.helpers import (R_minus, dR_minus, R_plus, dR_plus, epsilon
 kt = dolfinx_contact.cpp.Kernel
 
 
+def tied_dg(u0, v0, h, n, gamma, theta, sigma, dS):
+    F = gamma / h('+') * ufl.inner(ufl.jump(u0), ufl.jump(v0)) * dS + \
+        gamma / h('-') * ufl.inner(ufl.jump(u0), ufl.jump(v0)) * dS -\
+        ufl.inner(ufl.avg(sigma(u0)) * n('+'), ufl.jump(v0)) * dS +\
+        ufl.inner(ufl.avg(sigma(u0)) * n('-'), ufl.jump(v0)) * dS -\
+        theta * ufl.inner(ufl.avg(sigma(v0)) * n('+'), ufl.jump(u0)) * dS +\
+        theta * ufl.inner(ufl.avg(sigma(v0)) * n('-'), ufl.jump(u0)) * dS
+    return 0.5 * F
+
+
 def DG_rhs_plus(u0, v0, h, n, gamma, theta, sigma, gap, dS):
     # This version of the ufl form agrees with the formulation in https://doi.org/10.1007/s00211-018-0950-x
     def Pn_g(u, a, b):
@@ -242,22 +252,22 @@ def locate_contact_facets_cuas(V, gap):
     contact_facets1 = []
     for facet in facets1:
         cell = f_to_c.links(facet)[0]
-        cells[0].append(cell)
         cell_midpoints = compute_midpoints(mesh, tdim, [cell])
         if cell_midpoints[0][tdim - 1] > 0:
             contact_facets1.append(facet)
+            cells[0].append(cell)
     contact_facets2 = []
     for facet in facets2:
         cell = f_to_c.links(facet)[0]
-        cells[1].append(cell)
         cell_midpoints = compute_midpoints(mesh, tdim, [cell])
         if cell_midpoints[0][tdim - 1] < -gap:
             contact_facets2.append(facet)
+            cells[1].append(cell)
 
     return cells, [contact_facets1, contact_facets2]
 
 
-def create_contact_data(V, u, quadrature_degree, lmbda, mu, facets_cg):
+def create_contact_data(V, u, quadrature_degree, lmbda, mu, facets_cg, tied=False):
     ''' This function creates the contact class and the coefficients
         passed to the assembly for the unbiased Nitsche method'''
 
@@ -307,33 +317,43 @@ def create_contact_data(V, u, quadrature_degree, lmbda, mu, facets_cg):
     h_0 = dolfinx_cuas.pack_coefficients([h_int], entities_0)
     h_1 = dolfinx_cuas.pack_coefficients([h_int], entities_1)
 
-    # Pack gap, normals and test functions on each surface
+    # Pack gap
     gap_0 = contact.pack_gap(0)
-    n_0 = contact.pack_ny(0, gap_0)
-    test_fn_0 = contact.pack_test_functions(0, gap_0)
     gap_1 = contact.pack_gap(1)
-    n_1 = contact.pack_ny(1, gap_1)
+    # Pack test functions
+    test_fn_0 = contact.pack_test_functions(0, gap_0)
     test_fn_1 = contact.pack_test_functions(1, gap_1)
-    # Concatenate all coeffs
-    coeff_0 = np.hstack([material_0, h_0, gap_0, n_0, test_fn_0])
-    coeff_1 = np.hstack([material_1, h_1, gap_1, n_1, test_fn_1])
-
     # pack u
     u_opp_0 = contact.pack_u_contact(0, u._cpp_object, gap_0)
     u_opp_1 = contact.pack_u_contact(1, u._cpp_object, gap_1)
     u_0 = dolfinx_cuas.pack_coefficients([u], entities_0)
     u_1 = dolfinx_cuas.pack_coefficients([u], entities_1)
-    c_0 = np.hstack([coeff_0, u_0, u_opp_0])
-    c_1 = np.hstack([coeff_1, u_1, u_opp_1])
+    if tied:
+        grad_test_fn_0 = contact.pack_grad_test_functions(0, gap_0, np.zeros(gap_0.shape))
+        grad_test_fn_1 = contact.pack_grad_test_functions(1, gap_1, np.zeros(gap_1.shape))
+        grad_u_opp_0 = contact.pack_grad_u_contact(0, u._cpp_object, gap_0, np.zeros(gap_0.shape))
+        grad_u_opp_1 = contact.pack_grad_u_contact(1, u._cpp_object, gap_1, np.zeros(gap_1.shape))
 
-    return contact, c_0, c_1
+        # Concatenate all coeffs
+        coeff_0 = np.hstack([material_0, h_0, test_fn_0, grad_test_fn_0, u_0, u_opp_0, grad_u_opp_0])
+        coeff_1 = np.hstack([material_1, h_1, test_fn_1, grad_test_fn_1, u_1, u_opp_1, grad_u_opp_1])
+    else:
+        n_0 = contact.pack_ny(0, gap_0)
+        n_1 = contact.pack_ny(1, gap_1)
+
+        # Concatenate all coeffs
+        coeff_0 = np.hstack([material_0, h_0, gap_0, n_0, test_fn_0, u_0, u_opp_0])
+        coeff_1 = np.hstack([material_1, h_1, gap_1, n_1, test_fn_1, u_1, u_opp_1])
+
+    return contact, coeff_0, coeff_1
 
 
-@ pytest.mark.parametrize("ct", ["quadrilateral", "triangle", "tetrahedron", "hexahedron"])
-@ pytest.mark.parametrize("gap", [1e-13, -1e-13, -0.5])
-@ pytest.mark.parametrize("q_deg", [1, 2, 3])
-@ pytest.mark.parametrize("theta", [1, 0, -1])
-def test_unbiased_rhs(ct, gap, q_deg, theta):
+@pytest.mark.parametrize("ct", ["quadrilateral", "triangle", "tetrahedron", "hexahedron"])
+@pytest.mark.parametrize("gap", [1e-13, -1e-13, -0.5])
+@pytest.mark.parametrize("q_deg", [1, 2, 3])
+@pytest.mark.parametrize("theta", [1, 0, -1])
+@pytest.mark.parametrize("tied", [True, False])
+def test_contact_kernels(ct, gap, q_deg, theta, tied):
 
     # set quadrature degree
     quadrature_degree = q_deg
@@ -357,124 +377,32 @@ def test_unbiased_rhs(ct, gap, q_deg, theta):
     tdim = mesh_ufl.topology.dim
     gdim = mesh_ufl.geometry.dim
 
+    TOL = 1e-7
+    cells_ufl_0 = locate_entities(mesh_ufl, tdim, lambda x: x[tdim - 1] > 0 - TOL)
+    cells_ufl_1 = locate_entities(mesh_ufl, tdim, lambda x: x[tdim - 1] < 0 + TOL)
+
     def _u0(x):
         values = np.zeros((gdim, x.shape[1]))
         for i in range(tdim):
-            for j in range(x.shape[1]):
-                values[i, j] = np.sin(x[i, j])
+            values[i] = np.sin(x[i]) + 1
         return values
-
-    # DG ufl 'contact'
-    u0 = _fem.Function(V_ufl)
-    u0.interpolate(_u0)
-    v0 = ufl.TestFunction(V_ufl)
-    metadata = {"quadrature_degree": quadrature_degree}
-    dS = ufl.Measure("dS", domain=mesh_ufl, metadata=metadata)
-
-    n = ufl.FacetNormal(mesh_ufl)
-
-    # Scaled Nitsche parameter
-    h = ufl.CellDiameter(mesh_ufl)
-    gamma_scaled = gamma * E
-
-    # Contact terms formulated using ufl consistent with https://doi.org/10.1007/s00211-018-0950-x
-    F0 = DG_rhs_plus(u0, v0, h, n, gamma_scaled, theta, sigma, gap, dS)
-
-    F0 = _fem.form(F0)
-    b0 = _fem.petsc.create_vector(F0)
-    b0.zeroEntries()
-    _fem.petsc.assemble_vector(b0, F0)
-
-    # Contact terms formulated using ufl consistent with nitsche_ufl.py
-    F1 = DG_rhs_minus(u0, v0, h, n, gamma_scaled, theta, sigma, gap, dS)
-
-    F1 = _fem.form(F1)
-    b1 = _fem.petsc.create_vector(F1)
-    b1.zeroEntries()
-    _fem.petsc.assemble_vector(b1, F1)
-
-    # Custom assembly
-    cells, facets_cg = locate_contact_facets_cuas(V_cuas, gap)
-
-    # fem functions
 
     def _u1(x):
         values = np.zeros((gdim, x.shape[1]))
         for i in range(tdim):
-            values[i] = np.sin(x[i] + gap) if i == tdim - 1 else np.sin(x[i])
+            values[i] = np.sin(x[i]) + 2
         return values
 
-    u1 = _fem.Function(V_cuas)
-    v1 = ufl.TestFunction(V_cuas)
-
-    u1.interpolate(_u0, cells[0])
-    u1.interpolate(_u1, cells[1])
-    u1.x.scatter_forward()
-    # dummy form for creating vector/matrix
-    dx = ufl.Measure("dx", domain=mesh_cuas)
-    F_cuas = ufl.inner(sigma(u1), epsilon(v1)) * dx
-
-    contact, c_0, c_1 = create_contact_data(V_cuas, u1, q_deg, lmbda, mu, facets_cg)
-    # Generate residual data structures
-    F_cuas = _fem.form(F0)
-    kernel_rhs = contact.generate_kernel(kt.Rhs)
-    b2 = _fem.petsc.create_vector(F_cuas)
-
-    # pack constants
-    consts = np.array([gamma_scaled, theta])
-
-    # assemble  residual
-    b2.zeroEntries()
-    contact.assemble_vector(b2, 0, kernel_rhs, c_0, consts)
-    contact.assemble_vector(b2, 1, kernel_rhs, c_1, consts)
-
-    tdim = mesh_ufl.topology.dim
-    facet_dg = locate_entities(mesh_ufl, tdim - 1, lambda x: np.isclose(x[tdim - 1], 0))
-    ind_cg, ind_dg = compute_dof_permutations(V_ufl, V_cuas, gap, [facet_dg], facets_cg)
-
-    assert(np.allclose(b0.array[ind_dg], b1.array[ind_dg]))
-    assert(np.allclose(b0.array[ind_dg], b2.array[ind_cg]))
-
-
-@ pytest.mark.parametrize("ct", ["quadrilateral", "triangle", "tetrahedron", "hexahedron"])
-@ pytest.mark.parametrize("gap", [1e-13, -1e-13, -0.5])
-@ pytest.mark.parametrize("q_deg", [1, 2, 3])
-@ pytest.mark.parametrize("theta", [1, 0, -1])
-def test_unbiased_jac(ct, gap, q_deg, theta):
-
-    # set quadrature degree
-    quadrature_degree = q_deg
-
-    # Compute lame parameters
-    plane_strain = False
-    E = 1e3
-    nu = 0.1
-    mu_func, lambda_func = lame_parameters(plane_strain)
-    mu = mu_func(E, nu)
-    lmbda = lambda_func(E, nu)
-    sigma = sigma_func(mu, lmbda)
-
-    # Nitche parameter
-    gamma = 10
-
-    # create meshes and function spaces
-    V_ufl, V_cuas = create_functionspaces(ct, gap)
-    mesh_ufl = V_ufl.mesh
-    mesh_cuas = V_cuas.mesh
-    tdim = mesh_ufl.topology.dim
-    gdim = mesh_ufl.geometry.dim
-
-    def _u0(x):
+    def _u2(x):
         values = np.zeros((gdim, x.shape[1]))
         for i in range(tdim):
-            for j in range(x.shape[1]):
-                values[i, j] = np.sin(x[i, j])
+            values[i] = np.sin(x[i] + gap) + 2 if i == tdim - 1 else np.sin(x[i]) + 2
         return values
 
     # DG ufl 'contact'
     u0 = _fem.Function(V_ufl)
-    u0.interpolate(_u0)
-
+    u0.interpolate(_u0, cells_ufl_0)
+    u0.interpolate(_u1, cells_ufl_1)
     v0 = ufl.TestFunction(V_ufl)
     w0 = ufl.TrialFunction(V_ufl)
     metadata = {"quadrature_degree": quadrature_degree}
@@ -486,72 +414,112 @@ def test_unbiased_jac(ct, gap, q_deg, theta):
     h = ufl.CellDiameter(mesh_ufl)
     gamma_scaled = gamma * E
 
-    # Contact terms formulated using ufl consistent with https://doi.org/10.1007/s00211-018-0950-x
-    J0 = DG_jac_plus(u0, v0, w0, h, n, gamma_scaled, theta, sigma, gap, dS)
+    # DG formulation
+
+    if tied:
+        F0 = tied_dg(u0, v0, h, n, gamma_scaled, theta, sigma, dS)
+        J0 = tied_dg(w0, v0, h, n, gamma_scaled, theta, sigma, dS)
+        kernel_type_rhs = kt.MeshTieRhs
+        kernel_type_jac = kt.MeshTieJac
+    else:
+        # Contact terms formulated using ufl consistent with https://doi.org/10.1007/s00211-018-0950-x
+        F0 = DG_rhs_plus(u0, v0, h, n, gamma_scaled, theta, sigma, gap, dS)
+        J0 = DG_jac_plus(u0, v0, w0, h, n, gamma_scaled, theta, sigma, gap, dS)
+        kernel_type_rhs = kt.Rhs
+        kernel_type_jac = kt.Jac
+
+    # rhs vector
+    F0 = _fem.form(F0)
+    b0 = _fem.petsc.create_vector(F0)
+    b0.zeroEntries()
+    _fem.petsc.assemble_vector(b0, F0)
+
+    # lhs matrix
     J0 = _fem.form(J0)
     A0 = _fem.petsc.create_matrix(J0)
     A0.zeroEntries()
     _fem.petsc.assemble_matrix(A0, J0)
     A0.assemble()
 
-    # Contact terms formulated using ufl consistent with nitsche_ufl.py
-    J1 = DG_jac_minus(u0, v0, w0, h, n, gamma_scaled, theta, sigma, gap, dS)
-    J1 = _fem.form(J1)
-    A1 = _fem.petsc.create_matrix(J1)
-    A1.zeroEntries()
-    _fem.petsc.assemble_matrix(A1, J1)
-    A1.assemble()
-
     # Custom assembly
     cells, facets_cg = locate_contact_facets_cuas(V_cuas, gap)
 
-    # fem functions
-    def _u1(x):
-        values = np.zeros((gdim, x.shape[1]))
-        for i in range(tdim):
-            for j in range(x.shape[1]):
-                if i == tdim - 1:
-                    values[i, j] = np.sin(x[i, j] + gap)
-                else:
-                    values[i, j] = np.sin(x[i, j])
-        return values
-
+    # Fem functions
     u1 = _fem.Function(V_cuas)
     v1 = ufl.TestFunction(V_cuas)
     w1 = ufl.TrialFunction(V_cuas)
 
     u1.interpolate(_u0, cells[0])
-    u1.interpolate(_u1, cells[1])
-    # dummy form for creating vector/matrix
+    u1.interpolate(_u2, cells[1])
+    u1.x.scatter_forward()
+
+    # Dummy form for creating vector/matrix
     dx = ufl.Measure("dx", domain=mesh_cuas)
+    F_cuas = ufl.inner(sigma(u1), epsilon(v1)) * dx
     J_cuas = ufl.inner(sigma(w1), epsilon(v1)) * dx
 
-    contact, c_0, c_1 = create_contact_data(V_cuas, u1, q_deg, lmbda, mu, facets_cg)
+    contact, c_0, c_1 = create_contact_data(V_cuas, u1, q_deg, lmbda, mu, facets_cg, tied)
+
+    # Generate residual data structures
+    F_cuas = _fem.form(F0)
+    kernel_rhs = contact.generate_kernel(kernel_type_rhs)
+    b1 = _fem.petsc.create_vector(F_cuas)
+
     # Generate residual data structures
     J_cuas = _fem.form(J_cuas)
-    kernel_jac = contact.generate_kernel(kt.Jac)
-    A2 = contact.create_matrix(J_cuas)
+    kernel_jac = contact.generate_kernel(kernel_type_jac)
+    A1 = contact.create_matrix(J_cuas)
 
-    # pack constants
+    # Pack constants
     consts = np.array([gamma_scaled, theta])
 
-    # assemble  jacobian
-    A2.zeroEntries()
-    contact.assemble_matrix(A2, [], 0, kernel_jac, c_0, consts)
-    contact.assemble_matrix(A2, [], 1, kernel_jac, c_1, consts)
-    A2.assemble(0)
+    # Assemble  residual
+    b1.zeroEntries()
+    contact.assemble_vector(b1, 0, kernel_rhs, c_0, consts)
+    contact.assemble_vector(b1, 1, kernel_rhs, c_1, consts)
 
+    # Assemble  jacobian
+    A1.zeroEntries()
+    contact.assemble_matrix(A1, [], 0, kernel_jac, c_0, consts)
+    contact.assemble_matrix(A1, [], 1, kernel_jac, c_1, consts)
+    A1.assemble(0)
+
+    # Retrieve data necessary for comparison
     tdim = mesh_ufl.topology.dim
     facet_dg = locate_entities(mesh_ufl, tdim - 1, lambda x: np.isclose(x[tdim - 1], 0))
     ind_cg, ind_dg = compute_dof_permutations(V_ufl, V_cuas, gap, [facet_dg], facets_cg)
+
+    # Compare rhs
+    assert(np.allclose(b0.array[ind_dg], b1.array[ind_cg]))
 
     # create scipy matrix
     ai, aj, av = A0.getValuesCSR()
     A_sp = scipy.sparse.csr_matrix((av, aj, ai), shape=A0.getSize()).todense()
     bi, bj, bv = A1.getValuesCSR()
     B_sp = scipy.sparse.csr_matrix((bv, bj, bi), shape=A1.getSize()).todense()
-    ci, cj, cv = A2.getValuesCSR()
-    C_sp = scipy.sparse.csr_matrix((cv, cj, ci), shape=A2.getSize()).todense()
 
-    assert(np.allclose(A_sp[ind_dg, ind_dg], B_sp[ind_dg, ind_dg]))
-    assert(np.allclose(A_sp[ind_dg, ind_dg], C_sp[ind_cg, ind_cg]))
+    assert(np.allclose(A_sp[ind_dg, ind_dg], B_sp[ind_cg, ind_cg]))
+
+    # Sanity check different formulations
+    if not tied:
+        # Contact terms formulated using ufl consistent with nitsche_ufl.py
+        F2 = DG_rhs_minus(u0, v0, h, n, gamma_scaled, theta, sigma, gap, dS)
+
+        F2 = _fem.form(F2)
+        b2 = _fem.petsc.create_vector(F2)
+        b2.zeroEntries()
+        _fem.petsc.assemble_vector(b2, F2)
+
+        assert(np.allclose(b1.array[ind_cg], b2.array[ind_dg]))
+
+        # Contact terms formulated using ufl consistent with nitsche_ufl.py
+        J2 = DG_jac_minus(u0, v0, w0, h, n, gamma_scaled, theta, sigma, gap, dS)
+        J2 = _fem.form(J2)
+        A2 = _fem.petsc.create_matrix(J2)
+        A2.zeroEntries()
+        _fem.petsc.assemble_matrix(A2, J2)
+        A2.assemble()
+
+        ci, cj, cv = A2.getValuesCSR()
+        C_sp = scipy.sparse.csr_matrix((cv, cj, ci), shape=A2.getSize()).todense()
+        assert(np.allclose(C_sp[ind_dg, ind_dg], B_sp[ind_cg, ind_cg]))

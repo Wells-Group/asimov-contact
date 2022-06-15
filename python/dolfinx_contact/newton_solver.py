@@ -259,6 +259,7 @@ class NewtonSolver():
             with common.Timer("~Contact: Newton (Krylov solver)"):
                 self.krylov_solver.solve(self._b, self._dx)
             self.krylov_iterations += self.krylov_solver.getIterationNumber()
+            assert(self.krylov_solver.getConvergedReason() > 0)
 
             # Update solution
             self._update_solution(self._dx, x_vec)

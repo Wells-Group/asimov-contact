@@ -32,8 +32,9 @@ enum class Kernel
 // num_dofs_per_link
 template <typename T>
 using kernel_fn
-    = std::function<void(std::vector<std::vector<T>>&, const T*, const T*,
-                         const double*, const int, const std::size_t)>;
+    = std::function<void(std::vector<std::vector<T>>&, xtl::span<const T>,
+                         const T*, const double*, const int,
+                         const std::size_t)>;
 
 /// This function computes the pull back for a set of points x on a cell
 /// described by coordinate_dofs as well as the corresponding Jacobian, their
@@ -53,7 +54,6 @@ void pull_back(xt::xtensor<double, 3>& J, xt::xtensor<double, 3>& K,
                xt::xtensor<double, 2>& X,
                const xt::xtensor<double, 2>& coordinate_dofs,
                const dolfinx::fem::CoordinateElement& cmap);
-
 
 /// @param[in] cells: the cells to be sorted
 /// @param[in, out] perm: the permutation for the sorted cells

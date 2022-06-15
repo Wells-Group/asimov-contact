@@ -155,7 +155,8 @@ PYBIND11_MODULE(cpp, m)
                  dolfinx::graph::AdjacencyList<std::int32_t>>(
                  std::move(data), std::move(offsets));
            })
-      .def("coefficients_size", &dolfinx_contact::Contact::coefficients_size)
+      .def("coefficients_size", &dolfinx_contact::Contact::coefficients_size,
+           py::arg("meshtie") = false)
       .def("set_quadrature_rule",
            &dolfinx_contact::Contact::set_quadrature_rule)
       .def("generate_kernel",
@@ -276,7 +277,9 @@ PYBIND11_MODULE(cpp, m)
       py::arg("coeffs"), py::arg("constant_normal") = true);
   py::enum_<dolfinx_contact::Kernel>(m, "Kernel")
       .value("Rhs", dolfinx_contact::Kernel::Rhs)
-      .value("Jac", dolfinx_contact::Kernel::Jac);
+      .value("Jac", dolfinx_contact::Kernel::Jac)
+      .value("MeshTieRhs", dolfinx_contact::Kernel::MeshTieRhs)
+      .value("MeshTieJac", dolfinx_contact::Kernel::MeshTieJac);
   m.def("pack_coefficient_quadrature",
         [](std::shared_ptr<const dolfinx::fem::Function<PetscScalar>> coeff,
            int q, const py::array_t<std::int32_t, py::array::c_style>& entities)

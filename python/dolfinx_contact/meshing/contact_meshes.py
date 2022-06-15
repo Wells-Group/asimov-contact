@@ -206,14 +206,13 @@ def create_box_mesh_2D(filename: str, quads: bool = False, res=0.1):
     gmsh.finalize()
 
 
-def create_box_mesh_3D(filename: str, simplex: bool = True, res=0.1):
+def create_box_mesh_3D(filename: str, simplex: bool = True, res=0.1, gap=0.1, W=0.5):
     """
     Create two boxes lying directly over eachother with a gap in between"""
     L = 0.5
     H = 0.5
-    W = 0.5
 
-    disp = -0.6
+    disp = -W - gap
     gmsh.initialize()
     model = gmsh.model
     if MPI.COMM_WORLD.rank == 0:
@@ -225,8 +224,8 @@ def create_box_mesh_3D(filename: str, simplex: bool = True, res=0.1):
         else:
             square1 = model.occ.add_rectangle(0, 0, 0, L, H)
             square2 = model.occ.add_rectangle(0, 0, disp, L, H)
-            model.occ.extrude([(2, square1)], 0, 0, H, numElements=[5], recombine=True)
-            model.occ.extrude([(2, square2)], 0, 0, H, numElements=[2], recombine=True)
+            model.occ.extrude([(2, square1)], 0, 0, W, numElements=[10], recombine=True)
+            model.occ.extrude([(2, square2)], 0, 0, W, numElements=[5], recombine=True)
             model.occ.synchronize()
         volumes = model.getEntities(3)
 

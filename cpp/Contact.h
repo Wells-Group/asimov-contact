@@ -103,7 +103,7 @@ public:
   }
 
   // return size of coefficients vector per facet on s
-  std::size_t coefficients_size();
+  std::size_t coefficients_size(bool meshtie);
 
   /// return distance map (adjacency map mapping quadrature points on surface
   /// to closest facet on other surface)
@@ -228,9 +228,10 @@ public:
     /// be padded to 3D, (shape (num_nodes, 3)).
     kernel_fn<PetscScalar> unbiased_rhs
         = [kd, gdim, ndofs_cell,
-           bs](std::vector<std::vector<PetscScalar>>& b, const PetscScalar* c,
-               const PetscScalar* w, const double* coordinate_dofs,
-               const int facet_index, const std::size_t num_links)
+           bs](std::vector<std::vector<PetscScalar>>& b,
+               xtl::span<const PetscScalar> c, const PetscScalar* w,
+               const double* coordinate_dofs, const int facet_index,
+               const std::size_t num_links)
 
     {
       // Retrieve some data from kd
@@ -372,10 +373,11 @@ public:
     /// @param[in] coordinate_dofs The physical coordinates of cell. Assumed
     /// to be padded to 3D, (shape (num_nodes, 3)).
     kernel_fn<PetscScalar> unbiased_jac
-        = [kd, gdim, ndofs_cell,
-           bs](std::vector<std::vector<PetscScalar>>& A, const double* c,
-               const double* w, const double* coordinate_dofs,
-               const int facet_index, const std::size_t num_links)
+        = [kd, gdim, ndofs_cell, bs](std::vector<std::vector<PetscScalar>>& A,
+                                     xtl::span<const double> c, const double* w,
+                                     const double* coordinate_dofs,
+                                     const int facet_index,
+                                     const std::size_t num_links)
     {
       // Retrieve some data from kd
       std::array<std::int32_t, 2> q_offset
