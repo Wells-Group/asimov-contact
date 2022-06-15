@@ -29,9 +29,9 @@ public:
   /// @param[in] mesh - the parent mesh
   /// @param[in] facets - vector of pairs (cell, facet) of exterior facets,
   /// where cell is the index of the cell local to the process and facet is
-  /// the facet index within the cell
+  /// the facet index within the cell. The data is flattened row-major.
   SubMesh(std::shared_ptr<const dolfinx::mesh::Mesh> mesh,
-          std::vector<std::pair<std::int32_t, int>>& facets);
+          xtl::span<const std::int32_t> facets);
 
   // Return mesh
   std::shared_ptr<const dolfinx::mesh::Mesh> mesh() const { return _mesh; }
