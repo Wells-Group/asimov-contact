@@ -106,8 +106,9 @@ void dolfinx_contact::compute_sigma_n_opp(xt::xtensor<double, 4>& sig_n_opp,
   for (std::size_t i = 0; i < num_links; ++i)
     for (std::size_t j = 0; j < ndofs_cell; ++j)
     {
-      int offset = i * num_q_points * ndofs_cell * gdim
-                   + j * num_q_points * gdim + q * gdim;
+      std::size_t offset = i * std::size_t(num_q_points) * ndofs_cell * gdim
+                           + j * std::size_t(num_q_points) * gdim
+                           + std::size_t(q) * gdim;
       // Compute dot(grad(v), n)
       double dv_dot_n = 0;
       for (std::size_t k = 0; k < gdim; ++k)

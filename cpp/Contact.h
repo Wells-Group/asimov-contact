@@ -529,16 +529,11 @@ public:
     case dolfinx_contact::Kernel::MeshTieRhs:
     {
 
-      const std::size_t max_links
-          = *std::max_element(_max_links.begin(), _max_links.end());
       return dolfinx_contact::generate_meshtie_kernel(
           type, _V, _quadrature_rule, max_links);
     }
     case dolfinx_contact::Kernel::MeshTieJac:
     {
-
-      const std::size_t max_links
-          = *std::max_element(_max_links.begin(), _max_links.end());
       return dolfinx_contact::generate_meshtie_kernel(
           type, _V, _quadrature_rule, max_links);
     }

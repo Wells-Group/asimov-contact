@@ -15,12 +15,8 @@ from dolfinx.mesh import locate_entities_boundary, meshtags
 from mpi4py import MPI
 
 from dolfinx_contact import update_geometry
-from dolfinx_contact.meshing import (convert_mesh, create_box_mesh_2D,
-                                     create_box_mesh_3D,
-                                     create_circle_circle_mesh,
-                                     create_circle_plane_mesh,
-                                     create_cylinder_cylinder_mesh,
-                                     create_sphere_plane_mesh)
+from dolfinx_contact.meshing import (convert_mesh,
+                                     create_box_mesh_3D)
 from dolfinx_contact.meshtie import nitsche_meshtie
 
 if __name__ == "__main__":
@@ -213,7 +209,8 @@ if __name__ == "__main__":
         # Solve contact problem using Nitsche's method
         u1, n, krylov_iterations, solver_time = nitsche_meshtie(
             mesh=mesh, mesh_tags=[facet_marker], domain_marker=domain_marker,
-            surfaces=surfaces, dirichlet=dirichlet, neumann=neumann, contact_pairs=contact, body_forces=body_force_incr, physical_parameters=physical_parameters,
+            surfaces=surfaces, dirichlet=dirichlet, neumann=neumann, contact_pairs=contact,
+            body_forces=body_force_incr, physical_parameters=physical_parameters,
             nitsche_parameters=nitsche_parameters,
             quadrature_degree=args.q_degree, petsc_options=petsc_options,
             newton_options=newton_options, outfile=solver_outfile)

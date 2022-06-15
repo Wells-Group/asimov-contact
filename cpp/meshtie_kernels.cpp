@@ -71,8 +71,7 @@ dolfinx_contact::generate_meshtie_kernel(
     // Create data structures for jacobians
     xt::xtensor<double, 2> J = xt::zeros<double>({gdim, tdim});
     xt::xtensor<double, 2> K = xt::zeros<double>({tdim, gdim});
-    xt::xtensor<double, 2> J_tot
-        = xt::zeros<double>({J.shape(0), (std::size_t)tdim - 1});
+    xt::xtensor<double, 2> J_tot = xt::zeros<double>({J.shape(0), tdim - 1});
     double detJ = 0;
     auto c_view = xt::view(coord, xt::all(), xt::range(0, gdim));
 
@@ -104,8 +103,7 @@ dolfinx_contact::generate_meshtie_kernel(
     // Temporary data structures used inside quadrature loop
     xt::xtensor<double, 3> sig_n({ndofs_cell, gdim, gdim});
     std::vector<double> sig_n_u(gdim);
-    xt::xtensor<double, 4> sig_n_opp(
-        {(std::size_t)num_links, ndofs_cell, gdim, gdim});
+    xt::xtensor<double, 4> sig_n_opp({num_links, ndofs_cell, gdim, gdim});
     std::vector<double> jump_u(gdim);
 
     // Loop over quadrature points
@@ -215,8 +213,7 @@ dolfinx_contact::generate_meshtie_kernel(
     // Create data structures for jacobians
     xt::xtensor<double, 2> J = xt::zeros<double>({gdim, tdim});
     xt::xtensor<double, 2> K = xt::zeros<double>({tdim, gdim});
-    xt::xtensor<double, 2> J_tot
-        = xt::zeros<double>({J.shape(0), (std::size_t)tdim - 1});
+    xt::xtensor<double, 2> J_tot = xt::zeros<double>({J.shape(0), tdim - 1});
     double detJ = 0;
     auto c_view = xt::view(coord, xt::all(), xt::range(0, gdim));
 
@@ -247,8 +244,7 @@ dolfinx_contact::generate_meshtie_kernel(
 
     // Temporary data structures used inside quadrature loop
     xt::xtensor<double, 3> sig_n({ndofs_cell, gdim, gdim});
-    xt::xtensor<double, 4> sig_n_opp(
-        {(std::size_t)num_links, ndofs_cell, gdim, gdim});
+    xt::xtensor<double, 4> sig_n_opp({num_links, ndofs_cell, gdim, gdim});
     // Loop over quadrature points
     const int num_points = q_offset[1] - q_offset[0];
     for (int q = 0; q < num_points; q++)
