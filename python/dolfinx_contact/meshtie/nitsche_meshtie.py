@@ -286,10 +286,8 @@ def nitsche_meshtie(mesh: _mesh.Mesh, mesh_tags: list[MeshTags_int32],
     def compute_jacobian_matrix(x, A, coeffs):
         A.zeroEntries()
         with _common.Timer("~~Contact: Contact contributions (in assemble matrix)"):
-            print('here')
             for i in range(len(contact_pairs)):
                 contact.assemble_matrix(A, [], i, kernel_jac, coeffs[i], consts)
-            print('here now')
         with _common.Timer("~~Contact: Standard contributions (in assemble matrix)"):
             _fem.petsc.assemble_matrix(A, J_custom, bcs=bcs)
         A.assemble()
