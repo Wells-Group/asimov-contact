@@ -147,12 +147,6 @@ def nitsche_meshtie(mesh: _mesh.Mesh, mesh_tags: list[MeshTags_int32],
 
     J = ufl.inner(sigma(du), epsilon(v)) * dx
     F = ufl.inner(sigma(u), epsilon(v)) * dx
-    for contact_pair in contact_pairs:
-        surface_value = int(surfaces.links(0)[contact_pair[0]])
-        J += -  0.5 * theta * h / gamma * ufl.inner(sigma(du) * n, sigma(v) * n) * \
-            ds(surface_value)
-        F += - 0.5 * theta * h / gamma * ufl.inner(sigma(u) * n, sigma(v) * n) * \
-            ds(surface_value)
 
     # Dirichle boundary conditions
     bcs = []
