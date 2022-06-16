@@ -110,9 +110,9 @@ class NonlinearPDE_SNESProblem:
         with F.localForm() as f_local:
             f_local.set(0.0)
         _fem.petsc.assemble_vector(F, self.L)
-        _fem.apply_lifting(F, [self.a], [[self.bc]], [x], -1.0)
+        _fem.petsc.apply_lifting(F, [self.a], bcs=[[self.bc]], x0=[x], scale=-1.0)
         F.ghostUpdate(addv=PETSc.InsertMode.ADD, mode=PETSc.ScatterMode.REVERSE)
-        _fem.set_bc(F, [self.bc], x, -1.0)
+        _fem.petsc.set_bc(F, [self.bc], x, -1.0)
 
     def J(self, snes, x, J, P):
         """Assemble Jacobian matrix."""
