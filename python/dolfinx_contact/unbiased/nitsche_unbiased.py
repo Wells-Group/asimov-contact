@@ -12,7 +12,7 @@ import dolfinx_cuas
 import numpy as np
 import ufl
 from dolfinx.cpp.graph import AdjacencyList_int32
-from dolfinx.cpp.mesh import MeshTags_int32
+import dolfinx.cpp as _cpp
 from petsc4py import PETSc as _PETSc
 
 import dolfinx_contact
@@ -25,8 +25,8 @@ kt = dolfinx_contact.cpp.Kernel
 __all__ = ["nitsche_unbiased"]
 
 
-def nitsche_unbiased(mesh: _mesh.Mesh, mesh_tags: list[MeshTags_int32],
-                     domain_marker: MeshTags_int32,
+def nitsche_unbiased(mesh: _mesh.Mesh, mesh_tags: list[_cpp.mesh.MeshTags_int32],
+                     domain_marker: Union[_cpp.mesh.MeshTags_int32, None],
                      surfaces: AdjacencyList_int32,
                      dirichlet: list[Tuple[int, Callable[[np.ndarray], np.ndarray]]],
                      neumann: list[Tuple[int, Callable[[np.ndarray], np.ndarray]]],
@@ -144,7 +144,10 @@ def nitsche_unbiased(mesh: _mesh.Mesh, mesh_tags: list[MeshTags_int32],
 
     # Integration measure and ufl part of linear/bilinear form
     # metadata = {"quadrature_degree": quadrature_degree}
-    dx = ufl.Measure("dx", domain=mesh, subdomain_data=domain_marker)
+    if domain_marker is None:
+        dx = ufl.Measure("dx", domain=mesh)
+    else:
+        dx = ufl.Measure("dx", domain=mesh, subdomain_data=domain_marker)
     ds = ufl.Measure("ds", domain=mesh,  # metadata=metadata,
                      subdomain_data=mesh_tags[0])
 
