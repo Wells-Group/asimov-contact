@@ -25,7 +25,7 @@ kt = dolfinx_contact.cpp.Kernel
 __all__ = ["nitsche_unbiased"]
 
 
-def nitsche_unbiased(mesh: _mesh.Mesh, mesh_tags: list[_cpp.meshMeshTags_int32],
+def nitsche_unbiased(mesh: _mesh.Mesh, mesh_tags: list[_cpp.mesh.MeshTags_int32],
                      domain_marker: Union[_cpp.mesh.MeshTags_int32, None],
                      surfaces: AdjacencyList_int32,
                      dirichlet: list[Tuple[int, Callable[[np.ndarray], np.ndarray]]],
