@@ -309,7 +309,7 @@ def nitsche_meshtie(mesh: _mesh.Mesh, mesh_tags: list[MeshTags_int32],
     # Set a monitor, solve linear system, and display the solver
     # configuration
     solver.setMonitor(lambda _, its, rnorm: print(f"Iteration: {its}, rel. residual: {rnorm}"))
-    timing_str = f"~Contact: {id(dofs_global)} Solve Nitsche"
+    timing_str = f"~Contact: Krylov Solver"
     with _common.Timer(timing_str):
         solver.solve(b, uh.vector)
 
@@ -320,4 +320,4 @@ def nitsche_meshtie(mesh: _mesh.Mesh, mesh_tags: list[MeshTags_int32],
     print(f"{dofs_global}\n",
           f"Number of Krylov iterations {solver.getIterationNumber()}\n",
           f"Solver time {solver_time}", flush=True)
-    return uh, solver.getIterationNumber(),solver_time
+    return uh, solver.getIterationNumber(), solver_time

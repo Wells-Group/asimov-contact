@@ -69,7 +69,7 @@ if __name__ == "__main__":
     # Load mesh and create identifier functions for the top (Displacement condition)
     # and the bottom (contact condition)
     displacement = [[0, 0, 0]]
-    gap = 0.01
+    gap = 1e-13
     H = 1.5
     fname = "box_3D"
     create_box_mesh_3D(f"{fname}.msh", simplex, gap=gap, W=H)
@@ -137,13 +137,7 @@ if __name__ == "__main__":
 
     # Solver options
     ksp_tol = 1e-10
-    newton_tol = 1e-7
-    newton_options = {"relaxation_parameter": 1,
-                      "atol": newton_tol,
-                      "rtol": newton_tol,
-                      "convergence_criterion": "residual",
-                      "max_it": 50,
-                      "error_on_nonconvergence": False}
+
     # petsc_options = {"ksp_type": "preonly", "pc_type": "lu"}
     petsc_options = {
         "matptap_via": "scalable",
@@ -181,9 +175,8 @@ if __name__ == "__main__":
     geometry = mesh.geometry.x[:].copy()
 
     log.set_log_level(log.LogLevel.OFF)
-    num_newton_its = np.zeros(nload_steps, dtype=int)
     num_krylov_its = np.zeros(nload_steps, dtype=int)
-    newton_time = np.zeros(nload_steps, dtype=np.float64)
+    solver_times = np.zeros(nload_steps, dtype=np.float64)
 
     solver_outfile = args.outfile if args.ksp else None
 
@@ -214,7 +207,7 @@ if __name__ == "__main__":
             nitsche_parameters=nitsche_parameters,
             quadrature_degree=args.q_degree, petsc_options=petsc_options)
         num_krylov_its[j] = krylov_iterations
-        newton_time[j] = solver_time
+        solver_times[j] = solver_time
         with XDMFFile(mesh.comm, f"results/u_unbiased_{j}.xdmf", "w") as xdmf:
             xdmf.write_mesh(mesh)
             u1.name = "u"
@@ -240,13 +233,9 @@ if __name__ == "__main__":
     else:
         outfile = open(args.outfile, "a")
     print("-" * 25, file=outfile)
-    print(f"Newton options {newton_options}", file=outfile)
     print(f"num_dofs: {u.function_space.dofmap.index_map_bs*u.function_space.dofmap.index_map.size_global}"
           + f", {mesh.topology.cell_type}", file=outfile)
-    print(f"Newton solver {timing('~Contact: Newton (Newton solver)')[1]}", file=outfile)
-    print(f"Krylov solver {timing('~Contact: Newton (Krylov solver)')[1]}", file=outfile)
-    print(f"Newton time: {newton_time}", file=outfile)
-    print(f"Newton iterations {num_newton_its}, {sum(num_newton_its)}", file=outfile)
+    print(f"Krylov solver {timing('~Contact: Krylov Solver')[1]}", file=outfile)
     print(f"Krylov iterations {num_krylov_its}, {sum(num_krylov_its)}", file=outfile)
     print("-" * 25, file=outfile)
 
