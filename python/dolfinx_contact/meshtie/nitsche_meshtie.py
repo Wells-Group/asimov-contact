@@ -33,8 +33,7 @@ def nitsche_meshtie(mesh: _mesh.Mesh, mesh_tags: list[MeshTags_int32],
                     physical_parameters: dict[str, Union[bool, np.float64, int]],
                     nitsche_parameters: dict[str, np.float64],
                     quadrature_degree: int = 5, form_compiler_params: dict = None, jit_params: dict = None,
-                    petsc_options: dict = None, newton_options: dict = None, initial_guess=None,
-                    outfile: str = None) -> Tuple[_fem.Function, int, int, float]:
+                    petsc_options: dict = None, initial_guess=None) -> Tuple[_fem.Function, int, int, float]:
     """
     Use custom kernel to compute the contact problem with two elastic bodies coming into contact.
 
@@ -83,19 +82,12 @@ def nitsche_meshtie(mesh: _mesh.Mesh, mesh_tags: list[MeshTags_int32],
         PETSc. For available choices for the 'petsc_options' kwarg,
         see the `PETSc-documentation
         <https://petsc4py.readthedocs.io/en/stable/manual/ksp/>`
-    newton_options
-        Dictionary with Newton-solver options. Valid (key, item) tuples are:
-        ("atol", float), ("rtol", float), ("convergence_criterion", "str"),
-        ("max_it", int), ("error_on_nonconvergence", bool), ("relaxation_parameter", float)
     initial_guess
         A functon containing an intial guess to use for the Newton-solver
-    outfile
-        File to append solver summary
     """
     form_compiler_params = {} if form_compiler_params is None else form_compiler_params
     jit_params = {} if jit_params is None else jit_params
     petsc_options = {} if petsc_options is None else petsc_options
-    newton_options = {} if newton_options is None else newton_options
 
     strain = physical_parameters.get("strain")
     if strain is None:
@@ -139,6 +131,12 @@ def nitsche_meshtie(mesh: _mesh.Mesh, mesh_tags: list[MeshTags_int32],
     h = ufl.CellDiameter(mesh)
     n = ufl.FacetNormal(mesh)
 
+    # Set initial guess
+    if initial_guess is None:
+        u.x.array[:] = 0
+    else:
+        u.x.array[:] = initial_guess.x.array[:]
+
     # Integration measure and ufl part of linear/bilinear form
     # metadata = {"quadrature_degree": quadrature_degree}
     dx = ufl.Measure("dx", domain=mesh, subdomain_data=domain_marker)
@@ -146,11 +144,14 @@ def nitsche_meshtie(mesh: _mesh.Mesh, mesh_tags: list[MeshTags_int32],
                      subdomain_data=mesh_tags[0])
 
     J = ufl.inner(sigma(du), epsilon(v)) * dx
-    F = ufl.inner(sigma(u), epsilon(v)) * dx
-
+    F = 0 * dx
     # Dirichle boundary conditions
     bcs = []
     if lifting:
+        raise Warning("Strong Dirichlet boundary conditions may cause unintended \
+                       side effects at degrees of freedom shared between contact \
+                       surfaces and Dirichlet boundary and/or prevent convergence \
+                       of iterative (non-)linear solvers")
         tdim = mesh.topology.dim
         for bc in dirichlet:
             facets = mesh_tags[0].find(bc[0])
@@ -164,8 +165,8 @@ def nitsche_meshtie(mesh: _mesh.Mesh, mesh_tags: list[MeshTags_int32],
             f = _fem.Function(V)
             f.interpolate(bc[1])
             F += - ufl.inner(sigma(u) * n, v) * ds(bc[0])\
-                - theta * ufl.inner(sigma(v) * n, u - f) * \
-                ds(bc[0]) + gamma / h * ufl.inner(u - f, v) * ds(bc[0])
+                - theta * ufl.inner(sigma(v) * n, f) * \
+                ds(bc[0]) + gamma / h * ufl.inner(f, v) * ds(bc[0])
             J += - ufl.inner(sigma(du) * n, v) * ds(bc[0])\
                 - theta * ufl.inner(sigma(v) * n, du) * \
                 ds(bc[0]) + gamma / h * ufl.inner(du, v) * ds(bc[0])
@@ -174,13 +175,13 @@ def nitsche_meshtie(mesh: _mesh.Mesh, mesh_tags: list[MeshTags_int32],
     for bc in neumann:
         g = _fem.Function(V)
         g.interpolate(bc[1])
-        F -= ufl.inner(g, v) * ds(bc[0])
+        F += ufl.inner(g, v) * ds(bc[0])
 
     # body forces
     for bf in body_forces:
         f = _fem.Function(V)
         f.interpolate(bf[1])
-        F -= ufl.inner(f, v) * dx(bf[0])
+        F += ufl.inner(f, v) * dx(bf[0])
 
     # Custom assembly
     # create contact class
@@ -241,7 +242,7 @@ def nitsche_meshtie(mesh: _mesh.Mesh, mesh_tags: list[MeshTags_int32],
     with _common.Timer("~Contact: Generate Jacobian kernel"):
         kernel_jac = contact.generate_kernel(kt.MeshTieJac)
     with _common.Timer("~Contact: Create matrix"):
-        J = contact.create_matrix(J_custom)
+        A = contact.create_matrix(J_custom)
 
     # Generate residual data structures
     F_custom = _fem.form(F, form_compiler_params=form_compiler_params, jit_params=jit_params)
@@ -250,89 +251,73 @@ def nitsche_meshtie(mesh: _mesh.Mesh, mesh_tags: list[MeshTags_int32],
     with _common.Timer("~Contact: Create vector"):
         b = _fem.petsc.create_vector(F_custom)
 
-    @ _common.timed("~Contact: Update coefficients")
-    def compute_coefficients(x, coeffs):
-        u.vector[:] = x.array
-        u_candidate = []
-        grad_u_candidate = []
-        with _common.Timer("~~Contact: Pack u contact"):
-            for i in range(len(contact_pairs)):
-                u_candidate.append(contact.pack_u_contact(i, u._cpp_object, gaps[i]))
-                grad_u_candidate.append(contact.pack_grad_u_contact(i, u._cpp_object, gaps[i], np.zeros(gaps[i].shape)))
-        u_puppet = []
-        with _common.Timer("~~Contact: Pack u"):
-            for i in range(len(contact_pairs)):
-                u_puppet.append(dolfinx_cuas.pack_coefficients([u], entities[i]))
+    # Compute u dependent coeficcients
+    u_candidate = []
+    grad_u_candidate = []
+    coeffs = []
+    with _common.Timer("~~Contact: Pack u contact"):
         for i in range(len(contact_pairs)):
-            c_0 = np.hstack([coeffs_const[i], u_puppet[i], u_candidate[i], grad_u_candidate[i]])
-            coeffs[i][:, :] = c_0[:, :]
+            u_candidate.append(contact.pack_u_contact(i, u._cpp_object, gaps[i]))
+            grad_u_candidate.append(contact.pack_grad_u_contact(i, u._cpp_object, gaps[i], np.zeros(gaps[i].shape)))
+    u_puppet = []
+    with _common.Timer("~~Contact: Pack u"):
+        for i in range(len(contact_pairs)):
+            u_puppet.append(dolfinx_cuas.pack_coefficients([u], entities[i]))
+    for i in range(len(contact_pairs)):
+        coeffs.append(np.hstack([coeffs_const[i], u_puppet[i], u_candidate[i], grad_u_candidate[i]]))
 
-    @ _common.timed("~Contact: Assemble residual")
-    def compute_residual(x, b, coeffs):
-        b.zeroEntries()
-        with _common.Timer("~~Contact: Contact contributions (in assemble vector)"):
-            for i in range(len(contact_pairs)):
-                contact.assemble_vector(b, i, kernel_rhs, coeffs[i], consts)
-        with _common.Timer("~~Contact: Standard contributions (in assemble vector)"):
-            _fem.petsc.assemble_vector(b, F_custom)
+    # Assemble residual vector
+    b.zeroEntries()
+    with _common.Timer("~~Contact: Contact contributions (in assemble vector)"):
+        for i in range(len(contact_pairs)):
+            contact.assemble_vector(b, i, kernel_rhs, coeffs[i], consts)
+    with _common.Timer("~~Contact: Standard contributions (in assemble vector)"):
+        _fem.petsc.assemble_vector(b, F_custom)
 
-        # Apply boundary condition
-        if lifting:
-            _fem.petsc.apply_lifting(b, [J_custom], bcs=[bcs], x0=[x], scale=-1.0)
-            b.ghostUpdate(addv=_PETSc.InsertMode.ADD, mode=_PETSc.ScatterMode.REVERSE)
-            _fem.petsc.set_bc(b, bcs, x, -1.0)
+    # Apply boundary condition
+    if lifting:
+        _fem.petsc.apply_lifting(b, [J_custom], bcs=[bcs], x0=[x], scale=-1.0)
+        b.ghostUpdate(addv=_PETSc.InsertMode.ADD, mode=_PETSc.ScatterMode.REVERSE)
+        _fem.petsc.set_bc(b, bcs, x, -1.0)
 
-    @ _common.timed("~Contact: Assemble matrix")
-    def compute_jacobian_matrix(x, A, coeffs):
-        A.zeroEntries()
-        with _common.Timer("~~Contact: Contact contributions (in assemble matrix)"):
-            for i in range(len(contact_pairs)):
-                contact.assemble_matrix(A, [], i, kernel_jac, coeffs[i], consts)
-        with _common.Timer("~~Contact: Standard contributions (in assemble matrix)"):
-            _fem.petsc.assemble_matrix(A, J_custom, bcs=bcs)
-        A.assemble()
-
-    # coefficient arrays
-    num_coeffs = contact.coefficients_size(meshtie=True)
-    coeffs = np.array([np.zeros((len(entities[i]), num_coeffs)) for i in range(len(contact_pairs))])
-    newton_solver = dolfinx_contact.NewtonSolver(mesh.comm, J, b, coeffs)
-
-    # Set matrix-vector computations
-    newton_solver.set_residual(compute_residual)
-    newton_solver.set_jacobian(compute_jacobian_matrix)
-    newton_solver.set_coefficients(compute_coefficients)
+    #  Compute Jacobi Matrix
+    A.zeroEntries()
+    with _common.Timer("~~Contact: Contact contributions (in assemble matrix)"):
+        for i in range(len(contact_pairs)):
+            contact.assemble_matrix(A, [], i, kernel_jac, coeffs[i], consts)
+    with _common.Timer("~~Contact: Standard contributions (in assemble matrix)"):
+        _fem.petsc.assemble_matrix(A, J_custom, bcs=bcs)
+    A.assemble()
 
     # Set rigid motion nullspace
     null_space = rigid_motions_nullspace(V)
-    newton_solver.A.setNearNullSpace(null_space)
+    A.setNearNullSpace(null_space)
+    # Create PETSc Krylov solver and turn convergence monitoring on
+    opts = _PETSc.Options()
+    for key in petsc_options:
+        opts[key] = petsc_options[key]
+    solver = _PETSc.KSP().create(mesh.comm)
+    solver.setFromOptions()
 
-    # Set Newton solver options
-    newton_solver.set_newton_options(newton_options)
+    # Set matrix operator
+    solver.setOperators(A)
 
-    # Set initial guess
-    if initial_guess is None:
-        u.x.array[:] = 0
-    else:
-        u.x.array[:] = initial_guess.x.array[:]
-
-    # Set Krylov solver options
-    newton_solver.set_krylov_options(petsc_options)
+    uh = _fem.Function(V)
 
     dofs_global = V.dofmap.index_map_bs * V.dofmap.index_map.size_global
     _log.set_log_level(_log.LogLevel.OFF)
-    # Solve non-linear problem
+    # Set a monitor, solve linear system, and display the solver
+    # configuration
+    solver.setMonitor(lambda _, its, rnorm: print(f"Iteration: {its}, rel. residual: {rnorm}"))
     timing_str = f"~Contact: {id(dofs_global)} Solve Nitsche"
     with _common.Timer(timing_str):
-        n, converged = newton_solver.solve(u)
+        solver.solve(b, uh.vector)
 
-    if outfile is not None:
-        viewer = _PETSc.Viewer().createASCII(outfile, "a")
-        newton_solver.krylov_solver.view(viewer)
-    newton_time = _common.timing(timing_str)
-    # if not converged:
-    #     raise RuntimeError("Newton solver did not converge")
-    u.x.scatter_forward()
+    # Scatter forward the solution vector to update ghost values
+    uh.x.scatter_forward()
 
-    print(f"{dofs_global}\n Number of Newton iterations: {n:d}\n",
-          f"Number of Krylov iterations {newton_solver.krylov_iterations}\n", flush=True)
-    return u, n, newton_solver.krylov_iterations, newton_time[1]
+    solver_time = _common.timing(timing_str)[1]
+    print(f"{dofs_global}\n",
+          f"Number of Krylov iterations {solver.getIterationNumber()}\n",
+          f"Solver time {solver_time}", flush=True)
+    return uh, solver.getIterationNumber(),solver_time

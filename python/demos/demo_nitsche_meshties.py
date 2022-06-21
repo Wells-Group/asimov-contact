@@ -1,4 +1,4 @@
-# Copyright (C) 2021 Jørgen S. Dokken and Sarah Roggendorf
+# Copyright (C) 2022 Sarah Roggendorf
 #
 # SPDX-License-Identifier:    MIT
 
@@ -163,7 +163,7 @@ if __name__ == "__main__":
         "pc_gamg_square_graph": 2,
     }
     # Pack mesh data for Nitsche solver
-    contact = [(1, 0)]
+    contact = [(1, 0), (0, 1)]
     data = np.array([contact_bdy_1, contact_bdy_2], dtype=np.int32)
     offsets = np.array([0, 2], dtype=np.int32)
     surfaces = create_adjacencylist(data, offsets)
@@ -207,14 +207,12 @@ if __name__ == "__main__":
             body_force_incr.append(increment)
 
         # Solve contact problem using Nitsche's method
-        u1, n, krylov_iterations, solver_time = nitsche_meshtie(
+        u1, krylov_iterations, solver_time = nitsche_meshtie(
             mesh=mesh, mesh_tags=[facet_marker], domain_marker=domain_marker,
             surfaces=surfaces, dirichlet=dirichlet, neumann=neumann, contact_pairs=contact,
             body_forces=body_force_incr, physical_parameters=physical_parameters,
             nitsche_parameters=nitsche_parameters,
-            quadrature_degree=args.q_degree, petsc_options=petsc_options,
-            newton_options=newton_options, outfile=solver_outfile)
-        num_newton_its[j] = n
+            quadrature_degree=args.q_degree, petsc_options=petsc_options)
         num_krylov_its[j] = krylov_iterations
         newton_time[j] = solver_time
         with XDMFFile(mesh.comm, f"results/u_unbiased_{j}.xdmf", "w") as xdmf:
