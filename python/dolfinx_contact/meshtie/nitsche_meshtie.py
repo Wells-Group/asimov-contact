@@ -276,6 +276,7 @@ def nitsche_meshtie(mesh: _mesh.Mesh, mesh_tags: list[MeshTags_int32],
 
     # Apply boundary condition
     if lifting:
+        x = u.vector
         _fem.petsc.apply_lifting(b, [J_custom], bcs=[bcs], x0=[x], scale=-1.0)
         b.ghostUpdate(addv=_PETSc.InsertMode.ADD, mode=_PETSc.ScatterMode.REVERSE)
         _fem.petsc.set_bc(b, bcs, x, -1.0)
@@ -320,4 +321,4 @@ def nitsche_meshtie(mesh: _mesh.Mesh, mesh_tags: list[MeshTags_int32],
     print(f"{dofs_global}\n",
           f"Number of Krylov iterations {solver.getIterationNumber()}\n",
           f"Solver time {solver_time}", flush=True)
-    return uh, solver.getIterationNumber(), solver_time
+    return uh, solver.getIterationNumber(), solver_time, dofs_global
