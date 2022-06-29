@@ -25,7 +25,7 @@ __all__ = ["nitsche_unbiased"]
 
 def nitsche_unbiased(F: ufl.Form, J: ufl.form, u: _fem.Function, markers: list[_cpp.MeshTags_int32],
                      contact_data: Tuple[AdjacencyList_int32, list[Tuple[int, int]]],
-                     bcs: list[_fem.dirichletbc],
+                     bcs: list[_fem.DirichletBCMetaClass],
                      problem_parameters: dict[str, np.float64],
                      quadrature_degree: int = 5, form_compiler_params: dict = None, jit_params: dict = None,
                      petsc_options: dict = None, newton_options: dict = None,
