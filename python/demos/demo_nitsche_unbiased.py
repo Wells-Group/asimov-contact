@@ -386,7 +386,7 @@ if __name__ == "__main__":
 
         # Solve contact problem using Nitsche's method
         u, newton_its, krylov_iterations, solver_time = nitsche_unbiased(
-            F=Fj, J=Jj, u=u, markers=[domain_marker, facet_marker], contact_data=[surfaces, contact],
+            F=Fj, J=Jj, u=u, markers=[domain_marker, facet_marker], contact_data=(surfaces, contact),
             bcs=bcs, problem_parameters=problem_parameters, newton_options=newton_options,
             petsc_options=petsc_options, outfile=solver_outfile)
         num_newton_its[j] = newton_its

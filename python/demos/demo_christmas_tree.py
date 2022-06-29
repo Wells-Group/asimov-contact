@@ -216,7 +216,7 @@ if __name__ == "__main__":
     log.set_log_level(log.LogLevel.OFF)
     with Timer("~Contact: - all"):
         u1, num_its, krylov_iterations, solver_time = nitsche_unbiased(
-            F=F, J=J, u=u, markers=mts, contact_data=[surfaces, contact_pairs],
+            F=F, J=J, u=u, markers=mts, contact_data=(surfaces, contact_pairs),
             bcs=bcs, problem_parameters=problem_parameters, newton_options=newton_options,
             petsc_options=petsc_options, outfile=solver_outfile)
 
