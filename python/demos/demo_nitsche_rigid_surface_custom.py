@@ -59,9 +59,7 @@ if __name__ == "__main__":
     physical_parameters = {"E": args.E, "nu": args.nu, "strain": args.plane_strain}
     vertical_displacement = -args.disp
     num_refs = args.refs + 1
-    top_value = 1
     threed = args.threed
-    bottom_value = 2
     curved = args.curved
     simplex = args.simplex
 
@@ -145,10 +143,6 @@ if __name__ == "__main__":
             mesh.topology.create_connectivity(tdim - 1, tdim)
             with XDMFFile(MPI.COMM_WORLD, f"{fname}_facets.xdmf", "r") as xdmf:
                 facet_marker = xdmf.read_meshtags(mesh, name="Grid")
-            top_value = 2
-            bottom_value = 4
-            surface_value = 9
-            surface_bottom = 7
 
             def top(x):
                 return x[1] > 0.5

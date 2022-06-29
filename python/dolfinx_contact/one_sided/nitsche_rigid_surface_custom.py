@@ -6,14 +6,14 @@ from typing import Dict, Tuple
 
 import basix
 import dolfinx.common as _common
-from dolfinx.graph import create_adjacencylist
+import dolfinx.cpp as _cpp
 import dolfinx.fem as _fem
 import dolfinx.log as _log
 import dolfinx.mesh as _mesh
 import dolfinx_cuas
 import numpy as np
 import ufl
-from dolfinx.cpp.mesh import MeshTags_int32
+from dolfinx.graph import create_adjacencylist
 
 import dolfinx_contact
 import dolfinx_contact.cpp
@@ -24,7 +24,7 @@ __all__ = ["nitsche_rigid_surface_custom"]
 kt = dolfinx_contact.cpp.Kernel
 
 
-def nitsche_rigid_surface_custom(mesh: _mesh.Mesh, mesh_data: Tuple[MeshTags_int32, int, int, int, int],
+def nitsche_rigid_surface_custom(mesh: _mesh.Mesh, mesh_data: Tuple[_cpp.mesh.MeshTags_int32, int, int, int, int],
                                  physical_parameters: dict = None, nitsche_parameters: Dict[str, float] = None,
                                  vertical_displacement: float = -0.1, nitsche_bc: bool = True,
                                  quadrature_degree: int = 5, form_compiler_params: Dict = None,
@@ -165,7 +165,7 @@ def nitsche_rigid_surface_custom(mesh: _mesh.Mesh, mesh_data: Tuple[MeshTags_int
     mu2.interpolate(lambda x: np.full((1, x.shape[1]), mu))
 
     # Compute integral entities on exterior facets (cell_index, local_index)
-    contact_facets = facet_marker.indices[facet_marker.values == contact_value_elastic]
+    contact_facets = facet_marker.find(contact_value_elastic)
     integral = _fem.IntegralType.exterior_facet
     integral_entities = dolfinx_contact.compute_active_entities(mesh, contact_facets, integral)
 

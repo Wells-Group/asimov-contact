@@ -11,7 +11,7 @@ import dolfinx_cuas
 import numpy as np
 import ufl
 from dolfinx.cpp.graph import AdjacencyList_int32
-from dolfinx.cpp.mesh import MeshTags_int32
+import dolfinx.cpp as _cpp
 from petsc4py import PETSc as _PETSc
 
 import dolfinx_contact
@@ -23,7 +23,7 @@ kt = dolfinx_contact.cpp.Kernel
 __all__ = ["nitsche_unbiased"]
 
 
-def nitsche_unbiased(F: ufl.Form, J: ufl.form, u: _fem.Function, markers: list[MeshTags_int32],
+def nitsche_unbiased(F: ufl.Form, J: ufl.form, u: _fem.Function, markers: list[_cpp.MeshTags_int32],
                      contact_data: Tuple[AdjacencyList_int32, list[Tuple[int, int]]],
                      bcs: list[_fem.dirichletbc],
                      problem_parameters: dict[str, np.float64],
