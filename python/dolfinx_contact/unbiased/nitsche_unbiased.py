@@ -28,7 +28,7 @@ def nitsche_unbiased(F: ufl.Form, J: ufl.form, u: _fem.Function, markers: list[_
                      bcs: list[_fem.dirichletbc],
                      problem_parameters: dict[str, np.float64],
                      quadrature_degree: int = 5, form_compiler_params: dict = None, jit_params: dict = None,
-                     petsc_options: dict = None, newton_options: dict = None, initial_guess=None,
+                     petsc_options: dict = None, newton_options: dict = None,
                      outfile: str = None) -> Tuple[_fem.Function, int, int, float]:
     """
     Use custom kernel to compute the contact problem with two elastic bodies coming into contact.
