@@ -43,7 +43,7 @@ def nitsche_unbiased(F: ufl.Form, J: ufl.form, u: _fem.Function, markers: list[_
         The second element must contain the mesh_tags for all puppet surfaces,
         Dirichlet-surfaces and Neumann-surfaces
         All further elements may contain candidate_surfaces
-    contact_data = [surfaces, contact_pairs], where
+    contact_data = (surfaces, contact_pairs), where
         surfaces: Adjacency list. Links of i are meshtag values for contact
                   surfaces in ith mesh_tag in mesh_tags
         contact_pairs: list of pairs (i, j) marking the ith surface as a puppet
@@ -96,7 +96,7 @@ def nitsche_unbiased(F: ufl.Form, J: ufl.form, u: _fem.Function, markers: list[_
     if problem_parameters.get("theta") is None:
         raise RuntimeError("Need to supply theta for Nitsche's method")
     else:
-        theta = problem_parameters.get("theta")
+        theta = problem_parameters["theta"]
     if problem_parameters.get("gamma") is None:
         raise RuntimeError("Need to supply gamma for Nitsche's method")
     else:
