@@ -2,12 +2,11 @@
 #
 # SPDX-License-Identifier:    MIT
 
-from typing import Callable, Tuple, Union
+from typing import Tuple
 
 import dolfinx.common as _common
 import dolfinx.fem as _fem
 import dolfinx.log as _log
-import dolfinx.mesh as _mesh
 import dolfinx_cuas
 import numpy as np
 import ufl
@@ -17,58 +16,45 @@ from petsc4py import PETSc as _PETSc
 
 import dolfinx_contact
 import dolfinx_contact.cpp
-from dolfinx_contact.helpers import (epsilon, lame_parameters,
-                                     rigid_motions_nullspace, sigma_func)
+from dolfinx_contact.helpers import (rigid_motions_nullspace_subdomains, sigma_func)
 
 kt = dolfinx_contact.cpp.Kernel
 
 __all__ = ["nitsche_unbiased"]
 
 
-def nitsche_unbiased(mesh: _mesh.Mesh, mesh_tags: list[MeshTags_int32],
-                     domain_marker: MeshTags_int32,
-                     surfaces: AdjacencyList_int32,
-                     dirichlet: list[Tuple[int, Callable[[np.ndarray], np.ndarray]]],
-                     neumann: list[Tuple[int, Callable[[np.ndarray], np.ndarray]]],
-                     contact_pairs: list[Tuple[int, int]],
-                     body_forces: list[Tuple[int, Callable[[np.ndarray], np.ndarray]]],
-                     physical_parameters: dict[str, Union[bool, np.float64, int]],
-                     nitsche_parameters: dict[str, np.float64],
+def nitsche_unbiased(F: ufl.Form, J: ufl.form, u: _fem.Function, markers: list[MeshTags_int32],
+                     contact_data: Tuple[AdjacencyList_int32, list[Tuple[int, int]]],
+                     bcs: list[_fem.dirichletbc],
+                     problem_parameters: dict[str, np.float64],
                      quadrature_degree: int = 5, form_compiler_params: dict = None, jit_params: dict = None,
                      petsc_options: dict = None, newton_options: dict = None, initial_guess=None,
-                     outfile: str = None, order: int = 1) -> Tuple[_fem.Function, int, int, float]:
+                     outfile: str = None) -> Tuple[_fem.Function, int, int, float]:
     """
     Use custom kernel to compute the contact problem with two elastic bodies coming into contact.
 
     Parameters
     ==========
-    mesh
-        The input mesh
-    mesh_tags
-        A list of meshtags. The first element must contain the mesh_tags for all puppet surfaces,
+    F The residual without contact contributions
+    J The Jacobian without contact contributions
+    u The function to be solved for. Also serves as initial value.
+    markers
+        A list of meshtags. The first element must mark all separate objects in order to create the correct nullspace.
+        The second element must contain the mesh_tags for all puppet surfaces,
         Dirichlet-surfaces and Neumann-surfaces
         All further elements may contain candidate_surfaces
-    domain_marker
-        marker for subdomains where a body force is applied
-    surfaces
-        Adjacency list. Links of i are meshtag values for contact surfaces in ith mesh_tag in mesh_tags
-    dirichlet
-        List of Dirichlet boundary conditions as pairs of (meshtag value, function), where function
-        is a function to be interpolated into the dolfinx function space
-    neumann
-        Same as dirichlet for Neumann boundary conditions
-    contact_pairs:
-        list of pairs (i, j) marking the ith surface as a puppet surface and the jth surface
-        as the corresponding candidate surface
-    physical_parameters
-        Optional dictionary with information about the linear elasticity problem.
-        Valid (key, value) tuples are: ('E': float), ('nu', float), ('strain', bool)
-    nitsche_parameters
-        Optional dictionary with information about the Nitsche configuration.
-        Valid (keu, value) tuples are: ('gamma', float), ('theta', float) where theta can be -1, 0 or 1 for
-        skew-symmetric, penalty like or symmetric enforcement of Nitsche conditions
-    displacement
-        The displacement enforced on Dirichlet boundary
+    contact_data = [surfaces, contact_pairs], where
+        surfaces: Adjacency list. Links of i are meshtag values for contact
+                  surfaces in ith mesh_tag in mesh_tags
+        contact_pairs: list of pairs (i, j) marking the ith surface as a puppet
+                  surface and the jth surface as the corresponding candidate
+                  surface
+    problem_parameters
+        Dictionary with lame parameters and Nitsche parameters.
+        Valid (key, value) tuples are: ('gamma': float), ('theta', float), ('mu', float),
+        (lambda, float),
+        where theta can be -1, 0 or 1 for skew-symmetric, penalty like or symmetric
+        enforcement of Nitsche conditions
     quadrature_degree
         The quadrature degree to use for the custom contact kernels
     form_compiler_params
@@ -89,112 +75,61 @@ def nitsche_unbiased(mesh: _mesh.Mesh, mesh_tags: list[MeshTags_int32],
         Dictionary with Newton-solver options. Valid (key, item) tuples are:
         ("atol", float), ("rtol", float), ("convergence_criterion", "str"),
         ("max_it", int), ("error_on_nonconvergence", bool), ("relaxation_parameter", float)
-    initial_guess
-        A functon containing an intial guess to use for the Newton-solver
     outfile
         File to append solver summary
-    order
-        The order of mesh and function space
+
     """
     form_compiler_params = {} if form_compiler_params is None else form_compiler_params
     jit_params = {} if jit_params is None else jit_params
     petsc_options = {} if petsc_options is None else petsc_options
     newton_options = {} if newton_options is None else newton_options
 
-    strain = physical_parameters.get("strain")
-    if strain is None:
-        raise RuntimeError("Need to supply if problem is plane strain (True) or plane stress (False)")
+    if problem_parameters.get("mu") is None:
+        raise RuntimeError("Need to supply lame paramters")
     else:
-        plane_strain = bool(strain)
-    _E = physical_parameters.get("E")
-    if _E is not None:
-        E = np.float64(_E)
-    else:
-        raise RuntimeError("Need to supply Youngs modulus")
+        mu = mu = problem_parameters.get("mu")
 
-    if physical_parameters.get("nu") is None:
-        raise RuntimeError("Need to supply Poisson's ratio")
+    if problem_parameters.get("lambda") is None:
+        raise RuntimeError("Need to supply lame paramters")
     else:
-        nu = physical_parameters.get("nu")
-
-    # Compute lame parameters
-    mu_func, lambda_func = lame_parameters(plane_strain)
-    mu = mu_func(E, nu)
-    lmbda = lambda_func(E, nu)
+        lmbda = problem_parameters.get("lambda")
+    if problem_parameters.get("theta") is None:
+        raise RuntimeError("Need to supply theta for Nitsche's method")
+    else:
+        theta = problem_parameters.get("theta")
+    if problem_parameters.get("gamma") is None:
+        raise RuntimeError("Need to supply gamma for Nitsche's method")
+    else:
+        gamma = problem_parameters.get("gamma")
     sigma = sigma_func(mu, lmbda)
 
-    # Nitche parameters and variables
-    theta = nitsche_parameters.get("theta")
-    if theta is None:
-        raise RuntimeError("Need to supply theta for Nitsche imposition of boundary conditions")
-    _gamma = nitsche_parameters.get("gamma")
-    if _gamma is None:
-        raise RuntimeError("Need to supply Coercivity/Stabilization parameter for Nitsche condition")
-    else:
-        gamma: np.float64 = _gamma * E
-    lifting = nitsche_parameters.get("lift_bc", False)
-    # Functions space and FEM functions
-    V = _fem.VectorFunctionSpace(mesh, ("CG", order))
-    u = _fem.Function(V)
-    v = ufl.TestFunction(V)
-    du = ufl.TrialFunction(V)
+    # Contact data
+    contact_pairs = contact_data[1]
+    contact_surfaces = contact_data[0]
+
+    # Mesh, function space and FEM functions
+    V = u.function_space
+    mesh = V.mesh
+    v = ufl.TestFunction(V)  # J.arguments()[0]
+    w = ufl.TrialFunction(V)  # J.arguments()[1]
 
     h = ufl.CellDiameter(mesh)
     n = ufl.FacetNormal(mesh)
 
     # Integration measure and ufl part of linear/bilinear form
-    # metadata = {"quadrature_degree": quadrature_degree}
-    dx = ufl.Measure("dx", domain=mesh, subdomain_data=domain_marker)
-    ds = ufl.Measure("ds", domain=mesh,  # metadata=metadata,
-                     subdomain_data=mesh_tags[0])
+    ds = ufl.Measure("ds", domain=mesh, subdomain_data=markers[1])
 
-    J = ufl.inner(sigma(du), epsilon(v)) * dx
-    F = ufl.inner(sigma(u), epsilon(v)) * dx
     for contact_pair in contact_pairs:
-        surface_value = int(surfaces.links(0)[contact_pair[0]])
-        J += -  0.5 * theta * h / gamma * ufl.inner(sigma(du) * n, sigma(v) * n) * \
+        surface_value = int(contact_surfaces.links(0)[contact_pair[0]])
+        J += -  0.5 * theta * h / gamma * ufl.inner(sigma(w) * n, sigma(v) * n) * \
             ds(surface_value)
         F += - 0.5 * theta * h / gamma * ufl.inner(sigma(u) * n, sigma(v) * n) * \
             ds(surface_value)
 
-    # Dirichle boundary conditions
-    bcs = []
-    if lifting:
-        tdim = mesh.topology.dim
-        for bc in dirichlet:
-            facets = mesh_tags[0].find(bc[0])
-            cells = _mesh.compute_incident_entities(mesh, facets, tdim - 1, tdim)
-            u_bc = _fem.Function(V)
-            u_bc.interpolate(bc[1], cells)
-            u_bc.x.scatter_forward()
-            bcs.append(_fem.dirichletbc(u_bc, _fem.locate_dofs_topological(V, tdim - 1, facets)))
-    else:
-        for bc in dirichlet:
-            f = _fem.Function(V)
-            f.interpolate(bc[1])
-            F += - ufl.inner(sigma(u) * n, v) * ds(bc[0])\
-                - theta * ufl.inner(sigma(v) * n, u - f) * \
-                ds(bc[0]) + gamma / h * ufl.inner(u - f, v) * ds(bc[0])
-            J += - ufl.inner(sigma(du) * n, v) * ds(bc[0])\
-                - theta * ufl.inner(sigma(v) * n, du) * \
-                ds(bc[0]) + gamma / h * ufl.inner(du, v) * ds(bc[0])
-
-    # Neumann boundary conditions
-    for bc in neumann:
-        g = _fem.Function(V)
-        g.interpolate(bc[1])
-        F -= ufl.inner(g, v) * ds(bc[0])
-
-    # body forces
-    for bf in body_forces:
-        f = _fem.Function(V)
-        f.interpolate(bf[1])
-        F -= ufl.inner(f, v) * dx(bf[0])
-
     # Custom assembly
     # create contact class
     with _common.Timer("~Contact: Init"):
-        contact = dolfinx_contact.cpp.Contact(mesh_tags, surfaces, contact_pairs,
+        contact = dolfinx_contact.cpp.Contact(markers[1:], contact_surfaces, contact_pairs,
                                               V._cpp_object, quadrature_degree=quadrature_degree)
     with _common.Timer("~Contact: Distance maps"):
         for i in range(len(contact_pairs)):
@@ -284,7 +219,7 @@ def nitsche_unbiased(mesh: _mesh.Mesh, mesh_tags: list[MeshTags_int32],
             _fem.petsc.assemble_vector(b, F_custom)
 
         # Apply boundary condition
-        if lifting:
+        if len(bcs) > 0:
             _fem.petsc.apply_lifting(b, [J_custom], bcs=[bcs], x0=[x], scale=-1.0)
             b.ghostUpdate(addv=_PETSc.InsertMode.ADD, mode=_PETSc.ScatterMode.REVERSE)
             _fem.petsc.set_bc(b, bcs, x, -1.0)
@@ -310,17 +245,11 @@ def nitsche_unbiased(mesh: _mesh.Mesh, mesh_tags: list[MeshTags_int32],
     newton_solver.set_coefficients(compute_coefficients)
 
     # Set rigid motion nullspace
-    null_space = rigid_motions_nullspace(V)
+    null_space = rigid_motions_nullspace_subdomains(V, markers[0], np.unique(markers[0].values))
     newton_solver.A.setNearNullSpace(null_space)
 
     # Set Newton solver options
     newton_solver.set_newton_options(newton_options)
-
-    # Set initial guess
-    if initial_guess is None:
-        u.x.array[:] = 0
-    else:
-        u.x.array[:] = initial_guess.x.array[:]
 
     # Set Krylov solver options
     newton_solver.set_krylov_options(petsc_options)
@@ -337,7 +266,7 @@ def nitsche_unbiased(mesh: _mesh.Mesh, mesh_tags: list[MeshTags_int32],
         newton_solver.krylov_solver.view(viewer)
     newton_time = _common.timing(timing_str)
     if not converged:
-        raise RuntimeError("Newton solver did not converge")
+        print("Newton solver did not converge")
     u.x.scatter_forward()
 
     print(f"{dofs_global}\n Number of Newton iterations: {n:d}\n",
