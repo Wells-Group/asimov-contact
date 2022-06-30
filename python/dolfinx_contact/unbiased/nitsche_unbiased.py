@@ -23,7 +23,7 @@ kt = dolfinx_contact.cpp.Kernel
 __all__ = ["nitsche_unbiased"]
 
 
-def nitsche_unbiased(F: ufl.Form, J: ufl.form, u: _fem.Function, markers: list[_cpp.MeshTags_int32],
+def nitsche_unbiased(ufl_form: ufl.Form, u: _fem.Function, markers: list[_cpp.mesh.MeshTags_int32],
                      contact_data: Tuple[AdjacencyList_int32, list[Tuple[int, int]]],
                      bcs: list[_fem.DirichletBCMetaClass],
                      problem_parameters: dict[str, np.float64],
@@ -110,8 +110,8 @@ def nitsche_unbiased(F: ufl.Form, J: ufl.form, u: _fem.Function, markers: list[_
     # Mesh, function space and FEM functions
     V = u.function_space
     mesh = V.mesh
-    v = ufl.TestFunction(V)  # J.arguments()[0]
-    w = ufl.TrialFunction(V)  # J.arguments()[1]
+    v = ufl_form.arguments()[0]  # Test function
+    w = ufl.TrialFunction(V)     # Trial function
 
     h = ufl.CellDiameter(mesh)
     n = ufl.FacetNormal(mesh)
@@ -119,12 +119,13 @@ def nitsche_unbiased(F: ufl.Form, J: ufl.form, u: _fem.Function, markers: list[_
     # Integration measure and ufl part of linear/bilinear form
     ds = ufl.Measure("ds", domain=mesh, subdomain_data=markers[1])
 
+    # ufl part of contact
+    F = ufl_form
     for contact_pair in contact_pairs:
         surface_value = int(contact_surfaces.links(0)[contact_pair[0]])
-        J += -  0.5 * theta * h / gamma * ufl.inner(sigma(w) * n, sigma(v) * n) * \
-            ds(surface_value)
         F += - 0.5 * theta * h / gamma * ufl.inner(sigma(u) * n, sigma(v) * n) * \
             ds(surface_value)
+    J = ufl.derivative(F, u, w)
 
     # Custom assembly
     # create contact class

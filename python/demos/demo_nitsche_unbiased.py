@@ -12,7 +12,8 @@ from dolfinx.common import TimingType, list_timings, timing
 from dolfinx.fem import dirichletbc, Constant, Function, locate_dofs_topological, VectorFunctionSpace
 from dolfinx.graph import create_adjacencylist
 from dolfinx.io import XDMFFile
-from dolfinx.mesh import locate_entities_boundary, meshtags
+from dolfinx.mesh import locate_entities_boundary
+from dolfinx.cpp.mesh import MeshTags_int32
 from mpi4py import MPI
 from petsc4py.PETSc import ScalarType
 
@@ -127,7 +128,7 @@ if __name__ == "__main__":
             indices = np.concatenate([top_facets1, bottom_facets1, top_facets2, bottom_facets2])
             values = np.hstack([top_values, bottom_values, surface_values, sbottom_values])
             sorted_facets = np.argsort(indices)
-            facet_marker = meshtags(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
+            facet_marker = MeshTags_int32(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
 
         elif problem == 2:
             fname = "sphere"
@@ -189,7 +190,7 @@ if __name__ == "__main__":
             indices = np.concatenate([dirichlet_facets_1, contact_facets_1, contact_facets_2, dirchlet_facets_2])
             values = np.hstack([val0, val1, val2, val3])
             sorted_facets = np.argsort(indices)
-            facet_marker = meshtags(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
+            facet_marker = MeshTags_int32(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
 
     else:
         displacement = [[0, -args.disp], [0, 0]]
@@ -287,7 +288,7 @@ if __name__ == "__main__":
             values = np.hstack([dir_val1, c_val1, surface_values, sbottom_values])
             sorted_facets = np.argsort(indices)
 
-            facet_marker = meshtags(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
+            facet_marker = MeshTags_int32(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
 
     with XDMFFile(mesh.comm, "test.xdmf", "w") as xdmf:
         xdmf.write_mesh(mesh)
@@ -331,7 +332,6 @@ if __name__ == "__main__":
     V = VectorFunctionSpace(mesh, ("CG", 1))
     u = Function(V)
     v = ufl.TestFunction(V)
-    w = ufl.TrialFunction(V)
     dx = ufl.Measure("dx", domain=mesh, subdomain_data=domain_marker)
     ds = ufl.Measure("ds", domain=mesh, subdomain_data=facet_marker)
 
@@ -344,7 +344,6 @@ if __name__ == "__main__":
     sigma = sigma_func(mu, lmbda)
 
     # Create variational form without contact contributions
-    J = ufl.inner(sigma(w), epsilon(v)) * dx
     F = ufl.inner(sigma(u), epsilon(v)) * dx
     # Solve contact problem using Nitsche's method
     load_increment = np.asarray(displacement, dtype=np.float64) / nload_steps
@@ -369,7 +368,7 @@ if __name__ == "__main__":
     # Load geometry over multiple steps
     for j in range(nload_steps):
         disp = []
-        Jj, Fj = J, F
+        Fj = F
         for d in load_increment:
             if gdim == 3:
                 disp.append(Constant(mesh, ScalarType((d[0], d[1], d[2]))))
@@ -382,11 +381,11 @@ if __name__ == "__main__":
                 bdy_dofs = locate_dofs_topological(V, tdim - 1, facet_marker.find(tag))
                 bcs.append(dirichletbc(g, bdy_dofs, V))
             else:
-                Jj, Fj = weak_dirichlet(Jj, Fj, u, g, sigma, E * gamma, theta, ds(tag))
+                Fj = weak_dirichlet(Fj, u, g, sigma, E * gamma, theta, ds(tag))
 
         # Solve contact problem using Nitsche's method
         u, newton_its, krylov_iterations, solver_time = nitsche_unbiased(
-            F=Fj, J=Jj, u=u, markers=[domain_marker, facet_marker], contact_data=(surfaces, contact),
+            ufl_form=Fj, u=u, markers=[domain_marker, facet_marker], contact_data=(surfaces, contact),
             bcs=bcs, problem_parameters=problem_parameters, newton_options=newton_options,
             petsc_options=petsc_options, outfile=solver_outfile)
         num_newton_its[j] = newton_its

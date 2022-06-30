@@ -227,18 +227,14 @@ def rigid_motions_nullspace_subdomains(V: _fem.FunctionSpace, mt: MeshTags_int32
     return PETSc.NullSpace().create(vectors=nullspace_basis)
 
 
-def weak_dirichlet(J: ufl.Form, F: ufl.Form, u: _fem.Function,
+def weak_dirichlet(F: ufl.Form, u: _fem.Function,
                    f: Union[_fem.Function, _fem.Constant], sigma, gamma, theta, ds):
     V = u.function_space
-    v = J.arguments()[0]
-    w = J.arguments()[1]
+    v = F.arguments()[0]
     mesh = V.mesh
     h = ufl.CellDiameter(mesh)
     n = ufl.FacetNormal(mesh)
     F += - ufl.inner(sigma(u) * n, v) * ds\
         - theta * ufl.inner(sigma(v) * n, u - f) * \
         ds + gamma / h * ufl.inner(u - f, v) * ds
-    J += - ufl.inner(sigma(w) * n, v) * ds\
-        - theta * ufl.inner(sigma(v) * n, w) * \
-        ds + gamma / h * ufl.inner(w, v) * ds
-    return J, F
+    return F

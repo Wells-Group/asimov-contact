@@ -137,7 +137,6 @@ if __name__ == "__main__":
     # Function, TestFunction, TrialFunction and measures
     u = _fem.Function(V)
     v = ufl.TestFunction(V)
-    w = ufl.TrialFunction(V)
     dx = ufl.Measure("dx", domain=mesh, subdomain_data=domain_marker)
     ds = ufl.Measure("ds", domain=mesh, subdomain_data=facet_marker)
 
@@ -150,13 +149,12 @@ if __name__ == "__main__":
     sigma = sigma_func(mu, lmbda)
 
     # Create variational form without contact contributions
-    J = ufl.inner(sigma(w), epsilon(v)) * dx
     F = ufl.inner(sigma(u), epsilon(v)) * dx
 
     # Apply weak Dirichlet boundary conditions using Nitsche's method
     gamma = args.gamma
     theta = args.theta
-    J, F = weak_dirichlet(J, F, u, g, sigma, E * gamma, theta, ds(4))
+    F = weak_dirichlet(F, u, g, sigma, E * gamma, theta, ds(4))
 
     # traction (neumann) boundary condition on mesh boundary with tag 3
     F -= ufl.inner(t, v) * ds(3)
@@ -216,7 +214,7 @@ if __name__ == "__main__":
     log.set_log_level(log.LogLevel.OFF)
     with Timer("~Contact: - all"):
         u1, num_its, krylov_iterations, solver_time = nitsche_unbiased(
-            F=F, J=J, u=u, markers=mts, contact_data=(surfaces, contact_pairs),
+            ufl_form=F, u=u, markers=mts, contact_data=(surfaces, contact_pairs),
             bcs=bcs, problem_parameters=problem_parameters, newton_options=newton_options,
             petsc_options=petsc_options, outfile=solver_outfile)
 
