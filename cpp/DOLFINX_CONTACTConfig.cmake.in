@@ -8,7 +8,6 @@ set_and_check(DOLFINX_CONTACT_CXX_COMPILER "@CMAKE_CXX_COMPILER@")
 
 include(CMakeFindDependencyMacro)
 find_dependency(DOLFINX REQUIRED)
-find_dependency(DOLFINX_CUAS REQUIRED)
 find_dependency(MPI REQUIRED)
 
 if (NOT TARGET dolfinx_contact)

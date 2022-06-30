@@ -14,7 +14,6 @@ import dolfinx.mesh as _mesh
 import dolfinx.nls as _nls
 import numpy as np
 import ufl
-from dolfinx.cpp.mesh import MeshTags_int32
 from petsc4py import PETSc as _PETSc
 
 import dolfinx_contact.cpp
@@ -22,7 +21,7 @@ from dolfinx_contact.helpers import (R_minus, epsilon, lame_parameters,
                                      rigid_motions_nullspace, sigma_func)
 
 
-def nitsche_rigid_surface(mesh: _mesh.Mesh, mesh_data: Tuple[MeshTags_int32, int, int, int, int],
+def nitsche_rigid_surface(mesh: _mesh.Mesh, mesh_data: Tuple[_cpp.mesh.MeshTags_int32, int, int, int, int],
                           physical_parameters: dict = {}, nitsche_parameters: Dict[str, float] = {},
                           vertical_displacement: float = -0.1, nitsche_bc: bool = False, quadrature_degree: int = 5,
                           form_compiler_params: Dict = {}, jit_params: Dict = {}, petsc_options: Dict = {},
@@ -145,12 +144,12 @@ def nitsche_rigid_surface(mesh: _mesh.Mesh, mesh_data: Tuple[MeshTags_int32, int
         u_D.name = "u_D"
         u_D.x.scatter_forward()
         dirichlet_dofs = _fem.locate_dofs_topological(
-            V, tdim - 1, facet_marker.indices[facet_marker.values == dirichlet_value_elastic])
+            V, tdim - 1, facet_marker.find(dirichlet_value_elastic))
         bc = _fem.dirichletbc(u_D, dirichlet_dofs)
         bcs = [bc]
         # Dirichlet boundary conditions for rigid plane
         dirichlet_dofs_plane = _fem.locate_dofs_topological(
-            V, tdim - 1, facet_marker.indices[facet_marker.values == dirichlet_value_rigid])
+            V, tdim - 1, facet_marker.find(dirichlet_value_rigid))
         u_D_plane = _fem.Function(V)
         with u_D_plane.vector.localForm() as loc:
             loc.set(0)
@@ -158,7 +157,7 @@ def nitsche_rigid_surface(mesh: _mesh.Mesh, mesh_data: Tuple[MeshTags_int32, int
         bcs.append(bc_plane)
 
     # Create contact class
-    contact_facets = facet_marker.indices[facet_marker.values == contact_value_elastic]
+    contact_facets = facet_marker.find(contact_value_elastic)
     data = np.array([contact_value_elastic, contact_value_rigid], dtype=np.int32)
     offsets = np.array([0, 2], dtype=np.int32)
     surfaces = create_adjacencylist(data, offsets)
