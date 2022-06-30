@@ -272,7 +272,6 @@ def create_split_box_3D(filename: str, res=0.8, L=5.0, H=1.0, W=1.0, domain_1=[0
         # combine mesh data
         marked_facets = np.vstack([marked_facets, marked_facets2 + x.shape[0]])
         facet_values = np.hstack([facet_values, facet_values2])
-        print(marked_facets, facet_values)
         cell_data = np.hstack([cell_data, cell_data2])
         cells = np.vstack([cells, cells2 + x.shape[0]])
         x = np.vstack([x, x2])

@@ -134,7 +134,7 @@ std::size_t dolfinx_contact::Contact::coefficients_size(bool meshtie)
            num_q_points * gdim * bs};
 
     // create offsets
-    std::vector<int32_t> offsets(9, 0);
+    std::vector<int32_t> offsets(9);
     offsets[0] = 0;
     std::partial_sum(cstrides.cbegin(), cstrides.cend(),
                      std::next(offsets.begin()));

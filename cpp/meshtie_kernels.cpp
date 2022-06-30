@@ -16,7 +16,8 @@ dolfinx_contact::generate_meshtie_kernel(
   assert(mesh);
   const std::size_t gdim = mesh->geometry().dim(); // geometrical dimension
   const std::size_t bs = V->dofmap()->bs();
-  // FIXME: This will not work for prism meshes
+  // NOTE: Assuming same number of quadrature points on each cell
+  dolfinx_contact::error::check_cell_type(mesh->topology().cell_type());
   const std::vector<std::int32_t>& qp_offsets = quadrature_rule->offset();
   const std::size_t num_q_points = qp_offsets[1] - qp_offsets[0];
   const std::size_t ndofs_cell = V->dofmap()->element_dof_layout().num_dofs();
@@ -265,16 +266,14 @@ dolfinx_contact::generate_meshtie_kernel(
         {
           for (std::size_t i = 0; i < ndofs_cell; i++)
           {
-            for (std::size_t b = 0; b < bs; b++)
+            for (std::size_t k = 0; k < num_links; k++)
             {
-              // Fill contributions of facet with itself
-              // -0.5 inner(sig(u)n, v) - 0.5 theta inner(sig(v), u)
-              A[0][(b + i * bs) * ndofs_cell * bs + l + j * bs]
-                  += (-0.5 * sig_n(j, l, b) * phi(q_pos, i)
-                      - 0.5 * theta * sig_n(i, b, l) * phi(q_pos, j))
-                     * w0;
+              // gamma inner(u, v)
+              A[0][(l + i * bs) * ndofs_cell * bs + l + j * bs]
+                  += gamma * phi(q_pos, j) * phi(q_pos, i) * w0;
 
-              // entries corresponding to u and v on the other surface
+              // inner products of test and trial functions only non-zero if dof
+              // corresponds to same block index
               for (std::size_t k = 0; k < num_links; k++)
               {
                 std::size_t index_u = kd.offsets(3)
@@ -282,30 +281,26 @@ dolfinx_contact::generate_meshtie_kernel(
                                       + j * num_points * bs + q * bs + l;
                 std::size_t index_v = kd.offsets(3)
                                       + k * num_points * ndofs_cell * bs
-                                      + i * num_points * bs + q * bs + b;
-                // -0.5 inner(sig(u_opp), v) +0.5 theta inner(sig(v), u_opp)
-                A[3 * k + 1][(b + i * bs) * bs * ndofs_cell + l + j * bs]
-                    += (-0.5 * sig_n_opp(k, j, l, b) * phi(q_pos, i)
-                        + 0.5 * theta * sig_n(i, b, l) * c[index_u])
-                       * w0;
+                                      + i * num_points * bs + q * bs + l;
 
-                // 0.5 inner(sig(u), v_opp) -0.5 theta inner(sig(v_opp), u)
-                A[3 * k + 2][(b + i * bs) * bs * ndofs_cell + l + j * bs]
-                    += (0.5 * sig_n(j, l, b) * c[index_v]
-                        - 0.5 * theta * sig_n_opp(k, i, b, l) * phi(q_pos, j))
-                       * w0;
-                // 0.5 inner(sig(u_opp), v_opp) +0.5 theta
-                // inner(sig(v_opp),u_opp)
-                A[3 * k + 3][(b + i * bs) * bs * ndofs_cell + l + j * bs]
-                    += (0.5 * sig_n_opp(k, j, l, b) * c[index_v]
-                        + 0.5 * theta * sig_n_opp(k, i, b, l) * c[index_u])
-                       * w0;
+                // - gamma inner(u_opp, v)
+                A[3 * k + 1][(l + i * bs) * bs * ndofs_cell + l + j * bs]
+                    += -gamma * c[index_u] * phi(q_pos, i) * w0;
+                // - gamma inner(u, v_opp)
+                A[3 * k + 2][(l + i * bs) * bs * ndofs_cell + l + j * bs]
+                    += -gamma * phi(q_pos, j) * c[index_v] * w0;
+                // + gamma inner(u_opp, v_opp)
+                A[3 * k + 3][(l + i * bs) * bs * ndofs_cell + l + j * bs]
+                    += gamma * c[index_u] * c[index_v] * w0;
               }
-              if (b == l)
+              for (std::size_t b = 0; b < bs; b++)
               {
-                // gamma inner(u, v)
+                // Fill contributions of facet with itself
+                // -0.5 inner(sig(u)n, v) - 0.5 theta inner(sig(v), u)
                 A[0][(b + i * bs) * ndofs_cell * bs + l + j * bs]
-                    += gamma * phi(q_pos, j) * phi(q_pos, i) * w0;
+                    += (-0.5 * sig_n(j, l, b) * phi(q_pos, i)
+                        - 0.5 * theta * sig_n(i, b, l) * phi(q_pos, j))
+                       * w0;
 
                 // entries corresponding to u and v on the other surface
                 for (std::size_t k = 0; k < num_links; k++)
@@ -316,16 +311,23 @@ dolfinx_contact::generate_meshtie_kernel(
                   std::size_t index_v = kd.offsets(3)
                                         + k * num_points * ndofs_cell * bs
                                         + i * num_points * bs + q * bs + b;
-
-                  // - gamma inner(u_opp, v)
+                  // -0.5 inner(sig(u_opp), v) +0.5 theta inner(sig(v), u_opp)
                   A[3 * k + 1][(b + i * bs) * bs * ndofs_cell + l + j * bs]
-                      += -gamma * c[index_u] * phi(q_pos, i) * w0;
-                  // - gamma inner(u, v_opp)
+                      += (-0.5 * sig_n_opp(k, j, l, b) * phi(q_pos, i)
+                          + 0.5 * theta * sig_n(i, b, l) * c[index_u])
+                         * w0;
+
+                  // 0.5 inner(sig(u), v_opp) -0.5 theta inner(sig(v_opp), u)
                   A[3 * k + 2][(b + i * bs) * bs * ndofs_cell + l + j * bs]
-                      += -gamma * phi(q_pos, j) * c[index_v] * w0;
-                  // + gamma inner(u_opp, v_opp)
+                      += (0.5 * sig_n(j, l, b) * c[index_v]
+                          - 0.5 * theta * sig_n_opp(k, i, b, l) * phi(q_pos, j))
+                         * w0;
+                  // 0.5 inner(sig(u_opp), v_opp) +0.5 theta
+                  // inner(sig(v_opp),u_opp)
                   A[3 * k + 3][(b + i * bs) * bs * ndofs_cell + l + j * bs]
-                      += gamma * c[index_u] * c[index_v] * w0;
+                      += (0.5 * sig_n_opp(k, j, l, b) * c[index_v]
+                          + 0.5 * theta * sig_n_opp(k, i, b, l) * c[index_u])
+                         * w0;
                 }
               }
             }

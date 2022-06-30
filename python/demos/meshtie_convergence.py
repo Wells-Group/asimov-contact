@@ -16,7 +16,6 @@ from dolfinx_contact.helpers import (epsilon, lame_parameters,
                                      rigid_motions_nullspace, sigma_func)
 from dolfinx_contact.meshing import create_split_box_2D, create_split_box_3D, horizontal_sin
 from dolfinx_contact.meshtie import nitsche_meshtie
-from IPython import embed
 
 
 def u_fun_2D(x, c, gdim):
@@ -57,9 +56,9 @@ def fun_3D(x, d, mu, lmbda, gdim):
 
     f3 = -(lmbda + mu) * b * c * np.sin(a * x[0]) * np.cos(b * x[1]) * np.cos(c * x[2])
     vals = np.zeros((gdim, x.shape[1]))
-    vals[0, :] = c * f1[:]
-    vals[1, :] = c * f2[:]
-    vals[2, :] = c * f3[:]
+    vals[0, :] = d * f1[:]
+    vals[1, :] = d * f2[:]
+    vals[2, :] = d * f3[:]
     return vals
 
 
@@ -214,7 +213,7 @@ def test_meshtie(threed=False, simplex=True, runs=5):
         if threed:
             fname = "beam3D"
             create_split_box_3D(fname, res=res, L=5.0, H=1.0, W=1.0, domain_1=[0, 1, 5, 4], domain_2=[4, 5, 2, 3], x0=[
-                0, 0.5], x1=[5.0, 0.7], curve_fun=horizontal_sin, num_segments=num_segments, hex=not simplex)
+                0, 0.5], x1=[5.0, 0.5], curve_fun=horizontal_sin, num_segments=num_segments, hex=not simplex)
             fun = fun_3D
             u_fun = u_fun_3D
         else:
@@ -223,7 +222,6 @@ def test_meshtie(threed=False, simplex=True, runs=5):
                 0, 0.5], x1=[5.0, 0.7], curve_fun=horizontal_sin, num_segments=num_segments, quads=not simplex)
             fun = fun_2D
             u_fun = u_fun_2D
-        embed()
         with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
             mesh = xdmf.read_mesh(name="Grid")
         tdim = mesh.topology.dim
@@ -273,4 +271,4 @@ def test_meshtie(threed=False, simplex=True, runs=5):
 
 
 # unsplit_domain(threed=False)
-test_meshtie(simplex=True, threed=True, runs=1)
+test_meshtie(simplex=True, threed=True, runs=5)
