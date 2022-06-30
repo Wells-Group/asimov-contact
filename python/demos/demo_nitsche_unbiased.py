@@ -6,15 +6,19 @@ import argparse
 import sys
 
 import numpy as np
+import ufl
 from dolfinx import log
 from dolfinx.common import TimingType, list_timings, timing
-from dolfinx.fem import Function, VectorFunctionSpace
+from dolfinx.fem import dirichletbc, Constant, Function, locate_dofs_topological, VectorFunctionSpace
 from dolfinx.graph import create_adjacencylist
 from dolfinx.io import XDMFFile
-from dolfinx.mesh import locate_entities_boundary, meshtags
+from dolfinx.mesh import locate_entities_boundary
+from dolfinx.cpp.mesh import MeshTags_int32
 from mpi4py import MPI
+from petsc4py.PETSc import ScalarType
 
 from dolfinx_contact import update_geometry
+from dolfinx_contact.helpers import lame_parameters, epsilon, weak_dirichlet, sigma_func
 from dolfinx_contact.meshing import (convert_mesh, create_box_mesh_2D,
                                      create_box_mesh_3D,
                                      create_circle_circle_mesh,
@@ -73,8 +77,6 @@ if __name__ == "__main__":
     # Parse input arguments or set to defualt values
     args = parser.parse_args()
     # Current formulation uses bilateral contact
-    nitsche_parameters = {"gamma": args.gamma, "theta": args.theta, "lift_bc": args.lifting}
-    physical_parameters = {"E": args.E, "nu": args.nu, "strain": args.plane_strain}
     threed = args.threed
     problem = args.problem
     nload_steps = args.nload_steps
@@ -99,6 +101,7 @@ if __name__ == "__main__":
 
             with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
                 mesh = xdmf.read_mesh(name="Grid")
+                domain_marker = xdmf.read_meshtags(mesh, name="Grid")
             tdim = mesh.topology.dim
             gdim = mesh.geometry.dim
             mesh.topology.create_connectivity(tdim - 1, 0)
@@ -125,7 +128,7 @@ if __name__ == "__main__":
             indices = np.concatenate([top_facets1, bottom_facets1, top_facets2, bottom_facets2])
             values = np.hstack([top_values, bottom_values, surface_values, sbottom_values])
             sorted_facets = np.argsort(indices)
-            facet_marker = meshtags(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
+            facet_marker = MeshTags_int32(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
 
         elif problem == 2:
             fname = "sphere"
@@ -134,6 +137,7 @@ if __name__ == "__main__":
             convert_mesh(f"{fname}", f"{fname}_facets", "triangle" + triangle_ext[args.order])
             with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
                 mesh = xdmf.read_mesh(name="Grid")
+                domain_marker = xdmf.read_meshtags(mesh, name="Grid")
             tdim = mesh.topology.dim
             gdim = mesh.geometry.dim
             mesh.topology.create_connectivity(tdim - 1, 0)
@@ -151,6 +155,7 @@ if __name__ == "__main__":
             create_cylinder_cylinder_mesh(fname, res=args.res, simplex=simplex)
             with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
                 mesh = xdmf.read_mesh(name="cylinder_cylinder")
+                domain_marker = xdmf.read_meshtags(mesh, name="domain_marker")
             tdim = mesh.topology.dim
             gdim = mesh.geometry.dim
             mesh.topology.create_connectivity(tdim - 1, 0)
@@ -185,7 +190,7 @@ if __name__ == "__main__":
             indices = np.concatenate([dirichlet_facets_1, contact_facets_1, contact_facets_2, dirchlet_facets_2])
             values = np.hstack([val0, val1, val2, val3])
             sorted_facets = np.argsort(indices)
-            facet_marker = meshtags(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
+            facet_marker = MeshTags_int32(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
 
     else:
         displacement = [[0, -args.disp], [0, 0]]
@@ -201,6 +206,7 @@ if __name__ == "__main__":
 
             with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
                 mesh = xdmf.read_mesh(name="Grid")
+                domain_marker = xdmf.read_meshtags(mesh, name="Grid")
             tdim = mesh.topology.dim
             gdim = mesh.geometry.dim
             mesh.topology.create_connectivity(tdim - 1, 0)
@@ -224,6 +230,7 @@ if __name__ == "__main__":
 
             with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
                 mesh = xdmf.read_mesh(name="Grid")
+                domain_marker = xdmf.read_meshtags(mesh, name="Grid")
             tdim = mesh.topology.dim
             gdim = mesh.geometry.dim
             mesh.topology.create_connectivity(tdim - 1, 0)
@@ -246,6 +253,7 @@ if __name__ == "__main__":
 
             with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
                 mesh = xdmf.read_mesh(name="Grid")
+                domain_marker = xdmf.read_meshtags(mesh, name="Grid")
             tdim = mesh.topology.dim
             gdim = mesh.geometry.dim
             mesh.topology.create_connectivity(tdim - 1, 0)
@@ -280,7 +288,7 @@ if __name__ == "__main__":
             values = np.hstack([dir_val1, c_val1, surface_values, sbottom_values])
             sorted_facets = np.argsort(indices)
 
-            facet_marker = meshtags(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
+            facet_marker = MeshTags_int32(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
 
     with XDMFFile(mesh.comm, "test.xdmf", "w") as xdmf:
         xdmf.write_mesh(mesh)
@@ -320,16 +328,29 @@ if __name__ == "__main__":
     offsets = np.array([0, 2], dtype=np.int32)
     surfaces = create_adjacencylist(data, offsets)
 
+    # Function, TestFunction, TrialFunction and measures
+    V = VectorFunctionSpace(mesh, ("CG", 1))
+    u = Function(V)
+    v = ufl.TestFunction(V)
+    dx = ufl.Measure("dx", domain=mesh, subdomain_data=domain_marker)
+    ds = ufl.Measure("ds", domain=mesh, subdomain_data=facet_marker)
+
+    # Compute lame parameters
+    E = args.E
+    nu = args.nu
+    mu_func, lambda_func = lame_parameters(args.plane_strain)
+    mu = mu_func(E, nu)
+    lmbda = lambda_func(E, nu)
+    sigma = sigma_func(mu, lmbda)
+
+    # Create variational form without contact contributions
+    F = ufl.inner(sigma(u), epsilon(v)) * dx
     # Solve contact problem using Nitsche's method
     load_increment = np.asarray(displacement, dtype=np.float64) / nload_steps
 
-    # Define function space for problem
-    V = VectorFunctionSpace(mesh, ("CG", 1))
-    u1 = None
-
     # Data to be stored on the unperturb domain at the end of the simulation
-    u = Function(V)
-    u.x.array[:] = np.zeros(u.x.array[:].shape)
+    u_all = Function(V)
+    u_all.x.array[:] = np.zeros(u.x.array[:].shape)
     geometry = mesh.geometry.x[:].copy()
 
     log.set_log_level(log.LogLevel.OFF)
@@ -339,48 +360,54 @@ if __name__ == "__main__":
 
     solver_outfile = args.outfile if args.ksp else None
 
-    def dirichlet_func(d):
-        def fn(x):
-            values = np.zeros((gdim, x.shape[1]))
-            for i in range(x.shape[1]):
-                values[:, i] = d[:gdim]
-            return values
-        return fn
+    # dictionary with problem parameters
+    gamma = args.gamma
+    theta = args.theta
+    problem_parameters = {"mu": mu, "lambda": lmbda, "gamma": E * gamma, "theta": theta}
+
     # Load geometry over multiple steps
     for j in range(nload_steps):
-        displacement = load_increment
-        dirichlet = []
-        for i, disp in enumerate(displacement):
-            dirichlet.append((dirichlet_vals[i], dirichlet_func(disp)))
+        disp = []
+        Fj = F
+        for d in load_increment:
+            if gdim == 3:
+                disp.append(Constant(mesh, ScalarType((d[0], d[1], d[2]))))
+            else:
+                disp.append(Constant(mesh, ScalarType((d[0], d[1]))))
+        bcs = []
+        for k, g in enumerate(disp):
+            tag = dirichlet_vals[k]
+            if args.lifting:
+                bdy_dofs = locate_dofs_topological(V, tdim - 1, facet_marker.find(tag))
+                bcs.append(dirichletbc(g, bdy_dofs, V))
+            else:
+                Fj = weak_dirichlet(Fj, u, g, sigma, E * gamma, theta, ds(tag))
 
         # Solve contact problem using Nitsche's method
-        u1, n, krylov_iterations, solver_time = nitsche_unbiased(
-            mesh=mesh, mesh_tags=[facet_marker], domain_marker=None,
-            surfaces=surfaces, dirichlet=dirichlet, neumann=[
-            ], contact_pairs=contact, body_forces=[], physical_parameters=physical_parameters,
-            nitsche_parameters=nitsche_parameters,
-            quadrature_degree=args.q_degree, petsc_options=petsc_options,
-            newton_options=newton_options, outfile=solver_outfile, order=args.order)
-        num_newton_its[j] = n
+        u, newton_its, krylov_iterations, solver_time = nitsche_unbiased(
+            ufl_form=Fj, u=u, markers=[domain_marker, facet_marker], contact_data=(surfaces, contact),
+            bcs=bcs, problem_parameters=problem_parameters, newton_options=newton_options,
+            petsc_options=petsc_options, outfile=solver_outfile)
+        num_newton_its[j] = newton_its
         num_krylov_its[j] = krylov_iterations
         newton_time[j] = solver_time
         with XDMFFile(mesh.comm, f"results/u_unbiased_{j}.xdmf", "w") as xdmf:
             xdmf.write_mesh(mesh)
-            u1.name = "u"
-            xdmf.write_function(u1)
+            u.name = "u"
+            xdmf.write_function(u)
 
         # Perturb mesh with solution displacement
-        update_geometry(u1._cpp_object, mesh)
+        update_geometry(u._cpp_object, mesh)
 
         # Accumulate displacements
-        u.x.array[:] += u1.x.array[:]
+        u_all.x.array[:] += u.x.array[:]
 
     # Reset mesh to initial state and write accumulated solution
     mesh.geometry.x[:] = geometry
     with XDMFFile(mesh.comm, "results/u_unbiased_total.xdmf", "w") as xdmf:
         xdmf.write_mesh(mesh)
-        u.name = "u"
-        xdmf.write_function(u)
+        u_all.name = "u"
+        xdmf.write_function(u_all)
     if args.timing:
         list_timings(mesh.comm, [TimingType.wall])
 
