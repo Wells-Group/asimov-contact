@@ -4,20 +4,21 @@
 
 import dolfinx.fem as _fem
 import dolfinx.mesh as _mesh
-from dolfinx.common import Timer, timing
+from dolfinx.common import Timer, timing, TimingType, list_timings
 from dolfinx.graph import create_adjacencylist
 from dolfinx.io import XDMFFile
-from dolfinx.mesh import locate_entities_boundary, meshtags
 import numpy as np
 import ufl
 from mpi4py import MPI
 from petsc4py import PETSc
 from dolfinx_contact.helpers import (epsilon, lame_parameters,
                                      rigid_motions_nullspace, sigma_func)
-from dolfinx_contact.meshing import create_split_box_2D, create_split_box_3D, horizontal_sin
+from dolfinx_contact.meshing import create_split_box_2D, create_split_box_3D, horizontal_sin, create_unsplit_box_2d, create_unsplit_box_3d
 from dolfinx_contact.meshtie import nitsche_meshtie
+from sys import stdout
 
 
+# manufactured solution 2D
 def u_fun_2D(x, c, gdim):
     u2 = c * np.sin(2 * np.pi * x[0] / 5) * np.sin(2 * np.pi * x[1])
     vals = np.zeros((gdim, x.shape[1]))
@@ -25,6 +26,7 @@ def u_fun_2D(x, c, gdim):
     return vals
 
 
+# forcing 2D for manufactured solution
 def fun_2D(x, c, mu, lmbda, gdim):
     a = 2 * np.pi / 5
     b = 2 * np.pi
@@ -38,6 +40,8 @@ def fun_2D(x, c, mu, lmbda, gdim):
 
     return vals
 
+# manufacture soltuion 3D
+
 
 def u_fun_3D(x, d, gdim):
     u2 = d * np.sin(2 * np.pi * x[0] / 5) * np.sin(2 * np.pi * x[1]) * np.sin(2 * np.pi * x[2])
@@ -46,6 +50,7 @@ def u_fun_3D(x, d, gdim):
     return vals
 
 
+# forcing 2D for manufactured solution
 def fun_3D(x, d, mu, lmbda, gdim):
     a = 2 * np.pi / 5
     b = 2 * np.pi
@@ -62,27 +67,39 @@ def fun_3D(x, d, mu, lmbda, gdim):
     return vals
 
 
-def unsplit_domain(threed=False):
+def unsplit_domain(threed=False, runs=1):
+    # arrays to store
     errors = []
-    NN = [4, 8, 15, 30, 58]
     ndofs = []
     times = []
     its = []
-    for N in NN:
+
+    res = 0.6  # mesh resolution (input to gmsh)
+    num_segments = 2 * np.ceil(5.0 / (1.2 * 0.7)).astype(np.int32)  # parameter for surface approximation
+
+    for i in range(1, runs + 1):
+
+        # create mesh
         if threed:
-            mesh = _mesh.create_box(MPI.COMM_WORLD, points=((0.0, 0.0, 0.0), (5.0, 1.0, 1.0)), n=(5 * N, N, N),
-                                    cell_type=_mesh.CellType.tetrahedron)
+            fname = "box_3D"
+            create_unsplit_box_3d(res=res, num_segments=num_segments)
             fun = fun_3D
             u_fun = u_fun_3D
         else:
-            mesh = _mesh.create_rectangle(MPI.COMM_WORLD, points=((0.0, 0.0), (5.0, 1.0)), n=(5 * N, N),
-                                          cell_type=_mesh.CellType.triangle)
+            fname = "box_2D"
+            create_unsplit_box_2d(res=res, num_segments=num_segments)
             fun = fun_2D
             u_fun = u_fun_2D
+
+        # read in mesh and markers
+        with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
+            mesh = xdmf.read_mesh(name="Grid")
         tdim = mesh.topology.dim
         gdim = mesh.geometry.dim
         mesh.topology.create_connectivity(tdim - 1, 0)
         mesh.topology.create_connectivity(tdim - 1, tdim)
+        with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
+            facet_marker = xdmf.read_meshtags(mesh, name="contact_facets")
 
         # Compute lame parameters
         E = 1e3
@@ -96,13 +113,13 @@ def unsplit_domain(threed=False):
         V = _fem.VectorFunctionSpace(mesh, ("CG", 1))
         ndofs.append(V.dofmap.index_map_bs * V.dofmap.index_map.size_global)
         f = _fem.Function(V)
-        c = 0.01
+        c = 0.01  # amplitude of solution
         f.interpolate(lambda x: fun(x, c, mu, lmbda, gdim))
         v = ufl.TestFunction(V)
         u = ufl.TrialFunction(V)
 
         # Boundary conditions
-        facets = _mesh.locate_entities_boundary(mesh, dim=tdim - 1, marker=lambda x: np.full(len(x[0]), True))
+        facets = facet_marker.find(2)
         bc = _fem.dirichletbc(np.zeros(tdim, dtype=PETSc.ScalarType),
                               _fem.locate_dofs_topological(V, entity_dim=tdim - 1, entities=facets), V=V)
 
@@ -159,29 +176,31 @@ def unsplit_domain(threed=False):
         uh.x.scatter_forward()
 
         # Error computation
-        V_err = _fem.VectorFunctionSpace(mesh, ("CG", 5))
+        V_err = _fem.VectorFunctionSpace(mesh, ("CG", 3))
         u_ex = _fem.Function(V_err)
         u_ex.interpolate(lambda x: u_fun(x, c, gdim))
 
         error_form = _fem.form(ufl.inner(u_ex - uh, u_ex - uh) * dx)
         error = _fem.assemble_scalar(error_form)
         errors.append(np.sqrt(mesh.comm.allreduce(error, op=MPI.SUM)))
+        res = 0.5 * res
+        num_segments = 2 * num_segments
 
-    errors = np.array(errors)
     print("L2-error: ", errors)
     print("Number of dofs: ", ndofs)
     print("Linear solver time: ", times)
     print("Krylov iterations: ", its)
-    print("Convergence rates: ", -(np.log(errors[0:- 1]) - np.log(errors[1:])) / (np.log(NN[0:-1]) - np.log(NN[1:])))
 
 
 def test_meshtie(threed=False, simplex=True, runs=5):
     if simplex:
         res = 0.8
     else:
-        res = 2.4
+        res = 1.2
+
+    # parameter for surface approximation
     num_segments = (2 * np.ceil(5.0 / 1.2).astype(np.int32), 2 * np.ceil(5.0 / (1.2 * 0.7)).astype(np.int32))
-    c = 0.01
+    c = 0.01  # amplitude of manufactured solution
     # nitsche parameters
     nitsche_parameters = {"gamma": 10, "theta": 1, "lift_bc": False}
     # Compute lame parameters
@@ -207,21 +226,25 @@ def test_meshtie(threed=False, simplex=True, runs=5):
     }
     errors = []
     times = []
+    other_times = []
     iterations = []
     dofs = []
     for i in range(1, runs + 1):
         if threed:
             fname = "beam3D"
             create_split_box_3D(fname, res=res, L=5.0, H=1.0, W=1.0, domain_1=[0, 1, 5, 4], domain_2=[4, 5, 2, 3], x0=[
-                0, 0.5], x1=[5.0, 0.5], curve_fun=horizontal_sin, num_segments=num_segments, hex=not simplex)
+                0, 0.5], x1=[5.0, 0.7], curve_fun=horizontal_sin, num_segments=num_segments, hex=not simplex)
             fun = fun_3D
             u_fun = u_fun_3D
+            el_string = "tets" if simplex else "hex"
         else:
             fname = "beam"
             create_split_box_2D(fname, res=res, L=5.0, H=1.0, domain_1=[0, 1, 5, 4], domain_2=[4, 5, 2, 3], x0=[
                 0, 0.5], x1=[5.0, 0.7], curve_fun=horizontal_sin, num_segments=num_segments, quads=not simplex)
             fun = fun_2D
             u_fun = u_fun_2D
+            el_string = "triangles" if simplex else "quads"
+
         with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
             mesh = xdmf.read_mesh(name="Grid")
         tdim = mesh.topology.dim
@@ -247,9 +270,9 @@ def test_meshtie(threed=False, simplex=True, runs=5):
             surfaces=surfaces, dirichlet=dirichlet, neumann=[], contact_pairs=contact,
             body_forces=body_forces, physical_parameters=physical_parameters,
             nitsche_parameters=nitsche_parameters,
-            quadrature_degree=3, petsc_options=petsc_options)
+            quadrature_degree=3, petsc_options=petsc_options, run=i)
 
-        V_err = _fem.VectorFunctionSpace(mesh, ("CG", 5))
+        V_err = _fem.VectorFunctionSpace(mesh, ("CG", 3))
         u_ex = _fem.Function(V_err)
         u_ex.interpolate(lambda x: u_fun(x, c, gdim))
 
@@ -262,13 +285,13 @@ def test_meshtie(threed=False, simplex=True, runs=5):
         iterations.append(its)
         times.append(solver_time)
         dofs.append(ndofs)
-    errors = np.array(errors)
+
+    list_timings(mesh.comm, [TimingType.wall])
     print("L2 errors; ", errors)
-    print("Convergence rates: ", (np.log(errors[0:runs - 1]) - np.log(errors[1:runs])) / (np.log(2)))
     print("Solver time: ", times)
     print("Krylov iterations: ", iterations)
     print("Number of dofs: ", dofs)
 
 
-# unsplit_domain(threed=False)
-test_meshtie(simplex=True, threed=True, runs=5)
+unsplit_domain(threed=False, runs=1)
+test_meshtie(simplex=False, threed=False runs=1)

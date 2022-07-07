@@ -6,15 +6,17 @@ import argparse
 import sys
 
 import numpy as np
+import ufl
 from dolfinx import log
 from dolfinx.common import TimingType, list_timings, timing
-from dolfinx.fem import Function, VectorFunctionSpace
+from dolfinx.fem import dirichletbc, Constant, Function, locate_dofs_topological, VectorFunctionSpace
 from dolfinx.graph import create_adjacencylist
 from dolfinx.io import XDMFFile
 from dolfinx.mesh import locate_entities_boundary, meshtags
 from mpi4py import MPI
+from petsc4py.PETSc import ScalarType
 
-from dolfinx_contact import update_geometry
+from dolfinx_contact.helpers import lame_parameters, epsilon, weak_dirichlet, sigma_func
 from dolfinx_contact.meshing import (convert_mesh,
                                      create_box_mesh_3D)
 from dolfinx_contact.meshtie import nitsche_meshtie
@@ -40,17 +42,9 @@ if __name__ == "__main__":
     _simplex.add_argument('--simplex', dest='simplex', action='store_true',
                           help="Use triangle/tet mesh", default=False)
     _strain = parser.add_mutually_exclusive_group(required=False)
-    _strain.add_argument('--strain', dest='plane_strain', action='store_true',
-                         help="Use plane strain formulation", default=False)
     parser.add_argument("--E", default=1e3, type=np.float64, dest="E",
                         help="Youngs modulus of material")
     parser.add_argument("--nu", default=0.1, type=np.float64, dest="nu", help="Poisson's ratio")
-    parser.add_argument("--disp", default=0.2, type=np.float64, dest="disp",
-                        help="Displacement BC in negative y direction")
-    parser.add_argument("--load_steps", default=1, type=np.int32, dest="nload_steps",
-                        help="Number of steps for gradual loading")
-    parser.add_argument("--res", default=0.1, type=np.float64, dest="res",
-                        help="Mesh resolution")
     parser.add_argument("--outfile", type=str, default=None, required=False,
                         help="File for appending results", dest="outfile")
     _lifting = parser.add_mutually_exclusive_group(required=False)
@@ -60,10 +54,6 @@ if __name__ == "__main__":
 
     # Parse input arguments or set to defualt values
     args = parser.parse_args()
-    # Current formulation uses bilateral contact
-    nitsche_parameters = {"gamma": args.gamma, "theta": args.theta, "lift_bc": args.lifting}
-    physical_parameters = {"E": args.E, "nu": args.nu, "strain": args.plane_strain}
-    nload_steps = args.nload_steps
     simplex = args.simplex
 
     # Load mesh and create identifier functions for the top (Displacement condition)
@@ -106,39 +96,62 @@ if __name__ == "__main__":
     values = np.hstack([top_values, bottom_values, surface_values, sbottom_values])
     sorted_facets = np.argsort(indices)
     facet_marker = meshtags(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
-    # traction (neumann) boundary condition on mesh boundary with tag 3
-    t = [0.0, 0.5, 0.0]
 
-    def neumann_func(x):
-        values = np.zeros((gdim, x.shape[1]))
-        for i in range(x.shape[1]):
-            values[:, i] = t[:gdim]
-        return values
-    neumann = [(neumann_bdy, neumann_func)]
-    dirichlet_vals = [dirichlet_bdy]
-
-    # body forces
-    f = [0.0, 0.5, 0.0]
+    # mark the whole domain
     cells = np.arange(mesh.topology.index_map(tdim).size_local
                       + mesh.topology.index_map(tdim).num_ghosts, dtype=np.int32)
     domain_marker = meshtags(mesh, tdim, cells, np.full(cells.shape, 1, dtype=np.int32))
 
-    def force_func(x):
-        values = np.zeros((gdim, x.shape[1]))
-        for i in range(x.shape[1]):
-            values[:, i] = f[:gdim]
-        return values
+    # Function, TestFunction, TrialFunction and measures
+    V = VectorFunctionSpace(mesh, ("CG", 1))
+    u = Function(V)
+    v = ufl.TestFunction(V)
+    w = ufl.TrialFunction(V)
+    dx = ufl.Measure("dx", domain=mesh, subdomain_data=domain_marker)
+    ds = ufl.Measure("ds", domain=mesh, subdomain_data=facet_marker)
+    h = ufl.CellDiameter(mesh)
+    n = ufl.FacetNormal(mesh)
 
-    body_forces = [(1, force_func)]
+    # Compute lame parameters
+    E = args.E
+    nu = args.nu
+    mu_func, lambda_func = lame_parameters(False)
+    mu = mu_func(E, nu)
+    lmbda = lambda_func(E, nu)
+    sigma = sigma_func(mu, lmbda)
 
-    with XDMFFile(mesh.comm, "test.xdmf", "w") as xdmf:
-        xdmf.write_mesh(mesh)
-        xdmf.write_meshtags(facet_marker)
+    # dictionary with problem parameters
+    gamma = args.gamma
+    theta = args.theta
+    problem_parameters = {"mu": mu, "lambda": lmbda, "gamma": E * gamma, "theta": theta}
+
+    J = ufl.inner(sigma(w), epsilon(v)) * dx
+
+    # traction (neumann) boundary condition on mesh boundary with tag 3
+    t = Constant(mesh, ScalarType((0.0, 0.5, 0.0)))
+    F = ufl.inner(t, v) * ds(neumann_bdy)
+
+    # Dirichlet bdry conditions
+    g = Constant(mesh, ScalarType((0.0, 0.0, 0.0)))
+    if args.lifting:
+        bdy_dofs = locate_dofs_topological(V, tdim - 1, facet_marker.find(dirichlet_bdy))
+        bcs = [dirichletbc(g, bdy_dofs, V)]
+    else:
+        bcs = []
+        J += - ufl.inner(sigma(w) * n, v) * ds(dirichlet_bdy)\
+            - theta * ufl.inner(sigma(v) * n, w) * \
+            ds(dirichlet_bdy) + E * gamma / h * ufl.inner(w, v) * ds(dirichlet_bdy)
+        F += - theta * ufl.inner(sigma(v) * n, g) * \
+            ds(dirichlet_bdy) + E * gamma / h * ufl.inner(g, v) * ds(dirichlet_bdy)
+
+    # body forces
+    f = Constant(mesh, ScalarType((0.0, 0.5, 0.0)))
+    F += ufl.inner(f, v) * dx
 
     # Solver options
     ksp_tol = 1e-10
 
-    # petsc_options = {"ksp_type": "preonly", "pc_type": "lu"}
+    # for debugging use petsc_options = {"ksp_type": "preonly", "pc_type": "lu"}
     petsc_options = {
         "matptap_via": "scalable",
         "ksp_type": "cg",
@@ -162,65 +175,15 @@ if __name__ == "__main__":
     offsets = np.array([0, 2], dtype=np.int32)
     surfaces = create_adjacencylist(data, offsets)
 
-    # Solve contact problem using Nitsche's method
-    load_increment = np.asarray(displacement, dtype=np.float64) / nload_steps
-
-    # Define function space for problem
-    V = VectorFunctionSpace(mesh, ("CG", 1))
-    u1 = None
-
-    # Data to be stored on the unperturb domain at the end of the simulation
-    u = Function(V)
-    u.x.array[:] = np.zeros(u.x.array[:].shape)
-    geometry = mesh.geometry.x[:].copy()
-
     log.set_log_level(log.LogLevel.OFF)
-    num_krylov_its = np.zeros(nload_steps, dtype=int)
-    solver_times = np.zeros(nload_steps, dtype=np.float64)
-
     solver_outfile = args.outfile if args.ksp else None
 
-    def dirichlet_func(d):
-        def fn(x):
-            values = np.zeros((gdim, x.shape[1]))
-            for i in range(x.shape[1]):
-                values[:, i] = d[:gdim]
-            return values
-        return fn
-    # Load geometry over multiple steps
-    for j in range(nload_steps):
-        displacement = load_increment
-        dirichlet = []
-        for i, disp in enumerate(displacement):
-            dirichlet.append((dirichlet_vals[i], dirichlet_func(disp)))
-
-        body_force_incr = []
-        for bf in body_forces:
-            increment = (bf[0], lambda x: (j + 1) * bf[1](x) / nload_steps)
-            body_force_incr.append(increment)
-
-        # Solve contact problem using Nitsche's method
-        u1, krylov_iterations, solver_time = nitsche_meshtie(
-            mesh=mesh, mesh_tags=[facet_marker], domain_marker=domain_marker,
-            surfaces=surfaces, dirichlet=dirichlet, neumann=neumann, contact_pairs=contact,
-            body_forces=body_force_incr, physical_parameters=physical_parameters,
-            nitsche_parameters=nitsche_parameters,
-            quadrature_degree=args.q_degree, petsc_options=petsc_options)
-        num_krylov_its[j] = krylov_iterations
-        solver_times[j] = solver_time
-        with XDMFFile(mesh.comm, f"results/u_unbiased_{j}.xdmf", "w") as xdmf:
-            xdmf.write_mesh(mesh)
-            u1.name = "u"
-            xdmf.write_function(u1)
-
-        # Perturb mesh with solution displacement
-        update_geometry(u1._cpp_object, mesh)
-
-        # Accumulate displacements
-        u.x.array[:] += u1.x.array[:]
+    # Solve contact problem using Nitsche's method
+    u, krylov_iterations, solver_time, _ = nitsche_meshtie(lhs=J, rhs=F, u=u, markers=[domain_marker, facet_marker], surface_data=(surfaces, contact),
+                                                           bcs=bcs, problem_parameters=problem_parameters,
+                                                           petsc_options=petsc_options)
 
     # Reset mesh to initial state and write accumulated solution
-    mesh.geometry.x[:] = geometry
     with XDMFFile(mesh.comm, "results/u_meshtie.xdmf", "w") as xdmf:
         xdmf.write_mesh(mesh)
         u.name = "u"
@@ -235,8 +198,8 @@ if __name__ == "__main__":
     print("-" * 25, file=outfile)
     print(f"num_dofs: {u.function_space.dofmap.index_map_bs*u.function_space.dofmap.index_map.size_global}"
           + f", {mesh.topology.cell_type}", file=outfile)
-    print(f"Krylov solver {timing('~Contact: Krylov Solver')[1]}", file=outfile)
-    print(f"Krylov iterations {num_krylov_its}, {sum(num_krylov_its)}", file=outfile)
+    print(f"Krylov solver {solver_time}", file=outfile)
+    print(f"Krylov iterations {krylov_iterations}", file=outfile)
     print("-" * 25, file=outfile)
 
     if args.outfile is not None:

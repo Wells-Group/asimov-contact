@@ -2,8 +2,10 @@
 #
 # SPDX-License-Identifier:    MIT
 
+from importlib.machinery import BYTECODE_SUFFIXES
 from typing import Callable, Tuple, Union
 
+import dolfinx.cpp.fem as _cppfem
 import dolfinx.common as _common
 import dolfinx.fem as _fem
 import dolfinx.log as _log
@@ -17,55 +19,42 @@ from petsc4py import PETSc as _PETSc
 
 import dolfinx_contact
 import dolfinx_contact.cpp
-from dolfinx_contact.helpers import (epsilon, lame_parameters,
-                                     rigid_motions_nullspace, sigma_func)
+from dolfinx_contact.helpers import (rigid_motions_nullspace_subdomains, sigma_func)
 
 kt = dolfinx_contact.cpp.Kernel
 
 
-def nitsche_meshtie(mesh: _mesh.Mesh, mesh_tags: list[MeshTags_int32],
-                    domain_marker: MeshTags_int32,
-                    surfaces: AdjacencyList_int32,
-                    dirichlet: list[Tuple[int, Callable[[np.ndarray], np.ndarray]]],
-                    neumann: list[Tuple[int, Callable[[np.ndarray], np.ndarray]]],
-                    contact_pairs: list[Tuple[int, int]],
-                    body_forces: list[Tuple[int, Callable[[np.ndarray], np.ndarray]]],
-                    physical_parameters: dict[str, Union[bool, np.float64, int]],
-                    nitsche_parameters: dict[str, np.float64],
+def nitsche_meshtie(lhs: ufl.Form, rhs: _fem.Function, u: _fem.Function, markers: list[MeshTags_int32],
+                    surface_data: Tuple[AdjacencyList_int32, list[Tuple[int, int]]],
+                    bcs: list[_fem.DirichletBCMetaClass],
+                    problem_parameters: dict[str, np.float64],
                     quadrature_degree: int = 5, form_compiler_params: dict = None, jit_params: dict = None,
-                    petsc_options: dict = None, initial_guess=None) -> Tuple[_fem.Function, int, int, float]:
+                    petsc_options: dict = None, timing_str: str = '') -> Tuple[_fem.Function, int, int, float]:
     """
-    Use custom kernel to compute the contact problem with two elastic bodies coming into contact.
+    Use custom kernel to compute elasticity problem if mesh consists of topologically disconnected parts
 
     Parameters
     ==========
-    mesh
-        The input mesh
-    mesh_tags
-        A list of meshtags. The first element must contain the mesh_tags for all puppet surfaces,
+    lhs the variational form (bilinear form) for the stiffness matrix
+    rhs the variational form  (linear form) for the right hand side
+    u The function to be solved for. Also serves as initial value.
+    markers
+        A list of meshtags. The first element must mark all separate objects in order to create the correct nullspace.
+        The second element must contain the mesh_tags for all puppet surfaces,
         Dirichlet-surfaces and Neumann-surfaces
         All further elements may contain candidate_surfaces
-    domain_marker
-        marker for subdomains where a body force is applied
-    surfaces
-        Adjacency list. Links of i are meshtag values for contact surfaces in ith mesh_tag in mesh_tags
-    dirichlet
-        List of Dirichlet boundary conditions as pairs of (meshtag value, function), where function
-        is a function to be interpolated into the dolfinx function space
-    neumann
-        Same as dirichlet for Neumann boundary conditions
-    contact_pairs:
-        list of pairs (i, j) marking the ith surface as a puppet surface and the jth surface
-        as the corresponding candidate surface
-    physical_parameters
-        Optional dictionary with information about the linear elasticity problem.
-        Valid (key, value) tuples are: ('E': float), ('nu', float), ('strain', bool)
-    nitsche_parameters
-        Optional dictionary with information about the Nitsche configuration.
-        Valid (keu, value) tuples are: ('gamma', float), ('theta', float) where theta can be -1, 0 or 1 for
-        skew-symmetric, penalty like or symmetric enforcement of Nitsche conditions
-    displacement
-        The displacement enforced on Dirichlet boundary
+    contact_data = (surfaces, surface_pairs), where
+        surfaces: Adjacency list. Links of i are meshtag values for contact
+                  surfaces in ith mesh_tag in mesh_tags
+        surface_pairs: list of pairs (i, j) marking the ith surface as a puppet
+                  surface and the jth surface as the corresponding candidate
+                  surface
+    problem_parameters
+        Dictionary with lame parameters and Nitsche parameters.
+        Valid (key, value) tuples are: ('gamma': float), ('theta', float), ('mu', float),
+        (lambda, float),
+        where theta can be -1, 0 or 1 for skew-symmetric, penalty like or symmetric
+        enforcement of Nitsche conditions
     quadrature_degree
         The quadrature degree to use for the custom contact kernels
     form_compiler_params
@@ -82,120 +71,54 @@ def nitsche_meshtie(mesh: _mesh.Mesh, mesh_tags: list[MeshTags_int32],
         PETSc. For available choices for the 'petsc_options' kwarg,
         see the `PETSc-documentation
         <https://petsc4py.readthedocs.io/en/stable/manual/ksp/>`
-    initial_guess
-        A functon containing an intial guess to use for the Newton-solver
     """
+
     form_compiler_params = {} if form_compiler_params is None else form_compiler_params
     jit_params = {} if jit_params is None else jit_params
     petsc_options = {} if petsc_options is None else petsc_options
 
-    strain = physical_parameters.get("strain")
-    if strain is None:
-        raise RuntimeError("Need to supply if problem is plane strain (True) or plane stress (False)")
+    if problem_parameters.get("mu") is None:
+        raise RuntimeError("Need to supply lame paramters")
     else:
-        plane_strain = bool(strain)
-    _E = physical_parameters.get("E")
-    if _E is not None:
-        E = np.float64(_E)
-    else:
-        raise RuntimeError("Need to supply Youngs modulus")
+        mu = mu = problem_parameters.get("mu")
 
-    if physical_parameters.get("nu") is None:
-        raise RuntimeError("Need to supply Poisson's ratio")
+    if problem_parameters.get("lambda") is None:
+        raise RuntimeError("Need to supply lame paramters")
     else:
-        nu = physical_parameters.get("nu")
-
-    # Compute lame parameters
-    mu_func, lambda_func = lame_parameters(plane_strain)
-    mu = mu_func(E, nu)
-    lmbda = lambda_func(E, nu)
+        lmbda = problem_parameters.get("lambda")
+    if problem_parameters.get("theta") is None:
+        raise RuntimeError("Need to supply theta for Nitsche's method")
+    else:
+        theta = problem_parameters["theta"]
+    if problem_parameters.get("gamma") is None:
+        raise RuntimeError("Need to supply gamma for Nitsche's method")
+    else:
+        gamma = problem_parameters.get("gamma")
     sigma = sigma_func(mu, lmbda)
 
-    # Nitche parameters and variables
-    theta = nitsche_parameters.get("theta")
-    if theta is None:
-        raise RuntimeError("Need to supply theta for Nitsche imposition of boundary conditions")
-    _gamma = nitsche_parameters.get("gamma")
-    if _gamma is None:
-        raise RuntimeError("Need to supply Coercivity/Stabilization parameter for Nitsche condition")
-    else:
-        gamma: np.float64 = _gamma * E
-    lifting = nitsche_parameters.get("lift_bc", False)
+    # Contact data
+    surface_pairs = surface_data[1]
+    surfaces = surface_data[0]
 
-    # Functions space and FEM functions
-    V = _fem.VectorFunctionSpace(mesh, ("CG", 1))
-    u = _fem.Function(V)
-    v = ufl.TestFunction(V)
-    du = ufl.TrialFunction(V)
-
+    # Mesh, function space and FEM functions
+    V = u.function_space
+    mesh = V.mesh
+    w = ufl.TrialFunction(V)     # Trial function
     h = ufl.CellDiameter(mesh)
-    n = ufl.FacetNormal(mesh)
-
-    # Set initial guess
-    if initial_guess is None:
-        u.x.array[:] = 0
-    else:
-        u.x.array[:] = initial_guess.x.array[:]
-
-    # Integration measure and ufl part of linear/bilinear form
-    # metadata = {"quadrature_degree": quadrature_degree}
-    dx = ufl.Measure("dx", domain=mesh, subdomain_data=domain_marker)
-    ds = ufl.Measure("ds", domain=mesh,  # metadata=metadata,
-                     subdomain_data=mesh_tags[0])
-
-    J = ufl.inner(sigma(du), epsilon(v)) * dx
-    F = 0 * dx
-    # Dirichle boundary conditions
-    bcs = []
-    if lifting:
-        raise Warning("Strong Dirichlet boundary conditions may cause unintended \
-                       side effects at degrees of freedom shared between contact \
-                       surfaces and Dirichlet boundary and/or prevent convergence \
-                       of iterative (non-)linear solvers")
-        tdim = mesh.topology.dim
-        for bc in dirichlet:
-            facets = mesh_tags[0].find(bc[0])
-            cells = _mesh.compute_incident_entities(mesh, facets, tdim - 1, tdim)
-            u_bc = _fem.Function(V)
-            u_bc.interpolate(bc[1], cells)
-            u_bc.x.scatter_forward()
-            bcs.append(_fem.dirichletbc(u_bc, _fem.locate_dofs_topological(V, tdim - 1, facets)))
-    else:
-        for bc in dirichlet:
-            f = _fem.Function(V)
-            f.interpolate(bc[1])
-            F += - ufl.inner(sigma(u) * n, v) * ds(bc[0])\
-                - theta * ufl.inner(sigma(v) * n, f) * \
-                ds(bc[0]) + gamma / h * ufl.inner(f, v) * ds(bc[0])
-            J += - ufl.inner(sigma(du) * n, v) * ds(bc[0])\
-                - theta * ufl.inner(sigma(v) * n, du) * \
-                ds(bc[0]) + gamma / h * ufl.inner(du, v) * ds(bc[0])
-
-    # Neumann boundary conditions
-    for bc in neumann:
-        g = _fem.Function(V)
-        g.interpolate(bc[1])
-        F += ufl.inner(g, v) * ds(bc[0])
-
-    # body forces
-    for bf in body_forces:
-        f = _fem.Function(V)
-        f.interpolate(bf[1])
-        F += ufl.inner(f, v) * dx(bf[0])
 
     # Custom assembly
     # create contact class
-    with _common.Timer("~Contact: Init"):
-        contact = dolfinx_contact.cpp.Contact(mesh_tags, surfaces, contact_pairs,
+    with _common.Timer("~Contact " + timing_str + ": Init"):
+        contact = dolfinx_contact.cpp.Contact(markers[1:], surfaces, surface_pairs,
                                               V._cpp_object, quadrature_degree=quadrature_degree)
-    with _common.Timer("~Contact: Distance maps"):
-        for i in range(len(contact_pairs)):
+    with _common.Timer("~Contact " + timing_str + ": Distance maps"):
+        for i in range(len(surface_pairs)):
             contact.create_distance_map(i)
     # pack constants
     consts = np.array([gamma, theta])
 
     # Pack material parameters mu and lambda on each contact surface
-    with _common.Timer("~Contact: Interpolate coeffs (mu, lmbda)"):
+    with _common.Timer("~Contact " + timing_str + ": Interpolate coeffs (mu, lmbda)"):
         V2 = _fem.FunctionSpace(mesh, ("DG", 0))
         lmbda2 = _fem.Function(V2)
         lmbda2.interpolate(lambda x: np.full((1, x.shape[1]), lmbda))
@@ -203,79 +126,83 @@ def nitsche_meshtie(mesh: _mesh.Mesh, mesh_tags: list[MeshTags_int32],
         mu2.interpolate(lambda x: np.full((1, x.shape[1]), mu))
 
     entities = []
-    with _common.Timer("~Contact: Compute active entities"):
-        for pair in contact_pairs:
+    with _common.Timer("~Contact " + timing_str + ": Compute active entities"):
+        for pair in surface_pairs:
             entities.append(contact.active_entities(pair[0]))
 
     material = []
-    with _common.Timer("~Contact: Pack coeffs (mu, lmbda"):
-        for i in range(len(contact_pairs)):
+    with _common.Timer("~Contact " + timing_str + ": Pack coeffs (mu, lmbda"):
+        for i in range(len(surface_pairs)):
             material.append(dolfinx_cuas.pack_coefficients([mu2, lmbda2], entities[i]))
 
     # Pack celldiameter on each surface
     h_packed = []
-    with _common.Timer("~Contact: Compute and pack celldiameter"):
-        surface_cells = np.unique(np.hstack([entities[i][:, 0] for i in range(len(contact_pairs))]))
+    with _common.Timer("~Contact " + timing_str + ": Compute and pack celldiameter"):
+        surface_cells = np.unique(np.hstack([entities[i][:, 0] for i in range(len(surface_pairs))]))
         h_int = _fem.Function(V2)
         expr = _fem.Expression(h, V2.element.interpolation_points)
         h_int.interpolate(expr, surface_cells)
-        for i in range(len(contact_pairs)):
+        for i in range(len(surface_pairs)):
             h_packed.append(dolfinx_cuas.pack_coefficients([h_int], entities[i]))
 
     # Pack gap, normals and test functions on each surface
     gaps = []
     test_fns = []
     grad_test_fns = []
-    with _common.Timer("~Contact: Pack gap, normals, testfunction"):
-        for i in range(len(contact_pairs)):
+    with _common.Timer("~Contact " + timing_str + ": Pack gap, normals, testfunction"):
+        for i in range(len(surface_pairs)):
             gaps.append(contact.pack_gap(i))
             test_fns.append(contact.pack_test_functions(i, gaps[i]))
             grad_test_fns.append(contact.pack_grad_test_functions(i, gaps[i], np.zeros(gaps[i].shape)))
 
     # Concatenate all coeffs
     coeffs_const = []
-    for i in range(len(contact_pairs)):
+    for i in range(len(surface_pairs)):
         coeffs_const.append(np.hstack([material[i], h_packed[i], test_fns[i], grad_test_fns[i]]))
 
     # Generate Jacobian data structures
-    J_custom = _fem.form(J, form_compiler_params=form_compiler_params, jit_params=jit_params)
-    with _common.Timer("~Contact: Generate Jacobian kernel"):
+    J_custom = _fem.form(lhs, form_compiler_params=form_compiler_params, jit_params=jit_params)
+    with _common.Timer("~Contact " + timing_str + ": Generate Jacobian kernel"):
         kernel_jac = contact.generate_kernel(kt.MeshTieJac)
-    with _common.Timer("~Contact: Create matrix"):
+    with _common.Timer("~Contact " + timing_str + ": Create matrix"):
         A = contact.create_matrix(J_custom)
 
     # Generate residual data structures
-    F_custom = _fem.form(F, form_compiler_params=form_compiler_params, jit_params=jit_params)
-    with _common.Timer("~Contact: Generate residual kernel"):
+    F_custom = _fem.form(rhs, form_compiler_params=form_compiler_params, jit_params=jit_params)
+    with _common.Timer("~Contact " + timing_str + ": Generate residual kernel"):
         kernel_rhs = contact.generate_kernel(kt.MeshTieRhs)
-    with _common.Timer("~Contact: Create vector"):
+    with _common.Timer("~Contact " + timing_str + ": Create vector"):
         b = _fem.petsc.create_vector(F_custom)
 
     # Compute u dependent coeficcients
     u_candidate = []
     grad_u_candidate = []
     coeffs = []
-    with _common.Timer("~~Contact: Pack u contact"):
-        for i in range(len(contact_pairs)):
+    with _common.Timer("~~Contact " + timing_str + ": Pack u contact"):
+        for i in range(len(surface_pairs)):
             u_candidate.append(contact.pack_u_contact(i, u._cpp_object, gaps[i]))
             grad_u_candidate.append(contact.pack_grad_u_contact(i, u._cpp_object, gaps[i], np.zeros(gaps[i].shape)))
     u_puppet = []
-    with _common.Timer("~~Contact: Pack u"):
-        for i in range(len(contact_pairs)):
+    with _common.Timer("~~Contact " + timing_str + ": Pack u"):
+        for i in range(len(surface_pairs)):
             u_puppet.append(dolfinx_cuas.pack_coefficients([u], entities[i]))
-    for i in range(len(contact_pairs)):
+    for i in range(len(surface_pairs)):
         coeffs.append(np.hstack([coeffs_const[i], u_puppet[i], u_candidate[i], grad_u_candidate[i]]))
 
     # Assemble residual vector
     b.zeroEntries()
-    with _common.Timer("~~Contact: Contact contributions (in assemble vector)"):
-        for i in range(len(contact_pairs)):
+    with _common.Timer("~~Contact " + timing_str + ": Contact contributions (in assemble vector)"):
+        for i in range(len(surface_pairs)):
             contact.assemble_vector(b, i, kernel_rhs, coeffs[i], consts)
-    with _common.Timer("~~Contact: Standard contributions (in assemble vector)"):
-        _fem.petsc.assemble_vector(b, F_custom)
+    with _common.Timer("~~Contact " + timing_str + ": Pack coefficients ufl"):
+        coeffs_ufl = _cppfem.pack_coefficients(F_custom)
+    with _common.Timer("~~Contact " + timing_str + ": Pack constants ufl"):
+        consts_ufl = _cppfem.pack_constants(F_custom)
+    with _common.Timer("~~Contact " + timing_str + ": Standard contributions (in assemble vector)"):
+        _fem.petsc.assemble_vector(b, F_custom, constants=consts_ufl, coeffs=coeffs_ufl)
 
     # Apply boundary condition
-    if lifting:
+    if len(bcs) > 0:
         x = u.vector
         _fem.petsc.apply_lifting(b, [J_custom], bcs=[bcs], x0=[x], scale=-1.0)
         b.ghostUpdate(addv=_PETSc.InsertMode.ADD, mode=_PETSc.ScatterMode.REVERSE)
@@ -283,15 +210,19 @@ def nitsche_meshtie(mesh: _mesh.Mesh, mesh_tags: list[MeshTags_int32],
 
     #  Compute Jacobi Matrix
     A.zeroEntries()
-    with _common.Timer("~~Contact: Contact contributions (in assemble matrix)"):
-        for i in range(len(contact_pairs)):
+    with _common.Timer("~~Contact " + timing_str + ": Contact contributions (in assemble matrix)"):
+        for i in range(len(surface_pairs)):
             contact.assemble_matrix(A, [], i, kernel_jac, coeffs[i], consts)
-    with _common.Timer("~~Contact: Standard contributions (in assemble matrix)"):
-        _fem.petsc.assemble_matrix(A, J_custom, bcs=bcs)
+    with _common.Timer("~~Contact " + timing_str + ": Pack coefficients ufl"):
+        coeffs_ufl = _cppfem.pack_coefficients(J_custom)
+    with _common.Timer("~~Contact " + timing_str + ": Pack constants ufl"):
+        consts_ufl = _cppfem.pack_constants(J_custom)
+    with _common.Timer("~~Contact " + timing_str + ": Standard contributions (in assemble matrix)"):
+        _fem.petsc.assemble_matrix(A, J_custom, constants=consts_ufl, coeffs=coeffs_ufl, bcs=bcs)
     A.assemble()
 
     # Set rigid motion nullspace
-    null_space = rigid_motions_nullspace(V)
+    null_space = rigid_motions_nullspace_subdomains(V, markers[0], np.unique(markers[0].values))
     A.setNearNullSpace(null_space)
     # Create PETSc Krylov solver and turn convergence monitoring on
     opts = _PETSc.Options()
@@ -310,7 +241,7 @@ def nitsche_meshtie(mesh: _mesh.Mesh, mesh_tags: list[MeshTags_int32],
     # Set a monitor, solve linear system, and display the solver
     # configuration
     solver.setMonitor(lambda _, its, rnorm: print(f"Iteration: {its}, rel. residual: {rnorm}"))
-    timing_str = f"~Contact: Krylov Solver"
+    timing_str = "~Contact " + timing_str + ": Krylov Solver"
     with _common.Timer(timing_str):
         solver.solve(b, uh.vector)
 

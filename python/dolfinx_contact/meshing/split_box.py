@@ -34,7 +34,7 @@ def horizontal_sin(t, x0, x1):
     return points
 
 
-def get_surface_points(domain, points, line_pts):
+def get_surface_points(domain, points, line_pts, split=1):
     pts = [points[node] for node in domain]
     i0 = np.argwhere(np.array(domain, dtype=np.int32) == 4)[0, 0]
     i1 = np.argwhere(np.array(domain, dtype=np.int32) == 5)[0, 0]
@@ -59,6 +59,7 @@ def get_surface_points(domain, points, line_pts):
         pts = np.vstack([line_pts, pts[1:-1]])
     else:
         raise RuntimeError("Invalid domains")
+
     return pts
 
 
@@ -106,6 +107,167 @@ def create_surface_mesh(domain, points, line_pts, model, tags):
     model.addPhysicalGroup(1, [lines[0]] + lines[len(line_pts):], tag=tags[1])
     model.addPhysicalGroup(1, lines[1:len(line_pts)], tag=tags[2])
     model.mesh.generate(2)
+    gmsh.model.mesh.optimize("Netgen")
+
+
+def create_unsplit_box_2d(H=1.0, L=5.0, res=0.1, x0=[0.0, 0.5], x1=[5.0, 0.7], quads=False, filename="box_2D", num_segments=10, curve_fun=horizontal_sin):
+    gmsh.initialize()
+    gmsh.option.setNumber("General.Terminal", 0)
+    if quads:
+        gmsh.option.setNumber("Mesh.RecombinationAlgorithm", 8)
+        gmsh.option.setNumber("Mesh.RecombineAll", 2)
+        gmsh.option.setNumber("Mesh.SubdivisionAlgorithm", 1)
+    if MPI.COMM_WORLD.rank == 0:
+        gmsh.option.setNumber("Mesh.CharacteristicLengthFactor", res)
+        model = gmsh.model()
+        model.add("box")
+        model.setCurrent("box")
+        t = np.linspace(0, 1, num_segments + 1)
+        line_pts = curve_fun(t, x0, x1)
+        pts = get_surface_points([2, 3, 4, 5], [[0.0, 0.0], [L, 0.0], [L, H], [0.0, H], x0, x1], line_pts)
+        ps1 = []
+        for point in pts:
+            ps1.append(gmsh.model.occ.addPoint(point[0], point[1], 0))
+        p1 = model.occ.addPoint(0.0, 0.0, 0.0)
+        p2 = model.occ.addPoint(L, 0.0, 0.0)
+        p3 = ps1[-3]
+        p4 = ps1[0]
+        ps2 = [p3, p2, p1, p4]
+
+        lines1 = [model.occ.addLine(ps1[i - 1], ps1[i]) for i in range(len(ps1))]
+        lines2 = [model.occ.addLine(ps2[i - 1], ps2[i]) for i in range(1, len(ps2))]
+        curve1 = model.occ.addCurveLoop(lines1)
+        curve2 = model.occ.addCurveLoop(lines1[1:-2] + lines2)
+        surface1 = model.occ.addPlaneSurface([curve1])
+        surface2 = model.occ.addPlaneSurface([curve2])
+        model.occ.synchronize()
+        model.addPhysicalGroup(2, [surface1, surface2], tag=1)
+        model.addPhysicalGroup(1, [lines1[0]] + lines1[-2:] + lines2, tag=2)
+        model.mesh.generate(2)
+        model.mesh.optimize("Netgen")
+
+        if quads:
+            gmsh_cell_id = MPI.COMM_WORLD.bcast(model.mesh.getElementType("quadrangle", 1), root=0)
+        else:
+            gmsh_cell_id = MPI.COMM_WORLD.bcast(model.mesh.getElementType("triangle", 1), root=0)
+
+        gmsh_facet_id = model.mesh.getElementType("line", 1)
+        x, cells, cell_data, marked_facets, facet_values = retrieve_mesh_data(
+            model, "box", gmsh_cell_id, gmsh_facet_id)
+    else:
+        gmsh_cell_id = MPI.COMM_WORLD.bcast(None, root=0)
+        num_nodes = MPI.COMM_WORLD.bcast(None, root=0)
+        cells, x = np.empty([0, num_nodes]), np.empty([0, 3])
+        marked_facets, facet_values = np.empty((0, 3), dtype=np.int64), np.empty((0,), dtype=np.int32)
+
+    if quads:
+        gmsh_quad4 = cell_perm_gmsh(CellType.quadrilateral, 4)
+        cells = cells[:, gmsh_quad4]
+    create_dolfinx_mesh(filename, x[:, :2], cells, cell_data, gmsh_cell_id, marked_facets, facet_values, 2)
+
+
+def create_unsplit_box_3d(L=5.0, H=1.0, W=1.0, res=0.1, fname="box_3D", hex=False, curve_fun=horizontal_sin, num_segments=10, x0=[0.0, 0.5], x1=[5.0, 0.7]):
+    gmsh.initialize()
+    gmsh.option.setNumber("General.Terminal", 0)
+    if hex:
+        gmsh.option.setNumber("Mesh.RecombinationAlgorithm", 8)
+        gmsh.option.setNumber("Mesh.RecombineAll", 2)
+        gmsh.option.setNumber("Mesh.SubdivisionAlgorithm", 1)
+    if MPI.COMM_WORLD.rank == 0:
+        gmsh.option.setNumber("Mesh.CharacteristicLengthFactor", res)
+        model = gmsh.model()
+        model.add("box")
+        model.setCurrent("box")
+
+        t = np.linspace(0, 1, num_segments + 1)
+        line_pts = curve_fun(t, x0, x1)
+        pts = get_surface_points([2, 3, 4, 5], [[0.0, 0.0], [L, 0.0], [L, H], [0.0, H], x0, x1], line_pts)
+        ps1 = []
+        ps3 = []
+        for point in pts:
+            ps1.append(gmsh.model.occ.addPoint(point[0], point[1], 0))
+            ps3.append(gmsh.model.occ.addPoint(point[0], point[1], W))
+        p1 = model.occ.addPoint(0.0, 0.0, 0.0)
+        p2 = model.occ.addPoint(L, 0.0, 0.0)
+        p3 = ps1[-3]
+        p4 = ps1[0]
+        ps2 = [p3, p2, p1, p4]
+        p1 = model.occ.addPoint(0.0, 0.0, W)
+        p2 = model.occ.addPoint(L, 0.0, W)
+        p3 = ps3[-3]
+        p4 = ps3[0]
+        ps4 = [p3, p2, p1, p4]
+
+        lines1 = [model.occ.addLine(ps1[i - 1], ps1[i]) for i in range(len(ps1))]
+        lines2 = [model.occ.addLine(ps2[i - 1], ps2[i]) for i in range(1, len(ps2))]
+        curve1 = model.occ.addCurveLoop(lines1)
+        curve2 = model.occ.addCurveLoop(lines1[1:-2] + lines2)
+        surface1 = model.occ.addPlaneSurface([curve1])
+        surface2 = model.occ.addPlaneSurface([curve2])
+        if not hex:
+            lines3 = [model.occ.addLine(ps3[i - 1], ps3[i]) for i in range(len(ps3))]
+            lines4 = [model.occ.addLine(ps4[i - 1], ps4[i]) for i in range(1, len(ps4))]
+            curve3 = model.occ.addCurveLoop(lines3)
+            curve4 = model.occ.addCurveLoop(lines3[1:-2] + lines4)
+            surface3 = model.occ.addPlaneSurface([curve3])
+            surface4 = model.occ.addPlaneSurface([curve4])
+            lines5 = [model.occ.addLine(ps1[i], ps3[i]) for i in range(len(ps1))]
+            curves1 = []
+            for i in range(len(lines1)):
+                curves1.append(model.occ.addCurveLoop([lines1[i], lines5[i], -lines3[i], -lines5[i - 1]]))
+
+            curves2 = []
+            lines6 = [lines5[-3]]
+            lines6.append(model.occ.addLine(ps2[1], ps4[1]))
+            lines6.append(model.occ.addLine(ps2[2], ps4[2]))
+            lines6.append(lines5[0])
+            for i in range(len(lines2)):
+                curves2.append(model.occ.addCurveLoop([lines2[i], lines6[i + 1], -lines4[i], -lines6[i]]))
+            surfaces1 = [model.occ.addPlaneSurface([curve]) for curve in curves1]
+            surfaces2 = [model.occ.addPlaneSurface([curve]) for curve in curves2]
+            sloop1 = model.occ.addSurfaceLoop([surface1] + surfaces1 + [surface3])
+            sloop2 = model.occ.addSurfaceLoop([surface2] + surfaces1[1:-2] + surfaces2 + [surface4])
+            vol1 = model.occ.addVolume([sloop1])
+            vol2 = model.occ.addVolume([sloop2])
+            model.occ.synchronize()
+            out_vol_tags, _ = model.occ.fragment([(3, vol1)], [(3, vol2)])
+            model.occ.synchronize()
+            p_v = [v_tag[1] for v_tag in out_vol_tags]
+            model.addPhysicalGroup(3, p_v, tag=1)
+            model.addPhysicalGroup(2, [surface1, surface2, surface3, surface4,
+                                   surfaces1[0], surfaces1[-1]] + surfaces2, tag=2)
+            model.addPhysicalGroup(2, surfaces1[1:-2], tag=3)
+        else:
+            square = model.occ.add_rectangle(0, 0, 0, L, H)
+            model.occ.extrude([(2, square)], 0, 0, W, numElements=[np.ceil(1. / res)], recombine=True)
+            model.occ.synchronize()
+            volumes = model.getEntities(3)
+            model.occ.synchronize()
+            model.addPhysicalGroup(volumes[0][0], [volumes[0][1]], tag=1)
+            bndry = model.getBoundary([(3, volumes[0][1])], oriented=False)
+            model.addPhysicalGroup(2, [b[1] for b in bndry], tag=2)
+        model.mesh.generate(3)
+
+        if hex:
+            gmsh_cell_id = MPI.COMM_WORLD.bcast(model.mesh.getElementType("hexahedron", 1), root=0)
+            gmsh_facet_id = MPI.COMM_WORLD.bcast(model.mesh.getElementType("quadrangle", 1), root=0)
+        else:
+            gmsh_cell_id = MPI.COMM_WORLD.bcast(model.mesh.getElementType("tetrahedron", 1), root=0)
+            gmsh_facet_id = MPI.COMM_WORLD.bcast(model.mesh.getElementType("triangle", 1), root=0)
+        x, cells, cell_data, marked_facets, facet_values = retrieve_mesh_data(
+            model, "box", gmsh_cell_id, gmsh_facet_id)
+    else:
+        gmsh_cell_id = MPI.COMM_WORLD.bcast(None, root=0)
+        num_nodes = MPI.COMM_WORLD.bcast(None, root=0)
+        cells, x = np.empty([0, num_nodes]), np.empty([0, 3])
+        marked_facets, facet_values = np.empty((0, 3), dtype=np.int64), np.empty((0,), dtype=np.int32)
+
+    if hex:
+        gmsh_hex8 = cell_perm_gmsh(CellType.hexahedron, 8)
+        cells = cells[:, gmsh_hex8]
+        gmsh_quad4 = cell_perm_gmsh(CellType.quadrilateral, 4)
+        marked_facets = marked_facets[:, gmsh_quad4]
+    create_dolfinx_mesh(fname, x, cells, cell_data, gmsh_cell_id, marked_facets, facet_values, 3)
 
 
 def create_tet_mesh(domain, points, line_pts, model, tags, z):
@@ -139,6 +301,7 @@ def create_tet_mesh(domain, points, line_pts, model, tags, z):
     model.addPhysicalGroup(2, [surface1, surface2, surfaces[0], surfaces[-2], surfaces[-1]], tag=tags[1])
     model.addPhysicalGroup(3, [volume], tag=tags[0])
     model.mesh.generate(3)
+    gmsh.model.mesh.optimize("Netgen")
 
 
 def create_hex_mesh(domain, points, line_pts, model, tags, z, res):
@@ -151,7 +314,7 @@ def create_hex_mesh(domain, points, line_pts, model, tags, z, res):
     curve = gmsh.model.occ.addCurveLoop(lines)
     surface = gmsh.model.occ.addPlaneSurface([curve])
 
-    model.occ.extrude([(2, surface)], 0, 0, z, numElements=[np.ceil(z / res)], recombine=True)
+    model.occ.extrude([(2, surface)], 0, 0, z, numElements=[np.ceil(5 * z / res)], recombine=True)
     model.occ.synchronize()
     volumes = model.getEntities(3)
     surfaces = model.getEntities(2)
@@ -165,6 +328,7 @@ def create_hex_mesh(domain, points, line_pts, model, tags, z, res):
     gmsh.option.setNumber("Mesh.RecombineAll", 2)
     gmsh.option.setNumber("Mesh.SubdivisionAlgorithm", 1)
     model.mesh.generate(3)
+    gmsh.model.mesh.optimize("Netgen")
 
 
 def create_split_box_2D(filename: str, res=0.8, L=5.0, H=1.0, domain_1=[0, 4, 5, 3],
@@ -172,6 +336,7 @@ def create_split_box_2D(filename: str, res=0.8, L=5.0, H=1.0, domain_1=[0, 4, 5,
                         num_segments=(1, 2), quads=False):
     points = [[0.0, 0.0], [L, 0.0], [L, H], [0.0, H], x0, x1]
     gmsh.initialize()
+    gmsh.option.setNumber("General.Terminal", 0)
     if quads:
         gmsh.option.setNumber("Mesh.RecombinationAlgorithm", 8)
         gmsh.option.setNumber("Mesh.RecombineAll", 2)
@@ -225,7 +390,7 @@ def create_split_box_2D(filename: str, res=0.8, L=5.0, H=1.0, domain_1=[0, 4, 5,
     if quads:
         gmsh_quad4 = cell_perm_gmsh(CellType.quadrilateral, 4)
         cells = cells[:, gmsh_quad4]
-    create_dolfinx_mesh(filename, x, cells, cell_data, gmsh_cell_id, marked_facets, facet_values, 2)
+    create_dolfinx_mesh(filename, x[:, :2], cells, cell_data, gmsh_cell_id, marked_facets, facet_values, 2)
 
 
 def create_split_box_3D(filename: str, res=0.8, L=5.0, H=1.0, W=1.0, domain_1=[0, 4, 5, 3],
@@ -233,6 +398,7 @@ def create_split_box_3D(filename: str, res=0.8, L=5.0, H=1.0, W=1.0, domain_1=[0
                         num_segments=(1, 2), hex=False):
     points = [[0.0, 0.0], [L, 0.0], [L, H], [0.0, H], x0, x1]
     gmsh.initialize()
+    gmsh.option.setNumber("General.Terminal", 0)
     if MPI.COMM_WORLD.rank == 0:
         gmsh.option.setNumber("Mesh.CharacteristicLengthFactor", res)
         model = gmsh.model()
@@ -287,3 +453,6 @@ def create_split_box_3D(filename: str, res=0.8, L=5.0, H=1.0, W=1.0, domain_1=[0
         gmsh_quad4 = cell_perm_gmsh(CellType.quadrilateral, 4)
         marked_facets = marked_facets[:, gmsh_quad4]
     create_dolfinx_mesh(filename, x, cells, cell_data, gmsh_cell_id, marked_facets, facet_values, 3)
+
+
+create_unsplit_box_3d()

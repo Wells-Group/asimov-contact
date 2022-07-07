@@ -232,8 +232,8 @@ def create_box_mesh_3D(filename: str, simplex: bool = True, order: int = 1,
         else:
             square1 = model.occ.add_rectangle(0, 0, 0, L, H)
             square2 = model.occ.add_rectangle(0, 0, disp, L, H)
-            model.occ.extrude([(2, square1)], 0, 0, W, numElements=[10], recombine=True)
-            model.occ.extrude([(2, square2)], 0, 0, W, numElements=[5], recombine=True)
+            model.occ.extrude([(2, square1)], 0, 0, W, numElements=[20], recombine=True)
+            model.occ.extrude([(2, square2)], 0, 0, W, numElements=[15], recombine=True)
             model.occ.synchronize()
         volumes = model.getEntities(3)
 
