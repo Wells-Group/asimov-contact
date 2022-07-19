@@ -132,6 +132,8 @@ def nitsche_ufl(mesh: dmesh.Mesh, mesh_data: Tuple[_cpp.mesh.MeshTags_int32, int
     J += 1 / gamma_scaled * 0.5 * (1 - ufl.sign(q)) * (sigma_n(du) - gamma_scaled * ufl.dot(du, n_2)) * \
         (theta * sigma_n(v) - gamma_scaled * ufl.dot(v, n_2)) * ds(bottom_value)
 
+    assert(mesh.geometry.dim == mesh.topology.dim)
+
     # Nitsche for Dirichlet, another theta-scheme.
     # https://doi.org/10.1016/j.cma.2018.05.024
     if nitsche_bc:

@@ -57,36 +57,32 @@ if __name__ == "__main__":
 
     # Load mesh and create identifier functions for the top (Displacement condition)
     # and the bottom (contact condition)
+    outdir = "meshes"
     if threed:
-        fname = "sphere"
+        fname = f"{outdir}/sphere"
         create_sphere_plane_mesh(filename=f"{fname}.msh")
-        convert_mesh(fname, fname, "tetra")
-        convert_mesh(f"{fname}", f"{fname}_facets", "triangle")
+        convert_mesh(fname, fname, gdim=3)
         with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
-            mesh = xdmf.read_mesh(name="Grid")
-        tdim = mesh.topology.dim
-        mesh.topology.create_connectivity(tdim - 1, 0)
-        mesh.topology.create_connectivity(tdim - 1, tdim)
-        with XDMFFile(MPI.COMM_WORLD, f"{fname}_facets.xdmf", "r") as xdmf:
-            facet_marker = xdmf.read_meshtags(mesh, name="Grid")
+            mesh = xdmf.read_mesh()
+            tdim = mesh.topology.dim
+            mesh.topology.create_connectivity(tdim - 1, tdim)
+            facet_marker = xdmf.read_meshtags(mesh, name="facet_marker")
         top_value = 2
         bottom_value = 1
         surface_value = 8
         surface_bottom = 7
 
     else:
-        fname = "twomeshes"
+        fname = f"{outdir}/twomeshes"
         create_circle_plane_mesh(filename=f"{fname}.msh")
-        convert_mesh(fname, fname, "triangle", prune_z=True)
-        convert_mesh(f"{fname}", f"{fname}_facets", "line", prune_z=True)
+        convert_mesh(fname, fname, gdim=2)
 
         with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
-            mesh = xdmf.read_mesh(name="Grid")
-        tdim = mesh.topology.dim
-        mesh.topology.create_connectivity(tdim - 1, 0)
-        mesh.topology.create_connectivity(tdim - 1, tdim)
-        with XDMFFile(MPI.COMM_WORLD, f"{fname}_facets.xdmf", "r") as xdmf:
-            facet_marker = xdmf.read_meshtags(mesh, name="Grid")
+            mesh = xdmf.read_mesh()
+            tdim = mesh.topology.dim
+            mesh.topology.create_connectivity(tdim - 1, tdim)
+            facet_marker = xdmf.read_meshtags(mesh, name="facet_marker")
+
         top_value = 2
         bottom_value = 4
         surface_value = 9

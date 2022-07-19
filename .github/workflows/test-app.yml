@@ -45,13 +45,7 @@ jobs:
       CONTACT_CMAKE_CXX_FLAGS: "-Wall -Werror -g -pedantic -Ofast -march=native"
     steps:
       - uses: actions/checkout@v2
-
-      - name: Install meshio/h5py
-        run: |
-          pip3 install mpi4py --no-cache-dir --upgrade
-          HDF5_MPI="ON" HDF5_DIR="/usr/local" pip3 install --no-cache-dir --no-binary=h5py h5py --upgrade
-          pip3 install meshio --no-cache-dir --upgrade
-
+      
       - name: Get Basix and install
         uses: actions/checkout@v2
         with:
@@ -121,6 +115,7 @@ jobs:
         run: |
           cd python/demos
           mkdir -p results
+          mkdir -p meshes
           python3 compare_custom_snes_one_sided.py
           python3 compare_nitsche_snes.py
           python3 demo_nitsche_rigid_surface_ufl.py
@@ -134,4 +129,5 @@ jobs:
       - name: Run tests
         run: |
           cd python/tests
+          mkdir -p meshes
           python3 -m pytest . -vs
