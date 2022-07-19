@@ -99,6 +99,7 @@ def snes_solver(mesh: dmesh.Mesh, mesh_data: Tuple[_cpp.mesh.MeshTags_int32, int
     # # Yields same F as above if penalty = 0 and body force 0
     # F = ufl.derivative(Pi, u, v)
     assert(mesh.topology.dim == mesh.geometry.dim)
+
     # Dirichlet boundary conditions
     def _u_D(x):
         values = np.zeros((mesh.geometry.dim, x.shape[1]))
