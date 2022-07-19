@@ -85,8 +85,8 @@ void dolfinx_contact::pull_back(xt::xtensor<double, 3>& J,
 
 //-----------------------------------------------------------------------------
 std::pair<std::vector<std::int32_t>, std::vector<std::int32_t>>
-dolfinx_contact::sort_cells(const xtl::span<const std::int32_t>& cells,
-                            const xtl::span<std::int32_t>& perm)
+dolfinx_contact::sort_cells(const std::span<const std::int32_t>& cells,
+                            const std::span<std::int32_t>& perm)
 {
   assert(perm.size() == cells.size());
 
@@ -143,7 +143,7 @@ void dolfinx_contact::update_geometry(
       = mesh->geometry().dofmap();
   const int bs = dofmap->bs();
   const auto& u_data = u.x()->array();
-  xtl::span<double> coords = mesh->geometry().x();
+  std::span<double> coords = mesh->geometry().x();
   std::vector<double> dx(coords.size());
   for (std::int32_t c = 0; c < num_cells; ++c)
   {
@@ -187,7 +187,7 @@ dolfinx_contact::evaluate_basis_shape(const dolfinx::fem::FunctionSpace& V,
 //-----------------------------------------------------------------------------
 void dolfinx_contact::evaluate_basis_functions(
     const dolfinx::fem::FunctionSpace& V, const xt::xtensor<double, 2>& x,
-    const xtl::span<const std::int32_t>& cells,
+    const std::span<const std::int32_t>& cells,
     xt::xtensor<double, 4>& basis_values, std::size_t num_derivatives)
 {
 
@@ -218,7 +218,7 @@ void dolfinx_contact::evaluate_basis_functions(
 
   // Get geometry data
   const std::size_t gdim = geometry.dim();
-  xtl::span<const double> x_g = geometry.x();
+  std::span<const double> x_g = geometry.x();
   const dolfinx::graph::AdjacencyList<std::int32_t>& x_dofmap
       = geometry.dofmap();
   const dolfinx::fem::CoordinateElement& cmap = geometry.cmap();
@@ -246,11 +246,11 @@ void dolfinx_contact::evaluate_basis_functions(
   std::shared_ptr<const dolfinx::fem::DofMap> dofmap = V.dofmap();
   assert(dofmap);
 
-  xtl::span<const std::uint32_t> cell_info;
+  std::span<const std::uint32_t> cell_info;
   if (element->needs_dof_transformations())
   {
     mesh->topology_mutable().create_entity_permutations();
-    cell_info = xtl::span(topology.get_cell_permutation_info());
+    cell_info = std::span(topology.get_cell_permutation_info());
   }
 
   xt::xtensor<double, 2> coordinate_dofs
@@ -341,18 +341,15 @@ void dolfinx_contact::evaluate_basis_functions(
   std::fill(basis_values.begin(), basis_values.end(), 0);
   std::fill(temp.begin(), temp.end(), 0);
 
-  using u_t = xt::xview<decltype(temp)&, std::size_t, std::size_t,
-                        xt::xall<std::size_t>, xt::xall<std::size_t>>;
-  using U_t
-      = xt::xview<decltype(basis_reference_values)&, std::size_t, std::size_t,
-                  xt::xall<std::size_t>, xt::xall<std::size_t>>;
-  using J_t = xt::xview<decltype(J)&, std::size_t, xt::xall<std::size_t>,
-                        xt::xall<std::size_t>>;
-  using K_t = xt::xview<decltype(K)&, std::size_t, xt::xall<std::size_t>,
-                        xt::xall<std::size_t>>;
-  auto push_forward_fn = element->map_fn<u_t, U_t, J_t, K_t>();
-  const std::function<void(const xtl::span<double>&,
-                           const xtl::span<const std::uint32_t>&, std::int32_t,
+  namespace stdex = std::experimental;
+  using xu_t = stdex::mdspan<double, stdex::dextents<std::size_t, 2>>;
+  using xU_t = stdex::mdspan<const double, stdex::dextents<std::size_t, 2>>;
+  using xJ_t = stdex::mdspan<const double, stdex::dextents<std::size_t, 2>>;
+  using xK_t = stdex::mdspan<const double, stdex::dextents<std::size_t, 2>>;
+  auto push_forward_fn
+      = element->basix_element().map_fn<xu_t, xU_t, xJ_t, xK_t>();
+  const std::function<void(const std::span<double>&,
+                           const std::span<const std::uint32_t>&, std::int32_t,
                            int)>
       apply_dof_transformation
       = element->get_dof_transformation_function<double>();
@@ -360,8 +357,8 @@ void dolfinx_contact::evaluate_basis_functions(
 
   for (std::size_t p = 0; p < cells.size(); ++p)
   {
-    auto _K = xt::view(K, p, xt::all(), xt::all());
-    auto _J = xt::view(J, p, xt::all(), xt::all());
+    xK_t _K(K.data() + p * K.shape(1) * K.shape(2), K.shape(1), K.shape(2));
+    xJ_t _J(J.data() + p * J.shape(1) * J.shape(2), J.shape(1), J.shape(2));
     /// NOTE: loop size correct for num_derivatives = 0,1
     for (std::size_t j = 0; j < num_derivatives * tdim + 1; ++j)
     {
@@ -373,23 +370,34 @@ void dolfinx_contact::evaluate_basis_functions(
 
       // Permute the reference values to account for the cell's orientation
       apply_dof_transformation(
-          xtl::span(basis_reference_values.data()
+          std::span(basis_reference_values.data()
                         + j * cells.size() * num_basis_values
                         + p * num_basis_values,
                     num_basis_values),
           cell_info, cell_index, (int)reference_value_size);
 
       // Push basis forward to physical element
-
-      auto _U = xt::view(basis_reference_values, j, p, xt::all(), xt::all());
+      xU_t _U(basis_reference_values.data()
+                  + j * basis_reference_values.shape(1)
+                        * basis_reference_values.shape(2)
+                        * basis_reference_values.shape(3)
+                  + p * basis_reference_values.shape(2)
+                        * basis_reference_values.shape(3),
+              basis_reference_values.shape(2), basis_reference_values.shape(3));
       if (j == 0)
       {
-        auto _u = xt::view(basis_values, j, p, xt::all(), xt::all());
+        xu_t _u(basis_values.data()
+                    + j * basis_values.shape(1) * basis_values.shape(2)
+                          * basis_values.shape(3)
+                    + p * basis_values.shape(2) * basis_values.shape(3),
+                basis_values.shape(2), basis_values.shape(3));
         push_forward_fn(_u, _U, _J, detJ[p], _K);
       }
       else
       {
-        auto _u = xt::view(temp, j, p, xt::all(), xt::all());
+        xu_t _u(temp.data() + j * temp.shape(1) * temp.shape(2) * temp.shape(3)
+                    + p * temp.shape(2) * temp.shape(3),
+                temp.shape(2), temp.shape(3));
         push_forward_fn(_u, _U, _J, detJ[p], _K);
       }
     }
@@ -496,7 +504,7 @@ dolfinx_contact::get_update_normal(const dolfinx::fem::CoordinateElement& cmap)
 /// @param[in] integral The type of integral
 std::vector<std::int32_t> dolfinx_contact::compute_active_entities(
     std::shared_ptr<const dolfinx::mesh::Mesh> mesh,
-    xtl::span<const std::int32_t> entities, dolfinx::fem::IntegralType integral)
+    std::span<const std::int32_t> entities, dolfinx::fem::IntegralType integral)
 {
 
   switch (integral)
@@ -570,7 +578,7 @@ std::vector<std::int32_t> dolfinx_contact::compute_active_entities(
 dolfinx::graph::AdjacencyList<std::int32_t>
 dolfinx_contact::entities_to_geometry_dofs(
     const dolfinx::mesh::Mesh& mesh, int dim,
-    const xtl::span<const std::int32_t>& entity_list)
+    const std::span<const std::int32_t>& entity_list)
 {
 
   // Get mesh geometry and topology data
@@ -673,13 +681,13 @@ std::vector<std::int32_t> dolfinx_contact::find_candidate_surface_segment(
 
 //-------------------------------------------------------------------------------------
 void dolfinx_contact::compute_physical_points(
-    const dolfinx::mesh::Mesh& mesh, xtl::span<const std::int32_t> facets,
+    const dolfinx::mesh::Mesh& mesh, std::span<const std::int32_t> facets,
     const std::vector<int>& offsets, const xt::xtensor<double, 2>& phi,
     std::vector<xt::xtensor<double, 2>>& qp_phys)
 {
   // Geometrical info
   const dolfinx::mesh::Geometry& geometry = mesh.geometry();
-  xtl::span<const double> mesh_geometry = geometry.x();
+  std::span<const double> mesh_geometry = geometry.x();
   const dolfinx::fem::CoordinateElement& cmap = geometry.cmap();
   const std::size_t num_dofs_g = cmap.dim();
   const dolfinx::graph::AdjacencyList<std::int32_t>& x_dofmap
@@ -720,9 +728,9 @@ void dolfinx_contact::compute_physical_points(
 dolfinx::graph::AdjacencyList<std::int32_t>
 dolfinx_contact::compute_distance_map(
     const dolfinx::mesh::Mesh& quadrature_mesh,
-    xtl::span<const std::int32_t> quadrature_facets,
+    std::span<const std::int32_t> quadrature_facets,
     const dolfinx::mesh::Mesh& candidate_mesh,
-    xtl::span<const std::int32_t> candidate_facets,
+    std::span<const std::int32_t> candidate_facets,
     const QuadratureRule& q_rule)
 {
 

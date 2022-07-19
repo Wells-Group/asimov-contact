@@ -28,8 +28,8 @@
 #include <xtensor/xindex_view.hpp>
 
 using mat_set_fn = const std::function<int(
-    const xtl::span<const std::int32_t>&, const xtl::span<const std::int32_t>&,
-    const xtl::span<const PetscScalar>&)>;
+    const std::span<const std::int32_t>&, const std::span<const std::int32_t>&,
+    const std::span<const PetscScalar>&)>;
 
 namespace dolfinx_contact
 {
@@ -153,8 +153,8 @@ public:
       const std::vector<
           std::shared_ptr<const dolfinx::fem::DirichletBC<PetscScalar>>>& bcs,
       int pair, const kernel_fn<PetscScalar>& kernel,
-      const xtl::span<const PetscScalar> coeffs, int cstride,
-      const xtl::span<const PetscScalar>& constants);
+      const std::span<const PetscScalar> coeffs, int cstride,
+      const std::span<const PetscScalar>& constants);
 
   /// Assemble vector over exterior facet (for contact facets)
   /// @param[in] b The vector
@@ -164,10 +164,10 @@ public:
   /// facets
   /// @param[in] cstride Number of coefficients per facet
   /// @param[in] constants used in the variational form
-  void assemble_vector(xtl::span<PetscScalar> b, int pair,
+  void assemble_vector(std::span<PetscScalar> b, int pair,
                        const kernel_fn<PetscScalar>& kernel,
-                       const xtl::span<const PetscScalar>& coeffs, int cstride,
-                       const xtl::span<const PetscScalar>& constants);
+                       const std::span<const PetscScalar>& coeffs, int cstride,
+                       const std::span<const PetscScalar>& constants);
 
   /// @brief Generate contact kernel
   ///
@@ -279,7 +279,7 @@ public:
       const xt::xtensor<double, 3>& dphi = kd.dphi();
 
       // Extract reference to quadrature weights for the local facet
-      xtl::span<const double> _weights(kd.q_weights());
+      std::span<const double> _weights(kd.q_weights());
       auto weights = _weights.subspan(q_offset[0], q_offset[1] - q_offset[0]);
 
       // Temporary data structures used inside quadrature loop
@@ -424,7 +424,7 @@ public:
 
       const xt::xtensor<double, 3>& dphi = kd.dphi();
       const xt::xtensor<double, 2>& phi = kd.phi();
-      xtl::span<const double> _weights(kd.q_weights());
+      std::span<const double> _weights(kd.q_weights());
       auto weights = _weights.subspan(q_offset[0], q_offset[1] - q_offset[0]);
       std::array<double, 3> n_surf = {0, 0, 0};
       xt::xtensor<double, 2> tr = xt::zeros<double>({ndofs_cell, gdim});
@@ -590,10 +590,9 @@ public:
     for (std::size_t i = 0; i < active_facets.size(); i += 2)
     {
       std::vector<std::int32_t> linked_cells;
-      const tcb::span<const int> links = map->links((int)i / 2);
-      for (auto link : links)
+      for (auto link : map->links((int)i / 2))
       {
-        const tcb::span<const int> facet_pair = facet_map->links(link);
+        const std::span<const int> facet_pair = facet_map->links(link);
         linked_cells.push_back(facet_pair[0]);
       }
       // Remove duplicates
@@ -631,7 +630,7 @@ public:
     // Get information about submesh geometry and topology
     const dolfinx::mesh::Geometry& geometry = candidate_mesh->geometry();
     const int gdim = geometry.dim();
-    xtl::span<const double> mesh_geometry = geometry.x();
+    std::span<const double> mesh_geometry = geometry.x();
     const dolfinx::fem::CoordinateElement& cmap = geometry.cmap();
     const dolfinx::fem::ElementDofLayout layout = cmap.create_dof_layout();
     const int tdim = candidate_mesh->topology().dim();
@@ -669,7 +668,7 @@ public:
 
     // Temporary data structures used in loops
     xt::xtensor<double, 2> point = {{0, 0, 0}};
-    xt::xtensor_fixed<double, xt::xshape<3>> dist_vec;
+    std::array<double, 3> dist_vec;
     xt::xtensor<double, 2> master_coords({num_facet_dofs, std::size_t(3)});
 
     // Pack gap function for each quadrature point on each facet
@@ -686,7 +685,7 @@ public:
           point(0, k) = qp_phys[i](q, k);
 
         // Get the geometry dofs for the ith facet, qth quadrature point
-        const tcb::span<const int> master_facet
+        const std::span<const int> master_facet
             = master_facets_geometry.links(int(i * num_q_point + q));
         assert(num_facet_dofs == master_facet.size());
 
@@ -705,7 +704,7 @@ public:
 
         // Add distance vector to coefficient array
         for (int k = 0; k < gdim; k++)
-          c[offset + q * gdim + k] += dist_vec(k);
+          c[offset + q * gdim + k] += dist_vec[k];
       }
     }
 
@@ -718,7 +717,7 @@ public:
   /// @param[in] gap - gap packed on facets per quadrature point
   /// @param[out] c - test functions packed on facets.
   std::pair<std::vector<PetscScalar>, int>
-  pack_test_functions(int pair, const xtl::span<const PetscScalar>& gap)
+  pack_test_functions(int pair, const std::span<const PetscScalar>& gap)
   {
     auto [puppet_mt, candidate_mt] = _contact_pairs[pair];
     // Mesh info
@@ -728,7 +727,7 @@ public:
     const int gdim = mesh->geometry().dim(); // geometrical dimension
     const dolfinx::graph::AdjacencyList<int>& x_dofmap
         = mesh->geometry().dofmap();
-    xtl::span<const double> mesh_geometry = mesh->geometry().x();
+    std::span<const double> mesh_geometry = mesh->geometry().x();
     std::shared_ptr<const dolfinx::fem::FiniteElement> element = _V->element();
     const std::uint32_t bs = element->block_size();
     const std::size_t ndofs = (std::size_t)element->space_dimension() / bs;
@@ -769,13 +768,13 @@ public:
     // Loop over all facets
     for (std::size_t i = 0; i < num_facets; i++)
     {
-      const tcb::span<const int> links = map->links((int)i);
+      const std::span<const int> links = map->links((int)i);
       assert(links.size() == num_q_points);
 
       // Compute Pi(x) form points x and gap funtion Pi(x) - x
       for (std::size_t j = 0; j < num_q_points; j++)
       {
-        const tcb::span<const int> linked_pair = facet_map->links(links[j]);
+        const std::span<const int> linked_pair = facet_map->links(links[j]);
         assert(!linked_pair.empty());
         linked_cells[j] = linked_pair.front();
         for (int k = 0; k < gdim; k++)
@@ -788,8 +787,8 @@ public:
       // Sort linked cells
       std::pair<std::vector<std::int32_t>, std::vector<std::int32_t>>
           sorted_cells = dolfinx_contact::sort_cells(
-              xtl::span(linked_cells.data(), linked_cells.size()),
-              xtl::span(perm.data(), perm.size()));
+              std::span(linked_cells.data(), linked_cells.size()),
+              std::span(perm.data(), perm.size()));
       const std::vector<std::int32_t>& unique_cells = sorted_cells.first;
       const std::vector<std::int32_t>& offsets = sorted_cells.second;
       // Loop over sorted array of unique cells
@@ -800,7 +799,7 @@ public:
         // Extract indices of all occurances of cell in the unsorted cell
         // array
         auto indices
-            = xtl::span(perm.data() + offsets[j], offsets[j + 1] - offsets[j]);
+            = std::span(perm.data() + offsets[j], offsets[j + 1] - offsets[j]);
         // Extract local dofs
         assert(linked_cell < x_dofmap.num_nodes());
         auto x_dofs = x_dofmap.links(linked_cell);
@@ -849,8 +848,8 @@ public:
   /// @param[in] u_packed -u packed on opposite surface per quadrature point
   /// @param[out] c - test functions packed on facets.
   std::pair<std::vector<PetscScalar>, int>
-  pack_grad_test_functions(int pair, const xtl::span<const PetscScalar>& gap,
-                           const xtl::span<const PetscScalar>& u_packed);
+  pack_grad_test_functions(int pair, const std::span<const PetscScalar>& gap,
+                           const std::span<const PetscScalar>& u_packed);
   /// Compute function on opposite surface at quadrature points of
   /// facets
   /// @param[in] pair - index of contact pair
@@ -859,7 +858,7 @@ public:
   std::pair<std::vector<PetscScalar>, int>
   pack_u_contact(int pair,
                  std::shared_ptr<dolfinx::fem::Function<PetscScalar>> u,
-                 const xtl::span<const PetscScalar> gap)
+                 const std::span<const PetscScalar> gap)
   {
     int puppet_mt = _contact_pairs[pair][0];
     int candidate_mt = _contact_pairs[pair][1];
@@ -922,7 +921,7 @@ public:
                                basis_values, 0);
     }
 
-    const xtl::span<const PetscScalar>& u_coeffs = u_sub.x()->array();
+    const std::span<const PetscScalar>& u_coeffs = u_sub.x()->array();
 
     // Output vector
     std::vector<PetscScalar> c(num_facets * num_q_points * bs_element, 0.0);
@@ -939,7 +938,7 @@ public:
       for (std::size_t q = 0; q < num_q_points; ++q)
       {
         // Get degrees of freedom for current cell
-        xtl::span<const std::int32_t> dofs
+        std::span<const std::int32_t> dofs
             = sub_dofmap->cell_dofs(cells[i * num_q_points + q]);
         for (std::size_t j = 0; j < dofs.size(); ++j)
           for (int k = 0; k < bs_dof; ++k)
@@ -973,8 +972,8 @@ public:
   std::pair<std::vector<PetscScalar>, int>
   pack_grad_u_contact(int pair,
                       std::shared_ptr<dolfinx::fem::Function<PetscScalar>> u,
-                      const xtl::span<const PetscScalar> gap,
-                      const xtl::span<const PetscScalar> u_packed);
+                      const std::span<const PetscScalar> gap,
+                      const std::span<const PetscScalar> u_packed);
 
   /// Compute inward surface normal at Pi(x)
   /// @param[in] pair - index of contact pair
@@ -983,7 +982,7 @@ public:
   /// the body coming into contact
   /// @param[out] c - normals ny packed on facets.
   std::pair<std::vector<PetscScalar>, int>
-  pack_ny(int pair, const xtl::span<const PetscScalar> gap);
+  pack_ny(int pair, const std::span<const PetscScalar> gap);
 
   /// Pack gap with rigid surface defined by x[gdim-1] = -g.
   /// g_vec = zeros(gdim), g_vec[gdim-1] = -g

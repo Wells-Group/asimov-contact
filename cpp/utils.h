@@ -69,8 +69,8 @@ void pull_back(xt::xtensor<double, 3>& J, xt::xtensor<double, 3>& K,
 // offsets[i]<=k<offsets[i+1]. In the example if i = 0, then perm[k] = 0 or
 // perm[k] = 3.
 std::pair<std::vector<std::int32_t>, std::vector<std::int32_t>>
-sort_cells(const xtl::span<const std::int32_t>& cells,
-           const xtl::span<std::int32_t>& perm);
+sort_cells(const std::span<const std::int32_t>& cells,
+           const std::span<std::int32_t>& perm);
 
 /// @param[in] u: dolfinx function on function space base on basix element
 /// @param[in] mesh: mesh to be updated
@@ -112,7 +112,7 @@ evaluate_basis_shape(const dolfinx::fem::FunctionSpace& V,
 /// with the correct size (num_points, number_of_dofs, value_size).
 void evaluate_basis_functions(const dolfinx::fem::FunctionSpace& V,
                               const xt::xtensor<double, 2>& x,
-                              const xtl::span<const std::int32_t>& cells,
+                              const std::span<const std::int32_t>& cells,
                               xt::xtensor<double, 4>& basis_values,
                               std::size_t num_derivatives);
 
@@ -177,7 +177,7 @@ get_update_normal(const dolfinx::fem::CoordinateElement& cmap);
 /// @param[in] integral The type of integral
 std::vector<std::int32_t>
 compute_active_entities(std::shared_ptr<const dolfinx::mesh::Mesh> mesh,
-                        xtl::span<const std::int32_t> entities,
+                        std::span<const std::int32_t> entities,
                         dolfinx::fem::IntegralType integral);
 
 /// @brief Compute the geometry dof indices for a set of entities
@@ -191,7 +191,7 @@ compute_active_entities(std::shared_ptr<const dolfinx::mesh::Mesh> mesh,
 /// closure dofs of the i-th input entity
 dolfinx::graph::AdjacencyList<std::int32_t>
 entities_to_geometry_dofs(const mesh::Mesh& mesh, int dim,
-                          const xtl::span<const std::int32_t>& entity_list);
+                          const std::span<const std::int32_t>& entity_list);
 
 /// @brief find candidate facets within a given radius of puppet facets
 ///
@@ -221,7 +221,7 @@ std::vector<std::int32_t> find_candidate_surface_segment(
 /// reference facet
 /// @param[in, out] qp_phys vector to stor physical points per facet
 void compute_physical_points(const dolfinx::mesh::Mesh& mesh,
-                             xtl::span<const std::int32_t> facets,
+                             std::span<const std::int32_t> facets,
                              const std::vector<int>& offsets,
                              const xt::xtensor<double, 2>& phi,
                              std::vector<xt::xtensor<double, 2>>& qp_phys);
@@ -240,9 +240,9 @@ void compute_physical_points(const dolfinx::mesh::Mesh& mesh,
 /// quadrature point.
 dolfinx::graph::AdjacencyList<std::int32_t>
 compute_distance_map(const dolfinx::mesh::Mesh& quadrature_mesh,
-                     xtl::span<const std::int32_t> quadrature_facets,
+                     std::span<const std::int32_t> quadrature_facets,
                      const dolfinx::mesh::Mesh& candidate_mesh,
-                     xtl::span<const std::int32_t> candidate_facets,
+                     std::span<const std::int32_t> candidate_facets,
                      const QuadratureRule& q_rule);
 
 } // namespace dolfinx_contact

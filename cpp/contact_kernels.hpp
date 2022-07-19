@@ -276,7 +276,7 @@ kernel_fn<T> generate_contact_kernel(
   /// how many cells are connected with the cell.
   kernel_fn<T> nitsche_rigid_jacobian
       = [kd, gdim, tdim, phi_coeffs, dphi_coeffs, num_coeffs, constant_normal](
-            std::vector<std::vector<double>>& A, xtl::span<const T> c,
+            std::vector<std::vector<double>>& A, std::span<const T> c,
             const T* w, const double* coordinate_dofs, const int facet_index,
             [[maybe_unused]] const std::size_t num_links)
   {

@@ -144,12 +144,13 @@ dolfinx_contact::pack_coefficient_quadrature(
         = xt::zeros<double>({num_dofs_g, (std::size_t)gdim});
 
     // Get push forward function
-    using u_t = xt::xview<decltype(basis_values)&, std::size_t,
-                          xt::xall<std::size_t>, xt::xall<std::size_t>>;
-    using U_t = xt::xview<decltype(element_basis_values)&,
-                          xt::xall<std::size_t>, xt::xall<std::size_t>>;
+    namespace stdex = std::experimental;
+    using xu_t = stdex::mdspan<double, stdex::dextents<std::size_t, 2>>;
+    using xU_t = stdex::mdspan<const double, stdex::dextents<std::size_t, 2>>;
+    using xJ_t = stdex::mdspan<const double, stdex::dextents<std::size_t, 2>>;
+    using xK_t = stdex::mdspan<const double, stdex::dextents<std::size_t, 2>>;
     auto push_forward_fn
-        = element->map_fn<u_t, U_t, decltype(J)&, decltype(K)&>();
+        = element->basix_element().map_fn<xu_t, xU_t, xJ_t, xK_t>();
     xt::xtensor<double, 2> dphi_q({(std::size_t)tdim, tab_shape[2]});
 
     for (std::size_t i = 0; i < num_active_entities; i++)
@@ -204,9 +205,14 @@ dolfinx_contact::pack_coefficient_quadrature(
               cell_info, cell, (int)vs);
 
           // Push basis forward to physical element
-          auto _u = xt::view(basis_values, q, xt::all(), xt::all());
-          auto _U = xt::view(element_basis_values, xt::all(), xt::all());
-          push_forward_fn(_u, _U, J, detJ, K);
+          xu_t _u(basis_values.data()
+                      + q * basis_values.shape(1) * basis_values.shape(2),
+                  basis_values.shape(1), basis_values.shape(2));
+          xU_t _U(element_basis_values.data(), element_basis_values.shape(0),
+                  element_basis_values.shape(1));
+          xK_t _K(K.data(), K.shape(0), K.shape(1));
+          xJ_t _J(J.data(), J.shape(0), J.shape(1));
+          push_forward_fn(_u, _U, _J, detJ, _K);
         }
       }
       else
@@ -232,9 +238,14 @@ dolfinx_contact::pack_coefficient_quadrature(
               cell_info, cell, (int)vs);
 
           // Push basis forward to physical element
-          auto _u = xt::view(basis_values, q, xt::all(), xt::all());
-          auto _U = xt::view(element_basis_values, xt::all(), xt::all());
-          push_forward_fn(_u, _U, J, detJ, K);
+          xu_t _u(basis_values.data()
+                      + q * basis_values.shape(1) * basis_values.shape(2),
+                  basis_values.shape(1), basis_values.shape(2));
+          xU_t _U(element_basis_values.data(), element_basis_values.shape(0),
+                  element_basis_values.shape(1));
+          xK_t _K(K.data(), K.shape(0), K.shape(1));
+          xJ_t _J(J.data(), J.shape(0), J.shape(1));
+          push_forward_fn(_u, _U, _J, detJ, _K);
         }
       }
       // Sum up quadrature contributions
