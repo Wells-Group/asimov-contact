@@ -137,7 +137,6 @@ public:
   {
     return _update_normal(n, K, _facet_normals, local_index);
   }
-
   // return quadrature weights for facet f
   const std::vector<double>& q_weights() const { return _q_weights; }
 

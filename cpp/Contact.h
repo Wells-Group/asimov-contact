@@ -11,6 +11,7 @@
 #include "SubMesh.h"
 #include "elasticity.h"
 #include "geometric_quantities.h"
+#include "meshtie_kernels.h"
 #include "utils.h"
 #include <basix/cell.h>
 #include <basix/finite-element.h>
@@ -32,11 +33,6 @@ using mat_set_fn = const std::function<int(
 
 namespace dolfinx_contact
 {
-enum class Kernel
-{
-  Rhs,
-  Jac
-};
 
 namespace
 {
@@ -107,7 +103,7 @@ public:
   }
 
   // return size of coefficients vector per facet on s
-  std::size_t coefficients_size();
+  std::size_t coefficients_size(bool meshtie);
 
   /// return distance map (adjacency map mapping quadrature points on surface
   /// to closest facet on other surface)
@@ -232,9 +228,10 @@ public:
     /// be padded to 3D, (shape (num_nodes, 3)).
     kernel_fn<PetscScalar> unbiased_rhs
         = [kd, gdim, ndofs_cell,
-           bs](std::vector<std::vector<PetscScalar>>& b, const PetscScalar* c,
-               const PetscScalar* w, const double* coordinate_dofs,
-               const int facet_index, const std::size_t num_links)
+           bs](std::vector<std::vector<PetscScalar>>& b,
+               std::span<const PetscScalar> c, const PetscScalar* w,
+               const double* coordinate_dofs, const int facet_index,
+               const std::size_t num_links)
 
     {
       // Retrieve some data from kd
@@ -376,10 +373,11 @@ public:
     /// @param[in] coordinate_dofs The physical coordinates of cell. Assumed
     /// to be padded to 3D, (shape (num_nodes, 3)).
     kernel_fn<PetscScalar> unbiased_jac
-        = [kd, gdim, ndofs_cell,
-           bs](std::vector<std::vector<PetscScalar>>& A, const double* c,
-               const double* w, const double* coordinate_dofs,
-               const int facet_index, const std::size_t num_links)
+        = [kd, gdim, ndofs_cell, bs](std::vector<std::vector<PetscScalar>>& A,
+                                     std::span<const double> c, const double* w,
+                                     const double* coordinate_dofs,
+                                     const int facet_index,
+                                     const std::size_t num_links)
     {
       // Retrieve some data from kd
       std::array<std::int32_t, 2> q_offset
@@ -528,6 +526,17 @@ public:
       return unbiased_rhs;
     case dolfinx_contact::Kernel::Jac:
       return unbiased_jac;
+    case dolfinx_contact::Kernel::MeshTieRhs:
+    {
+
+      return dolfinx_contact::generate_meshtie_kernel(
+          type, _V, _quadrature_rule, max_links);
+    }
+    case dolfinx_contact::Kernel::MeshTieJac:
+    {
+      return dolfinx_contact::generate_meshtie_kernel(
+          type, _V, _quadrature_rule, max_links);
+    }
     default:
       throw std::invalid_argument("Unrecognized kernel");
     }

@@ -96,7 +96,7 @@ dolfinx_contact::Contact::Contact(
       topology.cell_type(), q_deg, fdim, basix::quadrature::type::Default);
 }
 //------------------------------------------------------------------------------------------------
-std::size_t dolfinx_contact::Contact::coefficients_size()
+std::size_t dolfinx_contact::Contact::coefficients_size(bool meshtie)
 {
   // mesh data
   assert(_V);
@@ -116,8 +116,33 @@ std::size_t dolfinx_contact::Contact::coefficients_size()
   const std::size_t max_links
       = *std::max_element(_max_links.begin(), _max_links.end());
 
-  return 3 + num_q_points * (2 * gdim + ndofs_cell * bs * max_links + bs)
-         + ndofs_cell * bs;
+  if (meshtie)
+  {
+
+    // Coefficient offsets
+    // Expecting coefficients in following order:
+    // mu, lmbda, h,test_fn, grad(test_fn), u, u_opposite,
+    // grad(u_opposite)
+    std::vector<std::size_t> cstrides
+        = {1,
+           1,
+           1,
+           num_q_points * ndofs_cell * bs * max_links,
+           num_q_points * ndofs_cell * bs * max_links,
+           ndofs_cell * bs,
+           num_q_points * bs,
+           num_q_points * gdim * bs};
+
+    // create offsets
+    std::vector<int32_t> offsets(9);
+    offsets[0] = 0;
+    std::partial_sum(cstrides.cbegin(), cstrides.cend(),
+                     std::next(offsets.begin()));
+    return offsets[8];
+  }
+  else
+    return 3 + num_q_points * (2 * gdim + ndofs_cell * bs * max_links + bs)
+           + ndofs_cell * bs;
 }
 
 Mat dolfinx_contact::Contact::create_petsc_matrix(
@@ -422,8 +447,9 @@ void dolfinx_contact::Contact::assemble_matrix(
       std::fill(Aes[3 * j + 3].begin(), Aes[3 * j + 3].end(), 0);
     }
 
-    kernel(Aes, coeffs.data() + i / 2 * cstride, constants.data(),
-           coordinate_dofs.data(), active_facets[i + 1], num_linked_cells);
+    kernel(Aes, std::span(coeffs.data() + i / 2 * cstride, cstride),
+           constants.data(), coordinate_dofs.data(), active_facets[i + 1],
+           num_linked_cells);
 
     // FIXME: We would have to handle possible Dirichlet conditions here, if we
     // think that we can have a case with contact and Dirichlet
@@ -522,8 +548,10 @@ void dolfinx_contact::Contact::assemble_vector(
     std::fill(bes[0].begin(), bes[0].end(), 0);
     for (std::size_t j = 0; j < num_linked_cells; j++)
       std::fill(bes[j + 1].begin(), bes[j + 1].end(), 0);
-    kernel(bes, coeffs.data() + i / 2 * cstride, constants.data(),
-           coordinate_dofs.data(), active_facets[i + 1], num_linked_cells);
+
+    kernel(bes, std::span(coeffs.data() + i / 2 * cstride, cstride),
+           constants.data(), coordinate_dofs.data(), active_facets[i + 1],
+           num_linked_cells);
 
     // Add element vector to global vector
     const std::span<const int> dofs_cell = dofmap->cell_dofs(active_facets[i]);
