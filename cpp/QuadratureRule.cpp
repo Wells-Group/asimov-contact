@@ -73,7 +73,7 @@ dolfinx_contact::QuadratureRule::QuadratureRule(dolfinx::mesh::CellType ct,
       // Create quadrature and tabulate on entity
       std::array<std::vector<double>, 2> quadrature
           = basix::quadrature::make_quadrature(et, degree);
-      std::vector<double>& q_weights = quadrature[1];
+      const std::vector<double>& q_weights = quadrature[1];
       std::size_t num_points = quadrature[1].size();
       std::size_t pt_shape = quadrature[0].size() / quadrature[1].size();
       std::array<std::size_t, 2> pts_shape = {num_points, pt_shape};
@@ -81,17 +81,17 @@ dolfinx_contact::QuadratureRule::QuadratureRule(dolfinx::mesh::CellType ct,
       std::copy(quadrature[0].cbegin(), quadrature[0].cend(), q_points.begin());
       num_points_per_entity[i] = (std::int32_t)num_points;
 
-      auto _c_tab = entity_element.tabulate(
+      auto [c_tab_data, c_tab_shape] = entity_element.tabulate(
           0, basix::impl::cmdspan2_t(q_points.data(), pts_shape));
-      xt::xtensor<double, 4> c_tab(_c_tab.second);
-      std::copy(_c_tab.first.cbegin(), _c_tab.first.cend(), c_tab.begin());
+      xt::xtensor<double, 4> c_tab(c_tab_shape);
+      std::copy(c_tab_data.cbegin(), c_tab_data.cend(), c_tab.begin());
       xt::xtensor<double, 2> phi_s
           = xt::view(c_tab, 0, xt::all(), xt::all(), 0);
-      auto cell_entity = entity_topology[i];
-      std::pair<std::vector<double>, std::array<std::size_t, 2>> sub_geom
+
+      auto [sub_geom_data, sub_geom_shape]
           = basix::cell::sub_entity_geometry(b_ct, dim, i);
-      xt::xtensor<double, 2> coords(sub_geom.second);
-      std::copy(sub_geom.first.cbegin(), sub_geom.first.cend(), coords.begin());
+      xt::xtensor<double, 2> coords(sub_geom_shape);
+      std::copy(sub_geom_data.cbegin(), sub_geom_data.cend(), coords.begin());
 
       // Push forward quadrature point from reference entity to reference
       // entity on cell

@@ -111,10 +111,9 @@ get_parameterization(dolfinx::mesh::CellType cell_type, int facet_index)
   // Get basix geometry information
   basix::cell::type basix_cell
       = dolfinx::mesh::cell_type_to_basix_type(cell_type);
-  std::pair<std::vector<double>, std::array<std::size_t, 2>> _x
-      = basix::cell::geometry(basix_cell);
-  xt::xtensor<double, 2> x(_x.second);
-  std::copy(_x.first.cbegin(), _x.first.cend(), x.begin());
+  auto [_x_data, _x_shape] = basix::cell::geometry(basix_cell);
+  xt::xtensor<double, 2> x(_x_shape);
+  std::copy(_x_data.cbegin(), _x_data.cend(), x.begin());
   const std::vector<std::vector<int>> facets
       = basix::cell::topology(basix_cell)[tdim - 1];
 
