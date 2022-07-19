@@ -3,8 +3,10 @@
 # SPDX-License-Identifier:    MIT
 
 import numpy as np
+import numpy.typing as npt
 import gmsh
 from mpi4py import MPI
+from typing import Callable, Tuple
 
 from dolfinx.graph import create_adjacencylist
 from dolfinx.io.gmshio import (cell_perm_array,
@@ -14,57 +16,62 @@ from dolfinx.io import XDMFFile, distribute_entity_data
 from dolfinx.mesh import CellType, create_mesh, meshtags_from_entities
 
 
-def vertical_line(t, x0, x1):
+def vertical_line(t: npt.NDArray[np.float64], x0: list[float], x1: list[float]) -> list[list[float]]:
     points = []
     for tt in t:
         points.append([x0[0], x0[1] + tt * (x1[1] - x0[1])])
     return points
 
 
-def horizontal_line(t, x0, x1):
+def horizontal_line(t: npt.NDArray[np.float64], x0: list[float], x1: list[float]) -> list[list[float]]:
     points = []
     for tt in t:
         points.append([x0[0] + tt * (x1[0] - x0[0]), x0[1] + tt * (x1[1] - x0[1])])
     return points
 
 
-def horizontal_sine(t, x0, x1):
+def horizontal_sine(t: npt.NDArray[np.float64], x0: list[float], x1: list[float]) -> list[list[float]]:
     points = []
     for tt in t:
         points.append([x0[0] + tt * (x1[0] - x0[0]), x0[1] + tt * (x1[1] - x0[1]) + 0.1 * np.sin(8 * np.pi * tt)])
     return points
 
 
-def get_surface_points(domain, points, line_pts):
-    pts = [points[node] for node in domain]
+def get_surface_points(domain: list[int], points: list[list[float]],
+                       line_pts: list[list[float]]) -> npt.NDArray[np.float64]:
+    pts = np.array([points[node] for node in domain])
+    lpts = np.array(line_pts)
     i0 = np.argwhere(np.array(domain, dtype=np.int32) == 4)[0, 0]
     i1 = np.argwhere(np.array(domain, dtype=np.int32) == 5)[0, 0]
     num_pts = len(pts)
     if i0 == i1 - 1:
         if i0 == 0:
-            pts = np.vstack([line_pts[:], pts[i1 + 1:]])
+            pts = np.vstack([lpts[:], pts[i1 + 1:]])
         elif i1 == num_pts - 1:
-            pts = np.vstack([line_pts[:], pts[:i0]])
+            pts = np.vstack([lpts[:], pts[:i0]])
         else:
-            pts = np.vstack([line_pts[:], pts[i1 + 1:], pts[:i0]])
+            pts = np.vstack([lpts[:], pts[i1 + 1:], pts[:i0]])
     elif i1 == i0 - 1:
         if i1 == 0:
-            pts = np.vstack([list(reversed(line_pts))[:], pts[i0 + 1:]])
+            pts = np.vstack([list(reversed(lpts))[:], pts[i0 + 1:]])
         elif i0 == num_pts - 1:
-            pts = np.vstack([list(reversed(line_pts))[:], pts[:i1]])
+            pts = np.vstack([list(reversed(lpts))[:], pts[:i1]])
         else:
-            pts = np.vstack([list(reversed(line_pts))[:], pts[i0 + 1:], pts[:i1]])
+            pts = np.vstack([list(reversed(lpts))[:], pts[i0 + 1:], pts[:i1]])
     elif i0 == 0 and i1 == num_pts - 1:
-        pts = np.vstack([list(reversed(line_pts)), pts[1:-1]])
+        pts = np.vstack([list(reversed(lpts)), pts[1:-1]])
     elif i1 == 0 and num_pts - 1:
-        pts = np.vstack([line_pts, pts[1:-1]])
+        pts = np.vstack([lpts, pts[1:-1]])
     else:
         raise RuntimeError("Invalid domains")
 
     return pts
 
 
-def retrieve_mesh_data(model, name, gmsh_cell_id, gmsh_facet_id):
+def retrieve_mesh_data(model: gmsh.model, name: str, gmsh_cell_id: str,
+                       gmsh_facet_id: str) -> Tuple[npt.NDArray[np.float64], npt.NDArray[np.int64],
+                                                    npt.NDArray[np.int32], npt.NDArray[np.int64],
+                                                    npt.NDArray[np.int32]]:
     x = extract_geometry(model, name=name)
     topologies = extract_topology_and_markers(model, name)
     cells = topologies[gmsh_cell_id]["topology"]
@@ -74,7 +81,9 @@ def retrieve_mesh_data(model, name, gmsh_cell_id, gmsh_facet_id):
     return x, cells, cell_data, marked_facets, facet_values
 
 
-def create_dolfinx_mesh(filename, x, cells, cell_data, gmsh_cell_id, marked_facets, facet_values, tdim):
+def create_dolfinx_mesh(filename: str, x: npt.NDArray[np.float64], cells: npt.NDArray[np.int64],
+                        cell_data: npt.NDArray[np.int32], gmsh_cell_id: int, marked_facets: npt.NDArray[np.int64],
+                        facet_values: npt.NDArray[np.int32], tdim: int) -> None:
     msh = create_mesh(MPI.COMM_WORLD, cells, x, ufl_mesh(gmsh_cell_id, 3))
     msh.name = "Grid"
     entities, values = distribute_entity_data(msh, tdim - 1, marked_facets, facet_values)
@@ -93,7 +102,8 @@ def create_dolfinx_mesh(filename, x, cells, cell_data, gmsh_cell_id, marked_face
         file.write_meshtags(mt)
 
 
-def create_surface_mesh(domain, points, line_pts, model, tags):
+def create_surface_mesh(domain: list[int], points: list[list[float]], line_pts: list[list[float]],
+                        model: gmsh.model, tags: list[int]) -> None:
     pts = get_surface_points(domain, points, line_pts)
     ps = []
     for point in pts:
@@ -110,8 +120,10 @@ def create_surface_mesh(domain, points, line_pts, model, tags):
     gmsh.model.mesh.optimize("Netgen")
 
 
-def create_unsplit_box_2d(H=1.0, L=5.0, res=0.1, x0=[0.0, 0.5], x1=[5.0, 0.7], quads=False,
-                          filename="box_2D", num_segments=10, curve_fun=horizontal_sine):
+def create_unsplit_box_2d(H: float = 1.0, L: float = 5.0, res: float = 0.1, x0: list[float] = [0.0, 0.5],
+                          x1: list[float] = [5.0, 0.7], quads=False, filename: str = "box_2D", num_segments: int = 10,
+                          curve_fun: Callable[[npt.NDArray[np.float64], list[float],
+                                               list[float]], list[list[float]]] = horizontal_sine) -> None:
     gmsh.initialize()
     gmsh.option.setNumber("General.Terminal", 0)
     if quads:
@@ -158,7 +170,7 @@ def create_unsplit_box_2d(H=1.0, L=5.0, res=0.1, x0=[0.0, 0.5], x1=[5.0, 0.7], q
     else:
         gmsh_cell_id = MPI.COMM_WORLD.bcast(None, root=0)
         num_nodes = MPI.COMM_WORLD.bcast(None, root=0)
-        cells, x = np.empty([0, num_nodes]), np.empty([0, 3])
+        cells, x = np.empty([0, num_nodes], dtype=np.int64), np.empty([0, 3])
         marked_facets, facet_values = np.empty((0, 3), dtype=np.int64), np.empty((0,), dtype=np.int32)
 
     if quads:
@@ -167,8 +179,10 @@ def create_unsplit_box_2d(H=1.0, L=5.0, res=0.1, x0=[0.0, 0.5], x1=[5.0, 0.7], q
     create_dolfinx_mesh(filename, x[:, :2], cells, cell_data, gmsh_cell_id, marked_facets, facet_values, 2)
 
 
-def create_unsplit_box_3d(L=5.0, H=1.0, W=1.0, res=0.1, fname="box_3D", hex=False,
-                          curve_fun=horizontal_sine, num_segments=10, x0=[0.0, 0.5], x1=[5.0, 0.7]):
+def create_unsplit_box_3d(L: float = 5.0, H: float = 1.0, W: float = 1.0, res: float = 0.1, fname: str = "box_3D",
+                          hex: bool = False, curve_fun: Callable[[npt.NDArray[np.float64], list[float],
+                                                                 list[float]], list[list[float]]] = horizontal_sine,
+                          num_segments: int = 10, x0: list[float] = [0.0, 0.5], x1: list[float] = [5.0, 0.7]) -> None:
     gmsh.initialize()
     gmsh.option.setNumber("General.Terminal", 0)
     if hex:
@@ -261,7 +275,7 @@ def create_unsplit_box_3d(L=5.0, H=1.0, W=1.0, res=0.1, fname="box_3D", hex=Fals
     else:
         gmsh_cell_id = MPI.COMM_WORLD.bcast(None, root=0)
         num_nodes = MPI.COMM_WORLD.bcast(None, root=0)
-        cells, x = np.empty([0, num_nodes]), np.empty([0, 3])
+        cells, x = np.empty([0, num_nodes], dtype=np.int64), np.empty([0, 3])
         marked_facets, facet_values = np.empty((0, 3), dtype=np.int64), np.empty((0,), dtype=np.int32)
 
     if hex:
@@ -272,7 +286,8 @@ def create_unsplit_box_3d(L=5.0, H=1.0, W=1.0, res=0.1, fname="box_3D", hex=Fals
     create_dolfinx_mesh(fname, x, cells, cell_data, gmsh_cell_id, marked_facets, facet_values, 3)
 
 
-def create_tet_mesh(domain, points, line_pts, model, tags, z):
+def create_tet_mesh(domain: list[int], points: list[list[float]], line_pts: list[list[float]],
+                    model: gmsh.model, tags: list[int], z: float) -> None:
     pts = get_surface_points(domain, points, line_pts)
     ps1 = []
     ps2 = []
@@ -306,7 +321,8 @@ def create_tet_mesh(domain, points, line_pts, model, tags, z):
     gmsh.model.mesh.optimize("Netgen")
 
 
-def create_hex_mesh(domain, points, line_pts, model, tags, z, res):
+def create_hex_mesh(domain: list[int], points: list[list[float]], line_pts: list[list[float]],
+                    model: gmsh.model, tags: list[int], z: float, res: float) -> None:
     pts = get_surface_points(domain, points, line_pts)
     ps = []
     for point in pts:
@@ -333,9 +349,12 @@ def create_hex_mesh(domain, points, line_pts, model, tags, z, res):
     gmsh.model.mesh.optimize("Netgen")
 
 
-def create_split_box_2D(filename: str, res=0.8, L=5.0, H=1.0, domain_1=[0, 4, 5, 3],
-                        domain_2=[4, 1, 2, 5], x0=[2.5, 0.0], x1=[2.5, 1.0], curve_fun=vertical_line,
-                        num_segments=(1, 2), quads=False):
+def create_split_box_2D(filename: str, res: float = 0.8, L: float = 5.0, H: float = 1.0,
+                        domain_1: list[int] = [0, 4, 5, 3], domain_2: list[int] = [4, 1, 2, 5],
+                        x0: list[float] = [2.5, 0.0], x1: list[float] = [2.5, 1.0],
+                        curve_fun: Callable[[npt.NDArray[np.float64], list[float],
+                                             list[float]], list[list[float]]] = vertical_line,
+                        num_segments: Tuple[int, int] = (1, 2), quads: bool = False) -> None:
     points = [[0.0, 0.0], [L, 0.0], [L, H], [0.0, H], x0, x1]
     gmsh.initialize()
     gmsh.option.setNumber("General.Terminal", 0)
@@ -386,7 +405,7 @@ def create_split_box_2D(filename: str, res=0.8, L=5.0, H=1.0, domain_1=[0, 4, 5,
     else:
         gmsh_cell_id = MPI.COMM_WORLD.bcast(None, root=0)
         num_nodes = MPI.COMM_WORLD.bcast(None, root=0)
-        cells, x = np.empty([0, num_nodes]), np.empty([0, 3])
+        cells, x = np.empty([0, num_nodes], dtype=np.int64), np.empty([0, 3])
         marked_facets, facet_values = np.empty((0, 3), dtype=np.int64), np.empty((0,), dtype=np.int32)
 
     if quads:
@@ -395,9 +414,12 @@ def create_split_box_2D(filename: str, res=0.8, L=5.0, H=1.0, domain_1=[0, 4, 5,
     create_dolfinx_mesh(filename, x[:, :2], cells, cell_data, gmsh_cell_id, marked_facets, facet_values, 2)
 
 
-def create_split_box_3D(filename: str, res=0.8, L=5.0, H=1.0, W=1.0, domain_1=[0, 4, 5, 3],
-                        domain_2=[4, 1, 2, 5], x0=[2.5, 0.0], x1=[2.5, 1.0], curve_fun=vertical_line,
-                        num_segments=(1, 2), hex=False):
+def create_split_box_3D(filename: str, res: float = 0.8, L: float = 5.0, H: float = 1.0, W: float = 1.0,
+                        domain_1: list[int] = [0, 4, 5, 3], domain_2: list[int] = [4, 1, 2, 5],
+                        x0: list[float] = [2.5, 0.0], x1: list[float] = [2.5, 1.0],
+                        curve_fun: Callable[[npt.NDArray[np.float64], list[float],
+                                             list[float]], list[list[float]]] = vertical_line,
+                        num_segments: Tuple[int, int] = (1, 2), hex: bool = False) -> None:
     points = [[0.0, 0.0], [L, 0.0], [L, H], [0.0, H], x0, x1]
     gmsh.initialize()
     gmsh.option.setNumber("General.Terminal", 0)
@@ -447,7 +469,7 @@ def create_split_box_3D(filename: str, res=0.8, L=5.0, H=1.0, W=1.0, domain_1=[0
     else:
         gmsh_cell_id = MPI.COMM_WORLD.bcast(None, root=0)
         num_nodes = MPI.COMM_WORLD.bcast(None, root=0)
-        cells, x = np.empty([0, num_nodes]), np.empty([0, 3])
+        cells, x = np.empty([0, num_nodes], dtype=np.int64), np.empty([0, 3])
         marked_facets, facet_values = np.empty((0, 3), dtype=np.int64), np.empty((0,), dtype=np.int32)
     if hex:
         gmsh_hex8 = cell_perm_array(CellType.hexahedron, 8)
@@ -455,6 +477,3 @@ def create_split_box_3D(filename: str, res=0.8, L=5.0, H=1.0, W=1.0, domain_1=[0
         gmsh_quad4 = cell_perm_array(CellType.quadrilateral, 4)
         marked_facets = marked_facets[:, gmsh_quad4]
     create_dolfinx_mesh(filename, x, cells, cell_data, gmsh_cell_id, marked_facets, facet_values, 3)
-
-
-create_unsplit_box_3d()

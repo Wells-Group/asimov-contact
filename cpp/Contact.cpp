@@ -447,7 +447,7 @@ void dolfinx_contact::Contact::assemble_matrix(
       std::fill(Aes[3 * j + 3].begin(), Aes[3 * j + 3].end(), 0);
     }
 
-    kernel(Aes, xtl::span(coeffs.data() + i / 2 * cstride, cstride),
+    kernel(Aes, std::span(coeffs.data() + i / 2 * cstride, cstride),
            constants.data(), coordinate_dofs.data(), active_facets[i + 1],
            num_linked_cells);
 
@@ -549,7 +549,7 @@ void dolfinx_contact::Contact::assemble_vector(
     for (std::size_t j = 0; j < num_linked_cells; j++)
       std::fill(bes[j + 1].begin(), bes[j + 1].end(), 0);
 
-    kernel(bes, xtl::span(coeffs.data() + i / 2 * cstride, cstride),
+    kernel(bes, std::span(coeffs.data() + i / 2 * cstride, cstride),
            constants.data(), coordinate_dofs.data(), active_facets[i + 1],
            num_linked_cells);
 

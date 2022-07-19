@@ -131,7 +131,10 @@ jobs:
           python3 demo_nitsche_unbiased.py --problem=3
           python3 demo_nitsche_unbiased.py --problem=3 --3D
           python3 demo_nitsche_meshties.py
-          python3 meshtie_convergence.py
+          python3 meshtie_convergence.py --3D
+          python3 meshtie_convergence.py --simplex --3D
+          python3 meshtie_convergence.py 
+          python3 meshtie_convergence.py --simplex --runs=4
 
       - name: Run tests
         run: |

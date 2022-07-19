@@ -7,6 +7,7 @@
 // This file contains helper functions that are useful for writing elasticity
 // kernels
 
+#include <span>
 #include <xtensor/xadapt.hpp>
 #include <xtensor/xbuilder.hpp>
 #include <xtensor/xindex_view.hpp>
@@ -60,7 +61,7 @@ void compute_sigma_n_basis(xt::xtensor<double, 3>& sig_n,
 /// @param[in] mu      The poisson ratio
 /// @param[in] lmbda   The 1st Lame parameter
 void compute_sigma_n_u(std::vector<double>& sig_n_u,
-                       xtl::span<const double> grad_u,
+                       std::span<const double> grad_u,
                        const xt::xtensor<double, 1>& n, const double mu,
                        const double lmbda);
 
@@ -78,7 +79,7 @@ void compute_sigma_n_u(std::vector<double>& sig_n_u,
 /// @param[in] lmbda  The 1st Lame parameter
 /// @param[in] q_pos  The offset of quadrature point for accessing dphi
 void compute_sigma_n_opp(xt::xtensor<double, 4>& sig_n_opp,
-                         xtl::span<const double> grad_v,
+                         std::span<const double> grad_v,
                          const xt::xtensor<double, 1>& n, const double mu,
                          const double lmbda, const int q,
                          const int num_q_points);

@@ -51,7 +51,7 @@ dolfinx_contact::generate_meshtie_kernel(
   kernel_fn<PetscScalar> meshtie_rhs
       = [kd, gdim, bs,
          ndofs_cell](std::vector<std::vector<PetscScalar>>& b,
-                     xtl::span<const PetscScalar> c, const PetscScalar* w,
+                     std::span<const PetscScalar> c, const PetscScalar* w,
                      const double* coordinate_dofs, const int facet_index,
                      const std::size_t num_links)
   {
@@ -98,7 +98,7 @@ dolfinx_contact::generate_meshtie_kernel(
     const xt::xtensor<double, 3>& dphi = kd.dphi();
 
     // Extract reference to quadrature weights for the local facet
-    xtl::span<const double> _weights(kd.q_weights());
+    std::span<const double> _weights(kd.q_weights());
     auto weights = _weights.subspan(q_offset[0], q_offset[1] - q_offset[0]);
 
     // Temporary data structures used inside quadrature loop
@@ -194,7 +194,7 @@ dolfinx_contact::generate_meshtie_kernel(
   /// to be padded to 3D, (shape (num_nodes, 3)).
   kernel_fn<PetscScalar> meshtie_jac
       = [kd, gdim, bs, ndofs_cell](
-            std::vector<std::vector<PetscScalar>>& A, xtl::span<const double> c,
+            std::vector<std::vector<PetscScalar>>& A, std::span<const double> c,
             const double* w, const double* coordinate_dofs,
             const int facet_index, const std::size_t num_links)
   {
@@ -240,7 +240,7 @@ dolfinx_contact::generate_meshtie_kernel(
     const xt::xtensor<double, 3>& dphi = kd.dphi();
 
     // Extract reference to quadrature weights for the local facet
-    xtl::span<const double> _weights(kd.q_weights());
+    std::span<const double> _weights(kd.q_weights());
     auto weights = _weights.subspan(q_offset[0], q_offset[1] - q_offset[0]);
 
     // Temporary data structures used inside quadrature loop

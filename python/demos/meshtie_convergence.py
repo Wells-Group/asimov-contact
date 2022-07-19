@@ -2,12 +2,14 @@
 #
 # SPDX-License-Identifier:    MIT
 
+import argparse
 import dolfinx.fem as _fem
 from dolfinx.common import Timer, timing, TimingType, list_timings
 from dolfinx.fem import Constant, Function, VectorFunctionSpace
 from dolfinx.graph import create_adjacencylist
 from dolfinx.io import XDMFFile
 import numpy as np
+import numpy.typing as npt
 import ufl
 from mpi4py import MPI
 from petsc4py import PETSc
@@ -19,15 +21,16 @@ from dolfinx_contact.meshtie import nitsche_meshtie
 
 
 # manufactured solution 2D
-def u_fun_2d(x, c, gdim):
-    u2 = c * np.sin(2 * np.pi * x[0] / 5) * np.sin(2 * np.pi * x[1])
+def u_fun_2d(x: npt.NDArray[np.float64], d: float, gdim: int) -> npt.NDArray[np.float64]:
+    u2 = d * np.sin(2 * np.pi * x[0] / 5) * np.sin(2 * np.pi * x[1])
     vals = np.zeros((gdim, x.shape[1]))
     vals[1, :] = u2[:]
     return vals
 
 
 # forcing 2D for manufactured solution
-def fun_2d(x, c, mu, lmbda, gdim):
+# this is -div(sigma(u_fun_2d))
+def fun_2d(x: npt.NDArray[np.float64], d: float, mu: float, lmbda: float, gdim: int) -> npt.NDArray[np.float64]:
     a = 2 * np.pi / 5
     b = 2 * np.pi
 
@@ -35,15 +38,15 @@ def fun_2d(x, c, mu, lmbda, gdim):
     f1 = -(lmbda + mu) * a * b * np.cos(a * x[0]) * np.cos(b * x[1])
 
     f2 = (mu * a**2 + (2 * mu + lmbda) * b**2) * np.sin(a * x[0]) * np.sin(b * x[1])
-    vals[0, :] = c * f1[:]
-    vals[1, :] = c * f2[:]
+    vals[0, :] = d * f1[:]
+    vals[1, :] = d * f2[:]
 
     return vals
 
 # manufacture soltuion 3D
 
 
-def u_fun_3d(x, d, gdim):
+def u_fun_3d(x: npt.NDArray[np.float64], d: float, gdim: int) -> npt.NDArray[np.float64]:
     u2 = d * np.sin(2 * np.pi * x[0] / 5) * np.sin(2 * np.pi * x[1]) * np.sin(2 * np.pi * x[2])
     vals = np.zeros((gdim, x.shape[1]))
     vals[1, :] = u2[:]
@@ -51,7 +54,8 @@ def u_fun_3d(x, d, gdim):
 
 
 # forcing 2D for manufactured solution
-def fun_3d(x, d, mu, lmbda, gdim):
+# this is -div(sigma(u_fun_3d))
+def fun_3d(x: npt.NDArray[np.float64], d: float, mu: float, lmbda: float, gdim: int) -> npt.NDArray[np.float64]:
     a = 2 * np.pi / 5
     b = 2 * np.pi
     c = 2 * np.pi
@@ -67,7 +71,14 @@ def fun_3d(x, d, mu, lmbda, gdim):
     return vals
 
 
-def unsplit_domain(threed=False, runs=1):
+def unsplit_domain(threed: bool = False, runs: int = 1):
+    '''
+        This function computes the finite element solution on a conforming
+        mesh that aligns with the surface that is used for splitting the domain
+        in 'test_meshtie' below
+        threed: tdim=gdim=3 if True, 2 otherwise
+        runs: number of refinements
+    '''
     # arrays to store
     errors = []
     ndofs = []
@@ -192,11 +203,16 @@ def unsplit_domain(threed=False, runs=1):
     print("Krylov iterations: ", its)
 
 
-def test_meshtie(threed=False, simplex=True, runs=5):
-    if simplex:
-        res = 0.8
-    else:
-        res = 1.2
+def test_meshtie(threed: bool = False, simplex: bool = True, runs: int = 5):
+    '''
+        This function computes the finite element solution on mesh
+        split along a surface, where the mesh and the surface discretisation
+        are not matching along the surface
+        threed: tdim=gdim=3 if True, 2 otherwise
+        simplex: If true use tet/triangle mesh if false use hex/quad mesh
+        runs: number of refinements
+    '''
+    res = 0.8 if simplex else 1.2
 
     # parameter for surface approximation
     num_segments = (2 * np.ceil(5.0 / 1.2).astype(np.int32), 2 * np.ceil(5.0 / (1.2 * 0.7)).astype(np.int32))
@@ -318,9 +334,23 @@ def test_meshtie(threed=False, simplex=True, runs=5):
     print("Number of dofs: ", dofs)
 
 
-unsplit_domain(threed=False, runs=2)
-unsplit_domain(threed=True, runs=1)
-test_meshtie(simplex=False, threed=False, runs=3)
-test_meshtie(simplex=True, threed=False, runs=1)
-test_meshtie(simplex=False, threed=True, runs=1)
-test_meshtie(simplex=True, threed=True, runs=1)
+if __name__ == "__main__":
+    desc = "Meshtie"
+    parser = argparse.ArgumentParser(description=desc,
+                                     formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument("--runs", default=1, type=int, dest="runs",
+                        help="Number of refinements")
+    _3D = parser.add_mutually_exclusive_group(required=False)
+    _3D.add_argument('--3D', dest='threed', action='store_true',
+                     help="Use 3D mesh", default=False)
+    _simplex = parser.add_mutually_exclusive_group(required=False)
+    _simplex.add_argument('--simplex', dest='simplex', action='store_true',
+                          help="Use triangle/tet mesh", default=False)
+    _unsplit = parser.add_mutually_exclusive_group(required=False)
+    _unsplit.add_argument('--unsplit', dest='unsplit', action='store_true',
+                          help="Use conforming mesh", default=False)
+    args = parser.parse_args()
+    if args.unsplit:
+        unsplit_domain(threed=args.threed, runs=args.runs)
+    else:
+        test_meshtie(simplex=args.simplex, threed=args.threed, runs=args.runs)

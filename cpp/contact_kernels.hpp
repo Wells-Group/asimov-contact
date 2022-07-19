@@ -109,7 +109,7 @@ kernel_fn<T> generate_contact_kernel(
   /// how many cells are connected with the cell.
   dolfinx_contact::kernel_fn<T> nitsche_rigid_rhs
       = [kd, gdim, tdim, phi_coeffs, constant_normal](
-            std::vector<std::vector<T>>& b, xtl::span<const T> c, const T* w,
+            std::vector<std::vector<T>>& b, std::span<const T> c, const T* w,
             const double* coordinate_dofs, const int facet_index,
             [[maybe_unused]] const std::size_t num_links)
   {
@@ -165,7 +165,7 @@ kernel_fn<T> generate_contact_kernel(
     double gamma = w[0] / c[c_offset + kd.offsets(3)];
     double gamma_inv = c[c_offset + kd.offsets(3)] / w[0];
     double theta = w[1];
-    xtl::span<const double> _weights(kd.q_weights());
+    std::span<const double> _weights(kd.q_weights());
     auto weights = _weights.subspan(q_offset[0], q_offset[1] - q_offset[0]);
 
     // Temporary variable for grad(phi) on physical cell
@@ -332,7 +332,7 @@ kernel_fn<T> generate_contact_kernel(
     double gamma_inv = c[c_offset + kd.offsets(3)] / w[0];
     double theta = w[1];
 
-    xtl::span<const double> _weights(kd.q_weights());
+    std::span<const double> _weights(kd.q_weights());
     auto weights = _weights.subspan(q_offset[0], q_offset[1] - q_offset[0]);
 
     // Extract reference to the tabulated basis function

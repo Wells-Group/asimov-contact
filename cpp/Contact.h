@@ -229,7 +229,7 @@ public:
     kernel_fn<PetscScalar> unbiased_rhs
         = [kd, gdim, ndofs_cell,
            bs](std::vector<std::vector<PetscScalar>>& b,
-               xtl::span<const PetscScalar> c, const PetscScalar* w,
+               std::span<const PetscScalar> c, const PetscScalar* w,
                const double* coordinate_dofs, const int facet_index,
                const std::size_t num_links)
 
@@ -374,7 +374,7 @@ public:
     /// to be padded to 3D, (shape (num_nodes, 3)).
     kernel_fn<PetscScalar> unbiased_jac
         = [kd, gdim, ndofs_cell, bs](std::vector<std::vector<PetscScalar>>& A,
-                                     xtl::span<const double> c, const double* w,
+                                     std::span<const double> c, const double* w,
                                      const double* coordinate_dofs,
                                      const int facet_index,
                                      const std::size_t num_links)
