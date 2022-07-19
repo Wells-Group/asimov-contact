@@ -10,6 +10,8 @@
 #include <basix/finite-element.h>
 #include <basix/quadrature.h>
 #include <dolfinx/mesh/cell_types.h>
+#include <xtensor/xtensor.hpp>
+#include <xtensor/xview.hpp>
 
 namespace dolfinx_contact
 {

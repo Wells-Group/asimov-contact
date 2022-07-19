@@ -9,6 +9,7 @@
 #include <dolfinx/fem/FiniteElement.h>
 #include <dolfinx/mesh/Mesh.h>
 #include <xtensor/xtensor.hpp>
+#include <xtensor/xview.hpp>
 namespace dolfinx_contact
 {
 
