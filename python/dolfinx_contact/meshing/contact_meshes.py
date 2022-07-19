@@ -4,9 +4,7 @@
 
 import gmsh
 import numpy as np
-from dolfinx.graph import create_adjacencylist
 from dolfinx.io import gmshio, XDMFFile
-from dolfinx.mesh import CellType, create_mesh, meshtags_from_entities
 from mpi4py import MPI
 
 __all__ = ["create_circle_plane_mesh", "create_circle_circle_mesh", "create_box_mesh_2D",
