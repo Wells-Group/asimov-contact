@@ -60,7 +60,7 @@ dolfinx_contact::KernelData::KernelData(
   /// Pack test and trial functions
   const basix::FiniteElement& basix_element = element->basix_element();
   std::array<std::size_t, 4> tab_shape
-      = basix_element.tabulate_shape(0, num_quadrature_pts);
+      = basix_element.tabulate_shape(1, num_quadrature_pts);
   _phi = xt::xtensor<double, 2>({num_quadrature_pts, _ndofs_cell});
   _dphi = xt::xtensor<double, 3>({_tdim, num_quadrature_pts, _ndofs_cell});
   xt::xtensor<double, 4> basis_functions(tab_shape);
@@ -88,10 +88,16 @@ dolfinx_contact::KernelData::KernelData(
   // compute this per quadrature point
   basix::cell::type basix_cell
       = dolfinx::mesh::cell_type_to_basix_type(mesh->topology().cell_type());
-  _ref_jacobians = basix::cell::facet_jacobians(basix_cell);
+  auto [ref_jac, jac_shape] = basix::cell::facet_jacobians(basix_cell);
+  _ref_jacobians = xt::zeros<double>(jac_shape);
+  std::copy(ref_jac.cbegin(), ref_jac.cend(), _ref_jacobians.begin());
 
   // Get facet normals on reference cell
-  _facet_normals = basix::cell::facet_outward_normals(basix_cell);
+  auto [facet_normals, n_shape]
+      = basix::cell::facet_outward_normals(basix_cell);
+  _facet_normals = xt::zeros<double>(n_shape);
+  std::copy(facet_normals.cbegin(), facet_normals.cend(),
+            _facet_normals.begin());
 
   // Get update Jacobian function (for each quadrature point)
   _update_jacobian = dolfinx_contact::get_update_jacobian_dependencies(cmap);

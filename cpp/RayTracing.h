@@ -111,7 +111,10 @@ get_parameterization(dolfinx::mesh::CellType cell_type, int facet_index)
   // Get basix geometry information
   basix::cell::type basix_cell
       = dolfinx::mesh::cell_type_to_basix_type(cell_type);
-  const xt::xtensor<double, 2> x = basix::cell::geometry(basix_cell);
+  std::pair<std::vector<double>, std::array<std::size_t, 2>> _x
+      = basix::cell::geometry(basix_cell);
+  xt::xtensor<double, 2> x(_x.second);
+  std::copy(_x.first.cbegin(), _x.first.cend(), x.begin());
   const std::vector<std::vector<int>> facets
       = basix::cell::topology(basix_cell)[tdim - 1];
 
@@ -164,8 +167,9 @@ get_parameterization_jacobian(dolfinx::mesh::CellType cell_type,
 
   basix::cell::type basix_cell
       = dolfinx::mesh::cell_type_to_basix_type(cell_type);
-  xt::xtensor<double, 3> facet_jacobians
-      = basix::cell::facet_jacobians(basix_cell);
+  auto [ref_jac, jac_shape] = basix::cell::facet_jacobians(basix_cell);
+  xt::xtensor<double, 3> facet_jacobians(jac_shape);
+  std::copy(ref_jac.cbegin(), ref_jac.cend(), facet_jacobians.begin());
 
   xt::xtensor_fixed<double, xt::xshape<tdim, tdim - 1>> output;
   output = xt::view(facet_jacobians, facet_index, xt::all(), xt::all());
