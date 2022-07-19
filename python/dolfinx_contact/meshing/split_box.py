@@ -35,7 +35,7 @@ def horizontal_sine(t, x0, x1):
     return points
 
 
-def get_surface_points(domain, points, line_pts, split=1):
+def get_surface_points(domain, points, line_pts):
     pts = [points[node] for node in domain]
     i0 = np.argwhere(np.array(domain, dtype=np.int32) == 4)[0, 0]
     i1 = np.argwhere(np.array(domain, dtype=np.int32) == 5)[0, 0]

@@ -19,7 +19,7 @@ from dolfinx_contact.meshtie import nitsche_meshtie
 
 
 # manufactured solution 2D
-def u_fun_2D(x, c, gdim):
+def u_fun_2d(x, c, gdim):
     u2 = c * np.sin(2 * np.pi * x[0] / 5) * np.sin(2 * np.pi * x[1])
     vals = np.zeros((gdim, x.shape[1]))
     vals[1, :] = u2[:]
@@ -27,7 +27,7 @@ def u_fun_2D(x, c, gdim):
 
 
 # forcing 2D for manufactured solution
-def fun_2D(x, c, mu, lmbda, gdim):
+def fun_2d(x, c, mu, lmbda, gdim):
     a = 2 * np.pi / 5
     b = 2 * np.pi
 
@@ -43,7 +43,7 @@ def fun_2D(x, c, mu, lmbda, gdim):
 # manufacture soltuion 3D
 
 
-def u_fun_3D(x, d, gdim):
+def u_fun_3d(x, d, gdim):
     u2 = d * np.sin(2 * np.pi * x[0] / 5) * np.sin(2 * np.pi * x[1]) * np.sin(2 * np.pi * x[2])
     vals = np.zeros((gdim, x.shape[1]))
     vals[1, :] = u2[:]
@@ -51,7 +51,7 @@ def u_fun_3D(x, d, gdim):
 
 
 # forcing 2D for manufactured solution
-def fun_3D(x, d, mu, lmbda, gdim):
+def fun_3d(x, d, mu, lmbda, gdim):
     a = 2 * np.pi / 5
     b = 2 * np.pi
     c = 2 * np.pi
@@ -78,18 +78,18 @@ def unsplit_domain(threed=False, runs=1):
     num_segments = 2 * np.ceil(5.0 / (1.2 * 0.7)).astype(np.int32)  # parameter for surface approximation
 
     for i in range(1, runs + 1):
-
+        print(f"Run {i}")
         # create mesh
         if threed:
             fname = "box_3D"
             create_unsplit_box_3d(res=res, num_segments=num_segments)
-            fun = fun_3D
-            u_fun = u_fun_3D
+            fun = fun_3d
+            u_fun = u_fun_3d
         else:
             fname = "box_2D"
             create_unsplit_box_2d(res=res, num_segments=num_segments)
-            fun = fun_2D
-            u_fun = u_fun_2D
+            fun = fun_2d
+            u_fun = u_fun_2d
 
         # read in mesh and markers
         with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
@@ -232,18 +232,19 @@ def test_meshtie(threed=False, simplex=True, runs=5):
     iterations = []
     dofs = []
     for i in range(1, runs + 1):
+        print(f"Run {i}")
         if threed:
             fname = "beam3D"
             create_split_box_3D(fname, res=res, L=5.0, H=1.0, W=1.0, domain_1=[0, 1, 5, 4], domain_2=[4, 5, 2, 3], x0=[
                 0, 0.5], x1=[5.0, 0.7], curve_fun=horizontal_sine, num_segments=num_segments, hex=not simplex)
-            fun = fun_3D
-            u_fun = u_fun_3D
+            fun = fun_3d
+            u_fun = u_fun_3d
         else:
             fname = "beam"
             create_split_box_2D(fname, res=res, L=5.0, H=1.0, domain_1=[0, 1, 5, 4], domain_2=[4, 5, 2, 3], x0=[
                 0, 0.5], x1=[5.0, 0.7], curve_fun=horizontal_sine, num_segments=num_segments, quads=not simplex)
-            fun = fun_2D
-            u_fun = u_fun_2D
+            fun = fun_2d
+            u_fun = u_fun_2d
 
         with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
             mesh = xdmf.read_mesh(name="Grid")

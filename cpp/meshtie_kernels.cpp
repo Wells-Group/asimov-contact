@@ -266,14 +266,43 @@ dolfinx_contact::generate_meshtie_kernel(
         {
           for (std::size_t i = 0; i < ndofs_cell; i++)
           {
+
+            // gamma inner(u, v)
+            A[0][(l + i * bs) * ndofs_cell * bs + l + j * bs]
+                += gamma * phi(q_pos, j) * phi(q_pos, i) * w0;
+
+            // inner products of test and trial functions only non-zero if dof
+            // corresponds to same block index
             for (std::size_t k = 0; k < num_links; k++)
             {
-              // gamma inner(u, v)
-              A[0][(l + i * bs) * ndofs_cell * bs + l + j * bs]
-                  += gamma * phi(q_pos, j) * phi(q_pos, i) * w0;
+              std::size_t index_u = kd.offsets(3)
+                                    + k * num_points * ndofs_cell * bs
+                                    + j * num_points * bs + q * bs + l;
+              std::size_t index_v = kd.offsets(3)
+                                    + k * num_points * ndofs_cell * bs
+                                    + i * num_points * bs + q * bs + l;
 
-              // inner products of test and trial functions only non-zero if dof
-              // corresponds to same block index
+              // - gamma inner(u_opp, v)
+              A[3 * k + 1][(l + i * bs) * bs * ndofs_cell + l + j * bs]
+                  += -gamma * c[index_u] * phi(q_pos, i) * w0;
+              // - gamma inner(u, v_opp)
+              A[3 * k + 2][(l + i * bs) * bs * ndofs_cell + l + j * bs]
+                  += -gamma * phi(q_pos, j) * c[index_v] * w0;
+              // + gamma inner(u_opp, v_opp)
+              A[3 * k + 3][(l + i * bs) * bs * ndofs_cell + l + j * bs]
+                  += gamma * c[index_u] * c[index_v] * w0;
+            }
+
+            for (std::size_t b = 0; b < bs; b++)
+            {
+              // Fill contributions of facet with itself
+              // -0.5 inner(sig(u)n, v) - 0.5 theta inner(sig(v), u)
+              A[0][(b + i * bs) * ndofs_cell * bs + l + j * bs]
+                  += (-0.5 * sig_n(j, l, b) * phi(q_pos, i)
+                      - 0.5 * theta * sig_n(i, b, l) * phi(q_pos, j))
+                     * w0;
+
+              // entries corresponding to u and v on the other surface
               for (std::size_t k = 0; k < num_links; k++)
               {
                 std::size_t index_u = kd.offsets(3)
@@ -281,54 +310,24 @@ dolfinx_contact::generate_meshtie_kernel(
                                       + j * num_points * bs + q * bs + l;
                 std::size_t index_v = kd.offsets(3)
                                       + k * num_points * ndofs_cell * bs
-                                      + i * num_points * bs + q * bs + l;
-
-                // - gamma inner(u_opp, v)
-                A[3 * k + 1][(l + i * bs) * bs * ndofs_cell + l + j * bs]
-                    += -gamma * c[index_u] * phi(q_pos, i) * w0;
-                // - gamma inner(u, v_opp)
-                A[3 * k + 2][(l + i * bs) * bs * ndofs_cell + l + j * bs]
-                    += -gamma * phi(q_pos, j) * c[index_v] * w0;
-                // + gamma inner(u_opp, v_opp)
-                A[3 * k + 3][(l + i * bs) * bs * ndofs_cell + l + j * bs]
-                    += gamma * c[index_u] * c[index_v] * w0;
-              }
-              for (std::size_t b = 0; b < bs; b++)
-              {
-                // Fill contributions of facet with itself
-                // -0.5 inner(sig(u)n, v) - 0.5 theta inner(sig(v), u)
-                A[0][(b + i * bs) * ndofs_cell * bs + l + j * bs]
-                    += (-0.5 * sig_n(j, l, b) * phi(q_pos, i)
-                        - 0.5 * theta * sig_n(i, b, l) * phi(q_pos, j))
+                                      + i * num_points * bs + q * bs + b;
+                // -0.5 inner(sig(u_opp), v) +0.5 theta inner(sig(v), u_opp)
+                A[3 * k + 1][(b + i * bs) * bs * ndofs_cell + l + j * bs]
+                    += (-0.5 * sig_n_opp(k, j, l, b) * phi(q_pos, i)
+                        + 0.5 * theta * sig_n(i, b, l) * c[index_u])
                        * w0;
 
-                // entries corresponding to u and v on the other surface
-                for (std::size_t k = 0; k < num_links; k++)
-                {
-                  std::size_t index_u = kd.offsets(3)
-                                        + k * num_points * ndofs_cell * bs
-                                        + j * num_points * bs + q * bs + l;
-                  std::size_t index_v = kd.offsets(3)
-                                        + k * num_points * ndofs_cell * bs
-                                        + i * num_points * bs + q * bs + b;
-                  // -0.5 inner(sig(u_opp), v) +0.5 theta inner(sig(v), u_opp)
-                  A[3 * k + 1][(b + i * bs) * bs * ndofs_cell + l + j * bs]
-                      += (-0.5 * sig_n_opp(k, j, l, b) * phi(q_pos, i)
-                          + 0.5 * theta * sig_n(i, b, l) * c[index_u])
-                         * w0;
-
-                  // 0.5 inner(sig(u), v_opp) -0.5 theta inner(sig(v_opp), u)
-                  A[3 * k + 2][(b + i * bs) * bs * ndofs_cell + l + j * bs]
-                      += (0.5 * sig_n(j, l, b) * c[index_v]
-                          - 0.5 * theta * sig_n_opp(k, i, b, l) * phi(q_pos, j))
-                         * w0;
-                  // 0.5 inner(sig(u_opp), v_opp) +0.5 theta
-                  // inner(sig(v_opp),u_opp)
-                  A[3 * k + 3][(b + i * bs) * bs * ndofs_cell + l + j * bs]
-                      += (0.5 * sig_n_opp(k, j, l, b) * c[index_v]
-                          + 0.5 * theta * sig_n_opp(k, i, b, l) * c[index_u])
-                         * w0;
-                }
+                // 0.5 inner(sig(u), v_opp) -0.5 theta inner(sig(v_opp), u)
+                A[3 * k + 2][(b + i * bs) * bs * ndofs_cell + l + j * bs]
+                    += (0.5 * sig_n(j, l, b) * c[index_v]
+                        - 0.5 * theta * sig_n_opp(k, i, b, l) * phi(q_pos, j))
+                       * w0;
+                // 0.5 inner(sig(u_opp), v_opp) +0.5 theta
+                // inner(sig(v_opp),u_opp)
+                A[3 * k + 3][(b + i * bs) * bs * ndofs_cell + l + j * bs]
+                    += (0.5 * sig_n_opp(k, j, l, b) * c[index_v]
+                        + 0.5 * theta * sig_n_opp(k, i, b, l) * c[index_u])
+                       * w0;
               }
             }
           }

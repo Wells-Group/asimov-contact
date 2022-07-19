@@ -29,6 +29,5 @@ __all__ = ["create_christmas_tree_mesh",
            "create_split_box_3D",
            "create_unsplit_box_2d",
            "create_unsplit_box_3d",
-           "horizontal_line",
            "vertical_line",
            "horizontal_sine"]
