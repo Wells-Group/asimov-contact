@@ -3,8 +3,8 @@
 # SPDX-License-Identifier:    MIT
 
 import dolfinx.fem as _fem
-import dolfinx.mesh as _mesh
 from dolfinx.common import Timer, timing, TimingType, list_timings
+from dolfinx.fem import Constant, Function, VectorFunctionSpace
 from dolfinx.graph import create_adjacencylist
 from dolfinx.io import XDMFFile
 import numpy as np
@@ -13,9 +13,9 @@ from mpi4py import MPI
 from petsc4py import PETSc
 from dolfinx_contact.helpers import (epsilon, lame_parameters,
                                      rigid_motions_nullspace, sigma_func)
-from dolfinx_contact.meshing import create_split_box_2D, create_split_box_3D, horizontal_sin, create_unsplit_box_2d, create_unsplit_box_3d
+from dolfinx_contact.meshing import (create_split_box_2D, create_split_box_3D,
+                                     horizontal_sine, create_unsplit_box_2d, create_unsplit_box_3d)
 from dolfinx_contact.meshtie import nitsche_meshtie
-from sys import stdout
 
 
 # manufactured solution 2D
@@ -165,7 +165,7 @@ def unsplit_domain(threed=False, runs=1):
         # Set a monitor, solve linear system, and display the solver
         # configuration
         solver.setMonitor(lambda _, its, rnorm: print(f"Iteration: {its}, rel. residual: {rnorm}"))
-        timing_str = f"~Krylov Solver"
+        timing_str = "~Krylov Solver"
         with Timer(timing_str):
             solver.solve(b, uh.vector)
 
@@ -201,15 +201,18 @@ def test_meshtie(threed=False, simplex=True, runs=5):
     # parameter for surface approximation
     num_segments = (2 * np.ceil(5.0 / 1.2).astype(np.int32), 2 * np.ceil(5.0 / (1.2 * 0.7)).astype(np.int32))
     c = 0.01  # amplitude of manufactured solution
-    # nitsche parameters
-    nitsche_parameters = {"gamma": 10, "theta": 1, "lift_bc": False}
     # Compute lame parameters
     E = 1e3
     nu = 0.1
     mu_func, lambda_func = lame_parameters(False)
     mu = mu_func(E, nu)
     lmbda = lambda_func(E, nu)
-    physical_parameters = {"E": E, "nu": nu, "strain": False}
+    sigma = sigma_func(mu, lmbda)
+
+    # dictionary with problem parameters
+    gamma = 10
+    theta = 1
+    problem_parameters = {"mu": mu, "lambda": lmbda, "gamma": E * gamma, "theta": theta}
 
     # Solver options
     ksp_tol = 1e-10
@@ -226,24 +229,21 @@ def test_meshtie(threed=False, simplex=True, runs=5):
     }
     errors = []
     times = []
-    other_times = []
     iterations = []
     dofs = []
     for i in range(1, runs + 1):
         if threed:
             fname = "beam3D"
             create_split_box_3D(fname, res=res, L=5.0, H=1.0, W=1.0, domain_1=[0, 1, 5, 4], domain_2=[4, 5, 2, 3], x0=[
-                0, 0.5], x1=[5.0, 0.7], curve_fun=horizontal_sin, num_segments=num_segments, hex=not simplex)
+                0, 0.5], x1=[5.0, 0.7], curve_fun=horizontal_sine, num_segments=num_segments, hex=not simplex)
             fun = fun_3D
             u_fun = u_fun_3D
-            el_string = "tets" if simplex else "hex"
         else:
             fname = "beam"
             create_split_box_2D(fname, res=res, L=5.0, H=1.0, domain_1=[0, 1, 5, 4], domain_2=[4, 5, 2, 3], x0=[
-                0, 0.5], x1=[5.0, 0.7], curve_fun=horizontal_sin, num_segments=num_segments, quads=not simplex)
+                0, 0.5], x1=[5.0, 0.7], curve_fun=horizontal_sine, num_segments=num_segments, quads=not simplex)
             fun = fun_2D
             u_fun = u_fun_2D
-            el_string = "triangles" if simplex else "quads"
 
         with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
             mesh = xdmf.read_mesh(name="Grid")
@@ -255,22 +255,46 @@ def test_meshtie(threed=False, simplex=True, runs=5):
             domain_marker = xdmf.read_meshtags(mesh, name="domain_marker")
             facet_marker = xdmf.read_meshtags(mesh, name="contact_facets")
 
-        def force_func(x): return fun(x, c, mu, lmbda, gdim)
-        def zero_dirichlet(x): return np.zeros((gdim, x.shape[1]))
-        dirichlet = [(3, zero_dirichlet), (5, zero_dirichlet)]
-        body_forces = [(1, force_func), (2, force_func)]
+        # Function, TestFunction, TrialFunction and measures
+        V = VectorFunctionSpace(mesh, ("CG", 1))
+        u = Function(V)
+        v = ufl.TestFunction(V)
+        w = ufl.TrialFunction(V)
+        dx = ufl.Measure("dx", domain=mesh, subdomain_data=domain_marker)
+        ds = ufl.Measure("ds", domain=mesh, subdomain_data=facet_marker)
+        h = ufl.CellDiameter(mesh)
+        n = ufl.FacetNormal(mesh)
+
+        J = ufl.inner(sigma(w), epsilon(v)) * dx
+
+        # forcing
+        def force_func(x):
+            return fun(x, c, mu, lmbda, gdim)
+        f = Function(V)
+        f.interpolate(force_func)
+        F = ufl.inner(f, v) * dx
+
+        # 0 dirichlet
+        if gdim == 3:
+            g = Constant(mesh, PETSc.ScalarType((0.0, 0.0, 0.0)))
+        else:
+            g = Constant(mesh, PETSc.ScalarType((0.0, 0.0)))
+        for tag in [3, 5]:
+            J += - ufl.inner(sigma(w) * n, v) * ds(tag)\
+                - theta * ufl.inner(sigma(v) * n, w) * \
+                ds(tag) + E * gamma / h * ufl.inner(w, v) * ds(tag)
+            F += - theta * ufl.inner(sigma(v) * n, g) * \
+                ds(tag) + E * gamma / h * ufl.inner(g, v) * ds(tag)
 
         contact = [(1, 0), (0, 1)]
         data = np.array([4, 6], dtype=np.int32)
         offsets = np.array([0, 2], dtype=np.int32)
         surfaces = create_adjacencylist(data, offsets)
         # Solve contact problem using Nitsche's method
-        u1, its, solver_time, ndofs = nitsche_meshtie(
-            mesh=mesh, mesh_tags=[facet_marker], domain_marker=domain_marker,
-            surfaces=surfaces, dirichlet=dirichlet, neumann=[], contact_pairs=contact,
-            body_forces=body_forces, physical_parameters=physical_parameters,
-            nitsche_parameters=nitsche_parameters,
-            quadrature_degree=3, petsc_options=petsc_options, run=i)
+        u1, its, solver_time, ndofs = nitsche_meshtie(lhs=J, rhs=F, u=u, markers=[domain_marker, facet_marker],
+                                                      surface_data=(surfaces, contact),
+                                                      bcs=[], problem_parameters=problem_parameters,
+                                                      petsc_options=petsc_options)
 
         V_err = _fem.VectorFunctionSpace(mesh, ("CG", 3))
         u_ex = _fem.Function(V_err)
@@ -293,5 +317,9 @@ def test_meshtie(threed=False, simplex=True, runs=5):
     print("Number of dofs: ", dofs)
 
 
-unsplit_domain(threed=False, runs=1)
-test_meshtie(simplex=False, threed=False runs=1)
+unsplit_domain(threed=False, runs=2)
+unsplit_domain(threed=True, runs=1)
+test_meshtie(simplex=False, threed=False, runs=3)
+test_meshtie(simplex=True, threed=False, runs=1)
+test_meshtie(simplex=False, threed=True, runs=1)
+test_meshtie(simplex=True, threed=True, runs=1)

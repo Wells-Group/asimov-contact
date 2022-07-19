@@ -2,14 +2,12 @@
 #
 # SPDX-License-Identifier:    MIT
 
-from importlib.machinery import BYTECODE_SUFFIXES
-from typing import Callable, Tuple, Union
+from typing import Tuple
 
 import dolfinx.cpp.fem as _cppfem
 import dolfinx.common as _common
 import dolfinx.fem as _fem
 import dolfinx.log as _log
-import dolfinx.mesh as _mesh
 import dolfinx_cuas
 import numpy as np
 import ufl
@@ -19,7 +17,7 @@ from petsc4py import PETSc as _PETSc
 
 import dolfinx_contact
 import dolfinx_contact.cpp
-from dolfinx_contact.helpers import (rigid_motions_nullspace_subdomains, sigma_func)
+from dolfinx_contact.helpers import rigid_motions_nullspace_subdomains
 
 kt = dolfinx_contact.cpp.Kernel
 
@@ -94,7 +92,6 @@ def nitsche_meshtie(lhs: ufl.Form, rhs: _fem.Function, u: _fem.Function, markers
         raise RuntimeError("Need to supply gamma for Nitsche's method")
     else:
         gamma = problem_parameters.get("gamma")
-    sigma = sigma_func(mu, lmbda)
 
     # Contact data
     surface_pairs = surface_data[1]
@@ -103,7 +100,6 @@ def nitsche_meshtie(lhs: ufl.Form, rhs: _fem.Function, u: _fem.Function, markers
     # Mesh, function space and FEM functions
     V = u.function_space
     mesh = V.mesh
-    w = ufl.TrialFunction(V)     # Trial function
     h = ufl.CellDiameter(mesh)
 
     # Custom assembly
@@ -199,7 +195,7 @@ def nitsche_meshtie(lhs: ufl.Form, rhs: _fem.Function, u: _fem.Function, markers
     with _common.Timer("~~Contact " + timing_str + ": Pack constants ufl"):
         consts_ufl = _cppfem.pack_constants(F_custom)
     with _common.Timer("~~Contact " + timing_str + ": Standard contributions (in assemble vector)"):
-        _fem.petsc.assemble_vector(b, F_custom, constants=consts_ufl, coeffs=coeffs_ufl)
+        _fem.petsc.assemble_vector(b, F_custom, constants=consts_ufl, coeffs=coeffs_ufl)  # type: ignore
 
     # Apply boundary condition
     if len(bcs) > 0:
@@ -218,7 +214,7 @@ def nitsche_meshtie(lhs: ufl.Form, rhs: _fem.Function, u: _fem.Function, markers
     with _common.Timer("~~Contact " + timing_str + ": Pack constants ufl"):
         consts_ufl = _cppfem.pack_constants(J_custom)
     with _common.Timer("~~Contact " + timing_str + ": Standard contributions (in assemble matrix)"):
-        _fem.petsc.assemble_matrix(A, J_custom, constants=consts_ufl, coeffs=coeffs_ufl, bcs=bcs)
+        _fem.petsc.assemble_matrix(A, J_custom, constants=consts_ufl, coeffs=coeffs_ufl, bcs=bcs)  # type: ignore
     A.assemble()
 
     # Set rigid motion nullspace

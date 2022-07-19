@@ -183,10 +183,10 @@ def rigid_motions_nullspace_subdomains(V: _fem.FunctionSpace, mt: MeshTags_int32
     ===========
     V
         The function space
-    mt 
+    mt
         Meshtag that contains tags for all objects that need to be considered
         for defining the rigid motion nullspace
-    tags 
+    tags
         The values of the meshtags for the objects
     """
     _x = _fem.Function(V)

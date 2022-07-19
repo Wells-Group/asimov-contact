@@ -8,7 +8,7 @@ import sys
 import numpy as np
 import ufl
 from dolfinx import log
-from dolfinx.common import TimingType, list_timings, timing
+from dolfinx.common import TimingType, list_timings
 from dolfinx.fem import dirichletbc, Constant, Function, locate_dofs_topological, VectorFunctionSpace
 from dolfinx.graph import create_adjacencylist
 from dolfinx.io import XDMFFile
@@ -16,7 +16,7 @@ from dolfinx.mesh import locate_entities_boundary, meshtags
 from mpi4py import MPI
 from petsc4py.PETSc import ScalarType
 
-from dolfinx_contact.helpers import lame_parameters, epsilon, weak_dirichlet, sigma_func
+from dolfinx_contact.helpers import lame_parameters, epsilon, sigma_func
 from dolfinx_contact.meshing import (convert_mesh,
                                      create_box_mesh_3D)
 from dolfinx_contact.meshtie import nitsche_meshtie
@@ -134,7 +134,7 @@ if __name__ == "__main__":
     # Dirichlet bdry conditions
     g = Constant(mesh, ScalarType((0.0, 0.0, 0.0)))
     if args.lifting:
-        bdy_dofs = locate_dofs_topological(V, tdim - 1, facet_marker.find(dirichlet_bdy))
+        bdy_dofs = locate_dofs_topological(V, tdim - 1, facet_marker.find(dirichlet_bdy))  # type: ignore
         bcs = [dirichletbc(g, bdy_dofs, V)]
     else:
         bcs = []
@@ -179,7 +179,8 @@ if __name__ == "__main__":
     solver_outfile = args.outfile if args.ksp else None
 
     # Solve contact problem using Nitsche's method
-    u, krylov_iterations, solver_time, _ = nitsche_meshtie(lhs=J, rhs=F, u=u, markers=[domain_marker, facet_marker], surface_data=(surfaces, contact),
+    u, krylov_iterations, solver_time, _ = nitsche_meshtie(lhs=J, rhs=F, u=u, markers=[domain_marker, facet_marker],
+                                                           surface_data=(surfaces, contact),
                                                            bcs=bcs, problem_parameters=problem_parameters,
                                                            petsc_options=petsc_options)
 
