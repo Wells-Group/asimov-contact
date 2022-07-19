@@ -18,8 +18,9 @@ dolfinx_contact::SubMesh::SubMesh(
   // create sorted vector of unique cells adjacent to the input facets
   std::vector<std::int32_t> cells(cell_facet_pairs.size() / 2);
   for (std::size_t f = 0; f < cell_facet_pairs.size(); f += 2)
-    cells[f / 2] = cell_facet_pairs[f];                // retrieve cells
-  dolfinx::radix_sort<std::int32_t>(xtl::span(cells)); // sort cells
+    cells[f / 2] = cell_facet_pairs[f]; // retrieve cells
+  dolfinx::radix_sort<std::int32_t>(
+      std::span(cells.data(), cells.size())); // sort cells
   cells.erase(std::unique(cells.begin(), cells.end()),
               cells.end()); // remove duplicates
 
@@ -28,7 +29,7 @@ dolfinx_contact::SubMesh::SubMesh(
   // call dolfinx::mesh::create_submesh and save ouput to member variables
   auto [submesh, cell_map, vertex_map, x_dof_map]
       = dolfinx::mesh::create_submesh(*mesh, tdim,
-                                      xtl::span(cells.data(), cells.size()));
+                                      std::span(cells.data(), cells.size()));
   _parent_cells = cell_map;
 
   _mesh = std::make_shared<dolfinx::mesh::Mesh>(submesh);

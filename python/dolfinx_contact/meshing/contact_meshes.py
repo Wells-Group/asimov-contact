@@ -4,10 +4,7 @@
 
 import gmsh
 import numpy as np
-from dolfinx.graph import create_adjacencylist
-from dolfinx.io import (XDMFFile, cell_perm_gmsh, distribute_entity_data, extract_gmsh_geometry,
-                        extract_gmsh_topology_and_markers, ufl_mesh_from_gmsh)
-from dolfinx.mesh import CellType, create_mesh, meshtags_from_entities
+from dolfinx.io import gmshio, XDMFFile
 from mpi4py import MPI
 
 __all__ = ["create_circle_plane_mesh", "create_circle_circle_mesh", "create_box_mesh_2D",
@@ -435,46 +432,17 @@ def create_cylinder_cylinder_mesh(filename: str, order: int = 1, res=0.25, simpl
 
         gmsh.model.mesh.field.setAsBackgroundMesh(1)
         model.occ.synchronize()
-        model.mesh.generate(3)
-        model.mesh.setOrder(order)
 
         for i, entity in enumerate(model.getEntities(3)):
             model.addPhysicalGroup(3, [entity[1]], tag=i)
 
         model.setPhysicalName(3, 1, "Mesh volume")
 
-        # Sort mesh nodes according to their index in gmsh
-        x = extract_gmsh_geometry(model, model.getCurrent())
-        ct = "tetrahedron" if simplex else "hexahedron"
-        # Broadcast cell type data and geometric dimension
-        gmsh_cell_id = MPI.COMM_WORLD.bcast(
-            model.mesh.getElementType(ct, order), root=0)
+        model.mesh.generate(3)
+        model.mesh.setOrder(order)
+    msh, mt_domain, _ = gmshio.model_to_mesh(model, MPI.COMM_WORLD, 0, 3)
 
-        # Get mesh data for dim (0, tdim) for all physical entities
-        topologies = extract_gmsh_topology_and_markers(model, model.getCurrent())
-        cells = topologies[gmsh_cell_id]["topology"]
-        cell_data = topologies[gmsh_cell_id]["cell_data"]
-
-        num_nodes = MPI.COMM_WORLD.bcast(cells.shape[1], root=0)
-        gmsh.finalize()
-    else:
-        gmsh_cell_id = MPI.COMM_WORLD.bcast(None, root=0)
-        num_nodes = MPI.COMM_WORLD.bcast(None, root=0)
-        cells, x = np.empty([0, num_nodes]), np.empty([0, 3])
-        cell_data = np.empty((0,), dtype=np.int32)
-
-    # Permute the mesh topology from GMSH ordering to DOLFINx ordering
-    domain = ufl_mesh_from_gmsh(gmsh_cell_id, 3)
-    cell_type = CellType.tetrahedron if simplex else CellType.hexahedron
-    gmsh_hex = cell_perm_gmsh(cell_type, num_nodes)
-    cells = cells[:, gmsh_hex]
-
-    msh = create_mesh(MPI.COMM_WORLD, cells, x, domain)
     msh.name = "cylinder_cylinder"
-
-    tdim = msh.topology.dim
-    entities, values = distribute_entity_data(msh, tdim, cells.astype(np.int64), cell_data.astype(np.int32))
-    mt_domain = meshtags_from_entities(msh, tdim, create_adjacencylist(entities), values)
     mt_domain.name = "domain_marker"
 
     # Permute also entities which are tagged
