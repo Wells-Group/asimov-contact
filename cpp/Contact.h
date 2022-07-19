@@ -581,10 +581,9 @@ public:
     for (std::size_t i = 0; i < active_facets.size(); i += 2)
     {
       std::vector<std::int32_t> linked_cells;
-      const tcb::span<const int> links = map->links((int)i / 2);
-      for (auto link : links)
+      for (auto link : map->links((int)i / 2))
       {
-        const tcb::span<const int> facet_pair = facet_map->links(link);
+        const std::span<const int> facet_pair = facet_map->links(link);
         linked_cells.push_back(facet_pair[0]);
       }
       // Remove duplicates
@@ -677,7 +676,7 @@ public:
           point(0, k) = qp_phys[i](q, k);
 
         // Get the geometry dofs for the ith facet, qth quadrature point
-        const tcb::span<const int> master_facet
+        const std::span<const int> master_facet
             = master_facets_geometry.links(int(i * num_q_point + q));
         assert(num_facet_dofs == master_facet.size());
 
@@ -760,13 +759,13 @@ public:
     // Loop over all facets
     for (std::size_t i = 0; i < num_facets; i++)
     {
-      const tcb::span<const int> links = map->links((int)i);
+      const std::span<const int> links = map->links((int)i);
       assert(links.size() == num_q_points);
 
       // Compute Pi(x) form points x and gap funtion Pi(x) - x
       for (std::size_t j = 0; j < num_q_points; j++)
       {
-        const tcb::span<const int> linked_pair = facet_map->links(links[j]);
+        const std::span<const int> linked_pair = facet_map->links(links[j]);
         assert(!linked_pair.empty());
         linked_cells[j] = linked_pair.front();
         for (int k = 0; k < gdim; k++)
