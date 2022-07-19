@@ -3,13 +3,13 @@
 # SPDX-License-Identifier:    MIT
 
 from mpi4py import MPI
-import meshio
+import dolfinx.io
 
 
-def convert_mesh(filename: str, outname: str, cell_type: str, prune_z: bool = False, cell_data: str = "gmsh:physical"):
+def convert_mesh(filename: str, outname: str, gdim: int = 3):
     """
-    Read a GMSH mesh (msh format) and convert it to XDMF with only cells of input cell-type.
-    Name of output file will be the same as input file (.msh->.xdmf/.h5)
+    Read a GMSH mesh (msh format) and convert it to XDMF with both cell
+    and facet tags in a single file.
 
     Parameters
     ==========
@@ -17,21 +17,19 @@ def convert_mesh(filename: str, outname: str, cell_type: str, prune_z: bool = Fa
         Name of input file
     outname
         Name of output file
-    cell_type
-        The cell type
-    prune_z
-        Sets mesh geometrical dimension to 2 if True, else gdim=3
-    cell_data
-        Key to cell data dictionary in msh file
+    gdim
+        The geometrical dimension of the mesh
     """
     fname = filename.split(".msh")[0]
     oname = outname.split(".xdmf")[0]
 
     if MPI.COMM_WORLD.rank == 0:
-        mesh = meshio.read(f"{fname}.msh")
-        cells = mesh.get_cells_type(cell_type)
-        data = mesh.get_cell_data(cell_data, cell_type)
-        pts = mesh.points[:, :2] if prune_z else mesh.points
-        out_mesh = meshio.Mesh(points=pts, cells={cell_type: cells}, cell_data={"name_to_read": [data]})
-        meshio.write(f"{oname}.xdmf", out_mesh)
+        mesh, ct, ft = dolfinx.io.gmshio.read_from_msh(f"{fname}.msh", MPI.COMM_SELF, 0, gdim=gdim)
+        ct.name = "cell_marker"
+        ft.name = "facet_marker"
+        with dolfinx.io.XDMFFile(mesh.comm, f"{oname}.xdmf", "w") as xdmf:
+            xdmf.write_mesh(mesh)
+            xdmf.write_meshtags(ct)
+            mesh.topology.create_connectivity(mesh.topology.dim - 1, mesh.topology.dim)
+            xdmf.write_meshtags(ft)
     MPI.COMM_WORLD.Barrier()

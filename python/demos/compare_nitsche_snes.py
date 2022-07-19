@@ -70,15 +70,16 @@ if __name__ == "__main__":
 
     # Load mesh and create identifier functions for the top (Displacement condition)
     # and the bottom (contact condition)
+    mesh_dir = "meshes"
     if threed:
         if cube:
             mesh = create_unit_cube(MPI.COMM_WORLD, 10, 10, 20)
         else:
-            fname = "sphere"
+            fname = f"{mesh_dir}/sphere"
             create_sphere_mesh(filename=f"{fname}.msh")
-            convert_mesh(fname, fname, "tetra")
+            convert_mesh(fname, fname, gdim=3)
             with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
-                mesh = xdmf.read_mesh(name="Grid")
+                mesh = xdmf.read_mesh()
 
         def top(x):
             return x[2] > 0.9
@@ -90,11 +91,11 @@ if __name__ == "__main__":
         if cube:
             mesh = create_unit_square(MPI.COMM_WORLD, 30, 30)
         else:
-            fname = "disk"
+            fname = f"{mesh_dir}/disk"
             create_disk_mesh(filename=f"{fname}.msh")
-            convert_mesh(fname, fname, "triangle", prune_z=True)
+            convert_mesh(fname, fname, gdim=3)
             with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
-                mesh = xdmf.read_mesh(name="Grid")
+                mesh = xdmf.read_mesh()
 
         def top(x):
             return x[1] > 0.5

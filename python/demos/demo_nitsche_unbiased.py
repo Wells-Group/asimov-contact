@@ -9,16 +9,18 @@ import numpy as np
 import ufl
 from dolfinx import log
 from dolfinx.common import TimingType, list_timings, timing
-from dolfinx.fem import dirichletbc, Constant, Function, locate_dofs_topological, VectorFunctionSpace
+from dolfinx.cpp.mesh import MeshTags_int32
+from dolfinx.fem import (Constant, Function, VectorFunctionSpace, dirichletbc,
+                         locate_dofs_topological)
 from dolfinx.graph import create_adjacencylist
 from dolfinx.io import XDMFFile
 from dolfinx.mesh import locate_entities_boundary
-from dolfinx.cpp.mesh import MeshTags_int32
 from mpi4py import MPI
 from petsc4py.PETSc import ScalarType
 
 from dolfinx_contact import update_geometry
-from dolfinx_contact.helpers import lame_parameters, epsilon, weak_dirichlet, sigma_func
+from dolfinx_contact.helpers import (epsilon, lame_parameters, sigma_func,
+                                     weak_dirichlet)
 from dolfinx_contact.meshing import (convert_mesh, create_box_mesh_2D,
                                      create_box_mesh_3D,
                                      create_circle_circle_mesh,
@@ -90,20 +92,18 @@ if __name__ == "__main__":
         raise NotImplementedError("More work in DOLFINx (SubMesh) required for this to work.")
     # Load mesh and create identifier functions for the top (Displacement condition)
     # and the bottom (contact condition)
+    mesh_dir = "meshes"
     if threed:
         displacement = [[0, 0, -args.disp], [0, 0, 0]]
         if problem == 1:
-            fname = "box_3D"
+            fname = f"{mesh_dir}/box_3D"
             create_box_mesh_3D(f"{fname}.msh", simplex, order=args.order)
-            ct = "tetra" if simplex else "hexahedron"
-            ct += tetra_ext[args.order] if simplex else hex_ext[args.order]
-            convert_mesh(fname, fname, ct)
+            convert_mesh(fname, fname, gdim=3)
 
             with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
-                mesh = xdmf.read_mesh(name="Grid")
-                domain_marker = xdmf.read_meshtags(mesh, name="Grid")
+                mesh = xdmf.read_mesh()
+                domain_marker = xdmf.read_meshtags(mesh, name="cell_marker")
             tdim = mesh.topology.dim
-            gdim = mesh.geometry.dim
             mesh.topology.create_connectivity(tdim - 1, 0)
             mesh.topology.create_connectivity(tdim - 1, tdim)
 
@@ -131,19 +131,15 @@ if __name__ == "__main__":
             facet_marker = MeshTags_int32(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
 
         elif problem == 2:
-            fname = "sphere"
+            fname = f"{mesh_dir}/sphere"
             create_sphere_plane_mesh(filename=f"{fname}.msh", order=args.order)
-            convert_mesh(fname, fname, "tetra" + tetra_ext[args.order])
-            convert_mesh(f"{fname}", f"{fname}_facets", "triangle" + triangle_ext[args.order])
+            convert_mesh(fname, fname, gdim=3)
             with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
-                mesh = xdmf.read_mesh(name="Grid")
-                domain_marker = xdmf.read_meshtags(mesh, name="Grid")
-            tdim = mesh.topology.dim
-            gdim = mesh.geometry.dim
-            mesh.topology.create_connectivity(tdim - 1, 0)
-            mesh.topology.create_connectivity(tdim - 1, tdim)
-            with XDMFFile(MPI.COMM_WORLD, f"{fname}_facets.xdmf", "r") as xdmf:
-                facet_marker = xdmf.read_meshtags(mesh, name="Grid")
+                mesh = xdmf.read_mesh()
+                domain_marker = xdmf.read_meshtags(mesh, name="cell_marker")
+                tdim = mesh.topology.dim
+                mesh.topology.create_connectivity(tdim - 1, tdim)
+                facet_marker = xdmf.read_meshtags(mesh, name="facet_marker")
             dirichet_bdy_1 = 2
             contact_bdy_1 = 1
             contact_bdy_2 = 8
@@ -157,8 +153,6 @@ if __name__ == "__main__":
                 mesh = xdmf.read_mesh(name="cylinder_cylinder")
                 domain_marker = xdmf.read_meshtags(mesh, name="domain_marker")
             tdim = mesh.topology.dim
-            gdim = mesh.geometry.dim
-            mesh.topology.create_connectivity(tdim - 1, 0)
             mesh.topology.create_connectivity(tdim - 1, tdim)
 
             def right(x):
@@ -195,67 +189,45 @@ if __name__ == "__main__":
     else:
         displacement = [[0, -args.disp], [0, 0]]
         if problem == 1:
-            fname = "box_2D"
+            fname = f"{mesh_dir}/box_2D"
             create_box_mesh_2D(filename=f"{fname}.msh", quads=not simplex, res=args.res,
                                order=args.order)
-            if simplex:
-                convert_mesh(fname, f"{fname}.xdmf", "triangle" + triangle_ext[args.order], prune_z=True)
-            else:
-                convert_mesh(fname, f"{fname}.xdmf", "quad" + quad_ext[args.order], prune_z=True)
-            convert_mesh(f"{fname}", f"{fname}_facets", "line" + line_ext[args.order], prune_z=True)
-
+            convert_mesh(fname, f"{fname}.xdmf", gdim=2)
             with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
-                mesh = xdmf.read_mesh(name="Grid")
-                domain_marker = xdmf.read_meshtags(mesh, name="Grid")
-            tdim = mesh.topology.dim
-            gdim = mesh.geometry.dim
-            mesh.topology.create_connectivity(tdim - 1, 0)
-            mesh.topology.create_connectivity(tdim - 1, tdim)
-            with XDMFFile(MPI.COMM_WORLD, f"{fname}_facets.xdmf", "r") as xdmf:
-                facet_marker = xdmf.read_meshtags(mesh, name="Grid")
+                mesh = xdmf.read_mesh()
+                domain_marker = xdmf.read_meshtags(mesh, name="cell_marker")
+                tdim = mesh.topology.dim
+                mesh.topology.create_connectivity(tdim - 1, tdim)
+                facet_marker = xdmf.read_meshtags(mesh, name="facet_marker")
             dirichet_bdy_1 = 5
             contact_bdy_1 = 3
             contact_bdy_2 = 9
             dirichlet_bdy_2 = 7
 
         elif problem == 2:
-            fname = "twomeshes"
-            if simplex:
-                create_circle_plane_mesh(filename=f"{fname}.msh", order=args.order)
-                convert_mesh(fname, f"{fname}.xdmf", "triangle" + triangle_ext[args.order], prune_z=True)
-            else:
-                create_circle_plane_mesh(filename=f"{fname}.msh", quads=True, order=args.order)
-                convert_mesh(fname, f"{fname}.xdmf", "quad" + quad_ext[args.order], prune_z=True)
-            convert_mesh(f"{fname}", f"{fname}_facets", "line" + line_ext[args.order], prune_z=True)
+            fname = f"{mesh_dir}/twomeshes"
+            create_circle_plane_mesh(filename=f"{fname}.msh", order=args.order)
+            convert_mesh(fname, f"{fname}.xdmf", gdim=2)
 
             with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
-                mesh = xdmf.read_mesh(name="Grid")
-                domain_marker = xdmf.read_meshtags(mesh, name="Grid")
-            tdim = mesh.topology.dim
-            gdim = mesh.geometry.dim
-            mesh.topology.create_connectivity(tdim - 1, 0)
-            mesh.topology.create_connectivity(tdim - 1, tdim)
-            with XDMFFile(MPI.COMM_WORLD, f"{fname}_facets.xdmf", "r") as xdmf:
-                facet_marker = xdmf.read_meshtags(mesh, name="Grid")
+                mesh = xdmf.read_mesh()
+                domain_marker = xdmf.read_meshtags(mesh, name="cell_marker")
+                tdim = mesh.topology.dim
+                mesh.topology.create_connectivity(tdim - 1, tdim)
+                facet_marker = xdmf.read_meshtags(mesh, name="facet_marker")
             dirichet_bdy_1 = 2
             contact_bdy_1 = 4
             contact_bdy_2 = 9
             dirichlet_bdy_2 = 7
         elif problem == 3:
-            fname = "two_disks"
-            if simplex:
-                create_circle_circle_mesh(filename=f"{fname}.msh", res=args.res, order=args.order)
-                convert_mesh(fname, f"{fname}.xdmf", "triangle" + triangle_ext[args.order], prune_z=True)
-            else:
-                create_circle_circle_mesh(filename=f"{fname}.msh", quads=True, res=args.res, order=args.order)
-                convert_mesh(fname, f"{fname}.xdmf", "quad" + quad_ext[args.order], prune_z=True)
-            convert_mesh(f"{fname}", f"{fname}_facets", "line" + line_ext[args.order], prune_z=True)
+            fname = f"{mesh_dir}/two_disks"
+            create_circle_circle_mesh(filename=f"{fname}.msh", quads=(not simplex), res=args.res, order=args.order)
+            convert_mesh(fname, f"{fname}.xdmf", gdim=2)
 
             with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
-                mesh = xdmf.read_mesh(name="Grid")
-                domain_marker = xdmf.read_meshtags(mesh, name="Grid")
+                mesh = xdmf.read_mesh()
+                domain_marker = xdmf.read_meshtags(mesh, name="cell_marker")
             tdim = mesh.topology.dim
-            gdim = mesh.geometry.dim
             mesh.topology.create_connectivity(tdim - 1, 0)
             mesh.topology.create_connectivity(tdim - 1, tdim)
 
@@ -290,7 +262,7 @@ if __name__ == "__main__":
 
             facet_marker = MeshTags_int32(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
 
-    with XDMFFile(mesh.comm, "test.xdmf", "w") as xdmf:
+    with XDMFFile(mesh.comm, f"{mesh_dir}/test.xdmf", "w") as xdmf:
         xdmf.write_mesh(mesh)
         xdmf.write_meshtags(facet_marker)
 
@@ -370,7 +342,7 @@ if __name__ == "__main__":
         disp = []
         Fj = F
         for d in load_increment:
-            if gdim == 3:
+            if mesh.geometry.dim == 3:
                 disp.append(Constant(mesh, ScalarType((d[0], d[1], d[2]))))
             else:
                 disp.append(Constant(mesh, ScalarType((d[0], d[1]))))
