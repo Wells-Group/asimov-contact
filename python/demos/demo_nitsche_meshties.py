@@ -62,11 +62,10 @@ if __name__ == "__main__":
     H = 1.5
     fname = "box_3D"
     create_box_mesh_3D(f"{fname}.msh", simplex, gap=gap, W=H)
-    ct = "tetra" if simplex else "hexahedron"
-    convert_mesh(fname, fname, ct)
+    convert_mesh(fname, fname, gdim=3)
 
     with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
-        mesh = xdmf.read_mesh(name="Grid")
+        mesh = xdmf.read_mesh()
 
     tdim = mesh.topology.dim
     gdim = mesh.geometry.dim

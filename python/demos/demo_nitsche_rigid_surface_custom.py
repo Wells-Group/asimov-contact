@@ -65,18 +65,16 @@ if __name__ == "__main__":
 
     # Load mesh and create identifier functions for the top (Displacement condition)
     # and the bottom (contact condition)
+    mesh_dir = "meshes"
     if threed:
-        fname = "sphere"
+        fname = f"{mesh_dir}/sphere"
         create_sphere_plane_mesh(filename=f"{fname}.msh")
-        convert_mesh(fname, fname, "tetra")
-        convert_mesh(f"{fname}", f"{fname}_facets", "triangle")
+        convert_mesh(fname, fname, gdim=3)
         with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
-            mesh = xdmf.read_mesh(name="Grid")
-        tdim = mesh.topology.dim
-        mesh.topology.create_connectivity(tdim - 1, 0)
-        mesh.topology.create_connectivity(tdim - 1, tdim)
-        with XDMFFile(MPI.COMM_WORLD, f"{fname}_facets.xdmf", "r") as xdmf:
-            facet_marker = xdmf.read_meshtags(mesh, name="Grid")
+            mesh = xdmf.read_mesh()
+            tdim = mesh.topology.dim
+            mesh.topology.create_connectivity(tdim - 1, tdim)
+            facet_marker = xdmf.read_meshtags(mesh, name="facet_marker")
         top_value = 2
         bottom_value = 1
         surface_value = 8
@@ -84,15 +82,13 @@ if __name__ == "__main__":
 
     else:
         if curved:
-            fname = "two_disks"
+            fname = f"{mesh_dir}/two_disks"
             create_circle_circle_mesh(filename=f"{fname}.msh")
-            convert_mesh(fname, fname, "triangle", prune_z=True)
-            convert_mesh(f"{fname}", f"{fname}_facets", "line", prune_z=True)
+            convert_mesh(fname, fname, gdim=2)
 
             with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
-                mesh = xdmf.read_mesh(name="Grid")
+                mesh = xdmf.read_mesh()
             tdim = mesh.topology.dim
-            mesh.topology.create_connectivity(tdim - 1, 0)
             mesh.topology.create_connectivity(tdim - 1, tdim)
 
             def top1(x):
@@ -126,23 +122,15 @@ if __name__ == "__main__":
             sorted_facets = np.argsort(indices)
             facet_marker = meshtags(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
         else:
-            fname = "twomeshes"
-            if simplex:
-                create_circle_plane_mesh(filename=f"{fname}.msh", res=0.05)
-                convert_mesh(fname, f"{fname}.xdmf", "triangle", prune_z=True)
-            else:
-                create_circle_plane_mesh(filename=f"{fname}.msh", quads=True, res=0.05)
-                convert_mesh(fname, f"{fname}.xdmf", "quad", prune_z=True)
-            convert_mesh(fname, f"{fname}_facets.xdmf", "line", prune_z=True)
+            fname = f"{mesh_dir}/twomeshes"
+            create_circle_plane_mesh(filename=f"{fname}.msh", quads=(not simplex), res=0.05)
+            convert_mesh(fname, f"{fname}.xdmf", gdim=2)
 
             with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
-                mesh = xdmf.read_mesh(name="Grid")
-            tdim = mesh.topology.dim
-            gdim = mesh.geometry.dim
-            mesh.topology.create_connectivity(tdim - 1, 0)
-            mesh.topology.create_connectivity(tdim - 1, tdim)
-            with XDMFFile(MPI.COMM_WORLD, f"{fname}_facets.xdmf", "r") as xdmf:
-                facet_marker = xdmf.read_meshtags(mesh, name="Grid")
+                mesh = xdmf.read_mesh()
+                tdim = mesh.topology.dim
+                mesh.topology.create_connectivity(tdim - 1, tdim)
+                facet_marker = xdmf.read_meshtags(mesh, "facet_marker")
 
             def top(x):
                 return x[1] > 0.5

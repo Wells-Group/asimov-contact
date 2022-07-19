@@ -14,10 +14,12 @@ from dolfinx.graph import create_adjacencylist
 from dolfinx.io import XDMFFile
 from dolfinx.mesh import meshtags, locate_entities_boundary
 from mpi4py import MPI
-
+import os
 import dolfinx_contact
 import dolfinx_contact.cpp
 from dolfinx_contact.meshing import convert_mesh, create_box_mesh_2D, create_box_mesh_3D
+
+os.system("mkdir -p meshes")
 
 
 @pytest.mark.parametrize("q_deg", range(1, 4))
@@ -27,25 +29,25 @@ def test_projection(q_deg, surf, dim):
 
     # Create mesh
     if dim == 2:
-        fname = "box_2D"
+        fname = "meshes/box_2D"
         create_box_mesh_2D(filename=f"{fname}.msh", res=1.0)
-        convert_mesh(fname, fname, "triangle", prune_z=True)
-        convert_mesh(f"{fname}", f"{fname}_facets", "line", prune_z=True)
+
     else:
-        fname = "box_3D"
+        fname = "meshes/box_3D"
         create_box_mesh_3D(filename=f"{fname}.msh", res=1.0)
-        convert_mesh(fname, fname, "tetra")
-        convert_mesh(f"{fname}", f"{fname}_facets", "triangle")
+
+    convert_mesh(fname, fname, gdim=dim)
 
     # Read in mesh
     with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
-        mesh = xdmf.read_mesh(name="Grid")
+        mesh = xdmf.read_mesh()
+
     tdim = mesh.topology.dim
     gdim = mesh.geometry.dim
     mesh.topology.create_connectivity(tdim - 1, 0)
     mesh.topology.create_connectivity(tdim - 1, tdim)
 
-    # Surface paramters see contact_meshes.py
+    # Surface parameters see contact_meshes.py
     L = 0.5
     delta = 0.1
     disp = -0.6

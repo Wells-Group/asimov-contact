@@ -55,20 +55,17 @@ if __name__ == "__main__":
 
     threed = args.threed
     split = args.split
-    fname = "xmas_tree"
+    mesh_dir = "meshes"
+    fname = f"{mesh_dir}/xmas_tree"
     if threed:
-        create_christmas_tree_mesh_3D(filename=fname, res=0.1, split=split, n1=81, n2=41)
-        convert_mesh(fname, fname, "tetra")
-        convert_mesh(f"{fname}", f"{fname}_facets", "triangle")
+        create_christmas_tree_mesh_3D(filename=fname, res=args.res, split=split, n1=81, n2=41)
+        convert_mesh(fname, fname, gdim=3)
         with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
-            mesh = xdmf.read_mesh(name="Grid")
-            domain_marker = xdmf.read_meshtags(mesh, name="Grid")
-        tdim = mesh.topology.dim
-        gdim = mesh.geometry.dim
-        mesh.topology.create_connectivity(tdim - 1, 0)
-        mesh.topology.create_connectivity(tdim - 1, tdim)
-        with XDMFFile(MPI.COMM_WORLD, f"{fname}_facets.xdmf", "r") as xdmf:
-            facet_marker = xdmf.read_meshtags(mesh, name="Grid")
+            mesh = xdmf.read_mesh()
+            domain_marker = xdmf.read_meshtags(mesh, "cell_marker")
+            tdim = mesh.topology.dim
+            mesh.topology.create_connectivity(tdim - 1, tdim)
+            facet_marker = xdmf.read_meshtags(mesh, "facet_marker")
 
         marker_offset = 6
         V = _fem.VectorFunctionSpace(mesh, ("CG", 1))
@@ -90,17 +87,14 @@ if __name__ == "__main__":
 
     else:
         create_christmas_tree_mesh(filename=fname, res=args.res, split=split)
-        convert_mesh(fname, fname, "triangle", prune_z=True)
-        convert_mesh(f"{fname}", f"{fname}_facets", "line", prune_z=True)
+        convert_mesh(fname, fname, gdim=2)
         with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
-            mesh = xdmf.read_mesh(name="Grid")
-            domain_marker = xdmf.read_meshtags(mesh, name="Grid")
-        tdim = mesh.topology.dim
-        gdim = mesh.geometry.dim
-        mesh.topology.create_connectivity(tdim - 1, 0)
-        mesh.topology.create_connectivity(tdim - 1, tdim)
-        with XDMFFile(MPI.COMM_WORLD, f"{fname}_facets.xdmf", "r") as xdmf:
-            facet_marker = xdmf.read_meshtags(mesh, name="Grid")
+            mesh = xdmf.read_mesh()
+            tdim = mesh.topology.dim
+            domain_marker = xdmf.read_meshtags(mesh, name="cell_marker")
+            mesh.topology.create_connectivity(tdim - 1, tdim)
+            facet_marker = xdmf.read_meshtags(mesh, name="facet_marker")
+
         marker_offset = 5
         V = _fem.VectorFunctionSpace(mesh, ("CG", 1))
         bcs = []
@@ -108,6 +102,7 @@ if __name__ == "__main__":
         t = _fem.Constant(mesh, _PETSc.ScalarType((0.2, 0.5)))  # traction
         f = _fem.Constant(mesh, _PETSc.ScalarType((1.0, 0.5)))  # body force
 
+    gdim = mesh.geometry.dim
     # create meshtags for candidate segments
     mts = [domain_marker, facet_marker]
     cand_facets_0 = np.sort(

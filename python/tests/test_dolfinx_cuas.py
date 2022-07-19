@@ -13,7 +13,7 @@ import pytest
 import ufl
 from mpi4py import MPI
 from dolfinx.graph import create_adjacencylist
-
+import os
 import dolfinx_contact
 import dolfinx_contact.cpp
 from dolfinx_contact.helpers import (R_minus, epsilon, lame_parameters,
@@ -44,13 +44,15 @@ def test_contact_kernel(theta, gamma, dim, gap):
 
     # Load mesh and create identifier functions for the top (Displacement condition)
     # and the bottom (contact condition)
+    mesh_dir = "meshes"
+    os.system(f"mkdir -p {mesh_dir}")
     if dim == 3:
-        fname = "sphere"
+        fname = f"{mesh_dir}/sphere"
         create_sphere_mesh(filename=f"{fname}.msh")
-        convert_mesh(fname, fname, "tetra")
+        convert_mesh(fname, fname, gdim=3)
 
         with dolfinx.io.XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
-            mesh = xdmf.read_mesh(name="Grid")
+            mesh = xdmf.read_mesh()
 
         def top(x):
             return x[2] > 0.9
@@ -59,11 +61,11 @@ def test_contact_kernel(theta, gamma, dim, gap):
             return x[2] < 0.15
 
     else:
-        fname = "disk"
+        fname = f"{mesh_dir}/disk"
         create_disk_mesh(filename=f"{fname}.msh")
-        convert_mesh(fname, fname, "triangle", prune_z=True)
+        convert_mesh(fname, fname, gdim=2)
         with dolfinx.io.XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
-            mesh = xdmf.read_mesh(name="Grid")
+            mesh = xdmf.read_mesh()
 
         def top(x):
             return x[1] > 0.5
