@@ -93,7 +93,7 @@ if __name__ == "__main__":
         else:
             fname = f"{mesh_dir}/disk"
             create_disk_mesh(filename=f"{fname}.msh")
-            convert_mesh(fname, fname, gdim=3)
+            convert_mesh(fname, fname, gdim=2)
             with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
                 mesh = xdmf.read_mesh()
 
@@ -111,7 +111,7 @@ if __name__ == "__main__":
                     "snes_max_fail": 10, "snes_type": "vinewtonrsls",
                     "snes_rtol": 1e-9, "snes_atol": 1e-9, "snes_view": None}
     # Cannot use GAMG with SNES, see: https://gitlab.com/petsc/petsc/-/issues/829
-    petsc_snes = {"ksp_type": "cg", "ksp_rtol": 1e-5, "pc_type": "jacobi"}
+    petsc_snes = {"ksp_type": "cg", "ksp_rtol": 1e-6, "pc_type": "jacobi"}
     e_abs = []
     e_rel = []
     dofs_global = []
