@@ -202,7 +202,7 @@ public:
 
     // Coefficient offsets
     // Expecting coefficients in following order:
-    // mu, lmbda, h, gap, normals, test_fn, u, u_opposite
+    // mu, lmbda, h, gap, normals, test_fn, u0, u1, u_opposite
     std::vector<std::size_t> cstrides
         = {1,
            1,
@@ -210,6 +210,7 @@ public:
            num_q_points * gdim,
            num_q_points * gdim,
            num_q_points * ndofs_cell * bs * max_links,
+           ndofs_cell * bs,
            ndofs_cell * bs,
            num_q_points * bs};
 
@@ -314,16 +315,17 @@ public:
         double jump_un = 0;
         for (std::size_t i = 0; i < ndofs_cell; i++)
         {
-          std::size_t block_index = kd.offsets(6) + i * bs;
+          std::size_t block_index0 = kd.offsets(6) + i * bs;
+          std::size_t block_index1 = kd.offsets(7) + i * bs;
           for (std::size_t j = 0; j < bs; j++)
           {
-            PetscScalar coeff = c[block_index + j];
+            PetscScalar coeff = c[block_index1 + j];
             tr_u += coeff * tr(i, j);
             epsn_u += coeff * epsn(i, j);
-            jump_un += coeff * phi(q_pos, i) * n_surf[j];
+            jump_un += c[block_index0 + j] * phi(q_pos, i) * n_surf[j];
           }
         }
-        std::size_t offset_u_opp = kd.offsets(7) + q * bs;
+        std::size_t offset_u_opp = kd.offsets(8) + q * bs;
         for (std::size_t j = 0; j < bs; ++j)
           jump_un += -c[offset_u_opp + j] * n_surf[j];
         double sign_u = lmbda * tr_u * n_dot + mu * epsn_u;
@@ -459,15 +461,16 @@ public:
 
         for (std::size_t i = 0; i < ndofs_cell; i++)
         {
-          std::size_t block_index = kd.offsets(6) + i * bs;
+          std::size_t block_index0 = kd.offsets(6) + i * bs;
+          std::size_t block_index1 = kd.offsets(7) + i * bs;
           for (std::size_t j = 0; j < bs; j++)
           {
-            tr_u += c[block_index + j] * tr(i, j);
-            epsn_u += c[block_index + j] * epsn(i, j);
-            jump_un += c[block_index + j] * phi(q_pos, i) * n_surf[j];
+            tr_u += c[block_index1 + j] * tr(i, j);
+            epsn_u += c[block_index1 + j] * epsn(i, j);
+            jump_un += c[block_index0 + j] * phi(q_pos, i) * n_surf[j];
           }
         }
-        std::size_t offset_u_opp = kd.offsets(7) + q * bs;
+        std::size_t offset_u_opp = kd.offsets(8) + q * bs;
         for (std::size_t j = 0; j < bs; ++j)
           jump_un += -c[offset_u_opp + j] * n_surf[j];
         double sign_u = lmbda * tr_u * n_dot + mu * epsn_u;

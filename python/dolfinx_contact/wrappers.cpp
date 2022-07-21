@@ -12,6 +12,7 @@
 #include <dolfinx_contact/Contact.h>
 #include <dolfinx_contact/QuadratureRule.h>
 #include <dolfinx_contact/RayTracing.h>
+#include <dolfinx_contact/SubMesh.h>
 #include <dolfinx_contact/coefficients.h>
 #include <dolfinx_contact/contact_kernels.hpp>
 #include <dolfinx_contact/utils.h>
@@ -149,6 +150,12 @@ PYBIND11_MODULE(cpp, m)
              return std::make_shared<
                  dolfinx::graph::AdjacencyList<std::int32_t>>(
                  std::move(data), std::move(offsets));
+           })
+      .def("submesh",
+           [](dolfinx_contact::Contact& self, int surface)
+           {
+             const dolfinx_contact::SubMesh& submesh = self.submesh(surface);
+             return submesh.mesh();
            })
       .def("coefficients_size", &dolfinx_contact::Contact::coefficients_size,
            py::arg("meshtie") = false)

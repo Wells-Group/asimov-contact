@@ -142,7 +142,7 @@ std::size_t dolfinx_contact::Contact::coefficients_size(bool meshtie)
   }
   else
     return 3 + num_q_points * (2 * gdim + ndofs_cell * bs * max_links + bs)
-           + ndofs_cell * bs;
+           + 2 * ndofs_cell * bs;
 }
 
 Mat dolfinx_contact::Contact::create_petsc_matrix(

@@ -27,7 +27,7 @@ from dolfinx_contact.meshing import (convert_mesh, create_box_mesh_2D,
                                      create_circle_plane_mesh,
                                      create_cylinder_cylinder_mesh,
                                      create_sphere_plane_mesh)
-from dolfinx_contact.unbiased.nitsche_unbiased import nitsche_unbiased
+from dolfinx_contact.unbiased.nitsche_pseudo_time import nitsche_pseudo_time
 
 if __name__ == "__main__":
     desc = "Nitsche's method for two elastic bodies using custom assemblers"
@@ -340,26 +340,31 @@ if __name__ == "__main__":
     # Load geometry over multiple steps
     for j in range(nload_steps):
         disp = []
+        bcs = []
         Fj = F
-        for d in load_increment:
+        for k, d in enumerate(load_increment):
+            if args.lifting:
+                tag = dirichlet_vals[k]
+                bcs.append((d, tag))
             if mesh.geometry.dim == 3:
                 disp.append(Constant(mesh, ScalarType((d[0], d[1], d[2]))))
             else:
                 disp.append(Constant(mesh, ScalarType((d[0], d[1]))))
-        bcs = []
         for k, g in enumerate(disp):
             tag = dirichlet_vals[k]
             if args.lifting:
-                bdy_dofs = locate_dofs_topological(V, tdim - 1, facet_marker.find(tag))
-                bcs.append(dirichletbc(g, bdy_dofs, V))
+                pass
+                # bdy_dofs = locate_dofs_topological(V, tdim - 1, facet_marker.find(tag))
+                # bcs.append(dirichletbc(g, bdy_dofs, V))
             else:
                 Fj = weak_dirichlet(Fj, u, g, sigma, E * gamma, theta, ds(tag))
 
         # Solve contact problem using Nitsche's method
-        u, newton_its, krylov_iterations, solver_time = nitsche_unbiased(
-            ufl_form=Fj, u=u, markers=[domain_marker, facet_marker], contact_data=(surfaces, contact),
-            bcs=bcs, problem_parameters=problem_parameters, newton_options=newton_options,
-            petsc_options=petsc_options, outfile=solver_outfile)
+        u, newton_its, krylov_iterations, solver_time = nitsche_pseudo_time(10,
+                                                                            lhs=Fj, rhs=0 * dx, u=u, markers=[domain_marker, facet_marker], contact_data=(
+                                                                                surfaces, contact),
+                                                                            bcs=bcs, problem_parameters=problem_parameters, newton_options=newton_options,
+                                                                            petsc_options=petsc_options, outfile=solver_outfile)
         num_newton_its[j] = newton_its
         num_krylov_its[j] = krylov_iterations
         newton_time[j] = solver_time
