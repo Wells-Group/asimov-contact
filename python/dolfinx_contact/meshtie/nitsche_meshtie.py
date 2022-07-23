@@ -129,7 +129,10 @@ def nitsche_meshtie(lhs: ufl.Form, rhs: _fem.Function, u: _fem.Function, markers
     material = []
     with _common.Timer("~Contact " + timing_str + ": Pack coeffs (mu, lmbda"):
         for i in range(len(surface_pairs)):
-            material.append(dolfinx_cuas.pack_coefficients([mu2, lmbda2], entities[i]))
+            material.append(np.hstack([dolfinx_contact.cpp.pack_coefficient_quadrature(
+                mu2._cpp_object, 0, entities[i]),
+                dolfinx_contact.cpp.pack_coefficient_quadrature(
+                lmbda2._cpp_object, 0, entities[i])]))
 
     # Pack celldiameter on each surface
     h_packed = []
@@ -139,7 +142,8 @@ def nitsche_meshtie(lhs: ufl.Form, rhs: _fem.Function, u: _fem.Function, markers
         expr = _fem.Expression(h, V2.element.interpolation_points)
         h_int.interpolate(expr, surface_cells)
         for i in range(len(surface_pairs)):
-            h_packed.append(dolfinx_cuas.pack_coefficients([h_int], entities[i]))
+            h_packed.append(dolfinx_contact.cpp.pack_coefficient_quadrature(
+                h_int._cpp_object, 0, entities[i]))
 
     # Pack gap, normals and test functions on each surface
     gaps = []

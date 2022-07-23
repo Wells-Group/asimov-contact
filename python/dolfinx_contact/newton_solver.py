@@ -173,6 +173,8 @@ class NewtonSolver():
         relax = options.get("relaxation_parameter")
         if relax is not None:
             self.relaxation_parameter = relax
+        else:
+            self.relaxation_parameter = 1.0
 
     def _pre_computation(self, x: PETSc.Vec):
         x.ghostUpdate(addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD)

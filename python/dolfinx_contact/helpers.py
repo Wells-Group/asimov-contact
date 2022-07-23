@@ -10,12 +10,28 @@ from dolfinx.cpp.mesh import MeshTags_int32
 import dolfinx.fem as _fem
 import dolfinx.la as _la
 import numpy
+import scipy
 import ufl
 from petsc4py import PETSc
 
-__all__ = ["lame_parameters", "epsilon", "sigma_func", "R_minus", "dR_minus", "R_plus",
+__all__ = ["compare_matrices", "lame_parameters", "epsilon", "sigma_func", "R_minus", "dR_minus", "R_plus",
            "dR_plus", "ball_projection", "tangential_proj", "NonlinearPDE_SNESProblem",
            "rigid_motions_nullspace", "rigid_motions_nullspace_subdomains", "weak_dirichlet"]
+
+
+def compare_matrices(A: PETSc.Mat, B: PETSc.Mat, atol: float = 1e-12):
+    """
+    Helper for comparing two PETSc matrices
+    """
+    # Create scipy CSR matrices
+    ai, aj, av = A.getValuesCSR()
+    A_sp = scipy.sparse.csr_matrix((av, aj, ai), shape=A.getSize())
+    bi, bj, bv = B.getValuesCSR()
+    B_sp = scipy.sparse.csr_matrix((bv, bj, bi), shape=B.getSize())
+
+    # Compare matrices
+    diff = numpy.abs(A_sp - B_sp)
+    assert diff.max() <= atol
 
 
 def lame_parameters(plane_strain: bool = False):

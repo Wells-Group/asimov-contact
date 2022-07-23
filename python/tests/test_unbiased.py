@@ -305,8 +305,14 @@ def create_contact_data(V, u, quadrature_degree, lmbda, mu, facets_cg, tied=Fals
     entities_1 = dolfinx_contact.compute_active_entities(mesh, facets_cg[1], integral)
 
     # pack coeffs mu, lambda
-    material_0 = dolfinx_cuas.pack_coefficients([mu2, lmbda2], entities_0)
-    material_1 = dolfinx_cuas.pack_coefficients([mu2, lmbda2], entities_1)
+    material_0 = np.hstack([dolfinx_contact.cpp.pack_coefficient_quadrature(
+        mu2._cpp_object, 0, entities_0),
+        dolfinx_contact.cpp.pack_coefficient_quadrature(
+        lmbda2._cpp_object, 0, entities_0)])
+    material_1 = np.hstack([dolfinx_contact.cpp.pack_coefficient_quadrature(
+        mu2._cpp_object, 0, entities_1),
+        dolfinx_contact.cpp.pack_coefficient_quadrature(
+        lmbda2._cpp_object, 0, entities_1)])
 
     # Pack cell diameter on each surface
     h = ufl.CellDiameter(mesh)
@@ -314,8 +320,10 @@ def create_contact_data(V, u, quadrature_degree, lmbda, mu, facets_cg, tied=Fals
     h_int = _fem.Function(V2)
     expr = _fem.Expression(h, V2.element.interpolation_points)
     h_int.interpolate(expr, surface_cells)
-    h_0 = dolfinx_cuas.pack_coefficients([h_int], entities_0)
-    h_1 = dolfinx_cuas.pack_coefficients([h_int], entities_1)
+    h_0 = dolfinx_contact.cpp.pack_coefficient_quadrature(
+        h_int._cpp_object, 0, entities_0)
+    h_1 = dolfinx_contact.cpp.pack_coefficient_quadrature(
+        h_int._cpp_object, 0, entities_1)
 
     # Pack gap
     gap_0 = contact.pack_gap(0)
