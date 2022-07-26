@@ -52,8 +52,12 @@ PYBIND11_MODULE(cpp, m)
                     basix::quadrature::type>(),
            py::arg("cell_type"), py::arg("degree"), py::arg("dim"),
            py::arg("type") = basix::quadrature::type::Default)
-      .def("points", [](dolfinx_contact::QuadratureRule& self)
-           { return dolfinx_wrappers::as_pyarray(self.points()); })
+      .def("points",
+           [](dolfinx_contact::QuadratureRule& self)
+           {
+             const std::vector<double> _points = self.points();
+             return dolfinx_wrappers::as_pyarray(std::move(_points));
+           })
       .def("points",
            [](dolfinx_contact::QuadratureRule& self, int i)
            {
@@ -66,8 +70,12 @@ PYBIND11_MODULE(cpp, m)
                  _points[i * shape[1] + j] = points_i(i, j);
              return dolfinx_wrappers::as_pyarray(std::move(_points), shape);
            })
-      .def("weights", [](dolfinx_contact::QuadratureRule& self)
-           { return dolfinx_wrappers::as_pyarray(self.weights()); })
+      .def("weights",
+           [](dolfinx_contact::QuadratureRule& self)
+           {
+             const std::vector<double> _weights = self.weights();
+             return dolfinx_wrappers::as_pyarray(std::move(_weights));
+           })
       .def("weights",
            [](dolfinx_contact::QuadratureRule& self, int i)
            {

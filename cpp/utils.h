@@ -44,15 +44,13 @@ using kernel_fn
 /// in x
 /// @param[in, out] K: inverse of J at each point.
 /// @param[in, out] detJ: determinant of J at each  point
-/// @param[in] x: points on physical element
 /// @param[in ,out] X: pull pack of x (points on reference element)
+/// @param[in] x: points on physical element
 /// @param[in] coordinate_dofs: geometry coordinates of cell
 /// @param[in] cmap: the coordinate element
 //-----------------------------------------------------------------------------
-void pull_back(xt::xtensor<double, 3>& J, xt::xtensor<double, 3>& K,
-               xt::xtensor<double, 1>& detJ, const xt::xtensor<double, 2>& x,
-               xt::xtensor<double, 2>& X,
-               const xt::xtensor<double, 2>& coordinate_dofs,
+void pull_back(mdspan3_t J, mdspan3_t K, std::span<double> detJ,
+               std::span<double> X, cmdspan2_t x, cmdspan2_t coordinate_dofs,
                const dolfinx::fem::CoordinateElement& cmap);
 
 /// @param[in] cells: the cells to be sorted
@@ -103,17 +101,19 @@ evaluate_basis_shape(const dolfinx::fem::FunctionSpace& V,
 /// corresponding cells.
 /// @param[in] V The function space
 /// @param[in] x The coordinates of the points. It has shape
-/// (num_points, 3).
+/// (num_points, gdim). Flattened row major
 /// @param[in] cells An array of cell indices. cells[i] is the index
 /// of the cell that contains the point x(i). Negative cell indices
 /// can be passed, and the corresponding point will be ignored.
 /// @param[in,out] basis_values The values at the points. Values are not
 /// computed for points with a negative cell index. This argument must be passed
-/// with the correct size (num_points, number_of_dofs, value_size).
+/// with the correct size (num_points, number_of_dofs, value_size). The basis
+/// values are flattened row-major.
+/// @param[in] number_of_derivatives FIXME: Add docs
 void evaluate_basis_functions(const dolfinx::fem::FunctionSpace& V,
-                              const xt::xtensor<double, 2>& x,
-                              const std::span<const std::int32_t>& cells,
-                              xt::xtensor<double, 4>& basis_values,
+                              std::span<const double> x,
+                              std::span<const std::int32_t> cells,
+                              std::span<double> basis_values,
                               std::size_t num_derivatives);
 
 /// Compute physical normal
@@ -128,20 +128,20 @@ void compute_normal(const xt::xtensor<double, 1>& n_ref,
 /// J: physical cell -> reference cell (and its inverse)
 /// J_tot: physical facet -> reference facet
 /// @param[in] q - index of quadrature points
-/// @param[in,out] J - Jacboian between reference cell and physical cell
+/// @param[in,out] J - Jacobian between reference cell and physical cell
 /// @param[in,out] K - inverse of J
 /// @param[in,out] J_tot - J_f*J
+/// @param[in,out] detJ_scratch Working memory for Jacobian computation. Has to
+/// be at least 2*gdim*tdim.
 /// @param[in] J_f - the Jacobian between reference facet and reference cell
 /// @param[in] dphi - derivatives of coordinate basis tabulated for quardrature
 /// points
 /// @param[in] coords - the coordinates of the facet
 /// @return absolute value of determinant of J_tot
-double compute_facet_jacobians(std::size_t q, xt::xtensor<double, 2>& J,
-                               xt::xtensor<double, 2>& K,
-                               xt::xtensor<double, 2>& J_tot,
-                               const xt::xtensor<double, 2>& J_f,
-                               const xt::xtensor<double, 3>& dphi,
-                               const xt::xtensor<double, 2>& coords);
+double compute_facet_jacobians(std::size_t q, mdspan2_t J, mdspan2_t K,
+                               mdspan2_t J_tot, std::span<double> detJ_scratch,
+                               cmdspan2_t J_f, cmdspan3_t dphi,
+                               cmdspan2_t coords);
 
 /// @brief Convenience function to update Jacobians
 ///
@@ -149,10 +149,8 @@ double compute_facet_jacobians(std::size_t q, xt::xtensor<double, 2>& J,
 /// For non-affine geometries, the Jacobian, it's inverse and the total Jacobian
 /// (J*J_f) is computed.
 /// @param[in] cmap The coordinate element
-std::function<double(
-    std::size_t, double, xt::xtensor<double, 2>&, xt::xtensor<double, 2>&,
-    xt::xtensor<double, 2>&, const xt::xtensor<double, 2>&,
-    const xt::xtensor<double, 3>&, const xt::xtensor<double, 2>&)>
+std::function<double(std::size_t, double, mdspan2_t, mdspan2_t, mdspan2_t,
+                     std::span<double>, cmdspan2_t, cmdspan3_t, cmdspan2_t)>
 get_update_jacobian_dependencies(const dolfinx::fem::CoordinateElement& cmap);
 
 /// @brief Convenience function to update facet normals
@@ -219,12 +217,12 @@ std::vector<std::int32_t> find_candidate_surface_segment(
 /// @param[in] offsets for accessing the basis_values for local_facet
 /// @param[in] phi Basis functions evaluated at desired set of point osn
 /// reference facet
-/// @param[in, out] qp_phys vector to stor physical points per facet
+/// @param[in, out] qp_phys Vector to store the quadrature points. Shape
+/// (num_facets, num_q_points_per_facet, gdim). Flattened row-major
 void compute_physical_points(const dolfinx::mesh::Mesh& mesh,
                              std::span<const std::int32_t> facets,
-                             const std::vector<int>& offsets,
-                             const xt::xtensor<double, 2>& phi,
-                             std::vector<xt::xtensor<double, 2>>& qp_phys);
+                             std::span<const std::int32_t> offsets,
+                             cmdspan4_t phi, std::span<double> qp_phys);
 
 /// Compute the closest entity at every quadrature point on a subset of facets
 /// on one mesh, to a subset of facets on the other mesh.

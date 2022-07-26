@@ -18,6 +18,8 @@ namespace dolfinx_contact
 namespace stdex = std::experimental;
 using mdspan2_t = stdex::mdspan<double, stdex::dextents<std::size_t, 2>>;
 using cmdspan2_t = stdex::mdspan<const double, stdex::dextents<std::size_t, 2>>;
+using mdspan3_t = stdex::mdspan<double, stdex::dextents<std::size_t, 3>>;
+using cmdspan3_t = stdex::mdspan<const double, stdex::dextents<std::size_t, 3>>;
 using mdspan4_t = stdex::mdspan<double, stdex::dextents<std::size_t, 4>>;
 using cmdspan4_t = stdex::mdspan<const double, stdex::dextents<std::size_t, 4>>;
 
@@ -36,11 +38,11 @@ public:
                  = basix::quadrature::type::Default);
 
   /// Return a list of quadrature points for each entity in the cell
-  std::vector<double> points() { return _points; }
+  const std::vector<double>& points() const { return _points; }
 
   /// Return a list of quadrature weights for each entity in the cell (using
   /// local entity index as in DOLFINx/Basix)
-  std::vector<double> weights() const { return _weights; }
+  const std::vector<double>& weights() const { return _weights; }
 
   /// Return dimension of entity in the quadrature rule
   int dim() const { return _dim; }
@@ -61,6 +63,9 @@ public:
 
   /// Return the number of quadrature points per entity
   std::int32_t num_points(int i) const;
+
+  /// Return the topological dimension of the quadrature rule
+  std::size_t tdim() const { return _tdim; };
 
   /// Return the quadrature points for the ith entity
   /// @param[in] i The local entity index
