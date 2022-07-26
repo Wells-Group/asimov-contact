@@ -5,6 +5,7 @@
 // SPDX-License-Identifier:    MIT
 
 #pragma once
+#include "QuadratureRule.h"
 #include <dolfinx/fem/CoordinateElement.h>
 #include <dolfinx/fem/FiniteElement.h>
 #include <dolfinx/mesh/Mesh.h>
@@ -20,48 +21,50 @@ namespace dolfinx_contact
 /// the surface of the physical cell. Each point x has a corresponding facet
 /// index, relating to which local facet the point belongs to.
 /// @note: The normal is computed using a covariant Piola transform
-/// @note: The Jacobian J and its inverse K are computed internally, and
-/// is only passed in to avoid dynamic memory allocation.
-/// @param[in, out] J: Jacobian of transformation from reference element to
-/// physical element. Shape = (gdim, tdim).
-/// @param[in, out] K: Inverse of J. Shape = (tdim, gdim)
-/// @param[in] x: The point on the facet of the physical cell(padded to 3D)
+/// @param[in, out] work_array: Work array to avoid dynamic memory allocation,
+/// use: `dolfinx_contact::allocate_pull_back_nonaffine` to get sufficent
+/// memory.
+/// @param[in] x: The point on the facet of the physical cell, size gdim
+/// @param[in] gdim: The geometrical dimension of the cell
+/// @param[in] tdim: The topogical dimension of the cell
 /// @param[in] coordinate_dofs: Geometry coordinates of cell
 /// @param[in] facet_index: Local facet index
 /// @param[in] cmap: The coordinate element
 /// @param[in] reference_normals: The facet normals on the reference cell
-std::array<double, 3>
-push_forward_facet_normal(xt::xtensor<double, 2>& J, xt::xtensor<double, 2>& K,
-                          const std::array<double, 3>& x,
-                          const xt::xtensor<double, 2>& coordinate_dofs,
-                          const std::size_t facet_index,
-                          const dolfinx::fem::CoordinateElement& cmap,
-                          const xt::xtensor<double, 2>& reference_normals);
+std::array<double, 3> push_forward_facet_normal(
+    std::span<double> work_array, std::span<const double> x, std::size_t gdim,
+    std::size_t tdim, cmdspan2_t coordinate_dofs, const std::size_t facet_index,
+    const dolfinx::fem::CoordinateElement& cmap, cmdspan2_t reference_normals);
 
-/// @brief Pull back a single point of a non-affine cell to the reference cell.
+/// @brief Allocate memory for pull-back on a non affine cell for a single
+/// point.
+/// @param[in] cmap The coordinate element
+/// @param[in] gdim The geometrical dimension
+/// @param[in] tdim The topological dimension
+/// @returns Vector of sufficient size
+std::vector<double>
+allocate_pull_back_nonaffine(const dolfinx::fem::CoordinateElement& cmap,
+                             int gdim, int tdim);
+
+/// @brief Pull back a single point of a non-affine cell to the reference
+/// cell.
 ///
-/// Given a single cell and a point in the fell, pull it back to the reference
+/// Given a single cell and a point, pull it back to the reference
 /// element. To compute this pull back Newton's method is employed.
-/// @note The data structures `J`, `K` and `basis_values` does not correspond to
-/// the Jacobian, its inverse and phi(X). They are sent in to avoid dynamic
-/// memory allocation.
+
 /// @param[in, out] X The point on the reference cell
-/// @param[in, out] J The Jacobian
-/// @param[in, out] K The inverse of the Jacobian
-/// @param[in,out] basis Tabulated basis functions (and first order derivatives)
-/// at a single point
+/// @param[in, out] work_array Work array of at least size
+/// 2*gdim*tdim+(tdim+1)*num_basis_functions + 9
 /// @param[in] x The physical point
 /// @param[in] cmap The coordinate element
 /// @param[in] cell_geometry The cell geometry
 /// @param[in] tol The tolerance for the Newton solver
 /// @param[in] max_it The maximum number of Newton iterations
-void pull_back_nonaffine(xt::xtensor<double, 2>& X, xt::xtensor<double, 2>& J,
-                         xt::xtensor<double, 2>& K,
-                         xt::xtensor<double, 4>& basis,
-                         const std::array<double, 3>& x,
+void pull_back_nonaffine(std::span<double> X, std::span<double> work_array,
+                         std::span<const double> x,
                          const dolfinx::fem::CoordinateElement& cmap,
-                         const xt::xtensor<double, 2>& cell_geometry,
-                         double tol = 1e-8, const int max_it = 10);
+                         cmdspan2_t cell_geometry, double tol = 1e-8,
+                         const int max_it = 10);
 
 /// Compute circumradius for a cell with given coordinates and determinant
 /// of Jacobian
@@ -71,7 +74,7 @@ void pull_back_nonaffine(xt::xtensor<double, 2>& X, xt::xtensor<double, 2>& J,
 /// @param[in] coordinate_dofs The cell geometry
 /// @returns The circumradius of the cell
 double compute_circumradius(const dolfinx::mesh::Mesh& mesh, double detJ,
-                            const xt::xtensor<double, 2>& coordinate_dofs);
+                            cmdspan2_t coordinate_dofs);
 
 /// @brief Push forward facet normal
 ///
@@ -84,9 +87,9 @@ double compute_circumradius(const dolfinx::mesh::Mesh& mesh, double detJ,
 template <class E, class F, class G>
 void physical_facet_normal(E&& physical_normal, F&& K, G&& reference_normal)
 {
-  assert(physical_normal.size() == K.shape(1));
-  const std::size_t tdim = K.shape(0);
-  const std::size_t gdim = K.shape(1);
+  assert(physical_normal.size() == K.extent(1));
+  const std::size_t tdim = K.extent(0);
+  const std::size_t gdim = K.extent(1);
   for (std::size_t i = 0; i < gdim; i++)
   {
     // FIXME: Replace with math-dot
@@ -95,7 +98,7 @@ void physical_facet_normal(E&& physical_normal, F&& K, G&& reference_normal)
   }
   // Normalize vector
   double norm = 0;
-  std::for_each(physical_normal.cbegin(), physical_normal.cend(),
+  std::for_each(physical_normal.begin(), physical_normal.end(),
                 [&norm](auto ni) { norm += std::pow(ni, 2); });
   norm = std::sqrt(norm);
   std::for_each(physical_normal.begin(), physical_normal.end(),

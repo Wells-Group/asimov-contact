@@ -183,8 +183,8 @@ void dolfinx_contact::update_geometry(
   std::vector<double> dx(coords.size());
   for (std::int32_t c = 0; c < num_cells; ++c)
   {
-    const tcb::span<const int> dofs = dofmap->cell_dofs(c);
-    const tcb::span<const int> dofs_x = dofmap_x.links(c);
+    const std::span<const int> dofs = dofmap->cell_dofs(c);
+    const std::span<const int> dofs_x = dofmap_x.links(c);
     for (std::size_t i = 0; i < dofs.size(); ++i)
       for (int j = 0; j < bs; ++j)
       {
@@ -336,7 +336,7 @@ void dolfinx_contact::evaluate_basis_functions(
     assert(cell_index < x_dofmap.num_nodes());
 
     // Get cell geometry (coordinate dofs)
-    const tcb::span<const int> x_dofs = x_dofmap.links(cell_index);
+    const std::span<const int> x_dofs = x_dofmap.links(cell_index);
     for (std::size_t j = 0; j < num_dofs_g; ++j)
     {
       auto pos = 3 * x_dofs[j];
@@ -523,16 +523,15 @@ dolfinx_contact::get_update_jacobian_dependencies(
   }
 }
 //-------------------------------------------------------------------------------------
-std::function<void(xt::xtensor<double, 1>&, const xt::xtensor<double, 2>&,
-                   const xt::xtensor<double, 2>&, const std::size_t)>
+std::function<void(std::span<double>, cmdspan2_t, cmdspan2_t,
+                   const std::size_t)>
 dolfinx_contact::get_update_normal(const dolfinx::fem::CoordinateElement& cmap)
 {
   if (cmap.is_affine())
   {
     // Return function that returns the input determinant
-    return []([[maybe_unused]] xt::xtensor<double, 1>& n,
-              [[maybe_unused]] const xt::xtensor<double, 2>& K,
-              [[maybe_unused]] const xt::xtensor<double, 2>& n_ref,
+    return []([[maybe_unused]] std::span<double> n,
+              [[maybe_unused]] cmdspan2_t K, [[maybe_unused]] cmdspan2_t n_ref,
               [[maybe_unused]] const std::size_t local_index)
     {
       // Do nothing
@@ -541,10 +540,11 @@ dolfinx_contact::get_update_normal(const dolfinx::fem::CoordinateElement& cmap)
   else
   {
     // Return function that updates the physical normal based on K
-    return [](xt::xtensor<double, 1>& n, const xt::xtensor<double, 2>& K,
-              const xt::xtensor<double, 2>& n_ref,
-              const std::size_t local_index) {
-      dolfinx_contact::physical_facet_normal(n, K, xt::row(n_ref, local_index));
+    return [](std::span<double> n, cmdspan2_t K, cmdspan2_t n_ref,
+              const std::size_t local_index)
+    {
+      auto n_f = stdex::submdspan(n_ref, local_index, stdex::full_extent);
+      dolfinx_contact::physical_facet_normal(n, K, n_f);
     };
   }
 }
@@ -671,14 +671,14 @@ dolfinx_contact::entities_to_geometry_dofs(
   {
     const std::int32_t idx = entity_list[i];
     const std::int32_t cell = e_to_c->links(idx)[0];
-    const tcb::span<const int> cell_entities = c_to_e->links(cell);
+    const std::span<const int> cell_entities = c_to_e->links(cell);
     auto it = std::find(cell_entities.begin(), cell_entities.end(), idx);
     assert(it != cell_entities.end());
     const auto local_entity = std::distance(cell_entities.begin(), it);
     const std::vector<std::int32_t>& entity_dofs
         = closure_dofs[dim][local_entity];
 
-    const tcb::span<const int> xc = xdofs.links(cell);
+    const std::span<const int> xc = xdofs.links(cell);
     for (std::size_t j = 0; j < num_entity_dofs; ++j)
       geometry_indices[i * num_entity_dofs + j] = xc[entity_dofs[j]];
   }

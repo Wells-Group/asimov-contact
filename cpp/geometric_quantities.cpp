@@ -10,59 +10,80 @@
 
 using namespace dolfinx_contact;
 
-void dolfinx_contact::pull_back_nonaffine(
-    xt::xtensor<double, 2>& X, xt::xtensor<double, 2>& J,
-    xt::xtensor<double, 2>& K, xt::xtensor<double, 4>& basis,
-    const std::array<double, 3>& x, const dolfinx::fem::CoordinateElement& cmap,
-    const xt::xtensor<double, 2>& cell_geometry, double tol, int max_it)
+std::vector<double> dolfinx_contact::allocate_pull_back_nonaffine(
+    const dolfinx::fem::CoordinateElement& cmap, int gdim, int tdim)
 {
-  assert((std::size_t)cmap.dim() == cell_geometry.shape(0));
-  assert(X.shape(0) == 1);
-  assert(X.shape(1) == J.shape(1));
+  const std::array<std::size_t, 4> c_shape = cmap.tabulate_shape(1, 1);
+  const std::size_t basis_size
+      = std::reduce(c_shape.cbegin(), c_shape.cend(), 1, std::multiplies());
+  return std::vector<double>(2 * gdim * tdim + basis_size + 9);
+}
+
+void dolfinx_contact::pull_back_nonaffine(
+    std::span<double> X, std::span<double> work_array,
+    std::span<const double> x, const dolfinx::fem::CoordinateElement& cmap,
+    cmdspan2_t cell_geometry, double tol, const int max_it)
+{
+  assert((std::size_t)cmap.dim() == cell_geometry.extent(0));
   // Temporary data structures for Newton iteration
-  const std::size_t tdim = J.shape(1);
-  xt::xtensor<double, 2> dphi({tdim, (std::size_t)cmap.dim()});
-  xt::xtensor<double, 2> Xk = xt::zeros<double>({(std::size_t)1, tdim});
-  std::array<double, 3> xk;
-  std::array<double, 3> dX = {0, 0, 0};
+  const std::size_t gdim = x.size();
+  const std::size_t tdim = X.size();
+  const std::array<std::size_t, 4> c_shape = cmap.tabulate_shape(1, 1);
+  const std::size_t basis_size
+      = std::reduce(c_shape.cbegin(), c_shape.cend(), 1, std::multiplies());
+  assert(work_array.size() >= basis_size + 2 * gdim * tdim);
+
+  // Use work-array for views
+  std::fill(work_array.begin(), std::next(work_array.begin(), gdim * tdim + 9),
+            0);
+  mdspan2_t J(work_array.data(), gdim, tdim);
+  std::span<double, 3> Xk(work_array.data() + gdim * tdim, 3);
+  std::span<double, 3> xk(work_array.data() + gdim * tdim + 3, 3);
+  std::span<double, 3> dX(work_array.data() + gdim * tdim + 6, 3);
+  mdspan2_t K(work_array.data() + gdim * tdim + 9, tdim, gdim);
+  mdspan4_t basis_values(work_array.data() + 9 + 2 * gdim * tdim, c_shape);
+  std::span basis_span(work_array.data() + 9 + 2 * gdim * tdim, basis_size);
+
   int k;
   for (k = 0; k < max_it; ++k)
   {
     // Tabulate coordinate basis at Xk
-    cmap.tabulate(1, Xk, basis);
+    cmap.tabulate(1, Xk, {1, tdim}, basis_span);
 
     // x = cell_geometry * phi
-    auto phi = xt::view(basis, 0, 0, xt::all(), 0);
+    auto phi = stdex::submdspan(basis_values, 0, 0, stdex::full_extent, 0);
     std::fill(xk.begin(), xk.end(), 0.0);
-    for (std::size_t i = 0; i < cell_geometry.shape(1); ++i)
-      for (std::size_t j = 0; j < cell_geometry.shape(0); ++j)
+    for (std::size_t i = 0; i < cell_geometry.extent(1); ++i)
+      for (std::size_t j = 0; j < cell_geometry.extent(0); ++j)
         xk[i] += cell_geometry(j, i) * phi[j];
 
     // Compute Jacobian, its inverse and determinant
-    std::fill(J.begin(), J.end(), 0.0);
-    dphi = xt::view(basis, xt::range(1, tdim + 1), 0, xt::all(), 0);
+    std::fill(work_array.begin(), std::next(work_array.begin(), gdim * tdim),
+              0.0);
+    auto dphi = stdex::submdspan(basis_values, std::pair{1, tdim + 1}, 0,
+                                 stdex::full_extent, 0);
     dolfinx::fem::CoordinateElement::compute_jacobian(dphi, cell_geometry, J);
     dolfinx::fem::CoordinateElement::compute_jacobian_inverse(J, K);
 
     // Compute dXk = K (x-xk)
     std::fill(dX.begin(), dX.end(), 0.0);
-    for (std::size_t i = 0; i < K.shape(0); ++i)
-      for (std::size_t j = 0; j < K.shape(1); ++j)
+    for (std::size_t i = 0; i < K.extent(0); ++i)
+      for (std::size_t j = 0; j < K.extent(1); ++j)
         dX[i] += K(i, j) * (x[j] - xk[j]);
 
     // Compute Xk += dX
-    std::transform(dX.cbegin(), std::next(dX.cbegin(), tdim), Xk.cbegin(),
+    std::transform(dX.begin(), std::next(dX.begin(), tdim), Xk.begin(),
                    Xk.begin(), [](double a, double b) { return a + b; });
 
     // Compute dot(dX, dX)
-    auto dX_squared = std::transform_reduce(dX.cbegin(), dX.cend(), 0.0,
-                                            std::plus<double>(),
-                                            [](const auto v) { return v * v; });
+    auto dX_squared
+        = std::transform_reduce(dX.begin(), dX.end(), 0.0, std::plus<double>(),
+                                [](const auto v) { return v * v; });
     if (std::sqrt(dX_squared) < tol)
       break;
   }
 
-  std::copy(Xk.cbegin(), std::next(Xk.cbegin(), tdim), X.begin());
+  std::copy(Xk.begin(), std::next(Xk.begin(), tdim), X.begin());
   if (k == max_it)
   {
     throw std::runtime_error(
@@ -71,62 +92,61 @@ void dolfinx_contact::pull_back_nonaffine(
 }
 
 std::array<double, 3> dolfinx_contact::push_forward_facet_normal(
-    xt::xtensor<double, 2>& J, xt::xtensor<double, 2>& K,
-    const std::array<double, 3>& x,
-    const xt::xtensor<double, 2>& coordinate_dofs,
-    const std::size_t facet_index, const dolfinx::fem::CoordinateElement& cmap,
-    const xt::xtensor<double, 2>& reference_normals)
+    std::span<double> work_array, std::span<const double> x, std::size_t gdim,
+    std::size_t tdim, cmdspan2_t coordinate_dofs, const std::size_t facet_index,
+    const dolfinx::fem::CoordinateElement& cmap, cmdspan2_t reference_normals)
 {
-  assert(J.shape(0) == K.shape(1));
-  assert(K.shape(0) == J.shape(1));
+  const std::array<std::size_t, 4> c_shape = cmap.tabulate_shape(1, 1);
+  const std::size_t basis_size
+      = std::reduce(c_shape.cbegin(), c_shape.cend(), 1, std::multiplies());
+  assert(work_array.size() >= basis_size + 2 * gdim * tdim);
 
-  // Shapes needed for computing the Jacobian inverse
-  const size_t tdim = K.shape(0);
-  const size_t gdim = K.shape(1);
-
-  // Data structures for computing J inverse
-  std::array<std::size_t, 4> shape = cmap.tabulate_shape(1, 1);
-  xt::xtensor<double, 4> phi(shape);
-  xt::xtensor<double, 2> dphi({tdim, shape[2]});
-  xt::xtensor<double, 2> X({1, tdim});
-  // Compute Jacobian inverse
-  std::fill(J.begin(), J.end(), 0);
-  std::fill(K.begin(), K.end(), 0);
+  // Use work-array for views
+  std::fill(work_array.begin(), std::next(work_array.begin(), gdim * tdim + 9),
+            0);
+  mdspan2_t J(work_array.data(), gdim, tdim);
+  std::span<double, 3> X(work_array.data() + gdim * tdim, 3);
+  mdspan2_t K(work_array.data() + gdim * tdim + 3, tdim, gdim);
+  cmdspan4_t basis_values(work_array.data() + 3 + 2 * gdim * tdim, c_shape);
+  std::span basis_span(work_array.data() + 3 + 2 * gdim * tdim, basis_size);
   if (cmap.is_affine())
   {
     // Affine Jacobian can be computed at any point in the cell (0,0,0) in
     // the reference cell
     std::fill(X.begin(), X.end(), 0);
-    cmap.tabulate(1, X, phi);
-    dphi = xt::view(phi, xt::range(1, tdim + 1), 0, xt::all(), 0);
+    cmap.tabulate(1, X, {1, tdim}, basis_span);
+    auto dphi = stdex::submdspan(basis_values, std::pair{1, tdim + 1}, 0,
+                                 stdex::full_extent, 0);
     dolfinx::fem::CoordinateElement::compute_jacobian(dphi, coordinate_dofs, J);
-    std::fill(K.begin(), K.end(), 0);
     dolfinx::fem::CoordinateElement::compute_jacobian_inverse(J, K);
   }
   else
   {
     // For non-affine geometries we have to compute the point in the reference
     // cell, which is a nonlinear operation.
-    dolfinx_contact::pull_back_nonaffine(X, J, K, phi, x, cmap,
+    dolfinx_contact::pull_back_nonaffine(X.subspan(0, tdim), work_array,
+                                         x.subspan(0, gdim), cmap,
                                          coordinate_dofs);
-    cmap.tabulate(1, X, phi);
-    dphi = xt::view(phi, xt::range(1, tdim + 1), 0, xt::all(), 0);
-    std::fill(J.begin(), J.end(), 0);
+    cmap.tabulate(1, X, {1, tdim}, basis_span);
+    std::fill(work_array.begin(), std::next(work_array.begin(), gdim * tdim),
+              0.0);
+    auto dphi = stdex::submdspan(basis_values, std::pair{1, tdim + 1}, 0,
+                                 stdex::full_extent, 0);
     dolfinx::fem::CoordinateElement::compute_jacobian(dphi, coordinate_dofs, J);
-    std::fill(K.begin(), K.end(), 0);
     dolfinx::fem::CoordinateElement::compute_jacobian_inverse(J, K);
   }
   // Push forward reference facet normal
   std::array<double, 3> normal = {0, 0, 0};
-  physical_facet_normal(xtl::span(normal.data(), gdim), K,
-                        xt::row(reference_normals, facet_index));
+  auto facet_normal
+      = stdex::submdspan(reference_normals, facet_index, stdex::full_extent);
+  physical_facet_normal(xtl::span(normal.data(), gdim), K, facet_normal);
   return normal;
 }
 
 //-----------------------------------------------------------------------------
-double dolfinx_contact::compute_circumradius(
-    const dolfinx::mesh::Mesh& mesh, double detJ,
-    const xt::xtensor<double, 2>& coordinate_dofs)
+double dolfinx_contact::compute_circumradius(const dolfinx::mesh::Mesh& mesh,
+                                             double detJ,
+                                             cmdspan2_t coordinate_dofs)
 {
   const dolfinx::mesh::CellType cell_type = mesh.topology().cell_type();
   const int gdim = mesh.geometry().dim();

@@ -159,8 +159,8 @@ get_update_jacobian_dependencies(const dolfinx::fem::CoordinateElement& cmap);
 /// For non-affine geometries, a function updating the physical facet normal is
 /// returned.
 /// @param[in] cmap The coordinate element
-std::function<void(xt::xtensor<double, 1>&, const xt::xtensor<double, 2>&,
-                   const xt::xtensor<double, 2>&, std::size_t)>
+std::function<void(std::span<double>, cmdspan2_t, cmdspan2_t,
+                   const std::size_t)>
 get_update_normal(const dolfinx::fem::CoordinateElement& cmap);
 
 /// @brief Convert local entity indices to integration entities

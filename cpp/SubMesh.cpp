@@ -169,14 +169,14 @@ void dolfinx_contact::SubMesh::copy_function(
   assert(bs == dofmap_parent->bs());
 
   // retrieve value array
-  tcb::span<PetscScalar> u_sub_data = u_sub.x()->mutable_array();
-  tcb::span<const PetscScalar> u_data = u_parent.x()->array();
+  std::span<PetscScalar> u_sub_data = u_sub.x()->mutable_array();
+  std::span<const PetscScalar> u_data = u_parent.x()->array();
 
   // copy data from u into u_sub
   for (std::int32_t c = 0; c < num_cells; ++c)
   {
-    const tcb::span<const int> dofs_sub = dofmap_sub->cell_dofs(c);
-    const tcb::span<const int> dofs_parent
+    const std::span<const int> dofs_sub = dofmap_sub->cell_dofs(c);
+    const std::span<const int> dofs_parent
         = dofmap_parent->cell_dofs(_parent_cells[c]);
     assert(dofs_sub.size() == dofs_parent.size());
     for (std::size_t i = 0; i < dofs_sub.size(); ++i)
@@ -194,8 +194,8 @@ void dolfinx_contact::SubMesh::update_geometry(
   // Recover original geometry from parent mesh
   std::shared_ptr<const dolfinx::mesh::Mesh> parent_mesh
       = u.function_space()->mesh();
-  tcb::span<double> sub_geometry = _mesh->geometry().x();
-  tcb::span<const double> parent_geometry = parent_mesh->geometry().x();
+  std::span<double> sub_geometry = _mesh->geometry().x();
+  std::span<const double> parent_geometry = parent_mesh->geometry().x();
   std::size_t num_x_dofs = sub_geometry.size() / 3;
   for (std::size_t i = 0; i < num_x_dofs; ++i)
   {
