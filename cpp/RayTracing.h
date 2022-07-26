@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include "QuadratureRule.h"
 #include <dolfinx/common/utils.h>
 #include <dolfinx/mesh/Mesh.h>
 #include <xtensor/xtensor.hpp>
@@ -14,12 +15,15 @@
 
 namespace
 {
+namespace stdex = std::experimental;
+template <std::size_t A, std::size_t B>
+using AB_span = stdex::mdspan<double, stdex::extents<std::size_t, A, B>>;
 
 /// Normalize a set of vectors by its length
 /// @tparam The number of vectors
 /// @tparam The length of the vectors
 template <std::size_t A, std::size_t B>
-void normalize(xt::xtensor_fixed<double, xt::xshape<A, B>>& vectors)
+void normalize(AB_span<A, B>& vectors)
 {
   for (std::size_t i = 0; i < A; ++i)
   {
@@ -40,15 +44,15 @@ void normalize(xt::xtensor_fixed<double, xt::xshape<A, B>>& vectors)
 /// @tparam gdim The dimension of the normal
 /// @returns The tangent(s)
 template <std::size_t gdim>
-xt::xtensor_fixed<double, xt::xshape<gdim - 1, gdim>>
-compute_tangents(const xt::xtensor_fixed<double, xt::xshape<gdim>>& n)
+void compute_tangents(std::span<const double, gdim> n,
+                      AB_span<gdim - 1, gdim> tangents)
 {
 
   // Compute local maximum and create iteration array
-  auto max_el = std::max_element(n.cbegin(), n.cend(),
+  auto max_el = std::max_element(n.begin(), n.end(),
                                  [](double a, double b)
                                  { return std::norm(a) < std::norm(b); });
-  auto max_pos = std::distance(n.cbegin(), max_el);
+  auto max_pos = std::distance(n.begin(), max_el);
   std::size_t c = 0;
   std::vector<std::size_t> indices(gdim - 1, 0);
   for (std::size_t i = 0; i < gdim; ++i)
@@ -56,21 +60,20 @@ compute_tangents(const xt::xtensor_fixed<double, xt::xshape<gdim>>& n)
       indices[c++] = i;
 
   /// Compute first tangent
-  xt::xtensor_fixed<double, xt::xshape<gdim - 1, gdim>> tangents;
-  std::fill(tangents.begin(), std::next(tangents.begin(), gdim), 1);
+  for (std::size_t i = 0; i < gdim; ++i)
+    tangents(0, i) = 1;
   tangents(0, max_pos) = 0;
   for (std::size_t i = 0; i < gdim - 1; ++i)
-    tangents(0, max_pos) -= n(0, i) / n(0, max_pos);
+    tangents(0, max_pos) -= n[i] / n[max_pos];
 
   /// Compute second tangent by cross product
   if constexpr (gdim == 3)
   {
-    tangents(1, 0) = tangents(0, 1) * n(2) - tangents(0, 2) * n(1);
-    tangents(1, 1) = tangents(0, 2) * n(0) - tangents(0, 0) * n(2);
-    tangents(1, 2) = tangents(0, 0) * n(1) - tangents(0, 1) * n(0);
+    tangents(1, 0) = tangents(0, 1) * n[2] - tangents(0, 2) * n[1];
+    tangents(1, 1) = tangents(0, 2) * n[0] - tangents(0, 0) * n[2];
+    tangents(1, 2) = tangents(0, 0) * n[1] - tangents(0, 1) * n[0];
   }
   normalize<gdim - 1, gdim>(tangents);
-  return tangents;
 };
 
 /// Get function that parameterizes a facet of a given cell
@@ -81,8 +84,8 @@ compute_tangents(const xt::xtensor_fixed<double, xt::xshape<gdim>>& n)
 /// facet on the reference cell.
 /// @tparam tdim The topological dimension of the cell
 template <std::size_t tdim>
-std::function<xt::xtensor_fixed<double, xt::xshape<1, tdim>>(
-    xt::xtensor_fixed<double, xt::xshape<tdim - 1>>)>
+const std::function<void(std::span<const double, tdim - 1>,
+                         std::span<double, tdim>)>
 get_parameterization(dolfinx::mesh::CellType cell_type, int facet_index)
 {
   switch (cell_type)
@@ -111,27 +114,29 @@ get_parameterization(dolfinx::mesh::CellType cell_type, int facet_index)
   // Get basix geometry information
   basix::cell::type basix_cell
       = dolfinx::mesh::cell_type_to_basix_type(cell_type);
-  auto [_x_data, _x_shape] = basix::cell::geometry(basix_cell);
-  xt::xtensor<double, 2> x(_x_shape);
-  std::copy(_x_data.cbegin(), _x_data.cend(), x.begin());
+  std::pair<std::vector<double>, std::array<std::size_t, 2>> geometry
+      = basix::cell::geometry(basix_cell);
+  auto xb = geometry.first;
+  auto x_shape = geometry.second;
   const std::vector<std::vector<int>> facets
       = basix::cell::topology(basix_cell)[tdim - 1];
+  namespace stdex = std::experimental;
 
   // Create parameterization function exploiting that the mapping between
   // reference geometries are affine
-  std::function<xt::xtensor_fixed<double, xt::xshape<1, tdim>>(
-      xt::xtensor_fixed<double, xt::xshape<tdim - 1>>)>
-      func = [x, facet = facets[facet_index]](
-                 xt::xtensor_fixed<double, xt::xshape<tdim>> xi)
-      -> xt::xtensor_fixed<double, xt::xshape<1, tdim>>
+  std::function<void(std::span<const double, tdim - 1>,
+                     std::span<double, tdim>)>
+      func
+      = [xb, x_shape, facet = facets[facet_index]](
+            std::span<const double, tdim - 1> xi, std::span<double, tdim> X)
   {
-    auto x0 = xt::row(x, facet[0]);
-    xt::xtensor_fixed<double, xt::xshape<1, tdim>> vals = x0;
+    dolfinx_contact::cmdspan2_t x(xb.data(), x_shape);
+    for (std::size_t i = 0; i < tdim; ++i)
+      X[i] = x(facet.front(), i);
 
     for (std::size_t i = 0; i < tdim; ++i)
       for (std::size_t j = 0; j < tdim - 1; ++j)
-        vals(0, i) += (xt::row(x, facet[j + 1])[i] - x0[i]) * xi[j];
-    return vals;
+        X[i] += x(facet[j + 1], i) - x(facet.front(), i) * xi[j];
   };
   return func;
 }
@@ -140,12 +145,12 @@ get_parameterization(dolfinx::mesh::CellType cell_type, int facet_index)
 /// parameters
 /// @param[in] cell_type The cell type
 /// @param[in] facet_index The facet index (local to cell)
-/// @returns The Jacobian of the parameterization
+/// @param[in,out] The Jacobian of the parameterization
 /// @tparam tdim The topological dimension of the cell
 template <std::size_t tdim>
-xt::xtensor_fixed<double, xt::xshape<tdim, tdim - 1>>
-get_parameterization_jacobian(dolfinx::mesh::CellType cell_type,
-                              int facet_index)
+void get_parameterization_jacobian(dolfinx::mesh::CellType cell_type,
+                                   int facet_index,
+                                   std::span<double, tdim * tdim - 1> jacobian)
 {
   switch (cell_type)
   {
@@ -167,43 +172,143 @@ get_parameterization_jacobian(dolfinx::mesh::CellType cell_type,
   basix::cell::type basix_cell
       = dolfinx::mesh::cell_type_to_basix_type(cell_type);
   auto [ref_jac, jac_shape] = basix::cell::facet_jacobians(basix_cell);
-  xt::xtensor<double, 3> facet_jacobians(jac_shape);
-  std::copy(ref_jac.cbegin(), ref_jac.cend(), facet_jacobians.begin());
-
-  xt::xtensor_fixed<double, xt::xshape<tdim, tdim - 1>> output;
-  output = xt::view(facet_jacobians, facet_index, xt::all(), xt::all());
-  return output;
+  assert(jac_shape[2] * jac_shape[3] == jacobian.size());
+  dolfinx_contact::cmdspan3_t facet_jacobians(ref_jac.data(), jac_shape);
+  for (std::size_t i = 0; i < facet_jacobians.extent(0); ++i)
+    for (std::size_t j = 0; j < facet_jacobians.extent(1); ++j)
+      jacobian[i * jac_shape[3] + j] = facet_jacobians(facet_index, i, j);
 }
 
 } // namespace
 
 namespace dolfinx_contact
 {
+namespace stdex = std::experimental;
+template <std::size_t A, std::size_t B>
+using AB_span = stdex::mdspan<double, stdex::extents<std::size_t, A, B>>;
 
 template <std::size_t tdim, std::size_t gdim>
-struct newton_storage
+class NewtonStorage
 {
-  xt::xtensor_fixed<double, xt::xshape<tdim, tdim - 1>>
-      dxi; // Jacobian of reference mapping
-  xt::xtensor<double, 2>
-      X_k; // Solution on reference domain (for Newton solver)
-  xt::xtensor<double, 2> x_k; // Solution in physical space (for Newton solver)
-  xt::xtensor_fixed<double, xt::xshape<tdim - 1>>
-      xi_k; // Reference parameters (for Newton solver)
-  xt::xtensor_fixed<double, xt::xshape<tdim - 1>>
-      dxi_k; // Gradient of reference parameters (for Newton Solver)
-  xt::xtensor_fixed<double, xt::xshape<gdim, tdim>> J; // Jacobian of the cell
-  xt::xtensor_fixed<double, xt::xshape<gdim, tdim - 1>>
-      dGk_tmp; // Temporary variable to invert Jacobian of Newton solver LHS
-  xt::xtensor_fixed<double, xt::xshape<gdim - 1, tdim - 1>>
-      dGk; // Newton solver LHS Jacobian
-  xt::xtensor_fixed<double, xt::xshape<tdim - 1, gdim - 1>>
-      dGk_inv; // Inverse of Newton solver LHS Jacobian
-  xt::xtensor_fixed<double, xt::xshape<gdim - 1>>
-      Gk; // Residual (RHS) of Newton solver
-  xt::xtensor_fixed<double, xt::xshape<gdim - 1, gdim>>
-      tangents;                                      // Tangents of ray
-  xt::xtensor_fixed<double, xt::xshape<gdim>> point; // Point of origin for ray
+public:
+  /// Creates storage for Newton solver with the following entries (listed in
+  /// order of appearance in the work-array)
+  /// The data-structures the Newton step requires is:
+  /// dxi The Jacobian of the reference mapping, shape (tdim, tdim-1)
+  /// X_k Solution on reference domain, size: tdim
+  /// x_k Solution in phyiscal space, size: gdim
+  /// xi_k Reference parameters, size: tdim-1
+  /// dxi_k Gradient of reference parameter, size: tdim-1
+  /// J Jacobian of cell basis, shape (gdim, tdim)
+  /// dGk_tmp Temporary variable to invert Jacobian of Newton solver LHS, shape
+  /// (gdim, tdim-1)
+  /// dGk Newton solver LHS Jacobian, shape (gdim-1, tdim-1)
+  /// dGk_inv Inverse of Newton solver Jacobian LHS, shape (tdim-1, gdim-1)
+  /// Gk Resiudal (RHS) of Newton solver, size: gdim-1
+  /// tangents Tangents of the ray, shape (gdim-1, gdim)
+  /// point Point of origin of ray, size gdim
+  NewtonStorage()
+  {
+
+    std::array<std::size_t, 12> distribution = {tdim * (tdim - 1),
+                                                tdim,
+                                                gdim,
+                                                tdim - 1,
+                                                tdim - 1,
+                                                gdim * tdim,
+                                                gdim * (tdim - 1),
+                                                (gdim - 1) * (tdim - 1),
+                                                (tdim - 1) * (gdim - 1),
+                                                gdim - 1,
+                                                (gdim - 1) * gdim,
+                                                gdim};
+    _offsets[0] = 0;
+    std::partial_sum(distribution.cbegin(), distribution.cend(),
+                     std::next(_offsets.begin()));
+    _work_array = std::vector<double>(_offsets.back());
+  }
+
+  /// Return the Jacobian of the reference mapping, shape (tdim, tdim-1)
+  AB_span<tdim, tdim - 1> dxi()
+  {
+    return AB_span<tdim, tdim - 1>(_work_array.data() + _offsets[0]);
+  }
+
+  /// Return the solution on the reference domain
+  std::span<double, tdim> X_k()
+  {
+    return std::span<double, tdim>(std::next(_work_array.begin(), _offsets[1]),
+                                   tdim);
+  }
+
+  /// Return the solution in physical space
+  std::span<double, gdim> x_k()
+  {
+    return std::span<double, gdim>(std::next(_work_array.begin(), _offsets[2]),
+                                   gdim);
+  }
+
+  /// Return the reference parameters
+  std::span<double, tdim - 1> xi_k()
+  {
+    return std::span<double, tdim - 1>(
+        std::next(_work_array.begin(), _offsets[3]), tdim - 1);
+  }
+
+  ///  Return the gradient of reference parameter
+  std::span<double, tdim - 1> dxi_k()
+  {
+    return std::span<double, tdim - 1>(
+        std::next(_work_array.begin(), _offsets[4]), tdim - 1);
+  }
+
+  /// Return the Jacobian of cell basis
+  AB_span<gdim, tdim> J()
+  {
+    return AB_span<gdim, tdim>(_work_array.data() + _offsets[5]);
+  }
+
+  /// Return temporary variable to invert Jacobian of Newton solver LHS
+  AB_span<gdim, tdim - 1> dGk_tmp()
+  {
+    return AB_span<gdim, tdim - 1>(_work_array.data() + _offsets[6]);
+  }
+
+  /// Return Newton solver LHS Jacobian
+  AB_span<gdim - 1, tdim - 1> dGk()
+  {
+    return AB_span<gdim - 1, tdim - 1>(_work_array.data() + _offsets[7]);
+  }
+
+  /// Return inverse of Newton solver Jacobian LHS
+  AB_span<tdim - 1, gdim - 1> dGk_inv()
+  {
+    return AB_span<tdim - 1, gdim - 1>(_work_array.data() + _offsets[8]);
+  }
+
+  /// Return resiudal (RHS) of Newton solver
+  std::span<double, gdim - 1> Gk()
+  {
+    return std::span<double, gdim - 1>(
+        std::next(_work_array.begin(), _offsets[9]), gdim - 1);
+  }
+
+  /// Return the tangents of the ray
+  AB_span<gdim - 1, gdim> tangents()
+  {
+    return AB_span<gdim - 1, gdim>(_work_array.data() + _offsets[10]);
+  }
+
+  /// Return resiudal (RHS) of Newton solver
+  std::span<double, gdim> point()
+  {
+    return std::span<double, gdim>(std::next(_work_array.begin(), _offsets[11]),
+                                   gdim);
+  }
+
+private:
+  std::vector<double> _work_array;
+  std::array<std::size_t, 13> _offsets;
 };
 
 /// @brief Compute the solution to the ray tracing problem for a single cell
@@ -223,8 +328,6 @@ struct newton_storage
 /// @note All other variables of the class is updated.
 /// @param[in, out] basis_values Four-dimensional array to write basis values
 /// into.
-/// @param[in, out] dphi Two-dimensional matrix to write the derviative of the
-/// basis functions into
 /// @param[in] max_iter Maximum number of iterations for the Newton solver
 /// @param[in] tol The tolerance for termination of the Newton solver
 /// @param[in] cmap The coordinate element
@@ -235,82 +338,97 @@ struct newton_storage
 /// @tparam tdim The topological dimension of the cell
 template <std::size_t tdim, std::size_t gdim>
 int raytracing_cell(
-    newton_storage<tdim, gdim>& storage, xt::xtensor<double, 4>& basis_values,
-    xt::xtensor<double, 2>& dphi, int max_iter, double tol,
-    const dolfinx::fem::CoordinateElement& cmap,
+    NewtonStorage<tdim, gdim>& storage, xt::xtensor<double, 4>& basis_values,
+    int max_iter, double tol, const dolfinx::fem::CoordinateElement& cmap,
     dolfinx::mesh::CellType cell_type,
     const xt::xtensor<double, 2>& coordinate_dofs,
-    const std::function<xt::xtensor_fixed<double, xt::xshape<1, tdim>>(
-        xt::xtensor_fixed<double, xt::xshape<tdim - 1>>)>& reference_map)
+    const std::function<void(std::span<const double, tdim - 1>,
+                             std::span<double, tdim>)>& reference_map)
 {
+  if constexpr ((gdim != 2) or (gdim != 3))
+    throw std::invalid_argument("The geometrical dimension has to be 2 or 3");
+
+  int status = -1;
+  auto x_k = storage.x_k();
+  std::fill(x_k.begin(), x_k.end(), 0);
 
   // Set initial guess for Newton-iteration (midpoint of facet)
-  int status = -1;
-  if constexpr (gdim == 2)
-    storage.x_k = {{0, 0}};
-  else if (gdim == 3)
-    storage.x_k = {{0, 0, 0}};
-  else
-    throw std::invalid_argument("The geometrical dimension has to be 2 or 3");
+  auto xi_k = storage.xi_k();
   if constexpr (tdim == 3)
-    storage.xi_k = {0.5, 0.25};
+  {
+    xi_k[0] = 0.5;
+    xi_k[1] = 0.25;
+  }
   else if constexpr (tdim == 2)
-    storage.xi_k = {0.5};
+    xi_k[0] = 0.5;
   else
     throw std::invalid_argument("The topological dimension has to be 2 or 3");
 
+  auto X_k = storage.X_k();
+  auto dGk = storage.dGk();
+  auto dGk_inv = storage.dGk_inv();
+  auto Gk = storage.Gk();
+  auto point = storage.point();
+  auto tangents = storage.tangents();
+  auto J = storage.J();
+  auto dGk_tmp = storage.dGk_tmp();
+  auto dxi = storage.dxi();
+  auto dxi_k = storage.dxi_k();
+
+  cmdspan4_t basis(basis_values.data(), basis_values.shape());
+  auto dphi = stdex::submdspan(basis, std::pair{1, tdim + 1}, 0,
+                               stdex::full_extent, 0);
+  cmdspan2_t coords(coordinate_dofs.data(), coordinate_dofs.shape());
+  mdspan2_t _xk(x_k.data(), 1, gdim);
   for (int k = 0; k < max_iter; ++k)
   {
     // Evaluate reference coordinate at current iteration
-    storage.X_k = reference_map(storage.xi_k);
+    reference_map(xi_k, X_k);
     // Tabulate coordinate element basis function
-    cmap.tabulate(1, storage.X_k, basis_values);
+    cmap.tabulate(1, X_k, {1, tdim}, basis_values);
 
     // Push forward reference coordinate
     dolfinx::fem::CoordinateElement::push_forward(
-        storage.x_k, coordinate_dofs,
-        xt::view(basis_values, 0, xt::all(), xt::all(), 0));
-    dphi = xt::view(basis_values, xt::xrange((std::size_t)1, tdim + 1), 0,
-                    xt::all(), 0);
+        _xk, coords,
+        stdex::submdspan(basis, 0, stdex::full_extent, stdex::full_extent, 0));
 
     // Compute residual at current iteration
-    std::fill(storage.Gk.begin(), storage.Gk.end(), 0);
+    std::fill(Gk.begin(), Gk.end(), 0);
     for (std::size_t i = 0; i < gdim; ++i)
-    {
       for (std::size_t j = 0; j < gdim - 1; ++j)
-      {
-        storage.Gk[j]
-            += (storage.x_k(0, i) - storage.point[i]) * storage.tangents(j, i);
-      }
-    }
+        Gk[j] += (x_k[i] - point[i]) * tangents(j, i);
 
     // Compute Jacobian
-    std::fill(storage.J.begin(), storage.J.end(), 0);
-    dolfinx::fem::CoordinateElement::compute_jacobian(dphi, coordinate_dofs,
-                                                      storage.J);
+    for (std::size_t i = 0; i < gdim; ++i)
+      for (std::size_t j = 0; j < tdim; ++j)
+        J(i, j) = 0;
+    dolfinx::fem::CoordinateElement::compute_jacobian(dphi, coords, J);
     /// Compute dGk/dxi
-    std::fill(storage.dGk_tmp.begin(), storage.dGk_tmp.end(), 0);
-    dolfinx::math::dot(storage.J, storage.dxi, storage.dGk_tmp);
+    for (std::size_t i = 0; i < gdim; ++i)
+      for (std::size_t j = 0; j < tdim - 1; ++j)
+        dGk_tmp(i, j) = 0;
+    dolfinx::math::dot(J, dxi, dGk_tmp);
 
-    std::fill(storage.dGk.begin(), storage.dGk.end(), 0);
+    for (std::size_t i = 0; i < gdim - 1; ++i)
+      for (std::size_t j = 0; j < tdim - 1; ++j)
+        dGk(i, j) = 0;
     for (std::size_t i = 0; i < gdim - 1; ++i)
       for (std::size_t j = 0; j < tdim - 1; ++j)
         for (std::size_t l = 0; l < gdim; ++l)
-          storage.dGk(i, j) += storage.dGk_tmp(l, j) * storage.tangents(i, l);
+          dGk(i, j) += dGk_tmp(l, j) * tangents(i, l);
 
     // Compute determinant of dGk/dxi to determine if invertible
     double det_dGk;
     if constexpr ((gdim != tdim) and (gdim == 3) and (tdim == 2))
     {
       // If non-square matrix compute det(A) = sqrt(det(A^T A))
-      xt::xtensor_fixed<double, xt::xshape<1, 1>> ATA;
-      ATA(0, 0) = 0;
-      dolfinx::math::dot(xt::transpose(storage.dGk), storage.dGk, ATA);
-      det_dGk = std::sqrt(dolfinx::math::det(ATA));
+      std::array<double, 1> ATA;
+      ATA[0] = dGk(0, 0) * dGk(0, 0) + dGk(1, 0) * dGk(1, 0);
+      det_dGk = std::sqrt(ATA[0]);
     }
     else
     {
-      det_dGk = dolfinx::math::det(storage.dGk);
+      det_dGk = dolfinx::math::det(dGk);
     }
     // Terminate if dGk/dxi is not invertible
     if (std::abs(det_dGk) < tol)
@@ -322,23 +440,23 @@ int raytracing_cell(
     // Invert dGk/dxi
     if constexpr (gdim == tdim)
     {
-      dolfinx::math::inv(storage.dGk, storage.dGk_inv);
+      dolfinx::math::inv(dGk, dGk_inv);
     }
     else
     {
-      dolfinx::math::pinv(storage.dGk, storage.dGk_inv);
+      dolfinx::math::pinv(dGk, dGk_inv);
     }
 
     // Compute dxi
-    std::fill(storage.dxi_k.begin(), storage.dxi_k.end(), 0);
+    std::fill(dxi_k.begin(), dxi_k.end(), 0);
     for (std::size_t i = 0; i < tdim - 1; ++i)
       for (std::size_t j = 0; j < gdim - 1; ++j)
-        storage.dxi_k[i] += storage.dGk_inv(i, j) * storage.Gk[j];
+        dxi_k[i] += dGk_inv(i, j) * Gk[j];
 
     // Check for convergence
     double norm_dxi = 0;
     for (std::size_t i = 0; i < tdim - 1; i++)
-      norm_dxi += storage.dxi_k[i] * storage.dxi_k[i];
+      norm_dxi += dxi_k[i] * dxi_k[i];
     if (norm_dxi < tol * tol)
     {
       status = 1;
@@ -346,36 +464,34 @@ int raytracing_cell(
     }
 
     // Update xi
-    std::transform(storage.xi_k.cbegin(), storage.xi_k.cend(),
-                   storage.dxi_k.cbegin(), storage.xi_k.begin(),
+    std::transform(xi_k.begin(), xi_k.end(), dxi_k.begin(), xi_k.begin(),
                    [](auto x, auto y) { return x - y; });
   }
   // Check if converged  parameters are valid
   switch (cell_type)
   {
   case dolfinx::mesh::CellType::tetrahedron:
-    if ((storage.xi_k[0] < -tol) or (storage.xi_k[0] > 1 + tol)
-        or (storage.xi_k[1] < -tol)
-        or (storage.xi_k[1] > 1 - storage.xi_k[0] + tol))
+    if ((xi_k[0] < -tol) or (xi_k[0] > 1 + tol) or (xi_k[1] < -tol)
+        or (xi_k[1] > 1 - xi_k[0] + tol))
     {
       status = -3;
     }
     break;
   case dolfinx::mesh::CellType::hexahedron:
-    if ((storage.xi_k[0] < -tol) or (storage.xi_k[0] > 1 + tol)
-        or (storage.xi_k[1] < -tol) or (storage.xi_k[1] > 1 + tol))
+    if ((xi_k[0] < -tol) or (xi_k[0] > 1 + tol) or (xi_k[1] < -tol)
+        or (xi_k[1] > 1 + tol))
     {
       status = -3;
     }
     break;
   case dolfinx::mesh::CellType::triangle:
-    if ((storage.xi_k[0] < -tol) or (storage.xi_k[0] > 1 + tol))
+    if ((xi_k[0] < -tol) or (xi_k[0] > 1 + tol))
     {
       status = -3;
     }
     break;
   case dolfinx::mesh::CellType::quadrilateral:
-    if ((storage.xi_k[0] < -tol) or (storage.xi_k[0] > 1 + tol))
+    if ((xi_k[0] < -tol) or (xi_k[0] > 1 + tol))
     {
       status = -3;
     }
@@ -409,11 +525,11 @@ int raytracing_cell(
 /// outside the element.
 /// @tparam tdim The topological dimension of the cell
 template <std::size_t tdim, std::size_t gdim>
-std::tuple<int, std::int32_t, xt::xtensor_fixed<double, xt::xshape<gdim>>,
-           xt::xtensor_fixed<double, xt::xshape<tdim>>>
+std::tuple<int, std::int32_t, std::array<double, gdim>,
+           std::array<double, tdim>>
 compute_ray(const dolfinx::mesh::Mesh& mesh,
-            const xt::xtensor_fixed<double, xt::xshape<gdim>>& point,
-            const xt::xtensor_fixed<double, xt::xshape<gdim>>& normal,
+            std::span<const double, gdim> point,
+            std::span<const double, gdim> normal,
             xtl::span<const std::int32_t> cells, const int max_iter = 25,
             const double tol = 1e-8)
 {
@@ -431,17 +547,20 @@ compute_ray(const dolfinx::mesh::Mesh& mesh,
   xtl::span<const double> x_g = geometry.x();
   const std::size_t num_dofs_g = cmap.dim();
   xt::xtensor<double, 2> coordinate_dofs({num_dofs_g, gdim});
-  xt::xtensor<double, 2> dphi({(std::size_t)tdim, num_dofs_g});
 
   // Temporary variables
   const std::array<std::size_t, 4> basis_shape = cmap.tabulate_shape(1, 1);
   xt::xtensor<double, 4> basis_values(basis_shape);
 
   std::size_t cell_idx = -1;
-  newton_storage<tdim, gdim> allocated_memory;
-  allocated_memory.tangents = compute_tangents<gdim>(normal);
-  allocated_memory.point = point;
+  auto allocated_memory = NewtonStorage<tdim, gdim>();
+  auto tangents = allocated_memory.tangents();
+  compute_tangents<gdim>(normal, tangents);
+  std::span<double, gdim> m_point = allocated_memory.point();
+  auto dxi = allocated_memory.dxi();
+  dolfinx::common::impl::copy_N<gdim>(point.begin(), m_point.begin());
 
+  std::array<double, tdim * tdim - 1> jac_param;
   for (std::size_t c = 0; c < cells.size(); c += 2)
   {
 
@@ -454,11 +573,15 @@ compute_ray(const dolfinx::mesh::Mesh& mesh,
           std::next(coordinate_dofs.begin(), gdim * j));
     }
     // Assign Jacobian of reference mapping
-    allocated_memory.dxi
-        = get_parameterization_jacobian<tdim>(cell_type, cells[c + 1]);
+    // FIXME: Should get span of dxi instead to avoid copying
+    get_parameterization_jacobian<tdim>(cell_type, cells[c + 1], jac_param);
+    for (std::size_t i = 0; i < dxi.extent(0); ++i)
+      for (std::size_t j = 0; j < dxi.extent(1); ++j)
+        dxi(i, j) = jac_param[i * dxi.extent(1) + i];
     // Get parameterization map
+
     auto reference_map = get_parameterization<tdim>(cell_type, cells[c + 1]);
-    status = raytracing_cell<tdim, gdim>(allocated_memory, basis_values, dphi,
+    status = raytracing_cell<tdim, gdim>(allocated_memory, basis_values,
                                          max_iter, tol, cmap, cell_type,
                                          coordinate_dofs, reference_map);
     if (status > 0)
@@ -470,10 +593,15 @@ compute_ray(const dolfinx::mesh::Mesh& mesh,
   if (status < 0)
     LOG(WARNING) << "No ray through the facets have been found";
 
-  std::tuple<int, std::int32_t, xt::xtensor_fixed<double, xt::xshape<gdim>>,
-             xt::xtensor_fixed<double, xt::xshape<tdim>>>
-      output = std::make_tuple(status, cell_idx, allocated_memory.x_k,
-                               allocated_memory.X_k);
+  std::array<double, gdim> x;
+  std::array<double, tdim> X;
+  auto x_fin = allocated_memory.x_k();
+  auto X_fin = allocated_memory.X_k();
+  dolfinx::common::impl::copy_N<gdim>(x_fin.begin(), x.begin());
+  dolfinx::common::impl::copy_N<gdim>(X_fin.begin(), X.begin());
+  std::tuple<int, std::int32_t, std::array<double, gdim>,
+             std::array<double, tdim>>
+      output = std::make_tuple(status, cell_idx, x, X);
   return output;
 }
 

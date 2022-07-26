@@ -26,21 +26,36 @@ dolfinx_contact::raytracing(const dolfinx::mesh::Mesh& mesh,
     if (gdim == 2)
     {
       auto [status, cell_idx, x, X] = dolfinx_contact::compute_ray<2, 2>(
-          mesh, point, normal, cells, max_iter, tol);
-      output = std::make_tuple(status, cell_idx, x, X);
+          mesh, std::span<const double, 2>(point.data(), 2),
+          std::span<const double, 2>(normal.data(), 2), cells, max_iter, tol);
+      xt::xtensor<double, 1> xt_x = xt::zeros<double>({(std::size_t)gdim});
+      xt::xtensor<double, 1> xt_X = xt::zeros<double>({(std::size_t)tdim});
+      std::copy(x.begin(), x.end(), xt_x.begin());
+      std::copy(X.begin(), X.end(), xt_X.begin());
+      output = std::make_tuple(status, cell_idx, xt_x, xt_X);
     }
     else if (gdim == 3)
     {
       auto [status, cell_idx, x, X] = dolfinx_contact::compute_ray<2, 3>(
-          mesh, point, normal, cells, max_iter, tol);
-      output = std::make_tuple(status, cell_idx, x, X);
+          mesh, std::span<const double, 3>(point.data(), 3),
+          std::span<const double, 3>(normal.data(), 3), cells, max_iter, tol);
+      xt::xtensor<double, 1> xt_x = xt::zeros<double>({(std::size_t)gdim});
+      xt::xtensor<double, 1> xt_X = xt::zeros<double>({(std::size_t)tdim});
+      std::copy(x.begin(), x.end(), xt_x.begin());
+      std::copy(X.begin(), X.end(), xt_X.begin());
+      output = std::make_tuple(status, cell_idx, xt_x, xt_X);
     }
   }
   else if (tdim == 3)
   {
     auto [status, cell_idx, x, X] = dolfinx_contact::compute_ray<3, 3>(
-        mesh, point, normal, cells, max_iter, tol);
-    output = std::make_tuple(status, cell_idx, x, X);
+        mesh, std::span<const double, 3>(point.data(), 3),
+        std::span<const double, 3>(normal.data(), 3), cells, max_iter, tol);
+    xt::xtensor<double, 1> xt_x = xt::zeros<double>({(std::size_t)gdim});
+    xt::xtensor<double, 1> xt_X = xt::zeros<double>({(std::size_t)tdim});
+    std::copy(x.begin(), x.end(), xt_x.begin());
+    std::copy(X.begin(), X.end(), xt_X.begin());
+    output = std::make_tuple(status, cell_idx, xt_x, xt_X);
   }
   return output;
 }
