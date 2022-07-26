@@ -52,112 +52,30 @@ PYBIND11_MODULE(cpp, m)
                     basix::quadrature::type>(),
            py::arg("cell_type"), py::arg("degree"), py::arg("dim"),
            py::arg("type") = basix::quadrature::type::Default)
+      .def("points", [](dolfinx_contact::QuadratureRule& self)
+           { return dolfinx_wrappers::as_pyarray(self.points()); })
       .def("points",
-           [](dolfinx_contact::QuadratureRule& self) {
-             return dolfinx_wrappers::xt_as_pyarray(std::move(self.points()));
+           [](dolfinx_contact::QuadratureRule& self, int i)
+           {
+             dolfinx_contact::cmdspan2_t points_i = self.points(i);
+             std::array<std::size_t, 2> shape
+                 = {points_i.extent(0), points_i.extent(1)};
+             std::vector<double> _points(shape[0] * shape[1]);
+             for (std::size_t i = 0; i < points_i.extent(0); ++i)
+               for (std::size_t j = 0; j < points_i.extent(1); ++j)
+                 _points[i * shape[1] + j] = points_i(i, j);
+             return dolfinx_wrappers::as_pyarray(std::move(_points), shape);
            })
       .def("weights", [](dolfinx_contact::QuadratureRule& self)
-           { return dolfinx_wrappers::as_pyarray(std::move(self.weights())); });
-
-  // Contact
-  py::class_<dolfinx_contact::Contact,
-             std::shared_ptr<dolfinx_contact::Contact>>(m, "Contact",
-                                                        "Contact object")
-      .def(py::init<std::vector<
-                        std::shared_ptr<dolfinx::mesh::MeshTags<std::int32_t>>>,
-                    std::shared_ptr<
-                        const dolfinx::graph::AdjacencyList<std::int32_t>>,
-                    std::vector<std::array<int, 2>>,
-                    std::shared_ptr<dolfinx::fem::FunctionSpace>, const int>(),
-           py::arg("markers"), py::arg("sufaces"), py::arg("contact_pairs"),
-           py::arg("V"), py::arg("quadrature_degree") = 3)
-      .def("create_distance_map",
-           [](dolfinx_contact::Contact& self, int pair)
+           { return dolfinx_wrappers::as_pyarray(self.weights()); })
+      .def("weights",
+           [](dolfinx_contact::QuadratureRule& self, int i)
            {
-             self.create_distance_map(pair);
-             return;
-           })
-      .def("pack_gap_plane",
-           [](dolfinx_contact::Contact& self, int origin_meshtag, double g)
-           {
-             auto [coeffs, cstride] = self.pack_gap_plane(origin_meshtag, g);
-             int shape0 = cstride == 0 ? 0 : coeffs.size() / cstride;
-             return dolfinx_wrappers::as_pyarray(std::move(coeffs),
-                                                 std::array{shape0, cstride});
-           })
-      .def("pack_gap",
-           [](dolfinx_contact::Contact& self, int origin_meshtag)
-           {
-             auto [coeffs, cstride] = self.pack_gap(origin_meshtag);
-             int shape0 = cstride == 0 ? 0 : coeffs.size() / cstride;
-             return dolfinx_wrappers::as_pyarray(std::move(coeffs),
-                                                 std::array{shape0, cstride});
-           })
-      .def(
-          "create_matrix",
-          [](dolfinx_contact::Contact& self, dolfinx::fem::Form<PetscScalar>& a,
-             std::string type) { return self.create_petsc_matrix(a, type); },
-          py::return_value_policy::take_ownership, py::arg("a"),
-          py::arg("type") = std::string(),
-          "Create a PETSc Mat for two-sided contact.")
-      .def("qp_phys",
-           [](dolfinx_contact::Contact& self, int origin_meshtag, int facet)
-           {
-             auto qp = self.qp_phys(origin_meshtag)[facet];
-             return dolfinx_wrappers::xt_as_pyarray(std::move(qp));
-           })
-      .def("active_entities",
-           [](dolfinx_contact::Contact& self, int s)
-           {
-             const std::vector<std::int32_t>& active_entities
-                 = self.active_entities(s);
-             std::array<py::ssize_t, 2> shape
-                 = {py::ssize_t(active_entities.size() / 2), 2};
-             return py::array_t<std::int32_t>(shape, active_entities.data(),
-                                              py::cast(self));
-           })
-      .def("facet_map",
-           [](dolfinx_contact::Contact& self, int pair)
-           {
-             // This exposes facet_map() to python but replaces the
-             // facet indices on the submesh with the facet indices in
-             // the parent mesh This is only exposed for testing (in
-             // particular
-             // nitsche_rigid_surface.py/demo_nitsche_rigid_surface_ufl.py)
-             auto contact_pair = self.contact_pair(pair);
-             std::shared_ptr<const dolfinx::mesh::Mesh> mesh = self.mesh();
-             const int tdim = mesh->topology().dim(); // topological dimension
-             const int fdim = tdim - 1; // topological dimension of facet
-             auto c_to_f = mesh->topology().connectivity(tdim, fdim);
-             assert(c_to_f);
-             std::shared_ptr<const dolfinx::graph::AdjacencyList<std::int32_t>>
-                 submesh_map = self.facet_map(pair);
-             const std::vector<int>& offsets = submesh_map->offsets();
-             const std::vector<std::int32_t>& old_data = submesh_map->array();
-             std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> facet_map
-                 = self.submesh(contact_pair[1]).facet_map();
-             const std::vector<std::int32_t>& parent_cells
-                 = self.submesh(contact_pair[1]).parent_cells();
-             std::vector<std::int32_t> data(old_data.size());
-             for (std::size_t i = 0; i < old_data.size(); ++i)
-             {
-               auto facet_sub = old_data[i];
-               auto facet_pair = facet_map->links(facet_sub);
-               auto cell_parent = parent_cells[facet_pair[0]];
-               data[i] = c_to_f->links(cell_parent)[facet_pair[1]];
-             }
-             return std::make_shared<
-                 dolfinx::graph::AdjacencyList<std::int32_t>>(
-                 std::move(data), std::move(offsets));
-           })
-      .def("coefficients_size", &dolfinx_contact::Contact::coefficients_size,
-           py::arg("meshtie") = false)
-      .def("set_quadrature_rule",
-           &dolfinx_contact::Contact::set_quadrature_rule)
-      .def("generate_kernel",
-           [](dolfinx_contact::Contact& self, dolfinx_contact::Kernel type) {
-             return contact_wrappers::KernelWrapper(self.generate_kernel(type));
-           })
+             std::span<const double> weights_i = self.weights(i);
+             std::vector<double> _weights(weights_i.size());
+             std::copy(weights_i.begin(), weights_i.end(), _weights.begin());
+             return dolfinx_wrappers::as_pyarray(std::move(_weights));
+           });
 
       .def("assemble_matrix",
            [](dolfinx_contact::Contact& self, Mat A,

@@ -15,6 +15,11 @@
 
 namespace dolfinx_contact
 {
+namespace stdex = std::experimental;
+using mdspan2_t = stdex::mdspan<double, stdex::dextents<std::size_t, 2>>;
+using cmdspan2_t = stdex::mdspan<const double, stdex::dextents<std::size_t, 2>>;
+using mdspan4_t = stdex::mdspan<double, stdex::dextents<std::size_t, 4>>;
+using cmdspan4_t = stdex::mdspan<const double, stdex::dextents<std::size_t, 4>>;
 
 class QuadratureRule
 {
@@ -31,11 +36,11 @@ public:
                  = basix::quadrature::type::Default);
 
   /// Return a list of quadrature points for each entity in the cell
-  const xt::xtensor<double, 2>& points() const { return _points; }
+  std::vector<double> points() { return _points; }
 
   /// Return a list of quadrature weights for each entity in the cell (using
   /// local entity index as in DOLFINx/Basix)
-  const std::vector<double>& weights() const { return _weights; }
+  std::vector<double> weights() const { return _weights; }
 
   /// Return dimension of entity in the quadrature rule
   int dim() const { return _dim; }
@@ -59,18 +64,24 @@ public:
 
   /// Return the quadrature points for the ith entity
   /// @param[in] i The local entity index
-  xt::xtensor<double, 2> points(int i) const;
+  cmdspan2_t points(int i) const;
+
+  /// Return the quadrature weights for the ith entity
+  /// @param[in] i The local entity index
+  std::span<const double> weights(int i) const;
 
   /// Return offset for quadrature rule of the ith entity
   const std::vector<std::int32_t>& offset() const { return _entity_offset; }
 
 private:
   dolfinx::mesh::CellType _cell_type;
+  std::size_t _tdim;
   int _degree;
   basix::quadrature::type _type;
   int _dim;
-  xt::xtensor<double, 2>
-      _points; // Quadrature points for each entity on the cell
+  std::vector<double>
+      _points; // Quadrature points for each entity on the cell. Shape (entity,
+               // num_points, tdim). Flattened row-major.
   std::vector<double>
       _weights; // Quadrature weights for each entity on the cell
   std::vector<std::int32_t> _entity_offset; // The offset for each entity
