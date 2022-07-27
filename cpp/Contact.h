@@ -568,9 +568,10 @@ public:
     }
 
     const std::vector<int>& qp_offsets = _quadrature_rule->offset();
-    dolfinx_contact::compute_physical_points(*mesh_sub, submesh_facets,
-                                             qp_offsets, _phi_ref_facets,
-                                             _qp_phys[origin_meshtag]);
+    dolfinx_contact::compute_physical_points(
+        *mesh_sub, submesh_facets, qp_offsets,
+        dolfinx_contact::cmdspan4_t(_reference_basis.data(), _reference_shape),
+        _qp_phys[origin_meshtag]);
   }
 
   /// Compute maximum number of links
@@ -1004,7 +1005,8 @@ public:
 
     // Tabulate basis function on reference cell (_phi_ref_facets)
     const dolfinx::fem::CoordinateElement& cmap = mesh->geometry().cmap();
-    _phi_ref_facets = tabulate(cmap, _quadrature_rule);
+    std::tie(_reference_basis, _reference_shape)
+        = tabulate(cmap, _quadrature_rule);
 
     // Compute quadrature points on physical facet _qp_phys_"puppet_mt"
     create_q_phys(puppet_mt);
@@ -1045,7 +1047,8 @@ private:
   //  each facet on ith surface in _surfaces
   std::vector<std::vector<xt::xtensor<double, 2>>> _qp_phys;
   // quadrature points on facets of reference cell
-  xt::xtensor<double, 2> _phi_ref_facets;
+  std::vector<double> _reference_basis;
+  std::array<std::size_t, 4> _reference_shape;
   // maximum number of cells linked to a cell on ith surface
   std::vector<std::size_t> _max_links;
   // submeshes for contact surface

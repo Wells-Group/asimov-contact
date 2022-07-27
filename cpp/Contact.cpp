@@ -255,7 +255,8 @@ void dolfinx_contact::Contact::create_distance_map(int pair)
   // NOTE: More data that should be updated inside this code
   const dolfinx::fem::CoordinateElement& cmap
       = candidate_mesh->geometry().cmap();
-  _phi_ref_facets = tabulate(cmap, _quadrature_rule);
+  std::tie(_reference_basis, _reference_shape)
+      = tabulate(cmap, _quadrature_rule);
 
   // NOTE: This function should be moved somwhere else, or return the actual
   // points such that we compuld send them in to compute_distance_map.
