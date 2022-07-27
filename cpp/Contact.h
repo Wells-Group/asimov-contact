@@ -40,24 +40,22 @@ namespace
 ///
 /// @param[in] cmap The coordinate element
 /// @param[in] q_rule The quadrature rule
-xt::xtensor<double, 2>
+std::pair<std::vector<double>, std::array<std::size_t, 4>>
 tabulate(const dolfinx::fem::CoordinateElement& cmap,
          std::shared_ptr<const dolfinx_contact::QuadratureRule> q_rule)
 {
 
   // Create quadrature points on reference facet
   const std::vector<double>& q_weights = q_rule->weights();
-  const xt::xtensor<double, 2>& q_points = q_rule->points();
-
+  const std::vector<double>& q_points = q_rule->points();
+  assert(q_weights.size() == (std::size_t)q_rule->offset().back());
   // Tabulate Coordinate element (first derivative to compute Jacobian)
   std::array<std::size_t, 4> cmap_shape
       = cmap.tabulate_shape(0, q_weights.size());
-  xt::xtensor<double, 2> phi_c({cmap_shape[1], cmap_shape[2]});
-  xt::xtensor<double, 4> cmap_basis(cmap_shape);
-  cmap.tabulate(0, q_points, cmap_basis);
-  phi_c = xt::view(cmap_basis, 0, xt::all(), xt::all(), 0);
-
-  return phi_c;
+  std::vector<double> cmap_basis(
+      std::reduce(cmap_shape.begin(), cmap_shape.end(), 1, std::multiplies()));
+  cmap.tabulate(0, q_points, {q_weights.size(), q_rule->tdim()}, cmap_basis);
+  return {cmap_basis, cmap_shape};
 }
 } // namespace
 
@@ -240,31 +238,31 @@ public:
       const std::uint32_t tdim = kd.tdim();
 
       // NOTE: DOLFINx has 3D input coordinate dofs
-      // FIXME: These array should be views (when compute_jacobian doesn't use
-      // xtensor)
-      std::array<std::size_t, 2> shape
-          = {(std::size_t)kd.num_coordinate_dofs(), 3};
-      xt::xtensor<double, 2> coord
-          = xt::adapt(coordinate_dofs, kd.num_coordinate_dofs() * 3,
-                      xt::no_ownership(), shape);
+      cmdspan2_t coord(coordinate_dofs, kd.num_coordinate_dofs(), 3);
 
       // Create data structures for jacobians
-      xt::xtensor<double, 2> J = xt::zeros<double>({gdim, (std::size_t)tdim});
-      xt::xtensor<double, 2> K = xt::zeros<double>({(std::size_t)tdim, gdim});
-      xt::xtensor<double, 2> J_tot
-          = xt::zeros<double>({J.shape(0), (std::size_t)tdim - 1});
+      // We allocate more memory than required, but its better for the compiler
+      std::array<double, 9> Jb;
+      mdspan2_t J(Jb.data(), gdim, tdim);
+      std::array<double, 9> Kb;
+      mdspan2_t K(Kb.data(), tdim, gdim);
+      std::array<double, 6> J_totb;
+      mdspan2_t J_tot(J_totb.data(), gdim, tdim - 1);
       double detJ;
-      auto c_view = xt::view(coord, xt::all(), xt::range(0, gdim));
+      std::array<double, 18> detJ_scratch;
 
       // Normal vector on physical facet at a single quadrature point
-      xt::xtensor<double, 1> n_phys = xt::zeros<double>({gdim});
+      std::array<double, 3> n_phys;
 
       // Pre-compute jacobians and normals for affine meshes
       if (kd.affine())
       {
-        detJ = kd.compute_facet_jacobians(facet_index, J, K, J_tot, coord);
+        detJ = kd.compute_facet_jacobians(facet_index, J, K, J_tot,
+                                          detJ_scratch, coord);
         dolfinx_contact::physical_facet_normal(
-            n_phys, K, xt::row(kd.facet_normals(), facet_index));
+            std::span(n_phys.data(), gdim), K,
+            stdex::submdspan(kd.facet_normals(), facet_index,
+                             stdex::full_extent));
       }
 
       // Extract constants used inside quadrature loop
@@ -275,8 +273,8 @@ public:
       double lmbda = c[1];
 
       // Extract reference to the tabulated basis function
-      const xt::xtensor<double, 2>& phi = kd.phi();
-      const xt::xtensor<double, 3>& dphi = kd.dphi();
+      cmdspan2_t phi = kd.phi();
+      cmdspan3_t dphi = kd.dphi();
 
       // Extract reference to quadrature weights for the local facet
       std::span<const double> _weights(kd.q_weights());
@@ -284,8 +282,11 @@ public:
 
       // Temporary data structures used inside quadrature loop
       std::array<double, 3> n_surf = {0, 0, 0};
-      xt::xtensor<double, 2> tr({ndofs_cell, gdim});
-      xt::xtensor<double, 2> epsn({ndofs_cell, gdim});
+      std::vector<double> epsnb(ndofs_cell * gdim);
+      mdspan2_t epsn(epsnb.data(), ndofs_cell, gdim);
+      std::vector<double> trb(ndofs_cell * gdim);
+      mdspan2_t tr(trb.data(), ndofs_cell, gdim);
+
       // Loop over quadrature points
       const int num_points = q_offset[1] - q_offset[0];
       for (int q = 0; q < num_points; q++)
@@ -304,7 +305,7 @@ public:
         {
 
           n_surf[i] = -c[kd.offsets(4) + q * gdim + i];
-          n_dot += n_phys(i) * n_surf[i];
+          n_dot += n_phys[i] * n_surf[i];
           gap += c[kd.offsets(3) + q * gdim + i] * n_surf[i];
         }
         compute_normal_strain_basis(epsn, tr, K, dphi, n_surf, n_phys, q_pos);
@@ -384,34 +385,32 @@ public:
           = {kd.qp_offsets(facet_index), kd.qp_offsets(facet_index + 1)};
       const std::uint32_t tdim = kd.tdim();
 
-      // Reshape coordinate dofs to two dimensional array
       // NOTE: DOLFINx has 3D input coordinate dofs
-      std::array<std::size_t, 2> shape
-          = {(std::size_t)kd.num_coordinate_dofs(), 3};
-
-      // FIXME: These array should be views (when compute_jacobian doesn't
-      // use xtensor)
-      xt::xtensor<double, 2> coord
-          = xt::adapt(coordinate_dofs, kd.num_coordinate_dofs() * 3,
-                      xt::no_ownership(), shape);
+      cmdspan2_t coord(coordinate_dofs, kd.num_coordinate_dofs(), 3);
 
       // Create data structures for jacobians
-      xt::xtensor<double, 2> J = xt::zeros<double>({gdim, (std::size_t)tdim});
-      xt::xtensor<double, 2> K = xt::zeros<double>({(std::size_t)tdim, gdim});
-      xt::xtensor<double, 2> J_tot
-          = xt::zeros<double>({J.shape(0), (std::size_t)tdim - 1});
+      // We allocate more memory than required, but its better for the compiler
+      std::array<double, 9> Jb;
+      mdspan2_t J(Jb.data(), gdim, tdim);
+      std::array<double, 9> Kb;
+      mdspan2_t K(Kb.data(), tdim, gdim);
+      std::array<double, 6> J_totb;
+      mdspan2_t J_tot(J_totb.data(), gdim, tdim - 1);
       double detJ;
-      auto c_view = xt::view(coord, xt::all(), xt::range(0, gdim));
+      std::array<double, 18> detJ_scratch;
 
       // Normal vector on physical facet at a single quadrature point
-      xt::xtensor<double, 1> n_phys = xt::zeros<double>({gdim});
+      std::array<double, 3> n_phys;
 
       // Pre-compute jacobians and normals for affine meshes
       if (kd.affine())
       {
-        detJ = kd.compute_facet_jacobians(facet_index, J, K, J_tot, coord);
+        detJ = kd.compute_facet_jacobians(facet_index, J, K, J_tot,
+                                          detJ_scratch, coord);
         dolfinx_contact::physical_facet_normal(
-            n_phys, K, xt::row(kd.facet_normals(), facet_index));
+            std::span(n_phys.data(), gdim), K,
+            stdex::submdspan(kd.facet_normals(), facet_index,
+                             stdex::full_extent));
       }
 
       // Extract scaled gamma (h/gamma) and its inverse
@@ -422,13 +421,16 @@ public:
       double mu = c[0];
       double lmbda = c[1];
 
-      const xt::xtensor<double, 3>& dphi = kd.dphi();
-      const xt::xtensor<double, 2>& phi = kd.phi();
+      cmdspan3_t dphi = kd.dphi();
+      cmdspan2_t phi = kd.phi();
       std::span<const double> _weights(kd.q_weights());
       auto weights = _weights.subspan(q_offset[0], q_offset[1] - q_offset[0]);
       std::array<double, 3> n_surf = {0, 0, 0};
-      xt::xtensor<double, 2> tr = xt::zeros<double>({ndofs_cell, gdim});
-      xt::xtensor<double, 2> epsn = xt::zeros<double>({ndofs_cell, gdim});
+      std::vector<double> epsnb(ndofs_cell * gdim);
+      mdspan2_t epsn(epsnb.data(), ndofs_cell, gdim);
+      std::vector<double> trb(ndofs_cell * gdim);
+      mdspan2_t tr(trb.data(), ndofs_cell, gdim);
+
       // Loop over quadrature points
       const int num_points = q_offset[1] - q_offset[0];
       for (int q = 0; q < num_points; q++)
@@ -446,7 +448,7 @@ public:
           // (-n_y)* (Pi(x) - x), where n_y is the outward unit normal
           // in y = Pi(x)
           n_surf[i] = -c[kd.offsets(4) + q * gdim + i];
-          n_dot += n_phys(i) * n_surf[i];
+          n_dot += n_phys[i] * n_surf[i];
           gap += c[kd.offsets(3) + q * gdim + i] * n_surf[i];
         }
 

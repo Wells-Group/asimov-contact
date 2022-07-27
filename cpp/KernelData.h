@@ -97,6 +97,33 @@ public:
     return cmdspan2_t(_facet_normals.data(), _normals_shape);
   }
 
+  /// Compute the following jacobians on a given facet:
+  /// J: physical cell -> reference cell (and its inverse)
+  /// J_tot: physical facet -> reference facet
+  /// @param[in] q - index of quadrature points
+  /// @param[in] facet_index - The index of the facet local to the cell
+  /// @param[in,out] J - Jacobian between reference cell and physical cell
+  /// @param[in,out] K - inverse of J
+  /// @param[in,out] J_tot - J_f*J
+  /// @param[in] coords - the coordinates of the facet
+  /// @return absolute value of determinant of J_tot
+  double update_jacobian(std::size_t q, const int facet_index, double detJ,
+                         mdspan2_t J, mdspan2_t K, mdspan2_t J_tot,
+                         cmdspan2_t coords) const
+  {
+    cmdspan4_t full_basis(_c_basis_values.data(), _c_basis_shape);
+    std::array<std::size_t, 2> _q_range
+        = {(std::size_t)_qp_offsets[facet_index],
+           (std::size_t)_qp_offsets[facet_index + 1]};
+    auto dphi_fc = stdex::submdspan(
+        full_basis, std::pair{1, (std::size_t)_tdim},
+        std::pair{_q_range[0], _q_range[1]}, stdex::full_extent, 0);
+    cmdspan3_t ref_jacs(_ref_jacobians.data(), _jac_shape);
+    auto J_f = stdex::submdspan(ref_jacs, (std::size_t)facet_index,
+                                stdex::full_extent, stdex::full_extent);
+    return _update_jacobian(q, detJ, J, K, J_tot, J_f, dphi_fc, coords);
+  }
+
   /// Compute the following jacobians on a given facet at first quadrature
   /// point: J: physical cell -> reference cell (and its inverse) J_tot:
   /// physical facet -> reference facet
@@ -114,7 +141,8 @@ public:
   {
     cmdspan4_t full_basis(_c_basis_values.data(), _c_basis_shape);
     std::array<std::size_t, 2> _q_range
-        = {_qp_offsets[facet_index], _qp_offsets[facet_index + 1]};
+        = {(std::size_t)_qp_offsets[facet_index],
+           (std::size_t)_qp_offsets[facet_index + 1]};
     auto dphi_fc = stdex::submdspan(
         full_basis, std::pair{1, (std::size_t)_tdim},
         std::pair{_q_range[0], _q_range[1]}, stdex::full_extent, 0);
