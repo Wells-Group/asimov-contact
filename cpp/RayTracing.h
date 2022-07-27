@@ -10,8 +10,6 @@
 #include "QuadratureRule.h"
 #include <dolfinx/common/utils.h>
 #include <dolfinx/mesh/Mesh.h>
-#include <xtensor/xtensor.hpp>
-#include <xtensor/xview.hpp>
 
 namespace dolfinx_contact
 {
@@ -35,9 +33,7 @@ void normalize(AB_span<A, B>& vectors)
       norm += vectors(i, j) * vectors(i, j);
     norm = std::sqrt(norm);
     for (std::size_t j = 0; j < B; ++j)
-    {
       vectors(i, j) = vectors(i, j) / norm;
-    }
   }
 }
 
@@ -329,16 +325,16 @@ private:
 /// @param[in] tol The tolerance for termination of the Newton solver
 /// @param[in] cmap The coordinate element
 /// @param[in] cell_type The cell type of the mesh
-/// @param[in] coordinate_dofs The cell geometry
+/// @param[in] coordinate_dofs The cell geometry, shape (num_dofs_g, gdim).
+/// Flattened row-major
 /// @param[in] reference_map Function mapping from reference parameters (xi,
 /// eta) to the physical element
 /// @tparam tdim The topological dimension of the cell
 template <std::size_t tdim, std::size_t gdim>
 int raytracing_cell(
-    NewtonStorage<tdim, gdim>& storage, xt::xtensor<double, 4>& basis_values,
+    NewtonStorage<tdim, gdim>& storage, std::span<double> basis_values,
     int max_iter, double tol, const dolfinx::fem::CoordinateElement& cmap,
-    dolfinx::mesh::CellType cell_type,
-    const xt::xtensor<double, 2>& coordinate_dofs,
+    dolfinx::mesh::CellType cell_type, std::span<const double> coordinate_dofs,
     const std::function<void(std::span<const double, tdim - 1>,
                              std::span<double, tdim>)>& reference_map)
 {
@@ -371,11 +367,15 @@ int raytracing_cell(
   auto dGk_tmp = storage.dGk_tmp();
   auto dxi = storage.dxi();
   auto dxi_k = storage.dxi_k();
-
-  cmdspan4_t basis(basis_values.data(), basis_values.shape());
+  std::array<std::size_t, 4> basis_shape = cmap.tabulate_shape(1, 1);
+  assert(std::reduce(basis_shape.cbegin(), basis_shape.cend(), 1,
+                     std::multiplies())
+         == basis_values.size());
+  cmdspan4_t basis(basis_values.data(), basis_shape);
   auto dphi = stdex::submdspan(basis, std::pair{1, tdim + 1}, 0,
                                stdex::full_extent, 0);
-  cmdspan2_t coords(coordinate_dofs.data(), coordinate_dofs.shape());
+  const std::array<std::size_t, 2> cd_shape = {(std::size_t)cmap.dim(), gdim};
+  cmdspan2_t coords(coordinate_dofs.data(), cd_shape);
   mdspan2_t _xk(x_k.data(), 1, gdim);
   for (int k = 0; k < max_iter; ++k)
   {
@@ -543,11 +543,12 @@ compute_ray(const dolfinx::mesh::Mesh& mesh,
       = geometry.dofmap();
   xtl::span<const double> x_g = geometry.x();
   const std::size_t num_dofs_g = cmap.dim();
-  xt::xtensor<double, 2> coordinate_dofs({num_dofs_g, gdim});
+  std::vector<double> coordinate_dofs(num_dofs_g * gdim);
 
   // Temporary variables
   const std::array<std::size_t, 4> basis_shape = cmap.tabulate_shape(1, 1);
-  xt::xtensor<double, 4> basis_values(basis_shape);
+  std::vector<double> basis_values(std::reduce(
+      basis_shape.cbegin(), basis_shape.cend(), 1, std::multiplies()));
 
   std::size_t cell_idx = -1;
   auto allocated_memory = NewtonStorage<tdim, gdim>();
