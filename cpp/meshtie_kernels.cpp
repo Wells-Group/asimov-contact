@@ -61,20 +61,18 @@ dolfinx_contact::generate_meshtie_kernel(
     auto tdim = std::size_t(kd.tdim());
 
     // NOTE: DOLFINx has 3D input coordinate dofs
-    // FIXME: These array should be views (when compute_jacobian doesn't use
-    // xtensor)
-    std::array<std::size_t, 2> shape
-        = {(std::size_t)kd.num_coordinate_dofs(), 3};
-    xt::xtensor<double, 2> coord
-        = xt::adapt(coordinate_dofs, kd.num_coordinate_dofs() * 3,
-                    xt::no_ownership(), shape);
+    cmdspan2_t coord(coordinate_dofs, kd.num_coordinate_dofs(), 3);
 
     // Create data structures for jacobians
-    xt::xtensor<double, 2> J = xt::zeros<double>({gdim, tdim});
-    xt::xtensor<double, 2> K = xt::zeros<double>({tdim, gdim});
-    xt::xtensor<double, 2> J_tot = xt::zeros<double>({J.shape(0), tdim - 1});
+    // We allocate more memory than required, but its better for the compiler
+    std::array<double, 9> Jb;
+    mdspan2_t J(Jb.data(), gdim, tdim);
+    std::array<double, 9> Kb;
+    mdspan2_t K(Kb.data(), tdim, gdim);
+    std::array<double, 6> J_totb;
+    mdspan2_t J_tot(J_totb.data(), gdim, tdim - 1);
     double detJ = 0;
-    auto c_view = xt::view(coord, xt::all(), xt::range(0, gdim));
+    std::array<double, 18> detJ_scratch;
 
     // Normal vector on physical facet at a single quadrature point
     xt::xtensor<double, 1> n_phys = xt::zeros<double>({gdim});
@@ -82,9 +80,13 @@ dolfinx_contact::generate_meshtie_kernel(
     // Pre-compute jacobians and normals for affine meshes
     if (kd.affine())
     {
-      detJ = kd.compute_facet_jacobians(facet_index, J, K, J_tot, coord);
+      detJ = kd.compute_facet_jacobians(facet_index, J, K, J_tot, detJ_scratch,
+                                        coord);
+
       dolfinx_contact::physical_facet_normal(
-          n_phys, K, xt::row(kd.facet_normals(), facet_index));
+          std::span(n_phys.data(), gdim), K,
+          stdex::submdspan(kd.facet_normals(), facet_index,
+                           stdex::full_extent));
     }
 
     // Extract constants used inside quadrature loop
@@ -94,18 +96,20 @@ dolfinx_contact::generate_meshtie_kernel(
     double lmbda = c[1];
 
     // Extract reference to the tabulated basis function
-    const xt::xtensor<double, 2>& phi = kd.phi();
-    const xt::xtensor<double, 3>& dphi = kd.dphi();
+    cmdspan2_t phi = kd.phi();
+    cmdspan3_t dphi = kd.dphi();
 
     // Extract reference to quadrature weights for the local facet
     std::span<const double> _weights(kd.q_weights());
     auto weights = _weights.subspan(q_offset[0], q_offset[1] - q_offset[0]);
 
     // Temporary data structures used inside quadrature loop
-    xt::xtensor<double, 3> sig_n({ndofs_cell, gdim, gdim});
+    std::vector<double> sig_nb(ndofs_cell * gdim * gdim);
+    std::vector<double> sig_n_oppb(num_links * ndofs_cell * gdim * gdim);
     std::vector<double> sig_n_u(gdim);
-    xt::xtensor<double, 4> sig_n_opp({num_links, ndofs_cell, gdim, gdim});
     std::vector<double> jump_u(gdim);
+    mdspan3_t sig_n(sig_nb.data(), ndofs_cell, gdim, gdim);
+    mdspan4_t sig_n_opp(sig_n_oppb.data(), num_links, ndofs_cell, gdim, gdim);
 
     // Loop over quadrature points
     const int num_points = q_offset[1] - q_offset[0];
@@ -114,7 +118,8 @@ dolfinx_contact::generate_meshtie_kernel(
       const std::size_t q_pos = q_offset[0] + q;
 
       // Update Jacobian and physical normal
-      detJ = kd.update_jacobian(q, facet_index, detJ, J, K, J_tot, coord);
+      detJ = kd.update_jacobian(q, facet_index, detJ, J, K, J_tot, detJ_scratch,
+                                coord);
       kd.update_normal(n_phys, K, facet_index);
       compute_sigma_n_basis(sig_n, K, dphi, n_phys, mu, lmbda, q_pos);
       compute_sigma_n_opp(
@@ -203,20 +208,18 @@ dolfinx_contact::generate_meshtie_kernel(
         = {kd.qp_offsets(facet_index), kd.qp_offsets(facet_index + 1)};
     auto tdim = std::size_t(kd.tdim());
     // NOTE: DOLFINx has 3D input coordinate dofs
-    // FIXME: These array should be views (when compute_jacobian doesn't use
-    // xtensor)
-    std::array<std::size_t, 2> shape
-        = {(std::size_t)kd.num_coordinate_dofs(), 3};
-    xt::xtensor<double, 2> coord
-        = xt::adapt(coordinate_dofs, kd.num_coordinate_dofs() * 3,
-                    xt::no_ownership(), shape);
+    cmdspan2_t coord(coordinate_dofs, kd.num_coordinate_dofs(), 3);
 
     // Create data structures for jacobians
-    xt::xtensor<double, 2> J = xt::zeros<double>({gdim, tdim});
-    xt::xtensor<double, 2> K = xt::zeros<double>({tdim, gdim});
-    xt::xtensor<double, 2> J_tot = xt::zeros<double>({J.shape(0), tdim - 1});
+    // We allocate more memory than required, but its better for the compiler
+    std::array<double, 9> Jb;
+    mdspan2_t J(Jb.data(), gdim, tdim);
+    std::array<double, 9> Kb;
+    mdspan2_t K(Kb.data(), tdim, gdim);
+    std::array<double, 6> J_totb;
+    mdspan2_t J_tot(J_totb.data(), gdim, tdim - 1);
     double detJ = 0;
-    auto c_view = xt::view(coord, xt::all(), xt::range(0, gdim));
+    std::array<double, 18> detJ_scratch;
 
     // Normal vector on physical facet at a single quadrature point
     xt::xtensor<double, 1> n_phys = xt::zeros<double>({gdim});
@@ -224,9 +227,13 @@ dolfinx_contact::generate_meshtie_kernel(
     // Pre-compute jacobians and normals for affine meshes
     if (kd.affine())
     {
-      detJ = kd.compute_facet_jacobians(facet_index, J, K, J_tot, coord);
+      detJ = kd.compute_facet_jacobians(facet_index, J, K, J_tot, detJ_scratch,
+                                        coord);
+
       dolfinx_contact::physical_facet_normal(
-          n_phys, K, xt::row(kd.facet_normals(), facet_index));
+          std::span(n_phys.data(), gdim), K,
+          stdex::submdspan(kd.facet_normals(), facet_index,
+                           stdex::full_extent));
     }
 
     // Extract constants used inside quadrature loop
@@ -236,23 +243,27 @@ dolfinx_contact::generate_meshtie_kernel(
     double lmbda = c[1];
 
     // Extract reference to the tabulated basis function
-    const xt::xtensor<double, 2>& phi = kd.phi();
-    const xt::xtensor<double, 3>& dphi = kd.dphi();
+    cmdspan2_t phi = kd.phi();
+    cmdspan3_t dphi = kd.dphi();
 
     // Extract reference to quadrature weights for the local facet
     std::span<const double> _weights(kd.q_weights());
     auto weights = _weights.subspan(q_offset[0], q_offset[1] - q_offset[0]);
 
     // Temporary data structures used inside quadrature loop
-    xt::xtensor<double, 3> sig_n({ndofs_cell, gdim, gdim});
-    xt::xtensor<double, 4> sig_n_opp({num_links, ndofs_cell, gdim, gdim});
+    std::vector<double> sig_nb(ndofs_cell * gdim * gdim);
+    std::vector<double> sig_n_oppb(num_links * ndofs_cell * gdim * gdim);
+    mdspan3_t sig_n(sig_nb.data(), ndofs_cell, gdim, gdim);
+    mdspan4_t sig_n_opp(sig_n_oppb.data(), num_links, ndofs_cell, gdim, gdim);
+
     // Loop over quadrature points
     const int num_points = q_offset[1] - q_offset[0];
     for (int q = 0; q < num_points; q++)
     {
       const std::size_t q_pos = q_offset[0] + q;
       // Update Jacobian and physical normal
-      detJ = kd.update_jacobian(q, facet_index, detJ, J, K, J_tot, coord);
+      detJ = kd.update_jacobian(q, facet_index, detJ, J, K, J_tot, detJ_scratch,
+                                coord);
       kd.update_normal(n_phys, K, facet_index);
       compute_sigma_n_basis(sig_n, K, dphi, n_phys, mu, lmbda, q_pos);
       compute_sigma_n_opp(

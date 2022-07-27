@@ -26,7 +26,7 @@ dolfinx_contact::pack_coefficient_quadrature(
 
   // Get topology data
   const dolfinx::mesh::Topology& topology = mesh->topology();
-  const int tdim = topology.dim();
+  const std::size_t tdim = topology.dim();
   const dolfinx::mesh::CellType cell_type = topology.cell_type();
 
   // Get what entity type we are integrating over

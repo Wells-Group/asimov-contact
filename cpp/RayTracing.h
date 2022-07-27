@@ -369,8 +369,8 @@ int raytracing_cell(
   auto dxi = storage.dxi();
   auto dxi_k = storage.dxi_k();
   std::array<std::size_t, 4> basis_shape = cmap.tabulate_shape(1, 1);
-  assert(std::reduce(basis_shape.cbegin(), basis_shape.cend(), 1,
-                     std::multiplies())
+  assert(std::size_t(std::reduce(basis_shape.cbegin(), basis_shape.cend(), 1,
+                                 std::multiplies()))
          == basis_values.size());
   cmdspan4_t basis(basis_values.data(), basis_shape);
   auto dphi = stdex::submdspan(basis, std::pair{1, tdim + 1}, 0,
@@ -599,7 +599,7 @@ compute_ray(const dolfinx::mesh::Mesh& mesh,
   auto x_fin = allocated_memory.x_k();
   auto X_fin = allocated_memory.X_k();
   dolfinx::common::impl::copy_N<gdim>(x_fin.begin(), x.begin());
-  dolfinx::common::impl::copy_N<gdim>(X_fin.begin(), X.begin());
+  dolfinx::common::impl::copy_N<tdim>(X_fin.begin(), X.begin());
   std::tuple<int, std::int32_t, std::array<double, gdim>,
              std::array<double, tdim>>
       output = std::make_tuple(status, cell_idx, x, X);

@@ -21,9 +21,9 @@
 
 namespace dolfinx_contact
 {
-using jac_fn
-    = std::function<double(std::size_t, double, mdspan2_t, mdspan2_t, mdspan2_t,
-                           cmdspan2_t, cmdspan3_t, cmdspan2_t)>;
+using jac_fn = std::function<double(std::size_t, double, mdspan2_t, mdspan2_t,
+                                    mdspan2_t, std::span<double>, cmdspan2_t,
+                                    cmdspan3_t, cmdspan2_t)>;
 
 using normal_fn = std::function<void(std::span<double>, cmdspan2_t, cmdspan2_t,
                                      const std::size_t)>;
@@ -109,6 +109,7 @@ public:
   /// @return absolute value of determinant of J_tot
   double update_jacobian(std::size_t q, const int facet_index, double detJ,
                          mdspan2_t J, mdspan2_t K, mdspan2_t J_tot,
+                         std::span<double> detJ_scratch,
                          cmdspan2_t coords) const
   {
     cmdspan4_t full_basis(_c_basis_values.data(), _c_basis_shape);
@@ -121,7 +122,8 @@ public:
     cmdspan3_t ref_jacs(_ref_jacobians.data(), _jac_shape);
     auto J_f = stdex::submdspan(ref_jacs, (std::size_t)facet_index,
                                 stdex::full_extent, stdex::full_extent);
-    return _update_jacobian(q, detJ, J, K, J_tot, J_f, dphi_fc, coords);
+    return _update_jacobian(q, detJ, J, K, J_tot, detJ_scratch, J_f, dphi_fc,
+                            coords);
   }
 
   /// Compute the following jacobians on a given facet at first quadrature

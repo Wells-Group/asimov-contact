@@ -189,7 +189,7 @@ kernel_fn<T> generate_contact_kernel(
 
       // Update Jacobian and physical normal
       detJ = std::fabs(
-          kd.update_jacobian(q, facet_index, detJ, J, K, J_tot, coord));
+          kd.update_jacobian(q, facet_index, detJ, J, K, J_tot, det coord));
       kd.update_normal(n_phys, K, facet_index);
 
       double mu = 0;

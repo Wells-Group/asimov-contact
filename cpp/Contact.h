@@ -114,9 +114,15 @@ public:
 
   /// Return the quadrature points on physical facet for each facet on surface
   /// @param[in] surface The index of the surface (0 or 1).
-  std::vector<xt::xtensor<double, 2>> qp_phys(int surface)
+  std::pair<std::vector<double>, std::array<std::size_t, 3>>
+  qp_phys(int surface)
   {
-    return _qp_phys[surface];
+    const std::size_t num_facets = _cell_facet_pairs[surface].size() / 2;
+    const std::size_t num_q_points
+        = _quadrature_rule->offset()[1] - _quadrature_rule->offset()[0];
+    const std::size_t gdim = _V->mesh()->geometry().dim();
+    std::array<std::size_t, 3> shape = {num_facets, num_q_points, gdim};
+    return {_qp_phys[surface], shape};
   }
 
   /// Return the submesh corresponding to surface
@@ -294,7 +300,8 @@ public:
         const std::size_t q_pos = q_offset[0] + q;
 
         // Update Jacobian and physical normal
-        detJ = kd.update_jacobian(q, facet_index, detJ, J, K, J_tot, coord);
+        detJ = kd.update_jacobian(q, facet_index, detJ, J, K, J_tot,
+                                  detJ_scratch, coord);
         kd.update_normal(n_phys, K, facet_index);
         double n_dot = 0;
         double gap = 0;
@@ -437,7 +444,8 @@ public:
       {
         const std::size_t q_pos = q_offset[0] + q;
         // Update Jacobian and physical normal
-        detJ = kd.update_jacobian(q, facet_index, detJ, J, K, J_tot, coord);
+        detJ = kd.update_jacobian(q, facet_index, detJ, J, K, J_tot,
+                                  detJ_scratch, coord);
         kd.update_normal(n_phys, K, facet_index);
 
         double n_dot = 0;
@@ -557,6 +565,7 @@ public:
         = _submeshes[origin_meshtag].cell_map();
     const std::vector<std::int32_t>& puppet_facets
         = _cell_facet_pairs[origin_meshtag];
+    std::size_t gdim = mesh_sub->geometry().dim();
 
     std::vector<std::int32_t> submesh_facets(puppet_facets.size());
     for (std::size_t f = 0; f < puppet_facets.size(); f += 2)
@@ -568,6 +577,8 @@ public:
     }
 
     const std::vector<int>& qp_offsets = _quadrature_rule->offset();
+    _qp_phys[origin_meshtag].resize((qp_offsets[1] - qp_offsets[0])
+                                    * (submesh_facets.size() / 2) * gdim);
     dolfinx_contact::compute_physical_points(
         *mesh_sub, submesh_facets, qp_offsets,
         dolfinx_contact::cmdspan4_t(_reference_basis.data(), _reference_shape),
@@ -644,13 +655,14 @@ public:
     std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> map
         = _facet_maps[pair];
     assert(map);
-    const std::vector<xt::xtensor<double, 2>>& qp_phys = _qp_phys[puppet_mt];
-    const std::size_t num_facets = _cell_facet_pairs[puppet_mt].size() / 2;
     // NOTE: Assumes same number of quadrature points on all facets
     dolfinx_contact::error::check_cell_type(
         candidate_mesh->topology().cell_type());
     const std::size_t num_q_point
         = _quadrature_rule->offset()[1] - _quadrature_rule->offset()[0];
+    const std::size_t num_facets = _cell_facet_pairs[puppet_mt].size() / 2;
+    mdspan3_t qp_span(_qp_phys[puppet_mt].data(), num_facets, num_q_point,
+                      gdim);
 
     // Get information aboute cell type and number of closure dofs on the facet
     // NOTE: Assumption that we do not have variable facet types (prism/pyramid
@@ -685,7 +697,7 @@ public:
         // Get quadrature points in physical space for the ith facet, qth
         // quadrature point
         for (int k = 0; k < gdim; k++)
-          point(0, k) = qp_phys[i](q, k);
+          point(0, k) = qp_span(i, q, k);
 
         // Get the geometry dofs for the ith facet, qth quadrature point
         const std::span<const int> master_facet
@@ -743,18 +755,19 @@ public:
     // correct map
     std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> map
         = _facet_maps[pair];
-    const std::vector<xt::xtensor<double, 2>>& qp_phys = _qp_phys[puppet_mt];
     const std::vector<std::int32_t>& puppet_facets
         = _cell_facet_pairs[puppet_mt];
+    const std::size_t num_facets = puppet_facets.size() / 2;
+    const std::size_t num_q_points
+        = _quadrature_rule->offset()[1] - _quadrature_rule->offset()[0];
+    std::vector<double> q_points(std::size_t(num_q_points) * std::size_t(gdim));
+    mdspan3_t qp_span(_qp_phys[puppet_mt].data(), num_facets, num_q_points,
+                      gdim);
+
     std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> facet_map
         = _submeshes[candidate_mt].facet_map();
     const std::size_t max_links
         = *std::max_element(_max_links.begin(), _max_links.end());
-    const std::size_t num_facets = puppet_facets.size() / 2;
-    const std::size_t num_q_points
-        = _quadrature_rule->offset()[1] - _quadrature_rule->offset()[0];
-    xt::xtensor<double, 2> q_points
-        = xt::zeros<double>({std::size_t(num_q_points), std::size_t(gdim)});
 
     std::vector<std::int32_t> perm(num_q_points);
     std::vector<std::int32_t> linked_cells(num_q_points);
@@ -773,19 +786,6 @@ public:
     {
       const std::span<const int> links = map->links((int)i);
       assert(links.size() == num_q_points);
-
-      // Compute Pi(x) form points x and gap funtion Pi(x) - x
-      for (std::size_t j = 0; j < num_q_points; j++)
-      {
-        const std::span<const int> linked_pair = facet_map->links(links[j]);
-        assert(!linked_pair.empty());
-        linked_cells[j] = linked_pair.front();
-        for (int k = 0; k < gdim; k++)
-        {
-          q_points(j, k)
-              = qp_phys[i](j, k) + gap[i * gdim * num_q_points + j * gdim + k];
-        }
-      }
 
       // Sort linked cells
       std::pair<std::vector<std::int32_t>, std::vector<std::int32_t>>
@@ -807,7 +807,16 @@ public:
         assert(linked_cell < x_dofmap.num_nodes());
         auto x_dofs = x_dofmap.links(linked_cell);
         const std::size_t num_dofs_g = x_dofs.size();
-
+        auto qp = std::span(q_points.data(), indices.size() * gdim);
+        mdspan2_t qp_j(qp.data(), indices.size(), gdim);
+        // Compute Pi(x) form points x and gap funtion Pi(x) - x
+        for (std::size_t l = 0; l < indices.size(); ++l)
+        {
+          std::size_t ind = indices[l];
+          for (int k = 0; k < gdim; k++)
+            qp_j(l, k) = qp_span(i, ind, k)
+                         + gap[i * gdim * num_q_points + ind * gdim + k];
+        }
         xt::xtensor<double, 2> coordinate_dofs
             = xt::zeros<double>({num_dofs_g, std::size_t(gdim)});
         for (std::size_t k = 0; k < num_dofs_g; ++k)
@@ -815,8 +824,6 @@ public:
           std::copy_n(std::next(mesh_geometry.begin(), 3 * x_dofs[k]), gdim,
                       std::next(coordinate_dofs.begin(), k * gdim));
         }
-        // Extract all physical points Pi(x) on a facet of linked_cell
-        auto qp = xt::view(q_points, xt::keep(indices), xt::all());
 
         // Compute values of basis functions for all y = Pi(x) in qp
         std::array<std::size_t, 4> b_shape
@@ -876,14 +883,16 @@ public:
     // correct map
     std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> map
         = _facet_maps[pair];
-    const std::vector<xt::xtensor<double, 2>>& qp_phys = _qp_phys[puppet_mt];
-    std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> facet_map
-        = submesh.facet_map();
     const std::size_t num_facets = _cell_facet_pairs[puppet_mt].size() / 2;
     const std::size_t num_q_points
         = _quadrature_rule->offset()[1] - _quadrature_rule->offset()[0];
     // NOTE: Assuming same number of quadrature points on each cell
     dolfinx_contact::error::check_cell_type(mesh->topology().cell_type());
+    mdspan3_t qp_span(_qp_phys[puppet_mt].data(), num_facets, num_q_points,
+                      gdim);
+    std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> facet_map
+        = submesh.facet_map();
+
     auto V_sub = std::make_shared<dolfinx::fem::FunctionSpace>(
         submesh.create_functionspace(_V));
     dolfinx::fem::Function<PetscScalar> u_sub(V_sub);
@@ -915,7 +924,7 @@ public:
           for (std::size_t j = 0; j < gdim; ++j)
           {
             points(row + q, j)
-                = qp_phys[i](q, j) + gap[row * gdim + q * gdim + j];
+                = qp_span(i, q, j) + gap[row * gdim + q * gdim + j];
           }
         }
       }
@@ -1010,19 +1019,19 @@ public:
 
     // Compute quadrature points on physical facet _qp_phys_"puppet_mt"
     create_q_phys(puppet_mt);
-    const std::vector<xt::xtensor<double, 2>> qp_phys = _qp_phys[puppet_mt];
-
     const std::size_t num_facets = _cell_facet_pairs[puppet_mt].size() / 2;
     // FIXME: This does not work for prism meshes
     std::size_t num_q_point
         = _quadrature_rule->offset()[1] - _quadrature_rule->offset()[0];
+    mdspan3_t qp_span(_qp_phys[puppet_mt].data(), num_facets, num_q_point,
+                      gdim);
     std::vector<PetscScalar> c(num_facets * num_q_point * gdim, 0.0);
     const int cstride = (int)num_q_point * gdim;
     for (std::size_t i = 0; i < num_facets; i++)
     {
       int offset = (int)i * cstride;
       for (std::size_t k = 0; k < num_q_point; k++)
-        c[offset + (k + 1) * gdim - 1] = g - qp_phys[i](k, gdim - 1);
+        c[offset + (k + 1) * gdim - 1] = g - qp_span(i, k, gdim - 1);
     }
     return {std::move(c), cstride};
   }
@@ -1045,7 +1054,8 @@ private:
       _facet_maps;
   //  _qp_phys[i] contains the quadrature points on the physical facets for
   //  each facet on ith surface in _surfaces
-  std::vector<std::vector<xt::xtensor<double, 2>>> _qp_phys;
+  std::vector<std::vector<double>> _qp_phys;
+  std::array<std::size_t, 2> _qp_phys_shape;
   // quadrature points on facets of reference cell
   std::vector<double> _reference_basis;
   std::array<std::size_t, 4> _reference_shape;

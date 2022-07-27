@@ -25,7 +25,7 @@ dolfinx_contact::QuadratureRule::QuadratureRule(dolfinx::mesh::CellType ct,
   _tdim = basix::cell::topological_dimension(b_ct);
   assert(dim <= 3);
   // If cell dimension no pushing forward
-  if (_tdim == dim)
+  if (_tdim == std::size_t(dim))
   {
     std::array<std::vector<double>, 2> quadrature
         = basix::quadrature::make_quadrature(type, b_ct, degree);
@@ -43,7 +43,7 @@ dolfinx_contact::QuadratureRule::QuadratureRule(dolfinx::mesh::CellType ct,
       for (std::size_t j = 0; j < num_points; ++j)
       {
         _weights[i * num_points * _num_sub_entities + j] = q_weights[j];
-        for (int k = 0; k < _tdim; ++k)
+        for (std::size_t k = 0; k < _tdim; ++k)
           _points[i * num_points * _num_sub_entities + j * _tdim + k]
               = qp(j, k);
       }
