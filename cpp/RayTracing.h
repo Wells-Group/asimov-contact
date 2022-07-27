@@ -319,8 +319,8 @@ private:
 /// @note It is expected that the variables tangents, point, xi is filled with
 /// appropriate input values
 /// @note All other variables of the class is updated.
-/// @param[in, out] basis_values Four-dimensional array to write basis values
-/// into.
+/// @param[in, out] basis_values Work_array for basis evaluation. Should have
+/// the length given by `cmap.tabulate_shape(1,1)`
 /// @param[in] max_iter Maximum number of iterations for the Newton solver
 /// @param[in] tol The tolerance for termination of the Newton solver
 /// @param[in] cmap The coordinate element
@@ -330,6 +330,7 @@ private:
 /// @param[in] reference_map Function mapping from reference parameters (xi,
 /// eta) to the physical element
 /// @tparam tdim The topological dimension of the cell
+/// @tparam gdim The geometrical dimension of the cell
 template <std::size_t tdim, std::size_t gdim>
 int raytracing_cell(
     NewtonStorage<tdim, gdim>& storage, std::span<double> basis_values,
