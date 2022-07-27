@@ -308,24 +308,20 @@ PYBIND11_MODULE(cpp, m)
         auto facet_span
             = std::span<const std::int32_t>(cells.data(), cells.size());
         const std::size_t gdim = mesh.geometry().dim();
-        std::array<std::size_t, 1> s_p = {(std::size_t)point.shape(0)};
-        if (std::size_t(point.shape(0)) != gdim)
+        if (std::size_t(point.size()) != gdim)
         {
           throw std::invalid_argument(
               "Input point has to have same dimension as gdim");
         }
-        auto _point
-            = xt::adapt(point.data(), point.size(), xt::no_ownership(), s_p);
+        auto _point = std::span<const double>(point.data(), point.size());
 
-        if (std::size_t(normal.shape(0)) != gdim)
+        if (std::size_t(normal.size()) != gdim)
         {
           throw std::invalid_argument(
               "Input normal has to have dimension gdim");
         }
-        auto _normal
-            = xt::adapt(normal.data(), normal.size(), xt::no_ownership(), s_p);
-        std::tuple<int, std::int32_t, xt::xtensor<double, 1>,
-                   xt::xtensor<double, 1>>
+        auto _normal = std::span<const double>(normal.data(), normal.size());
+        std::tuple<int, std::int32_t, std::vector<double>, std::vector<double>>
             output = dolfinx_contact::raytracing(mesh, _point, _normal,
                                                  facet_span, max_iter, tol);
         int status = std::get<0>(output);
@@ -334,8 +330,8 @@ PYBIND11_MODULE(cpp, m)
         std::int32_t idx = std::get<1>(output);
 
         return py::make_tuple(status, idx,
-                              dolfinx_wrappers::xt_as_pyarray(std::move(x)),
-                              dolfinx_wrappers::xt_as_pyarray(std::move(X)));
+                              dolfinx_wrappers::as_pyarray(std::move(x)),
+                              dolfinx_wrappers::as_pyarray(std::move(X)));
       },
       py::arg("mesh"), py::arg("point"), py::arg("tangents"), py::arg("cells"),
       py::arg("max_iter") = 25, py::arg("tol") = 1e-8);

@@ -13,11 +13,14 @@
 #include <xtensor/xtensor.hpp>
 #include <xtensor/xview.hpp>
 
-namespace
+namespace dolfinx_contact
 {
 namespace stdex = std::experimental;
 template <std::size_t A, std::size_t B>
 using AB_span = stdex::mdspan<double, stdex::extents<std::size_t, A, B>>;
+
+namespace impl
+{
 
 /// Normalize a set of vectors by its length
 /// @tparam The number of vectors
@@ -133,10 +136,9 @@ get_parameterization(dolfinx::mesh::CellType cell_type, int facet_index)
     dolfinx_contact::cmdspan2_t x(xb.data(), x_shape);
     for (std::size_t i = 0; i < tdim; ++i)
       X[i] = x(facet.front(), i);
-
     for (std::size_t i = 0; i < tdim; ++i)
       for (std::size_t j = 0; j < tdim - 1; ++j)
-        X[i] += x(facet[j + 1], i) - x(facet.front(), i) * xi[j];
+        X[i] += (x(facet[j + 1], i) - x(facet.front(), i)) * xi[j];
   };
   return func;
 }
@@ -150,7 +152,7 @@ get_parameterization(dolfinx::mesh::CellType cell_type, int facet_index)
 template <std::size_t tdim>
 void get_parameterization_jacobian(dolfinx::mesh::CellType cell_type,
                                    int facet_index,
-                                   std::span<double, tdim * tdim - 1> jacobian)
+                                   std::span<double, tdim*(tdim - 1)> jacobian)
 {
   switch (cell_type)
   {
@@ -172,20 +174,15 @@ void get_parameterization_jacobian(dolfinx::mesh::CellType cell_type,
   basix::cell::type basix_cell
       = dolfinx::mesh::cell_type_to_basix_type(cell_type);
   auto [ref_jac, jac_shape] = basix::cell::facet_jacobians(basix_cell);
-  assert(jac_shape[2] * jac_shape[3] == jacobian.size());
+  assert(tdim == jac_shape[1]);
+  assert(tdim - 1 == jac_shape[2]);
+  assert(jac_shape[1] * jac_shape[2] == jacobian.size());
   dolfinx_contact::cmdspan3_t facet_jacobians(ref_jac.data(), jac_shape);
-  for (std::size_t i = 0; i < facet_jacobians.extent(0); ++i)
-    for (std::size_t j = 0; j < facet_jacobians.extent(1); ++j)
-      jacobian[i * jac_shape[3] + j] = facet_jacobians(facet_index, i, j);
+  for (std::size_t i = 0; i < tdim; ++i)
+    for (std::size_t j = 0; j < tdim - 1; ++j)
+      jacobian[i * jac_shape[2] + j] = facet_jacobians(facet_index, i, j);
 }
-
-} // namespace
-
-namespace dolfinx_contact
-{
-namespace stdex = std::experimental;
-template <std::size_t A, std::size_t B>
-using AB_span = stdex::mdspan<double, stdex::extents<std::size_t, A, B>>;
+} // namespace impl
 
 template <std::size_t tdim, std::size_t gdim>
 class NewtonStorage
@@ -345,7 +342,7 @@ int raytracing_cell(
     const std::function<void(std::span<const double, tdim - 1>,
                              std::span<double, tdim>)>& reference_map)
 {
-  if constexpr ((gdim != 2) or (gdim != 3))
+  if constexpr ((gdim != 2) and (gdim != 3))
     throw std::invalid_argument("The geometrical dimension has to be 2 or 3");
 
   int status = -1;
@@ -384,6 +381,7 @@ int raytracing_cell(
   {
     // Evaluate reference coordinate at current iteration
     reference_map(xi_k, X_k);
+
     // Tabulate coordinate element basis function
     cmap.tabulate(1, X_k, {1, tdim}, basis_values);
 
@@ -422,9 +420,8 @@ int raytracing_cell(
     if constexpr ((gdim != tdim) and (gdim == 3) and (tdim == 2))
     {
       // If non-square matrix compute det(A) = sqrt(det(A^T A))
-      std::array<double, 1> ATA;
-      ATA[0] = dGk(0, 0) * dGk(0, 0) + dGk(1, 0) * dGk(1, 0);
-      det_dGk = std::sqrt(ATA[0]);
+      double ATA = dGk(0, 0) * dGk(0, 0) + dGk(1, 0) * dGk(1, 0);
+      det_dGk = std::sqrt(ATA);
     }
     else
     {
@@ -530,7 +527,7 @@ std::tuple<int, std::int32_t, std::array<double, gdim>,
 compute_ray(const dolfinx::mesh::Mesh& mesh,
             std::span<const double, gdim> point,
             std::span<const double, gdim> normal,
-            xtl::span<const std::int32_t> cells, const int max_iter = 25,
+            std::span<const std::int32_t> cells, const int max_iter = 25,
             const double tol = 1e-8)
 {
   int status = -1;
@@ -555,12 +552,12 @@ compute_ray(const dolfinx::mesh::Mesh& mesh,
   std::size_t cell_idx = -1;
   auto allocated_memory = NewtonStorage<tdim, gdim>();
   auto tangents = allocated_memory.tangents();
-  compute_tangents<gdim>(normal, tangents);
+  impl::compute_tangents<gdim>(normal, tangents);
   std::span<double, gdim> m_point = allocated_memory.point();
   auto dxi = allocated_memory.dxi();
   dolfinx::common::impl::copy_N<gdim>(point.begin(), m_point.begin());
 
-  std::array<double, tdim * tdim - 1> jac_param;
+  std::array<double, tdim*(tdim - 1)> jac_param;
   for (std::size_t c = 0; c < cells.size(); c += 2)
   {
 
@@ -572,15 +569,17 @@ compute_ray(const dolfinx::mesh::Mesh& mesh,
           std::next(x_g.begin(), 3 * x_dofs[j]),
           std::next(coordinate_dofs.begin(), gdim * j));
     }
-    // Assign Jacobian of reference mapping
-    // FIXME: Should get span of dxi instead to avoid copying
-    get_parameterization_jacobian<tdim>(cell_type, cells[c + 1], jac_param);
-    for (std::size_t i = 0; i < dxi.extent(0); ++i)
-      for (std::size_t j = 0; j < dxi.extent(1); ++j)
-        dxi(i, j) = jac_param[i * dxi.extent(1) + i];
-    // Get parameterization map
 
-    auto reference_map = get_parameterization<tdim>(cell_type, cells[c + 1]);
+    // Assign Jacobian of reference mapping
+    impl::get_parameterization_jacobian<tdim>(cell_type, cells[c + 1],
+                                              jac_param);
+    for (std::size_t i = 0; i < tdim; ++i)
+      for (std::size_t j = 0; j < tdim - 1; ++j)
+        dxi(i, j) = jac_param[i * (tdim - 1) + j];
+
+    // Get parameterization map
+    auto reference_map
+        = impl::get_parameterization<tdim>(cell_type, cells[c + 1]);
     status = raytracing_cell<tdim, gdim>(allocated_memory, basis_values,
                                          max_iter, tol, cmap, cell_type,
                                          coordinate_dofs, reference_map);
@@ -625,10 +624,9 @@ compute_ray(const dolfinx::mesh::Mesh& mesh,
 /// the maximum number of iterations are reached, -2 if the facet is
 /// parallel with the tangent, -3 if the Newton solver finds a solution
 /// outside the element.
-std::tuple<int, std::int32_t, xt::xtensor<double, 1>, xt::xtensor<double, 1>>
-raytracing(const dolfinx::mesh::Mesh& mesh, const xt::xtensor<double, 1>& point,
-           const xt::xtensor<double, 1>& normal,
-           xtl::span<const std::int32_t> cells, const int max_iter = 25,
-           const double tol = 1e-8);
+std::tuple<int, std::int32_t, std::vector<double>, std::vector<double>>
+raytracing(const dolfinx::mesh::Mesh& mesh, std::span<const double> point,
+           std::span<const double> normal, std::span<const std::int32_t> cells,
+           const int max_iter = 25, const double tol = 1e-8);
 
 } // namespace dolfinx_contact
