@@ -39,6 +39,15 @@ def test_pack_coeff_at_quadrature(ct, quadrature_degree, space, degree):
     else:
         v.interpolate(lambda x: (x[1], -x[0]))
 
+    tdim = mesh.topology.dim
+    fdim = tdim - 1
+
+    # Create quadrature points for integration on facets
+    ct = mesh.topology.cell_type
+    q_rule = dolfinx_contact.QuadratureRule(ct, quadrature_degree, fdim)
+    from IPython import embed
+    embed()
+
     # Pack coeffs
     tdim = mesh.topology.dim
     num_cells = mesh.topology.index_map(tdim).size_local

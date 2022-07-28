@@ -39,10 +39,10 @@ PYBIND11_MODULE(cpp, m)
   m.attr("__version__") = "dev";
 #endif
 
-  // // Kernel wrapper class
-  // py::class_<contact_wrappers::KernelWrapper,
-  //            std::shared_ptr<contact_wrappers::KernelWrapper>>(
-  //     m, "KernelWrapper", "Wrapper for C++ contact integration kernels");
+  // Kernel wrapper class
+  py::class_<contact_wrappers::KernelWrapper,
+             std::shared_ptr<contact_wrappers::KernelWrapper>>(
+      m, "KernelWrapper", "Wrapper for C++ contact integration kernels");
 
   // QuadratureRule
   py::class_<dolfinx_contact::QuadratureRule,
@@ -396,18 +396,17 @@ PYBIND11_MODULE(cpp, m)
           }
         });
 
-  // m.def(
-  //     "find_candidate_surface_segment",
-  //     [](std::shared_ptr<const dolfinx::mesh::Mesh> mesh,
-  //        const std::vector<std::int32_t>& puppet_facets,
-  //        const std::vector<std::int32_t>& candidate_facets, const double
-  //        radius)
-  //     {
-  //       return dolfinx_contact::find_candidate_surface_segment(
-  //           mesh, puppet_facets, candidate_facets, radius);
-  //     },
-  //     py::arg("mesh"), py::arg("puppet_facets"), py::arg("candidate_facets"),
-  //     py::arg("radius") = -1.0);
+  m.def(
+      "find_candidate_surface_segment",
+      [](std::shared_ptr<const dolfinx::mesh::Mesh> mesh,
+         const std::vector<std::int32_t>& puppet_facets,
+         const std::vector<std::int32_t>& candidate_facets, const double radius)
+      {
+        return dolfinx_contact::find_candidate_surface_segment(
+            mesh, puppet_facets, candidate_facets, radius);
+      },
+      py::arg("mesh"), py::arg("puppet_facets"), py::arg("candidate_facets"),
+      py::arg("radius") = -1.0);
   m.def(
       "raytracing",
       [](const dolfinx::mesh::Mesh& mesh,
