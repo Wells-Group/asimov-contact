@@ -55,8 +55,10 @@ PYBIND11_MODULE(cpp, m)
       .def("points",
            [](dolfinx_contact::QuadratureRule& self)
            {
-             const std::vector<double> _points = self.points();
-             return dolfinx_wrappers::as_pyarray(std::move(_points));
+             std::vector<double> _points = self.points();
+             std::array<std::size_t, 2> shape
+                 = {_points.size() / self.tdim(), self.tdim()};
+             return dolfinx_wrappers::as_pyarray(std::move(_points), shape);
            })
       .def("points",
            [](dolfinx_contact::QuadratureRule& self, int i)
