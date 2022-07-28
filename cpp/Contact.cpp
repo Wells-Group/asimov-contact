@@ -517,7 +517,6 @@ void dolfinx_contact::Contact::assemble_vector(
   std::vector<double> coordinate_dofs(3 * num_dofs_g);
   std::vector<std::vector<PetscScalar>> bes(
       max_links + 1, std::vector<PetscScalar>(bs * ndofs_cell));
-
   // Tempoary array to hold cell links
   std::vector<std::int32_t> linked_cells;
   for (std::size_t i = 0; i < active_facets.size(); i += 2)
@@ -547,6 +546,7 @@ void dolfinx_contact::Contact::assemble_vector(
     kernel(bes, std::span(coeffs.data() + i / 2 * cstride, cstride),
            constants.data(), coordinate_dofs.data(), active_facets[i + 1],
            num_linked_cells);
+    assert(false);
 
     // Add element vector to global vector
     const std::span<const int> dofs_cell = dofmap->cell_dofs(active_facets[i]);

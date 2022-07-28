@@ -125,11 +125,7 @@ kernel_fn<T> generate_contact_kernel(
     const std::uint32_t ndofs_cell = kd.ndofs_cell();
 
     // Reshape coordinate dofs to two dimensional array
-    // FIXME: These array should be views (when compute_jacobian doesn't use
-    // xtensor)
-    // NOTE: DOLFINx has 3D input coordinate dofs
     cmdspan2_t coord(coordinate_dofs, kd.num_coordinate_dofs(), 3);
-
     // Compute Jacobian and determinant at first quadrature point
     std::array<double, 9> Jb;
     mdspan2_t J(Jb.data(), gdim, tdim);
@@ -142,19 +138,20 @@ kernel_fn<T> generate_contact_kernel(
 
     // Normal vector on physical facet at a single quadrature point
     std::array<double, 3> n_phys;
-
+    std::cout << kd.affine() << "\n";
     // Pre-compute jacobians and normals for affine meshes
     if (kd.affine())
     {
-      detJ = kd.compute_facet_jacobians(facet_index, J, K, J_tot, detJ_scratch,
-                                        coord);
-
+      std::cout << "Pref facet jacs\n";
+      detJ = kd.compute_first_facet_jacobian(facet_index, J, K, J_tot,
+                                             detJ_scratch, coord);
+      std::cout << "Physical facet\n";
       dolfinx_contact::physical_facet_normal(
           std::span(n_phys.data(), gdim), K,
           stdex::submdspan(kd.facet_normals(), facet_index,
                            stdex::full_extent));
     }
-
+    std::cout << "post physical normal\n";
     // Retrieve normal of rigid surface if constant
     std::array<double, 3> n_surf = {0, 0, 0};
     double n_dot = 0;
@@ -320,8 +317,8 @@ kernel_fn<T> generate_contact_kernel(
     // Pre-compute jacobians and normals for affine meshes
     if (kd.affine())
     {
-      detJ = kd.compute_facet_jacobians(facet_index, J, K, J_tot, detJ_scratch,
-                                        coord);
+      detJ = kd.compute_first_facet_jacobian(facet_index, J, K, J_tot,
+                                             detJ_scratch, coord);
 
       dolfinx_contact::physical_facet_normal(
           std::span(n_phys.data(), gdim), K,

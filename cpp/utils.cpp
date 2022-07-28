@@ -463,61 +463,57 @@ void dolfinx_contact::evaluate_basis_functions(
   }
 };
 
-double dolfinx_contact::compute_facet_jacobians(std::size_t q, mdspan2_t J,
-                                                mdspan2_t K, mdspan2_t J_tot,
-                                                std::span<double> detJ_scratch,
-                                                cmdspan2_t J_f, cmdspan3_t dphi,
-                                                cmdspan2_t coords)
+double dolfinx_contact::compute_facet_jacobian(
+    mdspan2_t J, mdspan2_t K, mdspan2_t J_tot, std::span<double> detJ_scratch,
+    cmdspan2_t J_f, s_cmdspan2_t dphi, cmdspan2_t coords)
 {
   std::size_t gdim = J.extent(0);
-
-  auto dphi_q
-      = stdex::submdspan(dphi, stdex::full_extent, q, stdex::full_extent);
   auto coordinate_dofs
       = stdex::submdspan(coords, stdex::full_extent, std::pair{0, gdim});
   for (std::size_t i = 0; i < J.extent(0); ++i)
     for (std::size_t j = 0; j < J.extent(1); ++j)
       J(i, j) = 0;
-
-  dolfinx::fem::CoordinateElement::compute_jacobian(dphi_q, coordinate_dofs, J);
+  std::cout << dphi.extent(0) << "x" << dphi.extent(1) << " "
+            << coordinate_dofs.extent(0) << "x" << coordinate_dofs.extent(1)
+            << "\n";
+  dolfinx::fem::CoordinateElement::compute_jacobian(dphi, coordinate_dofs, J);
   dolfinx::fem::CoordinateElement::compute_jacobian_inverse(J, K);
   for (std::size_t i = 0; i < J_tot.extent(0); ++i)
     for (std::size_t j = 0; j < J_tot.extent(1); ++j)
       J_tot(i, j) = 0;
-
   dolfinx::math::dot(J, J_f, J_tot);
   return std::fabs(
       dolfinx::fem::CoordinateElement::compute_jacobian_determinant(
           J_tot, detJ_scratch));
 }
 //-------------------------------------------------------------------------------------
-std::function<double(std::size_t, double, mdspan2_t, mdspan2_t, mdspan2_t,
-                     std::span<double>, cmdspan2_t, cmdspan3_t, cmdspan2_t)>
+std::function<double(double, mdspan2_t, mdspan2_t, mdspan2_t, std::span<double>,
+                     cmdspan2_t, s_cmdspan2_t, cmdspan2_t)>
 dolfinx_contact::get_update_jacobian_dependencies(
     const dolfinx::fem::CoordinateElement& cmap)
 {
   if (cmap.is_affine())
   {
     // Return function that returns the input determinant
-    return []([[maybe_unused]] std::size_t q, double detJ,
-              [[maybe_unused]] mdspan2_t J, [[maybe_unused]] mdspan2_t K,
-              [[maybe_unused]] mdspan2_t J_tot,
-              [[maybe_unused]] std::span<double> detJ_scratch,
-              [[maybe_unused]] cmdspan2_t J_f, [[maybe_unused]] cmdspan3_t dphi,
-              [[maybe_unused]] cmdspan2_t coords) { return detJ; };
+    return
+        [](double detJ, [[maybe_unused]] mdspan2_t J,
+           [[maybe_unused]] mdspan2_t K, [[maybe_unused]] mdspan2_t J_tot,
+           [[maybe_unused]] std::span<double> detJ_scratch,
+           [[maybe_unused]] cmdspan2_t J_f, [[maybe_unused]] s_cmdspan2_t dphi,
+           [[maybe_unused]] cmdspan2_t coords) { return detJ; };
   }
   else
   {
     // Return function that returns the input determinant
-    return []([[maybe_unused]] std::size_t q, double detJ,
-              [[maybe_unused]] mdspan2_t J, [[maybe_unused]] mdspan2_t K,
-              [[maybe_unused]] mdspan2_t J_tot,
-              [[maybe_unused]] std::span<double> detJ_scratch,
-              [[maybe_unused]] cmdspan2_t J_f, [[maybe_unused]] cmdspan3_t dphi,
-              [[maybe_unused]] cmdspan2_t coords)
+    return
+        [](double detJ, [[maybe_unused]] mdspan2_t J,
+           [[maybe_unused]] mdspan2_t K, [[maybe_unused]] mdspan2_t J_tot,
+           [[maybe_unused]] std::span<double> detJ_scratch,
+           [[maybe_unused]] cmdspan2_t J_f, [[maybe_unused]] s_cmdspan2_t dphi,
+           [[maybe_unused]] cmdspan2_t coords)
     {
-      double new_detJ = dolfinx_contact::compute_facet_jacobians(
-          q, J, K, J_tot, detJ_scratch, J_f, dphi, coords);
+      double new_detJ = dolfinx_contact::compute_facet_jacobian(
+          J, K, J_tot, detJ_scratch, J_f, dphi, coords);
       return new_detJ;
     };
   }
