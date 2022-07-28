@@ -221,7 +221,7 @@ std::vector<std::int32_t> find_candidate_surface_segment(
 /// (num_facets, num_q_points_per_facet, gdim). Flattened row-major
 void compute_physical_points(const dolfinx::mesh::Mesh& mesh,
                              std::span<const std::int32_t> facets,
-                             std::span<const std::int32_t> offsets,
+                             std::span<const std::size_t> offsets,
                              cmdspan4_t phi, std::span<double> qp_phys);
 
 /// Compute the closest entity at every quadrature point on a subset of facets

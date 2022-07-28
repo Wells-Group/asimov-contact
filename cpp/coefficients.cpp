@@ -54,7 +54,7 @@ dolfinx_contact::pack_coefficient_quadrature(
   // Tabulate function at quadrature points (assuming no derivatives)
   dolfinx_contact::error::check_cell_type(cell_type);
   const std::vector<double>& q_points = q_rule.points();
-  const std::vector<std::int32_t>& q_offset = q_rule.offset();
+  const std::vector<std::size_t>& q_offset = q_rule.offset();
   const std::size_t sum_q_points = q_offset.back();
   const std::size_t num_points_per_entity = q_offset[1] - q_offset[0];
   std::array<std::size_t, 2> p_shape = {sum_q_points, (std::size_t)tdim};
@@ -85,7 +85,7 @@ dolfinx_contact::pack_coefficient_quadrature(
   }
 
   // Create output array
-  const std::vector<std::int32_t>& q_offsets = q_rule.offset();
+  const std::vector<std::size_t>& q_offsets = q_rule.offset();
   const auto cstride = int(value_size * num_points_per_entity);
   std::vector<PetscScalar> coefficients(num_active_entities * cstride, 0.0);
 
@@ -111,7 +111,7 @@ dolfinx_contact::pack_coefficient_quadrature(
 
   if (needs_dof_transformations)
   {
-    const auto num_points = (std::size_t)q_offsets.back();
+    const auto num_points = q_offsets.back();
 
     // Get geometry data
     const dolfinx::mesh::Geometry& geometry = mesh->geometry();
@@ -288,7 +288,7 @@ dolfinx_contact::pack_coefficient_quadrature(
       }
 
       auto dofs = dofmap->cell_dofs(cell);
-      const std::int32_t q_offset = q_offsets[entity_index];
+      const std::size_t q_offset = q_offsets[entity_index];
 
       // Loop over all dofs in cell
       for (std::size_t d = 0; d < dofs.size(); ++d)
@@ -337,7 +337,7 @@ std::vector<PetscScalar> dolfinx_contact::pack_circumradius(
 
   // Get quadrature points on reference facets
   const std::vector<double>& q_points = q_rule.points();
-  const std::vector<std::int32_t>& q_offset = q_rule.offset();
+  const std::vector<std::size_t>& q_offset = q_rule.offset();
   const std::size_t num_q_points = q_offset[1] - q_offset[0];
   const std::size_t sum_q_points = q_offset.back();
   const std::array<std::size_t, 2> q_shape = {sum_q_points, (std::size_t)tdim};

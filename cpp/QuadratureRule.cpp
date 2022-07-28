@@ -35,11 +35,11 @@ dolfinx_contact::QuadratureRule::QuadratureRule(dolfinx::mesh::CellType ct,
     cmdspan2_t qp(quadrature.front().data(), num_points, pt_shape);
 
     _points = std::vector<double>(num_points * _num_sub_entities * _tdim);
-    _entity_offset = std::vector<std::int32_t>(_num_sub_entities + 1, 0);
+    _entity_offset = std::vector<std::size_t>(_num_sub_entities + 1, 0);
     _weights = std::vector<double>(num_points * _num_sub_entities);
     for (std::int32_t i = 0; i < _num_sub_entities; i++)
     {
-      _entity_offset[i + 1] = (i + 1) * (std::int32_t)q_weights.size();
+      _entity_offset[i + 1] = (i + 1) * q_weights.size();
       for (std::size_t j = 0; j < num_points; ++j)
       {
         _weights[i * num_points * _num_sub_entities + j] = q_weights[j];
@@ -55,7 +55,7 @@ dolfinx_contact::QuadratureRule::QuadratureRule(dolfinx::mesh::CellType ct,
     auto entity_topology = basix::cell::topology(b_ct)[dim];
 
     // Create map for each facet type to the local index
-    std::vector<std::int32_t> num_points_per_entity(_num_sub_entities);
+    std::vector<std::size_t> num_points_per_entity(_num_sub_entities);
     for (std::int32_t i = 0; i < _num_sub_entities; i++)
     {
       // Create reference element to map facet quadrature to
@@ -70,7 +70,7 @@ dolfinx_contact::QuadratureRule::QuadratureRule(dolfinx::mesh::CellType ct,
       const std::vector<double>& q_points = quadrature.front();
       const std::size_t num_points = q_weights.size();
       const std::size_t tdim = q_points.size() / q_weights.size();
-      num_points_per_entity[i] = (std::int32_t)num_points;
+      num_points_per_entity[i] = num_points;
 
       const std::array<std::size_t, 4> e_tab_shape
           = entity_element.tabulate_shape(0, num_points);
@@ -101,7 +101,7 @@ dolfinx_contact::QuadratureRule::QuadratureRule(dolfinx::mesh::CellType ct,
       std::copy(q_weights.cbegin(), q_weights.cend(),
                 std::next(_weights.begin(), weights_offset));
     }
-    _entity_offset = std::vector<std::int32_t>(_num_sub_entities + 1, 0);
+    _entity_offset = std::vector<std::size_t>(_num_sub_entities + 1, 0);
     std::partial_sum(num_points_per_entity.begin(), num_points_per_entity.end(),
                      std::next(_entity_offset.begin()));
   }
@@ -121,7 +121,7 @@ int QuadratureRule::degree() const { return _degree; }
 //-----------------------------------------------------------------------------------------------
 basix::quadrature::type QuadratureRule::type() const { return _type; }
 //-----------------------------------------------------------------------------------------------
-std::int32_t QuadratureRule::num_points(int i) const
+std::size_t QuadratureRule::num_points(int i) const
 {
   assert(i < _num_sub_entities);
   return _entity_offset[i + 1] - _entity_offset[i];

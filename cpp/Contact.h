@@ -197,7 +197,7 @@ public:
     const std::size_t gdim = mesh->geometry().dim(); // geometrical dimension
     const std::size_t bs = _V->dofmap()->bs();
     // FIXME: This will not work for prism meshes
-    const std::vector<std::int32_t>& qp_offsets = _quadrature_rule->offset();
+    const std::vector<std::size_t>& qp_offsets = _quadrature_rule->offset();
     const std::size_t num_q_points = qp_offsets[1] - qp_offsets[0];
     const std::size_t max_links
         = *std::max_element(_max_links.begin(), _max_links.end());
@@ -239,7 +239,7 @@ public:
 
     {
       // Retrieve some data from kd
-      std::array<std::int32_t, 2> q_offset
+      std::array<std::size_t, 2> q_offset
           = {kd.qp_offsets(facet_index), kd.qp_offsets(facet_index + 1)};
       const std::uint32_t tdim = kd.tdim();
 
@@ -388,7 +388,7 @@ public:
                                      const std::size_t num_links)
     {
       // Retrieve some data from kd
-      std::array<std::int32_t, 2> q_offset
+      std::array<std::size_t, 2> q_offset
           = {kd.qp_offsets(facet_index), kd.qp_offsets(facet_index + 1)};
       const std::uint32_t tdim = kd.tdim();
 
@@ -576,7 +576,7 @@ public:
       submesh_facets[f + 1] = puppet_facets[f + 1];
     }
 
-    const std::vector<int>& qp_offsets = _quadrature_rule->offset();
+    const std::vector<size_t>& qp_offsets = _quadrature_rule->offset();
     _qp_phys[origin_meshtag].resize((qp_offsets[1] - qp_offsets[0])
                                     * (submesh_facets.size() / 2) * gdim);
     dolfinx_contact::compute_physical_points(
@@ -635,8 +635,8 @@ public:
   /// quadrature point
   std::pair<std::vector<PetscScalar>, int> pack_gap(int pair)
   {
-    int puppet_mt = _contact_pairs[pair][0];
-    int candidate_mt = _contact_pairs[pair][1];
+    auto [puppet_mt, candidate_mt] = _contact_pairs[pair];
+
     // Mesh info
     const std::shared_ptr<const dolfinx::mesh::Mesh>& candidate_mesh
         = _submeshes[candidate_mt].mesh();
@@ -1055,7 +1055,6 @@ private:
   //  _qp_phys[i] contains the quadrature points on the physical facets for
   //  each facet on ith surface in _surfaces
   std::vector<std::vector<double>> _qp_phys;
-  std::array<std::size_t, 2> _qp_phys_shape;
   // quadrature points on facets of reference cell
   std::vector<double> _reference_basis;
   std::array<std::size_t, 4> _reference_shape;

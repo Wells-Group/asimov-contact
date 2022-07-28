@@ -62,7 +62,7 @@ public:
   basix::quadrature::type type() const;
 
   /// Return the number of quadrature points per entity
-  std::int32_t num_points(int i) const;
+  std::size_t num_points(int i) const;
 
   /// Return the topological dimension of the quadrature rule
   std::size_t tdim() const { return _tdim; };
@@ -76,7 +76,7 @@ public:
   std::span<const double> weights(int i) const;
 
   /// Return offset for quadrature rule of the ith entity
-  const std::vector<std::int32_t>& offset() const { return _entity_offset; }
+  const std::vector<std::size_t>& offset() const { return _entity_offset; }
 
 private:
   dolfinx::mesh::CellType _cell_type;
@@ -89,7 +89,7 @@ private:
                // num_points, tdim). Flattened row-major.
   std::vector<double>
       _weights; // Quadrature weights for each entity on the cell
-  std::vector<std::int32_t> _entity_offset; // The offset for each entity
+  std::vector<std::size_t> _entity_offset; // The offset for each entity
 
   int _num_sub_entities; // Number of sub entities
 };

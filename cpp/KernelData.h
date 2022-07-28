@@ -60,7 +60,11 @@ public:
   std::size_t bs() const { return _bs; }
 
   // Return quadrature rule offsets for index f
-  int qp_offsets(int f) const { return _qp_offsets[f]; }
+  std::size_t qp_offsets(int f) const
+  {
+    assert((std::size_t)f < _qp_offsets.size());
+    return (std::size_t)_qp_offsets[f];
+  }
 
   // Return basis functions at quadrature points for facet f
   cmdspan2_t phi() const
@@ -105,6 +109,7 @@ public:
   /// @param[in,out] J - Jacobian between reference cell and physical cell
   /// @param[in,out] K - inverse of J
   /// @param[in,out] J_tot - J_f*J
+  /// @param[in, out] detJ_scratch - Working memory to compute determinants
   /// @param[in] coords - the coordinates of the facet
   /// @return absolute value of determinant of J_tot
   double update_jacobian(std::size_t q, const int facet_index, double detJ,
@@ -114,8 +119,7 @@ public:
   {
     cmdspan4_t full_basis(_c_basis_values.data(), _c_basis_shape);
     std::array<std::size_t, 2> _q_range
-        = {(std::size_t)_qp_offsets[facet_index],
-           (std::size_t)_qp_offsets[facet_index + 1]};
+        = {_qp_offsets[facet_index], _qp_offsets[facet_index + 1]};
     auto dphi_fc = stdex::submdspan(
         full_basis, std::pair{1, (std::size_t)_tdim},
         std::pair{_q_range[0], _q_range[1]}, stdex::full_extent, 0);
@@ -143,8 +147,7 @@ public:
   {
     cmdspan4_t full_basis(_c_basis_values.data(), _c_basis_shape);
     std::array<std::size_t, 2> _q_range
-        = {(std::size_t)_qp_offsets[facet_index],
-           (std::size_t)_qp_offsets[facet_index + 1]};
+        = {_qp_offsets[facet_index], _qp_offsets[facet_index + 1]};
     auto dphi_fc = stdex::submdspan(
         full_basis, std::pair{1, (std::size_t)_tdim},
         std::pair{_q_range[0], _q_range[1]}, stdex::full_extent, 0);
@@ -176,13 +179,13 @@ public:
   }
 
 private:
-  std::uint32_t _gdim;               // geometrical dimension
-  std::uint32_t _tdim;               // topological dimension
-  int _num_coordinate_dofs;          // number of dofs for geometry
-  bool _affine;                      // store whether cell geometry is affine
-  std::uint32_t _ndofs_cell;         // number of dofs per cell
-  std::size_t _bs;                   // block size
-  std::vector<int> _qp_offsets;      // quadrature point offsets
+  std::uint32_t _gdim;                  // geometrical dimension
+  std::uint32_t _tdim;                  // topological dimension
+  int _num_coordinate_dofs;             // number of dofs for geometry
+  bool _affine;                         // store whether cell geometry is affine
+  std::uint32_t _ndofs_cell;            // number of dofs per cell
+  std::size_t _bs;                      // block size
+  std::vector<std::size_t> _qp_offsets; // quadrature point offsets
   std::vector<double> _basis_values; // Basis functions (including first order
                                      // derivatives) at quadrature points
   std::array<std::size_t, 4> _basis_shape; // Shape of basis values

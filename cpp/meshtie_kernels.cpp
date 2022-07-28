@@ -18,7 +18,7 @@ dolfinx_contact::generate_meshtie_kernel(
   const std::size_t bs = V->dofmap()->bs();
   // NOTE: Assuming same number of quadrature points on each cell
   dolfinx_contact::error::check_cell_type(mesh->topology().cell_type());
-  const std::vector<std::int32_t>& qp_offsets = quadrature_rule->offset();
+  const std::vector<std::size_t>& qp_offsets = quadrature_rule->offset();
   const std::size_t num_q_points = qp_offsets[1] - qp_offsets[0];
   const std::size_t ndofs_cell = V->dofmap()->element_dof_layout().num_dofs();
 
@@ -56,7 +56,7 @@ dolfinx_contact::generate_meshtie_kernel(
                      const std::size_t num_links)
   {
     // Retrieve some data from kd
-    std::array<std::int32_t, 2> q_offset
+    std::array<std::size_t, 2> q_offset
         = {kd.qp_offsets(facet_index), kd.qp_offsets(facet_index + 1)};
     auto tdim = std::size_t(kd.tdim());
 
@@ -204,7 +204,7 @@ dolfinx_contact::generate_meshtie_kernel(
             const int facet_index, const std::size_t num_links)
   {
     // Retrieve some data from kd
-    std::array<std::int32_t, 2> q_offset
+    std::array<std::size_t, 2> q_offset
         = {kd.qp_offsets(facet_index), kd.qp_offsets(facet_index + 1)};
     auto tdim = std::size_t(kd.tdim());
     // NOTE: DOLFINx has 3D input coordinate dofs
@@ -222,7 +222,7 @@ dolfinx_contact::generate_meshtie_kernel(
     std::array<double, 18> detJ_scratch;
 
     // Normal vector on physical facet at a single quadrature point
-    xt::xtensor<double, 1> n_phys = xt::zeros<double>({gdim});
+    std::array<double, 3> n_phys;
 
     // Pre-compute jacobians and normals for affine meshes
     if (kd.affine())

@@ -738,7 +738,7 @@ std::vector<std::int32_t> dolfinx_contact::find_candidate_surface_segment(
 //-------------------------------------------------------------------------------------
 void dolfinx_contact::compute_physical_points(
     const dolfinx::mesh::Mesh& mesh, std::span<const std::int32_t> facets,
-    std::span<const std::int32_t> offsets, cmdspan4_t phi,
+    std::span<const std::size_t> offsets, cmdspan4_t phi,
     std::span<double> qp_phys)
 {
   // Geometrical info
@@ -772,8 +772,7 @@ void dolfinx_contact::compute_physical_points(
     }
     // push forward points on reference element
     const std::array<std::size_t, 2> range
-        = {(std::size_t)offsets[facets[i + 1]],
-           (std::size_t)offsets[facets[i + 1] + 1]};
+        = {offsets[facets[i + 1]], offsets[facets[i + 1] + 1]};
     auto phi_f = stdex::submdspan(phi, (std::size_t)0,
                                   std::pair{range.front(), range.back()},
                                   stdex::full_extent, (std::size_t)0);
@@ -808,7 +807,7 @@ dolfinx_contact::compute_distance_map(
 
   // Get quadrature points on reference facets
   const std::vector<double>& q_points = q_rule.points();
-  const std::vector<std::int32_t>& q_offset = q_rule.offset();
+  const std::vector<std::size_t>& q_offset = q_rule.offset();
   const std::size_t num_q_points = q_offset[1] - q_offset[0];
   const std::size_t sum_q_points = q_offset.back();
 
