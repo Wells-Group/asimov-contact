@@ -78,7 +78,7 @@ public:
   cmdspan3_t dphi() const
   {
     cmdspan4_t full_basis(_basis_values.data(), _basis_shape);
-    return stdex::submdspan(full_basis, std::pair{1, (std::size_t)_tdim},
+    return stdex::submdspan(full_basis, std::pair{1, (std::size_t)_tdim + 1},
                             stdex::full_extent, stdex::full_extent, 0);
   }
 
@@ -86,7 +86,7 @@ public:
   cmdspan3_t dphi_c() const
   {
     cmdspan4_t full_basis(_c_basis_values.data(), _c_basis_shape);
-    return stdex::submdspan(full_basis, std::pair{1, (std::size_t)_tdim},
+    return stdex::submdspan(full_basis, std::pair{1, (std::size_t)_tdim + 1},
                             stdex::full_extent, stdex::full_extent, 0);
   }
 
@@ -121,7 +121,7 @@ public:
     std::array<std::size_t, 2> _q_range
         = {_qp_offsets[facet_index], _qp_offsets[facet_index + 1]};
     auto dphi_fc = stdex::submdspan(
-        full_basis, std::pair{1, (std::size_t)_tdim},
+        full_basis, std::pair{1, (std::size_t)_tdim + 1},
         std::pair{_q_range[0], _q_range[1]}, stdex::full_extent, 0);
     cmdspan3_t ref_jacs(_ref_jacobians.data(), _jac_shape);
     auto J_f = stdex::submdspan(ref_jacs, (std::size_t)facet_index,
@@ -149,7 +149,7 @@ public:
     std::array<std::size_t, 2> _q_range
         = {_qp_offsets[facet_index], _qp_offsets[facet_index + 1]};
     auto dphi_fc = stdex::submdspan(
-        full_basis, std::pair{1, (std::size_t)_tdim},
+        full_basis, std::pair{1, (std::size_t)_tdim + 1},
         std::pair{_q_range[0], _q_range[1]}, stdex::full_extent, 0);
     cmdspan3_t ref_jacs(_ref_jacobians.data(), _jac_shape);
     auto J_f = stdex::submdspan(ref_jacs, (std::size_t)facet_index,

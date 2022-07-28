@@ -338,7 +338,6 @@ std::vector<PetscScalar> dolfinx_contact::pack_circumradius(
   // Get quadrature points on reference facets
   const std::vector<double>& q_points = q_rule.points();
   const std::vector<std::size_t>& q_offset = q_rule.offset();
-  const std::size_t num_q_points = q_offset[1] - q_offset[0];
   const std::size_t sum_q_points = q_offset.back();
   const std::array<std::size_t, 2> q_shape = {sum_q_points, (std::size_t)tdim};
   assert(q_rule.tdim() == (std::size_t)tdim);
@@ -346,7 +345,7 @@ std::vector<PetscScalar> dolfinx_contact::pack_circumradius(
   // Tabulate coordinate basis for Jacobian computation
   const dolfinx::fem::CoordinateElement& cmap = geometry.cmap();
   const std::array<std::size_t, 4> tab_shape
-      = cmap.tabulate_shape(1, num_q_points);
+      = cmap.tabulate_shape(1, sum_q_points);
   std::vector<double> coordinate_basisb(
       std::reduce(tab_shape.cbegin(), tab_shape.cend(), 1, std::multiplies()));
   assert(tab_shape.back() == 1);
@@ -391,9 +390,9 @@ std::vector<PetscScalar> dolfinx_contact::pack_circumradius(
     // area/volume of the cell
     std::fill(Jb.begin(), Jb.end(), 0);
     assert(q_offset[local_index + 1] - q_offset[local_index] == 1);
-    auto dphi_q
-        = stdex::submdspan(coordinate_basis, std::pair{1, (std::size_t)tdim},
-                           q_offset[local_index], stdex::full_extent, 0);
+    auto dphi_q = stdex::submdspan(
+        coordinate_basis, std::pair{1, (std::size_t)tdim + 1},
+        q_offset[local_index], stdex::full_extent, 0);
     dolfinx::fem::CoordinateElement::compute_jacobian(dphi_q, coordinate_dofs,
                                                       J);
     double detJ = dolfinx::fem::CoordinateElement::compute_jacobian_determinant(

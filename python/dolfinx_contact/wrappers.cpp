@@ -130,8 +130,14 @@ PYBIND11_MODULE(cpp, m)
       .def("qp_phys",
            [](dolfinx_contact::Contact& self, int origin_meshtag, int facet)
            {
-             auto qp = self.qp_phys(origin_meshtag)[facet];
-             return dolfinx_wrappers::xt_as_pyarray(std::move(qp));
+             auto [qp, qp_shape] = self.qp_phys(origin_meshtag);
+             dolfinx_contact::cmdspan3_t qp_span(qp.data(), qp_shape);
+             std::vector<double> qp_vec(qp_shape[1] * qp_shape[2]);
+             for (std::size_t i = 0; i < qp_shape[1]; ++i)
+               for (std::size_t j = 0; j < qp_shape[2]; ++j)
+                 qp_vec[i * qp_shape[2] + j] = qp_span(facet, i, j);
+             std::array<std::size_t, 2> shape_out = {qp_shape[1], qp_shape[2]};
+             return dolfinx_wrappers::as_pyarray(std::move(qp_vec), shape_out);
            })
       .def("active_entities",
            [](dolfinx_contact::Contact& self, int s)
@@ -150,36 +156,32 @@ PYBIND11_MODULE(cpp, m)
              // facet indices on the submesh with the facet indices in
              // the parent mesh This is only exposed for testing (in
              // particular
-             //
-                 nitsche_rigid_surface.py/demo_nitsche_rigid_surface_ufl.py)
-                 auto contact_pair = self.contact_pair(pair);
-                 std::shared_ptr<const dolfinx::mesh::Mesh> mesh = self.mesh();
-                 const int tdim = mesh->topology().dim();         //
-                 topological dimension const int fdim = tdim - 1; //
-                 topological dimension of facet auto c_to_f
-                     = mesh->topology().connectivity(tdim, fdim);
-                 assert(c_to_f);
-                 std::shared_ptr<
-                     const dolfinx::graph::AdjacencyList<std::int32_t>>
-                     submesh_map = self.facet_map(pair);
-                 const std::vector<int>& offsets = submesh_map->offsets();
-                 const std::vector<std::int32_t>& old_data
-                     = submesh_map->array();
-                 std::shared_ptr<const dolfinx::graph::AdjacencyList<int>>
-                     facet_map = self.submesh(contact_pair[1]).facet_map();
-                 const std::vector<std::int32_t>& parent_cells
-                     = self.submesh(contact_pair[1]).parent_cells();
-                 std::vector<std::int32_t> data(old_data.size());
-                 for (std::size_t i = 0; i < old_data.size(); ++i)
-                 {
-                   auto facet_sub = old_data[i];
-                   auto facet_pair = facet_map->links(facet_sub);
-                   auto cell_parent = parent_cells[facet_pair[0]];
-                   data[i] = c_to_f->links(cell_parent)[facet_pair[1]];
-                 }
-                 return std::make_shared<
-                     dolfinx::graph::AdjacencyList<std::int32_t>>(
-                     std::move(data), std::move(offsets));
+             // nitsche_rigid_surface.py/demo_nitsche_rigid_surface_ufl.py)
+             auto contact_pair = self.contact_pair(pair);
+             std::shared_ptr<const dolfinx::mesh::Mesh> mesh = self.mesh();
+             const int tdim = mesh->topology().dim(); // topological dimension
+             const int fdim = tdim - 1; // topological dimension of facet
+             auto c_to_f = mesh->topology().connectivity(tdim, fdim);
+             assert(c_to_f);
+             std::shared_ptr<const dolfinx::graph::AdjacencyList<std::int32_t>>
+                 submesh_map = self.facet_map(pair);
+             const std::vector<int>& offsets = submesh_map->offsets();
+             const std::vector<std::int32_t>& old_data = submesh_map->array();
+             std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> facet_map
+                 = self.submesh(contact_pair[1]).facet_map();
+             const std::vector<std::int32_t>& parent_cells
+                 = self.submesh(contact_pair[1]).parent_cells();
+             std::vector<std::int32_t> data(old_data.size());
+             for (std::size_t i = 0; i < old_data.size(); ++i)
+             {
+               auto facet_sub = old_data[i];
+               auto facet_pair = facet_map->links(facet_sub);
+               auto cell_parent = parent_cells[facet_pair[0]];
+               data[i] = c_to_f->links(cell_parent)[facet_pair[1]];
+             }
+             return std::make_shared<
+                 dolfinx::graph::AdjacencyList<std::int32_t>>(
+                 std::move(data), std::move(offsets));
            })
       .def("coefficients_size", &dolfinx_contact::Contact::coefficients_size,
            py::arg("meshtie") = false)

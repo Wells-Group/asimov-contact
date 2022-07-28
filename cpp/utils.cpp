@@ -302,8 +302,8 @@ void dolfinx_contact::evaluate_basis_functions(
   std::array<double, 3> X0;
   cmap.tabulate(1, std::span(X0.data(), tdim), {1, tdim}, datab);
   cmdspan4_t data(datab.data(), c_shape);
-  auto dphi_0
-      = stdex::submdspan(data, std::pair{1, tdim}, 0, stdex::full_extent, 0);
+  auto dphi_0 = stdex::submdspan(data, std::pair{1, tdim + 1}, 0,
+                                 stdex::full_extent, 0);
   auto pull_back_affine = [&dphi_0, x0 = std::array<double, 3>({0, 0, 0})](
                               auto&& X, const auto& cell_geometry, auto&& J,
                               auto&& K, const auto& x) mutable
