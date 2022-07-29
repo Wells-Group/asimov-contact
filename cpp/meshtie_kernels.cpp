@@ -75,7 +75,7 @@ dolfinx_contact::generate_meshtie_kernel(
     std::array<double, 18> detJ_scratch;
 
     // Normal vector on physical facet at a single quadrature point
-    xt::xtensor<double, 1> n_phys = xt::zeros<double>({gdim});
+    std::array<double, 3> n_phys;
 
     // Pre-compute jacobians and normals for affine meshes
     if (kd.affine())
@@ -120,11 +120,12 @@ dolfinx_contact::generate_meshtie_kernel(
       // Update Jacobian and physical normal
       detJ = kd.update_jacobian(q, facet_index, detJ, J, K, J_tot, detJ_scratch,
                                 coord);
-      kd.update_normal(n_phys, K, facet_index);
-      compute_sigma_n_basis(sig_n, K, dphi, n_phys, mu, lmbda, q_pos);
+      kd.update_normal(std::span(n_phys.data(), gdim), K, facet_index);
+      compute_sigma_n_basis(sig_n, K, dphi, std::span(n_phys.data(), gdim), mu,
+                            lmbda, q_pos);
       compute_sigma_n_opp(
           sig_n_opp, c.subspan(kd.offsets(4), kd.offsets(5) - kd.offsets(4)),
-          n_phys, mu, lmbda, q, num_points);
+          std::span(n_phys.data(), gdim), mu, lmbda, q, num_points);
 
       // compute u, 0.5 sig_n(u)
       std::fill(sig_n_u.begin(), sig_n_u.end(), 0.0);
@@ -143,7 +144,7 @@ dolfinx_contact::generate_meshtie_kernel(
       // avg(sig_n(u)):  sig_n(u) +=  sig_n(u_opposite)
       compute_sigma_n_u(sig_n_u,
                         c.subspan(kd.offsets(7) + q * gdim * gdim, gdim * gdim),
-                        n_phys, mu, lmbda);
+                        std::span(n_phys.data(), gdim), mu, lmbda);
 
       // compute [[u]] = jump(u) = u - u_opp
       std::size_t offset_u_opp = kd.offsets(6) + q * bs;
@@ -264,11 +265,12 @@ dolfinx_contact::generate_meshtie_kernel(
       // Update Jacobian and physical normal
       detJ = kd.update_jacobian(q, facet_index, detJ, J, K, J_tot, detJ_scratch,
                                 coord);
-      kd.update_normal(n_phys, K, facet_index);
-      compute_sigma_n_basis(sig_n, K, dphi, n_phys, mu, lmbda, q_pos);
+      kd.update_normal(std::span(n_phys.data(), gdim), K, facet_index);
+      compute_sigma_n_basis(sig_n, K, dphi, std::span(n_phys.data(), gdim), mu,
+                            lmbda, q_pos);
       compute_sigma_n_opp(
           sig_n_opp, c.subspan(kd.offsets(4), kd.offsets(5) - kd.offsets(4)),
-          n_phys, mu, lmbda, q, num_points);
+          std::span(n_phys.data(), gdim), mu, lmbda, q, num_points);
 
       const double w0 = 0.5 * weights[q] * detJ;
       for (std::size_t j = 0; j < ndofs_cell; j++)

@@ -647,7 +647,7 @@ dolfinx_contact::Contact::pack_grad_test_functions(
         throw std::invalid_argument(
             "pack_grad_test_functions assumes values size 1");
       std::vector<double> basis_valuesb(
-          std::reduce(b_shape.cbegin(), b_shape.cend(), 1, std::multiplies()));
+          std::reduce(b_shape.cbegin(), b_shape.cend(), 1, std::multiplies{}));
       cmdspan4_t basis_values(basis_valuesb.data(), b_shape);
       cells.resize(indices.size());
       std::fill(cells.begin(), cells.end(), linked_cell);
@@ -720,7 +720,7 @@ dolfinx_contact::Contact::pack_grad_u_contact(
   std::array<std::size_t, 4> b_shape
       = evaluate_basis_shape(*_V, num_facets * num_q_points, 1);
   std::vector<double> basis_values(
-      std::reduce(b_shape.begin(), b_shape.end(), 1, std::multiplies()));
+      std::reduce(b_shape.begin(), b_shape.end(), 1, std::multiplies{}));
   std::fill(basis_values.begin(), basis_values.end(), 0);
   evaluate_basis_functions(*u->function_space(), points, cells, basis_values,
                            1);

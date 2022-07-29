@@ -32,7 +32,7 @@ void dolfinx_contact::pull_back(mdspan3_t J, mdspan3_t K,
     // Tabulate at reference coordinate origin
     std::array<std::size_t, 4> c_shape = cmap.tabulate_shape(1, 1);
     std::vector<double> data(
-        std::reduce(c_shape.cbegin(), c_shape.cend(), 1, std::multiplies()));
+        std::reduce(c_shape.cbegin(), c_shape.cend(), 1, std::multiplies{}));
     std::array<double, 3> X0;
     cmap.tabulate(1, std::span(X0.data(), tdim), {1, tdim}, data);
     cmdspan4_t c_basis(data.data(), c_shape);
@@ -97,7 +97,7 @@ void dolfinx_contact::pull_back(mdspan3_t J, mdspan3_t K,
     const std::array<std::size_t, 4> c_shape
         = cmap.tabulate_shape(1, num_points);
     std::vector<double> basis_buffer(
-        std::reduce(c_shape.cbegin(), c_shape.cend(), 1, std::multiplies()));
+        std::reduce(c_shape.cbegin(), c_shape.cend(), 1, std::multiplies{}));
     cmap.tabulate(1, X, {num_points, tdim}, basis_buffer);
     cmdspan4_t c_basis(basis_buffer.data(), c_shape);
 
@@ -292,7 +292,7 @@ void dolfinx_contact::evaluate_basis_functions(
   // -- Lambda function for affine pull-backs
   const std::array<std::size_t, 4> c_shape = cmap.tabulate_shape(1, 1);
   std::vector<double> datab(
-      std::reduce(c_shape.cbegin(), c_shape.cend(), 1, std::multiplies()));
+      std::reduce(c_shape.cbegin(), c_shape.cend(), 1, std::multiplies{}));
   std::array<double, 3> X0;
   cmap.tabulate(1, std::span(X0.data(), tdim), {1, tdim}, datab);
   cmdspan4_t data(datab.data(), c_shape);
@@ -305,7 +305,7 @@ void dolfinx_contact::evaluate_basis_functions(
     dolfinx::fem::CoordinateElement::compute_jacobian(dphi_0, cell_geometry, J);
     dolfinx::fem::CoordinateElement::compute_jacobian_inverse(J, K);
     for (std::size_t i = 0; i < cell_geometry.extent(1); ++i)
-      x0[i] += cell_geometry(0, i);
+      x0[i] = cell_geometry(0, i);
     dolfinx::fem::CoordinateElement::pull_back_affine(X, K, x0, x);
   };
 
@@ -318,7 +318,7 @@ void dolfinx_contact::evaluate_basis_functions(
   mdspan3_t K(Kb.data(), num_cells, tdim, gdim);
   std::vector<double> detJ_scratch(2 * gdim * tdim);
   std::vector<double> basisb(
-      std::reduce(c_shape.cbegin(), c_shape.cend(), 1, std::multiplies()));
+      std::reduce(c_shape.cbegin(), c_shape.cend(), 1, std::multiplies{}));
   cmdspan4_t basis(basisb.data(), c_shape);
   for (std::size_t p = 0; p < cells.size(); ++p)
   {
@@ -369,7 +369,7 @@ void dolfinx_contact::evaluate_basis_functions(
   const std::array<std::size_t, 4> reference_shape
       = element->basix_element().tabulate_shape(num_derivatives, num_cells);
   std::vector<double> basis_reference_valuesb(std::reduce(
-      reference_shape.cbegin(), reference_shape.cend(), 1, std::multiplies()));
+      reference_shape.cbegin(), reference_shape.cend(), 1, std::multiplies{}));
 
   // Compute basis on reference element
   element->tabulate(basis_reference_valuesb, Xb, {num_cells, tdim},
@@ -383,7 +383,7 @@ void dolfinx_contact::evaluate_basis_functions(
   if (num_derivatives == 1)
     shape[0] = tdim + 1;
   std::vector<double> tempb(
-      std::reduce(shape.cbegin(), shape.cend(), 1, std::multiplies()));
+      std::reduce(shape.cbegin(), shape.cend(), 1, std::multiplies{}));
   mdspan4_t temp(tempb.data(), shape);
 
   mdspan4_t basis_span(basis_values.data(), shape);
@@ -806,7 +806,7 @@ dolfinx_contact::compute_distance_map(
     std::array<std::size_t, 4> cmap_shape
         = cmap.tabulate_shape(0, sum_q_points);
     std::vector<double> c_basis(std::reduce(
-        cmap_shape.cbegin(), cmap_shape.cend(), 1, std::multiplies()));
+        cmap_shape.cbegin(), cmap_shape.cend(), 1, std::multiplies{}));
     cmap.tabulate(0, q_points, {sum_q_points, (std::size_t)tdim}, c_basis);
     cmdspan4_t reference_facet_basis_values(c_basis.data(), cmap_shape);
     compute_physical_points(quadrature_mesh, quadrature_facets, q_offset,

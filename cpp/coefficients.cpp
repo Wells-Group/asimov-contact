@@ -10,7 +10,6 @@
 #include "geometric_quantities.h"
 #include <basix/quadrature.h>
 #include <dolfinx/mesh/cell_types.h>
-#include <xtensor/xslice.hpp>
 using namespace dolfinx_contact;
 
 std::pair<std::vector<PetscScalar>, int>
@@ -64,7 +63,7 @@ dolfinx_contact::pack_coefficient_quadrature(
   std::array<std::size_t, 4> tab_shape
       = basix_element.tabulate_shape(0, sum_q_points);
   std::vector<double> reference_basisb(
-      std::reduce(tab_shape.cbegin(), tab_shape.cend(), 1, std::multiplies()));
+      std::reduce(tab_shape.cbegin(), tab_shape.cend(), 1, std::multiplies{}));
   element->tabulate(reference_basisb, q_points, p_shape, 0);
   cmdspan4_t reference_basis(reference_basisb.data(), tab_shape);
 
@@ -125,7 +124,7 @@ dolfinx_contact::pack_coefficient_quadrature(
     // Tabulate coordinate basis to compute Jacobian
     std::array<std::size_t, 4> c_shape = cmap.tabulate_shape(1, num_points);
     std::vector<double> c_basisb(
-        std::reduce(c_shape.cbegin(), c_shape.cend(), 1, std::multiplies()));
+        std::reduce(c_shape.cbegin(), c_shape.cend(), 1, std::multiplies{}));
     cmap.tabulate(1, q_points, p_shape, c_basisb);
     cmdspan4_t c_basis(c_basisb.data(), c_shape);
 
@@ -347,7 +346,7 @@ std::vector<PetscScalar> dolfinx_contact::pack_circumradius(
   const std::array<std::size_t, 4> tab_shape
       = cmap.tabulate_shape(1, sum_q_points);
   std::vector<double> coordinate_basisb(
-      std::reduce(tab_shape.cbegin(), tab_shape.cend(), 1, std::multiplies()));
+      std::reduce(tab_shape.cbegin(), tab_shape.cend(), 1, std::multiplies{}));
   assert(tab_shape.back() == 1);
   cmap.tabulate(1, q_points, q_shape, coordinate_basisb);
   cmdspan4_t coordinate_basis(coordinate_basisb.data(), tab_shape);

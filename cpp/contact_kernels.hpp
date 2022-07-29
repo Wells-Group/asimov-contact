@@ -84,7 +84,7 @@ kernel_fn<T> generate_contact_kernel(
           "Kernel does not support coefficients with value size!=1");
     }
     std::vector<double> coeff_basisb(std::reduce(
-        coeff_shape.cbegin(), coeff_shape.cend(), 1, std::multiplies()));
+        coeff_shape.cbegin(), coeff_shape.cend(), 1, std::multiplies{}));
     coeff_element->tabulate(coeff_basisb, q_points, {num_quadrature_pts, tdim},
                             1);
     cmdspan4_t coeff_basis(coeff_basisb.data(), coeff_shape);
@@ -171,9 +171,6 @@ kernel_fn<T> generate_contact_kernel(
     std::span<const double> _weights(kd.q_weights());
     auto weights = _weights.subspan(q_offset[0], q_offset[1] - q_offset[0]);
 
-    // Temporary variable for grad(phi) on physical cell
-    xt::xtensor<double, 2> dphi_phys({bs, ndofs_cell});
-
     // Temporary work arrays
     std::vector<double> epsnb((kd.offsets(1) - kd.offsets(0)) * gdim);
     mdspan2_t epsn(epsnb.data(), kd.offsets(1) - kd.offsets(0), gdim);
@@ -221,9 +218,7 @@ kernel_fn<T> generate_contact_kernel(
       int gap_offset = c_offset + kd.offsets(4);
       double gap = 0;
       for (int i = 0; i < gdim; i++)
-      {
         gap += c[gap_offset + q * gdim + i] * n_surf[i];
-      }
 
       compute_normal_strain_basis(epsn, tr, K, dphi, n_surf,
                                   std::span(n_phys.data(), gdim), q_pos);
@@ -237,9 +232,10 @@ kernel_fn<T> generate_contact_kernel(
         const std::int32_t block_index = (i + kd.offsets(0)) * bs;
         for (int j = 0; j < bs; j++)
         {
-          tr_u += c[block_index + j] * tr(i, j);
-          epsn_u += c[block_index + j] * epsn(i, j);
-          u_dot_nsurf += c[block_index + j] * n_surf[j] * phi(q_pos, i);
+          const auto c_val = c[block_index + j];
+          tr_u += c_val * tr(i, j);
+          epsn_u += c_val * epsn(i, j);
+          u_dot_nsurf += c_val * n_surf[j] * phi(q_pos, i);
         }
       }
 
@@ -281,18 +277,16 @@ kernel_fn<T> generate_contact_kernel(
   /// @param[in] num_links Unused integer. In two sided contact this indicates
   /// how many cells are connected with the cell.
   kernel_fn<T> nitsche_rigid_jacobian
-      = [kd, gdim, tdim, coeff_basis_valuesb, coeff_shape, num_coeffs,
-         constant_normal](std::vector<std::vector<double>>& A,
-                          std::span<const T> c, const T* w,
-                          const double* coordinate_dofs, const int facet_index,
-                          [[maybe_unused]] const std::size_t num_links)
+      = [kd, gdim, tdim, coeff_basis_valuesb, coeff_shape, constant_normal](
+            std::vector<std::vector<double>>& A, std::span<const T> c,
+            const T* w, const double* coordinate_dofs, const int facet_index,
+            [[maybe_unused]] const std::size_t num_links)
   {
     // Retrieve some data from kd
-    std::array<std::int32_t, 2> q_offset
+    const std::array<std::int32_t, 2> q_offset
         = {kd.qp_offsets(facet_index), kd.qp_offsets(facet_index + 1)};
     const std::size_t bs = kd.bs();
     const std::uint32_t ndofs_cell = kd.ndofs_cell();
-    const int fdim = tdim - 1;
 
     // Reshape coordinate dofs to two-dimensional array
     cmdspan2_t coord(coordinate_dofs, kd.num_coordinate_dofs(), 3);
@@ -341,31 +335,27 @@ kernel_fn<T> generate_contact_kernel(
       }
     }
     int c_offset = (bs - 1) * kd.offsets(1);
-    double gamma
-        = w[0]
-          / c[c_offset + kd.offsets(3)]; // This is gamma/hdouble gamma = w[0];
+    // This is gamma/h
+    double gamma = w[0] / c[c_offset + kd.offsets(3)];
     double gamma_inv = c[c_offset + kd.offsets(3)] / w[0];
     double theta = w[1];
-
     std::span<const double> _weights(kd.q_weights());
     auto weights = _weights.subspan(q_offset[0], q_offset[1] - q_offset[0]);
+
+    // Temporary work arrays
+    std::vector<double> epsnb((kd.offsets(1) - kd.offsets(0)) * gdim);
+    mdspan2_t epsn(epsnb.data(), kd.offsets(1) - kd.offsets(0), gdim);
+    std::vector<double> trb((kd.offsets(1) - kd.offsets(0)) * gdim);
+    mdspan2_t tr(trb.data(), kd.offsets(1) - kd.offsets(0), gdim);
+
+    // Extract basis for coefficients
+    cmdspan2_t phi_coeffs(coeff_basis_valuesb.data(), coeff_shape);
 
     // Extract reference to the tabulated basis function
     cmdspan2_t phi = kd.phi();
     cmdspan3_t dphi = kd.dphi();
-
-    // Get number of dofs per cell
-    // Temporary variable for grad(phi) on physical cell
-    std::vector<double> dphi_physb(bs * ndofs_cell);
-    mdspan2_t dphi_phys(dphi_physb.data(), bs, ndofs_cell);
-    // Temporary work arrays
-    std::vector<double> epsnb(ndofs_cell * gdim);
-    mdspan2_t epsn(epsnb.data(), ndofs_cell, gdim);
-    std::vector<double> trb(ndofs_cell * gdim);
-    mdspan2_t tr(trb.data(), ndofs_cell, gdim);
-
-    cmdspan2_t phi_coeffs(coeff_basis_valuesb.data(), coeff_shape);
-    const std::uint32_t num_points = q_offset[1] - q_offset[0];
+    // Loop over quadrature points
+    const int num_points = q_offset[1] - q_offset[0];
     for (std::size_t q = 0; q < num_points; q++)
     {
       const std::size_t q_pos = q_offset[0] + q;
@@ -373,7 +363,14 @@ kernel_fn<T> generate_contact_kernel(
       // Update Jacobian and physical normal
       detJ = std::fabs(kd.update_jacobian(q, facet_index, detJ, J, K, J_tot,
                                           detJ_scratch, coord));
-      kd.update_normal(n_phys, K, facet_index);
+      kd.update_normal(std::span(n_phys.data(), gdim), K, facet_index);
+
+      double mu = 0;
+      for (int j = kd.offsets(1); j < kd.offsets(2); j++)
+        mu += c[j + c_offset] * phi_coeffs(q_pos, j);
+      double lmbda = 0;
+      for (int j = kd.offsets(2); j < kd.offsets(3); j++)
+        lmbda += c[j + c_offset] * phi_coeffs(q_pos, j);
 
       // if normal not constant, get surface normal at current quadrature point
       int normal_offset = c_offset + kd.offsets(5);
@@ -397,14 +394,6 @@ kernel_fn<T> generate_contact_kernel(
       compute_normal_strain_basis(epsn, tr, K, dphi, n_surf,
                                   std::span(n_phys.data(), gdim), q_pos);
 
-      double mu = 0;
-      int c_offset = (bs - 1) * kd.offsets(1);
-      for (int j = kd.offsets(1); j < kd.offsets(2); j++)
-        mu += c[j + c_offset] * phi_coeffs(q_pos, j);
-      double lmbda = 0;
-      for (int j = kd.offsets(2); j < kd.offsets(3); j++)
-        lmbda += c[j + c_offset] * phi_coeffs(q_pos, j);
-
       // compute tr(eps(u)), epsn at q
       double tr_u = 0;
       double epsn_u = 0;
@@ -421,7 +410,7 @@ kernel_fn<T> generate_contact_kernel(
         }
       }
 
-      double sign_u = lmbda * tr_u * n_dot + mu * epsn_u;
+      double sign_u = (lmbda * n_dot * tr_u + mu * epsn_u);
       double Pn_u
           = dolfinx_contact::dR_minus(sign_u + gamma * (gap - u_dot_nsurf));
       const double w0 = weights[q] * detJ;

@@ -61,13 +61,13 @@ dolfinx_contact::KernelData::KernelData(
   const basix::FiniteElement& basix_element = element->basix_element();
   _basis_shape = basix_element.tabulate_shape(1, num_quadrature_pts);
   _basis_values = std::vector<double>(std::reduce(
-      _basis_shape.begin(), _basis_shape.end(), 1, std::multiplies()));
+      _basis_shape.begin(), _basis_shape.end(), 1, std::multiplies{}));
   element->tabulate(_basis_values, q_points, {num_quadrature_pts, _tdim}, 1);
 
   // Tabulate Coordinate element (first derivative to compute Jacobian)
   _c_basis_shape = cmap.tabulate_shape(1, _q_weights.size());
   _c_basis_values = std::vector<double>(std::reduce(
-      _c_basis_shape.begin(), _c_basis_shape.end(), 1, std::multiplies()));
+      _c_basis_shape.begin(), _c_basis_shape.end(), 1, std::multiplies{}));
   cmap.tabulate(1, q_points, {num_quadrature_pts, _tdim}, _c_basis_values);
 
   // Create offsets from cstrides

@@ -15,7 +15,7 @@ std::vector<double> dolfinx_contact::allocate_pull_back_nonaffine(
 {
   const std::array<std::size_t, 4> c_shape = cmap.tabulate_shape(1, 1);
   const std::size_t basis_size
-      = std::reduce(c_shape.cbegin(), c_shape.cend(), 1, std::multiplies());
+      = std::reduce(c_shape.cbegin(), c_shape.cend(), 1, std::multiplies{});
   return std::vector<double>(2 * gdim * tdim + basis_size + 9);
 }
 
@@ -30,7 +30,7 @@ void dolfinx_contact::pull_back_nonaffine(
   const std::size_t tdim = X.size();
   const std::array<std::size_t, 4> c_shape = cmap.tabulate_shape(1, 1);
   const std::size_t basis_size
-      = std::reduce(c_shape.cbegin(), c_shape.cend(), 1, std::multiplies());
+      = std::reduce(c_shape.cbegin(), c_shape.cend(), 1, std::multiplies{});
   assert(work_array.size() >= basis_size + 2 * gdim * tdim);
 
   // Use work-array for views
@@ -98,7 +98,7 @@ std::array<double, 3> dolfinx_contact::push_forward_facet_normal(
 {
   const std::array<std::size_t, 4> c_shape = cmap.tabulate_shape(1, 1);
   const std::size_t basis_size
-      = std::reduce(c_shape.cbegin(), c_shape.cend(), 1, std::multiplies());
+      = std::reduce(c_shape.cbegin(), c_shape.cend(), 1, std::multiplies{});
   assert(work_array.size() >= basis_size + 2 * gdim * tdim);
 
   // Use work-array for views

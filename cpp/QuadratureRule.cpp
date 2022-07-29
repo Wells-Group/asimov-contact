@@ -75,7 +75,7 @@ dolfinx_contact::QuadratureRule::QuadratureRule(dolfinx::mesh::CellType ct,
       const std::array<std::size_t, 4> e_tab_shape
           = entity_element.tabulate_shape(0, num_points);
       std::vector<double> reference_entity_b(std::reduce(
-          e_tab_shape.cbegin(), e_tab_shape.cend(), 1, std::multiplies()));
+          e_tab_shape.cbegin(), e_tab_shape.cend(), 1, std::multiplies{}));
 
       entity_element.tabulate(0, q_points, {num_points, tdim},
                               reference_entity_b);

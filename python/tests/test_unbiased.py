@@ -312,7 +312,7 @@ def create_contact_data(V, u, quadrature_degree, lmbda, mu, facets_cg, tied=Fals
     h = ufl.CellDiameter(mesh)
     surface_cells = np.unique(np.hstack([entities_0[:, 0], entities_1[:, 0]]))
     h_int = _fem.Function(V2)
-    expr = _fem.Expression(h, V2.element.interpolation_points)
+    expr = _fem.Expression(h, V2.element.interpolation_points())
     h_int.interpolate(expr, surface_cells)
     h_0 = dolfinx_cuas.pack_coefficients([h_int], entities_0)
     h_1 = dolfinx_cuas.pack_coefficients([h_int], entities_1)

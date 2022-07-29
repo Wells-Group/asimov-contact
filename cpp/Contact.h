@@ -50,7 +50,7 @@ tabulate(const dolfinx::fem::CoordinateElement& cmap,
   std::array<std::size_t, 4> cmap_shape
       = cmap.tabulate_shape(0, q_weights.size());
   std::vector<double> cmap_basis(
-      std::reduce(cmap_shape.begin(), cmap_shape.end(), 1, std::multiplies()));
+      std::reduce(cmap_shape.begin(), cmap_shape.end(), 1, std::multiplies{}));
   cmap.tabulate(0, q_points, {q_weights.size(), q_rule->tdim()}, cmap_basis);
   return {cmap_basis, cmap_shape};
 }
@@ -830,7 +830,7 @@ public:
           throw std::invalid_argument(
               "pack_test_functions assumes values size 1");
         std::vector<double> basis_valuesb(std::reduce(
-            b_shape.cbegin(), b_shape.cend(), 1, std::multiplies()));
+            b_shape.cbegin(), b_shape.cend(), 1, std::multiplies{}));
         std::fill(basis_valuesb.begin(), basis_valuesb.end(), 0);
         cells.resize(indices.size());
         std::fill(cells.begin(), cells.end(), linked_cell);
@@ -902,7 +902,7 @@ public:
     std::array<std::size_t, 4> b_shape
         = evaluate_basis_shape(*V_sub, num_facets * num_q_points, 0);
     std::vector<double> basis_valuesb(
-        std::reduce(b_shape.begin(), b_shape.end(), 1, std::multiplies()));
+        std::reduce(b_shape.begin(), b_shape.end(), 1, std::multiplies{}));
     std::vector<std::int32_t> cells(num_facets * num_q_points, -1);
     {
       // Copy function from parent mesh
@@ -922,8 +922,7 @@ public:
           cells[row + q] = linked_pair.front();
           for (std::size_t j = 0; j < gdim; ++j)
           {
-            points(row, q, j)
-                = qp_span(i, q, j) + gap[row * gdim + q * gdim + j];
+            points(i, q, j) = qp_span(i, q, j) + gap[row * gdim + q * gdim + j];
           }
         }
       }

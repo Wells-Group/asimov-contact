@@ -370,7 +370,7 @@ int raytracing_cell(
   auto dxi_k = storage.dxi_k();
   std::array<std::size_t, 4> basis_shape = cmap.tabulate_shape(1, 1);
   assert(std::size_t(std::reduce(basis_shape.cbegin(), basis_shape.cend(), 1,
-                                 std::multiplies()))
+                                 std::multiplies{}))
          == basis_values.size());
   cmdspan4_t basis(basis_values.data(), basis_shape);
   auto dphi = stdex::submdspan(basis, std::pair{1, tdim + 1}, 0,
@@ -549,7 +549,7 @@ compute_ray(const dolfinx::mesh::Mesh& mesh,
   // Temporary variables
   const std::array<std::size_t, 4> basis_shape = cmap.tabulate_shape(1, 1);
   std::vector<double> basis_values(std::reduce(
-      basis_shape.cbegin(), basis_shape.cend(), 1, std::multiplies()));
+      basis_shape.cbegin(), basis_shape.cend(), 1, std::multiplies{}));
 
   std::size_t cell_idx = -1;
   auto allocated_memory = NewtonStorage<tdim, gdim>();
