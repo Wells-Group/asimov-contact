@@ -266,12 +266,6 @@ void dolfinx_contact::evaluate_basis_functions(
       = element->reference_value_size() / bs_element;
   const std::size_t space_dimension = element->space_dimension() / bs_element;
 
-  if (num_cells != basis_values.size() / space_dimension)
-  {
-    throw std::invalid_argument("Length of array for basis values must be the "
-                                "same as the number of points.");
-  }
-
   // If the space has sub elements, concatenate the evaluations on the sub
   // elements
   if (const int num_sub_elements = element->num_sub_elements();
@@ -463,61 +457,54 @@ void dolfinx_contact::evaluate_basis_functions(
   }
 };
 
-double dolfinx_contact::compute_facet_jacobians(std::size_t q, mdspan2_t J,
-                                                mdspan2_t K, mdspan2_t J_tot,
-                                                std::span<double> detJ_scratch,
-                                                cmdspan2_t J_f, cmdspan3_t dphi,
-                                                cmdspan2_t coords)
+double dolfinx_contact::compute_facet_jacobian(
+    mdspan2_t J, mdspan2_t K, mdspan2_t J_tot, std::span<double> detJ_scratch,
+    cmdspan2_t J_f, s_cmdspan2_t dphi, cmdspan2_t coords)
 {
   std::size_t gdim = J.extent(0);
-
-  auto dphi_q
-      = stdex::submdspan(dphi, stdex::full_extent, q, stdex::full_extent);
   auto coordinate_dofs
       = stdex::submdspan(coords, stdex::full_extent, std::pair{0, gdim});
   for (std::size_t i = 0; i < J.extent(0); ++i)
     for (std::size_t j = 0; j < J.extent(1); ++j)
       J(i, j) = 0;
-
-  dolfinx::fem::CoordinateElement::compute_jacobian(dphi_q, coordinate_dofs, J);
+  dolfinx::fem::CoordinateElement::compute_jacobian(dphi, coordinate_dofs, J);
   dolfinx::fem::CoordinateElement::compute_jacobian_inverse(J, K);
   for (std::size_t i = 0; i < J_tot.extent(0); ++i)
     for (std::size_t j = 0; j < J_tot.extent(1); ++j)
       J_tot(i, j) = 0;
-
   dolfinx::math::dot(J, J_f, J_tot);
   return std::fabs(
       dolfinx::fem::CoordinateElement::compute_jacobian_determinant(
           J_tot, detJ_scratch));
 }
 //-------------------------------------------------------------------------------------
-std::function<double(std::size_t, double, mdspan2_t, mdspan2_t, mdspan2_t,
-                     std::span<double>, cmdspan2_t, cmdspan3_t, cmdspan2_t)>
+std::function<double(double, mdspan2_t, mdspan2_t, mdspan2_t, std::span<double>,
+                     cmdspan2_t, s_cmdspan2_t, cmdspan2_t)>
 dolfinx_contact::get_update_jacobian_dependencies(
     const dolfinx::fem::CoordinateElement& cmap)
 {
   if (cmap.is_affine())
   {
     // Return function that returns the input determinant
-    return []([[maybe_unused]] std::size_t q, double detJ,
-              [[maybe_unused]] mdspan2_t J, [[maybe_unused]] mdspan2_t K,
-              [[maybe_unused]] mdspan2_t J_tot,
-              [[maybe_unused]] std::span<double> detJ_scratch,
-              [[maybe_unused]] cmdspan2_t J_f, [[maybe_unused]] cmdspan3_t dphi,
-              [[maybe_unused]] cmdspan2_t coords) { return detJ; };
+    return
+        [](double detJ, [[maybe_unused]] mdspan2_t J,
+           [[maybe_unused]] mdspan2_t K, [[maybe_unused]] mdspan2_t J_tot,
+           [[maybe_unused]] std::span<double> detJ_scratch,
+           [[maybe_unused]] cmdspan2_t J_f, [[maybe_unused]] s_cmdspan2_t dphi,
+           [[maybe_unused]] cmdspan2_t coords) { return detJ; };
   }
   else
   {
     // Return function that returns the input determinant
-    return []([[maybe_unused]] std::size_t q, double detJ,
-              [[maybe_unused]] mdspan2_t J, [[maybe_unused]] mdspan2_t K,
-              [[maybe_unused]] mdspan2_t J_tot,
-              [[maybe_unused]] std::span<double> detJ_scratch,
-              [[maybe_unused]] cmdspan2_t J_f, [[maybe_unused]] cmdspan3_t dphi,
-              [[maybe_unused]] cmdspan2_t coords)
+    return
+        [](double detJ, [[maybe_unused]] mdspan2_t J,
+           [[maybe_unused]] mdspan2_t K, [[maybe_unused]] mdspan2_t J_tot,
+           [[maybe_unused]] std::span<double> detJ_scratch,
+           [[maybe_unused]] cmdspan2_t J_f, [[maybe_unused]] s_cmdspan2_t dphi,
+           [[maybe_unused]] cmdspan2_t coords)
     {
-      double new_detJ = dolfinx_contact::compute_facet_jacobians(
-          q, J, K, J_tot, detJ_scratch, J_f, dphi, coords);
+      double new_detJ = dolfinx_contact::compute_facet_jacobian(
+          J, K, J_tot, detJ_scratch, J_f, dphi, coords);
       return new_detJ;
     };
   }
@@ -817,7 +804,7 @@ dolfinx_contact::compute_distance_map(
   {
     // Tabulate coordinate element basis values
     std::array<std::size_t, 4> cmap_shape
-        = cmap.tabulate_shape(0, num_q_points);
+        = cmap.tabulate_shape(0, sum_q_points);
     std::vector<double> c_basis(std::reduce(
         cmap_shape.cbegin(), cmap_shape.cend(), 1, std::multiplies()));
     cmap.tabulate(0, q_points, {sum_q_points, (std::size_t)tdim}, c_basis);

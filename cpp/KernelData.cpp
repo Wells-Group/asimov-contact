@@ -65,8 +65,7 @@ dolfinx_contact::KernelData::KernelData(
   element->tabulate(_basis_values, q_points, {num_quadrature_pts, _tdim}, 1);
 
   // Tabulate Coordinate element (first derivative to compute Jacobian)
-  std::array<std::size_t, 4> _c_basis_shape
-      = cmap.tabulate_shape(1, _q_weights.size());
+  _c_basis_shape = cmap.tabulate_shape(1, _q_weights.size());
   _c_basis_values = std::vector<double>(std::reduce(
       _c_basis_shape.begin(), _c_basis_shape.end(), 1, std::multiplies()));
   cmap.tabulate(1, q_points, {num_quadrature_pts, _tdim}, _c_basis_values);
@@ -81,10 +80,11 @@ dolfinx_contact::KernelData::KernelData(
   // compute this per quadrature point
   basix::cell::type basix_cell
       = dolfinx::mesh::cell_type_to_basix_type(mesh->topology().cell_type());
-  auto [_ref_jacobians, _jac_shape] = basix::cell::facet_jacobians(basix_cell);
+  std::tie(_ref_jacobians, _jac_shape)
+      = basix::cell::facet_jacobians(basix_cell);
 
   // Get facet normals on reference cell
-  auto [_facet_normals, _normals_shape]
+  std::tie(_facet_normals, _normals_shape)
       = basix::cell::facet_outward_normals(basix_cell);
 
   // Get update Jacobian function (for each quadrature point)

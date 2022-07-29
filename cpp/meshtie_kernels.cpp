@@ -80,8 +80,8 @@ dolfinx_contact::generate_meshtie_kernel(
     // Pre-compute jacobians and normals for affine meshes
     if (kd.affine())
     {
-      detJ = kd.compute_facet_jacobians(facet_index, J, K, J_tot, detJ_scratch,
-                                        coord);
+      detJ = kd.compute_first_facet_jacobian(facet_index, J, K, J_tot,
+                                             detJ_scratch, coord);
 
       dolfinx_contact::physical_facet_normal(
           std::span(n_phys.data(), gdim), K,
@@ -227,8 +227,8 @@ dolfinx_contact::generate_meshtie_kernel(
     // Pre-compute jacobians and normals for affine meshes
     if (kd.affine())
     {
-      detJ = kd.compute_facet_jacobians(facet_index, J, K, J_tot, detJ_scratch,
-                                        coord);
+      detJ = kd.compute_first_facet_jacobian(facet_index, J, K, J_tot,
+                                             detJ_scratch, coord);
 
       dolfinx_contact::physical_facet_normal(
           std::span(n_phys.data(), gdim), K,

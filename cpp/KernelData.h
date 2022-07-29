@@ -21,9 +21,9 @@
 
 namespace dolfinx_contact
 {
-using jac_fn = std::function<double(std::size_t, double, mdspan2_t, mdspan2_t,
-                                    mdspan2_t, std::span<double>, cmdspan2_t,
-                                    cmdspan3_t, cmdspan2_t)>;
+using jac_fn = std::function<double(double, mdspan2_t, mdspan2_t, mdspan2_t,
+                                    std::span<double>, cmdspan2_t, s_cmdspan2_t,
+                                    cmdspan2_t)>;
 
 using normal_fn = std::function<void(std::span<double>, cmdspan2_t, cmdspan2_t,
                                      const std::size_t)>;
@@ -118,15 +118,14 @@ public:
                          cmdspan2_t coords) const
   {
     cmdspan4_t full_basis(_c_basis_values.data(), _c_basis_shape);
-    std::array<std::size_t, 2> _q_range
-        = {_qp_offsets[facet_index], _qp_offsets[facet_index + 1]};
-    auto dphi_fc = stdex::submdspan(
-        full_basis, std::pair{1, (std::size_t)_tdim + 1},
-        std::pair{_q_range[0], _q_range[1]}, stdex::full_extent, 0);
+    const std::size_t q_pos = _qp_offsets[facet_index] + q;
+    auto dphi_fc
+        = stdex::submdspan(full_basis, std::pair{1, (std::size_t)_tdim + 1},
+                           q_pos, stdex::full_extent, 0);
     cmdspan3_t ref_jacs(_ref_jacobians.data(), _jac_shape);
     auto J_f = stdex::submdspan(ref_jacs, (std::size_t)facet_index,
                                 stdex::full_extent, stdex::full_extent);
-    return _update_jacobian(q, detJ, J, K, J_tot, detJ_scratch, J_f, dphi_fc,
+    return _update_jacobian(detJ, J, K, J_tot, detJ_scratch, J_f, dphi_fc,
                             coords);
   }
 
@@ -140,22 +139,20 @@ public:
   /// @param[in,out] detJ_scratch - Working memory, min size (2*gdim*tdim)
   /// @param[in] coords - the coordinates of the facet
   /// @return absolute value of determinant of J_tot
-  double compute_facet_jacobians(const int facet_index, mdspan2_t J,
-                                 mdspan2_t K, mdspan2_t J_tot,
-                                 std::span<double> detJ_scratch,
-                                 cmdspan2_t coords) const
+  double compute_first_facet_jacobian(const int facet_index, mdspan2_t J,
+                                      mdspan2_t K, mdspan2_t J_tot,
+                                      std::span<double> detJ_scratch,
+                                      cmdspan2_t coords) const
   {
     cmdspan4_t full_basis(_c_basis_values.data(), _c_basis_shape);
-    std::array<std::size_t, 2> _q_range
-        = {_qp_offsets[facet_index], _qp_offsets[facet_index + 1]};
-    auto dphi_fc = stdex::submdspan(
-        full_basis, std::pair{1, (std::size_t)_tdim + 1},
-        std::pair{_q_range[0], _q_range[1]}, stdex::full_extent, 0);
+    s_cmdspan2_t dphi_fc
+        = stdex::submdspan(full_basis, std::pair{1, (std::size_t)_tdim + 1},
+                           _qp_offsets[facet_index], stdex::full_extent, 0);
     cmdspan3_t ref_jacs(_ref_jacobians.data(), _jac_shape);
     auto J_f = stdex::submdspan(ref_jacs, (std::size_t)facet_index,
                                 stdex::full_extent, stdex::full_extent);
-    return std::fabs(dolfinx_contact::compute_facet_jacobians(
-        0, J, K, J_tot, detJ_scratch, J_f, dphi_fc, coords));
+    return std::fabs(dolfinx_contact::compute_facet_jacobian(
+        J, K, J_tot, detJ_scratch, J_f, dphi_fc, coords));
   }
 
   /// update normal

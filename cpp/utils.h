@@ -21,6 +21,7 @@
 #include <xtensor/xtensor.hpp>
 namespace dolfinx_contact
 {
+
 enum class Kernel
 {
   Rhs,
@@ -127,7 +128,6 @@ void compute_normal(const xt::xtensor<double, 1>& n_ref,
 /// Compute the following jacobians on a given facet:
 /// J: physical cell -> reference cell (and its inverse)
 /// J_tot: physical facet -> reference facet
-/// @param[in] q - index of quadrature points
 /// @param[in,out] J - Jacobian between reference cell and physical cell
 /// @param[in,out] K - inverse of J
 /// @param[in,out] J_tot - J_f*J
@@ -138,10 +138,9 @@ void compute_normal(const xt::xtensor<double, 1>& n_ref,
 /// points
 /// @param[in] coords - the coordinates of the facet
 /// @return absolute value of determinant of J_tot
-double compute_facet_jacobians(std::size_t q, mdspan2_t J, mdspan2_t K,
-                               mdspan2_t J_tot, std::span<double> detJ_scratch,
-                               cmdspan2_t J_f, cmdspan3_t dphi,
-                               cmdspan2_t coords);
+double compute_facet_jacobian(mdspan2_t J, mdspan2_t K, mdspan2_t J_tot,
+                              std::span<double> detJ_scratch, cmdspan2_t J_f,
+                              s_cmdspan2_t dphi, cmdspan2_t coords);
 
 /// @brief Convenience function to update Jacobians
 ///
@@ -149,8 +148,8 @@ double compute_facet_jacobians(std::size_t q, mdspan2_t J, mdspan2_t K,
 /// For non-affine geometries, the Jacobian, it's inverse and the total Jacobian
 /// (J*J_f) is computed.
 /// @param[in] cmap The coordinate element
-std::function<double(std::size_t, double, mdspan2_t, mdspan2_t, mdspan2_t,
-                     std::span<double>, cmdspan2_t, cmdspan3_t, cmdspan2_t)>
+std::function<double(double, mdspan2_t, mdspan2_t, mdspan2_t, std::span<double>,
+                     cmdspan2_t, s_cmdspan2_t, cmdspan2_t)>
 get_update_jacobian_dependencies(const dolfinx::fem::CoordinateElement& cmap);
 
 /// @brief Convenience function to update facet normals

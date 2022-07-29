@@ -201,7 +201,7 @@ Mat dolfinx_contact::Contact::create_petsc_matrix(
 void dolfinx_contact::Contact::create_distance_map(int pair)
 {
   // Get quadrature mesh info
-  int puppet_mt = _contact_pairs[pair][0];
+  auto [puppet_mt, candidate_mt] = _contact_pairs[pair];
   const std::vector<std::int32_t>& puppet_facets = _cell_facet_pairs[puppet_mt];
   std::shared_ptr<const dolfinx::mesh::Mesh> puppet_mesh
       = _submeshes[puppet_mt].mesh();
@@ -222,7 +222,6 @@ void dolfinx_contact::Contact::create_distance_map(int pair)
       quadrature_facets[i + 1] = puppet_facets[i + 1];
     }
   }
-  int candidate_mt = _contact_pairs[pair][1];
   const std::vector<std::int32_t>& candidate_facets
       = _cell_facet_pairs[candidate_mt];
   std::vector<std::int32_t> submesh_facets(candidate_facets.size());
@@ -292,9 +291,8 @@ dolfinx_contact::Contact::pack_ny(int pair,
       candidate_mesh->topology().cell_type());
 
   // Get facet normals on reference cell
-  auto [_facet_normals, n_shape]
-      = basix::cell::facet_outward_normals(cell_type);
-  mdspan2_t reference_normals(_facet_normals.data(), n_shape[0], n_shape[1]);
+  auto [facet_normals, n_shape] = basix::cell::facet_outward_normals(cell_type);
+  mdspan2_t reference_normals(facet_normals.data(), n_shape[0], n_shape[1]);
 
   // Select which side of the contact interface to loop from and get the
   // correct map
@@ -517,7 +515,6 @@ void dolfinx_contact::Contact::assemble_vector(
   std::vector<double> coordinate_dofs(3 * num_dofs_g);
   std::vector<std::vector<PetscScalar>> bes(
       max_links + 1, std::vector<PetscScalar>(bs * ndofs_cell));
-
   // Tempoary array to hold cell links
   std::vector<std::int32_t> linked_cells;
   for (std::size_t i = 0; i < active_facets.size(); i += 2)
@@ -649,11 +646,12 @@ dolfinx_contact::Contact::pack_grad_test_functions(
       if (b_shape[3] != 1)
         throw std::invalid_argument(
             "pack_grad_test_functions assumes values size 1");
-      xt::xtensor<double, 4> basis_values(b_shape);
-      std::fill(basis_values.begin(), basis_values.end(), 0);
+      std::vector<double> basis_valuesb(
+          std::reduce(b_shape.cbegin(), b_shape.cend(), 1, std::multiplies()));
+      cmdspan4_t basis_values(basis_valuesb.data(), b_shape);
       cells.resize(indices.size());
       std::fill(cells.begin(), cells.end(), linked_cell);
-      evaluate_basis_functions(*_V, qp, cells, basis_values, 1);
+      evaluate_basis_functions(*_V, qp, cells, basis_valuesb, 1);
       // Insert basis function values into c
       for (std::size_t k = 0; k < ndofs; k++)
         for (std::size_t q = 0; q < indices.size(); ++q)

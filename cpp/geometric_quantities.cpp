@@ -108,13 +108,15 @@ std::array<double, 3> dolfinx_contact::push_forward_facet_normal(
   std::span<double, 3> X(work_array.data() + gdim * tdim, 3);
   mdspan2_t K(work_array.data() + gdim * tdim + 3, tdim, gdim);
   cmdspan4_t basis_values(work_array.data() + 3 + 2 * gdim * tdim, c_shape);
-  std::span basis_span(work_array.data() + 3 + 2 * gdim * tdim, basis_size);
+  std::span<double> basis_span(work_array.data() + 3 + 2 * gdim * tdim,
+                               basis_size);
   if (cmap.is_affine())
   {
     // Affine Jacobian can be computed at any point in the cell (0,0,0) in
     // the reference cell
     std::fill(X.begin(), X.end(), 0);
-    cmap.tabulate(1, X, {1, tdim}, basis_span);
+    cmap.tabulate(1, X.subspan(0, tdim), {1, tdim}, basis_span);
+
     auto dphi = stdex::submdspan(basis_values, std::pair{1, tdim + 1}, 0,
                                  stdex::full_extent, 0);
     dolfinx::fem::CoordinateElement::compute_jacobian(dphi, coordinate_dofs, J);
@@ -127,7 +129,8 @@ std::array<double, 3> dolfinx_contact::push_forward_facet_normal(
     dolfinx_contact::pull_back_nonaffine(X.subspan(0, tdim), work_array,
                                          x.subspan(0, gdim), cmap,
                                          coordinate_dofs);
-    cmap.tabulate(1, X, {1, tdim}, basis_span);
+
+    cmap.tabulate(1, X.subspan(0, tdim), {1, tdim}, basis_span);
     std::fill(work_array.begin(), std::next(work_array.begin(), gdim * tdim),
               0.0);
     auto dphi = stdex::submdspan(basis_values, std::pair{1, tdim + 1}, 0,
