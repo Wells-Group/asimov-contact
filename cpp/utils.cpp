@@ -810,7 +810,7 @@ dolfinx_contact::compute_distance_map(
   {
     // Tabulate coordinate element basis values
     std::array<std::size_t, 4> cmap_shape
-        = cmap.tabulate_shape(0, num_q_points);
+        = cmap.tabulate_shape(0, sum_q_points);
     std::vector<double> c_basis(std::reduce(
         cmap_shape.cbegin(), cmap_shape.cend(), 1, std::multiplies()));
     cmap.tabulate(0, q_points, {sum_q_points, (std::size_t)tdim}, c_basis);

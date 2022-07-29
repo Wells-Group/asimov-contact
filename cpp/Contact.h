@@ -1,4 +1,4 @@
-// Copyright (C) 2021 Jørgen S. Dokken and Sarah Roggendorf
+// Copyright (C) 2021-2022 Jørgen S. Dokken and Sarah Roggendorf
 //
 // This file is part of DOLFINx_Contact
 //
@@ -23,7 +23,6 @@
 #include <dolfinx/mesh/Mesh.h>
 #include <dolfinx/mesh/MeshTags.h>
 #include <dolfinx/mesh/cell_types.h>
-
 #include <xtensor/xbuilder.hpp>
 #include <xtensor/xindex_view.hpp>
 
@@ -878,9 +877,9 @@ public:
                  std::shared_ptr<dolfinx::fem::Function<PetscScalar>> u,
                  const std::span<const PetscScalar> gap)
   {
-    int puppet_mt = _contact_pairs[pair][0];
-    int candidate_mt = _contact_pairs[pair][1];
     dolfinx::common::Timer t("Pack contact u");
+    auto [puppet_mt, candidate_mt] = _contact_pairs[pair];
+
     // Mesh info
     dolfinx_contact::SubMesh submesh = _submeshes[candidate_mt];
     std::shared_ptr<const dolfinx::mesh::Mesh> mesh = submesh.mesh(); // mesh
@@ -940,7 +939,7 @@ public:
       evaluate_basis_functions(*u_sub.function_space(), points, cells,
                                basis_values, 0);
     }
-
+    std::cout << basis_values << "\n";
     const std::span<const PetscScalar>& u_coeffs = u_sub.x()->array();
 
     // Output vector

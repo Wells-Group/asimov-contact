@@ -201,7 +201,7 @@ Mat dolfinx_contact::Contact::create_petsc_matrix(
 void dolfinx_contact::Contact::create_distance_map(int pair)
 {
   // Get quadrature mesh info
-  int puppet_mt = _contact_pairs[pair][0];
+  auto [puppet_mt, candidate_mt] = _contact_pairs[pair];
   const std::vector<std::int32_t>& puppet_facets = _cell_facet_pairs[puppet_mt];
   std::shared_ptr<const dolfinx::mesh::Mesh> puppet_mesh
       = _submeshes[puppet_mt].mesh();
@@ -222,7 +222,6 @@ void dolfinx_contact::Contact::create_distance_map(int pair)
       quadrature_facets[i + 1] = puppet_facets[i + 1];
     }
   }
-  int candidate_mt = _contact_pairs[pair][1];
   const std::vector<std::int32_t>& candidate_facets
       = _cell_facet_pairs[candidate_mt];
   std::vector<std::int32_t> submesh_facets(candidate_facets.size());
