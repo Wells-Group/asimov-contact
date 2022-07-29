@@ -473,9 +473,6 @@ double dolfinx_contact::compute_facet_jacobian(
   for (std::size_t i = 0; i < J.extent(0); ++i)
     for (std::size_t j = 0; j < J.extent(1); ++j)
       J(i, j) = 0;
-  std::cout << dphi.extent(0) << "x" << dphi.extent(1) << " "
-            << coordinate_dofs.extent(0) << "x" << coordinate_dofs.extent(1)
-            << "\n";
   dolfinx::fem::CoordinateElement::compute_jacobian(dphi, coordinate_dofs, J);
   dolfinx::fem::CoordinateElement::compute_jacobian_inverse(J, K);
   for (std::size_t i = 0; i < J_tot.extent(0); ++i)

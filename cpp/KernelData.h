@@ -145,22 +145,14 @@ public:
                                       cmdspan2_t coords) const
   {
     cmdspan4_t full_basis(_c_basis_values.data(), _c_basis_shape);
-    std::cout << "MDSPAN\n";
-    std::cout << full_basis.extent(0) << " " << full_basis.extent(1) << " "
-              << full_basis.extent(2) << "\n";
     s_cmdspan2_t dphi_fc
         = stdex::submdspan(full_basis, std::pair{1, (std::size_t)_tdim + 1},
                            _qp_offsets[facet_index], stdex::full_extent, 0);
-    std::cout << dphi_fc.extent(0) << " " << dphi_fc.extent(1) << " "
-              << dphi_fc.extent(2) << "\n";
-    std::cout << dphi_fc.extents().rank() << "\n";
     cmdspan3_t ref_jacs(_ref_jacobians.data(), _jac_shape);
     auto J_f = stdex::submdspan(ref_jacs, (std::size_t)facet_index,
                                 stdex::full_extent, stdex::full_extent);
-    std::cout << "HERE!\n";
     return std::fabs(dolfinx_contact::compute_facet_jacobian(
         J, K, J_tot, detJ_scratch, J_f, dphi_fc, coords));
-    std::cout << "Hello";
   }
 
   /// update normal

@@ -138,20 +138,16 @@ kernel_fn<T> generate_contact_kernel(
 
     // Normal vector on physical facet at a single quadrature point
     std::array<double, 3> n_phys;
-    std::cout << kd.affine() << "\n";
     // Pre-compute jacobians and normals for affine meshes
     if (kd.affine())
     {
-      std::cout << "Pref facet jacs\n";
       detJ = kd.compute_first_facet_jacobian(facet_index, J, K, J_tot,
                                              detJ_scratch, coord);
-      std::cout << "Physical facet\n";
       dolfinx_contact::physical_facet_normal(
           std::span(n_phys.data(), gdim), K,
           stdex::submdspan(kd.facet_normals(), facet_index,
                            stdex::full_extent));
     }
-    std::cout << "post physical normal\n";
     // Retrieve normal of rigid surface if constant
     std::array<double, 3> n_surf = {0, 0, 0};
     double n_dot = 0;

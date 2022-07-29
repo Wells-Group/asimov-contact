@@ -787,6 +787,14 @@ public:
       const std::span<const int> links = map->links((int)i);
       assert(links.size() == num_q_points);
 
+      // Compute Pi(x) form points x and gap funtion Pi(x) - x
+      for (std::size_t j = 0; j < num_q_points; j++)
+      {
+        const std::span<const int> linked_pair = facet_map->links(links[j]);
+        assert(!linked_pair.empty());
+        linked_cells[j] = linked_pair.front();
+      }
+
       // Sort linked cells
       std::pair<std::vector<std::int32_t>, std::vector<std::int32_t>>
           sorted_cells = dolfinx_contact::sort_cells(
@@ -794,7 +802,7 @@ public:
               std::span(perm.data(), perm.size()));
       const std::vector<std::int32_t>& unique_cells = sorted_cells.first;
       const std::vector<std::int32_t>& offsets = sorted_cells.second;
-      // Loop over sorted array of unique cells
+
       for (std::size_t j = 0; j < unique_cells.size(); ++j)
       {
 

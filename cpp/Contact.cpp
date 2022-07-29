@@ -292,9 +292,8 @@ dolfinx_contact::Contact::pack_ny(int pair,
       candidate_mesh->topology().cell_type());
 
   // Get facet normals on reference cell
-  auto [_facet_normals, n_shape]
-      = basix::cell::facet_outward_normals(cell_type);
-  mdspan2_t reference_normals(_facet_normals.data(), n_shape[0], n_shape[1]);
+  auto [facet_normals, n_shape] = basix::cell::facet_outward_normals(cell_type);
+  mdspan2_t reference_normals(facet_normals.data(), n_shape[0], n_shape[1]);
 
   // Select which side of the contact interface to loop from and get the
   // correct map
@@ -546,7 +545,6 @@ void dolfinx_contact::Contact::assemble_vector(
     kernel(bes, std::span(coeffs.data() + i / 2 * cstride, cstride),
            constants.data(), coordinate_dofs.data(), active_facets[i + 1],
            num_linked_cells);
-    assert(false);
 
     // Add element vector to global vector
     const std::span<const int> dofs_cell = dofmap->cell_dofs(active_facets[i]);
