@@ -266,12 +266,6 @@ void dolfinx_contact::evaluate_basis_functions(
       = element->reference_value_size() / bs_element;
   const std::size_t space_dimension = element->space_dimension() / bs_element;
 
-  if (num_cells != basis_values.size() / space_dimension)
-  {
-    throw std::invalid_argument("Length of array for basis values must be the "
-                                "same as the number of points.");
-  }
-
   // If the space has sub elements, concatenate the evaluations on the sub
   // elements
   if (const int num_sub_elements = element->num_sub_elements();

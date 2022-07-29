@@ -23,8 +23,6 @@
 #include <dolfinx/mesh/Mesh.h>
 #include <dolfinx/mesh/MeshTags.h>
 #include <dolfinx/mesh/cell_types.h>
-#include <xtensor/xbuilder.hpp>
-#include <xtensor/xindex_view.hpp>
 
 using mat_set_fn = const std::function<int(
     const std::span<const std::int32_t>&, const std::span<const std::int32_t>&,
@@ -681,9 +679,9 @@ public:
                                                      master_facets);
 
     // Temporary data structures used in loops
-    xt::xtensor<double, 2> point = {{0, 0, 0}};
+    std::array<double, 3> point;
     std::array<double, 3> dist_vec;
-    xt::xtensor<double, 2> master_coords({num_facet_dofs, std::size_t(3)});
+    std::vector<double> master_coords(num_facet_dofs * 3);
 
     // Pack gap function for each quadrature point on each facet
     std::vector<PetscScalar> c(num_facets * num_q_point * gdim, 0.0);
@@ -693,10 +691,13 @@ public:
       int offset = (int)i * cstride;
       for (std::size_t q = 0; q < num_q_point; ++q)
       {
+
+        // FIXME: should probably just pad all quadrature points with zeros
+        // when they are pushed forward
         // Get quadrature points in physical space for the ith facet, qth
         // quadrature point
         for (int k = 0; k < gdim; k++)
-          point(0, k) = qp_span(i, q, k);
+          point[k] = qp_span(i, q, k);
 
         // Get the geometry dofs for the ith facet, qth quadrature point
         const std::span<const int> master_facet
@@ -741,7 +742,6 @@ public:
     const int gdim = mesh->geometry().dim(); // geometrical dimension
     const dolfinx::graph::AdjacencyList<int>& x_dofmap
         = mesh->geometry().dofmap();
-    std::span<const double> mesh_geometry = mesh->geometry().x();
     std::shared_ptr<const dolfinx::fem::FiniteElement> element = _V->element();
     const std::uint32_t bs = element->block_size();
     const std::size_t ndofs = (std::size_t)element->space_dimension() / bs;
@@ -812,8 +812,6 @@ public:
             = std::span(perm.data() + offsets[j], offsets[j + 1] - offsets[j]);
         // Extract local dofs
         assert(linked_cell < x_dofmap.num_nodes());
-        auto x_dofs = x_dofmap.links(linked_cell);
-        const std::size_t num_dofs_g = x_dofs.size();
         auto qp = std::span(q_points.data(), indices.size() * gdim);
         mdspan2_t qp_j(qp.data(), indices.size(), gdim);
         // Compute Pi(x) form points x and gap funtion Pi(x) - x
@@ -824,26 +822,20 @@ public:
             qp_j(l, k) = qp_span(i, ind, k)
                          + gap[i * gdim * num_q_points + ind * gdim + k];
         }
-        xt::xtensor<double, 2> coordinate_dofs
-            = xt::zeros<double>({num_dofs_g, std::size_t(gdim)});
-        for (std::size_t k = 0; k < num_dofs_g; ++k)
-        {
-          std::copy_n(std::next(mesh_geometry.begin(), 3 * x_dofs[k]), gdim,
-                      std::next(coordinate_dofs.begin(), k * gdim));
-        }
 
         // Compute values of basis functions for all y = Pi(x) in qp
         std::array<std::size_t, 4> b_shape
             = evaluate_basis_shape(*V_sub, indices.size(), 0);
-        if (b_shape[3] > 1)
+        if (b_shape.back() > 1)
           throw std::invalid_argument(
               "pack_test_functions assumes values size 1");
-        xt::xtensor<double, 4> basis_values(b_shape);
-        std::fill(basis_values.begin(), basis_values.end(), 0);
+        std::vector<double> basis_valuesb(std::reduce(
+            b_shape.cbegin(), b_shape.cend(), 1, std::multiplies()));
+        std::fill(basis_valuesb.begin(), basis_valuesb.end(), 0);
         cells.resize(indices.size());
         std::fill(cells.begin(), cells.end(), linked_cell);
-        evaluate_basis_functions(*V_sub, qp, cells, basis_values, 0);
-
+        evaluate_basis_functions(*V_sub, qp, cells, basis_valuesb, 0);
+        cmdspan4_t basis_values(basis_valuesb.data(), b_shape);
         // Insert basis function values into c
         for (std::size_t k = 0; k < ndofs; k++)
           for (std::size_t q = 0; q < indices.size(); ++q)
@@ -909,15 +901,15 @@ public:
 
     std::array<std::size_t, 4> b_shape
         = evaluate_basis_shape(*V_sub, num_facets * num_q_points, 0);
-    xt::xtensor<double, 4> basis_values(b_shape);
-    std::fill(basis_values.begin(), basis_values.end(), 0);
+    std::vector<double> basis_valuesb(
+        std::reduce(b_shape.begin(), b_shape.end(), 1, std::multiplies()));
     std::vector<std::int32_t> cells(num_facets * num_q_points, -1);
     {
       // Copy function from parent mesh
       submesh.copy_function(*u, u_sub);
 
-      xt::xtensor<double, 2> points
-          = xt::zeros<double>({num_facets * num_q_points, gdim});
+      std::vector<double> pointsb(num_facets * num_q_points * gdim);
+      mdspan3_t points(pointsb.data(), num_facets, num_q_points, gdim);
       for (std::size_t i = 0; i < num_facets; ++i)
       {
         auto links = map->links((int)i);
@@ -930,16 +922,16 @@ public:
           cells[row + q] = linked_pair.front();
           for (std::size_t j = 0; j < gdim; ++j)
           {
-            points(row + q, j)
+            points(row, q, j)
                 = qp_span(i, q, j) + gap[row * gdim + q * gdim + j];
           }
         }
       }
 
-      evaluate_basis_functions(*u_sub.function_space(), points, cells,
-                               basis_values, 0);
+      evaluate_basis_functions(*u_sub.function_space(), pointsb, cells,
+                               basis_valuesb, 0);
     }
-    std::cout << basis_values << "\n";
+
     const std::span<const PetscScalar>& u_coeffs = u_sub.x()->array();
 
     // Output vector
@@ -947,11 +939,12 @@ public:
 
     // Create work vector for expansion coefficients
     const auto cstride = int(num_q_points * bs_element);
-    const std::size_t num_basis_functions = basis_values.shape(2);
-    const std::size_t value_size = basis_values.shape(3);
+    const std::size_t num_basis_functions = b_shape[2];
+    const std::size_t value_size = b_shape[3];
     if (value_size > 1)
       throw std::invalid_argument("pack_u_contact assumes values size 1");
     std::vector<PetscScalar> coefficients(num_basis_functions * bs_element);
+    cmdspan4_t basis_values(basis_valuesb.data(), b_shape);
     for (std::size_t i = 0; i < num_facets; ++i)
     {
       for (std::size_t q = 0; q < num_q_points; ++q)

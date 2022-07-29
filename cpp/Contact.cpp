@@ -646,11 +646,12 @@ dolfinx_contact::Contact::pack_grad_test_functions(
       if (b_shape[3] != 1)
         throw std::invalid_argument(
             "pack_grad_test_functions assumes values size 1");
-      xt::xtensor<double, 4> basis_values(b_shape);
-      std::fill(basis_values.begin(), basis_values.end(), 0);
+      std::vector<double> basis_valuesb(
+          std::reduce(b_shape.cbegin(), b_shape.cend(), 1, std::multiplies()));
+      cmdspan4_t basis_values(basis_valuesb.data(), b_shape);
       cells.resize(indices.size());
       std::fill(cells.begin(), cells.end(), linked_cell);
-      evaluate_basis_functions(*_V, qp, cells, basis_values, 1);
+      evaluate_basis_functions(*_V, qp, cells, basis_valuesb, 1);
       // Insert basis function values into c
       for (std::size_t k = 0; k < ndofs; k++)
         for (std::size_t q = 0; q < indices.size(); ++q)
