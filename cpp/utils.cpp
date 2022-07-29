@@ -405,7 +405,7 @@ void dolfinx_contact::evaluate_basis_functions(
   for (std::size_t p = 0; p < cells.size(); ++p)
   {
     auto _J = stdex::submdspan(J, p, stdex::full_extent, stdex::full_extent);
-    auto _K = stdex::submdspan(J, p, stdex::full_extent, stdex::full_extent);
+    auto _K = stdex::submdspan(K, p, stdex::full_extent, stdex::full_extent);
     /// NOTE: loop size correct for num_derivatives = 0,1
     for (std::size_t j = 0; j < num_derivatives * tdim + 1; ++j)
     {
