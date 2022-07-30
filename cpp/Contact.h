@@ -281,7 +281,8 @@ public:
 
       // Extract reference to quadrature weights for the local facet
       std::span<const double> _weights(kd.q_weights());
-      auto weights = _weights.subspan(q_offset[0], q_offset[1] - q_offset[0]);
+      const int num_points = q_offset.back() - q_offset.front();
+      auto weights = _weights.subspan(q_offset.front(), num_points);
 
       // Temporary data structures used inside quadrature loop
       std::array<double, 3> n_surf = {0, 0, 0};
@@ -291,7 +292,6 @@ public:
       mdspan2_t tr(trb.data(), ndofs_cell, gdim);
 
       // Loop over quadrature points
-      const int num_points = q_offset[1] - q_offset[0];
       for (int q = 0; q < num_points; q++)
       {
         const std::size_t q_pos = q_offset[0] + q;
@@ -299,7 +299,7 @@ public:
         // Update Jacobian and physical normal
         detJ = kd.update_jacobian(q, facet_index, detJ, J, K, J_tot,
                                   detJ_scratch, coord);
-        kd.update_normal(n_phys, K, facet_index);
+        kd.update_normal(std::span(n_phys.data(), gdim), K, facet_index);
         double n_dot = 0;
         double gap = 0;
         // For closest point projection the gap function is given by
@@ -312,7 +312,8 @@ public:
           n_dot += n_phys[i] * n_surf[i];
           gap += c[kd.offsets(3) + q * gdim + i] * n_surf[i];
         }
-        compute_normal_strain_basis(epsn, tr, K, dphi, n_surf, n_phys, q_pos);
+        compute_normal_strain_basis(epsn, tr, K, dphi, n_surf,
+                                    std::span(n_phys.data(), gdim), q_pos);
         // compute tr(eps(u)), epsn at q
         double tr_u = 0;
         double epsn_u = 0;
@@ -428,7 +429,8 @@ public:
       cmdspan3_t dphi = kd.dphi();
       cmdspan2_t phi = kd.phi();
       std::span<const double> _weights(kd.q_weights());
-      auto weights = _weights.subspan(q_offset[0], q_offset[1] - q_offset[0]);
+      const int num_points = q_offset.back() - q_offset.front();
+      auto weights = _weights.subspan(q_offset.front(), num_points);
       std::array<double, 3> n_surf = {0, 0, 0};
       std::vector<double> epsnb(ndofs_cell * gdim);
       mdspan2_t epsn(epsnb.data(), ndofs_cell, gdim);
@@ -436,14 +438,13 @@ public:
       mdspan2_t tr(trb.data(), ndofs_cell, gdim);
 
       // Loop over quadrature points
-      const int num_points = q_offset[1] - q_offset[0];
       for (int q = 0; q < num_points; q++)
       {
-        const std::size_t q_pos = q_offset[0] + q;
+        const std::size_t q_pos = q_offset.front() + q;
         // Update Jacobian and physical normal
         detJ = kd.update_jacobian(q, facet_index, detJ, J, K, J_tot,
                                   detJ_scratch, coord);
-        kd.update_normal(n_phys, K, facet_index);
+        kd.update_normal(std::span(n_phys.data(), gdim), K, facet_index);
 
         double n_dot = 0;
         double gap = 0;
@@ -457,7 +458,8 @@ public:
           gap += c[kd.offsets(3) + q * gdim + i] * n_surf[i];
         }
 
-        compute_normal_strain_basis(epsn, tr, K, dphi, n_surf, n_phys, q_pos);
+        compute_normal_strain_basis(epsn, tr, K, dphi, n_surf,
+                                    std::span(n_phys.data(), gdim), q_pos);
 
         // compute tr(eps(u)), epsn at q
         double tr_u = 0;
