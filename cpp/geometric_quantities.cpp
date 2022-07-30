@@ -46,7 +46,7 @@ void dolfinx_contact::pull_back_nonaffine(
   for (k = 0; k < max_it; ++k)
   {
     // Tabulate coordinate basis at Xk
-    cmap.tabulate(1, Xk, {1, tdim}, basis_span);
+    cmap.tabulate(1, Xk.subspan(0, tdim), {1, tdim}, basis_span);
 
     // x = cell_geometry * phi
     auto phi = stdex::submdspan(basis_values, 0, 0, stdex::full_extent, 0);
@@ -74,9 +74,9 @@ void dolfinx_contact::pull_back_nonaffine(
                    Xk.begin(), [](double a, double b) { return a + b; });
 
     // Compute dot(dX, dX)
-    auto dX_squared
-        = std::transform_reduce(dX.begin(), dX.end(), 0.0, std::plus<double>(),
-                                [](const auto v) { return v * v; });
+    auto dX_squared = std::transform_reduce(
+        dX.begin(), std::next(dX.begin(), tdim), 0.0, std::plus<double>(),
+        [](const auto v) { return v * v; });
     if (std::sqrt(dX_squared) < tol)
       break;
   }
@@ -97,7 +97,7 @@ std::array<double, 3> dolfinx_contact::push_forward_facet_normal(
   const std::array<std::size_t, 4> c_shape = cmap.tabulate_shape(1, 1);
   const std::size_t basis_size
       = std::reduce(c_shape.cbegin(), c_shape.cend(), 1, std::multiplies{});
-  assert(work_array.size() >= basis_size + 2 * gdim * tdim);
+  assert(work_array.size() >= 3 + basis_size + 2 * gdim * tdim);
 
   // Use work-array for views
   std::fill(work_array.begin(), std::next(work_array.begin(), gdim * tdim + 9),

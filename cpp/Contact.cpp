@@ -300,11 +300,12 @@ dolfinx_contact::Contact::pack_ny(int pair,
       = submesh.facet_map();
   std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> map
       = _facet_maps[pair];
-  const std::size_t num_facets = _cell_facet_pairs[contact_pair[0]].size() / 2;
+  const std::size_t num_facets
+      = _cell_facet_pairs[contact_pair.front()].size() / 2;
   const std::size_t num_q_points
       = _quadrature_rule->offset()[1] - _quadrature_rule->offset()[0];
-  mdspan3_t qp_span(_qp_phys[contact_pair[0]].data(), num_facets, num_q_points,
-                    gdim);
+  mdspan3_t qp_span(_qp_phys[contact_pair.front()].data(), num_facets,
+                    num_q_points, gdim);
 
   // Needed for pull_back in get_facet_normals
   std::vector<double> work_array
@@ -322,21 +323,22 @@ dolfinx_contact::Contact::pack_ny(int pair,
   for (std::size_t i = 0; i < num_facets; ++i)
   {
 
-    const std::span<const int> links = map->links((int)i);
+    auto links = map->links((int)i);
     assert(links.size() == num_q_points);
     for (std::size_t q = 0; q < num_q_points; ++q)
     {
 
       // Extract linked cell and facet at quadrature point q
-      const std::span<const int> linked_pair = facet_map->links(links[q]);
-      std::int32_t linked_cell = linked_pair[0];
+      auto linked_pair = facet_map->links(links[q]);
+      assert(linked_pair.size() == 2);
+      std::int32_t linked_cell = linked_pair.front();
       // Compute Pi(x) from x, and gap = Pi(x) - x
       for (int k = 0; k < gdim; ++k)
         point[k]
             = qp_span(i, q, k) + gap[i * gdim * num_q_points + q * gdim + k];
 
       // Extract local dofs
-      const std::span<const int> x_dofs = x_dofmap.links(linked_cell);
+      auto x_dofs = x_dofmap.links(linked_cell);
       assert(num_dofs_g == (std::size_t)x_dofmap.num_links(linked_cell));
 
       for (std::size_t j = 0; j < x_dofs.size(); ++j)
@@ -350,7 +352,7 @@ dolfinx_contact::Contact::pack_ny(int pair,
       //       if the cells are sorted like in pack_test_functions
       assert(linked_cell >= 0);
       normal = dolfinx_contact::push_forward_facet_normal(
-          work_array, point, gdim, tdim, coord, linked_pair[1], cmap,
+          work_array, point, gdim, tdim, coord, linked_pair.back(), cmap,
           reference_normals);
       // Copy normal into c
       std::copy_n(normal.begin(), gdim,

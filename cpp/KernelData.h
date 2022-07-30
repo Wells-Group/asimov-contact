@@ -132,7 +132,7 @@ public:
   /// point: J: physical cell -> reference cell (and its inverse) J_tot:
   /// physical facet -> reference facet
   /// @param[in] facet_index - The index of the facet local to the cell
-  /// @param[in,out] J - Jacboian between reference cell and physical cell
+  /// @param[in,out] J - Jacobian between reference cell and physical cell
   /// @param[in,out] K - inverse of J
   /// @param[in,out] J_tot - J_f*J
   /// @param[in,out] detJ_scratch - Working memory, min size (2*gdim*tdim)
