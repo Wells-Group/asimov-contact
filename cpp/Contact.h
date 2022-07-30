@@ -786,7 +786,6 @@ public:
       const std::span<const int> links = map->links((int)i);
       assert(links.size() == num_q_points);
 
-      // Compute Pi(x) form points x and gap funtion Pi(x) - x
       for (std::size_t j = 0; j < num_q_points; j++)
       {
         const std::span<const int> linked_pair = facet_map->links(links[j]);
