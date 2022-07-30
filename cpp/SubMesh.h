@@ -13,7 +13,6 @@
 #include <dolfinx/fem/utils.h>
 #include <dolfinx/mesh/Mesh.h>
 #include <dolfinx/mesh/MeshTags.h>
-#include <xtensor/xadapt.hpp>
 
 namespace dolfinx_contact
 {
@@ -31,7 +30,7 @@ public:
   /// where cell is the index of the cell local to the process and facet is
   /// the facet index within the cell. The data is flattened row-major.
   SubMesh(std::shared_ptr<const dolfinx::mesh::Mesh> mesh,
-          xtl::span<const std::int32_t> facets);
+          std::span<const std::int32_t> facets);
 
   // Return mesh
   std::shared_ptr<const dolfinx::mesh::Mesh> mesh() const { return _mesh; }

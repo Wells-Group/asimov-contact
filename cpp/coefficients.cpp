@@ -89,7 +89,7 @@ dolfinx_contact::pack_coefficient_quadrature(
   std::vector<PetscScalar> coefficients(num_active_entities * cstride, 0.0);
 
   // Get the coeffs to pack
-  const xtl::span<const double> data = coeff->x()->array();
+  const std::span<const double> data = coeff->x()->array();
 
   // Get dofmap info
   const dolfinx::fem::DofMap* dofmap = coeff->function_space()->dofmap().get();
@@ -97,14 +97,14 @@ dolfinx_contact::pack_coefficient_quadrature(
 
   // Get dof transformations
   const bool needs_dof_transformations = element->needs_dof_transformations();
-  xtl::span<const std::uint32_t> cell_info;
+  std::span<const std::uint32_t> cell_info;
   if (needs_dof_transformations)
   {
     mesh->topology_mutable().create_entity_permutations();
     cell_info = topology.get_cell_permutation_info();
   }
-  const std::function<void(const xtl::span<PetscScalar>&,
-                           const xtl::span<const std::uint32_t>&, std::int32_t,
+  const std::function<void(const std::span<PetscScalar>&,
+                           const std::span<const std::uint32_t>&, std::int32_t,
                            int)>
       transformation = element->get_dof_transformation_function<PetscScalar>();
 
@@ -119,7 +119,7 @@ dolfinx_contact::pack_coefficient_quadrature(
         = mesh->geometry().dofmap();
     const dolfinx::fem::CoordinateElement& cmap = geometry.cmap();
     const std::size_t num_dofs_g = cmap.dim();
-    xtl::span<const double> x_g = geometry.x();
+    std::span<const double> x_g = geometry.x();
 
     // Tabulate coordinate basis to compute Jacobian
     std::array<std::size_t, 4> c_shape = cmap.tabulate_shape(1, num_points);
@@ -358,7 +358,7 @@ std::vector<PetscScalar> dolfinx_contact::pack_circumradius(
   // Get geometry data
   const dolfinx::graph::AdjacencyList<std::int32_t>& x_dofmap
       = geometry.dofmap();
-  xtl::span<const double> x_g = geometry.x();
+  std::span<const double> x_g = geometry.x();
 
   // Prepare temporary data structures data structures
   const int gdim = geometry.dim();

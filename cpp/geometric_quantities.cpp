@@ -5,8 +5,6 @@
 // SPDX-License-Identifier:    MIT
 
 #include "geometric_quantities.h"
-#include <xtensor/xbuilder.hpp>
-#include <xtensor/xtensor.hpp>
 
 using namespace dolfinx_contact;
 
@@ -142,7 +140,7 @@ std::array<double, 3> dolfinx_contact::push_forward_facet_normal(
   std::array<double, 3> normal = {0, 0, 0};
   auto facet_normal
       = stdex::submdspan(reference_normals, facet_index, stdex::full_extent);
-  physical_facet_normal(xtl::span(normal.data(), gdim), K, facet_normal);
+  physical_facet_normal(std::span(normal.data(), gdim), K, facet_normal);
   return normal;
 }
 

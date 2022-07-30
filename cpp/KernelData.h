@@ -17,7 +17,6 @@
 #include <dolfinx/fem/utils.h>
 #include <dolfinx/mesh/Mesh.h>
 #include <dolfinx/mesh/MeshTags.h>
-#include <xtensor/xadapt.hpp>
 
 namespace dolfinx_contact
 {

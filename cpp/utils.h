@@ -18,7 +18,6 @@
 #include <dolfinx/fem/petsc.h>
 #include <dolfinx/fem/utils.h>
 #include <dolfinx/mesh/Mesh.h>
-#include <xtensor/xtensor.hpp>
 namespace dolfinx_contact
 {
 
@@ -33,7 +32,7 @@ enum class Kernel
 // num_dofs_per_link
 template <typename T>
 using kernel_fn
-    = std::function<void(std::vector<std::vector<T>>&, xtl::span<const T>,
+    = std::function<void(std::vector<std::vector<T>>&, std::span<const T>,
                          const T*, const double*, const int,
                          const std::size_t)>;
 
@@ -116,14 +115,6 @@ void evaluate_basis_functions(const dolfinx::fem::FunctionSpace& V,
                               std::span<const std::int32_t> cells,
                               std::span<double> basis_values,
                               std::size_t num_derivatives);
-
-/// Compute physical normal
-/// @param[in] n_ref facet normal on reference element
-/// @param[in] K inverse Jacobian
-/// @param[in,out] n_phys facet normal on physical element
-void compute_normal(const xt::xtensor<double, 1>& n_ref,
-                    const xt::xtensor<double, 2>& K,
-                    xt::xarray<double>& n_phys);
 
 /// Compute the following jacobians on a given facet:
 /// J: physical cell -> reference cell (and its inverse)

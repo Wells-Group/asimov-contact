@@ -11,7 +11,7 @@ using namespace dolfinx_contact;
 
 dolfinx_contact::SubMesh::SubMesh(
     std::shared_ptr<const dolfinx::mesh::Mesh> mesh,
-    xtl::span<const std::int32_t> cell_facet_pairs)
+    std::span<const std::int32_t> cell_facet_pairs)
 {
   const int tdim = mesh->topology().dim(); // topological dimension
 

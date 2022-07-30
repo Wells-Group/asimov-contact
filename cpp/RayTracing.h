@@ -542,7 +542,7 @@ compute_ray(const dolfinx::mesh::Mesh& mesh,
   const dolfinx::mesh::Geometry& geometry = mesh.geometry();
   const dolfinx::graph::AdjacencyList<std::int32_t>& x_dofmap
       = geometry.dofmap();
-  xtl::span<const double> x_g = geometry.x();
+  std::span<const double> x_g = geometry.x();
   const std::size_t num_dofs_g = cmap.dim();
   std::vector<double> coordinate_dofs(num_dofs_g * gdim);
 
