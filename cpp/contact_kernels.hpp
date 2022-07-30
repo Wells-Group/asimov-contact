@@ -76,23 +76,23 @@ kernel_fn<T> generate_contact_kernel(
     std::shared_ptr<const dolfinx::fem::FiniteElement> coeff_element
         = coeffs[i]->function_space()->element();
     assert(coeff_element);
-    const std::array<std::size_t, 4> coeff_shape
-        = coeff_element->basix_element().tabulate_shape(1, num_quadrature_pts);
-    if (coeff_shape.back() != 1)
+    const std::array<std::size_t, 4> coeff_i_shape
+        = coeff_element->basix_element().tabulate_shape(0, num_quadrature_pts);
+    if (coeff_i_shape.back() != 1)
     {
       throw std::invalid_argument(
           "Kernel does not support coefficients with value size!=1");
     }
     std::vector<double> coeff_basisb(std::reduce(
-        coeff_shape.cbegin(), coeff_shape.cend(), 1, std::multiplies{}));
+        coeff_i_shape.cbegin(), coeff_i_shape.cend(), 1, std::multiplies{}));
     coeff_element->tabulate(coeff_basisb, q_points, {num_quadrature_pts, tdim},
-                            1);
-    cmdspan4_t coeff_basis(coeff_basisb.data(), coeff_shape);
+                            0);
+    cmdspan4_t coeff_basis(coeff_basisb.data(), coeff_i_shape);
     auto basis = stdex::submdspan(coeff_basis_valuesm, stdex::full_extent,
                                   std::pair{kd.offsets(i), kd.offsets(i + 1)});
-    assert(kd.offsets(i + 1) - kd.offsets(i) == coeff_shape[2]);
-    for (std::size_t k = 0; k < basis.extent(1); ++k)
-      for (std::size_t l = 0; l < basis.extent(2); ++l)
+    assert(kd.offsets(i + 1) - kd.offsets(i) == coeff_i_shape[2]);
+    for (std::size_t k = 0; k < basis.extent(0); ++k)
+      for (std::size_t l = 0; l < basis.extent(1); ++l)
         basis(k, l) = coeff_basis(0, k, l, 0);
   }
 
@@ -118,14 +118,15 @@ kernel_fn<T> generate_contact_kernel(
             const double* coordinate_dofs, const int facet_index,
             [[maybe_unused]] const std::size_t num_links)
   {
-    // Retrieve some data form kd
+    // Retrieve some data from kd
     const std::array<std::int32_t, 2> q_offset
         = {kd.qp_offsets(facet_index), kd.qp_offsets(facet_index + 1)};
     const std::size_t bs = kd.bs();
     const std::uint32_t ndofs_cell = kd.ndofs_cell();
 
-    // Reshape coordinate dofs to two dimensional array
+    // Reshape coordinate dofs to two-dimensional array
     cmdspan2_t coord(coordinate_dofs, kd.num_coordinate_dofs(), 3);
+
     // Compute Jacobian and determinant at first quadrature point
     std::array<double, 9> Jb;
     mdspan2_t J(Jb.data(), gdim, tdim);
@@ -138,6 +139,7 @@ kernel_fn<T> generate_contact_kernel(
 
     // Normal vector on physical facet at a single quadrature point
     std::array<double, 3> n_phys;
+
     // Pre-compute jacobians and normals for affine meshes
     if (kd.affine())
     {
@@ -169,7 +171,8 @@ kernel_fn<T> generate_contact_kernel(
     double gamma_inv = c[c_offset + kd.offsets(3)] / w[0];
     double theta = w[1];
     std::span<const double> _weights(kd.q_weights());
-    auto weights = _weights.subspan(q_offset[0], q_offset[1] - q_offset[0]);
+    const int num_points = q_offset.back() - q_offset.front();
+    auto weights = _weights.subspan(q_offset.front(), num_points);
 
     // Temporary work arrays
     std::vector<double> epsnb((kd.offsets(1) - kd.offsets(0)) * gdim);
@@ -183,11 +186,11 @@ kernel_fn<T> generate_contact_kernel(
     // Extract reference to the tabulated basis function
     cmdspan2_t phi = kd.phi();
     cmdspan3_t dphi = kd.dphi();
+
     // Loop over quadrature points
-    const int num_points = q_offset[1] - q_offset[0];
     for (std::size_t q = 0; q < num_points; q++)
     {
-      const std::size_t q_pos = q_offset[0] + q;
+      const std::size_t q_pos = q_offset.front() + q;
 
       // Update Jacobian and physical normal
       detJ = std::fabs(kd.update_jacobian(q, facet_index, detJ, J, K, J_tot,
@@ -309,7 +312,6 @@ kernel_fn<T> generate_contact_kernel(
     {
       detJ = kd.compute_first_facet_jacobian(facet_index, J, K, J_tot,
                                              detJ_scratch, coord);
-
       dolfinx_contact::physical_facet_normal(
           std::span(n_phys.data(), gdim), K,
           stdex::submdspan(kd.facet_normals(), facet_index,
@@ -318,9 +320,6 @@ kernel_fn<T> generate_contact_kernel(
 
     // Retrieve normal of rigid surface if constant
     std::array<double, 3> n_surf = {0, 0, 0};
-
-    // FIXME: Code duplication from previous kernel, and should be made into a
-    // lambda function
     double n_dot = 0;
     if (constant_normal)
     {
@@ -334,13 +333,15 @@ kernel_fn<T> generate_contact_kernel(
         n_dot += n_phys[i] * n_surf[i];
       }
     }
+
     int c_offset = (bs - 1) * kd.offsets(1);
     // This is gamma/h
     double gamma = w[0] / c[c_offset + kd.offsets(3)];
     double gamma_inv = c[c_offset + kd.offsets(3)] / w[0];
     double theta = w[1];
     std::span<const double> _weights(kd.q_weights());
-    auto weights = _weights.subspan(q_offset[0], q_offset[1] - q_offset[0]);
+    const int num_points = q_offset.back() - q_offset.front();
+    auto weights = _weights.subspan(q_offset.front(), num_points);
 
     // Temporary work arrays
     std::vector<double> epsnb((kd.offsets(1) - kd.offsets(0)) * gdim);
@@ -354,11 +355,11 @@ kernel_fn<T> generate_contact_kernel(
     // Extract reference to the tabulated basis function
     cmdspan2_t phi = kd.phi();
     cmdspan3_t dphi = kd.dphi();
+
     // Loop over quadrature points
-    const int num_points = q_offset[1] - q_offset[0];
     for (std::size_t q = 0; q < num_points; q++)
     {
-      const std::size_t q_pos = q_offset[0] + q;
+      const std::size_t q_pos = q_offset.front() + q;
 
       // Update Jacobian and physical normal
       detJ = std::fabs(kd.update_jacobian(q, facet_index, detJ, J, K, J_tot,
