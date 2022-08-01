@@ -25,9 +25,9 @@ def compare_matrices(a: PETSc.Mat, b: PETSc.Mat, atol: float = 1e-12):
     """
     # Create scipy CSR matrices
     ai, aj, av = a.getValuesCSR()
-    a_sp = scipy.sparse.csr_matrix((av, aj, ai), shape=A.getSize())
+    a_sp = scipy.sparse.csr_matrix((av, aj, ai), shape=a.getSize())
     bi, bj, bv = b.getValuesCSR()
-    b_sp = scipy.sparse.csr_matrix((bv, bj, bi), shape=B.getSize())
+    b_sp = scipy.sparse.csr_matrix((bv, bj, bi), shape=b.getSize())
 
     # Compare matrices
     diff = numpy.abs(a_sp - b_sp)
