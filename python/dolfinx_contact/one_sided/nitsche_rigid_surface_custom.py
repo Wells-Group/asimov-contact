@@ -174,7 +174,7 @@ def nitsche_rigid_surface_custom(mesh: _mesh.Mesh, mesh_data: Tuple[_cpp.mesh.Me
     # Pack celldiameter on facets
     surface_cells = np.unique(integral_entities[:, 0])
     h_int = _fem.Function(V2)
-    expr = _fem.Expression(h, V2.element.interpolation_points)
+    expr = _fem.Expression(h, V2.element.interpolation_points())
     h_int.interpolate(expr, surface_cells)
     h_facets = dolfinx_cuas.pack_coefficients([h_int], integral_entities)
 

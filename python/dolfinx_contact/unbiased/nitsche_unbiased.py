@@ -161,7 +161,7 @@ def nitsche_unbiased(ufl_form: ufl.Form, u: _fem.Function, markers: list[_cpp.me
     with _common.Timer("~Contact: Compute and pack celldiameter"):
         surface_cells = np.unique(np.hstack([entities[i][:, 0] for i in range(len(contact_pairs))]))
         h_int = _fem.Function(V2)
-        expr = _fem.Expression(h, V2.element.interpolation_points)
+        expr = _fem.Expression(h, V2.element.interpolation_points())
         h_int.interpolate(expr, surface_cells)
         for i in range(len(contact_pairs)):
             h_packed.append(dolfinx_cuas.pack_coefficients([h_int], entities[i]))
