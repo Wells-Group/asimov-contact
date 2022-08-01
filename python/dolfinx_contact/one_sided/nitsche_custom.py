@@ -181,21 +181,21 @@ def nitsche_custom(mesh: dmesh.Mesh, mesh_data: Tuple[_cpp.mesh.MeshTags_int32, 
     kernel_J = dolfinx_contact.cpp.generate_contact_kernel(
         V._cpp_object, dolfinx_contact.Kernel.Jac, q_rule, [u._cpp_object, mu2._cpp_object, lmbda2._cpp_object])
 
-    def assemble_jacobian(x, A, cf):
+    def assemble_jacobian(x, a_mat, cf):
         u.vector[:] = x.array
         u_packed = dolfinx_cuas.pack_coefficients([u._cpp_object], integral_entities)
         c = np.hstack([u_packed, coeffs])
-        A.zeroEntries()
-        contact.assemble_matrix(A, [], 0, kernel_J, c, consts)
-        _fem.petsc.assemble_matrix(A, a_custom)
-        A.assemble()
+        a_mat.zeroEntries()
+        contact.assemble_matrix(a_mat, [], 0, kernel_J, c, consts)
+        _fem.petsc.assemble_matrix(a_mat, a_custom)
+        a_mat.assemble()
 
     # Setup Newton-solver
     def update_cf(x, cf):
         pass
-    A = _fem.petsc.create_matrix(a_custom)
+    a_mat = _fem.petsc.create_matrix(a_custom)
     b = _fem.petsc.create_vector(L_custom)
-    solver = dolfinx_contact.NewtonSolver(mesh.comm, A, b, np.empty((0, 0)))
+    solver = dolfinx_contact.NewtonSolver(mesh.comm, a_mat, b, np.empty((0, 0)))
     solver.set_jacobian(assemble_jacobian)
     solver.set_residual(assemble_residual)
     solver.set_coefficients(update_cf)
@@ -204,7 +204,7 @@ def nitsche_custom(mesh: dmesh.Mesh, mesh_data: Tuple[_cpp.mesh.MeshTags_int32, 
 
     # Create rigid motion null-space
     null_space = rigid_motions_nullspace(V)
-    solver.A.setNearNullSpace(null_space)
+    solver.a_mat.setNearNullSpace(null_space)
 
     def _u_initial(x):
         values = np.zeros((mesh.geometry.dim, x.shape[1]))

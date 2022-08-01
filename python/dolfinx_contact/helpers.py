@@ -19,18 +19,18 @@ __all__ = ["compare_matrices", "lame_parameters", "epsilon", "sigma_func", "R_mi
            "rigid_motions_nullspace", "rigid_motions_nullspace_subdomains", "weak_dirichlet"]
 
 
-def compare_matrices(A: PETSc.Mat, B: PETSc.Mat, atol: float = 1e-12):
+def compare_matrices(a: PETSc.Mat, b: PETSc.Mat, atol: float = 1e-12):
     """
     Helper for comparing two PETSc matrices
     """
     # Create scipy CSR matrices
-    ai, aj, av = A.getValuesCSR()
-    A_sp = scipy.sparse.csr_matrix((av, aj, ai), shape=A.getSize())
-    bi, bj, bv = B.getValuesCSR()
-    B_sp = scipy.sparse.csr_matrix((bv, bj, bi), shape=B.getSize())
+    ai, aj, av = a.getValuesCSR()
+    a_sp = scipy.sparse.csr_matrix((av, aj, ai), shape=A.getSize())
+    bi, bj, bv = b.getValuesCSR()
+    b_sp = scipy.sparse.csr_matrix((bv, bj, bi), shape=B.getSize())
 
     # Compare matrices
-    diff = numpy.abs(A_sp - B_sp)
+    diff = numpy.abs(a_sp - b_sp)
     assert diff.max() <= atol
 
 
