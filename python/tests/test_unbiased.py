@@ -482,7 +482,7 @@ def test_contact_kernels(ct, gap, q_deg, theta, tied):
     A1.zeroEntries()
     contact.assemble_matrix(A1, [], 0, kernel_jac, c_0, consts)
     contact.assemble_matrix(A1, [], 1, kernel_jac, c_1, consts)
-    A1.assemble(0)
+    A1.assemble()
 
     # Retrieve data necessary for comparison
     tdim = mesh_ufl.topology.dim
@@ -509,7 +509,6 @@ def test_contact_kernels(ct, gap, q_deg, theta, tied):
         b2 = _fem.petsc.create_vector(F2)
         b2.zeroEntries()
         _fem.petsc.assemble_vector(b2, F2)
-
         assert(np.allclose(b1.array[ind_cg], b2.array[ind_dg]))
 
         # Contact terms formulated using ufl consistent with nitsche_ufl.py

@@ -530,6 +530,7 @@ dolfinx_contact::get_update_normal(const dolfinx::fem::CoordinateElement& cmap)
     return [](std::span<double> n, cmdspan2_t K, cmdspan2_t n_ref,
               const std::size_t local_index)
     {
+      std::fill(n.begin(), n.end(), 0);
       auto n_f = stdex::submdspan(n_ref, local_index, stdex::full_extent);
       dolfinx_contact::physical_facet_normal(n, K, n_f);
     };

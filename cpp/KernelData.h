@@ -161,7 +161,6 @@ public:
   void update_normal(std::span<double> n, cmdspan2_t K,
                      const std::size_t local_index) const
   {
-    std::fill(n.begin(), n.end(), 0);
     return _update_normal(
         n, K, cmdspan2_t(_facet_normals.data(), _normals_shape), local_index);
   }

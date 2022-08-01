@@ -251,7 +251,7 @@ public:
       mdspan2_t K(Kb.data(), tdim, gdim);
       std::array<double, 6> J_totb;
       mdspan2_t J_tot(J_totb.data(), gdim, tdim - 1);
-      double detJ;
+      double detJ = 0;
       std::array<double, 18> detJ_scratch;
 
       // Normal vector on physical facet at a single quadrature point

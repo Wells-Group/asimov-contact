@@ -89,12 +89,11 @@ void physical_facet_normal(E&& physical_normal, F&& K, G&& reference_normal)
   assert(physical_normal.size() == K.extent(1));
   const std::size_t tdim = K.extent(0);
   const std::size_t gdim = K.extent(1);
+  std::fill(physical_normal.begin(), physical_normal.end(), 0);
   for (std::size_t i = 0; i < gdim; i++)
-  {
-    // FIXME: Replace with math-dot
     for (std::size_t j = 0; j < tdim; j++)
       physical_normal[i] += K(j, i) * reference_normal[j];
-  }
+
   // Normalize vector
   double norm = 0;
   std::for_each(physical_normal.begin(), physical_normal.end(),
