@@ -142,7 +142,6 @@ def test_contact_kernel(theta, gamma, dim, gap):
         F += 1 / gammah * R_minus(sigma_n(u) + gammah * (gap - ufl.dot(u, (-n_2)))) * \
             (theta * sigma_n(v) - gammah * ufl.dot(v, (-n_2))) * ds(bottom_value)
 
-        u.interpolate(_u_initial)
         L = dolfinx.fem.form(F)
         b = dolfinx.fem.petsc.create_vector(L)
 

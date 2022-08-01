@@ -139,7 +139,7 @@ def nitsche_meshtie(lhs: ufl.Form, rhs: _fem.Function, u: _fem.Function, markers
     with _common.Timer("~Contact " + timing_str + ": Compute and pack celldiameter"):
         surface_cells = np.unique(np.hstack([entities[i][:, 0] for i in range(len(surface_pairs))]))
         h_int = _fem.Function(V2)
-        expr = _fem.Expression(h, V2.element.interpolation_points)
+        expr = _fem.Expression(h, V2.element.interpolation_points())
         h_int.interpolate(expr, surface_cells)
         for i in range(len(surface_pairs)):
             h_packed.append(dolfinx_contact.cpp.pack_coefficient_quadrature(

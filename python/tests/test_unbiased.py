@@ -318,7 +318,7 @@ def create_contact_data(V, u, quadrature_degree, lmbda, mu, facets_cg, tied=Fals
     h = ufl.CellDiameter(mesh)
     surface_cells = np.unique(np.hstack([entities_0[:, 0], entities_1[:, 0]]))
     h_int = _fem.Function(V2)
-    expr = _fem.Expression(h, V2.element.interpolation_points)
+    expr = _fem.Expression(h, V2.element.interpolation_points())
     h_int.interpolate(expr, surface_cells)
     h_0 = dolfinx_contact.cpp.pack_coefficient_quadrature(
         h_int._cpp_object, 0, entities_0)
@@ -490,7 +490,7 @@ def test_contact_kernels(ct, gap, q_deg, theta, tied):
     A1.zeroEntries()
     contact.assemble_matrix(A1, [], 0, kernel_jac, c_0, consts)
     contact.assemble_matrix(A1, [], 1, kernel_jac, c_1, consts)
-    A1.assemble(0)
+    A1.assemble()
 
     # Retrieve data necessary for comparison
     tdim = mesh_ufl.topology.dim
@@ -517,7 +517,6 @@ def test_contact_kernels(ct, gap, q_deg, theta, tied):
         b2 = _fem.petsc.create_vector(F2)
         b2.zeroEntries()
         _fem.petsc.assemble_vector(b2, F2)
-
         assert(np.allclose(b1.array[ind_cg], b2.array[ind_dg]))
 
         # Contact terms formulated using ufl consistent with nitsche_ufl.py
