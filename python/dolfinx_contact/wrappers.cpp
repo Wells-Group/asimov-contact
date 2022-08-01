@@ -9,7 +9,7 @@
 #include <caster_petsc.h>
 #include <dolfinx/la/petsc.h>
 #include <dolfinx/mesh/MeshTags.h>
-// #include <dolfinx_contact/Contact.h>
+#include <dolfinx_contact/Contact.h>
 #include <dolfinx_contact/QuadratureRule.h>
 #include <dolfinx_contact/RayTracing.h>
 #include <dolfinx_contact/coefficients.h>
