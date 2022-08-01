@@ -204,7 +204,7 @@ def nitsche_custom(mesh: dmesh.Mesh, mesh_data: Tuple[_cpp.mesh.MeshTags_int32, 
 
     # Create rigid motion null-space
     null_space = rigid_motions_nullspace(V)
-    solver.a_mat.setNearNullSpace(null_space)
+    solver.A.setNearNullSpace(null_space)
 
     def _u_initial(x):
         values = np.zeros((mesh.geometry.dim, x.shape[1]))
