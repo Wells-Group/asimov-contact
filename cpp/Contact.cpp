@@ -166,7 +166,7 @@ Mat dolfinx_contact::Contact::create_petsc_matrix(
     const std::array<int, 2>& contact_pair = _contact_pairs[k];
     std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> facet_map
         = _submeshes[contact_pair[1]].facet_map();
-    const std::vector<std::int32_t>& parent_cells
+    std::span<const std::int32_t> parent_cells
         = _submeshes[contact_pair[1]].parent_cells();
     for (int i = 0; i < (int)_cell_facet_pairs[contact_pair[0]].size(); i += 2)
     {
@@ -402,13 +402,13 @@ void dolfinx_contact::Contact::assemble_matrix(
 
   const std::array<int, 2>& contact_pair = _contact_pairs[pair];
   const std::vector<std::int32_t>& active_facets
-      = _cell_facet_pairs[contact_pair[0]];
+      = _cell_facet_pairs[contact_pair.front()];
   std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> map
       = _facet_maps[pair];
   std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> facet_map
-      = _submeshes[contact_pair[1]].facet_map();
-  const std::vector<std::int32_t>& parent_cells
-      = _submeshes[_contact_pairs[pair][1]].parent_cells();
+      = _submeshes[contact_pair.back()].facet_map();
+  std::span<const std::int32_t> parent_cells
+      = _submeshes[contact_pair.back()].parent_cells();
   // Data structures used in assembly
   std::vector<double> coordinate_dofs(3 * num_dofs_g);
   std::vector<std::vector<PetscScalar>> Aes(
@@ -499,13 +499,13 @@ void dolfinx_contact::Contact::assemble_vector(
   // correct map
   const std::array<int, 2>& contact_pair = _contact_pairs[pair];
   const std::vector<std::int32_t>& active_facets
-      = _cell_facet_pairs[contact_pair[0]];
-  const dolfinx_contact::SubMesh& submesh = _submeshes[contact_pair[1]];
+      = _cell_facet_pairs[contact_pair.front()];
+  const dolfinx_contact::SubMesh& submesh = _submeshes[contact_pair.back()];
   std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> map
       = _facet_maps[pair];
   std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> facet_map
       = submesh.facet_map();
-  std::vector<std::int32_t> parent_cells = submesh.parent_cells();
+  std::span<const std::int32_t> parent_cells = submesh.parent_cells();
   const std::size_t max_links
       = *std::max_element(_max_links.begin(), _max_links.end());
   if (max_links == 0)
@@ -573,8 +573,8 @@ dolfinx_contact::Contact::pack_grad_test_functions(
   const dolfinx_contact::SubMesh& submesh = _submeshes[candidate_mt];
   std::shared_ptr<const dolfinx::mesh::Mesh> mesh = _V->mesh(); // mesh
   assert(mesh);
-  const std::size_t gdim = mesh->geometry().dim(); // geometrical dimension
-  std::vector<std::int32_t> parent_cells = submesh.parent_cells();
+  const std::size_t gdim = mesh->geometry().dim();
+  std::span<const std::int32_t> parent_cells = submesh.parent_cells();
   const dolfinx::graph::AdjacencyList<int>& x_dofmap
       = mesh->geometry().dofmap();
   std::shared_ptr<const fem::FiniteElement> element = _V->element();
@@ -681,14 +681,13 @@ dolfinx_contact::Contact::pack_grad_u_contact(
     const std::span<const PetscScalar> gap,
     const std::span<const PetscScalar> u_packed)
 {
-  const int puppet_mt = _contact_pairs[pair][0];
-  const int candidate_mt = _contact_pairs[pair][1];
+  auto [puppet_mt, candidate_mt] = _contact_pairs[pair];
 
   // Mesh info
   const dolfinx_contact::SubMesh& submesh = _submeshes[candidate_mt];
   std::shared_ptr<const dolfinx::mesh::Mesh> mesh = _V->mesh();
   const std::size_t gdim = mesh->geometry().dim(); // geometrical dimension
-  std::vector<std::int32_t> parent_cells = submesh.parent_cells();
+  std::span<const std::int32_t> parent_cells = submesh.parent_cells();
   const std::size_t bs_element = _V->element()->block_size();
   std::shared_ptr<const dolfinx::fem::DofMap> dofmap = _V->dofmap();
   assert(dofmap);
@@ -703,6 +702,7 @@ dolfinx_contact::Contact::pack_grad_u_contact(
   mdspan3_t qp_span(_qp_phys[puppet_mt].data(), num_facets, num_q_points, gdim);
   std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> facet_map
       = submesh.facet_map();
+  assert(facet_map);
 
   // NOTE: Assuming same number of quadrature points on each cell
   dolfinx_contact::error::check_cell_type(mesh->topology().cell_type());
@@ -711,12 +711,12 @@ dolfinx_contact::Contact::pack_grad_u_contact(
   std::vector<std::int32_t> cells(num_facets * num_q_points, -1);
   for (std::size_t i = 0; i < num_facets; ++i)
   {
-    const std::span<const int> links = map->links((int)i);
+    auto links = map->links((int)i);
     assert(links.size() == num_q_points);
     for (std::size_t q = 0; q < num_q_points; ++q)
     {
       const std::size_t row = i * num_q_points;
-      const std::span<const int> linked_pair = facet_map->links(links[q]);
+      auto linked_pair = facet_map->links(links[q]);
       cells[row + q] = parent_cells[linked_pair[0]];
       for (std::size_t j = 0; j < gdim; ++j)
       {
@@ -750,8 +750,7 @@ dolfinx_contact::Contact::pack_grad_u_contact(
     for (std::size_t q = 0; q < num_q_points; ++q)
     {
       // Get degrees of freedom for current cell
-      std::span<const std::int32_t> dofs
-          = dofmap->cell_dofs(cells[i * num_q_points + q]);
+      auto dofs = dofmap->cell_dofs(cells[i * num_q_points + q]);
       for (std::size_t j = 0; j < dofs.size(); ++j)
         for (int k = 0; k < bs_dof; ++k)
           coefficients[bs_dof * j + k] = u_coeffs[bs_dof * dofs[j] + k];
