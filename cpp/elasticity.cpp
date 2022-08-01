@@ -103,7 +103,8 @@ void dolfinx_contact::compute_sigma_n_opp(mdspan4_t sig_n_opp,
                                           std::span<const double> grad_v,
                                           std::span<const double> n,
                                           const double mu, const double lmbda,
-                                          const int q, const int num_q_points)
+                                          const std::size_t q,
+                                          const std::size_t num_q_points)
 {
   const std::size_t num_links = sig_n_opp.extent(0);
   const std::size_t ndofs_cell = sig_n_opp.extent(1);
@@ -119,9 +120,8 @@ void dolfinx_contact::compute_sigma_n_opp(mdspan4_t sig_n_opp,
   for (std::size_t i = 0; i < num_links; ++i)
     for (std::size_t j = 0; j < ndofs_cell; ++j)
     {
-      std::size_t offset = i * std::size_t(num_q_points) * ndofs_cell * gdim
-                           + j * std::size_t(num_q_points) * gdim
-                           + std::size_t(q) * gdim;
+      std::size_t offset = i * num_q_points * ndofs_cell * gdim
+                           + j * num_q_points * gdim + q * gdim;
       // Compute dot(grad(v), n)
       double dv_dot_n = 0;
       for (std::size_t k = 0; k < gdim; ++k)

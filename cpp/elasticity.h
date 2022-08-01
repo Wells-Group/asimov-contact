@@ -74,7 +74,7 @@ void compute_sigma_n_u(std::span<double> sig_n_u,
 /// @param[in] q_pos  The offset of quadrature point for accessing dphi
 void compute_sigma_n_opp(mdspan4_t sig_n_opp, std::span<const double> grad_v,
                          std::span<const double> n, const double mu,
-                         const double lmbda, const int q,
-                         const int num_q_points);
+                         const double lmbda, const std::size_t q,
+                         const std::size_t num_q_points);
 
 } // namespace dolfinx_contact
