@@ -274,10 +274,9 @@ public:
       double theta = w[1];
       double mu = c[0];
       double lmbda = c[1];
-
       // Extract reference to the tabulated basis function
-      cmdspan2_t phi = kd.phi();
-      cmdspan3_t dphi = kd.dphi();
+      s_cmdspan2_t phi = kd.phi();
+      s_cmdspan3_t dphi = kd.dphi();
 
       // Extract reference to quadrature weights for the local facet
       std::span<const double> _weights(kd.q_weights());
@@ -286,9 +285,9 @@ public:
 
       // Temporary data structures used inside quadrature loop
       std::array<double, 3> n_surf = {0, 0, 0};
-      std::vector<double> epsnb(ndofs_cell * gdim);
+      std::vector<double> epsnb(ndofs_cell * gdim, 0);
       mdspan2_t epsn(epsnb.data(), ndofs_cell, gdim);
-      std::vector<double> trb(ndofs_cell * gdim);
+      std::vector<double> trb(ndofs_cell * gdim, 0);
       mdspan2_t tr(trb.data(), ndofs_cell, gdim);
 
       // Loop over quadrature points
@@ -307,7 +306,6 @@ public:
         // in y = Pi(x)
         for (std::size_t i = 0; i < gdim; i++)
         {
-
           n_surf[i] = -c[kd.offsets(4) + q * gdim + i];
           n_dot += n_phys[i] * n_surf[i];
           gap += c[kd.offsets(3) + q * gdim + i] * n_surf[i];
@@ -334,12 +332,10 @@ public:
           jump_un += -c[offset_u_opp + j] * n_surf[j];
         double sign_u = lmbda * tr_u * n_dot + mu * epsn_u;
         const double w0 = weights[q] * detJ;
+
         double Pn_u
-            = dolfinx_contact::R_plus((jump_un - gap) - gamma * sign_u) * w0;
-        sign_u *= w0;
-
+            = dolfinx_contact::R_plus(jump_un - gap - gamma * sign_u) * w0;
         // Fill contributions of facet with itself
-
         for (std::size_t i = 0; i < ndofs_cell; i++)
         {
           for (std::size_t n = 0; n < bs; n++)
@@ -349,7 +345,6 @@ public:
             // This is (1./gamma)*Pn_v to avoid the product gamma*(1./gamma)
             double Pn_v = gamma_inv * v_dot_nsurf - theta * sign_v;
             b[0][n + i * bs] += 0.5 * Pn_u * Pn_v;
-            // 0.5 * (-theta * gamma * sign_v * sign_u + Pn_u * Pn_v);
 
             // entries corresponding to v on the other surface
             for (std::size_t k = 0; k < num_links; k++)

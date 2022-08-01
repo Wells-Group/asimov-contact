@@ -66,7 +66,7 @@ public:
   }
 
   // Return basis functions at quadrature points for facet f
-  cmdspan2_t phi() const
+  s_cmdspan2_t phi() const
   {
     cmdspan4_t full_basis(_basis_values.data(), _basis_shape);
     return stdex::submdspan(full_basis, 0, stdex::full_extent,
@@ -74,7 +74,7 @@ public:
   }
 
   // Return grad(_phi) at quadrature points for facet f
-  cmdspan3_t dphi() const
+  s_cmdspan3_t dphi() const
   {
     cmdspan4_t full_basis(_basis_values.data(), _basis_shape);
     return stdex::submdspan(full_basis, std::pair{1, (std::size_t)_tdim + 1},
@@ -161,6 +161,7 @@ public:
   void update_normal(std::span<double> n, cmdspan2_t K,
                      const std::size_t local_index) const
   {
+    std::fill(n.begin(), n.end(), 0);
     return _update_normal(
         n, K, cmdspan2_t(_facet_normals.data(), _normals_shape), local_index);
   }
