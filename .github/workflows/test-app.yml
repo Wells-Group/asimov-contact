@@ -32,8 +32,6 @@ jobs:
     env:
       CC: ${{ matrix.CC }}
       CXX: ${{ matrix.CXX }}
-      HDF5_MPI: "ON"
-      HDF5_DIR: "/usr/lib/x86_64-linux-gnu/hdf5/mpich/"
       PETSC_ARCH: linux-gnu-${{ matrix.petsc_mode }}-${{ matrix.petsc_int_type }}
       OMPI_ALLOW_RUN_AS_ROOT: 1
       OMPI_ALLOW_RUN_AS_ROOT_CONFIRM: 1

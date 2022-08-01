@@ -737,7 +737,7 @@ public:
         = _submeshes[candidate_mt].mesh(); // mesh
     assert(mesh);
     const int gdim = mesh->geometry().dim(); // geometrical dimension
-    const dolfinx::graph::AdjacencyList<int>& x_dofmap
+    [[maybe_unused]] const dolfinx::graph::AdjacencyList<int>& x_dofmap
         = mesh->geometry().dofmap();
     std::shared_ptr<const dolfinx::fem::FiniteElement> element = _V->element();
     const std::uint32_t bs = element->block_size();
