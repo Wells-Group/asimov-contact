@@ -62,7 +62,7 @@ public:
   std::size_t qp_offsets(int f) const
   {
     assert((std::size_t)f < _qp_offsets.size());
-    return (std::size_t)_qp_offsets[f];
+    return _qp_offsets[f];
   }
 
   // Return basis functions at quadrature points for facet f

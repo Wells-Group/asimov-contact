@@ -39,8 +39,6 @@ def test_pack_coeff_at_quadrature(ct, quadrature_degree, space, degree):
     else:
         v.interpolate(lambda x: (x[1], -x[0]))
 
-    tdim = mesh.topology.dim
-
     # Create quadrature points for integration on facets
     ct = mesh.topology.cell_type
 

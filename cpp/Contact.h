@@ -280,7 +280,7 @@ public:
 
       // Extract reference to quadrature weights for the local facet
       std::span<const double> _weights(kd.q_weights());
-      const int num_points = q_offset.back() - q_offset.front();
+      const std::size_t num_points = q_offset.back() - q_offset.front();
       auto weights = _weights.subspan(q_offset.front(), num_points);
 
       // Temporary data structures used inside quadrature loop
@@ -291,7 +291,7 @@ public:
       mdspan2_t tr(trb.data(), ndofs_cell, gdim);
 
       // Loop over quadrature points
-      for (int q = 0; q < num_points; q++)
+      for (std::size_t q = 0; q < num_points; q++)
       {
         const std::size_t q_pos = q_offset[0] + q;
 
@@ -424,7 +424,7 @@ public:
       cmdspan3_t dphi = kd.dphi();
       cmdspan2_t phi = kd.phi();
       std::span<const double> _weights(kd.q_weights());
-      const int num_points = q_offset.back() - q_offset.front();
+      const std::size_t num_points = q_offset.back() - q_offset.front();
       auto weights = _weights.subspan(q_offset.front(), num_points);
       std::array<double, 3> n_surf = {0, 0, 0};
       std::vector<double> epsnb(ndofs_cell * gdim);
@@ -433,7 +433,7 @@ public:
       mdspan2_t tr(trb.data(), ndofs_cell, gdim);
 
       // Loop over quadrature points
-      for (int q = 0; q < num_points; q++)
+      for (std::size_t q = 0; q < num_points; q++)
       {
         const std::size_t q_pos = q_offset.front() + q;
         // Update Jacobian and physical normal

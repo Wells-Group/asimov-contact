@@ -29,7 +29,7 @@ dolfinx_contact::pack_coefficient_quadrature(
   const dolfinx::mesh::CellType cell_type = topology.cell_type();
 
   // Get what entity type we are integrating over
-  int entity_dim;
+  std::size_t entity_dim;
   switch (integral)
   {
   case dolfinx::fem::IntegralType::cell:
@@ -56,7 +56,7 @@ dolfinx_contact::pack_coefficient_quadrature(
   const std::vector<std::size_t>& q_offset = q_rule.offset();
   const std::size_t sum_q_points = q_offset.back();
   const std::size_t num_points_per_entity = q_offset[1] - q_offset[0];
-  std::array<std::size_t, 2> p_shape = {sum_q_points, (std::size_t)tdim};
+  std::array<std::size_t, 2> p_shape = {sum_q_points, tdim};
   assert(q_rule.tdim() == tdim);
 
   const basix::FiniteElement& basix_element = element->basix_element();
@@ -208,7 +208,7 @@ dolfinx_contact::pack_coefficient_quadrature(
 
           // Permute the reference values to account for the cell's
           // orientation
-          transformation(element_basisb, cell_info, cell, tab_shape[3]);
+          transformation(element_basisb, cell_info, cell, (int)tab_shape[3]);
 
           // Push basis forward to physical element
           auto _u = stdex::submdspan(basis_values, q, stdex::full_extent,
@@ -241,7 +241,7 @@ dolfinx_contact::pack_coefficient_quadrature(
 
           // Permute the reference values to account for the cell's
           // orientation
-          transformation(element_basisb, cell_info, cell, tab_shape[3]);
+          transformation(element_basisb, cell_info, cell, (int)tab_shape[3]);
 
           // Push basis forward to physical element
           // Push basis forward to physical element

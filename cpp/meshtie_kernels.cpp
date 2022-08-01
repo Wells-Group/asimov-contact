@@ -112,8 +112,8 @@ dolfinx_contact::generate_meshtie_kernel(
     mdspan4_t sig_n_opp(sig_n_oppb.data(), num_links, ndofs_cell, gdim, gdim);
 
     // Loop over quadrature points
-    const int num_points = q_offset[1] - q_offset[0];
-    for (int q = 0; q < num_points; q++)
+    const std::size_t num_points = q_offset[1] - q_offset[0];
+    for (std::size_t q = 0; q < num_points; q++)
     {
       const std::size_t q_pos = q_offset[0] + q;
 
@@ -258,8 +258,8 @@ dolfinx_contact::generate_meshtie_kernel(
     mdspan4_t sig_n_opp(sig_n_oppb.data(), num_links, ndofs_cell, gdim, gdim);
 
     // Loop over quadrature points
-    const int num_points = q_offset[1] - q_offset[0];
-    for (int q = 0; q < num_points; q++)
+    const std::size_t num_points = q_offset[1] - q_offset[0];
+    for (std::size_t q = 0; q < num_points; q++)
     {
       const std::size_t q_pos = q_offset[0] + q;
       // Update Jacobian and physical normal
