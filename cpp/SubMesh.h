@@ -13,7 +13,6 @@
 #include <dolfinx/fem/utils.h>
 #include <dolfinx/mesh/Mesh.h>
 #include <dolfinx/mesh/MeshTags.h>
-#include <xtensor/xadapt.hpp>
 
 namespace dolfinx_contact
 {
@@ -31,7 +30,7 @@ public:
   /// where cell is the index of the cell local to the process and facet is
   /// the facet index within the cell. The data is flattened row-major.
   SubMesh(std::shared_ptr<const dolfinx::mesh::Mesh> mesh,
-          xtl::span<const std::int32_t> facets);
+          std::span<const std::int32_t> facets);
 
   // Return mesh
   std::shared_ptr<const dolfinx::mesh::Mesh> mesh() const { return _mesh; }
@@ -53,7 +52,11 @@ public:
 
   // Return parent cells: parent_cells()[i] is the cell in the parent mesh for
   // ith cell in submesh
-  std::vector<std::int32_t> parent_cells() const { return _parent_cells; }
+  std::span<const std::int32_t> parent_cells() const
+  {
+    return std::span<const std::int32_t>(_parent_cells.data(),
+                                         _parent_cells.size());
+  }
 
   // Create FunctionSpace on submesh that is identical with a given
   // FunctionSpace on the parent mesh but restricted to submesh

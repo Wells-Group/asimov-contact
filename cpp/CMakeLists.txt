@@ -40,7 +40,6 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_CURRENT_SOURCE_DIR})
 # Find packages
 find_package(DOLFINX 0.4.2.0 REQUIRED)
 find_package(Basix 0.4.2.0 REQUIRED)
-find_package(xtensor REQUIRED)
 
 feature_summary(WHAT ALL)
 

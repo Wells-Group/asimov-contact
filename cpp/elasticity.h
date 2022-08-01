@@ -7,10 +7,8 @@
 // This file contains helper functions that are useful for writing elasticity
 // kernels
 
+#include "QuadratureRule.h"
 #include <span>
-#include <xtensor/xadapt.hpp>
-#include <xtensor/xbuilder.hpp>
-#include <xtensor/xindex_view.hpp>
 
 namespace dolfinx_contact
 {
@@ -25,12 +23,10 @@ namespace dolfinx_contact
 /// @param[in] n_1        1st normal vector, typically n_surf
 /// @param[in] n_2        2nd normal vector, typically n_phys
 /// @param[in] q_pos      offset of quadrature point for accessing dphi
-void compute_normal_strain_basis(xt::xtensor<double, 2>& epsn,
-                                 xt::xtensor<double, 2>& tr,
-                                 const xt::xtensor<double, 2>& K,
-                                 const xt::xtensor<double, 3>& dphi,
+void compute_normal_strain_basis(mdspan2_t epsn, mdspan2_t tr, cmdspan2_t K,
+                                 cmdspan3_t dphi,
                                  const std::array<double, 3>& n_1,
-                                 const xt::xtensor<double, 1>& n_2,
+                                 std::span<const double> n_2,
                                  const std::size_t q_pos);
 
 /// @brief Compute sigma(v)*n for all test functions in dphi at quadrature point
@@ -47,10 +43,8 @@ void compute_normal_strain_basis(xt::xtensor<double, 2>& epsn,
 /// @param[in] mu    The poisson ratio
 /// @param[in] lmbda The 1st Lame parameter
 /// @param[in] q_pos The offset of quadrature point for accessing dphi
-void compute_sigma_n_basis(xt::xtensor<double, 3>& sig_n,
-                           const xt::xtensor<double, 2>& K,
-                           const xt::xtensor<double, 3>& dphi,
-                           const xt::xtensor<double, 1>& n, const double mu,
+void compute_sigma_n_basis(mdspan3_t sig_n, cmdspan2_t K, cmdspan3_t dphi,
+                           std::span<const double> n, const double mu,
                            const double lmbda, const std::size_t q_pos);
 
 /// @brief Compute sigma(u)*n from grad(u)
@@ -60,9 +54,9 @@ void compute_sigma_n_basis(xt::xtensor<double, 3>& sig_n,
 /// @param[in] n       The normal vector
 /// @param[in] mu      The poisson ratio
 /// @param[in] lmbda   The 1st Lame parameter
-void compute_sigma_n_u(std::vector<double>& sig_n_u,
+void compute_sigma_n_u(std::span<double> sig_n_u,
                        std::span<const double> grad_u,
-                       const xt::xtensor<double, 1>& n, const double mu,
+                       std::span<const double> n, const double mu,
                        const double lmbda);
 
 /// @brief Compute sigma(v)*n from the gradients of v evaluated on opposite
@@ -78,10 +72,9 @@ void compute_sigma_n_u(std::vector<double>& sig_n_u,
 /// @param[in] mu     The poisson ratio
 /// @param[in] lmbda  The 1st Lame parameter
 /// @param[in] q_pos  The offset of quadrature point for accessing dphi
-void compute_sigma_n_opp(xt::xtensor<double, 4>& sig_n_opp,
-                         std::span<const double> grad_v,
-                         const xt::xtensor<double, 1>& n, const double mu,
-                         const double lmbda, const int q,
-                         const int num_q_points);
+void compute_sigma_n_opp(mdspan4_t sig_n_opp, std::span<const double> grad_v,
+                         std::span<const double> n, const double mu,
+                         const double lmbda, const std::size_t q,
+                         const std::size_t num_q_points);
 
 } // namespace dolfinx_contact

@@ -17,17 +17,16 @@
 #include <dolfinx/fem/utils.h>
 #include <dolfinx/mesh/Mesh.h>
 #include <dolfinx/mesh/MeshTags.h>
-#include <xtensor/xadapt.hpp>
-using jac_fn = std::function<double(
-    std::size_t, double, xt::xtensor<double, 2>&, xt::xtensor<double, 2>&,
-    xt::xtensor<double, 2>&, const xt::xtensor<double, 2>&,
-    const xt::xtensor<double, 3>&, const xt::xtensor<double, 2>&)>;
-using normal_fn
-    = std::function<void(xt::xtensor<double, 1>&, const xt::xtensor<double, 2>&,
-                         const xt::xtensor<double, 2>&, const std::size_t)>;
 
 namespace dolfinx_contact
 {
+using jac_fn = std::function<double(double, mdspan2_t, mdspan2_t, mdspan2_t,
+                                    std::span<double>, cmdspan2_t, s_cmdspan2_t,
+                                    cmdspan2_t)>;
+
+using normal_fn = std::function<void(std::span<double>, cmdspan2_t, cmdspan2_t,
+                                     const std::size_t)>;
+
 class KernelData
 {
 public:
@@ -60,16 +59,35 @@ public:
   std::size_t bs() const { return _bs; }
 
   // Return quadrature rule offsets for index f
-  int qp_offsets(int f) const { return _qp_offsets[f]; }
+  std::size_t qp_offsets(int f) const
+  {
+    assert((std::size_t)f < _qp_offsets.size());
+    return _qp_offsets[f];
+  }
 
   // Return basis functions at quadrature points for facet f
-  const xt::xtensor<double, 2>& phi() const { return _phi; }
+  s_cmdspan2_t phi() const
+  {
+    cmdspan4_t full_basis(_basis_values.data(), _basis_shape);
+    return stdex::submdspan(full_basis, 0, stdex::full_extent,
+                            stdex::full_extent, 0);
+  }
 
   // Return grad(_phi) at quadrature points for facet f
-  const xt::xtensor<double, 3>& dphi() const { return _dphi; }
+  s_cmdspan3_t dphi() const
+  {
+    cmdspan4_t full_basis(_basis_values.data(), _basis_shape);
+    return stdex::submdspan(full_basis, std::pair{1, (std::size_t)_tdim + 1},
+                            stdex::full_extent, stdex::full_extent, 0);
+  }
 
   // Return gradient of coordinate bases at quadrature points for facet f
-  const xt::xtensor<double, 3>& dphi_c() const { return _dphi_c; }
+  cmdspan3_t dphi_c() const
+  {
+    cmdspan4_t full_basis(_c_basis_values.data(), _c_basis_shape);
+    return stdex::submdspan(full_basis, std::pair{1, (std::size_t)_tdim + 1},
+                            stdex::full_extent, stdex::full_extent, 0);
+  }
 
   // Return coefficient offsets of coefficient i
   std::size_t offsets(const std::size_t i) const { return _offsets[i]; }
@@ -77,7 +95,10 @@ public:
   const std::vector<std::size_t>& offsets_array() const { return _offsets; }
 
   // Return reference facet normals
-  const xt::xtensor<double, 2>& facet_normals() const { return _facet_normals; }
+  cmdspan2_t facet_normals() const
+  {
+    return cmdspan2_t(_facet_normals.data(), _normals_shape);
+  }
 
   /// Compute the following jacobians on a given facet:
   /// J: physical cell -> reference cell (and its inverse)
@@ -87,76 +108,92 @@ public:
   /// @param[in,out] J - Jacobian between reference cell and physical cell
   /// @param[in,out] K - inverse of J
   /// @param[in,out] J_tot - J_f*J
+  /// @param[in, out] detJ_scratch - Working memory to compute determinants
   /// @param[in] coords - the coordinates of the facet
   /// @return absolute value of determinant of J_tot
   double update_jacobian(std::size_t q, const int facet_index, double detJ,
-                         xt::xtensor<double, 2>& J, xt::xtensor<double, 2>& K,
-                         xt::xtensor<double, 2>& J_tot,
-                         const xt::xtensor<double, 2>& coords) const
+                         mdspan2_t J, mdspan2_t K, mdspan2_t J_tot,
+                         std::span<double> detJ_scratch,
+                         cmdspan2_t coords) const
   {
-    const xt::xtensor<double, 3> dphi_fc = xt::view(
-        _dphi_c, xt::all(),
-        xt::xrange(_qp_offsets[facet_index], _qp_offsets[facet_index + 1]),
-        xt::all());
-    xt::xtensor<double, 2> J_f
-        = xt::view(_ref_jacobians, facet_index, xt::all(), xt::all());
-    return _update_jacobian(q, detJ, J, K, J_tot, J_f, dphi_fc, coords);
+    cmdspan4_t full_basis(_c_basis_values.data(), _c_basis_shape);
+    const std::size_t q_pos = _qp_offsets[facet_index] + q;
+    auto dphi_fc
+        = stdex::submdspan(full_basis, std::pair{1, (std::size_t)_tdim + 1},
+                           q_pos, stdex::full_extent, 0);
+    cmdspan3_t ref_jacs(_ref_jacobians.data(), _jac_shape);
+    auto J_f = stdex::submdspan(ref_jacs, (std::size_t)facet_index,
+                                stdex::full_extent, stdex::full_extent);
+    return _update_jacobian(detJ, J, K, J_tot, detJ_scratch, J_f, dphi_fc,
+                            coords);
   }
 
   /// Compute the following jacobians on a given facet at first quadrature
   /// point: J: physical cell -> reference cell (and its inverse) J_tot:
   /// physical facet -> reference facet
   /// @param[in] facet_index - The index of the facet local to the cell
-  /// @param[in,out] J - Jacboian between reference cell and physical cell
+  /// @param[in,out] J - Jacobian between reference cell and physical cell
   /// @param[in,out] K - inverse of J
   /// @param[in,out] J_tot - J_f*J
+  /// @param[in,out] detJ_scratch - Working memory, min size (2*gdim*tdim)
   /// @param[in] coords - the coordinates of the facet
   /// @return absolute value of determinant of J_tot
-  double compute_facet_jacobians(const int facet_index,
-                                 xt::xtensor<double, 2>& J,
-                                 xt::xtensor<double, 2>& K,
-                                 xt::xtensor<double, 2>& J_tot,
-                                 const xt::xtensor<double, 2>& coords) const
+  double compute_first_facet_jacobian(const int facet_index, mdspan2_t J,
+                                      mdspan2_t K, mdspan2_t J_tot,
+                                      std::span<double> detJ_scratch,
+                                      cmdspan2_t coords) const
   {
-    const xt::xtensor<double, 3> dphi_fc = xt::view(
-        _dphi_c, xt::all(),
-        xt::xrange(_qp_offsets[facet_index], _qp_offsets[facet_index + 1]),
-        xt::all());
-    xt::xtensor<double, 2> J_f
-        = xt::view(_ref_jacobians, facet_index, xt::all(), xt::all());
-    return std::fabs(dolfinx_contact::compute_facet_jacobians(
-        0, J, K, J_tot, J_f, dphi_fc, coords));
+    cmdspan4_t full_basis(_c_basis_values.data(), _c_basis_shape);
+    s_cmdspan2_t dphi_fc
+        = stdex::submdspan(full_basis, std::pair{1, (std::size_t)_tdim + 1},
+                           _qp_offsets[facet_index], stdex::full_extent, 0);
+    cmdspan3_t ref_jacs(_ref_jacobians.data(), _jac_shape);
+    auto J_f = stdex::submdspan(ref_jacs, (std::size_t)facet_index,
+                                stdex::full_extent, stdex::full_extent);
+    return std::fabs(dolfinx_contact::compute_facet_jacobian(
+        J, K, J_tot, detJ_scratch, J_f, dphi_fc, coords));
   }
 
   /// update normal
   /// @param[in, out] n The facet normal
   /// @param[in] K The inverse Jacobian
   /// @param[in] local_index The facet index local to the cell
-  void update_normal(xt::xtensor<double, 1>& n, const xt::xtensor<double, 2>& K,
+  void update_normal(std::span<double> n, cmdspan2_t K,
                      const std::size_t local_index) const
   {
-    return _update_normal(n, K, _facet_normals, local_index);
+    return _update_normal(
+        n, K, cmdspan2_t(_facet_normals.data(), _normals_shape), local_index);
   }
+
   // return quadrature weights for facet f
   const std::vector<double>& q_weights() const { return _q_weights; }
 
   // return the reference jacobians
-  const xt::xtensor<double, 3>& ref_jacobians() const { return _ref_jacobians; }
+  cmdspan3_t ref_jacobians() const
+  {
+    return cmdspan3_t(_ref_jacobians.data(), _jac_shape);
+  }
 
 private:
-  std::uint32_t _gdim;               // geometrical dimension
-  std::uint32_t _tdim;               // topological dimension
-  int _num_coordinate_dofs;          // number of dofs for geometry
-  bool _affine;                      // store whether cell geometry is affine
-  std::uint32_t _ndofs_cell;         // number of dofs per cell
-  std::size_t _bs;                   // block size
-  std::vector<int> _qp_offsets;      // quadrature point offsets
-  xt::xtensor<double, 2> _phi;       // basis functions at quadrature points
-  xt::xtensor<double, 3> _dphi;      // grad(_phi)
-  xt::xtensor<double, 3> _dphi_c;    // gradient of coordinate basis
-  std::vector<std::size_t> _offsets; // the coefficient offsets
-  xt::xtensor<double, 3> _ref_jacobians;
-  xt::xtensor<double, 2> _facet_normals;
+  std::uint32_t _gdim;                  // geometrical dimension
+  std::uint32_t _tdim;                  // topological dimension
+  int _num_coordinate_dofs;             // number of dofs for geometry
+  bool _affine;                         // store whether cell geometry is affine
+  std::uint32_t _ndofs_cell;            // number of dofs per cell
+  std::size_t _bs;                      // block size
+  std::vector<std::size_t> _qp_offsets; // quadrature point offsets
+  std::vector<double> _basis_values; // Basis functions (including first order
+                                     // derivatives) at quadrature points
+  std::array<std::size_t, 4> _basis_shape; // Shape of basis values
+  std::vector<double>
+      _c_basis_values; // Coordiante basis functions (including first order
+                       // derivatives) at quadrature points
+  std::array<std::size_t, 4> _c_basis_shape; // Shape of coordinate basis values
+  std::vector<std::size_t> _offsets;         // the coefficient offsets
+  std::vector<double> _ref_jacobians;
+  std::array<std::size_t, 3> _jac_shape;
+  std::vector<double> _facet_normals;
+  std::array<std::size_t, 2> _normals_shape;
   jac_fn _update_jacobian;
   normal_fn _update_normal;
   std::vector<double> _q_weights;

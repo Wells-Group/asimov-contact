@@ -39,6 +39,9 @@ def test_pack_coeff_at_quadrature(ct, quadrature_degree, space, degree):
     else:
         v.interpolate(lambda x: (x[1], -x[0]))
 
+    # Create quadrature points for integration on facets
+    ct = mesh.topology.cell_type
+
     # Pack coeffs
     tdim = mesh.topology.dim
     num_cells = mesh.topology.index_map(tdim).size_local
@@ -49,7 +52,7 @@ def test_pack_coeff_at_quadrature(ct, quadrature_degree, space, degree):
         v._cpp_object, quadrature_degree, integration_entities)
 
     # Use prepare quadrature points and geometry for eval
-    quadrature_points, wts = basix.make_quadrature(
+    quadrature_points, _ = basix.make_quadrature(
         basix.QuadratureType.Default, basix.cell.string_to_type(to_string(ct)), quadrature_degree)
 
     # Use Expression to verify packing
