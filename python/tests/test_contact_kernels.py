@@ -21,7 +21,7 @@ import dolfinx_contact
 import dolfinx_contact.cpp
 
 kt = dolfinx_contact.cpp.Kernel
-compare_matrices = dolfinx_cuas.utils.compare_matrices
+compare_matrices = dolfinx_contact.helpers.compare_matrices
 
 
 # R_minus(x) returns x if negative zero else

@@ -154,7 +154,10 @@ def nitsche_unbiased(ufl_form: ufl.Form, u: _fem.Function, markers: list[_cpp.me
     material = []
     with _common.Timer("~Contact: Pack coeffs (mu, lmbda"):
         for i in range(len(contact_pairs)):
-            material.append(dolfinx_cuas.pack_coefficients([mu2, lmbda2], entities[i]))
+            material.append(np.hstack([dolfinx_contact.cpp.pack_coefficient_quadrature(
+                mu2._cpp_object, 0, entities[i]),
+                dolfinx_contact.cpp.pack_coefficient_quadrature(
+                lmbda2._cpp_object, 0, entities[i])]))
 
     # Pack celldiameter on each surface
     h_packed = []
@@ -164,7 +167,8 @@ def nitsche_unbiased(ufl_form: ufl.Form, u: _fem.Function, markers: list[_cpp.me
         expr = _fem.Expression(h, V2.element.interpolation_points())
         h_int.interpolate(expr, surface_cells)
         for i in range(len(contact_pairs)):
-            h_packed.append(dolfinx_cuas.pack_coefficients([h_int], entities[i]))
+            h_packed.append(dolfinx_contact.cpp.pack_coefficient_quadrature(
+                h_int._cpp_object, 0, entities[i]))
 
     # Pack gap, normals and test functions on each surface
     gaps = []

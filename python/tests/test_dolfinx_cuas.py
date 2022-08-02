@@ -22,7 +22,7 @@ from dolfinx_contact.meshing import (convert_mesh, create_disk_mesh,
                                      create_sphere_mesh)
 
 kt = dolfinx_contact.cpp.Kernel
-compare_matrices = dolfinx_cuas.utils.compare_matrices
+compare_matrices = dolfinx_contact.helpers.compare_matrices
 
 
 # This tests compares custom assembly and ufl based assembly
@@ -192,7 +192,11 @@ def test_contact_kernel(theta, gamma, dim, gap):
         integral_entities = dolfinx_contact.compute_active_entities(
             mesh, bottom_facets, dolfinx.fem.IntegralType.exterior_facet)
         coeffs = dolfinx_cuas.cpp.pack_coefficients(
-            [u._cpp_object, mu2._cpp_object, lmbda2._cpp_object], integral_entities)
+            [u._cpp_object], integral_entities)
+        coeffs = np.hstack([coeffs, dolfinx_contact.cpp.pack_coefficient_quadrature(
+            mu2._cpp_object, 0, integral_entities),
+            dolfinx_contact.cpp.pack_coefficient_quadrature(
+            lmbda2._cpp_object, 0, integral_entities)])
         h_facets = dolfinx_contact.pack_circumradius(mesh, integral_entities)
         data = np.array([bottom_value, top_value], dtype=np.int32)
         offsets = np.array([0, 2], dtype=np.int32)

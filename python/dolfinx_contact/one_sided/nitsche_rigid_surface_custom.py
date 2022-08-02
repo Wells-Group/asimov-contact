@@ -170,13 +170,17 @@ def nitsche_rigid_surface_custom(mesh: _mesh.Mesh, mesh_data: Tuple[_cpp.mesh.Me
     integral_entities = dolfinx_contact.compute_active_entities(mesh, contact_facets, integral)
 
     # Pack mu and lambda on facets
-    coeffs = dolfinx_cuas.pack_coefficients([mu2, lmbda2], integral_entities)
+    coeffs = np.hstack([dolfinx_contact.cpp.pack_coefficient_quadrature(
+        mu2._cpp_object, 0, integral_entities),
+        dolfinx_contact.cpp.pack_coefficient_quadrature(
+        lmbda2._cpp_object, 0, integral_entities)])
     # Pack celldiameter on facets
     surface_cells = np.unique(integral_entities[:, 0])
     h_int = _fem.Function(V2)
     expr = _fem.Expression(h, V2.element.interpolation_points())
     h_int.interpolate(expr, surface_cells)
-    h_facets = dolfinx_cuas.pack_coefficients([h_int], integral_entities)
+    h_facets = dolfinx_contact.cpp.pack_coefficient_quadrature(
+        h_int._cpp_object, 0, integral_entities)
 
     # Create contact class
     data = np.array([contact_value_elastic, contact_value_rigid], dtype=np.int32)
