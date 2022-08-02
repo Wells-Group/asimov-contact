@@ -311,7 +311,7 @@ void dolfinx_contact::evaluate_basis_functions(
 
   // Create buffer for pull back
   std::vector<double> Xb(num_cells * tdim);
-  std::vector<double> Jb(num_cells * gdim * tdim);
+  std::vector<double> Jb(num_cells * gdim * tdim, 0);
   std::vector<double> Kb(num_cells * gdim * tdim);
   std::vector<double> detJ(num_cells);
   mdspan3_t J(Jb.data(), num_cells, gdim, tdim);
@@ -345,10 +345,10 @@ void dolfinx_contact::evaluate_basis_functions(
     // Compute reference coordinates X, and J, detJ and K
     if (cmap.is_affine())
     {
-
       pull_back_affine(Xp, coordinate_dofs, _J, _K, xp);
       detJ[p] = dolfinx::fem::CoordinateElement::compute_jacobian_determinant(
           _J, detJ_scratch);
+      assert(std::fabs(detJ[p]) > 1e-10);
     }
     else
     {
@@ -362,6 +362,7 @@ void dolfinx_contact::evaluate_basis_functions(
       dolfinx::fem::CoordinateElement::compute_jacobian_inverse(_J, _K);
       detJ[p] = dolfinx::fem::CoordinateElement::compute_jacobian_determinant(
           _J, detJ_scratch);
+      assert(std::fabs(detJ[p]) > 1e-10);
     }
   }
 
