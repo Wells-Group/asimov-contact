@@ -112,11 +112,14 @@ kernel_fn<T> generate_contact_kernel(
   /// facet. Used to access the correct quadrature rule.
   /// @param[in] num_links Unused integer. In two sided contact this indicates
   /// how many cells are connected with the cell.
+  /// @param[in] q_indices Unused indices. In two sided contact this yields what
+  /// quadrature points to add contributions from
   dolfinx_contact::kernel_fn<T> nitsche_rigid_rhs
       = [kd, gdim, tdim, coeff_basis_valuesb, coeff_shape, constant_normal](
             std::vector<std::vector<T>>& b, std::span<const T> c, const T* w,
             const double* coordinate_dofs, const int facet_index,
-            [[maybe_unused]] const std::size_t num_links)
+            [[maybe_unused]] const std::size_t num_links,
+            [[maybe_unused]] std::span<const std::int32_t> q_indices)
   {
     // Retrieve some data from kd
     const std::array<std::int32_t, 2> q_offset
@@ -279,11 +282,14 @@ kernel_fn<T> generate_contact_kernel(
   /// facet. Used to access the correct quadrature rule.
   /// @param[in] num_links Unused integer. In two sided contact this indicates
   /// how many cells are connected with the cell.
+  /// @param[in] q_indices Unused indices. In two sided contact this yields what
+  /// quadrature points to add contributions from
   kernel_fn<T> nitsche_rigid_jacobian
       = [kd, gdim, tdim, coeff_basis_valuesb, coeff_shape, constant_normal](
             std::vector<std::vector<double>>& A, std::span<const T> c,
             const T* w, const double* coordinate_dofs, const int facet_index,
-            [[maybe_unused]] const std::size_t num_links)
+            [[maybe_unused]] const std::size_t num_links,
+            [[maybe_unused]] std::span<const std::int32_t> q_indices)
   {
     // Retrieve some data from kd
     const std::array<std::int32_t, 2> q_offset

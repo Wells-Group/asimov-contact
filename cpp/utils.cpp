@@ -5,16 +5,17 @@
 // SPDX-License-Identifier:    MIT
 
 #include "utils.h"
+#include "RayTracing.h"
 #include "error_handling.h"
 #include "geometric_quantities.h"
 #include <dolfinx/geometry/BoundingBoxTree.h>
 #include <dolfinx/geometry/utils.h>
-using namespace dolfinx_contact;
 
 //-----------------------------------------------------------------------------
-void dolfinx_contact::pull_back(mdspan3_t J, mdspan3_t K,
+void dolfinx_contact::pull_back(mdspan3_t J, dolfinx_contact::mdspan3_t K,
                                 std::span<double> detJ, std::span<double> X,
-                                cmdspan2_t x, cmdspan2_t coordinate_dofs,
+                                dolfinx_contact::cmdspan2_t x,
+                                dolfinx_contact::cmdspan2_t coordinate_dofs,
                                 const dolfinx::fem::CoordinateElement& cmap)
 {
   const std::size_t num_points = x.extent(0);
@@ -35,7 +36,7 @@ void dolfinx_contact::pull_back(mdspan3_t J, mdspan3_t K,
         std::reduce(c_shape.cbegin(), c_shape.cend(), 1, std::multiplies{}));
     std::array<double, 3> X0;
     cmap.tabulate(1, std::span(X0.data(), tdim), {1, tdim}, data);
-    cmdspan4_t c_basis(data.data(), c_shape);
+    dolfinx_contact::cmdspan4_t c_basis(data.data(), c_shape);
 
     namespace stdex = std::experimental;
     auto dphi0 = stdex::submdspan(c_basis, std::pair{1, tdim + 1}, 0,
@@ -66,7 +67,7 @@ void dolfinx_contact::pull_back(mdspan3_t J, mdspan3_t K,
     std::array<double, 3> x0 = {0, 0, 0};
     for (std::size_t i = 0; i < coordinate_dofs.extent(1); ++i)
       x0[i] += coordinate_dofs(0, i);
-    mdspan2_t Xs(X.data(), num_points, tdim);
+    dolfinx_contact::mdspan2_t Xs(X.data(), num_points, tdim);
     dolfinx::fem::CoordinateElement::pull_back_affine(Xs, K0, x0, x);
 
     // Copy Jacobian, inverse and determinant to all other inputs
@@ -88,7 +89,7 @@ void dolfinx_contact::pull_back(mdspan3_t J, mdspan3_t K,
         for (std::size_t k = 0; k < J.extent(2); ++k)
           J(i, j, k) = 0;
 
-    mdspan2_t Xs(X.data(), num_points, tdim);
+    dolfinx_contact::mdspan2_t Xs(X.data(), num_points, tdim);
     cmap.pull_back_nonaffine(Xs, x, coordinate_dofs);
 
     /// Tabulate coordinate basis at pull back points to compute the Jacobian,
@@ -99,7 +100,7 @@ void dolfinx_contact::pull_back(mdspan3_t J, mdspan3_t K,
     std::vector<double> basis_buffer(
         std::reduce(c_shape.cbegin(), c_shape.cend(), 1, std::multiplies{}));
     cmap.tabulate(1, X, {num_points, tdim}, basis_buffer);
-    cmdspan4_t c_basis(basis_buffer.data(), c_shape);
+    dolfinx_contact::cmdspan4_t c_basis(basis_buffer.data(), c_shape);
 
     for (std::size_t p = 0; p < num_points; ++p)
     {
@@ -287,7 +288,8 @@ void dolfinx_contact::evaluate_basis_functions(
   }
 
   std::vector<double> coordinate_dofsb(num_dofs_g * gdim);
-  mdspan2_t coordinate_dofs(coordinate_dofsb.data(), num_dofs_g, gdim);
+  dolfinx_contact::mdspan2_t coordinate_dofs(coordinate_dofsb.data(),
+                                             num_dofs_g, gdim);
 
   // -- Lambda function for affine pull-backs
   const std::array<std::size_t, 4> c_shape = cmap.tabulate_shape(1, 1);
@@ -295,7 +297,7 @@ void dolfinx_contact::evaluate_basis_functions(
       std::reduce(c_shape.cbegin(), c_shape.cend(), 1, std::multiplies{}));
   std::array<double, 3> X0;
   cmap.tabulate(1, std::span(X0.data(), tdim), {1, tdim}, datab);
-  cmdspan4_t data(datab.data(), c_shape);
+  dolfinx_contact::cmdspan4_t data(datab.data(), c_shape);
   auto dphi_0 = stdex::submdspan(data, std::pair{1, tdim + 1}, 0,
                                  stdex::full_extent, 0);
   auto pull_back_affine = [&dphi_0, x0 = std::array<double, 3>({0, 0, 0})](
@@ -314,12 +316,12 @@ void dolfinx_contact::evaluate_basis_functions(
   std::vector<double> Jb(num_cells * gdim * tdim, 0);
   std::vector<double> Kb(num_cells * gdim * tdim);
   std::vector<double> detJ(num_cells);
-  mdspan3_t J(Jb.data(), num_cells, gdim, tdim);
-  mdspan3_t K(Kb.data(), num_cells, tdim, gdim);
+  dolfinx_contact::mdspan3_t J(Jb.data(), num_cells, gdim, tdim);
+  dolfinx_contact::mdspan3_t K(Kb.data(), num_cells, tdim, gdim);
   std::vector<double> detJ_scratch(2 * gdim * tdim);
   std::vector<double> basisb(
       std::reduce(c_shape.cbegin(), c_shape.cend(), 1, std::multiplies{}));
-  cmdspan4_t basis(basisb.data(), c_shape);
+  dolfinx_contact::cmdspan4_t basis(basisb.data(), c_shape);
   for (std::size_t p = 0; p < cells.size(); ++p)
   {
     const int cell_index = cells[p];
@@ -340,8 +342,8 @@ void dolfinx_contact::evaluate_basis_functions(
 
     auto _J = stdex::submdspan(J, p, stdex::full_extent, stdex::full_extent);
     auto _K = stdex::submdspan(K, p, stdex::full_extent, stdex::full_extent);
-    mdspan2_t Xp(Xb.data() + p * tdim, 1, tdim);
-    cmdspan2_t xp(x.data() + p * gdim, 1, gdim);
+    dolfinx_contact::mdspan2_t Xp(Xb.data() + p * tdim, 1, tdim);
+    dolfinx_contact::cmdspan2_t xp(x.data() + p * gdim, 1, gdim);
     // Compute reference coordinates X, and J, detJ and K
     if (cmap.is_affine())
     {
@@ -375,8 +377,8 @@ void dolfinx_contact::evaluate_basis_functions(
   // Compute basis on reference element
   element->tabulate(basis_reference_valuesb, Xb, {num_cells, tdim},
                     (int)num_derivatives);
-  cmdspan4_t basis_reference_values(basis_reference_valuesb.data(),
-                                    reference_shape);
+  dolfinx_contact::cmdspan4_t basis_reference_values(
+      basis_reference_valuesb.data(), reference_shape);
 
   // We need a temporary data structure to apply push forward
   std::array<std::size_t, 4> shape
@@ -385,9 +387,9 @@ void dolfinx_contact::evaluate_basis_functions(
     shape[0] = tdim + 1;
   std::vector<double> tempb(
       std::reduce(shape.cbegin(), shape.cend(), 1, std::multiplies{}));
-  mdspan4_t temp(tempb.data(), shape);
+  dolfinx_contact::mdspan4_t temp(tempb.data(), shape);
 
-  mdspan4_t basis_span(basis_values.data(), shape);
+  dolfinx_contact::mdspan4_t basis_span(basis_values.data(), shape);
   std::fill(basis_values.begin(), basis_values.end(), 0);
 
   using xu_t = stdex::mdspan<double, stdex::dextents<std::size_t, 2>>;
@@ -459,8 +461,10 @@ void dolfinx_contact::evaluate_basis_functions(
 };
 
 double dolfinx_contact::compute_facet_jacobian(
-    mdspan2_t J, mdspan2_t K, mdspan2_t J_tot, std::span<double> detJ_scratch,
-    cmdspan2_t J_f, s_cmdspan2_t dphi, cmdspan2_t coords)
+    dolfinx_contact::mdspan2_t J, dolfinx_contact::mdspan2_t K,
+    dolfinx_contact::mdspan2_t J_tot, std::span<double> detJ_scratch,
+    dolfinx_contact::cmdspan2_t J_f, dolfinx_contact::s_cmdspan2_t dphi,
+    dolfinx_contact::cmdspan2_t coords)
 {
   std::size_t gdim = J.extent(0);
   auto coordinate_dofs
@@ -479,30 +483,35 @@ double dolfinx_contact::compute_facet_jacobian(
           J_tot, detJ_scratch));
 }
 //-------------------------------------------------------------------------------------
-std::function<double(double, mdspan2_t, mdspan2_t, mdspan2_t, std::span<double>,
-                     cmdspan2_t, s_cmdspan2_t, cmdspan2_t)>
+std::function<double(
+    double, dolfinx_contact::mdspan2_t, dolfinx_contact::mdspan2_t,
+    dolfinx_contact::mdspan2_t, std::span<double>, dolfinx_contact::cmdspan2_t,
+    dolfinx_contact::s_cmdspan2_t, dolfinx_contact::cmdspan2_t)>
 dolfinx_contact::get_update_jacobian_dependencies(
     const dolfinx::fem::CoordinateElement& cmap)
 {
   if (cmap.is_affine())
   {
     // Return function that returns the input determinant
-    return
-        [](double detJ, [[maybe_unused]] mdspan2_t J,
-           [[maybe_unused]] mdspan2_t K, [[maybe_unused]] mdspan2_t J_tot,
-           [[maybe_unused]] std::span<double> detJ_scratch,
-           [[maybe_unused]] cmdspan2_t J_f, [[maybe_unused]] s_cmdspan2_t dphi,
-           [[maybe_unused]] cmdspan2_t coords) { return detJ; };
+    return [](double detJ, [[maybe_unused]] dolfinx_contact::mdspan2_t J,
+              [[maybe_unused]] dolfinx_contact::mdspan2_t K,
+              [[maybe_unused]] dolfinx_contact::mdspan2_t J_tot,
+              [[maybe_unused]] std::span<double> detJ_scratch,
+              [[maybe_unused]] dolfinx_contact::cmdspan2_t J_f,
+              [[maybe_unused]] dolfinx_contact::s_cmdspan2_t dphi,
+              [[maybe_unused]] dolfinx_contact::cmdspan2_t coords)
+    { return detJ; };
   }
   else
   {
     // Return function that returns the input determinant
-    return
-        [](double detJ, [[maybe_unused]] mdspan2_t J,
-           [[maybe_unused]] mdspan2_t K, [[maybe_unused]] mdspan2_t J_tot,
-           [[maybe_unused]] std::span<double> detJ_scratch,
-           [[maybe_unused]] cmdspan2_t J_f, [[maybe_unused]] s_cmdspan2_t dphi,
-           [[maybe_unused]] cmdspan2_t coords)
+    return [](double detJ, [[maybe_unused]] dolfinx_contact::mdspan2_t J,
+              [[maybe_unused]] dolfinx_contact::mdspan2_t K,
+              [[maybe_unused]] dolfinx_contact::mdspan2_t J_tot,
+              [[maybe_unused]] std::span<double> detJ_scratch,
+              [[maybe_unused]] dolfinx_contact::cmdspan2_t J_f,
+              [[maybe_unused]] dolfinx_contact::s_cmdspan2_t dphi,
+              [[maybe_unused]] dolfinx_contact::cmdspan2_t coords)
     {
       double new_detJ = dolfinx_contact::compute_facet_jacobian(
           J, K, J_tot, detJ_scratch, J_f, dphi, coords);
@@ -511,15 +520,16 @@ dolfinx_contact::get_update_jacobian_dependencies(
   }
 }
 //-------------------------------------------------------------------------------------
-std::function<void(std::span<double>, cmdspan2_t, cmdspan2_t,
-                   const std::size_t)>
+std::function<void(std::span<double>, dolfinx_contact::cmdspan2_t,
+                   dolfinx_contact::cmdspan2_t, const std::size_t)>
 dolfinx_contact::get_update_normal(const dolfinx::fem::CoordinateElement& cmap)
 {
   if (cmap.is_affine())
   {
     // Return function that returns the input determinant
     return []([[maybe_unused]] std::span<double> n,
-              [[maybe_unused]] cmdspan2_t K, [[maybe_unused]] cmdspan2_t n_ref,
+              [[maybe_unused]] dolfinx_contact::cmdspan2_t K,
+              [[maybe_unused]] dolfinx_contact::cmdspan2_t n_ref,
               [[maybe_unused]] const std::size_t local_index)
     {
       // Do nothing
@@ -528,8 +538,8 @@ dolfinx_contact::get_update_normal(const dolfinx::fem::CoordinateElement& cmap)
   else
   {
     // Return function that updates the physical normal based on K
-    return [](std::span<double> n, cmdspan2_t K, cmdspan2_t n_ref,
-              const std::size_t local_index)
+    return [](std::span<double> n, dolfinx_contact::cmdspan2_t K,
+              dolfinx_contact::cmdspan2_t n_ref, const std::size_t local_index)
     {
       std::fill(n.begin(), n.end(), 0);
       auto n_f = stdex::submdspan(n_ref, local_index, stdex::full_extent);
@@ -641,8 +651,8 @@ dolfinx_contact::entities_to_geometry_dofs(
   mesh.topology_mutable().create_connectivity(tdim, dim);
 
   // Create arrays for the adjacency-list
-  std::vector<std::int32_t> geometry_indices(num_entity_dofs
-                                             * entity_list.size());
+  std::vector<std::int32_t> geometry_indices(
+      num_entity_dofs * entity_list.size(), -1);
   std::vector<std::int32_t> offsets(entity_list.size() + 1, 0);
   for (std::size_t i = 0; i < entity_list.size(); ++i)
     offsets[i + 1] = std::int32_t((i + 1) * num_entity_dofs);
@@ -659,7 +669,10 @@ dolfinx_contact::entities_to_geometry_dofs(
   for (std::size_t i = 0; i < entity_list.size(); ++i)
   {
     const std::int32_t idx = entity_list[i];
-    const std::int32_t cell = e_to_c->links(idx)[0];
+    // Skip if negative cell index
+    if (idx < 0)
+      continue;
+    const std::int32_t cell = e_to_c->links(idx).front();
     const std::span<const int> cell_entities = c_to_e->links(cell);
     auto it = std::find(cell_entities.begin(), cell_entities.end(), idx);
     assert(it != cell_entities.end());
@@ -667,7 +680,8 @@ dolfinx_contact::entities_to_geometry_dofs(
     const std::vector<std::int32_t>& entity_dofs
         = closure_dofs[dim][local_entity];
 
-    const std::span<const int> xc = xdofs.links(cell);
+    auto xc = xdofs.links(cell);
+    assert(xc.size() == num_entity_dofs);
     for (std::size_t j = 0; j < num_entity_dofs; ++j)
       geometry_indices[i * num_entity_dofs + j] = xc[entity_dofs[j]];
   }
@@ -727,7 +741,7 @@ std::vector<std::int32_t> dolfinx_contact::find_candidate_surface_segment(
 //-------------------------------------------------------------------------------------
 void dolfinx_contact::compute_physical_points(
     const dolfinx::mesh::Mesh& mesh, std::span<const std::int32_t> facets,
-    std::span<const std::size_t> offsets, cmdspan4_t phi,
+    std::span<const std::size_t> offsets, dolfinx_contact::cmdspan4_t phi,
     std::span<double> qp_phys)
 {
   // Geometrical info
@@ -744,12 +758,14 @@ void dolfinx_contact::compute_physical_points(
   dolfinx_contact::error::check_cell_type(mesh.topology().cell_type());
   std::size_t num_q_points = offsets[1] - offsets[0];
 
-  mdspan3_t all_qps(qp_phys.data(), std::size_t(facets.size() / 2),
-                    num_q_points, (std::size_t)gdim);
+  dolfinx_contact::mdspan3_t all_qps(qp_phys.data(),
+                                     std::size_t(facets.size() / 2),
+                                     num_q_points, (std::size_t)gdim);
 
   // Temporary data array
   std::vector<double> coordinate_dofsb(num_dofs_g * gdim);
-  cmdspan2_t coordinate_dofs(coordinate_dofsb.data(), num_dofs_g, gdim);
+  dolfinx_contact::cmdspan2_t coordinate_dofs(coordinate_dofsb.data(),
+                                              num_dofs_g, gdim);
   for (std::size_t i = 0; i < facets.size(); i += 2)
   {
     auto x_dofs = x_dofmap.links(facets[i]);
@@ -772,13 +788,15 @@ void dolfinx_contact::compute_physical_points(
 }
 
 //-------------------------------------------------------------------------------------
-dolfinx::graph::AdjacencyList<std::int32_t>
+std::tuple<dolfinx::graph::AdjacencyList<std::int32_t>, std::vector<double>,
+           std::array<std::size_t, 2>>
 dolfinx_contact::compute_distance_map(
     const dolfinx::mesh::Mesh& quadrature_mesh,
     std::span<const std::int32_t> quadrature_facets,
     const dolfinx::mesh::Mesh& candidate_mesh,
     std::span<const std::int32_t> candidate_facets,
-    const QuadratureRule& q_rule)
+    const dolfinx_contact::QuadratureRule& q_rule,
+    dolfinx_contact::ContactMode mode)
 {
 
   const dolfinx::mesh::Geometry& geometry = quadrature_mesh.geometry();
@@ -789,84 +807,125 @@ dolfinx_contact::compute_distance_map(
   dolfinx_contact::error::check_cell_type(cell_type);
 
   const int tdim = topology.dim();
-  const int fdim = tdim - 1;
-  assert(q_rule.dim() == fdim);
+  assert(q_rule.dim() == tdim - 1);
   assert(q_rule.cell_type(0)
          == dolfinx::mesh::cell_entity_type(cell_type, fdim, 0));
 
-  // Get quadrature points on reference facets
-  const std::vector<double>& q_points = q_rule.points();
-  const std::vector<std::size_t>& q_offset = q_rule.offset();
-  const std::size_t num_q_points = q_offset[1] - q_offset[0];
-  const std::size_t sum_q_points = q_offset.back();
-
-  // Push forward quadrature points to physical element
-  std::vector<double> quadrature_points(quadrature_facets.size() / 2
-                                        * num_q_points * gdim);
+  switch (mode)
   {
-    // Tabulate coordinate element basis values
-    std::array<std::size_t, 4> cmap_shape
-        = cmap.tabulate_shape(0, sum_q_points);
-    std::vector<double> c_basis(std::reduce(
-        cmap_shape.cbegin(), cmap_shape.cend(), 1, std::multiplies{}));
-    cmap.tabulate(0, q_points, {sum_q_points, (std::size_t)tdim}, c_basis);
-    cmdspan4_t reference_facet_basis_values(c_basis.data(), cmap_shape);
-    compute_physical_points(quadrature_mesh, quadrature_facets, q_offset,
-                            reference_facet_basis_values, quadrature_points);
-  }
-
-  // Copy quadrature points to padded 3D structure
-  std::vector<double> padded_qpsb(quadrature_facets.size() / 2 * num_q_points
-                                  * 3);
-  if (gdim == 3)
+  case dolfinx_contact::ContactMode::ClosestPoint:
   {
-    assert(quadrature_points.size() == padded_qpsb.size());
-    std::copy(quadrature_points.begin(), quadrature_points.end(),
-              padded_qpsb.begin());
-  }
-  else
-  {
-    mdspan3_t padded_qps(padded_qpsb.data(), quadrature_facets.size() / 2,
-                         num_q_points, 3);
-    cmdspan3_t qps(quadrature_points.data(), quadrature_facets.size() / 2,
-                   num_q_points, gdim);
-    for (std::size_t i = 0; i < qps.extent(0); ++i)
-      for (std::size_t j = 0; j < qps.extent(1); ++j)
-        for (std::size_t k = 0; k < qps.extent(2); ++k)
-          padded_qps(i, j, k) = qps(i, j, k);
-  }
-
-  std::vector<std::int32_t> closest_entity;
-  {
-    // Convert cell,local_facet_index to facet_index (local to proc)
-    std::vector<std::int32_t> facets(candidate_facets.size() / 2);
-    std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> c_to_f
-        = candidate_mesh.topology().connectivity(tdim, fdim);
-    if (!c_to_f)
+    // Get quadrature points on reference facets
+    const std::vector<double>& q_points = q_rule.points();
+    const std::vector<std::size_t>& q_offset = q_rule.offset();
+    const std::size_t num_q_points = q_offset[1] - q_offset[0];
+    const std::size_t sum_q_points = q_offset.back();
+    // Push forward quadrature points to physical element
+    std::vector<double> quadrature_points(quadrature_facets.size() / 2
+                                          * num_q_points * gdim);
     {
-      throw std::runtime_error(
-          "Missing cell->facet connectivity on candidate mesh.");
+      // Tabulate coordinate element basis values
+      std::array<std::size_t, 4> cmap_shape
+          = cmap.tabulate_shape(0, sum_q_points);
+      std::vector<double> c_basis(std::reduce(
+          cmap_shape.cbegin(), cmap_shape.cend(), 1, std::multiplies{}));
+      cmap.tabulate(0, q_points, {sum_q_points, (std::size_t)tdim}, c_basis);
+      dolfinx_contact::cmdspan4_t reference_facet_basis_values(c_basis.data(),
+                                                               cmap_shape);
+      compute_physical_points(quadrature_mesh, quadrature_facets, q_offset,
+                              reference_facet_basis_values, quadrature_points);
     }
+    std::vector<std::int32_t> offsets(quadrature_points.size() + 1,
+                                      num_q_points);
+    for (std::size_t i = 0; i < offsets.size(); ++i)
+      offsets[i] *= i;
 
-    for (std::size_t i = 0; i < candidate_facets.size(); i += 2)
+    // Copy quadrature points to padded 3D structure
+    std::vector<double> padded_qpsb(quadrature_facets.size() / 2 * num_q_points
+                                    * 3);
+    if (gdim == 2)
     {
-      auto local_facets = c_to_f->links(candidate_facets[i]);
-      assert(!local_facets.empty());
-      assert((std::size_t)candidate_facets[i + 1] < local_facets.size());
-      facets[i / 2] = local_facets[candidate_facets[i + 1]];
+      dolfinx_contact::mdspan3_t padded_qps(
+          padded_qpsb.data(), quadrature_facets.size() / 2, num_q_points, 3);
+      dolfinx_contact::cmdspan3_t qps(quadrature_points.data(),
+                                      quadrature_facets.size() / 2,
+                                      num_q_points, gdim);
+      for (std::size_t i = 0; i < qps.extent(0); ++i)
+        for (std::size_t j = 0; j < qps.extent(1); ++j)
+          for (std::size_t k = 0; k < qps.extent(2); ++k)
+            padded_qps(i, j, k) = qps(i, j, k);
     }
-    // Compute closest entity for each quadrature point
-    dolfinx::geometry::BoundingBoxTree bbox(candidate_mesh, fdim, facets);
-    dolfinx::geometry::BoundingBoxTree midpoint_tree
-        = dolfinx::geometry::create_midpoint_tree(candidate_mesh, fdim, facets);
-    closest_entity = dolfinx::geometry::compute_closest_entity(
-        bbox, midpoint_tree, candidate_mesh, padded_qpsb);
+    else if (gdim == 3)
+    {
+      assert(quadrature_points.size() == padded_qpsb.size());
+      std::copy(quadrature_points.begin(), quadrature_points.end(),
+                padded_qpsb.begin());
+    }
+    else
+      throw std::runtime_error("Invalid gdim: " + std::to_string(gdim));
+    if (tdim == 2)
+    {
+      if (gdim == 2)
+      {
+        auto [closest_entities, reference_points, shape]
+            = dolfinx_contact::compute_projection_map<2, 2>(
+                candidate_mesh, candidate_facets, padded_qpsb);
+        return {dolfinx::graph::AdjacencyList<std::int32_t>(closest_entities,
+                                                            offsets),
+                reference_points, shape};
+      }
+      else if (gdim == 3)
+      {
+        auto [closest_entities, reference_points, shape]
+            = dolfinx_contact::compute_projection_map<2, 3>(
+                candidate_mesh, candidate_facets, padded_qpsb);
+        return {dolfinx::graph::AdjacencyList<std::int32_t>(closest_entities,
+                                                            offsets),
+                reference_points, shape};
+      }
+    }
+    else if (tdim == 3)
+    {
+      auto [closest_entities, reference_points, shape]
+          = dolfinx_contact::compute_projection_map<3, 3>(
+              candidate_mesh, candidate_facets, padded_qpsb);
+      return {dolfinx::graph::AdjacencyList<std::int32_t>(closest_entities,
+                                                          offsets),
+              reference_points, shape};
+    }
+    else
+      throw std::runtime_error("Invalid tdim: " + std::to_string(tdim));
   }
+  case dolfinx_contact::ContactMode::RayTracing:
+  {
 
-  // Create structures used to create adjacency list of closest entity
-  std::vector<std::int32_t> offset(quadrature_facets.size() / 2 + 1);
-  std::iota(offset.begin(), offset.end(), 0);
-  std::for_each(offset.begin(), offset.end(),
-                [num_q_points](auto& i) { i *= num_q_points; });
-  return dolfinx::graph::AdjacencyList<std::int32_t>(closest_entity, offset);
+    if (tdim == 2)
+    {
+      if (gdim == 2)
+      {
+        return dolfinx_contact::compute_raytracing_map<2, 2>(
+            quadrature_mesh, quadrature_facets, q_rule, candidate_mesh,
+            candidate_facets);
+      }
+      else if (gdim == 3)
+      {
+        return dolfinx_contact::compute_raytracing_map<2, 3>(
+            quadrature_mesh, quadrature_facets, q_rule, candidate_mesh,
+            candidate_facets);
+      }
+      else
+        throw std::runtime_error("Invalid gdim: " + std::to_string(gdim));
+    }
+    else if (tdim == 3)
+    {
+      return dolfinx_contact::compute_raytracing_map<3, 3>(
+          quadrature_mesh, quadrature_facets, q_rule, candidate_mesh,
+          candidate_facets);
+    }
+    else
+      throw std::runtime_error("Invalid tdim: " + std::to_string(tdim));
+  }
+  default:
+    throw std::runtime_error("Unsupported contact mode");
+  }
 }

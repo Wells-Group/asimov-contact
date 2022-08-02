@@ -53,7 +53,8 @@ dolfinx_contact::generate_meshtie_kernel(
          ndofs_cell](std::vector<std::vector<PetscScalar>>& b,
                      std::span<const PetscScalar> c, const PetscScalar* w,
                      const double* coordinate_dofs, const int facet_index,
-                     const std::size_t num_links)
+                     const std::size_t num_links,
+                     [[maybe_unused]] std::span<const std::int32_t> q_indices)
   {
     // Retrieve some data from kd
     std::array<std::size_t, 2> q_offset
@@ -202,7 +203,8 @@ dolfinx_contact::generate_meshtie_kernel(
       = [kd, gdim, bs, ndofs_cell](
             std::vector<std::vector<PetscScalar>>& A, std::span<const double> c,
             const double* w, const double* coordinate_dofs,
-            const int facet_index, const std::size_t num_links)
+            const int facet_index, const std::size_t num_links,
+            [[maybe_unused]] std::span<const std::int32_t> q_indices)
   {
     // Retrieve some data from kd
     std::array<std::size_t, 2> q_offset

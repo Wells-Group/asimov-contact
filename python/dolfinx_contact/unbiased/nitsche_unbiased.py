@@ -130,8 +130,11 @@ def nitsche_unbiased(ufl_form: ufl.Form, u: _fem.Function, markers: list[_cpp.me
     # Custom assembly
     # create contact class
     with _common.Timer("~Contact: Init"):
+        mode = dolfinx_contact.cpp.ContactMode.Raytracing
+        # mode = dolfinx_contact.cpp.ContactMode.ClosestPoint
         contact = dolfinx_contact.cpp.Contact(markers[1:], contact_surfaces, contact_pairs,
-                                              V._cpp_object, quadrature_degree=quadrature_degree)
+                                              V._cpp_object, quadrature_degree=quadrature_degree,
+                                              search_method=mode)
     with _common.Timer("~Contact: Distance maps"):
         for i in range(len(contact_pairs)):
             contact.create_distance_map(i)

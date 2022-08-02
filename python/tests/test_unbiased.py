@@ -338,8 +338,8 @@ def create_contact_data(V, u, quadrature_degree, lmbda, mu, facets_cg, tied=Fals
         coeff_0 = np.hstack([material_0, h_0, test_fn_0, grad_test_fn_0, u_0, u_opp_0, grad_u_opp_0])
         coeff_1 = np.hstack([material_1, h_1, test_fn_1, grad_test_fn_1, u_1, u_opp_1, grad_u_opp_1])
     else:
-        n_0 = contact.pack_ny(0, gap_0)
-        n_1 = contact.pack_ny(1, gap_1)
+        n_0 = contact.pack_ny(0)
+        n_1 = contact.pack_ny(1)
 
         # Concatenate all coeffs
         coeff_0 = np.hstack([material_0, h_0, gap_0, n_0, test_fn_0, u_0, u_opp_0])
