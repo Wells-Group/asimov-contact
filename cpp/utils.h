@@ -546,7 +546,7 @@ compute_projection_map(const dolfinx::mesh::Mesh& mesh,
     const dolfinx::graph::AdjacencyList<std::int32_t> facets_geometry
         = dolfinx_contact::entities_to_geometry_dofs(mesh, tdim - 1,
                                                      closest_facets);
-    assert(facets_geometry.num_nodes() == num_points);
+    assert(facets_geometry.num_nodes() == (int)num_points);
 
     // Compute physical points for each facet
     std::vector<double> coordinate_dofs(3 * num_facet_dofs);

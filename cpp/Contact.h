@@ -597,14 +597,16 @@ public:
         = _cell_facet_pairs[contact_pair.front()];
     std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> map
         = _facet_maps[pair];
+    assert(map);
     std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> facet_map
         = _submeshes[contact_pair.back()].facet_map();
+    assert(facet_map);
     for (std::size_t i = 0; i < active_facets.size(); i += 2)
     {
       std::vector<std::int32_t> linked_cells;
       for (auto link : map->links((int)i / 2))
       {
-        if (link > 0)
+        if (link >= 0)
         {
           auto facet_pair = facet_map->links(link);
           linked_cells.push_back(facet_pair.front());
@@ -763,10 +765,14 @@ public:
           std::copy_n(std::next(x_g.begin(), 3 * x_dofs[j]), gdim,
                       std::next(coordinate_dofsb.begin(), j * gdim));
         }
-        dolfinx::fem::CoordinateElement::push_forward(
-            coord, coordinate_dofs,
-            stdex::submdspan(full_basis, 0, i * num_q_point + q,
-                             stdex::full_extent, stdex::full_extent));
+
+        auto basis_q = stdex::submdspan(
+            full_basis, 0,
+            std::pair{i * num_q_point + q, i * num_q_point + q + 1},
+            stdex::full_extent, 0);
+
+        dolfinx::fem::CoordinateElement::push_forward(coord, coordinate_dofs,
+                                                      basis_q);
         for (int k = 0; k < gdim; k++)
           c[offset + q * gdim + k] = coordb[k] - qp_span(i, q, k);
       }
@@ -813,6 +819,8 @@ public:
 
     std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> facet_map
         = _submeshes[candidate_mt].facet_map();
+    assert(facet_map);
+
     const std::size_t max_links
         = *std::max_element(_max_links.begin(), _max_links.end());
 
@@ -856,18 +864,19 @@ public:
       {
 
         std::int32_t linked_cell = unique_cells[j];
+        if (linked_cell < 0)
+          continue;
+
         // Extract indices of all occurances of cell in the unsorted cell
         // array
         auto indices
             = std::span(perm.data() + offsets[j], offsets[j + 1] - offsets[j]);
 
-        if (linked_cell < 0)
-          continue;
-
         // Extract local dofs
         assert(linked_cell < x_dofmap.num_nodes());
         auto qp = std::span(q_points.data(), indices.size() * gdim);
         mdspan2_t qp_j(qp.data(), indices.size(), gdim);
+
         // Compute Pi(x) form points x and gap funtion Pi(x) - x
         for (std::size_t l = 0; l < indices.size(); ++l)
         {
@@ -890,10 +899,11 @@ public:
         std::fill(cells.begin(), cells.end(), linked_cell);
         evaluate_basis_functions(*V_sub, qp, cells, basis_valuesb, 0);
         cmdspan4_t basis_values(basis_valuesb.data(), b_shape);
+
         // Insert basis function values into c
-        for (std::size_t k = 0; k < ndofs; k++)
-          for (std::size_t q = 0; q < indices.size(); ++q)
-            for (std::size_t l = 0; l < bs; l++)
+        for (std::size_t k = 0; k < b_shape[2]; ++k)
+          for (std::size_t q = 0; q < b_shape[1]; ++q)
+            for (std::size_t l = 0; l < bs; ++l)
             {
               c[i * cstride + j * ndofs * bs * num_q_points
                 + k * bs * num_q_points + indices[q] * bs + l]

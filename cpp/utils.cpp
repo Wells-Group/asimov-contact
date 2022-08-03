@@ -407,17 +407,16 @@ void dolfinx_contact::evaluate_basis_functions(
 
   for (std::size_t p = 0; p < cells.size(); ++p)
   {
+    // Skip negative cell indices
+    const int cell_index = cells[p];
+    if (cell_index < 0)
+      continue;
+
     auto _J = stdex::submdspan(J, p, stdex::full_extent, stdex::full_extent);
     auto _K = stdex::submdspan(K, p, stdex::full_extent, stdex::full_extent);
     /// NOTE: loop size correct for num_derivatives = 0,1
     for (std::size_t j = 0; j < num_derivatives * tdim + 1; ++j)
     {
-      const int cell_index = cells[p];
-
-      // Skip negative cell indices
-      if (cell_index < 0)
-        continue;
-
       // Permute the reference values to account for the cell's orientation
       apply_dof_transformation(
           std::span(basis_reference_valuesb.data()
@@ -681,7 +680,7 @@ dolfinx_contact::entities_to_geometry_dofs(
         = closure_dofs[dim][local_entity];
 
     auto xc = xdofs.links(cell);
-    assert(xc.size() == num_entity_dofs);
+    assert(num_entity_dofs <= xc.size());
     for (std::size_t j = 0; j < num_entity_dofs; ++j)
       geometry_indices[i * num_entity_dofs + j] = xc[entity_dofs[j]];
   }
@@ -809,7 +808,7 @@ dolfinx_contact::compute_distance_map(
   const int tdim = topology.dim();
   assert(q_rule.dim() == tdim - 1);
   assert(q_rule.cell_type(0)
-         == dolfinx::mesh::cell_entity_type(cell_type, fdim, 0));
+         == dolfinx::mesh::cell_entity_type(cell_type, tdim - 1, 0));
 
   switch (mode)
   {
@@ -835,7 +834,7 @@ dolfinx_contact::compute_distance_map(
       compute_physical_points(quadrature_mesh, quadrature_facets, q_offset,
                               reference_facet_basis_values, quadrature_points);
     }
-    std::vector<std::int32_t> offsets(quadrature_points.size() + 1,
+    std::vector<std::int32_t> offsets(quadrature_facets.size() / 2 + 1,
                                       num_q_points);
     for (std::size_t i = 0; i < offsets.size(); ++i)
       offsets[i] *= i;

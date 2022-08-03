@@ -512,7 +512,7 @@ void dolfinx_contact::Contact::assemble_matrix(
     q_indices.reserve(connected_facets.size());
     // NOTE: Should probably be pre-computed
     for (std::size_t j = 0; j < connected_facets.size(); ++j)
-      if (connected_facets[j] > 0)
+      if (connected_facets[j] >= 0)
         q_indices.push_back(j);
 
     if (max_links > 0)
@@ -627,7 +627,7 @@ void dolfinx_contact::Contact::assemble_vector(
     q_indices.reserve(connected_facets.size());
     // NOTE: Should probably be pre-computed
     for (std::size_t j = 0; j < connected_facets.size(); ++j)
-      if (connected_facets[j] > 0)
+      if (connected_facets[j] >= 0)
         q_indices.push_back(j);
 
     // Compute the unique set of cells linked to the current facet
@@ -733,7 +733,7 @@ dolfinx_contact::Contact::pack_grad_test_functions(
       auto indices
           = std::span(perm.data() + offsets[j], offsets[j + 1] - offsets[j]);
       // Extract local dofs
-      assert(linked_cell < x_dofmap.num_nodes());
+      assert(linked_cell < mesh->geometry().dofmap().num_nodes());
       auto qp = std::span(q_points.data(), indices.size() * gdim);
       mdspan2_t qp_j(qp.data(), indices.size(), gdim);
       // Compute Pi(x) form points x and gap funtion Pi(x) - x
