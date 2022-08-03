@@ -172,6 +172,7 @@ Mat dolfinx_contact::Contact::create_petsc_matrix(
     const std::array<int, 2>& contact_pair = _contact_pairs[k];
     std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> facet_map
         = _submeshes[contact_pair.back()].facet_map();
+    assert(facet_map);
     std::span<const std::int32_t> parent_cells
         = _submeshes[contact_pair.back()].parent_cells();
     for (int i = 0; i < (int)_cell_facet_pairs[contact_pair.front()].size();
@@ -485,8 +486,11 @@ void dolfinx_contact::Contact::assemble_matrix(
       = _cell_facet_pairs[contact_pair.front()];
   std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> map
       = _facet_maps[pair];
+  assert(map);
   std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> facet_map
       = _submeshes[contact_pair.back()].facet_map();
+  assert(facet_map);
+
   std::span<const std::int32_t> parent_cells
       = _submeshes[contact_pair.back()].parent_cells();
   // Data structures used in assembly
@@ -594,8 +598,10 @@ void dolfinx_contact::Contact::assemble_vector(
   const dolfinx_contact::SubMesh& submesh = _submeshes[contact_pair.back()];
   std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> map
       = _facet_maps[pair];
+  assert(map);
   std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> facet_map
       = submesh.facet_map();
+  assert(facet_map);
   std::span<const std::int32_t> parent_cells = submesh.parent_cells();
   const std::size_t max_links
       = *std::max_element(_max_links.begin(), _max_links.end());
@@ -612,7 +618,6 @@ void dolfinx_contact::Contact::assemble_vector(
   std::vector<std::int32_t> linked_cells;
   for (std::size_t i = 0; i < active_facets.size(); i += 2)
   {
-
     // Get cell coordinates/geometry
     const std::span<const int> x_dofs = x_dofmap.links(active_facets[i]);
     for (std::size_t j = 0; j < x_dofs.size(); ++j)
@@ -625,6 +630,7 @@ void dolfinx_contact::Contact::assemble_vector(
     // corresponding facets on other surface)
     std::vector<std::int32_t> q_indices;
     q_indices.reserve(connected_facets.size());
+
     // NOTE: Should probably be pre-computed
     for (std::size_t j = 0; j < connected_facets.size(); ++j)
       if (connected_facets[j] >= 0)

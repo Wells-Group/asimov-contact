@@ -210,13 +210,15 @@ def test_contact_kernel(theta, gamma, dim, gap):
         b2.zeroEntries()
         contact_assembler = dolfinx_contact.cpp.Contact(
             [facet_marker], surfaces, [(0, 1)], V._cpp_object, quadrature_degree=q_deg)
+        contact_assembler.create_distance_map(0)
+
         contact_assembler.assemble_vector(b2, 0, kernel, coeffs, consts)
         dolfinx.fem.petsc.assemble_vector(b2, L_cuas)
         b2.assemble()
         # Jacobian
         a_cuas = ufl.inner(sigma(du), epsilon(v)) * dx
         a_cuas = dolfinx.fem.form(a_cuas)
-        B = dolfinx.fem.petsc.create_matrix(a_cuas)
+        B = contact_assembler.create_matrix(a_cuas)
         kernel = dolfinx_contact.cpp.generate_contact_kernel(
             V._cpp_object, kt.Jac, q_rule, [u._cpp_object, mu2._cpp_object, lmbda2._cpp_object])
         B.zeroEntries()
