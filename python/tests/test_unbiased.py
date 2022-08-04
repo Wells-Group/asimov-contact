@@ -498,7 +498,7 @@ def test_contact_kernels(ct, gap, q_deg, theta, tied):
     ind_cg, ind_dg = compute_dof_permutations(V_ufl, V_cuas, gap, [facet_dg], facets_cg)
 
     # Compare rhs
-    assert(np.allclose(b0.array[ind_dg], b1.array[ind_cg]))
+    assert np.allclose(b0.array[ind_dg], b1.array[ind_cg])
 
     # create scipy matrix
     ai, aj, av = A0.getValuesCSR()
@@ -506,7 +506,7 @@ def test_contact_kernels(ct, gap, q_deg, theta, tied):
     bi, bj, bv = A1.getValuesCSR()
     B_sp = scipy.sparse.csr_matrix((bv, bj, bi), shape=A1.getSize()).todense()
 
-    assert(np.allclose(A_sp[ind_dg, ind_dg], B_sp[ind_cg, ind_cg]))
+    assert np.allclose(A_sp[ind_dg, ind_dg], B_sp[ind_cg, ind_cg])
 
     # Sanity check different formulations
     if not tied:
@@ -517,7 +517,7 @@ def test_contact_kernels(ct, gap, q_deg, theta, tied):
         b2 = _fem.petsc.create_vector(F2)
         b2.zeroEntries()
         _fem.petsc.assemble_vector(b2, F2)
-        assert(np.allclose(b1.array[ind_cg], b2.array[ind_dg]))
+        assert np.allclose(b1.array[ind_cg], b2.array[ind_dg])
 
         # Contact terms formulated using ufl consistent with nitsche_ufl.py
         J2 = DG_jac_minus(u0, v0, w0, h, n, gamma_scaled, theta, sigma, gap, dS)
@@ -529,4 +529,4 @@ def test_contact_kernels(ct, gap, q_deg, theta, tied):
 
         ci, cj, cv = A2.getValuesCSR()
         C_sp = scipy.sparse.csr_matrix((cv, cj, ci), shape=A2.getSize()).todense()
-        assert(np.allclose(C_sp[ind_dg, ind_dg], B_sp[ind_cg, ind_cg]))
+        assert np.allclose(C_sp[ind_dg, ind_dg], B_sp[ind_cg, ind_cg])
