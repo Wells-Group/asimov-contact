@@ -257,6 +257,10 @@ compute_distance_map(const dolfinx::mesh::Mesh& quadrature_mesh,
 /// mesh_q onto mesh_c at a specific set of quadrature
 /// points on a subset of facets. There is also a subset of
 /// facets on mesh_c we use for intersection checks.
+/// NOTE: If the ray intersects with more than one facet 
+/// in the subset of facets on mesh_c, only one of these 
+/// facets is detected and it is not guaranteed to be the 
+/// closest.
 /// @param[in] quadrature_mesh The mesh to compute rays
 /// from
 /// @param[in] quadrature_facets Set of facets in the of
