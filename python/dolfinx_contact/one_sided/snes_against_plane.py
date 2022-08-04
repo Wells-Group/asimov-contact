@@ -71,7 +71,7 @@ def snes_solver(mesh: dmesh.Mesh, mesh_data: Tuple[_cpp.mesh.MeshTags_int32, int
 
     (facet_marker, top_value, _) = mesh_data
 
-    assert(facet_marker.dim == mesh.topology.dim - 1)
+    assert facet_marker.dim == mesh.topology.dim - 1
 
     # function space and problem parameters
     V = _fem.VectorFunctionSpace(mesh, ("CG", 1))  # function space
@@ -98,7 +98,7 @@ def snes_solver(mesh: dmesh.Mesh, mesh_data: Tuple[_cpp.mesh.MeshTags_int32, int
     # # Compute first variation of Pi (directional derivative about u in the direction of v)
     # # Yields same F as above if penalty = 0 and body force 0
     # F = ufl.derivative(Pi, u, v)
-    assert(mesh.topology.dim == mesh.geometry.dim)
+    assert mesh.topology.dim == mesh.geometry.dim
 
     # Dirichlet boundary conditions
     def _u_D(x):
@@ -192,7 +192,7 @@ def snes_solver(mesh: dmesh.Mesh, mesh_data: Tuple[_cpp.mesh.MeshTags_int32, int
         snes.solve(None, u.vector)
     u.x.scatter_forward()
 
-    assert(snes.getConvergedReason() > 1)
-    assert(snes.getConvergedReason() < 4)
+    assert snes.getConvergedReason() > 1
+    assert snes.getConvergedReason() < 4
 
     return u

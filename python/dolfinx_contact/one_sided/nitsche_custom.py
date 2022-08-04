@@ -88,7 +88,7 @@ def nitsche_custom(mesh: dmesh.Mesh, mesh_data: Tuple[_cpp.mesh.MeshTags_int32, 
 
     # Unpack mesh data
     (facet_marker, dirichlet_value, contact_value) = mesh_data
-    assert(facet_marker.dim == mesh.topology.dim - 1)
+    assert facet_marker.dim == mesh.topology.dim - 1
 
     # Outward unit normal of plane
     n_vec = np.zeros(mesh.geometry.dim)
@@ -223,7 +223,7 @@ def nitsche_custom(mesh: dmesh.Mesh, mesh_data: Tuple[_cpp.mesh.MeshTags_int32, 
     u.x.scatter_forward()
 
     if solver.error_on_nonconvergence:
-        assert(converged)
+        assert converged
     print(f"{dofs_global}, Number of interations: {n:d}")
 
     return u

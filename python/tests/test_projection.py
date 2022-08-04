@@ -61,11 +61,11 @@ def test_projection(q_deg, surf, dim):
             return np.isclose(x[2], 0)
 
     def surface_1(x):
-        return(np.isclose(x[dim - 1], disp + H))
+        return np.isclose(x[dim - 1], disp + H)
 
     # define restriced range for x coordinate to ensure closest point is on interior of opposite surface
     def x_range(x):
-        return(np.logical_and(x[0] > delta, x[0] < L - delta))
+        return np.logical_and(x[0] > delta, x[0] < L - delta)
 
     surface_0_val = 1
     surface_1_val = 2
@@ -112,4 +112,4 @@ def test_projection(q_deg, surf, dim):
 
     # Test if angle between -normal and gap function is less than 6.5 degrees
     # Is better accuracy needed?
-    assert(np.allclose(n_dot, np.ones(n_dot.shape)))
+    assert np.allclose(n_dot, np.ones(n_dot.shape))

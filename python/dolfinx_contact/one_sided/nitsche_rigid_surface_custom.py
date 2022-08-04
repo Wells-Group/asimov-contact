@@ -106,7 +106,7 @@ def nitsche_rigid_surface_custom(mesh: _mesh.Mesh, mesh_data: Tuple[_cpp.mesh.Me
     # Unpack mesh data
     (facet_marker, dirichlet_value_elastic, contact_value_elastic, contact_value_rigid,
      dirichlet_value_rigid) = mesh_data
-    assert(facet_marker.dim == mesh.topology.dim - 1)
+    assert facet_marker.dim == mesh.topology.dim - 1
     gdim = mesh.geometry.dim
 
     # Setup function space and functions used in Jacobian and residual formulation
@@ -282,7 +282,7 @@ def nitsche_rigid_surface_custom(mesh: _mesh.Mesh, mesh_data: Tuple[_cpp.mesh.Me
     u.x.scatter_forward()
 
     if solver.error_on_nonconvergence:
-        assert(converged)
+        assert converged
     print(f"{dofs_global}, Number of interations: {n:d}")
 
     return u

@@ -227,7 +227,7 @@ def test_contact_kernel(theta, gamma, dim, gap):
         contact_assembler.assemble_matrix(B, [], 0, kernel, coeffs, consts)
         dolfinx.fem.petsc.assemble_matrix(B, a_cuas)
         B.assemble()
-        assert(np.allclose(b.array, b2.array))
+        assert np.allclose(b.array, b2.array)
         # Compare matrices, first norm, then entries
         assert np.isclose(A.norm(), B.norm())
         compare_matrices(A, B, atol=1e-7)
