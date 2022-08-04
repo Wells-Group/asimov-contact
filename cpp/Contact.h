@@ -646,56 +646,21 @@ public:
     const std::shared_ptr<const dolfinx::mesh::Mesh>& quadrature_mesh
         = _submeshes[quadrature_mt].mesh();
     assert(quadrature_mesh);
+    // Get (cell, local_facet_index) tuples on quadrature submesh
+    const std::vector<std::int32_t> quadrature_facets
+        = _submeshes[quadrature_mt].get_submesh_tuples(
+            quadrature_mt, _cell_facet_pairs[quadrature_mt]);
 
     const std::shared_ptr<const dolfinx::mesh::Mesh>& candidate_mesh
         = _submeshes[candidate_mt].mesh();
     assert(candidate_mesh);
-
-    // FIXME: Code duplication from create distance map. Should be refactored.
-    const std::vector<std::int32_t>& candidate_facets
-        = _cell_facet_pairs[candidate_mt];
-    // Map (cell, facet) tuples from parent to sub mesh for candidate surface
-    std::vector<std::int32_t> submesh_facets(candidate_facets.size());
-    {
-      const int tdim = candidate_mesh->topology().dim();
-      std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> c_to_f
-          = candidate_mesh->topology().connectivity(tdim, tdim - 1);
-      assert(c_to_f);
-      std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> cell_map
-          = _submeshes[candidate_mt].cell_map();
-
-      for (std::size_t i = 0; i < candidate_facets.size(); i += 2)
-      {
-        auto submesh_cell = cell_map->links(candidate_facets[i]);
-        assert(!submesh_cell.empty());
-        submesh_facets[i] = submesh_cell.front();
-        submesh_facets[i + 1] = candidate_facets[i + 1];
-      }
-    }
-    // Map (cell, facet) tuples from parent to sub mesh for quadrature surface
-    const std::vector<std::int32_t>& parent_quadrature_facets
-        = _cell_facet_pairs[quadrature_mt];
-    std::vector<std::int32_t> quadrature_facets(
-        parent_quadrature_facets.size());
-    {
-      const int tdim = quadrature_mesh->topology().dim();
-      std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> c_to_f
-          = quadrature_mesh->topology().connectivity(tdim, tdim - 1);
-      assert(c_to_f);
-      std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> cell_map
-          = _submeshes[quadrature_mt].cell_map();
-
-      for (std::size_t i = 0; i < quadrature_facets.size(); i += 2)
-      {
-        auto sub_cells = cell_map->links(parent_quadrature_facets[i]);
-        assert(!sub_cells.empty());
-        quadrature_facets[i] = sub_cells.front();
-        quadrature_facets[i + 1] = parent_quadrature_facets[i + 1];
-      }
-    }
+    // Get (cell, local_facet_index) tuples on candidate submesh
+    const std::vector<std::int32_t> candidate_facets
+        = _submeshes[candidate_mt].get_submesh_tuples(
+            candidate_mt, _cell_facet_pairs[candidate_mt]);
 
     auto [candidate_map, reference_x, shape] = compute_distance_map(
-        *quadrature_mesh, quadrature_facets, *candidate_mesh, submesh_facets,
+        *quadrature_mesh, quadrature_facets, *candidate_mesh, candidate_facets,
         *_quadrature_rule, _mode);
 
     // NOTE: Assumes same number of quadrature points on all facets
@@ -1055,9 +1020,6 @@ public:
 
   /// Compute inward surface normal at Pi(x)
   /// @param[in] pair - index of contact pair
-  /// @param[in] gap - gap function: Pi(x)-x packed at quadrature points,
-  /// where Pi(x) is the chosen projection of x onto the contact surface of
-  /// the body coming into contact
   /// @param[out] c - normals ny packed on facets.
   std::pair<std::vector<PetscScalar>, int> pack_ny(int pair);
 
