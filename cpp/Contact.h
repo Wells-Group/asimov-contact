@@ -751,133 +751,133 @@ public:
   /// @param[in] gap - gap packed on facets per quadrature point
   /// @param[out] c - test functions packed on facets.
   std::pair<std::vector<PetscScalar>, int>
-  pack_test_functions(int pair, const std::span<const PetscScalar>& gap)
+  pack_test_functions(int pair,
+                      [[maybe_unused]] const std::span<const PetscScalar> gap)
   {
     auto [quadrature_mt, candidate_mt] = _contact_pairs[pair];
-    // Mesh info
-    std::shared_ptr<const dolfinx::mesh::Mesh> mesh
-        = _submeshes[candidate_mt].mesh(); // mesh
-    assert(mesh);
-    const int gdim = mesh->geometry().dim(); // geometrical dimension
-    [[maybe_unused]] const dolfinx::graph::AdjacencyList<int>& x_dofmap
-        = mesh->geometry().dofmap();
-    std::shared_ptr<const dolfinx::fem::FiniteElement> element = _V->element();
-    const std::uint32_t bs = element->block_size();
-    const std::size_t ndofs = (std::size_t)element->space_dimension() / bs;
-    mesh->topology_mutable().create_entity_permutations();
 
-    const std::vector<std::uint32_t> permutation_info
-        = mesh->topology().get_cell_permutation_info();
+    // Get mesh info for candidate side
+    const std::shared_ptr<const dolfinx::mesh::Mesh>& candidate_mesh
+        = _submeshes[candidate_mt].mesh();
+    assert(candidate_mesh);
+    const std::shared_ptr<const dolfinx::mesh::Mesh>& quadrature_mesh
+        = _submeshes[quadrature_mt].mesh();
+    assert(quadrature_mesh);
 
-    // Select which side of the contact interface to loop from and get the
-    // correct map
-    std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> map
-        = _facet_maps[pair];
-    const std::vector<std::int32_t>& puppet_facets
-        = _cell_facet_pairs[quadrature_mt];
-    const std::size_t num_facets = puppet_facets.size() / 2;
-    const std::size_t num_q_points
-        = _quadrature_rule->offset()[1] - _quadrature_rule->offset()[0];
-    std::vector<double> q_points(std::size_t(num_q_points) * std::size_t(gdim));
-    mdspan3_t qp_span(_qp_phys[quadrature_mt].data(), num_facets, num_q_points,
-                      gdim);
+    // Get (cell, local_facet_index) tuples on quadrature submesh
+    const std::vector<std::int32_t> quadrature_facets
+        = _submeshes[quadrature_mt].get_submesh_tuples(
+            quadrature_mt, _cell_facet_pairs[quadrature_mt]);
 
-    std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> facet_map
-        = _submeshes[candidate_mt].facet_map();
-    assert(facet_map);
+    // Get (cell, local_facet_index) tuples on candidate submesh
+    const std::vector<std::int32_t> candidate_facets
+        = _submeshes[candidate_mt].get_submesh_tuples(
+            candidate_mt, _cell_facet_pairs[candidate_mt]);
 
-    const std::size_t max_links
-        = *std::max_element(_max_links.begin(), _max_links.end());
+    auto [candidate_map, reference_x, shape]
+        = dolfinx_contact::compute_distance_map(
+            *quadrature_mesh, quadrature_facets, *candidate_mesh,
+            candidate_facets, *_quadrature_rule, _mode);
 
-    std::vector<std::int32_t> perm(num_q_points);
-    std::vector<std::int32_t> linked_cells(num_q_points, -1);
+    // Compute values of basis functions for all y = Pi(x) in qp
     auto V_sub = std::make_shared<dolfinx::fem::FunctionSpace>(
         _submeshes[candidate_mt].create_functionspace(_V));
 
-    // Create output vector
-    std::vector<PetscScalar> c(
-        num_facets * num_q_points * max_links * ndofs * bs, 0.0);
-    const auto cstride = int(num_q_points * max_links * ndofs * bs);
+    std::shared_ptr<const dolfinx::fem::FiniteElement> element
+        = V_sub->element();
+    std::array<std::size_t, 4> b_shape
+        = element->basix_element().tabulate_shape(0, shape[0]);
+    if (b_shape.back() > 1)
+      throw std::invalid_argument("pack_test_functions assumes values size 1");
+    std::vector<double> basis_valuesb(
+        std::reduce(b_shape.cbegin(), b_shape.cend(), 1, std::multiplies{}));
+    element->tabulate(basis_valuesb, reference_x, shape, 0);
+    cmdspan4_t basis_values(basis_valuesb.data(), b_shape);
 
-    // temporary data structure used inside loop
-    std::vector<std::int32_t> cells(max_links);
-    // Loop over all facets
-    for (std::size_t i = 0; i < num_facets; i++)
+    // Need to apply push forward and dof transformations to test functions
+    assert((b_shape.front() == 1) and (b_shape.back() == 1));
+
+    const basix::FiniteElement& b_el = element->basix_element();
+    if (element->needs_dof_transformations()
+        or b_el.map_type() != basix::maps::type::identity)
     {
-      const std::span<const int> links = map->links((int)i);
-      assert(links.size() == num_q_points);
-      std::fill(linked_cells.begin(), linked_cells.end(), -1);
-      for (std::size_t j = 0; j < num_q_points; j++)
-      {
-        // Skip if quadrature point is not connected to any cell
-        if (links[j] < 0)
-          continue;
-        const std::span<const int> linked_pair = facet_map->links(links[j]);
-        assert(!linked_pair.empty());
-        linked_cells[j] = linked_pair.front();
-      }
+      // If we want to do this we need to apply transformation and push
+      // forward
+      throw std::runtime_error(
+          "Packing basis (test) functions of space that uses "
+          "non-indentity maps is not supported");
+    }
 
-      // Sort linked cells
-      std::pair<std::vector<std::int32_t>, std::vector<std::int32_t>>
-          sorted_cells
-          = sort_cells(std::span(linked_cells.data(), linked_cells.size()),
-                       std::span(perm.data(), perm.size()));
-      const std::vector<std::int32_t>& unique_cells = sorted_cells.first;
-      const std::vector<std::int32_t>& offsets = sorted_cells.second;
+    // Convert facet index on candidate mesh into cell index
+    const dolfinx::mesh::Topology& topology = candidate_mesh->topology();
+    const int tdim = topology.dim();
+    auto f_to_c = topology.connectivity(tdim - 1, tdim);
+    assert(f_to_c);
+    const std::vector<std::int32_t>& facets = candidate_map.array();
+    error::check_cell_type(topology.cell_type());
+    const std::size_t num_q_points
+        = _quadrature_rule->offset()[1] - _quadrature_rule->offset()[0];
+    const std::size_t num_facets = quadrature_facets.size() / 2;
+    assert(num_facets * num_q_points == facets.size());
+    std::vector<std::int32_t> cells(facets.size(), -1);
+    for (std::size_t i = 0; i < cells.size(); ++i)
+    {
+      if (facets[i] < 0)
+        continue;
+      auto f_cells = f_to_c->links(facets[i]);
+      assert(f_cells.size() == 1);
+      cells[i] = f_cells.front();
+    }
+    // Compute maximum number of unique candidate cells opposite to a single
+    // quadrature facet
+    std::size_t max_links = 0;
+    std::vector<std::int32_t> unique_cells;
+    unique_cells.reserve(num_q_points);
+    for (std::size_t i = 0; i < num_facets; ++i)
+    {
+      unique_cells.clear();
+      assert(unique_cells.size() == 0);
+      std::copy_if(std::next(cells.cbegin(), i * num_q_points),
+                   std::next(cells.cbegin(), (i + 1) * num_q_points),
+                   std::back_inserter(unique_cells),
+                   [](auto cell) { return cell >= 0; });
+      max_links = std::max(max_links, unique_cells.size());
+    }
+    const std::size_t bs = element->block_size();
+    const auto cstride = int(num_q_points * max_links * b_shape[2] * bs);
+    std::vector<PetscScalar> cb(
+        num_facets * max_links * num_q_points * b_shape[2] * bs, 0.0);
+    stdex::mdspan<PetscScalar, stdex::dextents<std::size_t, 5>> c(
+        cb.data(), num_facets, max_links, b_shape[2], num_q_points, bs);
 
+    auto cell_imap = topology.index_map(tdim);
+    const int num_local_cells
+        = cell_imap->size_local() + cell_imap->num_ghosts();
+    std::vector<std::int32_t> perm(num_q_points);
+    for (std::size_t i = 0; i < c.extent(0); ++i)
+    {
+      std::span<const std::int32_t> f_cells(cells.data() + i * num_q_points,
+                                            num_q_points);
+      auto [unique_cells, offsets] = sort_cells(f_cells, perm);
       for (std::size_t j = 0; j < unique_cells.size(); ++j)
       {
-
         std::int32_t linked_cell = unique_cells[j];
-        if (linked_cell < 0)
-          continue;
-
-        // Extract indices of all occurances of cell in the unsorted cell
-        // array
+        assert(linked_cell < num_local_cells);
         auto indices
             = std::span(perm.data() + offsets[j], offsets[j + 1] - offsets[j]);
 
-        // Extract local dofs
-        assert(linked_cell < x_dofmap.num_nodes());
-        auto qp = std::span(q_points.data(), indices.size() * gdim);
-        mdspan2_t qp_j(qp.data(), indices.size(), gdim);
-
-        // Compute Pi(x) form points x and gap funtion Pi(x) - x
-        for (std::size_t l = 0; l < indices.size(); ++l)
-        {
-          std::size_t ind = indices[l];
-          for (int k = 0; k < gdim; k++)
-            qp_j(l, k) = qp_span(i, ind, k)
-                         + gap[i * gdim * num_q_points + ind * gdim + k];
-        }
-
-        // Compute values of basis functions for all y = Pi(x) in qp
-        std::array<std::size_t, 4> b_shape
-            = evaluate_basis_shape(*V_sub, indices.size(), 0);
-        if (b_shape.back() > 1)
-          throw std::invalid_argument(
-              "pack_test_functions assumes values size 1");
-        std::vector<double> basis_valuesb(std::reduce(
-            b_shape.cbegin(), b_shape.cend(), 1, std::multiplies{}));
-        std::fill(basis_valuesb.begin(), basis_valuesb.end(), 0);
-        cells.resize(indices.size());
-        std::fill(cells.begin(), cells.end(), linked_cell);
-        evaluate_basis_functions(*V_sub, qp, cells, basis_valuesb, 0);
-        cmdspan4_t basis_values(basis_valuesb.data(), b_shape);
-
-        // Insert basis function values into c
-        for (std::size_t k = 0; k < b_shape[2]; ++k)
-          for (std::size_t q = 0; q < b_shape[1]; ++q)
-            for (std::size_t l = 0; l < bs; ++l)
+        assert(perm.size() >= (std::size_t)offsets[j + 1]);
+        for (std::size_t k = 0; k < c.extent(2); ++k)
+          for (std::size_t q = 0; q < indices.size(); ++q)
+            for (std::size_t l = 0; l < c.extent(4); ++l)
             {
-              c[i * cstride + j * ndofs * bs * num_q_points
-                + k * bs * num_q_points + indices[q] * bs + l]
-                  = basis_values(0, q, k, 0);
+              c(i, j, k, indices[q], l)
+                  = basis_values(0, i * num_q_points + indices[q], k, 0);
             }
       }
     }
 
-    return {std::move(c), cstride};
+    return {std::move(cb), cstride};
   }
   /// Compute gradient of test functions on opposite surface (initial
   /// configuration) at quadrature points of facets
