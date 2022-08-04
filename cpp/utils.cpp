@@ -12,7 +12,7 @@
 #include <dolfinx/geometry/utils.h>
 
 //-----------------------------------------------------------------------------
-void dolfinx_contact::pull_back(mdspan3_t J, dolfinx_contact::mdspan3_t K,
+void dolfinx_contact::pull_back(dolfinx_contact::mdspan3_t J, dolfinx_contact::mdspan3_t K,
                                 std::span<double> detJ, std::span<double> X,
                                 dolfinx_contact::cmdspan2_t x,
                                 dolfinx_contact::cmdspan2_t coordinate_dofs,
