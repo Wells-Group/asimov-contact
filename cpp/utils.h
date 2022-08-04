@@ -370,8 +370,8 @@ compute_raytracing_map(const dolfinx::mesh::Mesh& quadrature_mesh,
   std::array<double, 3> normal;
   std::vector<std::int32_t> colliding_facet(
       quadrature_facets.size() / 2 * num_q_points, -1);
-  std::vector<double> reference_points(quadrature_facets.size() / 2
-                                       * num_q_points * tdim);
+  std::vector<double> reference_points(
+      quadrature_facets.size() / 2 * num_q_points * tdim, 0);
 
   NewtonStorage<tdim, gdim> allocated_memory;
   auto tangents = allocated_memory.tangents();
@@ -457,8 +457,8 @@ compute_raytracing_map(const dolfinx::mesh::Mesh& quadrature_mesh,
       {
         colliding_facet[i / 2 * num_q_points + j] = facets[cell_idx];
         dolfinx::common::impl::copy_N<tdim>(
-            X_fin.begin(),
-            std::next(reference_points.begin(), i / 2 * num_q_points + j));
+            X_fin.begin(), std::next(reference_points.begin(),
+                                     tdim * (i / 2 * num_q_points + j)));
       }
     }
   }
