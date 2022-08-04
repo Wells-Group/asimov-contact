@@ -219,7 +219,7 @@ std::vector<std::int32_t> dolfinx_contact::SubMesh::get_submesh_tuples(
 {
   assert(_mesh);
 
-  // Map (cell, facet) tuples from parent to sub mesh for candidate surface
+  // Map (cell, facet) tuples from parent to sub mesh
   std::vector<std::int32_t> submesh_facets(facets.size());
 
   const int tdim = _mesh->topology().dim();
