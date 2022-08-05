@@ -185,7 +185,7 @@ def nitsche_unbiased(ufl_form: ufl.Form, u: _fem.Function, markers: list[_cpp.me
                 normals.append(-contact.pack_nx(i))
             else:
                 normals.append(contact.pack_ny(i))
-            test_fns.append(contact.pack_test_functions(i, gaps[-1]))
+            test_fns.append(contact.pack_test_functions(i))
 
     # Concatenate all coeffs
     coeffs_const = []

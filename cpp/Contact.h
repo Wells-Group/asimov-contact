@@ -753,9 +753,7 @@ public:
   /// @param[in] pair - index of contact pair
   /// @param[in] gap - gap packed on facets per quadrature point
   /// @param[out] c - test functions packed on facets.
-  std::pair<std::vector<PetscScalar>, int>
-  pack_test_functions(int pair,
-                      [[maybe_unused]] const std::span<const PetscScalar> gap)
+  std::pair<std::vector<PetscScalar>, int> pack_test_functions(int pair)
   {
     auto [quadrature_mt, candidate_mt] = _contact_pairs[pair];
 
@@ -889,8 +887,7 @@ public:
   /// @param[out] c - test functions packed on facets.
   std::pair<std::vector<PetscScalar>, int>
   pack_u_contact(int pair,
-                 std::shared_ptr<dolfinx::fem::Function<PetscScalar>> u,
-                 const std::span<const PetscScalar> gap)
+                 std::shared_ptr<dolfinx::fem::Function<PetscScalar>> u)
   {
     dolfinx::common::Timer t("Pack contact u");
     auto [quadrature_mt, candidate_mt] = _contact_pairs[pair];
