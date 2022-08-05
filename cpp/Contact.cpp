@@ -129,7 +129,7 @@ std::size_t dolfinx_contact::Contact::coefficients_size(bool meshtie)
     // Expecting coefficients in following order:
     // mu, lmbda, h,test_fn, grad(test_fn), u, u_opposite,
     // grad(u_opposite)
-    std::vector<std::size_t> cstrides
+    std::array<std::size_t, 8> cstrides
         = {1,
            1,
            1,
@@ -138,17 +138,24 @@ std::size_t dolfinx_contact::Contact::coefficients_size(bool meshtie)
            ndofs_cell * bs,
            num_q_points * bs,
            num_q_points * gdim * bs};
-
-    // create offsets
-    std::vector<int32_t> offsets(9);
-    offsets[0] = 0;
-    std::partial_sum(cstrides.cbegin(), cstrides.cend(),
-                     std::next(offsets.begin()));
-    return offsets[8];
+    return std::accumulate(cstrides.cbegin(), cstrides.cend(), 0);
   }
   else
-    return 3 + num_q_points * (2 * gdim + ndofs_cell * bs * max_links + bs)
-           + ndofs_cell * bs;
+  {
+    // Coefficient offsets
+    // Expecting coefficients in the following order
+    // mu, lmbda, h, gap, normals, test_fns, u, u_opposite,
+    std::array<std::size_t, 8> cstrides
+        = {1,
+           1,
+           1,
+           num_q_points * bs,
+           num_q_points * bs,
+           num_q_points * ndofs_cell * bs * max_links,
+           ndofs_cell * bs,
+           num_q_points * bs};
+    return std::accumulate(cstrides.cbegin(), cstrides.cend(), 0);
+  };
 }
 
 Mat dolfinx_contact::Contact::create_petsc_matrix(
@@ -276,6 +283,104 @@ void dolfinx_contact::Contact::create_distance_map(int pair)
   // Update maximum number of connected cells
   max_links(pair);
 }
+std::pair<std::vector<PetscScalar>, int>
+dolfinx_contact::Contact::pack_nx(int pair)
+{
+  auto [quadrature_mt, candidate_mt] = _contact_pairs[pair];
+  const std::shared_ptr<const dolfinx::mesh::Mesh>& quadrature_mesh
+      = _submeshes[quadrature_mt].mesh();
+  assert(quadrature_mesh);
+
+  // Get (cell, local_facet_index) tuples on quadrature submesh
+  const std::vector<std::int32_t> quadrature_facets
+      = _submeshes[quadrature_mt].get_submesh_tuples(
+          quadrature_mt, _cell_facet_pairs[quadrature_mt]);
+
+  // Get information about submesh geometry and topology
+  const dolfinx::mesh::Geometry& geometry = quadrature_mesh->geometry();
+  const int gdim = geometry.dim();
+  std::span<const double> x_g = geometry.x();
+  auto x_dofmap = geometry.dofmap();
+  const dolfinx::fem::CoordinateElement& cmap = geometry.cmap();
+  const std::size_t num_dofs_g = cmap.dim();
+  const dolfinx::mesh::Topology& topology = quadrature_mesh->topology();
+  const int tdim = topology.dim();
+
+  // Get all quadrature points
+  const std::vector<double>& q_points = _quadrature_rule->points();
+  assert(_quadrature_rule->tdim() == (std::size_t)tdim);
+  const std::array<std::size_t, 2> shape
+      = {q_points.size() / tdim, (std::size_t)tdim};
+
+  // Tabulate first derivatives basis functions at all reference points
+  const std::array<std::size_t, 4> basis_shape
+      = cmap.tabulate_shape(1, shape[0]);
+  assert(basis_shape.back() == 1);
+  std::vector<double> cmap_basisb(std::reduce(
+      basis_shape.cbegin(), basis_shape.cend(), 1, std::multiplies{}));
+  cmap.tabulate(1, q_points, shape, cmap_basisb);
+
+  // Loop over quadrature points
+  error::check_cell_type(quadrature_mesh->topology().cell_type());
+  const std::size_t num_facets = quadrature_facets.size() / 2;
+  const std::size_t num_q_points = _quadrature_rule->num_points(0);
+
+  // Get facet normals on reference cell
+  basix::cell::type cell_type
+      = dolfinx::mesh::cell_type_to_basix_type(topology.cell_type());
+  auto [facet_normalsb, n_shape]
+      = basix::cell::facet_outward_normals(cell_type);
+  cmdspan2_t facet_normals(facet_normalsb.data(), n_shape);
+
+  // Working memory for loop
+  std::vector<double> coordinate_dofsb(num_dofs_g * gdim);
+  cmdspan2_t coordinate_dofs(coordinate_dofsb.data(), num_dofs_g, gdim);
+  std::array<double, 9> Jb;
+  std::array<double, 9> Kb;
+  mdspan2_t J(Jb.data(), gdim, tdim);
+  mdspan2_t K(Kb.data(), tdim, gdim);
+  mdspan4_t full_basis(cmap_basisb.data(), basis_shape);
+
+  std::vector<PetscScalar> normals(num_facets * num_q_points * gdim, 0.0);
+  const int cstride = (int)num_q_points * gdim;
+  for (std::size_t i = 0; i < quadrature_facets.size(); i += 2)
+  {
+
+    // Copy coordinate dofs of candidate cell
+    // Get cell geometry (coordinate dofs)
+    auto x_dofs = x_dofmap.links(quadrature_facets[i]);
+    assert(x_dofs.size() == num_dofs_g);
+    for (std::size_t j = 0; j < num_dofs_g; ++j)
+    {
+      std::copy_n(std::next(x_g.begin(), 3 * x_dofs[j]), gdim,
+                  std::next(coordinate_dofsb.begin(), j * gdim));
+    }
+    for (std::size_t q = 0; q < num_q_points; ++q)
+    {
+      auto dphi = stdex::submdspan(full_basis, std::pair{1, tdim + 1},
+                                   quadrature_facets[i + 1] * num_q_points + q,
+                                   stdex::full_extent, 0);
+
+      // Compute Jacobian and Jacobian inverse for Piola mapping of normal
+      std::fill(Jb.begin(), Jb.end(), 0);
+      dolfinx::fem::CoordinateElement::compute_jacobian(dphi, coordinate_dofs,
+                                                        J);
+      std::fill(Kb.begin(), Kb.end(), 0);
+      dolfinx::fem::CoordinateElement::compute_jacobian_inverse(J, K);
+
+      // Push forward normal using covariant Piola
+      physical_facet_normal(
+          std::span(std::next(normals.begin(), i / 2 * cstride + q * gdim),
+                    gdim),
+          K,
+          stdex::submdspan(facet_normals, quadrature_facets[i + 1],
+                           stdex::full_extent));
+    }
+  }
+  return {std::move(normals), cstride};
+}
+
+//------------------------------------------------------------------------------------------------
 //------------------------------------------------------------------------------------------------
 std::pair<std::vector<PetscScalar>, int>
 dolfinx_contact::Contact::pack_ny(int pair)

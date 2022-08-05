@@ -359,7 +359,7 @@ if __name__ == "__main__":
         u, newton_its, krylov_iterations, solver_time = nitsche_unbiased(
             ufl_form=Fj, u=u, markers=[domain_marker, facet_marker], contact_data=(surfaces, contact),
             bcs=bcs, problem_parameters=problem_parameters, newton_options=newton_options,
-            petsc_options=petsc_options, outfile=solver_outfile)
+            petsc_options=petsc_options, outfile=solver_outfile, quadrature_degree=args.q_degree)
         num_newton_its[j] = newton_its
         num_krylov_its[j] = krylov_iterations
         newton_time[j] = solver_time

@@ -200,7 +200,7 @@ PYBIND11_MODULE(cpp, m)
                  std::move(data), std::move(offsets));
            })
       .def("coefficients_size", &dolfinx_contact::Contact::coefficients_size,
-           py::arg("meshtie") = false)
+           py::arg("meshtie"))
       .def("set_quadrature_rule",
            &dolfinx_contact::Contact::set_quadrature_rule)
       .def("generate_kernel",
@@ -267,6 +267,14 @@ PYBIND11_MODULE(cpp, m)
            [](dolfinx_contact::Contact& self, int origin_meshtag)
            {
              auto [coeffs, cstride] = self.pack_ny(origin_meshtag);
+             int shape0 = cstride == 0 ? 0 : coeffs.size() / cstride;
+             return dolfinx_wrappers::as_pyarray(std::move(coeffs),
+                                                 std::array{shape0, cstride});
+           })
+             .def("pack_nx",
+           [](dolfinx_contact::Contact& self, int origin_meshtag)
+           {
+             auto [coeffs, cstride] = self.pack_nx(origin_meshtag);
              int shape0 = cstride == 0 ? 0 : coeffs.size() / cstride;
              return dolfinx_wrappers::as_pyarray(std::move(coeffs),
                                                  std::array{shape0, cstride});

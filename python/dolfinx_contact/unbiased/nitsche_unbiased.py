@@ -131,7 +131,7 @@ def nitsche_unbiased(ufl_form: ufl.Form, u: _fem.Function, markers: list[_cpp.me
     # create contact class
     with _common.Timer("~Contact: Init"):
         mode = dolfinx_contact.cpp.ContactMode.Raytracing
-        mode = dolfinx_contact.cpp.ContactMode.ClosestPoint
+        #mode = dolfinx_contact.cpp.ContactMode.ClosestPoint
         contact = dolfinx_contact.cpp.Contact(markers[1:], contact_surfaces, contact_pairs,
                                               V._cpp_object, quadrature_degree=quadrature_degree,
                                               search_method=mode)
@@ -181,7 +181,10 @@ def nitsche_unbiased(ufl_form: ufl.Form, u: _fem.Function, markers: list[_cpp.me
     with _common.Timer("~Contact: Pack gap, normals, testfunction"):
         for i in range(len(contact_pairs)):
             gaps.append(contact.pack_gap(i))
-            normals.append(contact.pack_ny(i))
+            if mode == dolfinx_contact.cpp.ContactMode.Raytracing:
+                normals.append(-contact.pack_nx(i))
+            else:
+                normals.append(contact.pack_ny(i))
             test_fns.append(contact.pack_test_functions(i, gaps[-1]))
 
     # Concatenate all coeffs
@@ -244,7 +247,7 @@ def nitsche_unbiased(ufl_form: ufl.Form, u: _fem.Function, markers: list[_cpp.me
         A.assemble()
 
     # coefficient arrays
-    num_coeffs = contact.coefficients_size()
+    num_coeffs = contact.coefficients_size(False)
     coeffs = np.array([np.zeros((len(entities[i]), num_coeffs)) for i in range(len(contact_pairs))])
     newton_solver = dolfinx_contact.NewtonSolver(mesh.comm, J, b, coeffs)
 
