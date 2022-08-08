@@ -212,7 +212,7 @@ def nitsche_unbiased(ufl_form: ufl.Form, u: _fem.Function, markers: list[_cpp.me
         u_candidate = []
         with _common.Timer("~~Contact: Pack u contact"):
             for i in range(len(contact_pairs)):
-                u_candidate.append(contact.pack_u_contact(i, u._cpp_object, gaps[i]))
+                u_candidate.append(contact.pack_u_contact(i, u._cpp_object))
         u_puppet = []
         with _common.Timer("~~Contact: Pack u"):
             for i in range(len(contact_pairs)):
