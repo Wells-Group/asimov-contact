@@ -13,7 +13,7 @@ import pytest
 import ufl
 from mpi4py import MPI
 from dolfinx.graph import create_adjacencylist
-
+import os
 import dolfinx_contact
 import dolfinx_contact.cpp
 from dolfinx_contact.helpers import (R_minus, epsilon, lame_parameters,
@@ -22,7 +22,7 @@ from dolfinx_contact.meshing import (convert_mesh, create_disk_mesh,
                                      create_sphere_mesh)
 
 kt = dolfinx_contact.cpp.Kernel
-compare_matrices = dolfinx_cuas.utils.compare_matrices
+compare_matrices = dolfinx_contact.helpers.compare_matrices
 
 
 # This tests compares custom assembly and ufl based assembly
@@ -44,13 +44,15 @@ def test_contact_kernel(theta, gamma, dim, gap):
 
     # Load mesh and create identifier functions for the top (Displacement condition)
     # and the bottom (contact condition)
+    mesh_dir = "meshes"
+    os.system(f"mkdir -p {mesh_dir}")
     if dim == 3:
-        fname = "sphere"
+        fname = f"{mesh_dir}/sphere"
         create_sphere_mesh(filename=f"{fname}.msh")
-        convert_mesh(fname, fname, "tetra")
+        convert_mesh(fname, fname, gdim=3)
 
         with dolfinx.io.XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
-            mesh = xdmf.read_mesh(name="Grid")
+            mesh = xdmf.read_mesh()
 
         def top(x):
             return x[2] > 0.9
@@ -59,11 +61,11 @@ def test_contact_kernel(theta, gamma, dim, gap):
             return x[2] < 0.15
 
     else:
-        fname = "disk"
+        fname = f"{mesh_dir}/disk"
         create_disk_mesh(filename=f"{fname}.msh")
-        convert_mesh(fname, fname, "triangle", prune_z=True)
+        convert_mesh(fname, fname, gdim=2)
         with dolfinx.io.XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
-            mesh = xdmf.read_mesh(name="Grid")
+            mesh = xdmf.read_mesh()
 
         def top(x):
             return x[1] > 0.5
@@ -140,7 +142,6 @@ def test_contact_kernel(theta, gamma, dim, gap):
         F += 1 / gammah * R_minus(sigma_n(u) + gammah * (gap - ufl.dot(u, (-n_2)))) * \
             (theta * sigma_n(v) - gammah * ufl.dot(v, (-n_2))) * ds(bottom_value)
 
-        u.interpolate(_u_initial)
         L = dolfinx.fem.form(F)
         b = dolfinx.fem.petsc.create_vector(L)
 
@@ -191,13 +192,17 @@ def test_contact_kernel(theta, gamma, dim, gap):
         integral_entities = dolfinx_contact.compute_active_entities(
             mesh, bottom_facets, dolfinx.fem.IntegralType.exterior_facet)
         coeffs = dolfinx_cuas.cpp.pack_coefficients(
-            [u._cpp_object, mu2._cpp_object, lmbda2._cpp_object], integral_entities)
+            [u._cpp_object], integral_entities)
+        coeffs = np.hstack([coeffs, dolfinx_contact.cpp.pack_coefficient_quadrature(
+            mu2._cpp_object, 0, integral_entities),
+            dolfinx_contact.cpp.pack_coefficient_quadrature(
+            lmbda2._cpp_object, 0, integral_entities)])
         h_facets = dolfinx_contact.pack_circumradius(mesh, integral_entities)
         data = np.array([bottom_value, top_value], dtype=np.int32)
         offsets = np.array([0, 2], dtype=np.int32)
         surfaces = create_adjacencylist(data, offsets)
-        contact = dolfinx_contact.cpp.Contact([facet_marker], surfaces, [(0, 1)], V._cpp_object)
-        contact.set_quadrature_degree(q_deg)
+        contact = dolfinx_contact.cpp.Contact([facet_marker], surfaces, [(0, 1)],
+                                              V._cpp_object, quadrature_degree=q_deg)
         g_vec = contact.pack_gap_plane(0, g)
         coeffs = np.hstack([coeffs, h_facets, g_vec])
         # RHS
@@ -207,22 +212,24 @@ def test_contact_kernel(theta, gamma, dim, gap):
         kernel = dolfinx_contact.cpp.generate_contact_kernel(V._cpp_object, kt.Rhs, q_rule,
                                                              [u._cpp_object, mu2._cpp_object, lmbda2._cpp_object])
         b2.zeroEntries()
-        contact_assembler = dolfinx_contact.cpp.Contact([facet_marker], surfaces, [(0, 1)], V._cpp_object)
-        contact_assembler.set_quadrature_degree(q_deg)
+        contact_assembler = dolfinx_contact.cpp.Contact(
+            [facet_marker], surfaces, [(0, 1)], V._cpp_object, quadrature_degree=q_deg)
+        contact_assembler.create_distance_map(0)
+
         contact_assembler.assemble_vector(b2, 0, kernel, coeffs, consts)
         dolfinx.fem.petsc.assemble_vector(b2, L_cuas)
         b2.assemble()
         # Jacobian
         a_cuas = ufl.inner(sigma(du), epsilon(v)) * dx
         a_cuas = dolfinx.fem.form(a_cuas)
-        B = dolfinx.fem.petsc.create_matrix(a_cuas)
+        B = contact_assembler.create_matrix(a_cuas)
         kernel = dolfinx_contact.cpp.generate_contact_kernel(
             V._cpp_object, kt.Jac, q_rule, [u._cpp_object, mu2._cpp_object, lmbda2._cpp_object])
         B.zeroEntries()
         contact_assembler.assemble_matrix(B, [], 0, kernel, coeffs, consts)
         dolfinx.fem.petsc.assemble_matrix(B, a_cuas)
         B.assemble()
-        assert(np.allclose(b.array, b2.array))
+        assert np.allclose(b.array, b2.array)
         # Compare matrices, first norm, then entries
         assert np.isclose(A.norm(), B.norm())
         compare_matrices(A, B, atol=1e-7)

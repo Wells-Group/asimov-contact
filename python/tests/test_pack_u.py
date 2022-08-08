@@ -62,8 +62,8 @@ def test_pack_u():
 
     # Compute contact class
     quadrature_degree = 2
-    contact = dolfinx_contact.cpp.Contact([facet_marker], surfaces, [(0, 1), (1, 0)], V._cpp_object)
-    contact.set_quadrature_degree(quadrature_degree)
+    contact = dolfinx_contact.cpp.Contact([facet_marker], surfaces, [(0, 1), (1, 0)],
+                                          V._cpp_object, quadrature_degree=quadrature_degree)
     contact.create_distance_map(0)
     contact.create_distance_map(1)
 
@@ -80,4 +80,4 @@ def test_pack_u():
 
         for j in range(len(s0)):
             f_exact = f(new_points[j].T).T.reshape(-1)
-            assert(np.allclose(f_exact, u_opposite[j]))
+            assert np.allclose(f_exact, u_opposite[j])

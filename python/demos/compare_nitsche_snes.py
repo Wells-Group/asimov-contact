@@ -70,15 +70,16 @@ if __name__ == "__main__":
 
     # Load mesh and create identifier functions for the top (Displacement condition)
     # and the bottom (contact condition)
+    mesh_dir = "meshes"
     if threed:
         if cube:
             mesh = create_unit_cube(MPI.COMM_WORLD, 10, 10, 20)
         else:
-            fname = "sphere"
+            fname = f"{mesh_dir}/sphere"
             create_sphere_mesh(filename=f"{fname}.msh")
-            convert_mesh(fname, fname, "tetra")
+            convert_mesh(fname, fname, gdim=3)
             with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
-                mesh = xdmf.read_mesh(name="Grid")
+                mesh = xdmf.read_mesh()
 
         def top(x):
             return x[2] > 0.9
@@ -90,11 +91,11 @@ if __name__ == "__main__":
         if cube:
             mesh = create_unit_square(MPI.COMM_WORLD, 30, 30)
         else:
-            fname = "disk"
+            fname = f"{mesh_dir}/disk"
             create_disk_mesh(filename=f"{fname}.msh")
-            convert_mesh(fname, fname, "triangle", prune_z=True)
+            convert_mesh(fname, fname, gdim=2)
             with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
-                mesh = xdmf.read_mesh(name="Grid")
+                mesh = xdmf.read_mesh()
 
         def top(x):
             return x[1] > 0.5
@@ -110,7 +111,7 @@ if __name__ == "__main__":
                     "snes_max_fail": 10, "snes_type": "vinewtonrsls",
                     "snes_rtol": 1e-9, "snes_atol": 1e-9, "snes_view": None}
     # Cannot use GAMG with SNES, see: https://gitlab.com/petsc/petsc/-/issues/829
-    petsc_snes = {"ksp_type": "cg", "ksp_rtol": 1e-5, "pc_type": "jacobi"}
+    petsc_snes = {"ksp_type": "cg", "ksp_rtol": 1e-6, "pc_type": "jacobi"}
     e_abs = []
     e_rel = []
     dofs_global = []
@@ -181,5 +182,5 @@ if __name__ == "__main__":
         if rank == 0:
             print(f"{dofs_global[i]}, Nitsche: {nitsche_timings[1]: 0.2e}"
                   + f" SNES: {snes_timings[1]:0.2e}")
-    assert(e_rel[-1] < 1e-3)
-    assert(e_abs[-1] < 1e-4)
+    assert e_rel[-1] < 1e-3
+    assert e_abs[-1] < 1e-4

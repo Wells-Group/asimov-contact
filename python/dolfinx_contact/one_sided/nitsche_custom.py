@@ -12,9 +12,8 @@ from dolfinx import common as _common
 from dolfinx import fem as _fem
 from dolfinx import log as _log
 from dolfinx import mesh as dmesh
+from dolfinx import cpp as _cpp
 from dolfinx.graph import create_adjacencylist
-from petsc4py import PETSc as _PETSc
-from dolfinx.cpp.mesh import MeshTags_int32
 import dolfinx_contact
 import dolfinx_contact.cpp
 from dolfinx_contact.helpers import (epsilon, lame_parameters,
@@ -23,7 +22,7 @@ from dolfinx_contact.helpers import (epsilon, lame_parameters,
 __all__ = ["nitsche_custom"]
 
 
-def nitsche_custom(mesh: dmesh.Mesh, mesh_data: Tuple[MeshTags_int32, int, int],
+def nitsche_custom(mesh: dmesh.Mesh, mesh_data: Tuple[_cpp.mesh.MeshTags_int32, int, int],
                    physical_parameters: dict = {}, nitsche_parameters: Dict[str, float] = {},
                    plane_loc: float = 0.0, vertical_displacement: float = -0.1,
                    nitsche_bc: bool = True, quadrature_degree: int = 5, form_compiler_params: Dict = {},
@@ -89,7 +88,7 @@ def nitsche_custom(mesh: dmesh.Mesh, mesh_data: Tuple[MeshTags_int32, int, int],
 
     # Unpack mesh data
     (facet_marker, dirichlet_value, contact_value) = mesh_data
-    assert(facet_marker.dim == mesh.topology.dim - 1)
+    assert facet_marker.dim == mesh.topology.dim - 1
 
     # Outward unit normal of plane
     n_vec = np.zeros(mesh.geometry.dim)
@@ -140,11 +139,14 @@ def nitsche_custom(mesh: dmesh.Mesh, mesh_data: Tuple[MeshTags_int32, int, int],
     mu2.interpolate(lambda x: np.full((1, x.shape[1]), mu))
 
     # Compute integral entities on exterior facets (cell_index, local_index)
-    bottom_facets = facet_marker.indices[facet_marker.values == contact_value]
+    bottom_facets = facet_marker.find(contact_value)
     integral = _fem.IntegralType.exterior_facet
     integral_entities = dolfinx_contact.compute_active_entities(mesh, bottom_facets, integral)
     # Pack mu and lambda on facets
-    coeffs = dolfinx_cuas.pack_coefficients([mu2, lmbda2], integral_entities)
+    coeffs = np.hstack([dolfinx_contact.cpp.pack_coefficient_quadrature(
+        mu2._cpp_object, 0, integral_entities),
+        dolfinx_contact.cpp.pack_coefficient_quadrature(
+        lmbda2._cpp_object, 0, integral_entities)])
     # Pack circumradius of facets
     h_facets = dolfinx_contact.pack_circumradius(mesh, integral_entities)
 
@@ -152,8 +154,8 @@ def nitsche_custom(mesh: dmesh.Mesh, mesh_data: Tuple[MeshTags_int32, int, int],
     data = np.array([contact_value, dirichlet_value], dtype=np.int32)
     offsets = np.array([0, 2], dtype=np.int32)
     surfaces = create_adjacencylist(data, offsets)
-    contact = dolfinx_contact.cpp.Contact([facet_marker], surfaces, [(0, 1)], V._cpp_object)
-    contact.set_quadrature_degree(quadrature_degree)
+    contact = dolfinx_contact.cpp.Contact([facet_marker], surfaces, [(0, 1)],
+                                          V._cpp_object, quadrature_degree=quadrature_degree)
     # Compute gap from contact boundary
     g_vec = contact.pack_gap_plane(0, -plane_loc)
 
@@ -165,13 +167,12 @@ def nitsche_custom(mesh: dmesh.Mesh, mesh_data: Tuple[MeshTags_int32, int, int],
     kernel_rhs = dolfinx_contact.cpp.generate_contact_kernel(V._cpp_object, dolfinx_contact.Kernel.Rhs, q_rule,
                                                              [u._cpp_object, mu2._cpp_object, lmbda2._cpp_object])
 
-    def create_b():
-        return _fem.petsc.create_vector(L_custom)
-
-    def assemble_residual(x, b):
+    def assemble_residual(x, b, cf):
         u.vector[:] = x.array
         u_packed = dolfinx_cuas.pack_coefficients([u._cpp_object], integral_entities)
         c = np.hstack([u_packed, coeffs])
+        with b.localForm() as b_local:
+            b_local.set(0.0)
         contact.assemble_vector(b, 0, kernel_rhs, c, consts)
         _fem.petsc.assemble_vector(b, L_custom)
 
@@ -180,31 +181,30 @@ def nitsche_custom(mesh: dmesh.Mesh, mesh_data: Tuple[MeshTags_int32, int, int],
     kernel_J = dolfinx_contact.cpp.generate_contact_kernel(
         V._cpp_object, dolfinx_contact.Kernel.Jac, q_rule, [u._cpp_object, mu2._cpp_object, lmbda2._cpp_object])
 
-    def create_A():
-        return _fem.petsc.create_matrix(a_custom)
-
-    def assemble_jacobian(x, A):
+    def assemble_jacobian(x, a_mat, cf):
         u.vector[:] = x.array
         u_packed = dolfinx_cuas.pack_coefficients([u._cpp_object], integral_entities)
         c = np.hstack([u_packed, coeffs])
-        contact.assemble_matrix(A, [], 0, kernel_J, c, consts)
-        _fem.petsc.assemble_matrix(A, a_custom)
+        a_mat.zeroEntries()
+        contact.assemble_matrix(a_mat, [], 0, kernel_J, c, consts)
+        _fem.petsc.assemble_matrix(a_mat, a_custom)
+        a_mat.assemble()
 
-    # Setup non-linear problem and Newton-solver
-    problem = dolfinx_cuas.NonlinearProblemCUAS(assemble_residual, assemble_jacobian, create_b, create_A)
-    solver = dolfinx_cuas.NewtonSolver(mesh.comm, problem)
+    # Setup Newton-solver
+    def update_cf(x, cf):
+        pass
+    a_mat = _fem.petsc.create_matrix(a_custom)
+    b = _fem.petsc.create_vector(L_custom)
+    solver = dolfinx_contact.NewtonSolver(mesh.comm, a_mat, b, np.empty((0, 0)))
+    solver.set_jacobian(assemble_jacobian)
+    solver.set_residual(assemble_residual)
+    solver.set_coefficients(update_cf)
+    solver.set_krylov_options(petsc_options)
+    solver.set_newton_options(newton_options)
 
     # Create rigid motion null-space
     null_space = rigid_motions_nullspace(V)
     solver.A.setNearNullSpace(null_space)
-
-    # Set Newton solver options
-    solver.atol = newton_options.get("atol", 1e-9)
-    solver.rtol = newton_options.get("rtol", 1e-9)
-    solver.convergence_criterion = newton_options.get("convergence_criterion", "incremental")
-    solver.max_it = newton_options.get("max_it", 50)
-    solver.error_on_nonconvergence = newton_options.get("error_on_nonconvergence", True)
-    solver.relaxation_parameter = newton_options.get("relaxation_parameter", 1.0)
 
     def _u_initial(x):
         values = np.zeros((mesh.geometry.dim, x.shape[1]))
@@ -213,18 +213,6 @@ def nitsche_custom(mesh: dmesh.Mesh, mesh_data: Tuple[MeshTags_int32, int, int],
 
     # Set initial_condition:
     u.interpolate(_u_initial)
-
-    # Define solver and options
-    ksp = solver.krylov_solver
-    option_prefix = ksp.getOptionsPrefix()
-
-    # Set PETSc options
-    opts = _PETSc.Options()
-    opts.prefixPush(option_prefix)
-    for k, v in petsc_options.items():
-        opts[k] = v
-    opts.prefixPop()
-    ksp.setFromOptions()
 
     dofs_global = V.dofmap.index_map_bs * V.dofmap.index_map.size_global
     _log.set_log_level(_log.LogLevel.INFO)
@@ -235,7 +223,7 @@ def nitsche_custom(mesh: dmesh.Mesh, mesh_data: Tuple[MeshTags_int32, int, int],
     u.x.scatter_forward()
 
     if solver.error_on_nonconvergence:
-        assert(converged)
+        assert converged
     print(f"{dofs_global}, Number of interations: {n:d}")
 
     return u

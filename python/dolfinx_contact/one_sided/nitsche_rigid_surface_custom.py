@@ -6,14 +6,14 @@ from typing import Dict, Tuple
 
 import basix
 import dolfinx.common as _common
-from dolfinx.graph import create_adjacencylist
+import dolfinx.cpp as _cpp
 import dolfinx.fem as _fem
 import dolfinx.log as _log
 import dolfinx.mesh as _mesh
 import dolfinx_cuas
 import numpy as np
 import ufl
-from dolfinx.cpp.mesh import MeshTags_int32
+from dolfinx.graph import create_adjacencylist
 
 import dolfinx_contact
 import dolfinx_contact.cpp
@@ -24,7 +24,7 @@ __all__ = ["nitsche_rigid_surface_custom"]
 kt = dolfinx_contact.cpp.Kernel
 
 
-def nitsche_rigid_surface_custom(mesh: _mesh.Mesh, mesh_data: Tuple[MeshTags_int32, int, int, int, int],
+def nitsche_rigid_surface_custom(mesh: _mesh.Mesh, mesh_data: Tuple[_cpp.mesh.MeshTags_int32, int, int, int, int],
                                  physical_parameters: dict = None, nitsche_parameters: Dict[str, float] = None,
                                  vertical_displacement: float = -0.1, nitsche_bc: bool = True,
                                  quadrature_degree: int = 5, form_compiler_params: Dict = None,
@@ -106,7 +106,7 @@ def nitsche_rigid_surface_custom(mesh: _mesh.Mesh, mesh_data: Tuple[MeshTags_int
     # Unpack mesh data
     (facet_marker, dirichlet_value_elastic, contact_value_elastic, contact_value_rigid,
      dirichlet_value_rigid) = mesh_data
-    assert(facet_marker.dim == mesh.topology.dim - 1)
+    assert facet_marker.dim == mesh.topology.dim - 1
     gdim = mesh.geometry.dim
 
     # Setup function space and functions used in Jacobian and residual formulation
@@ -165,25 +165,29 @@ def nitsche_rigid_surface_custom(mesh: _mesh.Mesh, mesh_data: Tuple[MeshTags_int
     mu2.interpolate(lambda x: np.full((1, x.shape[1]), mu))
 
     # Compute integral entities on exterior facets (cell_index, local_index)
-    contact_facets = facet_marker.indices[facet_marker.values == contact_value_elastic]
+    contact_facets = facet_marker.find(contact_value_elastic)
     integral = _fem.IntegralType.exterior_facet
     integral_entities = dolfinx_contact.compute_active_entities(mesh, contact_facets, integral)
 
     # Pack mu and lambda on facets
-    coeffs = dolfinx_cuas.pack_coefficients([mu2, lmbda2], integral_entities)
+    coeffs = np.hstack([dolfinx_contact.cpp.pack_coefficient_quadrature(
+        mu2._cpp_object, 0, integral_entities),
+        dolfinx_contact.cpp.pack_coefficient_quadrature(
+        lmbda2._cpp_object, 0, integral_entities)])
     # Pack celldiameter on facets
     surface_cells = np.unique(integral_entities[:, 0])
     h_int = _fem.Function(V2)
-    expr = _fem.Expression(h, V2.element.interpolation_points)
+    expr = _fem.Expression(h, V2.element.interpolation_points())
     h_int.interpolate(expr, surface_cells)
-    h_facets = dolfinx_cuas.pack_coefficients([h_int], integral_entities)
+    h_facets = dolfinx_contact.cpp.pack_coefficient_quadrature(
+        h_int._cpp_object, 0, integral_entities)
 
     # Create contact class
     data = np.array([contact_value_elastic, contact_value_rigid], dtype=np.int32)
     offsets = np.array([0, 2], dtype=np.int32)
     surfaces = create_adjacencylist(data, offsets)
-    contact = dolfinx_contact.cpp.Contact([facet_marker], surfaces, [(0, 1)], V._cpp_object)
-    contact.set_quadrature_degree(quadrature_degree)
+    contact = dolfinx_contact.cpp.Contact([facet_marker], surfaces, [(0, 1)],
+                                          V._cpp_object, quadrature_degree=quadrature_degree)
 
     # Compute gap and normals
     contact.create_distance_map(0)
@@ -206,8 +210,7 @@ def nitsche_rigid_surface_custom(mesh: _mesh.Mesh, mesh_data: Tuple[MeshTags_int
 
     # NOTE: HACK to make "one-sided" contact work with assemble_matrix/assemble_vector
     contact_assembler = dolfinx_contact.cpp.Contact(
-        [facet_marker], surfaces, [(0, 1)], V._cpp_object)
-    contact_assembler.set_quadrature_degree(quadrature_degree)
+        [facet_marker], surfaces, [(0, 1)], V._cpp_object, quadrature_degree=quadrature_degree)
 
     def pack_coefficients(x, solver_coeffs):
         """
@@ -279,7 +282,7 @@ def nitsche_rigid_surface_custom(mesh: _mesh.Mesh, mesh_data: Tuple[MeshTags_int
     u.x.scatter_forward()
 
     if solver.error_on_nonconvergence:
-        assert(converged)
+        assert converged
     print(f"{dofs_global}, Number of interations: {n:d}")
 
     return u

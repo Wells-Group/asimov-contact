@@ -9,7 +9,7 @@ from setuptools.command.build_ext import build_ext
 
 VERSION = "0.4.0"
 
-REQUIREMENTS = ["fenics-dolfinx>0.4.0", "numpy>=1.21.0"]
+REQUIREMENTS = ["fenics-dolfinx>0.4.0", "numpy>=1.21.0", "dolfinx_cuas>=0.4.1"]
 
 
 class CMakeExtension(Extension):
@@ -72,10 +72,11 @@ setup(name='dolfinx_contact',
 
       author='Sarah Roggendorf',
       python_requires='>3.7.0',
-      packages=['dolfinx_contact', "dolfinx_contact.one_sided", "dolfinx_contact.meshing",
+      packages=['dolfinx_contact', "dolfinx_contact.one_sided", "dolfinx_contact.meshing", "dolfinx_contact.meshtie",
                 "dolfinx_contact.unbiased"],
       package_data={'dolfinx_contact.wrappers': ['*.h'], 'dolfinx_contact': ["py.typed"],
                     "dolfinx_contact.one_sided": ["py.typed"], "dolfinx_contact.meshing": ["py.typed"],
+                    "dolfinx_contact.meshtie": ["py.typed"],
                     "dolfinx_contact.unbiased": ["py.typed"]},
       ext_modules=[CMakeExtension('dolfinx_contact.cpp')],
       cmdclass=dict(build_ext=CMakeBuild),

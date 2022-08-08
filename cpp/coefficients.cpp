@@ -6,20 +6,17 @@
 
 #include "coefficients.h"
 #include "QuadratureRule.h"
+#include "error_handling.h"
 #include "geometric_quantities.h"
 #include <basix/quadrature.h>
 #include <dolfinx/mesh/cell_types.h>
-#include <xtensor/xslice.hpp>
-#include <xtl/xspan.hpp>
 using namespace dolfinx_contact;
 
 std::pair<std::vector<PetscScalar>, int>
 dolfinx_contact::pack_coefficient_quadrature(
     std::shared_ptr<const dolfinx::fem::Function<PetscScalar>> coeff,
-    const int q_degree,
-    std::variant<tcb::span<const std::int32_t>,
-                 tcb::span<const std::pair<std::int32_t, int>>>
-        active_entities)
+    const int q_degree, std::span<const std::int32_t> active_entities,
+    dolfinx::fem::IntegralType integral)
 {
   // Get mesh
   std::shared_ptr<const dolfinx::mesh::Mesh> mesh
@@ -28,100 +25,71 @@ dolfinx_contact::pack_coefficient_quadrature(
 
   // Get topology data
   const dolfinx::mesh::Topology& topology = mesh->topology();
-  const int tdim = topology.dim();
+  const std::size_t tdim = topology.dim();
   const dolfinx::mesh::CellType cell_type = topology.cell_type();
 
   // Get what entity type we are integrating over
-  int entity_dim;
-  std::visit(
-      [&entity_dim, tdim](auto& entities)
-      {
-        using U = std::decay_t<decltype(entities)>;
-        if constexpr (std::is_same_v<U, tcb::span<const std::int32_t>>)
-          entity_dim = tdim;
-        else if constexpr (std::is_same_v<
-                               U,
-                               tcb::span<const std::pair<std::int32_t, int>>>)
-        {
-          entity_dim = tdim - 1;
-        }
-        else
-        {
-          throw std::invalid_argument(
-              "Could not pack coefficients. Input entity "
-              "type is not supported.");
-        }
-      },
-      active_entities);
-
+  std::size_t entity_dim;
+  switch (integral)
+  {
+  case dolfinx::fem::IntegralType::cell:
+    entity_dim = tdim;
+    break;
+  case dolfinx::fem::IntegralType::exterior_facet:
+    entity_dim = tdim - 1;
+    break;
+  default:
+    throw std::invalid_argument("Unsupported integral type.");
+  }
   // Create quadrature rule
-  QuadratureRule q_rule(cell_type, q_degree, entity_dim);
-
-  // Get finite element
-  const dolfinx::fem::FiniteElement* element
-      = coeff->function_space()->element().get();
+  QuadratureRule q_rule(cell_type, q_degree, (int)entity_dim);
 
   // Get element information
+  const dolfinx::fem::FiniteElement* element
+      = coeff->function_space()->element().get();
   const std::size_t bs = element->block_size();
-  const std::size_t num_basis_functions = element->space_dimension() / bs;
-  const int reference_value_size = element->reference_value_size();
-  const int vs = reference_value_size / bs;
+  const std::size_t value_size = element->value_size();
 
   // Tabulate function at quadrature points (assuming no derivatives)
-  if ((cell_type == dolfinx::mesh::CellType::prism)
-      or (cell_type == dolfinx::mesh::CellType::pyramid))
-  {
-    throw std::invalid_argument("Prism and pyramid meshes are not supported");
-  }
-  const xt::xtensor<double, 2>& q_points = q_rule.points();
-  const std::vector<std::int32_t>& q_offsets = q_rule.offset();
+  dolfinx_contact::error::check_cell_type(cell_type);
+  const std::vector<double>& q_points = q_rule.points();
+  const std::vector<std::size_t>& q_offset = q_rule.offset();
+  const std::size_t sum_q_points = q_offset.back();
+  const std::size_t num_points_per_entity = q_offset[1] - q_offset[0];
+  std::array<std::size_t, 2> p_shape = {sum_q_points, tdim};
+  assert(q_rule.tdim() == tdim);
 
-  xt::xtensor<double, 4> reference_basis_values(
-      {1, (std::size_t)q_offsets.back(), num_basis_functions, (std::size_t)vs});
-  element->tabulate(reference_basis_values, q_points, 0);
+  const basix::FiniteElement& basix_element = element->basix_element();
+  std::array<std::size_t, 4> tab_shape
+      = basix_element.tabulate_shape(0, sum_q_points);
+  std::vector<double> reference_basisb(
+      std::reduce(tab_shape.cbegin(), tab_shape.cend(), 1, std::multiplies{}));
+  element->tabulate(reference_basisb, q_points, p_shape, 0);
+  cmdspan4_t reference_basis(reference_basisb.data(), tab_shape);
 
-  std::function<std::pair<std::int32_t, int>(std::size_t)> get_cell_info;
+  assert(value_size / bs == tab_shape[3]);
+
+  std::function<std::array<std::int32_t, 2>(std::size_t)> get_cell_info;
   std::size_t num_active_entities;
-  // TODO see if this can be simplified with templating
-  std::visit(
-      [&num_active_entities, &get_cell_info](auto& entities)
-      {
-        using U = std::decay_t<decltype(entities)>;
-        if constexpr (std::is_same_v<U, tcb::span<const std::int32_t>>)
-        {
-          num_active_entities = entities.size();
-          // Iterate over coefficients
-          get_cell_info = [&entities](auto i)
-          {
-            std::pair<std::int32_t, int> pair(entities[i], 0);
-            return pair;
-          };
-        }
-        else if constexpr (std::is_same_v<
-                               U,
-                               tcb::span<const std::pair<std::int32_t, int>>>)
-        {
-          num_active_entities = entities.size();
-          // Create lambda function fetching cell index from exterior facet
-          // entity
-          get_cell_info = [&entities](auto i) { return entities[i]; };
-        }
-        else
-        {
-          throw std::invalid_argument(
-              "Could not pack coefficient. Input entity "
-              "type is not supported.");
-        }
-      },
-      active_entities);
+  switch (integral)
+  {
+  case dolfinx::fem::IntegralType::cell:
+    num_active_entities = active_entities.size();
+    break;
+  case dolfinx::fem::IntegralType::exterior_facet:
+    num_active_entities = active_entities.size() / 2;
+    break;
+  default:
+    throw std::invalid_argument("Unsupported integral type.");
+  }
 
   // Create output array
-  const std::size_t num_points_per_entity = q_offsets[1] - q_offsets[0];
-  const auto cstride = int(reference_value_size * num_points_per_entity);
+  const std::vector<std::size_t>& q_offsets = q_rule.offset();
+  const auto cstride = int(value_size * num_points_per_entity);
   std::vector<PetscScalar> coefficients(num_active_entities * cstride, 0.0);
 
   // Get the coeffs to pack
-  const xtl::span<const double> data = coeff->x()->array();
+  const std::span<const double> data = coeff->x()->array();
 
   // Get dofmap info
   const dolfinx::fem::DofMap* dofmap = coeff->function_space()->dofmap().get();
@@ -129,26 +97,20 @@ dolfinx_contact::pack_coefficient_quadrature(
 
   // Get dof transformations
   const bool needs_dof_transformations = element->needs_dof_transformations();
-  xtl::span<const std::uint32_t> cell_info;
+  std::span<const std::uint32_t> cell_info;
   if (needs_dof_transformations)
   {
     mesh->topology_mutable().create_entity_permutations();
     cell_info = topology.get_cell_permutation_info();
   }
-  const std::function<void(const xtl::span<PetscScalar>&,
-                           const xtl::span<const std::uint32_t>&, std::int32_t,
+  const std::function<void(const std::span<PetscScalar>&,
+                           const std::span<const std::uint32_t>&, std::int32_t,
                            int)>
       transformation = element->get_dof_transformation_function<PetscScalar>();
 
   if (needs_dof_transformations)
   {
-    const auto num_points = (std::size_t)q_offsets.back();
-
-    // Prepare basis function data structures
-    xt::xtensor<double, 3> basis_values(
-        {num_points_per_entity, num_basis_functions, (std::size_t)vs});
-    xt::xtensor<double, 2> element_basis_values(
-        {basis_values.shape(0), basis_values.shape(1)});
+    const auto num_points = q_offsets.back();
 
     // Get geometry data
     const dolfinx::mesh::Geometry& geometry = mesh->geometry();
@@ -157,105 +119,135 @@ dolfinx_contact::pack_coefficient_quadrature(
         = mesh->geometry().dofmap();
     const dolfinx::fem::CoordinateElement& cmap = geometry.cmap();
     const std::size_t num_dofs_g = cmap.dim();
-    xtl::span<const double> x_g = geometry.x();
+    std::span<const double> x_g = geometry.x();
 
     // Tabulate coordinate basis to compute Jacobian
-    std::array<std::size_t, 4> tab_shape = cmap.tabulate_shape(1, num_points);
-    xt::xtensor<double, 3> cmap_derivative(
-        {(std::size_t)tdim, tab_shape[1], tab_shape[2]});
-    {
-      xt::xtensor<double, 4> cmap_basis_functions(tab_shape);
-      cmap.tabulate(1, q_points, cmap_basis_functions);
-      cmap_derivative
-          = xt::view(cmap_basis_functions, xt::xrange(1, int(tdim) + 1),
-                     xt::all(), xt::all(), 0);
-    }
+    std::array<std::size_t, 4> c_shape = cmap.tabulate_shape(1, num_points);
+    std::vector<double> c_basisb(
+        std::reduce(c_shape.cbegin(), c_shape.cend(), 1, std::multiplies{}));
+    cmap.tabulate(1, q_points, p_shape, c_basisb);
+    cmdspan4_t c_basis(c_basisb.data(), c_shape);
+
     // Prepare geometry data structures
-    xt::xtensor<double, 2> X({num_points_per_entity, (std::size_t)tdim});
-    xt::xtensor<double, 2> J
-        = xt::zeros<double>({(std::size_t)gdim, (std::size_t)tdim});
-    xt::xtensor<double, 2> K
-        = xt::zeros<double>({(std::size_t)tdim, (std::size_t)gdim});
-    xt::xtensor<double, 2> coordinate_dofs
-        = xt::zeros<double>({num_dofs_g, (std::size_t)gdim});
+    std::vector<double> Jb(gdim * tdim);
+    std::vector<double> Kb(tdim * gdim);
+    mdspan2_t J(Jb.data(), gdim, tdim);
+    mdspan2_t K(Kb.data(), tdim, gdim);
+    std::vector<double> detJ_scratch(2 * gdim * tdim);
+    std::vector<double> coordinate_dofsb(num_dofs_g * gdim);
+    mdspan2_t coordinate_dofs(coordinate_dofsb.data(), num_dofs_g, gdim);
+
+    // Prepare transformation function
+    std::vector<double> element_basisb(tab_shape[2] * tab_shape[3]);
+    mdspan2_t element_basis(element_basisb.data(), tab_shape[2], tab_shape[3]);
+    std::vector<double> basis_valuesb(num_points_per_entity * tab_shape[2]
+                                      * tab_shape[3]);
+    mdspan3_t basis_values(basis_valuesb.data(), num_points_per_entity,
+                           tab_shape[2], tab_shape[3]);
 
     // Get push forward function
-    using u_t = xt::xview<decltype(basis_values)&, std::size_t,
-                          xt::xall<std::size_t>, xt::xall<std::size_t>>;
-    using U_t = xt::xview<decltype(element_basis_values)&,
-                          xt::xall<std::size_t>, xt::xall<std::size_t>>;
+    using xu_t = stdex::mdspan<double, stdex::dextents<std::size_t, 2>>;
+    using xU_t = stdex::mdspan<const double, stdex::dextents<std::size_t, 2>>;
+    using xJ_t = stdex::mdspan<const double, stdex::dextents<std::size_t, 2>>;
+    using xK_t = stdex::mdspan<const double, stdex::dextents<std::size_t, 2>>;
     auto push_forward_fn
-        = element->map_fn<u_t, U_t, decltype(J)&, decltype(K)&>();
-    xt::xtensor<double, 2> dphi_q({(std::size_t)tdim, tab_shape[2]});
+        = element->basix_element().map_fn<xu_t, xU_t, xJ_t, xK_t>();
 
     for (std::size_t i = 0; i < num_active_entities; i++)
     {
-      auto [cell, entity_index] = get_cell_info(i);
+      // Get local cell info
+      std::int32_t cell;
+      std::int32_t entity_index;
+      switch (integral)
+      {
+      case dolfinx::fem::IntegralType::cell:
+        cell = active_entities[i];
+        entity_index = 0;
+        break;
+      case dolfinx::fem::IntegralType::exterior_facet:
+        cell = active_entities[2 * i];
+        entity_index = active_entities[2 * i + 1];
+        break;
+      default:
+        throw std::invalid_argument("Unsupported integral type.");
+      }
 
       // Get cell geometry (coordinate dofs)
       auto x_dofs = x_dofmap.links(cell);
       assert(x_dofs.size() == num_dofs_g);
-      for (std::size_t k = 0; k < num_dofs_g; ++k)
+      for (std::size_t j = 0; j < num_dofs_g; ++j)
       {
-        const int pos = 3 * x_dofs[k];
-        for (int j = 0; j < gdim; ++j)
-          coordinate_dofs(k, j) = x_g[pos + j];
+        auto pos = 3 * x_dofs[j];
+        for (std::size_t k = 0; k < coordinate_dofs.extent(1); ++k)
+          coordinate_dofs(j, k) = x_g[pos + k];
       }
+
       if (cmap.is_affine())
       {
-        std::fill(J.begin(), J.end(), 0);
-        dphi_q = xt::view(cmap_derivative, xt::all(), q_offsets[entity_index],
-                          xt::all());
+        std::fill(Jb.begin(), Jb.end(), 0);
+        auto dphi_q
+            = stdex::submdspan(c_basis, std::pair{1, std::size_t(tdim + 1)},
+                               q_offsets[entity_index], stdex::full_extent, 0);
         dolfinx::fem::CoordinateElement::compute_jacobian(dphi_q,
                                                           coordinate_dofs, J);
         dolfinx::fem::CoordinateElement::compute_jacobian_inverse(J, K);
         double detJ
-            = dolfinx::fem::CoordinateElement::compute_jacobian_determinant(J);
+            = dolfinx::fem::CoordinateElement::compute_jacobian_determinant(
+                J, detJ_scratch);
 
         for (std::size_t q = 0; q < num_points_per_entity; ++q)
         {
 
+          // Copy basis values prior to calling transformation
+          for (std::size_t j = 0; j < element_basis.extent(0); ++j)
+            for (std::size_t k = 0; k < element_basis.extent(1); ++k)
+            {
+              element_basis(j, k)
+                  = reference_basis(0, q_offsets[entity_index] + q, j, k);
+            }
+
           // Permute the reference values to account for the cell's
           // orientation
-          element_basis_values
-              = xt::view(reference_basis_values, 0, q_offsets[entity_index] + q,
-                         xt::all(), xt::all());
-          transformation(
-              xtl::span(element_basis_values.data(), num_basis_functions * vs),
-              cell_info, cell, vs);
+          transformation(element_basisb, cell_info, cell, (int)tab_shape[3]);
 
           // Push basis forward to physical element
-          auto _u = xt::view(basis_values, q, xt::all(), xt::all());
-          auto _U = xt::view(element_basis_values, xt::all(), xt::all());
-          push_forward_fn(_u, _U, J, detJ, K);
+          auto _u = stdex::submdspan(basis_values, q, stdex::full_extent,
+                                     stdex::full_extent);
+          push_forward_fn(_u, element_basis, J, detJ, K);
         }
       }
       else
       {
         for (std::size_t q = 0; q < num_points_per_entity; ++q)
         {
-          std::fill(J.begin(), J.end(), 0);
-          dphi_q = xt::view(cmap_derivative, xt::all(),
-                            q_offsets[entity_index] + q, xt::all());
+          std::fill(Jb.begin(), Jb.end(), 0);
+          auto dphi_q = stdex::submdspan(
+              c_basis, std::pair{1, std::size_t(tdim + 1)},
+              q_offsets[entity_index] + q, stdex::full_extent, 0);
           dolfinx::fem::CoordinateElement::compute_jacobian(dphi_q,
                                                             coordinate_dofs, J);
           dolfinx::fem::CoordinateElement::compute_jacobian_inverse(J, K);
           double detJ
               = dolfinx::fem::CoordinateElement::compute_jacobian_determinant(
-                  J);
+                  J, detJ_scratch);
+
+          // Copy basis values prior to calling transformation
+          for (std::size_t j = 0; j < element_basis.extent(0); ++j)
+            for (std::size_t k = 0; k < element_basis.extent(1); ++k)
+            {
+              element_basis(j, k)
+                  = reference_basis(0, q_offsets[entity_index] + q, j, k);
+            }
+
           // Permute the reference values to account for the cell's
           // orientation
-          element_basis_values
-              = xt::view(reference_basis_values, 0, q_offsets[entity_index] + q,
-                         xt::all(), xt::all());
-          transformation(
-              xtl::span(element_basis_values.data(), num_basis_functions * vs),
-              cell_info, cell, vs);
+          transformation(element_basisb, cell_info, cell, (int)tab_shape[3]);
 
           // Push basis forward to physical element
-          auto _u = xt::view(basis_values, q, xt::all(), xt::all());
-          auto _U = xt::view(element_basis_values, xt::all(), xt::all());
-          push_forward_fn(_u, _U, J, detJ, K);
+          // Push basis forward to physical element
+          auto _u = stdex::submdspan(basis_values, q, stdex::full_extent,
+                                     stdex::full_extent);
+          push_forward_fn(_u, element_basis, J, detJ, K);
         }
       }
       // Sum up quadrature contributions
@@ -266,8 +258,8 @@ dolfinx_contact::pack_coefficient_quadrature(
 
         for (std::size_t q = 0; q < num_points_per_entity; ++q)
           for (std::size_t k = 0; k < dofmap_bs; ++k)
-            for (int j = 0; j < vs; j++)
-              coefficients[cstride * i + q * reference_value_size + k + j]
+            for (std::size_t j = 0; j < tab_shape[3]; j++)
+              coefficients[cstride * i + q * value_size + k + j]
                   += basis_values(q, d, j) * data[pos_v + k];
       }
     }
@@ -277,9 +269,25 @@ dolfinx_contact::pack_coefficient_quadrature(
     // Loop over all entities
     for (std::size_t i = 0; i < num_active_entities; i++)
     {
-      auto [cell, entity_index] = get_cell_info(i);
+      // Get local cell info
+      std::int32_t cell;
+      std::int32_t entity_index;
+      switch (integral)
+      {
+      case dolfinx::fem::IntegralType::cell:
+        cell = active_entities[i];
+        entity_index = 0;
+        break;
+      case dolfinx::fem::IntegralType::exterior_facet:
+        cell = active_entities[2 * i];
+        entity_index = active_entities[2 * i + 1];
+        break;
+      default:
+        throw std::invalid_argument("Unsupported integral type.");
+      }
+
       auto dofs = dofmap->cell_dofs(cell);
-      const std::int32_t q_offset = q_offsets[entity_index];
+      const std::size_t q_offset = q_offsets[entity_index];
 
       // Loop over all dofs in cell
       for (std::size_t d = 0; d < dofs.size(); ++d)
@@ -296,11 +304,10 @@ dolfinx_contact::pack_coefficient_quadrature(
           {
             // Access each component of the reference basis function (in the
             // case of vector spaces)
-            for (int l = 0; l < vs; ++l)
+            for (std::size_t l = 0; l < tab_shape[3]; ++l)
             {
-              coefficients[cstride * i + q * bs * vs + l + pos.rem]
-                  += reference_basis_values(0, q_offset + q, pos.quot, l)
-                     * coeff;
+              coefficients[cstride * i + q * bs * tab_shape[3] + l + pos.rem]
+                  += reference_basis(0, q_offset + q, pos.quot, l) * coeff;
             }
           }
         }
@@ -312,7 +319,7 @@ dolfinx_contact::pack_coefficient_quadrature(
 //-----------------------------------------------------------------------------
 std::vector<PetscScalar> dolfinx_contact::pack_circumradius(
     const dolfinx::mesh::Mesh& mesh,
-    const tcb::span<const std::pair<std::int32_t, int>>& active_facets)
+    const std::span<const std::int32_t>& active_facets)
 {
   const dolfinx::mesh::Geometry& geometry = mesh.geometry();
   const dolfinx::mesh::Topology& topology = mesh.topology();
@@ -321,70 +328,76 @@ std::vector<PetscScalar> dolfinx_contact::pack_circumradius(
 
   // Tabulate element at quadrature points
   const dolfinx::mesh::CellType cell_type = topology.cell_type();
-  if ((cell_type == dolfinx::mesh::CellType::prism)
-      or (cell_type == dolfinx::mesh::CellType::pyramid))
-  {
-    throw std::invalid_argument("Prism and pyramid meshes are not supported");
-  }
+  dolfinx_contact::error::check_cell_type(cell_type);
 
   const int tdim = topology.dim();
   const int fdim = tdim - 1;
   const dolfinx_contact::QuadratureRule q_rule(cell_type, 0, fdim);
-  const xt::xtensor<double, 2>& q_points = q_rule.points();
-  const std::size_t num_q_points = q_points.shape(0);
-  const std::vector<std::int32_t> q_offset = q_rule.offset();
+
+  // Get quadrature points on reference facets
+  const std::vector<double>& q_points = q_rule.points();
+  const std::vector<std::size_t>& q_offset = q_rule.offset();
+  const std::size_t sum_q_points = q_offset.back();
+  const std::array<std::size_t, 2> q_shape = {sum_q_points, (std::size_t)tdim};
+  assert(q_rule.tdim() == (std::size_t)tdim);
 
   // Tabulate coordinate basis for Jacobian computation
   const dolfinx::fem::CoordinateElement& cmap = geometry.cmap();
-  std::array<std::size_t, 4> tab_shape = cmap.tabulate_shape(1, num_q_points);
-  xt::xtensor<double, 4> coordinate_basis(tab_shape);
-  assert(tab_shape[3] == 1);
-  xt::xtensor<double, 3> dphi({(std::size_t)tdim, tab_shape[1], tab_shape[2]});
-  cmap.tabulate(1, q_points, coordinate_basis);
-  dphi = xt::view(coordinate_basis, xt::xrange(1, tdim + 1), xt::all(),
-                  xt::all(), 0);
+  const std::array<std::size_t, 4> tab_shape
+      = cmap.tabulate_shape(1, sum_q_points);
+  std::vector<double> coordinate_basisb(
+      std::reduce(tab_shape.cbegin(), tab_shape.cend(), 1, std::multiplies{}));
+  assert(tab_shape.back() == 1);
+  cmap.tabulate(1, q_points, q_shape, coordinate_basisb);
+  cmdspan4_t coordinate_basis(coordinate_basisb.data(), tab_shape);
 
   // Prepare output variables
   std::vector<PetscScalar> circumradius;
-  circumradius.reserve(active_facets.size());
+  circumradius.reserve(active_facets.size() / 2);
 
   // Get geometry data
   const dolfinx::graph::AdjacencyList<std::int32_t>& x_dofmap
       = geometry.dofmap();
-  xtl::span<const double> x_g = geometry.x();
+  std::span<const double> x_g = geometry.x();
 
   // Prepare temporary data structures data structures
   const int gdim = geometry.dim();
   const std::size_t num_dofs_g = cmap.dim();
-  xt::xtensor<double, 2> J
-      = xt::zeros<double>({(std::size_t)gdim, (std::size_t)tdim});
 
-  xt::xtensor<double, 2> coordinate_dofs
-      = xt::zeros<double>({num_dofs_g, (std::size_t)gdim});
-  xt::xtensor<double, 2> dphi_q({(std::size_t)tdim, num_dofs_g});
+  std::vector<double> Jb(gdim * tdim);
+  std::vector<double> Kb(tdim * gdim);
+  mdspan2_t J(Jb.data(), gdim, tdim);
+  mdspan2_t K(Kb.data(), tdim, gdim);
+  std::vector<double> detJ_scratch(2 * gdim * tdim);
+  std::vector<double> coordinate_dofsb(num_dofs_g * gdim);
+  mdspan2_t coordinate_dofs(coordinate_dofsb.data(), num_dofs_g, gdim);
+
   assert(num_dofs_g == tab_shape[2]);
-  for (auto [cell, local_index] : active_facets)
+  for (std::size_t i = 0; i < active_facets.size(); i += 2)
   {
+    std::int32_t cell = active_facets[i];
+    std::int32_t local_index = active_facets[i + 1];
     // Get cell geometry (coordinate dofs)
     auto x_dofs = x_dofmap.links(cell);
-    for (std::size_t i = 0; i < num_dofs_g; ++i)
+    for (std::size_t j = 0; j < x_dofs.size(); ++j)
     {
-      const int pos = 3 * x_dofs[i];
-      for (int j = 0; j < gdim; ++j)
-        coordinate_dofs(i, j) = x_g[pos + j];
+      std::copy_n(std::next(x_g.begin(), 3 * x_dofs[j]), gdim,
+                  std::next(coordinate_dofsb.begin(), j * gdim));
     }
 
     // Compute determinant of Jacobian which is used to compute the
     // area/volume of the cell
-    std::fill(J.begin(), J.end(), 0);
+    std::fill(Jb.begin(), Jb.end(), 0);
     assert(q_offset[local_index + 1] - q_offset[local_index] == 1);
-    dphi_q = xt::view(dphi, xt::all(), q_offset[local_index], xt::all());
+    auto dphi_q = stdex::submdspan(
+        coordinate_basis, std::pair{1, (std::size_t)tdim + 1},
+        q_offset[local_index], stdex::full_extent, 0);
     dolfinx::fem::CoordinateElement::compute_jacobian(dphi_q, coordinate_dofs,
                                                       J);
-    double detJ
-        = dolfinx::fem::CoordinateElement::compute_jacobian_determinant(J);
+    double detJ = dolfinx::fem::CoordinateElement::compute_jacobian_determinant(
+        J, detJ_scratch);
     circumradius.push_back(compute_circumradius(mesh, detJ, coordinate_dofs));
   }
-  assert(circumradius.size() == active_facets.size());
+  assert(circumradius.size() == active_facets.size() / 2);
   return circumradius;
 }

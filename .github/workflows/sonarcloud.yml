@@ -14,7 +14,7 @@ jobs:
 
     name: Sonarcloud analysis
     runs-on: ubuntu-latest
-    container: dolfinx/dev-env
+    container: dolfinx/dev-env:nightly
     env:
       SONAR_SCANNER_VERSION:
         4.7.0.2747 # Find the latest version at:
@@ -106,5 +106,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_PROJECT: ${{ secrets.SONAR_PROJECT }}
+          SONAR_ORGANIZATION: ${{ secrets.SONAR_ORGANIZATION }}
         run: |
-          sonar-scanner --define sonar.host.url="${{ env.SONAR_SERVER_URL }}" --define sonar.cfamily.build-wrapper-output="${{ env.BUILD_WRAPPER_OUT_DIR }}"
+          sonar-scanner --define sonar.projectKey=$SONAR_PROJECT --define sonar.organization=$SONAR_ORGANIZATION --define sonar.host.url="${{ env.SONAR_SERVER_URL }}" --define sonar.cfamily.build-wrapper-output="${{ env.BUILD_WRAPPER_OUT_DIR }}"

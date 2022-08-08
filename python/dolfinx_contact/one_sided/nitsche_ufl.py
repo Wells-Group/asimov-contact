@@ -5,13 +5,13 @@
 from typing import Dict, Tuple
 
 import dolfinx.common as _common
+import dolfinx.cpp as _cpp
 import dolfinx.fem as _fem
 import dolfinx.log as _log
 import dolfinx.mesh as dmesh
 import dolfinx.nls as _nls
 import numpy as np
 import ufl
-from dolfinx.cpp.mesh import MeshTags_int32
 from petsc4py import PETSc as _PETSc
 
 from dolfinx_contact.helpers import (R_minus, epsilon, lame_parameters,
@@ -20,7 +20,7 @@ from dolfinx_contact.helpers import (R_minus, epsilon, lame_parameters,
 __all__ = ["nitsche_ufl"]
 
 
-def nitsche_ufl(mesh: dmesh.Mesh, mesh_data: Tuple[MeshTags_int32, int, int],
+def nitsche_ufl(mesh: dmesh.Mesh, mesh_data: Tuple[_cpp.mesh.MeshTags_int32, int, int],
                 physical_parameters: dict = {}, nitsche_parameters: Dict[str, float] = {},
                 plane_loc: float = 0.0, vertical_displacement: float = -0.1,
                 nitsche_bc: bool = True, quadrature_degree: int = 5, form_compiler_params: Dict = {},
@@ -85,7 +85,7 @@ def nitsche_ufl(mesh: dmesh.Mesh, mesh_data: Tuple[MeshTags_int32, int, int],
     gamma = nitsche_parameters.get("gamma", 1)
 
     (facet_marker, top_value, bottom_value) = mesh_data
-    assert(facet_marker.dim == mesh.topology.dim - 1)
+    assert facet_marker.dim == mesh.topology.dim - 1
 
     # Normal vector pointing into plane (but outward of the body coming into contact)
     # Similar to computing the normal by finding the gap vector between two meshes
@@ -132,6 +132,8 @@ def nitsche_ufl(mesh: dmesh.Mesh, mesh_data: Tuple[MeshTags_int32, int, int],
     J += 1 / gamma_scaled * 0.5 * (1 - ufl.sign(q)) * (sigma_n(du) - gamma_scaled * ufl.dot(du, n_2)) * \
         (theta * sigma_n(v) - gamma_scaled * ufl.dot(v, n_2)) * ds(bottom_value)
 
+    assert mesh.geometry.dim == mesh.topology.dim
+
     # Nitsche for Dirichlet, another theta-scheme.
     # https://doi.org/10.1016/j.cma.2018.05.024
     if nitsche_bc:
@@ -157,7 +159,7 @@ def nitsche_ufl(mesh: dmesh.Mesh, mesh_data: Tuple[MeshTags_int32, int, int],
         u_D.x.scatter_forward()
         tdim = mesh.topology.dim
         dirichlet_dofs = _fem.locate_dofs_topological(
-            V, tdim - 1, facet_marker.indices[facet_marker.values == top_value])
+            V, tdim - 1, facet_marker.find(top_value))
         bc = _fem.dirichletbc(u_D, dirichlet_dofs)
         bcs = [bc]
 
@@ -218,6 +220,6 @@ def nitsche_ufl(mesh: dmesh.Mesh, mesh_data: Tuple[MeshTags_int32, int, int],
         n, converged = solver.solve(u)
     u.x.scatter_forward()
     if solver.error_on_nonconvergence:
-        assert(converged)
+        assert converged
     print(f"{num_dofs_global}, Number of interations: {n:d}")
     return u

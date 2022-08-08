@@ -7,10 +7,10 @@ from typing import Dict, Tuple
 import dolfinx.common as _common
 import dolfinx.fem as _fem
 import dolfinx.la as _la
+import dolfinx.cpp as _cpp
 import dolfinx.mesh as dmesh
 import numpy as np
 import ufl
-from dolfinx.cpp.mesh import MeshTags_int32
 from petsc4py import PETSc as _PETSc
 
 from dolfinx_contact.helpers import (NonlinearPDE_SNESProblem, epsilon,
@@ -18,7 +18,7 @@ from dolfinx_contact.helpers import (NonlinearPDE_SNESProblem, epsilon,
                                      sigma_func)
 
 
-def snes_solver(mesh: dmesh.Mesh, mesh_data: Tuple[MeshTags_int32, int, int],
+def snes_solver(mesh: dmesh.Mesh, mesh_data: Tuple[_cpp.mesh.MeshTags_int32, int, int],
                 physical_parameters: dict = {}, plane_loc: float = 0.0, vertical_displacement: float = -0.1,
                 quadrature_degree: int = 5, form_compiler_params: Dict = {},
                 jit_params: Dict = {}, petsc_options: Dict = {}, snes_options: Dict = {}) -> _fem.Function:
@@ -71,7 +71,7 @@ def snes_solver(mesh: dmesh.Mesh, mesh_data: Tuple[MeshTags_int32, int, int],
 
     (facet_marker, top_value, _) = mesh_data
 
-    assert(facet_marker.dim == mesh.topology.dim - 1)
+    assert facet_marker.dim == mesh.topology.dim - 1
 
     # function space and problem parameters
     V = _fem.VectorFunctionSpace(mesh, ("CG", 1))  # function space
@@ -98,6 +98,7 @@ def snes_solver(mesh: dmesh.Mesh, mesh_data: Tuple[MeshTags_int32, int, int],
     # # Compute first variation of Pi (directional derivative about u in the direction of v)
     # # Yields same F as above if penalty = 0 and body force 0
     # F = ufl.derivative(Pi, u, v)
+    assert mesh.topology.dim == mesh.geometry.dim
 
     # Dirichlet boundary conditions
     def _u_D(x):
@@ -110,8 +111,7 @@ def snes_solver(mesh: dmesh.Mesh, mesh_data: Tuple[MeshTags_int32, int, int],
     u_D.x.scatter_forward()
 
     tdim = mesh.topology.dim
-    dirichlet_dofs = _fem.locate_dofs_topological(
-        V, tdim - 1, facet_marker.indices[facet_marker.values == top_value])
+    dirichlet_dofs = _fem.locate_dofs_topological(V, tdim - 1, facet_marker.find(top_value))
     bc = _fem.dirichletbc(u_D, dirichlet_dofs)
     # bcs = [bc]
 
@@ -192,7 +192,7 @@ def snes_solver(mesh: dmesh.Mesh, mesh_data: Tuple[MeshTags_int32, int, int],
         snes.solve(None, u.vector)
     u.x.scatter_forward()
 
-    assert(snes.getConvergedReason() > 1)
-    assert(snes.getConvergedReason() < 4)
+    assert snes.getConvergedReason() > 1
+    assert snes.getConvergedReason() < 4
 
     return u

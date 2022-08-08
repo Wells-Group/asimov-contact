@@ -15,7 +15,7 @@ jobs:
   build:
     if: "!(contains(github.event.head_commit.message, '[ci skip]') || contains(github.event.head_commit.message, '[skip ci]'))"
     runs-on: ubuntu-20.04
-    container: dolfinx/dev-env
+    container: dolfinx/dev-env:nightly
 
     strategy:
       matrix:
@@ -32,8 +32,6 @@ jobs:
     env:
       CC: ${{ matrix.CC }}
       CXX: ${{ matrix.CXX }}
-      HDF5_MPI: "ON"
-      HDF5_DIR: "/usr/lib/x86_64-linux-gnu/hdf5/mpich/"
       PETSC_ARCH: linux-gnu-${{ matrix.petsc_mode }}-${{ matrix.petsc_int_type }}
       OMPI_ALLOW_RUN_AS_ROOT: 1
       OMPI_ALLOW_RUN_AS_ROOT_CONFIRM: 1
@@ -45,13 +43,7 @@ jobs:
       CONTACT_CMAKE_CXX_FLAGS: "-Wall -Werror -g -pedantic -Ofast -march=native"
     steps:
       - uses: actions/checkout@v2
-
-      - name: Install meshio/h5py
-        run: |
-          pip3 install mpi4py --no-cache-dir --upgrade
-          HDF5_MPI="ON" HDF5_DIR="/usr/local" pip3 install --no-cache-dir --no-binary=h5py h5py --upgrade
-          pip3 install meshio --no-cache-dir --upgrade
-
+      
       - name: Get Basix and install
         uses: actions/checkout@v2
         with:
@@ -113,7 +105,7 @@ jobs:
 
       - name: Run mypy checks
         run: |
-          pip install mypy
+          pip3 install mypy
           cd python
           python3 -m mypy . --exclude=build
 
@@ -121,6 +113,7 @@ jobs:
         run: |
           cd python/demos
           mkdir -p results
+          mkdir -p meshes
           python3 compare_custom_snes_one_sided.py
           python3 compare_nitsche_snes.py
           python3 demo_nitsche_rigid_surface_ufl.py
@@ -130,8 +123,14 @@ jobs:
           python3 demo_nitsche_unbiased.py --problem=2
           python3 demo_nitsche_unbiased.py --problem=3
           python3 demo_nitsche_unbiased.py --problem=3 --3D
+          python3 demo_nitsche_meshties.py
+          python3 meshtie_convergence.py --3D
+          python3 meshtie_convergence.py --simplex --3D
+          python3 meshtie_convergence.py 
+          python3 meshtie_convergence.py --simplex --runs=4
 
       - name: Run tests
         run: |
           cd python/tests
+          mkdir -p meshes
           python3 -m pytest . -vs

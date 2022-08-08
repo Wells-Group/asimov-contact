@@ -8,7 +8,6 @@
 #include <dolfinx/fem/Function.h>
 #include <dolfinx/fem/petsc.h>
 #include <variant>
-#include <xtl/xspan.hpp>
 namespace dolfinx_contact
 {
 
@@ -30,15 +29,13 @@ namespace dolfinx_contact
 /// @param[in] coeff The coefficient to pack
 /// @param[in] q_degree The quadrature degree
 /// @param[in] integral The integral type (cell or exterior facet)
-/// @param[in] active_entities List of active entities (cells or exterior
-/// facets)
+/// @param[in] active_entities List of active entities.
+/// @param[in] integral The integral type (cells or exterior facet)
 /// @returns c The packed coefficients and the number of coeffs per entity
 std::pair<std::vector<PetscScalar>, int> pack_coefficient_quadrature(
     std::shared_ptr<const dolfinx::fem::Function<PetscScalar>> coeff,
-    const int q_degree,
-    std::variant<tcb::span<const std::int32_t>,
-                 tcb::span<const std::pair<std::int32_t, int>>>
-        active_entities);
+    const int q_degree, std::span<const std::int32_t> active_entities,
+    dolfinx::fem::IntegralType integral);
 
 /// Prepare circumradii of triangle/tetrahedron for assembly with custom
 /// kernels by packing them as an array, where the ith entry of the output
@@ -47,7 +44,7 @@ std::pair<std::vector<PetscScalar>, int> pack_coefficient_quadrature(
 /// @param[in] active_facets List of (cell, local_facet_index) tuples
 /// @returns[out] The packed coefficients
 /// @note Circumradius is constant and therefore the cstride is 1
-std::vector<PetscScalar> pack_circumradius(
-    const dolfinx::mesh::Mesh& mesh,
-    const tcb::span<const std::pair<std::int32_t, int>>& active_facets);
+std::vector<PetscScalar>
+pack_circumradius(const dolfinx::mesh::Mesh& mesh,
+                  const std::span<const std::int32_t>& active_facets);
 } // namespace dolfinx_contact

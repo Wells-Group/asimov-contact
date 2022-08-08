@@ -21,7 +21,7 @@ import dolfinx_contact
 import dolfinx_contact.cpp
 
 kt = dolfinx_contact.cpp.Kernel
-compare_matrices = dolfinx_cuas.utils.compare_matrices
+compare_matrices = dolfinx_contact.helpers.compare_matrices
 
 
 # R_minus(x) returns x if negative zero else
@@ -131,8 +131,8 @@ def test_vector_surface_kernel(dim, kernel_type, P, Q):
     data = np.array([1], dtype=np.int32)
     offsets = np.array([0, 1], dtype=np.int32)
     surfaces = create_adjacencylist(data, offsets)
-    contact = dolfinx_contact.cpp.Contact([ft], surfaces, [(0, 0)], V._cpp_object)
-    contact.set_quadrature_degree(2 * P + Q + 1)
+    contact = dolfinx_contact.cpp.Contact([ft], surfaces, [(0, 0)], V._cpp_object, quadrature_degree=2 * P + Q + 1)
+    contact.create_distance_map(0)
     g_vec = contact.pack_gap_plane(0, -g)
     # FIXME: assuming all facets are the same type
     q_rule = dolfinx_contact.QuadratureRule(mesh.topology.cell_type, 2 * P
@@ -256,8 +256,8 @@ def test_matrix_surface_kernel(dim, kernel_type, P, Q):
     data = np.array([1], dtype=np.int32)
     offsets = np.array([0, 1], dtype=np.int32)
     surfaces = create_adjacencylist(data, offsets)
-    contact = dolfinx_contact.cpp.Contact([ft], surfaces, [(0, 0)], V._cpp_object)
-    contact.set_quadrature_degree(2 * P + Q + 1)
+    contact = dolfinx_contact.cpp.Contact([ft], surfaces, [(0, 0)], V._cpp_object, quadrature_degree=2 * P + Q + 1)
+    contact.create_distance_map(0)
     g_vec = contact.pack_gap_plane(0, -g)
     coeffs = np.hstack([coeffs, h_facets, g_vec])
     a_custom = ufl.inner(sigma(du), epsilon(v)) * dx

@@ -4,16 +4,34 @@
 
 
 from contextlib import ExitStack
+from typing import Union
 
+from dolfinx.cpp.mesh import MeshTags_int32
 import dolfinx.fem as _fem
 import dolfinx.la as _la
 import numpy
+import scipy
 import ufl
 from petsc4py import PETSc
 
-__all__ = ["lame_parameters", "epsilon", "sigma_func", "R_minus", "dR_minus", "R_plus",
+__all__ = ["compare_matrices", "lame_parameters", "epsilon", "sigma_func", "R_minus", "dR_minus", "R_plus",
            "dR_plus", "ball_projection", "tangential_proj", "NonlinearPDE_SNESProblem",
-           "rigid_motions_nullspace"]
+           "rigid_motions_nullspace", "rigid_motions_nullspace_subdomains", "weak_dirichlet"]
+
+
+def compare_matrices(a: PETSc.Mat, b: PETSc.Mat, atol: float = 1e-12):
+    """
+    Helper for comparing two PETSc matrices
+    """
+    # Create scipy CSR matrices
+    ai, aj, av = a.getValuesCSR()
+    a_sp = scipy.sparse.csr_matrix((av, aj, ai), shape=a.getSize())
+    bi, bj, bv = b.getValuesCSR()
+    b_sp = scipy.sparse.csr_matrix((bv, bj, bi), shape=b.getSize())
+
+    # Compare matrices
+    diff = numpy.abs(a_sp - b_sp)
+    assert diff.max() <= atol
 
 
 def lame_parameters(plane_strain: bool = False):
@@ -110,9 +128,9 @@ class NonlinearPDE_SNESProblem:
         with F.localForm() as f_local:
             f_local.set(0.0)
         _fem.petsc.assemble_vector(F, self.L)
-        _fem.apply_lifting(F, [self.a], [[self.bc]], [x], -1.0)
+        _fem.petsc.apply_lifting(F, [self.a], bcs=[[self.bc]], x0=[x], scale=-1.0)
         F.ghostUpdate(addv=PETSc.InsertMode.ADD, mode=PETSc.ScatterMode.REVERSE)
-        _fem.set_bc(F, [self.bc], x, -1.0)
+        _fem.petsc.set_bc(F, [self.bc], x, -1.0)
 
     def J(self, snes, x, J, P):
         """Assemble Jacobian matrix."""
@@ -170,3 +188,74 @@ def rigid_motions_nullspace(V: _fem.FunctionSpace):
     _la.orthonormalize(nullspace_basis)
     assert _la.is_orthonormal(nullspace_basis)
     return PETSc.NullSpace().create(vectors=nullspace_basis)
+
+
+def rigid_motions_nullspace_subdomains(V: _fem.FunctionSpace, mt: MeshTags_int32,
+                                       tags: numpy.typing.NDArray[numpy.int32]):
+    """
+    Function to build nullspace for 2D/3D elasticity.
+
+    Parameters:
+    ===========
+    V
+        The function space
+    mt
+        Meshtag that contains tags for all objects that need to be considered
+        for defining the rigid motion nullspace
+    tags
+        The values of the meshtags for the objects
+    """
+    _x = _fem.Function(V)
+    # Get geometric dim
+    gdim = V.mesh.geometry.dim
+    assert gdim == 2 or gdim == 3
+
+    # Set dimension of nullspace
+    dim = 3 if gdim == 2 else 6
+
+    # Create list of vectors for null space
+    nullspace_basis = [_x.vector.copy() for i in range(dim * len(tags))]
+
+    with ExitStack() as stack:
+        vec_local = [stack.enter_context(x.localForm()) for x in nullspace_basis]
+        basis = [numpy.asarray(x) for x in vec_local]
+        for j, tag in enumerate(tags):
+            cells = mt.find(tag)
+            dofs_block = numpy.unique(numpy.hstack([V.dofmap.cell_dofs(cell) for cell in cells]))
+            dofs = [gdim * dofs_block + i for i in range(gdim)]
+
+            # Build translational null space basis
+            for i in range(gdim):
+                basis[j * dim + i][dofs[i]] = 1.0
+
+            # Build rotational null space basis
+            x = V.tabulate_dof_coordinates()
+            x0, x1, x2 = x[dofs_block, 0], x[dofs_block, 1], x[dofs_block, 2]
+            if gdim == 2:
+                basis[j * dim + 2][dofs[0]] = -x1
+                basis[j * dim + 2][dofs[1]] = x0
+            elif gdim == 3:
+                basis[j * dim + 3][dofs[0]] = -x1
+                basis[j * dim + 3][dofs[1]] = x0
+
+                basis[j * dim + 4][dofs[0]] = x2
+                basis[j * dim + 4][dofs[2]] = -x0
+                basis[j * dim + 5][dofs[2]] = x1
+                basis[j * dim + 5][dofs[1]] = -x2
+
+        _la.orthonormalize(nullspace_basis)
+        assert _la.is_orthonormal(nullspace_basis)
+    return PETSc.NullSpace().create(vectors=nullspace_basis)
+
+
+def weak_dirichlet(F: ufl.Form, u: _fem.Function,
+                   f: Union[_fem.Function, _fem.Constant], sigma, gamma, theta, ds):
+    V = u.function_space
+    v = F.arguments()[0]
+    mesh = V.mesh
+    h = ufl.CellDiameter(mesh)
+    n = ufl.FacetNormal(mesh)
+    F += - ufl.inner(sigma(u) * n, v) * ds\
+        - theta * ufl.inner(sigma(v) * n, u - f) * \
+        ds + gamma / h * ufl.inner(u - f, v) * ds
+    return F

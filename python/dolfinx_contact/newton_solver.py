@@ -173,6 +173,8 @@ class NewtonSolver():
         relax = options.get("relaxation_parameter")
         if relax is not None:
             self.relaxation_parameter = relax
+        else:
+            self.relaxation_parameter = 1.0
 
     def _pre_computation(self, x: PETSc.Vec):
         x.ghostUpdate(addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD)
@@ -189,7 +191,11 @@ class NewtonSolver():
         if self.comm.rank == 0:
             print(f"Newton Iteration {self.iteration}: r (abs) {residual} (atol={self.atol})",
                   flush=True, end=" ")
-            print(f"r (rel) {relative_residual} (rtol={self.rtol})", flush=True)
+            print(f"r (rel) {relative_residual} (rtol={self.rtol})", flush=True, end=" ")
+            # Petsc KSP converged reason:
+            # https://petsc.org/main/docs/manualpages/KSP/KSPConvergedReason/
+            print(f"Krylov iterations: {self.krylov_solver.getIterationNumber()}", flush=True, end=" ")
+            print(f"converged: {self.krylov_solver.getConvergedReason()}")
         return residual, relative_residual < self.rtol or residual < self.atol
 
     def _update_solution(self, dx: PETSc.Vec, x: PETSc.Vec):
@@ -259,6 +265,7 @@ class NewtonSolver():
             with common.Timer("~Contact: Newton (Krylov solver)"):
                 self.krylov_solver.solve(self._b, self._dx)
             self.krylov_iterations += self.krylov_solver.getIterationNumber()
+            assert self.krylov_solver.getConvergedReason() > 0
 
             # Update solution
             self._update_solution(self._dx, x_vec)
