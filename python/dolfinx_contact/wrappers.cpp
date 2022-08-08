@@ -147,7 +147,7 @@ PYBIND11_MODULE(cpp, m)
                  qp_vec[i * qp_shape[2] + j] = qp_span(facet, i, j);
              std::array<std::size_t, 2> shape_out = {qp_shape[1], qp_shape[2]};
              return dolfinx_wrappers::as_pyarray(std::move(qp_vec), shape_out);
-           })
+           }, "Get quadrature points for the jth facet of the ith contact pair")
       .def("active_entities",
            [](dolfinx_contact::Contact& self, int s)
            {

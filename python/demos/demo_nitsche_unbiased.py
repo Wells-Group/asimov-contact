@@ -83,6 +83,7 @@ if __name__ == "__main__":
     problem = args.problem
     nload_steps = args.nload_steps
     simplex = args.simplex
+    mesh_dir = "meshes"
     triangle_ext = {1: "", 2: "6", 3: "10"}
     tetra_ext = {1: "", 2: "10", 3: "20"}
     hex_ext = {1: "", 2: "27"}
@@ -92,7 +93,7 @@ if __name__ == "__main__":
         raise NotImplementedError("More work in DOLFINx (SubMesh) required for this to work.")
     # Load mesh and create identifier functions for the top (Displacement condition)
     # and the bottom (contact condition)
-    mesh_dir = "meshes"
+
     if threed:
         displacement = [[0, 0, -args.disp], [0, 0, 0]]
         if problem == 1:
@@ -107,7 +108,7 @@ if __name__ == "__main__":
             mesh.topology.create_connectivity(tdim - 1, 0)
             mesh.topology.create_connectivity(tdim - 1, tdim)
 
-            dirichet_bdy_1 = 1
+            dirichlet_bdy_1 = 1
             contact_bdy_1 = 2
             contact_bdy_2 = 3
             dirichlet_bdy_2 = 4
@@ -118,7 +119,7 @@ if __name__ == "__main__":
             top_facets2 = locate_entities_boundary(mesh, tdim - 1, lambda x: np.isclose(x[2], -0.1))
             bottom_facets2 = locate_entities_boundary(
                 mesh, tdim - 1, lambda x: np.isclose(x[2], -0.6))
-            top_values = np.full(len(top_facets1), dirichet_bdy_1, dtype=np.int32)
+            top_values = np.full(len(top_facets1), dirichlet_bdy_1, dtype=np.int32)
             bottom_values = np.full(
                 len(bottom_facets1), contact_bdy_1, dtype=np.int32)
 
@@ -140,7 +141,7 @@ if __name__ == "__main__":
                 tdim = mesh.topology.dim
                 mesh.topology.create_connectivity(tdim - 1, tdim)
                 facet_marker = xdmf.read_meshtags(mesh, name="facet_marker")
-            dirichet_bdy_1 = 2
+            dirichlet_bdy_1 = 2
             contact_bdy_1 = 1
             contact_bdy_2 = 8
             dirichlet_bdy_2 = 7
@@ -167,7 +168,7 @@ if __name__ == "__main__":
             def left(x):
                 return x[0] < -0.5
 
-            dirichet_bdy_1 = 1
+            dirichlet_bdy_1 = 1
             contact_bdy_1 = 2
             contact_bdy_2 = 3
             dirichlet_bdy_2 = 4
@@ -177,7 +178,7 @@ if __name__ == "__main__":
             contact_facets_2 = locate_entities_boundary(mesh, tdim - 1, left_contact)
             dirchlet_facets_2 = locate_entities_boundary(mesh, tdim - 1, left)
 
-            val0 = np.full(len(dirichlet_facets_1), dirichet_bdy_1, dtype=np.int32)
+            val0 = np.full(len(dirichlet_facets_1), dirichlet_bdy_1, dtype=np.int32)
             val1 = np.full(len(contact_facets_1), contact_bdy_1, dtype=np.int32)
             val2 = np.full(len(contact_facets_2), contact_bdy_2, dtype=np.int32)
             val3 = np.full(len(dirchlet_facets_2), dirichlet_bdy_2, dtype=np.int32)
@@ -199,7 +200,7 @@ if __name__ == "__main__":
                 tdim = mesh.topology.dim
                 mesh.topology.create_connectivity(tdim - 1, tdim)
                 facet_marker = xdmf.read_meshtags(mesh, name="facet_marker")
-            dirichet_bdy_1 = 5
+            dirichlet_bdy_1 = 5
             contact_bdy_1 = 3
             contact_bdy_2 = 9
             dirichlet_bdy_2 = 7
@@ -215,7 +216,7 @@ if __name__ == "__main__":
                 tdim = mesh.topology.dim
                 mesh.topology.create_connectivity(tdim - 1, tdim)
                 facet_marker = xdmf.read_meshtags(mesh, name="facet_marker")
-            dirichet_bdy_1 = 2
+            dirichlet_bdy_1 = 2
             contact_bdy_1 = 4
             contact_bdy_2 = 9
             dirichlet_bdy_2 = 7
@@ -243,7 +244,7 @@ if __name__ == "__main__":
             def bottom_contact(x):
                 return np.logical_and(x[1] > -0.45, x[1] < 0.1)
 
-            dirichet_bdy_1 = 1
+            dirichlet_bdy_1 = 1
             contact_bdy_1 = 2
             contact_bdy_2 = 3
             dirichlet_bdy_2 = 4
@@ -252,7 +253,7 @@ if __name__ == "__main__":
             bottom_facets1 = locate_entities_boundary(mesh, tdim - 1, top_contact)
             top_facets2 = locate_entities_boundary(mesh, tdim - 1, bottom_contact)
             bottom_facets2 = locate_entities_boundary(mesh, tdim - 1, bottom_dir)
-            dir_val1 = np.full(len(top_facets1), dirichet_bdy_1, dtype=np.int32)
+            dir_val1 = np.full(len(top_facets1), dirichlet_bdy_1, dtype=np.int32)
             c_val1 = np.full(len(bottom_facets1), contact_bdy_1, dtype=np.int32)
             surface_values = np.full(len(top_facets2), contact_bdy_2, dtype=np.int32)
             sbottom_values = np.full(len(bottom_facets2), dirichlet_bdy_2, dtype=np.int32)
@@ -264,6 +265,7 @@ if __name__ == "__main__":
 
     with XDMFFile(mesh.comm, f"{mesh_dir}/test.xdmf", "w") as xdmf:
         xdmf.write_mesh(mesh)
+        xdmf.write_meshtags(domain_marker)
         xdmf.write_meshtags(facet_marker)
 
     # Solver options
@@ -294,7 +296,7 @@ if __name__ == "__main__":
         "pc_gamg_square_graph": 2,
     }
     # Pack mesh data for Nitsche solver
-    dirichlet_vals = [dirichet_bdy_1, dirichlet_bdy_2]
+    dirichlet_vals = [dirichlet_bdy_1, dirichlet_bdy_2]
     contact = [(0, 1), (1, 0)]
     data = np.array([contact_bdy_1, contact_bdy_2], dtype=np.int32)
     offsets = np.array([0, 2], dtype=np.int32)
