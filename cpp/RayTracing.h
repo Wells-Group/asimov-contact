@@ -63,7 +63,7 @@ void compute_tangents(std::span<const double, gdim> n,
     tangents(0, i) = 1;
   tangents(0, max_pos) = 0;
   for (std::size_t i = 0; i < gdim - 1; ++i)
-    tangents(0, max_pos) -= n[i] / n[max_pos];
+    tangents(0, max_pos) -= n[indices[i]] / n[max_pos];
 
   /// Compute second tangent by cross product
   if constexpr (gdim == 3)

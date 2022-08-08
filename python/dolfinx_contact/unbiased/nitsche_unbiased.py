@@ -27,6 +27,7 @@ def nitsche_unbiased(ufl_form: ufl.Form, u: _fem.Function, markers: list[_cpp.me
                      contact_data: Tuple[AdjacencyList_int32, list[Tuple[int, int]]],
                      bcs: list[_fem.DirichletBCMetaClass],
                      problem_parameters: dict[str, np.float64],
+                     search_method: dolfinx_contact.cpp.ContactMode,
                      quadrature_degree: int = 5, form_compiler_params: dict = None, jit_params: dict = None,
                      petsc_options: dict = None, newton_options: dict = None,
                      outfile: str = None) -> Tuple[_fem.Function, int, int, float]:
@@ -55,6 +56,8 @@ def nitsche_unbiased(ufl_form: ufl.Form, u: _fem.Function, markers: list[_cpp.me
         (lambda, float),
         where theta can be -1, 0 or 1 for skew-symmetric, penalty like or symmetric
         enforcement of Nitsche conditions
+    search_method
+        Way of detecting contact. Either closest point projection or raytracing
     quadrature_degree
         The quadrature degree to use for the custom contact kernels
     form_compiler_params
@@ -130,11 +133,10 @@ def nitsche_unbiased(ufl_form: ufl.Form, u: _fem.Function, markers: list[_cpp.me
     # Custom assembly
     # create contact class
     with _common.Timer("~Contact: Init"):
-        # mode = dolfinx_contact.cpp.ContactMode.Raytracing
-        mode = dolfinx_contact.cpp.ContactMode.ClosestPoint
         contact = dolfinx_contact.cpp.Contact(markers[1:], contact_surfaces, contact_pairs,
                                               V._cpp_object, quadrature_degree=quadrature_degree,
-                                              search_method=mode)
+                                              search_method=search_method)
+
     with _common.Timer("~Contact: Distance maps"):
         for i in range(len(contact_pairs)):
             contact.create_distance_map(i)

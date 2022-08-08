@@ -4,6 +4,7 @@
 
 import argparse
 import sys
+import dolfinx_contact
 
 import numpy as np
 import ufl
@@ -75,6 +76,10 @@ if __name__ == "__main__":
     _lifting.add_argument('--lifting', dest='lifting', action='store_true',
                           help="Apply lifting (strong enforcement of Dirichlet condition",
                           default=False)
+    _raytracing = parser.add_mutually_exclusive_group(required=False)
+    _raytracing.add_argument('--raytracing', dest='raytracing', action='store_true',
+                             help="Use raytracing for contact search.",
+                             default=False)
 
     # Parse input arguments or set to defualt values
     args = parser.parse_args()
@@ -207,7 +212,7 @@ if __name__ == "__main__":
 
         elif problem == 2:
             fname = f"{mesh_dir}/twomeshes"
-            create_circle_plane_mesh(filename=f"{fname}.msh", order=args.order)
+            create_circle_plane_mesh(filename=f"{fname}.msh", quads=not simplex, res=args.res, order=args.order)
             convert_mesh(fname, f"{fname}.xdmf", gdim=2)
 
             with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
@@ -338,7 +343,7 @@ if __name__ == "__main__":
     gamma = args.gamma
     theta = args.theta
     problem_parameters = {"mu": mu, "lambda": lmbda, "gamma": E * gamma, "theta": theta}
-
+    mode = dolfinx_contact.cpp.ContactMode.Raytracing if args.raytracing else dolfinx_contact.cpp.ContactMode.ClosestPoint
     # Load geometry over multiple steps
     for j in range(nload_steps):
         disp = []
@@ -361,7 +366,8 @@ if __name__ == "__main__":
         u, newton_its, krylov_iterations, solver_time = nitsche_unbiased(
             ufl_form=Fj, u=u, markers=[domain_marker, facet_marker], contact_data=(surfaces, contact),
             bcs=bcs, problem_parameters=problem_parameters, newton_options=newton_options,
-            petsc_options=petsc_options, outfile=solver_outfile, quadrature_degree=args.q_degree)
+            petsc_options=petsc_options, outfile=solver_outfile, quadrature_degree=args.q_degree,
+            search_mode=mode)
         num_newton_its[j] = newton_its
         num_krylov_its[j] = krylov_iterations
         newton_time[j] = solver_time
