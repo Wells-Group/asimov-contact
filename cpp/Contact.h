@@ -560,23 +560,12 @@ public:
   void create_q_phys(int origin_meshtag)
   {
     // Get information depending on surface
-    std::shared_ptr<const dolfinx::mesh::Mesh> mesh_sub
-        = _submeshes[origin_meshtag].mesh();
-    std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> cell_map
-        = _submeshes[origin_meshtag].cell_map();
-    const std::vector<std::int32_t>& puppet_facets
-        = _cell_facet_pairs[origin_meshtag];
-    std::size_t gdim = mesh_sub->geometry().dim();
+    const SubMesh& submesh = _submeshes[origin_meshtag];
 
-    std::vector<std::int32_t> submesh_facets(puppet_facets.size());
-    for (std::size_t f = 0; f < puppet_facets.size(); f += 2)
-    {
-      const auto cell_sub = cell_map->links(puppet_facets[f]);
-      assert(!cell_sub.empty());
-      submesh_facets[f] = cell_sub[0];
-      submesh_facets[f + 1] = puppet_facets[f + 1];
-    }
-
+    const std::vector<std::int32_t> submesh_facets
+        = submesh.get_submesh_tuples(_cell_facet_pairs[origin_meshtag]);
+    auto mesh_sub = submesh.mesh();
+    const std::size_t gdim = mesh_sub->geometry().dim();
     const std::vector<size_t>& qp_offsets = _quadrature_rule->offset();
     _qp_phys[origin_meshtag].resize((qp_offsets[1] - qp_offsets[0])
                                     * (submesh_facets.size() / 2) * gdim);
@@ -652,7 +641,7 @@ public:
     // Get (cell, local_facet_index) tuples on quadrature submesh
     const std::vector<std::int32_t> quadrature_facets
         = _submeshes[quadrature_mt].get_submesh_tuples(
-            quadrature_mt, _cell_facet_pairs[quadrature_mt]);
+            _cell_facet_pairs[quadrature_mt]);
 
     const std::shared_ptr<const dolfinx::mesh::Mesh>& candidate_mesh
         = _submeshes[candidate_mt].mesh();
@@ -660,7 +649,7 @@ public:
     // Get (cell, local_facet_index) tuples on candidate submesh
     const std::vector<std::int32_t> candidate_facets
         = _submeshes[candidate_mt].get_submesh_tuples(
-            candidate_mt, _cell_facet_pairs[candidate_mt]);
+            _cell_facet_pairs[candidate_mt]);
 
     auto [candidate_map, reference_x, shape] = compute_distance_map(
         *quadrature_mesh, quadrature_facets, *candidate_mesh, candidate_facets,
@@ -768,12 +757,12 @@ public:
     // Get (cell, local_facet_index) tuples on quadrature submesh
     const std::vector<std::int32_t> quadrature_facets
         = _submeshes[quadrature_mt].get_submesh_tuples(
-            quadrature_mt, _cell_facet_pairs[quadrature_mt]);
+            _cell_facet_pairs[quadrature_mt]);
 
     // Get (cell, local_facet_index) tuples on candidate submesh
     const std::vector<std::int32_t> candidate_facets
         = _submeshes[candidate_mt].get_submesh_tuples(
-            candidate_mt, _cell_facet_pairs[candidate_mt]);
+            _cell_facet_pairs[candidate_mt]);
 
     auto [candidate_map, reference_x, shape]
         = dolfinx_contact::compute_distance_map(
@@ -903,12 +892,12 @@ public:
     // Get (cell, local_facet_index) tuples on quadrature submesh
     const std::vector<std::int32_t> quadrature_facets
         = _submeshes[quadrature_mt].get_submesh_tuples(
-            quadrature_mt, _cell_facet_pairs[quadrature_mt]);
+            _cell_facet_pairs[quadrature_mt]);
 
     // Get (cell, local_facet_index) tuples on candidate submesh
     const std::vector<std::int32_t> candidate_facets
         = _submeshes[candidate_mt].get_submesh_tuples(
-            candidate_mt, _cell_facet_pairs[candidate_mt]);
+            _cell_facet_pairs[candidate_mt]);
 
     auto [candidate_map, reference_x, shape]
         = dolfinx_contact::compute_distance_map(

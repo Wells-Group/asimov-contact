@@ -215,7 +215,7 @@ void dolfinx_contact::SubMesh::update_geometry(
 //-----------------------------------------------------------------------------------------------
 
 std::vector<std::int32_t> dolfinx_contact::SubMesh::get_submesh_tuples(
-    int i, std::span<const std::int32_t> facets) const
+    std::span<const std::int32_t> facets) const
 {
   assert(_mesh);
 

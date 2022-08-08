@@ -294,7 +294,7 @@ dolfinx_contact::Contact::pack_nx(int pair)
   // Get (cell, local_facet_index) tuples on quadrature submesh
   const std::vector<std::int32_t> quadrature_facets
       = _submeshes[quadrature_mt].get_submesh_tuples(
-          quadrature_mt, _cell_facet_pairs[quadrature_mt]);
+          _cell_facet_pairs[quadrature_mt]);
 
   // Get information about submesh geometry and topology
   const dolfinx::mesh::Geometry& geometry = quadrature_mesh->geometry();
@@ -401,12 +401,12 @@ dolfinx_contact::Contact::pack_ny(int pair)
   // Get (cell, local_facet_index) tuples on quadrature submesh
   const std::vector<std::int32_t> quadrature_facets
       = _submeshes[quadrature_mt].get_submesh_tuples(
-          quadrature_mt, _cell_facet_pairs[quadrature_mt]);
+          _cell_facet_pairs[quadrature_mt]);
 
   // Get (cell, local_facet_index) tuples on candidate submesh
   const std::vector<std::int32_t> candidate_facets
       = _submeshes[candidate_mt].get_submesh_tuples(
-          candidate_mt, _cell_facet_pairs[candidate_mt]);
+          _cell_facet_pairs[candidate_mt]);
 
   auto [candidate_map, reference_x, shape]
       = dolfinx_contact::compute_distance_map(

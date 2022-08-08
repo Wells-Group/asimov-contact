@@ -80,11 +80,10 @@ public:
 
   /// Map parent facets (parent_cell, local_facet_index) to submesh (cell,
   /// local_facet_index) tuples
-  /// @param[in] tag: The submesh tag
   /// @param[in] facets: The facets. Flattened row-major
   /// @returns The submesh facets pairs. Flattened row-major
   std::vector<std::int32_t>
-  get_submesh_tuples(int i, std::span<const std::int32_t> facets) const;
+  get_submesh_tuples(std::span<const std::int32_t> facets) const;
 
 private:
   // the submesh mesh

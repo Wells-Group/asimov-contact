@@ -257,9 +257,9 @@ compute_distance_map(const dolfinx::mesh::Mesh& quadrature_mesh,
 /// mesh_q onto mesh_c at a specific set of quadrature
 /// points on a subset of facets. There is also a subset of
 /// facets on mesh_c we use for intersection checks.
-/// NOTE: If the ray intersects with more than one facet 
-/// in the subset of facets on mesh_c, only one of these 
-/// facets is detected and it is not guaranteed to be the 
+/// NOTE: If the ray intersects with more than one facet
+/// in the subset of facets on mesh_c, only one of these
+/// facets is detected and it is not guaranteed to be the
 /// closest.
 /// @param[in] quadrature_mesh The mesh to compute rays
 /// from
@@ -420,12 +420,11 @@ compute_raytracing_map(const dolfinx::mesh::Mesh& quadrature_mesh,
       // raytracing
       dolfinx::common::impl::copy_N<gdim>(
           std::next(quadrature_points.cbegin(),
-                    i / 2 * num_q_points + j * gdim),
+                    (i / 2 * num_q_points + j) * gdim),
           point.begin());
       impl::compute_tangents<gdim>(std::span<double, gdim>(normal.data(), gdim),
                                    tangents);
       std::size_t cell_idx = -1;
-
       int status = 0;
       for (std::size_t c = 0; c < candidate_facets.size(); c += 2)
       {
@@ -441,9 +440,9 @@ compute_raytracing_map(const dolfinx::mesh::Mesh& quadrature_mesh,
         // Assign Jacobian of reference mapping
         impl::get_parameterization_jacobian<tdim>(
             cell_type, candidate_facets[c + 1], jac_param);
-        for (std::size_t i = 0; i < tdim; ++i)
-          for (std::size_t j = 0; j < tdim - 1; ++j)
-            dxi(i, j) = jac_param[i * (tdim - 1) + j];
+        for (std::size_t l = 0; l < tdim; ++l)
+          for (std::size_t m = 0; m < tdim - 1; ++m)
+            dxi(l, m) = jac_param[l * (tdim - 1) + m];
 
         // Get parameterization map
         auto reference_map = impl::get_parameterization<tdim>(
