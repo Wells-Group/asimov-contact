@@ -370,20 +370,38 @@ compute_raytracing_map(const dolfinx::mesh::Mesh& quadrature_mesh,
       basis_shape_c.begin(), basis_shape_c.end(), 1, std::multiplies{}));
 
   // Variable to hold jth point for Jacbian computation
-  error::check_cell_type(cell_type);
   std::array<double, 3> normal;
   std::vector<std::int32_t> colliding_facet(
       quadrature_facets.size() / 2 * num_q_points, -1);
   std::vector<double> reference_points(
       quadrature_facets.size() / 2 * num_q_points * tdim, 0);
 
+  // Check for parameterization and jacobian parameterization
+  error::check_cell_type(cell_type);
+  basix::cell::type basix_cell
+      = dolfinx::mesh::cell_type_to_basix_type(cell_type);
+  assert(dolfinx::mesh::cell_dim(cell_type) == tdim);
+
+  // Get facet jacobians from Basix
+  auto [ref_jac, jac_shape] = basix::cell::facet_jacobians(basix_cell);
+  assert(tdim == jac_shape[1]);
+  assert(tdim - 1 == jac_shape[2]);
+  assert(jac_shape[1] * jac_shape[2] == jacobian.size());
+  cmdspan3_t facet_jacobians(ref_jac.data(), jac_shape);
+
+  // Get basix geometry information
+  std::pair<std::vector<double>, std::array<std::size_t, 2>> geometry
+      = basix::cell::geometry(basix_cell);
+  auto xb = geometry.first;
+  auto x_shape = geometry.second;
+  const std::vector<std::vector<int>> bfacets
+      = basix::cell::topology(basix_cell)[tdim - 1];
+
   NewtonStorage<tdim, gdim> allocated_memory;
   auto tangents = allocated_memory.tangents();
   auto point = allocated_memory.point();
   auto dxi = allocated_memory.dxi();
   auto X_fin = allocated_memory.X_k();
-
-  std::array<double, tdim*(tdim - 1)> jac_param;
 
   for (std::size_t i = 0; i < quadrature_facets.size(); i += 2)
   {
@@ -424,6 +442,7 @@ compute_raytracing_map(const dolfinx::mesh::Mesh& quadrature_mesh,
           point.begin());
       impl::compute_tangents<gdim>(std::span<double, gdim>(normal.data(), gdim),
                                    tangents);
+
       std::size_t cell_idx = -1;
       int status = 0;
       for (std::size_t c = 0; c < candidate_facets.size(); c += 2)
@@ -438,18 +457,30 @@ compute_raytracing_map(const dolfinx::mesh::Mesh& quadrature_mesh,
               std::next(coordinate_dofs_c.begin(), gdim * k));
         }
         // Assign Jacobian of reference mapping
-        impl::get_parameterization_jacobian<tdim>(
-            cell_type, candidate_facets[c + 1], jac_param);
         for (std::size_t l = 0; l < tdim; ++l)
           for (std::size_t m = 0; m < tdim - 1; ++m)
-            dxi(l, m) = jac_param[l * (tdim - 1) + m];
+            dxi(l, m) = facet_jacobians(candidate_facets[c + 1], l, m);
 
         // Get parameterization map
-        auto reference_map = impl::get_parameterization<tdim>(
-            cell_type, candidate_facets[c + 1]);
-        status = raytracing_cell<tdim, gdim>(allocated_memory, basis_values_c,
-                                             25, 1e-8, cmap_c, cell_type,
-                                             coordinate_dofs_c, reference_map);
+        std::function<void(std::span<const double, tdim - 1>,
+                           std::span<double, tdim>)>
+            reference_map
+            = [&xb, &x_shape, &bfacets, facet_index = candidate_facets[c + 1]](
+                  std::span<const double, tdim - 1> xi,
+                  std::span<double, tdim> X)
+        {
+          const std::vector<int>& facet = bfacets[facet_index];
+          dolfinx_contact::cmdspan2_t x(xb.data(), x_shape);
+          const int f0 = facet.front();
+          for (std::size_t i = 0; i < tdim; ++i)
+            X[i] = x(f0, i);
+          for (std::size_t i = 0; i < tdim; ++i)
+            for (std::size_t j = 0; j < tdim - 1; ++j)
+              X[i] += (x(facet[j + 1], i) - x(f0, i)) * xi[j];
+        };
+        status = raytracing_cell<tdim, gdim>(
+            allocated_memory, basis_values_c, basis_shape_c, 25, 1e-8, cmap_c,
+            cell_type, coordinate_dofs_c, reference_map);
         if (status > 0)
         {
           cell_idx = c / 2;

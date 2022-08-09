@@ -138,7 +138,7 @@ if __name__ == "__main__":
 
         elif problem == 2:
             fname = f"{mesh_dir}/sphere"
-            create_sphere_plane_mesh(filename=f"{fname}.msh", order=args.order)
+            create_sphere_plane_mesh(filename=f"{fname}.msh", order=args.order, res=args.res)
             convert_mesh(fname, fname, gdim=3)
             with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
                 mesh = xdmf.read_mesh()

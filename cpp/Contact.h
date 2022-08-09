@@ -830,9 +830,6 @@ public:
     stdex::mdspan<PetscScalar, stdex::dextents<std::size_t, 5>> c(
         cb.data(), num_facets, max_links, b_shape[2], num_q_points, bs);
 
-    auto cell_imap = topology.index_map(tdim);
-    const int num_local_cells
-        = cell_imap->size_local() + cell_imap->num_ghosts();
     std::vector<std::int32_t> perm(num_q_points);
     for (std::size_t i = 0; i < c.extent(0); ++i)
     {
@@ -841,7 +838,6 @@ public:
       auto [unique_cells, offsets] = sort_cells(f_cells, perm);
       for (std::size_t j = 0; j < unique_cells.size(); ++j)
       {
-        assert(unique_cells[j] < num_local_cells);
         auto indices
             = std::span(perm.data() + offsets[j], offsets[j + 1] - offsets[j]);
 

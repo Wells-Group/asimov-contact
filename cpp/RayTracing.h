@@ -8,6 +8,7 @@
 #pragma once
 
 #include "QuadratureRule.h"
+#include "error_handling.h"
 #include <dolfinx/common/utils.h>
 #include <dolfinx/mesh/Mesh.h>
 
@@ -75,109 +76,6 @@ void compute_tangents(std::span<const double, gdim> n,
   normalize<gdim - 1, gdim>(tangents);
 };
 
-/// Get function that parameterizes a facet of a given cell
-///
-/// @param[in] cell_type The cell type
-/// @param[in] facet_index The facet index (local to cell)
-/// @returns Function that computes the coordinate parameterization of the local
-/// facet on the reference cell.
-/// @tparam tdim The topological dimension of the cell
-template <std::size_t tdim>
-const std::function<void(std::span<const double, tdim - 1>,
-                         std::span<double, tdim>)>
-get_parameterization(dolfinx::mesh::CellType cell_type, int facet_index)
-{
-  switch (cell_type)
-  {
-  case dolfinx::mesh::CellType::interval:
-    throw std::invalid_argument("Unsupported cell type");
-    break;
-  case dolfinx::mesh::CellType::pyramid:
-    throw std::invalid_argument("Unsupported cell type");
-    break;
-  case dolfinx::mesh::CellType::prism:
-    throw std::invalid_argument("Unsupported cell type");
-    break;
-  default:
-    break;
-  }
-
-  assert(dolfinx::mesh::cell_dim(cell_type) == tdim);
-
-  if (const int num_facets
-      = dolfinx::mesh::cell_num_entities(cell_type, tdim - 1);
-      facet_index >= num_facets)
-    throw std::invalid_argument(
-        "Invalid facet index (larger than number of facets");
-
-  // Get basix geometry information
-  basix::cell::type basix_cell
-      = dolfinx::mesh::cell_type_to_basix_type(cell_type);
-  std::pair<std::vector<double>, std::array<std::size_t, 2>> geometry
-      = basix::cell::geometry(basix_cell);
-  auto xb = geometry.first;
-  auto x_shape = geometry.second;
-  const std::vector<std::vector<int>> facets
-      = basix::cell::topology(basix_cell)[tdim - 1];
-  namespace stdex = std::experimental;
-
-  // Create parameterization function exploiting that the mapping between
-  // reference geometries are affine
-  std::function<void(std::span<const double, tdim - 1>,
-                     std::span<double, tdim>)>
-      func
-      = [xb, x_shape, facet = facets[facet_index]](
-            std::span<const double, tdim - 1> xi, std::span<double, tdim> X)
-  {
-    dolfinx_contact::cmdspan2_t x(xb.data(), x_shape);
-    for (std::size_t i = 0; i < tdim; ++i)
-      X[i] = x(facet.front(), i);
-    for (std::size_t i = 0; i < tdim; ++i)
-      for (std::size_t j = 0; j < tdim - 1; ++j)
-        X[i] += (x(facet[j + 1], i) - x(facet.front(), i)) * xi[j];
-  };
-  return func;
-}
-
-/// Get derivative of the parameterization with respect to the input
-/// parameters
-/// @param[in] cell_type The cell type
-/// @param[in] facet_index The facet index (local to cell)
-/// @param[in,out] The Jacobian of the parameterization
-/// @tparam tdim The topological dimension of the cell
-template <std::size_t tdim>
-void get_parameterization_jacobian(dolfinx::mesh::CellType cell_type,
-                                   int facet_index,
-                                   std::span<double, tdim*(tdim - 1)> jacobian)
-{
-  switch (cell_type)
-  {
-  case dolfinx::mesh::CellType::interval:
-    throw std::invalid_argument("Unsupported cell type");
-    break;
-  case dolfinx::mesh::CellType::pyramid:
-    throw std::invalid_argument("Unsupported cell type");
-    break;
-  case dolfinx::mesh::CellType::prism:
-    throw std::invalid_argument("Unsupported cell type");
-    break;
-  default:
-    break;
-  }
-
-  assert(dolfinx::mesh::cell_dim(cell_type) == tdim);
-
-  basix::cell::type basix_cell
-      = dolfinx::mesh::cell_type_to_basix_type(cell_type);
-  auto [ref_jac, jac_shape] = basix::cell::facet_jacobians(basix_cell);
-  assert(tdim == jac_shape[1]);
-  assert(tdim - 1 == jac_shape[2]);
-  assert(jac_shape[1] * jac_shape[2] == jacobian.size());
-  dolfinx_contact::cmdspan3_t facet_jacobians(ref_jac.data(), jac_shape);
-  for (std::size_t i = 0; i < tdim; ++i)
-    for (std::size_t j = 0; j < tdim - 1; ++j)
-      jacobian[i * jac_shape[2] + j] = facet_jacobians(facet_index, i, j);
-}
 } // namespace impl
 
 template <std::size_t tdim, std::size_t gdim>
@@ -334,7 +232,8 @@ private:
 template <std::size_t tdim, std::size_t gdim>
 int raytracing_cell(
     NewtonStorage<tdim, gdim>& storage, std::span<double> basis_values,
-    int max_iter, double tol, const dolfinx::fem::CoordinateElement& cmap,
+    const std::array<std::size_t, 4>& basis_shape, int max_iter, double tol,
+    const dolfinx::fem::CoordinateElement& cmap,
     dolfinx::mesh::CellType cell_type, std::span<const double> coordinate_dofs,
     const std::function<void(std::span<const double, tdim - 1>,
                              std::span<double, tdim>)>& reference_map)
@@ -368,15 +267,13 @@ int raytracing_cell(
   auto dGk_tmp = storage.dGk_tmp();
   auto dxi = storage.dxi();
   auto dxi_k = storage.dxi_k();
-  std::array<std::size_t, 4> basis_shape = cmap.tabulate_shape(1, 1);
   assert(std::size_t(std::reduce(basis_shape.cbegin(), basis_shape.cend(), 1,
                                  std::multiplies{}))
          == basis_values.size());
   cmdspan4_t basis(basis_values.data(), basis_shape);
   auto dphi = stdex::submdspan(basis, std::pair{1, tdim + 1}, 0,
                                stdex::full_extent, 0);
-  const std::array<std::size_t, 2> cd_shape = {(std::size_t)cmap.dim(), gdim};
-  cmdspan2_t coords(coordinate_dofs.data(), cd_shape);
+  cmdspan2_t coords(coordinate_dofs.data(), cmap.dim(), gdim);
   mdspan2_t _xk(x_k.data(), 1, gdim);
   for (int k = 0; k < max_iter; ++k)
   {
@@ -559,7 +456,27 @@ compute_ray(const dolfinx::mesh::Mesh& mesh,
   auto dxi = allocated_memory.dxi();
   dolfinx::common::impl::copy_N<gdim>(point.begin(), m_point.begin());
 
-  std::array<double, tdim*(tdim - 1)> jac_param;
+  // Check for parameterization and jacobian parameterization
+  error::check_cell_type(cell_type);
+  basix::cell::type basix_cell
+      = dolfinx::mesh::cell_type_to_basix_type(cell_type);
+  assert(dolfinx::mesh::cell_dim(cell_type) == tdim);
+
+  // Get facet jacobians from Basix
+  auto [ref_jac, jac_shape] = basix::cell::facet_jacobians(basix_cell);
+  assert(tdim == jac_shape[1]);
+  assert(tdim - 1 == jac_shape[2]);
+  assert(jac_shape[1] * jac_shape[2] == jacobian.size());
+  cmdspan3_t facet_jacobians(ref_jac.data(), jac_shape);
+
+  // Get basix geometry information
+  std::pair<std::vector<double>, std::array<std::size_t, 2>> bgeometry
+      = basix::cell::geometry(basix_cell);
+  auto xb = bgeometry.first;
+  auto x_shape = bgeometry.second;
+  const std::vector<std::vector<int>> facets
+      = basix::cell::topology(basix_cell)[tdim - 1];
+
   for (std::size_t c = 0; c < cells.size(); c += 2)
   {
 
@@ -573,18 +490,32 @@ compute_ray(const dolfinx::mesh::Mesh& mesh,
     }
 
     // Assign Jacobian of reference mapping
-    impl::get_parameterization_jacobian<tdim>(cell_type, cells[c + 1],
-                                              jac_param);
     for (std::size_t i = 0; i < tdim; ++i)
       for (std::size_t j = 0; j < tdim - 1; ++j)
-        dxi(i, j) = jac_param[i * (tdim - 1) + j];
+        dxi(i, j) = facet_jacobians(cells[c + 1], i, j);
+
+    dolfinx::common::Timer tfc("~~get parameterization");
 
     // Get parameterization map
-    auto reference_map
-        = impl::get_parameterization<tdim>(cell_type, cells[c + 1]);
-    status = raytracing_cell<tdim, gdim>(allocated_memory, basis_values,
-                                         max_iter, tol, cmap, cell_type,
-                                         coordinate_dofs, reference_map);
+    std::function<void(std::span<const double, tdim - 1>,
+                       std::span<double, tdim>)>
+        reference_map
+        = [&xb, &x_shape, &facets, facet_index = cells[c + 1]](
+              std::span<const double, tdim - 1> xi, std::span<double, tdim> X)
+    {
+      const std::vector<int>& facet = facets[facet_index];
+      dolfinx_contact::cmdspan2_t x(xb.data(), x_shape);
+      for (std::size_t i = 0; i < tdim; ++i)
+        X[i] = x(facet.front(), i);
+      for (std::size_t i = 0; i < tdim; ++i)
+        for (std::size_t j = 0; j < tdim - 1; ++j)
+          X[i] += (x(facet[j + 1], i) - x(facet.front(), i)) * xi[j];
+    };
+    tfc.stop();
+
+    status = raytracing_cell<tdim, gdim>(
+        allocated_memory, basis_values, basis_shape, max_iter, tol, cmap,
+        cell_type, coordinate_dofs, reference_map);
     if (status > 0)
     {
       cell_idx = c / 2;

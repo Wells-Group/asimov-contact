@@ -12,7 +12,8 @@
 #include <dolfinx/geometry/utils.h>
 
 //-----------------------------------------------------------------------------
-void dolfinx_contact::pull_back(dolfinx_contact::mdspan3_t J, dolfinx_contact::mdspan3_t K,
+void dolfinx_contact::pull_back(dolfinx_contact::mdspan3_t J,
+                                dolfinx_contact::mdspan3_t K,
                                 std::span<double> detJ, std::span<double> X,
                                 dolfinx_contact::cmdspan2_t x,
                                 dolfinx_contact::cmdspan2_t coordinate_dofs,
@@ -743,6 +744,8 @@ void dolfinx_contact::compute_physical_points(
     std::span<const std::size_t> offsets, dolfinx_contact::cmdspan4_t phi,
     std::span<double> qp_phys)
 {
+  dolfinx::common::Timer timer("~Contact: Compute Physical points");
+
   // Geometrical info
   const dolfinx::mesh::Geometry& geometry = mesh.geometry();
   std::span<const double> mesh_geometry = geometry.x();
