@@ -559,7 +559,6 @@ void dolfinx_contact::Contact::assemble_matrix(
       = _cell_facet_pairs[contact_pair.front()];
   std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> map
       = _facet_maps[pair];
-  assert(map);
   std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> facet_map
       = _submeshes[contact_pair.back()].facet_map();
   assert(facet_map);
@@ -582,18 +581,20 @@ void dolfinx_contact::Contact::assemble_matrix(
       std::copy_n(std::next(x_g.begin(), 3 * x_dofs[j]), gdim,
                   std::next(coordinate_dofs.begin(), j * 3));
     }
-    auto connected_facets = map->links((int)i / 2);
     // Compute what quadrature points to integrate over (which ones has
     // corresponding facets on other surface)
     std::vector<std::int32_t> q_indices;
-    q_indices.reserve(connected_facets.size());
-    // NOTE: Should probably be pre-computed
-    for (std::size_t j = 0; j < connected_facets.size(); ++j)
-      if (connected_facets[j] >= 0)
-        q_indices.push_back(j);
 
     if (max_links > 0)
     {
+      assert(map);
+      auto connected_facets = map->links((int)i / 2);
+      q_indices.reserve(connected_facets.size());
+      // NOTE: Should probably be pre-computed
+      for (std::size_t j = 0; j < connected_facets.size(); ++j)
+        if (connected_facets[j] >= 0)
+          q_indices.push_back(j);
+
       // Compute the unique set of cells linked to the current facet
       compute_linked_cells(linked_cells, connected_facets, facet_map,
                            parent_cells);
@@ -671,7 +672,6 @@ void dolfinx_contact::Contact::assemble_vector(
   const dolfinx_contact::SubMesh& submesh = _submeshes[contact_pair.back()];
   std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> map
       = _facet_maps[pair];
-  assert(map);
   std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> facet_map
       = submesh.facet_map();
   assert(facet_map);
@@ -698,20 +698,23 @@ void dolfinx_contact::Contact::assemble_vector(
       std::copy_n(std::next(x_g.begin(), 3 * x_dofs[j]), gdim,
                   std::next(coordinate_dofs.begin(), j * 3));
     }
-    auto connected_facets = map->links((int)i / 2);
+
     // Compute what quadrature points to integrate over (which ones has
     // corresponding facets on other surface)
     std::vector<std::int32_t> q_indices;
-    q_indices.reserve(connected_facets.size());
-
-    // NOTE: Should probably be pre-computed
-    for (std::size_t j = 0; j < connected_facets.size(); ++j)
-      if (connected_facets[j] >= 0)
-        q_indices.push_back(j);
 
     // Compute the unique set of cells linked to the current facet
     if (max_links > 0)
     {
+      assert(map);
+      auto connected_facets = map->links((int)i / 2);
+      q_indices.reserve(connected_facets.size());
+
+      // NOTE: Should probably be pre-computed
+      for (std::size_t j = 0; j < connected_facets.size(); ++j)
+        if (connected_facets[j] >= 0)
+          q_indices.push_back(j);
+
       compute_linked_cells(linked_cells, connected_facets, facet_map,
                            parent_cells);
     }
