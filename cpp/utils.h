@@ -481,9 +481,10 @@ compute_raytracing_map(const dolfinx::mesh::Mesh& quadrature_mesh,
         status = raytracing_cell<tdim, gdim>(
             allocated_memory, basis_values_c, basis_shape_c, 25, 1e-8, cmap_c,
             cell_type, coordinate_dofs_c, reference_map);
+
         if (status > 0)
         {
-          cell_idx = pos / 2;         
+          cell_idx = c / 2;
           // Break loop
           c = candidate_facets.size();
         }
