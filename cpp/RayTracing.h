@@ -505,10 +505,11 @@ compute_ray(const dolfinx::mesh::Mesh& mesh,
       const std::vector<int>& facet = facets[facet_index];
       dolfinx_contact::cmdspan2_t x(xb.data(), x_shape);
       for (std::size_t i = 0; i < tdim; ++i)
+      {
         X[i] = x(facet.front(), i);
-      for (std::size_t i = 0; i < tdim; ++i)
         for (std::size_t j = 0; j < tdim - 1; ++j)
           X[i] += (x(facet[j + 1], i) - x(facet.front(), i)) * xi[j];
+      }
     };
     tfc.stop();
 

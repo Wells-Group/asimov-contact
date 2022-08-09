@@ -386,7 +386,6 @@ compute_raytracing_map(const dolfinx::mesh::Mesh& quadrature_mesh,
   auto [ref_jac, jac_shape] = basix::cell::facet_jacobians(basix_cell);
   assert(tdim == jac_shape[1]);
   assert(tdim - 1 == jac_shape[2]);
-  assert(jac_shape[1] * jac_shape[2] == jacobian.size());
   cmdspan3_t facet_jacobians(ref_jac.data(), jac_shape);
 
   // Get basix geometry information
@@ -473,10 +472,11 @@ compute_raytracing_map(const dolfinx::mesh::Mesh& quadrature_mesh,
           dolfinx_contact::cmdspan2_t x(xb.data(), x_shape);
           const int f0 = facet.front();
           for (std::size_t i = 0; i < tdim; ++i)
+          {
             X[i] = x(f0, i);
-          for (std::size_t i = 0; i < tdim; ++i)
             for (std::size_t j = 0; j < tdim - 1; ++j)
               X[i] += (x(facet[j + 1], i) - x(f0, i)) * xi[j];
+          }
         };
         status = raytracing_cell<tdim, gdim>(
             allocated_memory, basis_values_c, basis_shape_c, 25, 1e-8, cmap_c,
