@@ -214,8 +214,8 @@ def test_packing(ct, gap, q_deg, delta, surface):
 
     # Pack gap on surface, pack test functions, u on opposite surface
     gap = contact.pack_gap(0)
-    test_fn = contact.pack_test_functions(0, gap)
-    u_packed = contact.pack_u_contact(0, u._cpp_object, gap)
+    test_fn = contact.pack_test_functions(0)
+    u_packed = contact.pack_u_contact(0, u._cpp_object)
     grad_test_fn = contact.pack_grad_test_functions(0, gap, u_packed)
     grad_u = contact.pack_grad_u_contact(0, u._cpp_object, gap, u_packed)
 
