@@ -841,8 +841,7 @@ public:
       auto [unique_cells, offsets] = sort_cells(f_cells, perm);
       for (std::size_t j = 0; j < unique_cells.size(); ++j)
       {
-        std::int32_t linked_cell = unique_cells[j];
-        assert(linked_cell < num_local_cells);
+        assert(unique_cells[j] < num_local_cells);
         auto indices
             = std::span(perm.data() + offsets[j], offsets[j + 1] - offsets[j]);
 
