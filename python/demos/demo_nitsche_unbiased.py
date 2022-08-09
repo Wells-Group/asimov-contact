@@ -343,7 +343,8 @@ if __name__ == "__main__":
     gamma = args.gamma
     theta = args.theta
     problem_parameters = {"mu": mu, "lambda": lmbda, "gamma": E * gamma, "theta": theta}
-    mode = dolfinx_contact.cpp.ContactMode.Raytracing if args.raytracing else dolfinx_contact.cpp.ContactMode.ClosestPoint
+    mode = dolfinx_contact.cpp.ContactMode.Raytracing if args.raytracing \
+        else dolfinx_contact.cpp.ContactMode.ClosestPoint
     # Load geometry over multiple steps
     for j in range(nload_steps):
         disp = []
@@ -367,7 +368,7 @@ if __name__ == "__main__":
             ufl_form=Fj, u=u, markers=[domain_marker, facet_marker], contact_data=(surfaces, contact),
             bcs=bcs, problem_parameters=problem_parameters, newton_options=newton_options,
             petsc_options=petsc_options, outfile=solver_outfile, quadrature_degree=args.q_degree,
-            search_mode=mode)
+            search_method=mode)
         num_newton_its[j] = newton_its
         num_krylov_its[j] = krylov_iterations
         newton_time[j] = solver_time

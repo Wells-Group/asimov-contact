@@ -183,7 +183,7 @@ def nitsche_unbiased(ufl_form: ufl.Form, u: _fem.Function, markers: list[_cpp.me
     with _common.Timer("~Contact: Pack gap, normals, testfunction"):
         for i in range(len(contact_pairs)):
             gaps.append(contact.pack_gap(i))
-            if mode == dolfinx_contact.cpp.ContactMode.Raytracing:
+            if search_method == dolfinx_contact.cpp.ContactMode.Raytracing:
                 normals.append(-contact.pack_nx(i))
             else:
                 normals.append(contact.pack_ny(i))
