@@ -69,7 +69,7 @@ def test_pack_u():
 
     for i in range(2):
         gap = contact.pack_gap(i)
-        u_opposite = contact.pack_u_contact(i, u._cpp_object, gap)
+        u_opposite = contact.pack_u_contact(i, u._cpp_object)
 
         gap_reshape = gap.reshape(len(ss[i]), -2, 2)
 
