@@ -466,7 +466,6 @@ compute_ray(const dolfinx::mesh::Mesh& mesh,
   auto [ref_jac, jac_shape] = basix::cell::facet_jacobians(basix_cell);
   assert(tdim == jac_shape[1]);
   assert(tdim - 1 == jac_shape[2]);
-  assert(jac_shape[1] * jac_shape[2] == jacobian.size());
   cmdspan3_t facet_jacobians(ref_jac.data(), jac_shape);
 
   // Get basix geometry information
