@@ -122,8 +122,6 @@ kernel_fn<T> generate_contact_kernel(
             [[maybe_unused]] std::span<const std::int32_t> q_indices)
   {
     // Retrieve some data from kd
-    const std::array<std::int32_t, 2> q_offset
-        = {kd.qp_offsets(facet_index), kd.qp_offsets(facet_index + 1)};
     const std::size_t bs = kd.bs();
     const std::uint32_t ndofs_cell = kd.ndofs_cell();
 
@@ -173,9 +171,7 @@ kernel_fn<T> generate_contact_kernel(
     double gamma = w[0] / c[c_offset + kd.offsets(3)];
     double gamma_inv = c[c_offset + kd.offsets(3)] / w[0];
     double theta = w[1];
-    std::span<const double> _weights(kd.q_weights());
-    const int num_points = q_offset.back() - q_offset.front();
-    auto weights = _weights.subspan(q_offset.front(), num_points);
+    std::span<const double> weights = kd.weights(facet_index);
 
     // Temporary work arrays
     std::vector<double> epsnb((kd.offsets(1) - kd.offsets(0)) * gdim);
@@ -191,6 +187,9 @@ kernel_fn<T> generate_contact_kernel(
     cmdspan3_t dphi = kd.dphi();
 
     // Loop over quadrature points
+    const std::array<std::int32_t, 2> q_offset
+        = {kd.qp_offsets(facet_index), kd.qp_offsets(facet_index + 1)};
+    const int num_points = q_offset.back() - q_offset.front();
     for (std::size_t q = 0; q < num_points; q++)
     {
       const std::size_t q_pos = q_offset.front() + q;
@@ -292,8 +291,6 @@ kernel_fn<T> generate_contact_kernel(
             [[maybe_unused]] std::span<const std::int32_t> q_indices)
   {
     // Retrieve some data from kd
-    const std::array<std::int32_t, 2> q_offset
-        = {kd.qp_offsets(facet_index), kd.qp_offsets(facet_index + 1)};
     const std::size_t bs = kd.bs();
     const std::uint32_t ndofs_cell = kd.ndofs_cell();
 
@@ -345,9 +342,7 @@ kernel_fn<T> generate_contact_kernel(
     double gamma = w[0] / c[c_offset + kd.offsets(3)];
     double gamma_inv = c[c_offset + kd.offsets(3)] / w[0];
     double theta = w[1];
-    std::span<const double> _weights(kd.q_weights());
-    const int num_points = q_offset.back() - q_offset.front();
-    auto weights = _weights.subspan(q_offset.front(), num_points);
+    std::span<const double> weights = kd.weights(facet_index);
 
     // Temporary work arrays
     std::vector<double> epsnb((kd.offsets(1) - kd.offsets(0)) * gdim);
@@ -363,6 +358,9 @@ kernel_fn<T> generate_contact_kernel(
     cmdspan3_t dphi = kd.dphi();
 
     // Loop over quadrature points
+    const std::array<std::int32_t, 2> q_offset
+        = {kd.qp_offsets(facet_index), kd.qp_offsets(facet_index + 1)};
+    const int num_points = q_offset.back() - q_offset.front();
     for (std::size_t q = 0; q < num_points; q++)
     {
       const std::size_t q_pos = q_offset.front() + q;
