@@ -58,7 +58,7 @@ if __name__ == "__main__":
     # Load mesh and create identifier functions for the top (Displacement condition)
     # and the bottom (contact condition)
     displacement = [[0, 0, 0]]
-    gap = 1e-13
+    gap = 1e-5
     H = 1.5
     fname = "box_3D"
     create_box_mesh_3D(f"{fname}.msh", simplex, gap=gap, W=H)
@@ -77,12 +77,12 @@ if __name__ == "__main__":
     contact_bdy_2 = 3
     dirichlet_bdy = 4
     # Create meshtag for top and bottom markers
-    top_facets1 = locate_entities_boundary(mesh, tdim - 1, lambda x: np.isclose(x[2], H))
+    top_facets1 = locate_entities_boundary(mesh, tdim - 1, lambda x: np.isclose(x[2], H, atol=1e-10))
     bottom_facets1 = locate_entities_boundary(
-        mesh, tdim - 1, lambda x: np.isclose(x[2], 0.0))
-    top_facets2 = locate_entities_boundary(mesh, tdim - 1, lambda x: np.isclose(x[2], -gap))
+        mesh, tdim - 1, lambda x: np.isclose(x[2], 0.0, atol=1e-10))
+    top_facets2 = locate_entities_boundary(mesh, tdim - 1, lambda x: np.isclose(x[2], -gap, atol=1e-10))
     bottom_facets2 = locate_entities_boundary(
-        mesh, tdim - 1, lambda x: np.isclose(x[2], -H - gap))
+        mesh, tdim - 1, lambda x: np.isclose(x[2], -H - gap, atol=1e-10))
     top_values = np.full(len(top_facets1), neumann_bdy, dtype=np.int32)
     bottom_values = np.full(
         len(bottom_facets1), contact_bdy_1, dtype=np.int32)
