@@ -97,7 +97,7 @@ def test_projection(q_deg, surf, dim):
                                           V._cpp_object, quadrature_degree=q_deg)
     contact.create_distance_map(surf)
     gap = contact.pack_gap(surf)
-    normals = contact.pack_ny(surf, gap)
+    normals = contact.pack_ny(surf)
 
     # Compute dot product and normalise
     n_dot = np.zeros((gap.shape[0], gap.shape[1] // gdim))

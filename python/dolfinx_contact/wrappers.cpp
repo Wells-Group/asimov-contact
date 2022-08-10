@@ -44,6 +44,10 @@ PYBIND11_MODULE(cpp, m)
              std::shared_ptr<contact_wrappers::KernelWrapper>>(
       m, "KernelWrapper", "Wrapper for C++ contact integration kernels");
 
+  py::enum_<dolfinx_contact::ContactMode>(m, "ContactMode")
+      .value("ClosestPoint", dolfinx_contact::ContactMode::ClosestPoint)
+      .value("Raytracing", dolfinx_contact::ContactMode::RayTracing);
+
   // QuadratureRule
   py::class_<dolfinx_contact::QuadratureRule,
              std::shared_ptr<dolfinx_contact::QuadratureRule>>(
@@ -96,9 +100,12 @@ PYBIND11_MODULE(cpp, m)
                     std::shared_ptr<
                         const dolfinx::graph::AdjacencyList<std::int32_t>>,
                     std::vector<std::array<int, 2>>,
-                    std::shared_ptr<dolfinx::fem::FunctionSpace>, const int>(),
-           py::arg("markers"), py::arg("sufaces"), py::arg("contact_pairs"),
-           py::arg("V"), py::arg("quadrature_degree") = 3)
+                    std::shared_ptr<dolfinx::fem::FunctionSpace>, const int,
+                    dolfinx_contact::ContactMode>(),
+           py::arg("markers"), py::arg("surfaces"), py::arg("contact_pairs"),
+           py::arg("V"), py::arg("quadrature_degree") = 3,
+           py::arg("search_method")
+           = dolfinx_contact::ContactMode::ClosestPoint)
       .def("create_distance_map",
 
            [](dolfinx_contact::Contact& self, int pair)
@@ -140,7 +147,7 @@ PYBIND11_MODULE(cpp, m)
                  qp_vec[i * qp_shape[2] + j] = qp_span(facet, i, j);
              std::array<std::size_t, 2> shape_out = {qp_shape[1], qp_shape[2]};
              return dolfinx_wrappers::as_pyarray(std::move(qp_vec), shape_out);
-           })
+           }, "Get quadrature points for the jth facet of the ith contact pair")
       .def("active_entities",
            [](dolfinx_contact::Contact& self, int s)
            {
@@ -174,20 +181,26 @@ PYBIND11_MODULE(cpp, m)
              std::span<const std::int32_t> parent_cells
                  = self.submesh(contact_pair[1]).parent_cells();
              std::vector<std::int32_t> data(old_data.size());
-             for (std::size_t i = 0; i < old_data.size(); ++i)
-             {
-               auto facet_sub = old_data[i];
-               auto facet_pair = facet_map->links(facet_sub);
-               assert(facet_pair.size() == 2);
-               auto cell_parent = parent_cells[facet_pair.front()];
-               data[i] = c_to_f->links(cell_parent)[facet_pair.back()];
-             }
+             std::transform(
+                 old_data.cbegin(), old_data.cend(), data.begin(),
+                 [&facet_map, &parent_cells, &c_to_f](auto submesh_facet)
+                 {
+                   if (submesh_facet < 0)
+                     return -1;
+                   else
+                   {
+                     auto facet_pair = facet_map->links(submesh_facet);
+                     assert(facet_pair.size() == 2);
+                     auto cell_parent = parent_cells[facet_pair.front()];
+                     return c_to_f->links(cell_parent)[facet_pair.back()];
+                   }
+                 });
              return std::make_shared<
                  dolfinx::graph::AdjacencyList<std::int32_t>>(
                  std::move(data), std::move(offsets));
            })
       .def("coefficients_size", &dolfinx_contact::Contact::coefficients_size,
-           py::arg("meshtie") = false)
+           py::arg("meshtie"))
       .def("set_quadrature_rule",
            &dolfinx_contact::Contact::set_quadrature_rule)
       .def("generate_kernel",
@@ -226,12 +239,10 @@ PYBIND11_MODULE(cpp, m)
                  std::span(constants.data(), constants.shape(0)));
            })
       .def("pack_test_functions",
-           [](dolfinx_contact::Contact& self, int origin_meshtag,
-              const py::array_t<PetscScalar, py::array::c_style>& gap)
+           [](dolfinx_contact::Contact& self, int origin_meshtag)
            {
              auto [coeffs, cstride] = self.pack_test_functions(
-                 origin_meshtag,
-                 std::span<const PetscScalar>(gap.data(), gap.size()));
+                 origin_meshtag);
              int shape0 = cstride == 0 ? 0 : coeffs.size() / cstride;
              return dolfinx_wrappers::as_pyarray(std::move(coeffs),
                                                  std::array{shape0, cstride});
@@ -251,12 +262,17 @@ PYBIND11_MODULE(cpp, m)
                                                 std::array{shape0, cstride});
           })
       .def("pack_ny",
-           [](dolfinx_contact::Contact& self, int origin_meshtag,
-              const py::array_t<PetscScalar, py::array::c_style>& gap)
+           [](dolfinx_contact::Contact& self, int origin_meshtag)
            {
-             auto [coeffs, cstride] = self.pack_ny(
-                 origin_meshtag,
-                 std::span<const PetscScalar>(gap.data(), gap.size()));
+             auto [coeffs, cstride] = self.pack_ny(origin_meshtag);
+             int shape0 = cstride == 0 ? 0 : coeffs.size() / cstride;
+             return dolfinx_wrappers::as_pyarray(std::move(coeffs),
+                                                 std::array{shape0, cstride});
+           })
+             .def("pack_nx",
+           [](dolfinx_contact::Contact& self, int origin_meshtag)
+           {
+             auto [coeffs, cstride] = self.pack_nx(origin_meshtag);
              int shape0 = cstride == 0 ? 0 : coeffs.size() / cstride;
              return dolfinx_wrappers::as_pyarray(std::move(coeffs),
                                                  std::array{shape0, cstride});
@@ -264,17 +280,15 @@ PYBIND11_MODULE(cpp, m)
       .def(
           "pack_u_contact",
           [](dolfinx_contact::Contact& self, int origin_meshtag,
-             std::shared_ptr<dolfinx::fem::Function<PetscScalar>> u,
-             const py::array_t<PetscScalar, py::array::c_style>& gap)
+             std::shared_ptr<dolfinx::fem::Function<PetscScalar>> u)
           {
             auto [coeffs, cstride] = self.pack_u_contact(
-                origin_meshtag, u,
-                std::span<const PetscScalar>(gap.data(), gap.size()));
+                origin_meshtag, u);
             int shape0 = cstride == 0 ? 0 : coeffs.size() / cstride;
             return dolfinx_wrappers::as_pyarray(std::move(coeffs),
                                                 std::array{shape0, cstride});
           },
-          py::arg("origin_meshtag"), py::arg("u"), py::arg("gap"))
+          py::arg("origin_meshtag"), py::arg("u"))
       .def(
           "pack_grad_u_contact",
           [](dolfinx_contact::Contact& self, int origin_meshtag,

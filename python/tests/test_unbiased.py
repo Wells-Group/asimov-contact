@@ -267,7 +267,7 @@ def locate_contact_facets_cuas(V, gap):
     return cells, [contact_facets1, contact_facets2]
 
 
-def create_contact_data(V, u, quadrature_degree, lmbda, mu, facets_cg, tied=False):
+def create_contact_data(V, u, quadrature_degree, lmbda, mu, facets_cg, search, tied=False):
     ''' This function creates the contact class and the coefficients
         passed to the assembly for the unbiased Nitsche method'''
 
@@ -288,7 +288,8 @@ def create_contact_data(V, u, quadrature_degree, lmbda, mu, facets_cg, tied=Fals
     surfaces = create_adjacencylist(data, offsets)
     # create contact class
     contact = dolfinx_contact.cpp.Contact([facet_marker], surfaces, [(0, 1), (1, 0)],
-                                          V._cpp_object, quadrature_degree=quadrature_degree)
+                                          V._cpp_object, quadrature_degree=quadrature_degree,
+                                          search_method=search)
     contact.create_distance_map(0)
     contact.create_distance_map(1)
 
@@ -328,12 +329,13 @@ def create_contact_data(V, u, quadrature_degree, lmbda, mu, facets_cg, tied=Fals
     # Pack gap
     gap_0 = contact.pack_gap(0)
     gap_1 = contact.pack_gap(1)
+
     # Pack test functions
-    test_fn_0 = contact.pack_test_functions(0, gap_0)
-    test_fn_1 = contact.pack_test_functions(1, gap_1)
+    test_fn_0 = contact.pack_test_functions(0)
+    test_fn_1 = contact.pack_test_functions(1)
     # pack u
-    u_opp_0 = contact.pack_u_contact(0, u._cpp_object, gap_0)
-    u_opp_1 = contact.pack_u_contact(1, u._cpp_object, gap_1)
+    u_opp_0 = contact.pack_u_contact(0, u._cpp_object)
+    u_opp_1 = contact.pack_u_contact(1, u._cpp_object)
     u_0 = dolfinx_cuas.pack_coefficients([u], entities_0)
     u_1 = dolfinx_cuas.pack_coefficients([u], entities_1)
     if tied:
@@ -346,8 +348,8 @@ def create_contact_data(V, u, quadrature_degree, lmbda, mu, facets_cg, tied=Fals
         coeff_0 = np.hstack([material_0, h_0, test_fn_0, grad_test_fn_0, u_0, u_opp_0, grad_u_opp_0])
         coeff_1 = np.hstack([material_1, h_1, test_fn_1, grad_test_fn_1, u_1, u_opp_1, grad_u_opp_1])
     else:
-        n_0 = contact.pack_ny(0, gap_0)
-        n_1 = contact.pack_ny(1, gap_1)
+        n_0 = contact.pack_ny(0)
+        n_1 = contact.pack_ny(1)
 
         # Concatenate all coeffs
         coeff_0 = np.hstack([material_0, h_0, gap_0, n_0, test_fn_0, u_0, u_opp_0])
@@ -357,14 +359,16 @@ def create_contact_data(V, u, quadrature_degree, lmbda, mu, facets_cg, tied=Fals
 
 
 @pytest.mark.parametrize("ct", ["quadrilateral", "triangle", "tetrahedron", "hexahedron"])
-@pytest.mark.parametrize("gap", [1e-13, -1e-13, -0.5])
-@pytest.mark.parametrize("q_deg", [1, 2, 3])
+@pytest.mark.parametrize("gap", [1e-13, -1e-13, 0.5, -0.5])
+@pytest.mark.parametrize("quadrature_degree", [1, 5])
 @pytest.mark.parametrize("theta", [1, 0, -1])
 @pytest.mark.parametrize("tied", [True, False])
-def test_contact_kernels(ct, gap, q_deg, theta, tied):
+@pytest.mark.parametrize("search", [dolfinx_contact.cpp.ContactMode.ClosestPoint,
+                                    dolfinx_contact.cpp.ContactMode.Raytracing])
+def test_contact_kernels(ct, gap, quadrature_degree, theta, tied, search):
 
-    # set quadrature degree
-    quadrature_degree = q_deg
+    if tied and search == dolfinx_contact.cpp.ContactMode.Raytracing:
+        pytest.xfail("Raytracing and MeshTie not supported")
 
     # Compute lame parameters
     plane_strain = False
@@ -384,7 +388,6 @@ def test_contact_kernels(ct, gap, q_deg, theta, tied):
     mesh_cuas = V_cuas.mesh
     tdim = mesh_ufl.topology.dim
     gdim = mesh_ufl.geometry.dim
-
     TOL = 1e-7
     cells_ufl_0 = locate_entities(mesh_ufl, tdim, lambda x: x[tdim - 1] > 0 - TOL)
     cells_ufl_1 = locate_entities(mesh_ufl, tdim, lambda x: x[tdim - 1] < 0 + TOL)
@@ -466,7 +469,7 @@ def test_contact_kernels(ct, gap, q_deg, theta, tied):
     F_cuas = ufl.inner(sigma(u1), epsilon(v1)) * dx
     J_cuas = ufl.inner(sigma(w1), epsilon(v1)) * dx
 
-    contact, c_0, c_1 = create_contact_data(V_cuas, u1, q_deg, lmbda, mu, facets_cg, tied)
+    contact, c_0, c_1 = create_contact_data(V_cuas, u1, quadrature_degree, lmbda, mu, facets_cg, search, tied)
 
     # Generate residual data structures
     F_cuas = _fem.form(F0)

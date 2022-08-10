@@ -192,7 +192,7 @@ def nitsche_rigid_surface_custom(mesh: _mesh.Mesh, mesh_data: Tuple[_cpp.mesh.Me
     # Compute gap and normals
     contact.create_distance_map(0)
     g_vec = contact.pack_gap(0)
-    n_surf = contact.pack_ny(0, g_vec)
+    n_surf = contact.pack_ny(0)
 
     # Concatenate "constant" coefficients
     constant_coeffs = np.hstack([coeffs, h_facets, g_vec, n_surf])

@@ -156,6 +156,8 @@ def nitsche_custom(mesh: dmesh.Mesh, mesh_data: Tuple[_cpp.mesh.MeshTags_int32, 
     surfaces = create_adjacencylist(data, offsets)
     contact = dolfinx_contact.cpp.Contact([facet_marker], surfaces, [(0, 1)],
                                           V._cpp_object, quadrature_degree=quadrature_degree)
+    contact.create_distance_map(0)
+
     # Compute gap from contact boundary
     g_vec = contact.pack_gap_plane(0, -plane_loc)
 
@@ -166,6 +168,9 @@ def nitsche_custom(mesh: dmesh.Mesh, mesh_data: Tuple[_cpp.mesh.MeshTags_int32, 
     L_custom = _fem.form(F, jit_params=jit_params, form_compiler_params=form_compiler_params)
     kernel_rhs = dolfinx_contact.cpp.generate_contact_kernel(V._cpp_object, dolfinx_contact.Kernel.Rhs, q_rule,
                                                              [u._cpp_object, mu2._cpp_object, lmbda2._cpp_object])
+    # NOTE: HACK to make "one-sided" contact work with assemble_matrix/assemble_vector
+    contact_assembler = dolfinx_contact.cpp.Contact([facet_marker], surfaces, [(0, 1)],
+                                                    V._cpp_object, quadrature_degree=quadrature_degree)
 
     def assemble_residual(x, b, cf):
         u.vector[:] = x.array
@@ -173,7 +178,7 @@ def nitsche_custom(mesh: dmesh.Mesh, mesh_data: Tuple[_cpp.mesh.MeshTags_int32, 
         c = np.hstack([u_packed, coeffs])
         with b.localForm() as b_local:
             b_local.set(0.0)
-        contact.assemble_vector(b, 0, kernel_rhs, c, consts)
+        contact_assembler.assemble_vector(b, 0, kernel_rhs, c, consts)
         _fem.petsc.assemble_vector(b, L_custom)
 
     # Create Jacobian kernels
@@ -186,7 +191,7 @@ def nitsche_custom(mesh: dmesh.Mesh, mesh_data: Tuple[_cpp.mesh.MeshTags_int32, 
         u_packed = dolfinx_cuas.pack_coefficients([u._cpp_object], integral_entities)
         c = np.hstack([u_packed, coeffs])
         a_mat.zeroEntries()
-        contact.assemble_matrix(a_mat, [], 0, kernel_J, c, consts)
+        contact_assembler.assemble_matrix(a_mat, [], 0, kernel_J, c, consts)
         _fem.petsc.assemble_matrix(a_mat, a_custom)
         a_mat.assemble()
 
@@ -215,6 +220,7 @@ def nitsche_custom(mesh: dmesh.Mesh, mesh_data: Tuple[_cpp.mesh.MeshTags_int32, 
     u.interpolate(_u_initial)
 
     dofs_global = V.dofmap.index_map_bs * V.dofmap.index_map.size_global
+
     _log.set_log_level(_log.LogLevel.INFO)
 
     # Solve non-linear problem

@@ -31,7 +31,7 @@ using mat_set_fn = const std::function<int(
 namespace dolfinx_contact
 {
 
-namespace
+namespace impl
 {
 /// Tabulate the coordinate element basis functions at quadrature points
 ///
@@ -54,7 +54,7 @@ tabulate(const dolfinx::fem::CoordinateElement& cmap,
   cmap.tabulate(0, q_points, {q_weights.size(), q_rule->tdim()}, cmap_basis);
   return {cmap_basis, cmap_shape};
 }
-} // namespace
+} // namespace impl
 
 class Contact
 {
@@ -72,7 +72,8 @@ public:
           std::shared_ptr<const dolfinx::graph::AdjacencyList<std::int32_t>>
               surfaces,
           const std::vector<std::array<int, 2>>& contact_pairs,
-          std::shared_ptr<dolfinx::fem::FunctionSpace> V, const int q_deg = 3);
+          std::shared_ptr<dolfinx::fem::FunctionSpace> V, const int q_deg = 3,
+          ContactMode mode = ContactMode::ClosestPoint);
 
   /// Return meshtag value for surface with index surface
   /// @param[in] surface - the index of the surface
@@ -93,11 +94,12 @@ public:
   // set quadrature rule
   void set_quadrature_rule(QuadratureRule q_rule)
   {
-    _quadrature_rule
-        = std::make_shared<dolfinx_contact::QuadratureRule>(q_rule);
+    _quadrature_rule = std::make_shared<QuadratureRule>(q_rule);
   }
 
-  // return size of coefficients vector per facet on s
+  /// return size of coefficients vector per facet on s
+  /// @param[in] meshtie - Type of constraint,meshtie if true, unbiased contact
+  /// if false
   std::size_t coefficients_size(bool meshtie);
 
   /// return distance map (adjacency map mapping quadrature points on surface
@@ -186,7 +188,7 @@ public:
   /// packed at quadrature points. The coefficient `u` is packed at dofs.
   /// @note The vector valued coefficents `gap`, `test_fn`, `u`, `u_opposite`
   /// has dimension `bs == gdim`.
-  kernel_fn<PetscScalar> generate_kernel(dolfinx_contact::Kernel type)
+  kernel_fn<PetscScalar> generate_kernel(Kernel type)
   {
 
     std::shared_ptr<const dolfinx::mesh::Mesh> mesh = _V->mesh();
@@ -227,12 +229,17 @@ public:
     /// `gamma`, `theta`.
     /// @param[in] coordinate_dofs The physical coordinates of cell. Assumed to
     /// be padded to 3D, (shape (num_nodes, 3)).
+    /// @param[in] facet_index Local facet index (relative to cell)
+    /// @param[in] num_links How many cells from opposite surface are connected
+    /// with the cell.
+    /// @param[in] q_indices The quadrature points to loop over
     kernel_fn<PetscScalar> unbiased_rhs
         = [kd, gdim, ndofs_cell,
            bs](std::vector<std::vector<PetscScalar>>& b,
                std::span<const PetscScalar> c, const PetscScalar* w,
                const double* coordinate_dofs, const int facet_index,
-               const std::size_t num_links)
+               const std::size_t num_links,
+               std::span<const std::int32_t> q_indices)
 
     {
       // Retrieve some data from kd
@@ -262,10 +269,9 @@ public:
       {
         detJ = kd.compute_first_facet_jacobian(facet_index, J, K, J_tot,
                                                detJ_scratch, coord);
-        dolfinx_contact::physical_facet_normal(
-            std::span(n_phys.data(), gdim), K,
-            stdex::submdspan(kd.facet_normals(), facet_index,
-                             stdex::full_extent));
+        physical_facet_normal(std::span(n_phys.data(), gdim), K,
+                              stdex::submdspan(kd.facet_normals(), facet_index,
+                                               stdex::full_extent));
       }
 
       // Extract constants used inside quadrature loop
@@ -291,7 +297,7 @@ public:
       mdspan2_t tr(trb.data(), ndofs_cell, gdim);
 
       // Loop over quadrature points
-      for (std::size_t q = 0; q < num_points; q++)
+      for (auto q : q_indices)
       {
         const std::size_t q_pos = q_offset[0] + q;
 
@@ -301,15 +307,16 @@ public:
         kd.update_normal(std::span(n_phys.data(), gdim), K, facet_index);
         double n_dot = 0;
         double gap = 0;
-        // For closest point projection the gap function is given by
-        // (-n_y)* (Pi(x) - x), where n_y is the outward unit normal
-        // in y = Pi(x)
+        // For ray tracing the gap is given by n * (Pi(x) -x)
+        // where n = n_x
+        // For closest point n = -n_y
         for (std::size_t i = 0; i < gdim; i++)
         {
           n_surf[i] = -c[kd.offsets(4) + q * gdim + i];
           n_dot += n_phys[i] * n_surf[i];
           gap += c[kd.offsets(3) + q * gdim + i] * n_surf[i];
         }
+
         compute_normal_strain_basis(epsn, tr, K, dphi, n_surf,
                                     std::span(n_phys.data(), gdim), q_pos);
         // compute tr(eps(u)), epsn at q
@@ -333,8 +340,7 @@ public:
         double sign_u = lmbda * tr_u * n_dot + mu * epsn_u;
         const double w0 = weights[q] * detJ;
 
-        double Pn_u
-            = dolfinx_contact::R_plus(jump_un - gap - gamma * sign_u) * w0;
+        double Pn_u = R_plus((jump_un - gap) - gamma * sign_u) * w0;
         // Fill contributions of facet with itself
         for (std::size_t i = 0; i < ndofs_cell; i++)
         {
@@ -373,12 +379,17 @@ public:
     /// `gamma`, `theta`.
     /// @param[in] coordinate_dofs The physical coordinates of cell. Assumed
     /// to be padded to 3D, (shape (num_nodes, 3)).
+    /// @param[in] facet_index Local facet index (relative to cell)
+    /// @param[in] num_links How many cells from opposite surface are connected
+    /// with the cell.
+    /// @param[in] q_indices The quadrature points to loop over
     kernel_fn<PetscScalar> unbiased_jac
         = [kd, gdim, ndofs_cell, bs](std::vector<std::vector<PetscScalar>>& A,
                                      std::span<const double> c, const double* w,
                                      const double* coordinate_dofs,
                                      const int facet_index,
-                                     const std::size_t num_links)
+                                     const std::size_t num_links,
+                                     std::span<const std::int32_t> q_indices)
     {
       // Retrieve some data from kd
       std::array<std::size_t, 2> q_offset
@@ -407,10 +418,9 @@ public:
       {
         detJ = kd.compute_first_facet_jacobian(facet_index, J, K, J_tot,
                                                detJ_scratch, coord);
-        dolfinx_contact::physical_facet_normal(
-            std::span(n_phys.data(), gdim), K,
-            stdex::submdspan(kd.facet_normals(), facet_index,
-                             stdex::full_extent));
+        physical_facet_normal(std::span(n_phys.data(), gdim), K,
+                              stdex::submdspan(kd.facet_normals(), facet_index,
+                                               stdex::full_extent));
       }
 
       // Extract scaled gamma (h/gamma) and its inverse
@@ -433,7 +443,7 @@ public:
       mdspan2_t tr(trb.data(), ndofs_cell, gdim);
 
       // Loop over quadrature points
-      for (std::size_t q = 0; q < num_points; q++)
+      for (auto q : q_indices)
       {
         const std::size_t q_pos = q_offset.front() + q;
         // Update Jacobian and physical normal
@@ -443,11 +453,11 @@ public:
 
         double n_dot = 0;
         double gap = 0;
+        // The gap is given by n * (Pi(x) -x)
+        // For raytracing n = n_x
+        // For closest point n = -n_y
         for (std::size_t i = 0; i < gdim; i++)
         {
-          // For closest point projection the gap function is given by
-          // (-n_y)* (Pi(x) - x), where n_y is the outward unit normal
-          // in y = Pi(x)
           n_surf[i] = -c[kd.offsets(4) + q * gdim + i];
           n_dot += n_phys[i] * n_surf[i];
           gap += c[kd.offsets(3) + q * gdim + i] * n_surf[i];
@@ -475,8 +485,7 @@ public:
         for (std::size_t j = 0; j < bs; ++j)
           jump_un += -c[offset_u_opp + j] * n_surf[j];
         double sign_u = lmbda * tr_u * n_dot + mu * epsn_u;
-        double Pn_u
-            = dolfinx_contact::dR_plus((jump_un - gap) - gamma * sign_u);
+        double Pn_u = dR_plus((jump_un - gap) - gamma * sign_u);
 
         // Fill contributions of facet with itself
         const double w0 = weights[q] * detJ;
@@ -526,20 +535,18 @@ public:
     };
     switch (type)
     {
-    case dolfinx_contact::Kernel::Rhs:
+    case Kernel::Rhs:
       return unbiased_rhs;
-    case dolfinx_contact::Kernel::Jac:
+    case Kernel::Jac:
       return unbiased_jac;
-    case dolfinx_contact::Kernel::MeshTieRhs:
+    case Kernel::MeshTieRhs:
     {
 
-      return dolfinx_contact::generate_meshtie_kernel(
-          type, _V, _quadrature_rule, max_links);
+      return generate_meshtie_kernel(type, _V, _quadrature_rule, max_links);
     }
-    case dolfinx_contact::Kernel::MeshTieJac:
+    case Kernel::MeshTieJac:
     {
-      return dolfinx_contact::generate_meshtie_kernel(
-          type, _V, _quadrature_rule, max_links);
+      return generate_meshtie_kernel(type, _V, _quadrature_rule, max_links);
     }
     default:
       throw std::invalid_argument("Unrecognized kernel");
@@ -553,29 +560,18 @@ public:
   void create_q_phys(int origin_meshtag)
   {
     // Get information depending on surface
-    std::shared_ptr<const dolfinx::mesh::Mesh> mesh_sub
-        = _submeshes[origin_meshtag].mesh();
-    std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> cell_map
-        = _submeshes[origin_meshtag].cell_map();
-    const std::vector<std::int32_t>& puppet_facets
-        = _cell_facet_pairs[origin_meshtag];
-    std::size_t gdim = mesh_sub->geometry().dim();
+    const SubMesh& submesh = _submeshes[origin_meshtag];
 
-    std::vector<std::int32_t> submesh_facets(puppet_facets.size());
-    for (std::size_t f = 0; f < puppet_facets.size(); f += 2)
-    {
-      const auto cell_sub = cell_map->links(puppet_facets[f]);
-      assert(!cell_sub.empty());
-      submesh_facets[f] = cell_sub[0];
-      submesh_facets[f + 1] = puppet_facets[f + 1];
-    }
-
+    const std::vector<std::int32_t> submesh_facets
+        = submesh.get_submesh_tuples(_cell_facet_pairs[origin_meshtag]);
+    auto mesh_sub = submesh.mesh();
+    const std::size_t gdim = mesh_sub->geometry().dim();
     const std::vector<size_t>& qp_offsets = _quadrature_rule->offset();
     _qp_phys[origin_meshtag].resize((qp_offsets[1] - qp_offsets[0])
                                     * (submesh_facets.size() / 2) * gdim);
-    dolfinx_contact::compute_physical_points(
+    compute_physical_points(
         *mesh_sub, submesh_facets, qp_offsets,
-        dolfinx_contact::cmdspan4_t(_reference_basis.data(), _reference_shape),
+        cmdspan4_t(_reference_basis.data(), _reference_shape),
         _qp_phys[origin_meshtag]);
   }
 
@@ -590,18 +586,23 @@ public:
     // correct map
     const std::array<int, 2>& contact_pair = _contact_pairs[pair];
     const std::vector<std::int32_t>& active_facets
-        = _cell_facet_pairs[contact_pair[0]];
+        = _cell_facet_pairs[contact_pair.front()];
     std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> map
         = _facet_maps[pair];
+    assert(map);
     std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> facet_map
-        = _submeshes[contact_pair[1]].facet_map();
+        = _submeshes[contact_pair.back()].facet_map();
+    assert(facet_map);
     for (std::size_t i = 0; i < active_facets.size(); i += 2)
     {
       std::vector<std::int32_t> linked_cells;
       for (auto link : map->links((int)i / 2))
       {
-        const std::span<const int> facet_pair = facet_map->links(link);
-        linked_cells.push_back(facet_pair[0]);
+        if (link >= 0)
+        {
+          auto facet_pair = facet_map->links(link);
+          linked_cells.push_back(facet_pair.front());
+        }
       }
       // Remove duplicates
       std::sort(linked_cells.begin(), linked_cells.end());
@@ -629,97 +630,110 @@ public:
   /// quadrature point
   std::pair<std::vector<PetscScalar>, int> pack_gap(int pair)
   {
-    auto [puppet_mt, candidate_mt] = _contact_pairs[pair];
+    // FIXME: This function should take in the quadrature points
+    // (push_forward_quadrature) of the relevant facet, and the reference
+    // points on the other surface (output of distance map)
+    auto [quadrature_mt, candidate_mt] = _contact_pairs[pair];
 
-    // Mesh info
+    const std::shared_ptr<const dolfinx::mesh::Mesh>& quadrature_mesh
+        = _submeshes[quadrature_mt].mesh();
+    assert(quadrature_mesh);
+    // Get (cell, local_facet_index) tuples on quadrature submesh
+    const std::vector<std::int32_t> quadrature_facets
+        = _submeshes[quadrature_mt].get_submesh_tuples(
+            _cell_facet_pairs[quadrature_mt]);
+
     const std::shared_ptr<const dolfinx::mesh::Mesh>& candidate_mesh
         = _submeshes[candidate_mt].mesh();
     assert(candidate_mesh);
+    // Get (cell, local_facet_index) tuples on candidate submesh
+    const std::vector<std::int32_t> candidate_facets
+        = _submeshes[candidate_mt].get_submesh_tuples(
+            _cell_facet_pairs[candidate_mt]);
+
+    auto [candidate_map, reference_x, shape] = compute_distance_map(
+        *quadrature_mesh, quadrature_facets, *candidate_mesh, candidate_facets,
+        *_quadrature_rule, _mode);
+
+    // NOTE: Assumes same number of quadrature points on all facets
+    error::check_cell_type(candidate_mesh->topology().cell_type());
+    const std::size_t num_q_point
+        = _quadrature_rule->offset()[1] - _quadrature_rule->offset()[0];
+    const std::size_t num_facets = _cell_facet_pairs[quadrature_mt].size() / 2;
+    const int q_gdim = quadrature_mesh->geometry().dim();
+    mdspan3_t qp_span(_qp_phys[quadrature_mt].data(), num_facets, num_q_point,
+                      q_gdim);
+
     // Get information about submesh geometry and topology
     const dolfinx::mesh::Geometry& geometry = candidate_mesh->geometry();
     const int gdim = geometry.dim();
-    std::span<const double> mesh_geometry = geometry.x();
+    std::span<const double> x_g = geometry.x();
+    auto x_dofmap = geometry.dofmap();
     const dolfinx::fem::CoordinateElement& cmap = geometry.cmap();
-    const dolfinx::fem::ElementDofLayout layout = cmap.create_dof_layout();
-    const int tdim = candidate_mesh->topology().dim();
-    const int fdim = tdim - 1;
+    const std::size_t num_dofs_g = cmap.dim();
+    const dolfinx::mesh::Topology& topology = candidate_mesh->topology();
+    const int tdim = topology.dim();
 
-    // Select which side of the contact interface to loop from and get the
-    // correct map
-    std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> map
-        = _facet_maps[pair];
-    assert(map);
-    // NOTE: Assumes same number of quadrature points on all facets
-    dolfinx_contact::error::check_cell_type(
-        candidate_mesh->topology().cell_type());
-    const std::size_t num_q_point
-        = _quadrature_rule->offset()[1] - _quadrature_rule->offset()[0];
-    const std::size_t num_facets = _cell_facet_pairs[puppet_mt].size() / 2;
-    mdspan3_t qp_span(_qp_phys[puppet_mt].data(), num_facets, num_q_point,
-                      gdim);
-
-    // Get information aboute cell type and number of closure dofs on the facet
-    // NOTE: Assumption that we do not have variable facet types (prism/pyramid
-    // cell)
-    const std::vector<std::int32_t>& closure_dofs
-        = layout.entity_closure_dofs(fdim, 0);
-    const std::size_t num_facet_dofs = closure_dofs.size();
-
-    // Get all connected facets for each quadrature point
-    const std::vector<std::int32_t> master_facets = map->array();
-    assert(master_facets.size() == num_facets * num_q_point);
-
-    // Get the geometry dofs for each of the facets for each quadrature point on
-    // the opposite surface
-    const dolfinx::graph::AdjacencyList<std::int32_t> master_facets_geometry
-        = dolfinx_contact::entities_to_geometry_dofs(*candidate_mesh, fdim,
-                                                     master_facets);
-
-    // Temporary data structures used in loops
-    std::array<double, 3> point;
-    std::array<double, 3> dist_vec;
-    std::vector<double> master_coords(num_facet_dofs * 3);
+    std::vector<double> coordinate_dofsb(num_dofs_g * gdim);
+    cmdspan2_t coordinate_dofs(coordinate_dofsb.data(), num_dofs_g, gdim);
+    std::array<double, 3> coordb;
+    mdspan2_t coord(coordb.data(), 1, gdim);
 
     // Pack gap function for each quadrature point on each facet
     std::vector<PetscScalar> c(num_facets * num_q_point * gdim, 0.0);
     const int cstride = (int)num_q_point * gdim;
+
+    auto f_to_c = candidate_mesh->topology().connectivity(tdim - 1, tdim);
+    if (!f_to_c)
+    {
+      throw std::runtime_error("Missing facet to cell connectivity on "
+                               "candidate submesh");
+    }
+    const std::array<std::size_t, 4> basis_shape
+        = cmap.tabulate_shape(0, shape[0]);
+    assert(basis_shape.back() == 1);
+    std::vector<double> cmap_basis(std::reduce(
+        basis_shape.begin(), basis_shape.end(), 1, std::multiplies{}));
+    cmap.tabulate(0, reference_x, shape, cmap_basis);
+    cmdspan4_t full_basis(cmap_basis.data(), basis_shape);
     for (std::size_t i = 0; i < num_facets; ++i)
     {
       int offset = (int)i * cstride;
+      auto facets = candidate_map.links(i);
+      assert(facets.size() == num_q_point);
+
       for (std::size_t q = 0; q < num_q_point; ++q)
       {
 
-        // FIXME: should probably just pad all quadrature points with zeros
-        // when they are pushed forward
-        // Get quadrature points in physical space for the ith facet, qth
-        // quadrature point
-        for (int k = 0; k < gdim; k++)
-          point[k] = qp_span(i, q, k);
+        // Skip negative facet indices (No facet on opposite surface has
+        // been found)
+        if (facets[q] < 0)
+          continue;
 
-        // Get the geometry dofs for the ith facet, qth quadrature point
-        const std::span<const int> master_facet
-            = master_facets_geometry.links(int(i * num_q_point + q));
-        assert(num_facet_dofs == master_facet.size());
+        auto candidate_cells = f_to_c->links(facets[q]);
+        assert(candidate_cells.size() == 1);
 
-        // Get the coordinates of the geometry on the other interface,
-        // and compute the distance of the convex hull created by the points
-        for (std::size_t l = 0; l < num_facet_dofs; ++l)
+        // Copy coordinate dofs of candidate cell
+        // Get cell geometry (coordinate dofs)
+        auto x_dofs = x_dofmap.links(candidate_cells.front());
+        assert(x_dofs.size() == num_dofs_g);
+        for (std::size_t j = 0; j < num_dofs_g; ++j)
         {
-          // Copy mesh geometry of facets into standalone array
-          dolfinx::common::impl::copy_N<3>(
-              std::next(mesh_geometry.begin(), 3 * master_facet[l]),
-              std::next(master_coords.begin(), 3 * l));
+          std::copy_n(std::next(x_g.begin(), 3 * x_dofs[j]), gdim,
+                      std::next(coordinate_dofsb.begin(), j * gdim));
         }
 
-        dist_vec
-            = dolfinx::geometry::compute_distance_gjk(master_coords, point);
+        auto basis_q = stdex::submdspan(
+            full_basis, 0,
+            std::pair{i * num_q_point + q, i * num_q_point + q + 1},
+            stdex::full_extent, 0);
 
-        // Add distance vector to coefficient array
+        dolfinx::fem::CoordinateElement::push_forward(coord, coordinate_dofs,
+                                                      basis_q);
         for (int k = 0; k < gdim; k++)
-          c[offset + q * gdim + k] += dist_vec[k];
+          c[offset + q * gdim + k] = coordb[k] - qp_span(i, q, k);
       }
     }
-
     return {std::move(c), cstride};
   }
 
@@ -728,123 +742,117 @@ public:
   /// @param[in] pair - index of contact pair
   /// @param[in] gap - gap packed on facets per quadrature point
   /// @param[out] c - test functions packed on facets.
-  std::pair<std::vector<PetscScalar>, int>
-  pack_test_functions(int pair, const std::span<const PetscScalar>& gap)
+  std::pair<std::vector<PetscScalar>, int> pack_test_functions(int pair)
   {
-    auto [puppet_mt, candidate_mt] = _contact_pairs[pair];
-    // Mesh info
-    std::shared_ptr<const dolfinx::mesh::Mesh> mesh
-        = _submeshes[candidate_mt].mesh(); // mesh
-    assert(mesh);
-    const int gdim = mesh->geometry().dim(); // geometrical dimension
-    [[maybe_unused]] const dolfinx::graph::AdjacencyList<int>& x_dofmap
-        = mesh->geometry().dofmap();
-    std::shared_ptr<const dolfinx::fem::FiniteElement> element = _V->element();
-    const std::uint32_t bs = element->block_size();
-    const std::size_t ndofs = (std::size_t)element->space_dimension() / bs;
-    mesh->topology_mutable().create_entity_permutations();
+    auto [quadrature_mt, candidate_mt] = _contact_pairs[pair];
 
-    const std::vector<std::uint32_t> permutation_info
-        = mesh->topology().get_cell_permutation_info();
+    // Get mesh info for candidate side
+    const std::shared_ptr<const dolfinx::mesh::Mesh>& candidate_mesh
+        = _submeshes[candidate_mt].mesh();
+    assert(candidate_mesh);
+    const std::shared_ptr<const dolfinx::mesh::Mesh>& quadrature_mesh
+        = _submeshes[quadrature_mt].mesh();
+    assert(quadrature_mesh);
 
-    // Select which side of the contact interface to loop from and get the
-    // correct map
-    std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> map
-        = _facet_maps[pair];
-    const std::vector<std::int32_t>& puppet_facets
-        = _cell_facet_pairs[puppet_mt];
-    const std::size_t num_facets = puppet_facets.size() / 2;
-    const std::size_t num_q_points
-        = _quadrature_rule->offset()[1] - _quadrature_rule->offset()[0];
-    std::vector<double> q_points(std::size_t(num_q_points) * std::size_t(gdim));
-    mdspan3_t qp_span(_qp_phys[puppet_mt].data(), num_facets, num_q_points,
-                      gdim);
+    // Get (cell, local_facet_index) tuples on quadrature submesh
+    const std::vector<std::int32_t> quadrature_facets
+        = _submeshes[quadrature_mt].get_submesh_tuples(
+            _cell_facet_pairs[quadrature_mt]);
 
-    std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> facet_map
-        = _submeshes[candidate_mt].facet_map();
-    const std::size_t max_links
-        = *std::max_element(_max_links.begin(), _max_links.end());
+    // Get (cell, local_facet_index) tuples on candidate submesh
+    const std::vector<std::int32_t> candidate_facets
+        = _submeshes[candidate_mt].get_submesh_tuples(
+            _cell_facet_pairs[candidate_mt]);
 
-    std::vector<std::int32_t> perm(num_q_points);
-    std::vector<std::int32_t> linked_cells(num_q_points);
+    auto [candidate_map, reference_x, shape]
+        = dolfinx_contact::compute_distance_map(
+            *quadrature_mesh, quadrature_facets, *candidate_mesh,
+            candidate_facets, *_quadrature_rule, _mode);
+
+    // Compute values of basis functions for all y = Pi(x) in qp
     auto V_sub = std::make_shared<dolfinx::fem::FunctionSpace>(
         _submeshes[candidate_mt].create_functionspace(_V));
 
-    // Create output vector
-    std::vector<PetscScalar> c(
-        num_facets * num_q_points * max_links * ndofs * bs, 0.0);
-    const auto cstride = int(num_q_points * max_links * ndofs * bs);
+    std::shared_ptr<const dolfinx::fem::FiniteElement> element
+        = V_sub->element();
+    std::array<std::size_t, 4> b_shape
+        = element->basix_element().tabulate_shape(0, shape[0]);
+    if (b_shape.back() > 1)
+      throw std::invalid_argument("pack_test_functions assumes values size 1");
+    std::vector<double> basis_valuesb(
+        std::reduce(b_shape.cbegin(), b_shape.cend(), 1, std::multiplies{}));
+    element->tabulate(basis_valuesb, reference_x, shape, 0);
+    cmdspan4_t basis_values(basis_valuesb.data(), b_shape);
 
-    // temporary data structure used inside loop
-    std::vector<std::int32_t> cells(max_links);
-    // Loop over all facets
-    for (std::size_t i = 0; i < num_facets; i++)
+    // Need to apply push forward and dof transformations to test functions
+    assert((b_shape.front() == 1) and (b_shape.back() == 1));
+
+    const basix::FiniteElement& b_el = element->basix_element();
+    if (element->needs_dof_transformations()
+        or b_el.map_type() != basix::maps::type::identity)
     {
-      const std::span<const int> links = map->links((int)i);
-      assert(links.size() == num_q_points);
+      // If we want to do this we need to apply transformation and push
+      // forward
+      throw std::runtime_error(
+          "Packing basis (test) functions of space that uses "
+          "non-indentity maps is not supported");
+    }
 
-      for (std::size_t j = 0; j < num_q_points; j++)
-      {
-        const std::span<const int> linked_pair = facet_map->links(links[j]);
-        assert(!linked_pair.empty());
-        linked_cells[j] = linked_pair.front();
-      }
+    // Convert facet index on candidate mesh into cell index
+    const dolfinx::mesh::Topology& topology = candidate_mesh->topology();
+    const int tdim = topology.dim();
+    auto f_to_c = topology.connectivity(tdim - 1, tdim);
+    assert(f_to_c);
+    const std::vector<std::int32_t>& facets = candidate_map.array();
+    error::check_cell_type(topology.cell_type());
+    const std::size_t num_q_points
+        = _quadrature_rule->offset()[1] - _quadrature_rule->offset()[0];
+    const std::size_t num_facets = quadrature_facets.size() / 2;
+    assert(num_facets * num_q_points == facets.size());
+    std::vector<std::int32_t> cells(facets.size(), -1);
+    for (std::size_t i = 0; i < cells.size(); ++i)
+    {
+      if (facets[i] < 0)
+        continue;
+      auto f_cells = f_to_c->links(facets[i]);
+      assert(f_cells.size() == 1);
+      cells[i] = f_cells.front();
+    }
+    // FIXME: Aim to remove this as it depends on the state of the contact
+    // algorithm
+    const std::size_t max_links
+        = *std::max_element(_max_links.begin(), _max_links.end());
 
-      // Sort linked cells
-      std::pair<std::vector<std::int32_t>, std::vector<std::int32_t>>
-          sorted_cells = dolfinx_contact::sort_cells(
-              std::span(linked_cells.data(), linked_cells.size()),
-              std::span(perm.data(), perm.size()));
-      const std::vector<std::int32_t>& unique_cells = sorted_cells.first;
-      const std::vector<std::int32_t>& offsets = sorted_cells.second;
+    const std::size_t bs = element->block_size();
+    const auto cstride = int(num_q_points * max_links * b_shape[2] * bs);
+    std::vector<PetscScalar> cb(
+        num_facets * max_links * num_q_points * b_shape[2] * bs, 0.0);
+    stdex::mdspan<PetscScalar, stdex::dextents<std::size_t, 5>> c(
+        cb.data(), num_facets, max_links, b_shape[2], num_q_points, bs);
 
+    std::vector<std::int32_t> perm(num_q_points);
+    for (std::size_t i = 0; i < c.extent(0); ++i)
+    {
+      std::span<const std::int32_t> f_cells(cells.data() + i * num_q_points,
+                                            num_q_points);
+      auto [unique_cells, offsets] = sort_cells(f_cells, perm);
       for (std::size_t j = 0; j < unique_cells.size(); ++j)
       {
-
-        std::int32_t linked_cell = unique_cells[j];
-        // Extract indices of all occurances of cell in the unsorted cell
-        // array
         auto indices
             = std::span(perm.data() + offsets[j], offsets[j + 1] - offsets[j]);
-        // Extract local dofs
-        assert(linked_cell < x_dofmap.num_nodes());
-        auto qp = std::span(q_points.data(), indices.size() * gdim);
-        mdspan2_t qp_j(qp.data(), indices.size(), gdim);
-        // Compute Pi(x) form points x and gap funtion Pi(x) - x
-        for (std::size_t l = 0; l < indices.size(); ++l)
-        {
-          std::size_t ind = indices[l];
-          for (int k = 0; k < gdim; k++)
-            qp_j(l, k) = qp_span(i, ind, k)
-                         + gap[i * gdim * num_q_points + ind * gdim + k];
-        }
 
-        // Compute values of basis functions for all y = Pi(x) in qp
-        std::array<std::size_t, 4> b_shape
-            = evaluate_basis_shape(*V_sub, indices.size(), 0);
-        if (b_shape.back() > 1)
-          throw std::invalid_argument(
-              "pack_test_functions assumes values size 1");
-        std::vector<double> basis_valuesb(std::reduce(
-            b_shape.cbegin(), b_shape.cend(), 1, std::multiplies{}));
-        std::fill(basis_valuesb.begin(), basis_valuesb.end(), 0);
-        cells.resize(indices.size());
-        std::fill(cells.begin(), cells.end(), linked_cell);
-        evaluate_basis_functions(*V_sub, qp, cells, basis_valuesb, 0);
-        cmdspan4_t basis_values(basis_valuesb.data(), b_shape);
-        // Insert basis function values into c
-        for (std::size_t k = 0; k < ndofs; k++)
+        assert(perm.size() >= (std::size_t)offsets[j + 1]);
+        for (std::size_t k = 0; k < c.extent(2); ++k)
           for (std::size_t q = 0; q < indices.size(); ++q)
-            for (std::size_t l = 0; l < bs; l++)
+            for (std::size_t l = 0; l < c.extent(4); ++l)
             {
-              c[i * cstride + j * ndofs * bs * num_q_points
-                + k * bs * num_q_points + indices[q] * bs + l]
-                  = basis_values(0, q, k, 0);
+              c(i, j, k, indices[q], l)
+                  = basis_values(0, i * num_q_points + indices[q], k, 0);
             }
       }
     }
 
-    return {std::move(c), cstride};
+    return {std::move(cb), cstride};
   }
   /// Compute gradient of test functions on opposite surface (initial
   /// configuration) at quadrature points of facets
@@ -855,6 +863,7 @@ public:
   std::pair<std::vector<PetscScalar>, int>
   pack_grad_test_functions(int pair, const std::span<const PetscScalar>& gap,
                            const std::span<const PetscScalar>& u_packed);
+
   /// Compute function on opposite surface at quadrature points of
   /// facets
   /// @param[in] pair - index of contact pair
@@ -862,91 +871,109 @@ public:
   /// @param[out] c - test functions packed on facets.
   std::pair<std::vector<PetscScalar>, int>
   pack_u_contact(int pair,
-                 std::shared_ptr<dolfinx::fem::Function<PetscScalar>> u,
-                 const std::span<const PetscScalar> gap)
+                 std::shared_ptr<dolfinx::fem::Function<PetscScalar>> u)
   {
     dolfinx::common::Timer t("Pack contact u");
-    auto [puppet_mt, candidate_mt] = _contact_pairs[pair];
+    auto [quadrature_mt, candidate_mt] = _contact_pairs[pair];
 
-    // Mesh info
-    dolfinx_contact::SubMesh submesh = _submeshes[candidate_mt];
-    std::shared_ptr<const dolfinx::mesh::Mesh> mesh = submesh.mesh(); // mesh
-    const std::size_t gdim = mesh->geometry().dim(); // geometrical dimension
-    const std::size_t bs_element = _V->element()->block_size();
+    // Get mesh info for candidate side
+    const std::shared_ptr<const dolfinx::mesh::Mesh>& candidate_mesh
+        = _submeshes[candidate_mt].mesh();
+    assert(candidate_mesh);
+    const std::shared_ptr<const dolfinx::mesh::Mesh>& quadrature_mesh
+        = _submeshes[quadrature_mt].mesh();
+    assert(quadrature_mesh);
 
-    // Select which side of the contact interface to loop from and get the
-    // correct map
-    std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> map
-        = _facet_maps[pair];
-    const std::size_t num_facets = _cell_facet_pairs[puppet_mt].size() / 2;
-    const std::size_t num_q_points
-        = _quadrature_rule->offset()[1] - _quadrature_rule->offset()[0];
-    // NOTE: Assuming same number of quadrature points on each cell
-    dolfinx_contact::error::check_cell_type(mesh->topology().cell_type());
-    mdspan3_t qp_span(_qp_phys[puppet_mt].data(), num_facets, num_q_points,
-                      gdim);
-    std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> facet_map
-        = submesh.facet_map();
+    // Get (cell, local_facet_index) tuples on quadrature submesh
+    const std::vector<std::int32_t> quadrature_facets
+        = _submeshes[quadrature_mt].get_submesh_tuples(
+            _cell_facet_pairs[quadrature_mt]);
 
+    // Get (cell, local_facet_index) tuples on candidate submesh
+    const std::vector<std::int32_t> candidate_facets
+        = _submeshes[candidate_mt].get_submesh_tuples(
+            _cell_facet_pairs[candidate_mt]);
+
+    auto [candidate_map, reference_x, shape]
+        = dolfinx_contact::compute_distance_map(
+            *quadrature_mesh, quadrature_facets, *candidate_mesh,
+            candidate_facets, *_quadrature_rule, _mode);
+
+    // Compute values of basis functions for all y = Pi(x) in qp
     auto V_sub = std::make_shared<dolfinx::fem::FunctionSpace>(
-        submesh.create_functionspace(_V));
+        _submeshes[candidate_mt].create_functionspace(_V));
     dolfinx::fem::Function<PetscScalar> u_sub(V_sub);
     std::shared_ptr<const dolfinx::fem::DofMap> sub_dofmap = V_sub->dofmap();
     assert(sub_dofmap);
     const int bs_dof = sub_dofmap->bs();
+    _submeshes[candidate_mt].copy_function(*u, u_sub);
 
+    std::shared_ptr<const dolfinx::fem::FiniteElement> element
+        = V_sub->element();
     std::array<std::size_t, 4> b_shape
-        = evaluate_basis_shape(*V_sub, num_facets * num_q_points, 0);
+        = element->basix_element().tabulate_shape(0, shape[0]);
+    if (b_shape.back() > 1)
+      throw std::invalid_argument("pack_test_functions assumes values size 1");
     std::vector<double> basis_valuesb(
-        std::reduce(b_shape.begin(), b_shape.end(), 1, std::multiplies{}));
-    std::vector<std::int32_t> cells(num_facets * num_q_points, -1);
+        std::reduce(b_shape.cbegin(), b_shape.cend(), 1, std::multiplies{}));
+    element->tabulate(basis_valuesb, reference_x, shape, 0);
+
+    // Need to apply push forward and dof transformations to test functions
+    assert((b_shape.front() == 1) and (b_shape.back() == 1));
+
+    const basix::FiniteElement& b_el = element->basix_element();
+    if (element->needs_dof_transformations()
+        or b_el.map_type() != basix::maps::type::identity)
     {
-      // Copy function from parent mesh
-      submesh.copy_function(*u, u_sub);
-
-      std::vector<double> pointsb(num_facets * num_q_points * gdim);
-      mdspan3_t points(pointsb.data(), num_facets, num_q_points, gdim);
-      for (std::size_t i = 0; i < num_facets; ++i)
-      {
-        auto links = map->links((int)i);
-        assert(links.size() == num_q_points);
-        for (std::size_t q = 0; q < num_q_points; ++q)
-        {
-          auto linked_pair = facet_map->links(links[(int)q]);
-          assert(!linked_pair.empty());
-          const std::size_t row = i * num_q_points;
-          cells[row + q] = linked_pair.front();
-          for (std::size_t j = 0; j < gdim; ++j)
-          {
-            points(i, q, j) = qp_span(i, q, j) + gap[row * gdim + q * gdim + j];
-          }
-        }
-      }
-
-      evaluate_basis_functions(*u_sub.function_space(), pointsb, cells,
-                               basis_valuesb, 0);
+      // If we want to do this we need to apply transformation and push
+      // forward
+      throw std::runtime_error(
+          "Packing u on opposite surface functions of space that uses "
+          "non-indentity maps is not supported");
     }
 
+    cmdspan4_t basis_values(basis_valuesb.data(), b_shape);
     const std::span<const PetscScalar>& u_coeffs = u_sub.x()->array();
 
     // Output vector
+    const std::size_t num_facets = quadrature_facets.size() / 2;
+    const dolfinx::mesh::Topology& topology = candidate_mesh->topology();
+    error::check_cell_type(topology.cell_type());
+    const std::size_t bs_element = element->block_size();
+
+    const std::size_t num_q_points
+        = _quadrature_rule->offset()[1] - _quadrature_rule->offset()[0];
     std::vector<PetscScalar> c(num_facets * num_q_points * bs_element, 0.0);
+
+    // Get cell index on sub-mesh
+    const int tdim = topology.dim();
+    auto f_to_c = topology.connectivity(tdim - 1, tdim);
+    assert(f_to_c);
+    const std::vector<std::int32_t>& facets = candidate_map.array();
+    std::vector<std::int32_t> cells(facets.size(), -1);
+    for (std::size_t i = 0; i < cells.size(); ++i)
+    {
+      if (facets[i] < 0)
+        continue;
+      auto f_cells = f_to_c->links(facets[i]);
+      assert(f_cells.size() == 1);
+      cells[i] = f_cells.front();
+    }
 
     // Create work vector for expansion coefficients
     const auto cstride = int(num_q_points * bs_element);
     const std::size_t num_basis_functions = b_shape[2];
     const std::size_t value_size = b_shape[3];
-    if (value_size > 1)
-      throw std::invalid_argument("pack_u_contact assumes values size 1");
     std::vector<PetscScalar> coefficients(num_basis_functions * bs_element);
-    cmdspan4_t basis_values(basis_valuesb.data(), b_shape);
+
     for (std::size_t i = 0; i < num_facets; ++i)
     {
       for (std::size_t q = 0; q < num_q_points; ++q)
       {
         // Get degrees of freedom for current cell
-        std::span<const std::int32_t> dofs
-            = sub_dofmap->cell_dofs(cells[i * num_q_points + q]);
+        if (facets[i * num_q_points + q] < 0)
+          continue;
+        auto dofs = sub_dofmap->cell_dofs(cells[i * num_q_points + q]);
         for (std::size_t j = 0; j < dofs.size(); ++j)
           for (int k = 0; k < bs_dof; ++k)
             coefficients[bs_dof * j + k] = u_coeffs[bs_dof * dofs[j] + k];
@@ -982,14 +1009,15 @@ public:
                       const std::span<const PetscScalar> gap,
                       const std::span<const PetscScalar> u_packed);
 
+  /// Compute outward surface normal at x
+  /// @param[in] pair - index of contact pair
+  /// @returns c - (normals, cstride) ny packed on facets.
+  std::pair<std::vector<PetscScalar>, int> pack_nx(int pair);
+
   /// Compute inward surface normal at Pi(x)
   /// @param[in] pair - index of contact pair
-  /// @param[in] gap - gap function: Pi(x)-x packed at quadrature points,
-  /// where Pi(x) is the chosen projection of x onto the contact surface of
-  /// the body coming into contact
-  /// @param[out] c - normals ny packed on facets.
-  std::pair<std::vector<PetscScalar>, int>
-  pack_ny(int pair, const std::span<const PetscScalar> gap);
+  /// @returns c - normals ny packed on facets.
+  std::pair<std::vector<PetscScalar>, int> pack_ny(int pair);
 
   /// Pack gap with rigid surface defined by x[gdim-1] = -g.
   /// g_vec = zeros(gdim), g_vec[gdim-1] = -g
@@ -1000,7 +1028,7 @@ public:
   /// jth component of the Gap on the ith facet at kth quadrature point
   std::pair<std::vector<PetscScalar>, int> pack_gap_plane(int pair, double g)
   {
-    int puppet_mt = _contact_pairs[pair][0];
+    int quadrature_mt = _contact_pairs[pair][0];
     // Mesh info
     std::shared_ptr<const dolfinx::mesh::Mesh> mesh = _V->mesh();
     assert(mesh);
@@ -1010,15 +1038,15 @@ public:
     // Tabulate basis function on reference cell (_phi_ref_facets)
     const dolfinx::fem::CoordinateElement& cmap = mesh->geometry().cmap();
     std::tie(_reference_basis, _reference_shape)
-        = tabulate(cmap, _quadrature_rule);
+        = impl::tabulate(cmap, _quadrature_rule);
 
-    // Compute quadrature points on physical facet _qp_phys_"puppet_mt"
-    create_q_phys(puppet_mt);
-    const std::size_t num_facets = _cell_facet_pairs[puppet_mt].size() / 2;
+    // Compute quadrature points on physical facet _qp_phys_"quadrature_mt"
+    create_q_phys(quadrature_mt);
+    const std::size_t num_facets = _cell_facet_pairs[quadrature_mt].size() / 2;
     // FIXME: This does not work for prism meshes
     std::size_t num_q_point
         = _quadrature_rule->offset()[1] - _quadrature_rule->offset()[0];
-    mdspan3_t qp_span(_qp_phys[puppet_mt].data(), num_facets, num_q_point,
+    mdspan3_t qp_span(_qp_phys[quadrature_mt].data(), num_facets, num_q_point,
                       gdim);
     std::vector<PetscScalar> c(num_facets * num_q_point * gdim, 0.0);
     const int cstride = (int)num_q_point * gdim;
@@ -1059,5 +1087,8 @@ private:
   std::vector<SubMesh> _submeshes;
   // facets as (cell, facet) pairs. The pairs are flattened row-major
   std::vector<std::vector<std::int32_t>> _cell_facet_pairs;
+
+  // Contact search mode
+  ContactMode _mode;
 };
 } // namespace dolfinx_contact
