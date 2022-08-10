@@ -5,19 +5,54 @@
 // SPDX-License-Identifier:    MIT
 
 #include "coefficients.h"
-#include "QuadratureRule.h"
 #include "error_handling.h"
 #include "geometric_quantities.h"
 #include <basix/quadrature.h>
 #include <dolfinx/mesh/cell_types.h>
 using namespace dolfinx_contact;
 
+void dolfinx_contact::transformed_push_forward(
+    const dolfinx::fem::FiniteElement* element, cmdspan4_t reference_basis,
+    std::vector<double>& element_basisb, mdspan3_t basis_values, mdspan2_t J,
+    mdspan2_t K, double detJ, std::size_t basis_offset, std::size_t q,
+    std::int32_t cell, std::span<const std::uint32_t> cell_info)
+{
+  const std::function<void(const std::span<PetscScalar>&,
+                           const std::span<const std::uint32_t>&, std::int32_t,
+                           int)>
+      transformation = element->get_dof_transformation_function<PetscScalar>();
+  // Get push forward function
+  using xu_t = stdex::mdspan<double, stdex::dextents<std::size_t, 2>>;
+  using xU_t = stdex::mdspan<const double, stdex::dextents<std::size_t, 2>>;
+  using xJ_t = stdex::mdspan<const double, stdex::dextents<std::size_t, 2>>;
+  using xK_t = stdex::mdspan<const double, stdex::dextents<std::size_t, 2>>;
+  auto push_forward_fn
+      = element->basix_element().map_fn<xu_t, xU_t, xJ_t, xK_t>();
+  mdspan2_t element_basis(element_basisb.data(), basis_values.extent(1),
+                          basis_values.extent(2));
+  // Copy basis values prior to calling transformation
+  for (std::size_t j = 0; j < element_basis.extent(0); ++j)
+    for (std::size_t k = 0; k < element_basis.extent(1); ++k)
+    {
+      element_basis(j, k) = reference_basis(0, basis_offset + q, j, k);
+    }
+
+  // Permute the reference values to account for the cell's
+  // orientation
+  transformation(element_basisb, cell_info, cell, (int)basis_values.extent(2));
+
+  // Push basis forward to physical element
+  auto _u = stdex::submdspan(basis_values, q, stdex::full_extent,
+                             stdex::full_extent);
+  push_forward_fn(_u, element_basis, J, detJ, K);
+}
 std::pair<std::vector<PetscScalar>, int>
 dolfinx_contact::pack_coefficient_quadrature(
     std::shared_ptr<const dolfinx::fem::Function<PetscScalar>> coeff,
     const int q_degree, std::span<const std::int32_t> active_entities,
     dolfinx::fem::IntegralType integral)
 {
+
   // Get mesh
   std::shared_ptr<const dolfinx::mesh::Mesh> mesh
       = coeff->function_space()->mesh();
@@ -103,10 +138,6 @@ dolfinx_contact::pack_coefficient_quadrature(
     mesh->topology_mutable().create_entity_permutations();
     cell_info = topology.get_cell_permutation_info();
   }
-  const std::function<void(const std::span<PetscScalar>&,
-                           const std::span<const std::uint32_t>&, std::int32_t,
-                           int)>
-      transformation = element->get_dof_transformation_function<PetscScalar>();
 
   if (needs_dof_transformations)
   {
@@ -139,19 +170,10 @@ dolfinx_contact::pack_coefficient_quadrature(
 
     // Prepare transformation function
     std::vector<double> element_basisb(tab_shape[2] * tab_shape[3]);
-    mdspan2_t element_basis(element_basisb.data(), tab_shape[2], tab_shape[3]);
     std::vector<double> basis_valuesb(num_points_per_entity * tab_shape[2]
                                       * tab_shape[3]);
     mdspan3_t basis_values(basis_valuesb.data(), num_points_per_entity,
                            tab_shape[2], tab_shape[3]);
-
-    // Get push forward function
-    using xu_t = stdex::mdspan<double, stdex::dextents<std::size_t, 2>>;
-    using xU_t = stdex::mdspan<const double, stdex::dextents<std::size_t, 2>>;
-    using xJ_t = stdex::mdspan<const double, stdex::dextents<std::size_t, 2>>;
-    using xK_t = stdex::mdspan<const double, stdex::dextents<std::size_t, 2>>;
-    auto push_forward_fn
-        = element->basix_element().map_fn<xu_t, xU_t, xJ_t, xK_t>();
 
     for (std::size_t i = 0; i < num_active_entities; i++)
     {
@@ -197,23 +219,9 @@ dolfinx_contact::pack_coefficient_quadrature(
 
         for (std::size_t q = 0; q < num_points_per_entity; ++q)
         {
-
-          // Copy basis values prior to calling transformation
-          for (std::size_t j = 0; j < element_basis.extent(0); ++j)
-            for (std::size_t k = 0; k < element_basis.extent(1); ++k)
-            {
-              element_basis(j, k)
-                  = reference_basis(0, q_offsets[entity_index] + q, j, k);
-            }
-
-          // Permute the reference values to account for the cell's
-          // orientation
-          transformation(element_basisb, cell_info, cell, (int)tab_shape[3]);
-
-          // Push basis forward to physical element
-          auto _u = stdex::submdspan(basis_values, q, stdex::full_extent,
-                                     stdex::full_extent);
-          push_forward_fn(_u, element_basis, J, detJ, K);
+          transformed_push_forward(element, reference_basis, element_basisb,
+                                   basis_values, J, K, detJ,
+                                   q_offsets[entity_index], q, cell, cell_info);
         }
       }
       else
@@ -231,23 +239,9 @@ dolfinx_contact::pack_coefficient_quadrature(
               = dolfinx::fem::CoordinateElement::compute_jacobian_determinant(
                   J, detJ_scratch);
 
-          // Copy basis values prior to calling transformation
-          for (std::size_t j = 0; j < element_basis.extent(0); ++j)
-            for (std::size_t k = 0; k < element_basis.extent(1); ++k)
-            {
-              element_basis(j, k)
-                  = reference_basis(0, q_offsets[entity_index] + q, j, k);
-            }
-
-          // Permute the reference values to account for the cell's
-          // orientation
-          transformation(element_basisb, cell_info, cell, (int)tab_shape[3]);
-
-          // Push basis forward to physical element
-          // Push basis forward to physical element
-          auto _u = stdex::submdspan(basis_values, q, stdex::full_extent,
-                                     stdex::full_extent);
-          push_forward_fn(_u, element_basis, J, detJ, K);
+          transformed_push_forward(element, reference_basis, element_basisb,
+                                   basis_values, J, K, detJ,
+                                   q_offsets[entity_index], q, cell, cell_info);
         }
       }
       // Sum up quadrature contributions
@@ -316,6 +310,7 @@ dolfinx_contact::pack_coefficient_quadrature(
   }
   return {std::move(coefficients), cstride};
 }
+
 //-----------------------------------------------------------------------------
 std::vector<PetscScalar> dolfinx_contact::pack_circumradius(
     const dolfinx::mesh::Mesh& mesh,
