@@ -165,8 +165,13 @@ public:
         n, K, cmdspan2_t(_facet_normals.data(), _normals_shape), local_index);
   }
 
-  // return quadrature weights for facet f
-  const std::vector<double>& q_weights() const { return _q_weights; }
+  /// Return quadrature weights for the i-th facet
+  std::span<const double> weights(std::size_t i) const
+  {
+    assert(i + 1 < _qp_offsets.size());
+    return std::span(_q_weights.data() + _qp_offsets[i],
+                     _qp_offsets[i + 1] - _qp_offsets[i]);
+  }
 
   // return the reference jacobians
   cmdspan3_t ref_jacobians() const

@@ -57,8 +57,6 @@ dolfinx_contact::generate_meshtie_kernel(
                      [[maybe_unused]] std::span<const std::int32_t> q_indices)
   {
     // Retrieve some data from kd
-    std::array<std::size_t, 2> q_offset
-        = {kd.qp_offsets(facet_index), kd.qp_offsets(facet_index + 1)};
     auto tdim = std::size_t(kd.tdim());
 
     // NOTE: DOLFINx has 3D input coordinate dofs
@@ -101,8 +99,7 @@ dolfinx_contact::generate_meshtie_kernel(
     cmdspan3_t dphi = kd.dphi();
 
     // Extract reference to quadrature weights for the local facet
-    std::span<const double> _weights(kd.q_weights());
-    auto weights = _weights.subspan(q_offset[0], q_offset[1] - q_offset[0]);
+    std::span<const double> weights = kd.weights(facet_index);
 
     // Temporary data structures used inside quadrature loop
     std::vector<double> sig_nb(ndofs_cell * gdim * gdim);
@@ -113,10 +110,12 @@ dolfinx_contact::generate_meshtie_kernel(
     mdspan4_t sig_n_opp(sig_n_oppb.data(), num_links, ndofs_cell, gdim, gdim);
 
     // Loop over quadrature points
-    const std::size_t num_points = q_offset[1] - q_offset[0];
+    std::array<std::size_t, 2> q_offset
+        = {kd.qp_offsets(facet_index), kd.qp_offsets(facet_index + 1)};
+    const std::size_t num_points = q_offset.back() - q_offset.front();
     for (std::size_t q = 0; q < num_points; q++)
     {
-      const std::size_t q_pos = q_offset[0] + q;
+      const std::size_t q_pos = q_offset.front() + q;
 
       // Update Jacobian and physical normal
       detJ = kd.update_jacobian(q, facet_index, detJ, J, K, J_tot, detJ_scratch,
@@ -207,8 +206,6 @@ dolfinx_contact::generate_meshtie_kernel(
             [[maybe_unused]] std::span<const std::int32_t> q_indices)
   {
     // Retrieve some data from kd
-    std::array<std::size_t, 2> q_offset
-        = {kd.qp_offsets(facet_index), kd.qp_offsets(facet_index + 1)};
     auto tdim = std::size_t(kd.tdim());
     // NOTE: DOLFINx has 3D input coordinate dofs
     cmdspan2_t coord(coordinate_dofs, kd.num_coordinate_dofs(), 3);
@@ -250,8 +247,7 @@ dolfinx_contact::generate_meshtie_kernel(
     cmdspan3_t dphi = kd.dphi();
 
     // Extract reference to quadrature weights for the local facet
-    std::span<const double> _weights(kd.q_weights());
-    auto weights = _weights.subspan(q_offset[0], q_offset[1] - q_offset[0]);
+    std::span<const double> weights = kd.weights(facet_index);
 
     // Temporary data structures used inside quadrature loop
     std::vector<double> sig_nb(ndofs_cell * gdim * gdim);
@@ -260,10 +256,12 @@ dolfinx_contact::generate_meshtie_kernel(
     mdspan4_t sig_n_opp(sig_n_oppb.data(), num_links, ndofs_cell, gdim, gdim);
 
     // Loop over quadrature points
-    const std::size_t num_points = q_offset[1] - q_offset[0];
+    std::array<std::size_t, 2> q_offset
+        = {kd.qp_offsets(facet_index), kd.qp_offsets(facet_index + 1)};
+    const std::size_t num_points = q_offset.back() - q_offset.front();
     for (std::size_t q = 0; q < num_points; q++)
     {
-      const std::size_t q_pos = q_offset[0] + q;
+      const std::size_t q_pos = q_offset.front() + q;
       // Update Jacobian and physical normal
       detJ = kd.update_jacobian(q, facet_index, detJ, J, K, J_tot, detJ_scratch,
                                 coord);
