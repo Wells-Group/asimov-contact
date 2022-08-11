@@ -93,3 +93,42 @@ dolfinx_contact::KernelData::KernelData(
   // Get update FacetNormal function (for each quadrature point)
   _update_normal = dolfinx_contact::get_update_normal(cmap);
 }
+//-----------------------------------------------------------------------------
+double dolfinx_contact::KernelData::compute_first_facet_jacobian(
+    const std::size_t facet_index, dolfinx_contact::mdspan2_t J,
+    dolfinx_contact::mdspan2_t K, dolfinx_contact::mdspan2_t J_tot,
+    std::span<double> detJ_scratch, dolfinx_contact::cmdspan2_t coords) const
+{
+  dolfinx_contact::cmdspan4_t full_basis(_c_basis_values.data(),
+                                         _c_basis_shape);
+  dolfinx_contact::s_cmdspan2_t dphi_fc
+      = stdex::submdspan(full_basis, std::pair{1, (std::size_t)_tdim + 1},
+                         _qp_offsets[facet_index], stdex::full_extent, 0);
+  dolfinx_contact::cmdspan3_t ref_jacs(_ref_jacobians.data(), _jac_shape);
+  auto J_f = stdex::submdspan(ref_jacs, (std::size_t)facet_index,
+                              stdex::full_extent, stdex::full_extent);
+  return std::fabs(dolfinx_contact::compute_facet_jacobian(
+      J, K, J_tot, detJ_scratch, J_f, dphi_fc, coords));
+}
+//-----------------------------------------------------------------------------
+void dolfinx_contact::KernelData::update_normal(
+    std::span<double> n, dolfinx_contact::cmdspan2_t K,
+    const std::size_t local_index) const
+{
+  return _update_normal(
+      n, K, dolfinx_contact::cmdspan2_t(_facet_normals.data(), _normals_shape),
+      local_index);
+}
+//-----------------------------------------------------------------------------
+std::span<const double>
+dolfinx_contact::KernelData::weights(std::size_t i) const
+{
+  assert(i + 1 < _qp_offsets.size());
+  return std::span(_q_weights.data() + _qp_offsets[i],
+                   _qp_offsets[i + 1] - _qp_offsets[i]);
+}
+//-----------------------------------------------------------------------------
+dolfinx_contact::cmdspan3_t dolfinx_contact::KernelData::ref_jacobians() const
+{
+  return dolfinx_contact::cmdspan3_t(_ref_jacobians.data(), _jac_shape);
+}

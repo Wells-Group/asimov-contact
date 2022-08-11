@@ -13,6 +13,28 @@ using namespace dolfinx_contact;
 namespace
 {
 
+/// Tabulate the coordinate element basis functions at quadrature points
+///
+/// @param[in] cmap The coordinate element
+/// @param[in] q_rule The quadrature rule
+std::pair<std::vector<double>, std::array<std::size_t, 4>>
+tabulate(const dolfinx::fem::CoordinateElement& cmap,
+         std::shared_ptr<const dolfinx_contact::QuadratureRule> q_rule)
+{
+
+  // Create quadrature points on reference facet
+  const std::vector<double>& q_weights = q_rule->weights();
+  const std::vector<double>& q_points = q_rule->points();
+  assert(q_weights.size() == (std::size_t)q_rule->offset().back());
+  // Tabulate Coordinate element (first derivative to compute Jacobian)
+  std::array<std::size_t, 4> cmap_shape
+      = cmap.tabulate_shape(0, q_weights.size());
+  std::vector<double> cmap_basis(
+      std::reduce(cmap_shape.begin(), cmap_shape.end(), 1, std::multiplies{}));
+  cmap.tabulate(0, q_points, {q_weights.size(), q_rule->tdim()}, cmap_basis);
+  return {cmap_basis, cmap_shape};
+}
+
 /// Given a set of facets on the submesh, find all cells on the opposite surface
 /// of the parent mesh that is linked.
 /// @param[in, out] linked_cells List of unique cells on the parent mesh
@@ -284,7 +306,7 @@ void dolfinx_contact::Contact::create_distance_map(int pair)
   const dolfinx::fem::CoordinateElement& cmap
       = candidate_mesh->geometry().cmap();
   std::tie(_reference_basis, _reference_shape)
-      = impl::tabulate(cmap, _quadrature_rule);
+      = tabulate(cmap, _quadrature_rule);
 
   // NOTE: This function should be moved somwhere else, or return the actual
   // points such that we compuld send them in to compute_distance_map.
@@ -294,6 +316,7 @@ void dolfinx_contact::Contact::create_distance_map(int pair)
   // Update maximum number of connected cells
   max_links(pair);
 }
+//------------------------------------------------------------------------------------------------
 std::pair<std::vector<PetscScalar>, int>
 dolfinx_contact::Contact::pack_nx(int pair)
 {
@@ -440,7 +463,7 @@ dolfinx_contact::Contact::generate_kernel(Kernel type)
       [kd, gdim, ndofs_cell,
        bs](std::vector<std::vector<PetscScalar>>& b,
            std::span<const PetscScalar> c, const PetscScalar* w,
-           const double* coordinate_dofs, const int facet_index,
+           const double* coordinate_dofs, const std::size_t facet_index,
            const std::size_t num_links, std::span<const std::int32_t> q_indices)
 
   {
@@ -584,11 +607,12 @@ dolfinx_contact::Contact::generate_kernel(Kernel type)
   /// @param[in] num_links How many cells from opposite surface are connected
   /// with the cell.
   /// @param[in] q_indices The quadrature points to loop over
-  kernel_fn<PetscScalar> unbiased_jac =
-      [kd, gdim, ndofs_cell, bs](
-          std::vector<std::vector<PetscScalar>>& A, std::span<const double> c,
-          const double* w, const double* coordinate_dofs, const int facet_index,
-          const std::size_t num_links, std::span<const std::int32_t> q_indices)
+  kernel_fn<PetscScalar> unbiased_jac
+      = [kd, gdim, ndofs_cell, bs](
+            std::vector<std::vector<PetscScalar>>& A, std::span<const double> c,
+            const double* w, const double* coordinate_dofs,
+            const std::size_t facet_index, const std::size_t num_links,
+            std::span<const std::int32_t> q_indices)
   {
     // Retrieve some data from kd
     const std::uint32_t tdim = kd.tdim();
@@ -874,7 +898,7 @@ dolfinx_contact::Contact::pack_gap(int pair)
   for (std::size_t i = 0; i < num_facets; ++i)
   {
     int offset = (int)i * cstride;
-    auto facets = candidate_map.links(i);
+    auto facets = candidate_map.links((int)i);
     assert(facets.size() == num_q_point);
 
     for (std::size_t q = 0; q < num_q_point; ++q)
@@ -957,8 +981,8 @@ dolfinx_contact::Contact::pack_test_functions(int pair)
   // Need to apply push forward and dof transformations to test functions
   assert((b_shape.front() == 1) and (b_shape.back() == 1));
 
-  const basix::FiniteElement& b_el = element->basix_element();
-  if (element->needs_dof_transformations()
+  if (const basix::FiniteElement& b_el = element->basix_element();
+      element->needs_dof_transformations()
       or b_el.map_type() != basix::maps::type::identity)
   {
     // If we want to do this we need to apply transformation and push
@@ -1075,9 +1099,8 @@ dolfinx_contact::Contact::pack_u_contact(
 
   // Need to apply push forward and dof transformations to test functions
   assert((b_shape.front() == 1) and (b_shape.back() == 1));
-
-  const basix::FiniteElement& b_el = element->basix_element();
-  if (element->needs_dof_transformations()
+  if (const basix::FiniteElement& b_el = element->basix_element();
+      element->needs_dof_transformations()
       or b_el.map_type() != basix::maps::type::identity)
   {
     // If we want to do this we need to apply transformation and push
@@ -1165,7 +1188,7 @@ dolfinx_contact::Contact::pack_gap_plane(int pair, double g)
   // Tabulate basis function on reference cell (_phi_ref_facets)
   const dolfinx::fem::CoordinateElement& cmap = mesh->geometry().cmap();
   std::tie(_reference_basis, _reference_shape)
-      = impl::tabulate(cmap, _quadrature_rule);
+      = tabulate(cmap, _quadrature_rule);
 
   // Compute quadrature points on physical facet _qp_phys_"quadrature_mt"
   create_q_phys(quadrature_mt);

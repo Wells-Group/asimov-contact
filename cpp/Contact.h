@@ -31,31 +31,6 @@ using mat_set_fn = const std::function<int(
 namespace dolfinx_contact
 {
 
-namespace impl
-{
-/// Tabulate the coordinate element basis functions at quadrature points
-///
-/// @param[in] cmap The coordinate element
-/// @param[in] q_rule The quadrature rule
-std::pair<std::vector<double>, std::array<std::size_t, 4>>
-tabulate(const dolfinx::fem::CoordinateElement& cmap,
-         std::shared_ptr<const dolfinx_contact::QuadratureRule> q_rule)
-{
-
-  // Create quadrature points on reference facet
-  const std::vector<double>& q_weights = q_rule->weights();
-  const std::vector<double>& q_points = q_rule->points();
-  assert(q_weights.size() == (std::size_t)q_rule->offset().back());
-  // Tabulate Coordinate element (first derivative to compute Jacobian)
-  std::array<std::size_t, 4> cmap_shape
-      = cmap.tabulate_shape(0, q_weights.size());
-  std::vector<double> cmap_basis(
-      std::reduce(cmap_shape.begin(), cmap_shape.end(), 1, std::multiplies{}));
-  cmap.tabulate(0, q_points, {q_weights.size(), q_rule->tdim()}, cmap_basis);
-  return {cmap_basis, cmap_shape};
-}
-} // namespace impl
-
 class Contact
 {
 public:
@@ -273,11 +248,10 @@ public:
   /// jth component of the Gap on the ith facet at kth quadrature point
   std::pair<std::vector<PetscScalar>, int> pack_gap_plane(int pair, double g);
 
-      /// This function updates the submesh geometry for all submeshes using
-      /// a function given on the parent mesh
-      /// @param[in] u - displacement
-      void update_submesh_geometry(
-          dolfinx::fem::Function<PetscScalar>& u) const;
+  /// This function updates the submesh geometry for all submeshes using
+  /// a function given on the parent mesh
+  /// @param[in] u - displacement
+  void update_submesh_geometry(dolfinx::fem::Function<PetscScalar>& u) const;
 
 private:
   std::shared_ptr<QuadratureRule> _quadrature_rule; // quadrature rule
