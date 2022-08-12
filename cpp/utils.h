@@ -45,8 +45,8 @@ enum class Kernel
 template <typename T>
 using kernel_fn
     = std::function<void(std::vector<std::vector<T>>&, std::span<const T>,
-                         const T*, const double*, const int, const std::size_t,
-                         std::span<const std::int32_t>)>;
+                         const T*, const double*, const std::size_t,
+                         const std::size_t, std::span<const std::int32_t>)>;
 
 /// This function computes the pull back for a set of points x on a cell
 /// described by coordinate_dofs as well as the corresponding Jacobian, their
