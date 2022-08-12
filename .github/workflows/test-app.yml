@@ -15,7 +15,7 @@ jobs:
   build:
     if: "!(contains(github.event.head_commit.message, '[ci skip]') || contains(github.event.head_commit.message, '[skip ci]'))"
     runs-on: ubuntu-20.04
-    container: dolfinx/dev-env:nightly
+    container: dolfinx/dev-env:v0.5.0
 
     strategy:
       matrix:
@@ -49,7 +49,7 @@ jobs:
         with:
           path: ./basix
           repository: FEniCS/basix
-          ref: main
+          ref: v0.5.0
 
       - name: Install FEniCS Python components (dolfinx)
         run: |
@@ -57,14 +57,14 @@ jobs:
           cmake --build build-basix
           cmake --install build-basix
           python3 -m pip install ./basix/python
-          python3 -m pip install git+https://github.com/FEniCS/ufl.git
-          python3 -m pip install git+https://github.com/FEniCS/ffcx.git
+          python3 -m pip install git+https://github.com/FEniCS/ufl.git@2022.2.0
+          python3 -m pip install git+https://github.com/FEniCS/ffcx.git@v0.5.0
       - name: Install dolfinx
         uses: actions/checkout@v2
         with:
           path: ./dolfinx
           repository: FEniCS/dolfinx
-          ref: main
+          ref: v0.5.0
 
       - name: Configure C++ (dolfinx)
         run: cmake -G Ninja -DCMAKE_BUILD_TYPE=Release -B build-dolfinx -S ./dolfinx/cpp/
@@ -82,7 +82,7 @@ jobs:
         with:
           path: ./asimov-custom-assemblers
           repository: Wells-Group/asimov-custom-assemblers
-          ref: main
+          ref: v0.5.0
 
       - name: Install custom assemblers (C++)
         run: |
