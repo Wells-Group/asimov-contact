@@ -7,7 +7,7 @@ from setuptools import Extension, setup
 from setuptools.command.build_ext import build_ext
 
 
-VERSION = "0.5.0"
+VERSION = "0.5.1"
 
 REQUIREMENTS = ["fenics-dolfinx>=0.5.0", "numpy>=1.21.0", "dolfinx_cuas>=0.5.0"]
 
