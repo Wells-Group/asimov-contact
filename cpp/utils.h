@@ -203,10 +203,12 @@ entities_to_geometry_dofs(const mesh::Mesh& mesh, int dim,
 /// @param[in] candidate_facets Candidate facets
 /// @param[in] radius The search radius
 /// @return candidate facets within radius of puppet facets
-std::vector<std::int32_t> find_candidate_surface_segment(
-    std::shared_ptr<const dolfinx::mesh::Mesh> mesh,
-    const std::vector<std::int32_t>& puppet_facets,
-    const std::vector<std::int32_t>& candidate_facets, const double radius);
+std::vector<std::int32_t>
+find_candidate_surface_segment(const dolfinx::mesh::Mesh& quadrature_mesh,
+                               const dolfinx::mesh::Mesh& candidate_mesh,
+                               std::span<const std::int32_t> quadrature_facets,
+                               std::span<const std::int32_t> candidate_facets,
+                               const double radius);
 
 /// @brief compute physical points on set of facets
 ///
@@ -250,7 +252,7 @@ compute_distance_map(const dolfinx::mesh::Mesh& quadrature_mesh,
                      const dolfinx::mesh::Mesh& candidate_mesh,
                      std::span<const std::int32_t> candidate_facets,
                      const QuadratureRule& q_rule,
-                     dolfinx_contact::ContactMode mode);
+                     dolfinx_contact::ContactMode mode, const double radius);
 
 /// Compute the relation between two meshes (mesh_q) and
 /// (mesh_c) by computing the intersection of rays from
@@ -287,10 +289,13 @@ compute_raytracing_map(const dolfinx::mesh::Mesh& quadrature_mesh,
                        std::span<const std::int32_t> quadrature_facets,
                        const QuadratureRule& q_rule,
                        const dolfinx::mesh::Mesh& candidate_mesh,
-                       std::span<const std::int32_t> candidate_facets)
+                       std::span<const std::int32_t> candidate_facets,
+                       const double search_radius = -1.)
 {
   dolfinx::common::Timer timer("~Raytracing");
-
+  std::vector<std::int32_t> cnd_fcts = find_candidate_surface_segment(
+      quadrature_mesh, candidate_mesh, quadrature_facets, candidate_facets,
+      search_radius);
   assert(candidate_mesh.geometry().dim() == gdim);
   assert(quadrature_mesh.geometry().dim() == gdim);
   assert(candidate_mesh.topology().dim() == tdim);
@@ -305,7 +310,7 @@ compute_raytracing_map(const dolfinx::mesh::Mesh& quadrature_mesh,
   // Convert (cell, local facet index) into facet index
   // (local to process) Convert cell,local_facet_index to
   // facet_index (local to proc)
-  std::vector<std::int32_t> facets(candidate_facets.size() / 2);
+  std::vector<std::int32_t> facets(cnd_fcts.size() / 2);
   std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> c_to_f
       = candidate_mesh.topology().connectivity(tdim, tdim - 1);
   if (!c_to_f)
@@ -314,12 +319,12 @@ compute_raytracing_map(const dolfinx::mesh::Mesh& quadrature_mesh,
                              "mesh.");
   }
 
-  for (std::size_t i = 0; i < candidate_facets.size(); i += 2)
+  for (std::size_t i = 0; i < cnd_fcts.size(); i += 2)
   {
-    auto local_facets = c_to_f->links(candidate_facets[i]);
+    auto local_facets = c_to_f->links(cnd_fcts[i]);
     assert(!local_facets.empty());
-    assert((std::size_t)candidate_facets[i + 1] < local_facets.size());
-    facets[i / 2] = local_facets[candidate_facets[i + 1]];
+    assert((std::size_t)cnd_fcts[i + 1] < local_facets.size());
+    facets[i / 2] = local_facets[cnd_fcts[i + 1]];
   }
 
   // Structures used for computing physical normal
@@ -444,11 +449,11 @@ compute_raytracing_map(const dolfinx::mesh::Mesh& quadrature_mesh,
 
       std::size_t cell_idx = -1;
       int status = 0;
-      for (std::size_t c = 0; c < candidate_facets.size(); c += 2)
+      for (std::size_t c = 0; c < cnd_fcts.size(); c += 2)
       {
         // Get cell geometry for candidate cell, reusing
         // coordinate dofs to store new coordinate
-        auto x_dofs = c_dofmap.links(candidate_facets[c]);
+        auto x_dofs = c_dofmap.links(cnd_fcts[c]);
         for (std::size_t k = 0; k < x_dofs.size(); ++k)
         {
           dolfinx::common::impl::copy_N<gdim>(
@@ -458,13 +463,13 @@ compute_raytracing_map(const dolfinx::mesh::Mesh& quadrature_mesh,
         // Assign Jacobian of reference mapping
         for (std::size_t l = 0; l < tdim; ++l)
           for (std::size_t m = 0; m < tdim - 1; ++m)
-            dxi(l, m) = facet_jacobians(candidate_facets[c + 1], l, m);
+            dxi(l, m) = facet_jacobians(cnd_fcts[c + 1], l, m);
 
         // Get parameterization map
         std::function<void(std::span<const double, tdim - 1>,
                            std::span<double, tdim>)>
             reference_map
-            = [&xb, &x_shape, &bfacets, facet_index = candidate_facets[c + 1]](
+            = [&xb, &x_shape, &bfacets, facet_index = cnd_fcts[c + 1]](
                   std::span<const double, tdim - 1> xi,
                   std::span<double, tdim> X)
         {
@@ -486,7 +491,7 @@ compute_raytracing_map(const dolfinx::mesh::Mesh& quadrature_mesh,
         {
           cell_idx = c / 2;
           // Break loop
-          c = candidate_facets.size();
+          c = cnd_fcts.size();
         }
       }
       if (status > 0)

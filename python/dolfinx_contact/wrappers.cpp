@@ -202,6 +202,8 @@ PYBIND11_MODULE(cpp, m)
            py::arg("meshtie"))
       .def("set_quadrature_rule",
            &dolfinx_contact::Contact::set_quadrature_rule)
+      .def("set_search_radius",
+           &dolfinx_contact::Contact::set_search_radius)
       .def("generate_kernel",
            [](dolfinx_contact::Contact& self, dolfinx_contact::Kernel type) {
              return contact_wrappers::KernelWrapper(self.generate_kernel(type));
@@ -411,14 +413,17 @@ PYBIND11_MODULE(cpp, m)
 
   m.def(
       "find_candidate_surface_segment",
-      [](std::shared_ptr<const dolfinx::mesh::Mesh> mesh,
-         const std::vector<std::int32_t>& puppet_facets,
+      [](const dolfinx::mesh::Mesh& quadrature_mesh,
+         const dolfinx::mesh::Mesh& candidate_mesh,
+         const std::vector<std::int32_t>& quadrature_facets,
          const std::vector<std::int32_t>& candidate_facets, const double radius)
       {
         return dolfinx_contact::find_candidate_surface_segment(
-            mesh, puppet_facets, candidate_facets, radius);
+            quadrature_mesh, candidate_mesh, quadrature_facets,
+            candidate_facets, radius);
       },
-      py::arg("mesh"), py::arg("puppet_facets"), py::arg("candidate_facets"),
+      py::arg("quadrature_mesh"), py::arg("candidate_mesh"),
+      py::arg("quadrature_facets"), py::arg("candidate_facets"),
       py::arg("radius") = -1.0);
   m.def(
       "raytracing",

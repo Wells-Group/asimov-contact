@@ -17,6 +17,7 @@ from petsc4py import PETSc as _PETSc
 import dolfinx_contact
 import dolfinx_contact.cpp
 from dolfinx_contact.helpers import (rigid_motions_nullspace_subdomains, sigma_func)
+from dolfinx_contact.plotting import plot_gap
 
 kt = dolfinx_contact.cpp.Kernel
 
@@ -136,7 +137,7 @@ def nitsche_unbiased(ufl_form: ufl.Form, u: _fem.Function, markers: list[_cpp.me
         contact = dolfinx_contact.cpp.Contact(markers[1:], contact_surfaces, contact_pairs,
                                               V._cpp_object, quadrature_degree=quadrature_degree,
                                               search_method=search_method)
-
+    contact.set_search_radius(0.2)
     with _common.Timer("~Contact: Distance maps"):
         for i in range(len(contact_pairs)):
             contact.create_distance_map(i)
@@ -188,6 +189,17 @@ def nitsche_unbiased(ufl_form: ufl.Form, u: _fem.Function, markers: list[_cpp.me
             else:
                 normals.append(contact.pack_ny(i))
             test_fns.append(contact.pack_test_functions(i))
+
+    for i, gap in enumerate(gaps):
+        s1 = contact_pairs[i][0]
+        s2 = contact_pairs[i][1]
+        tag1 = contact_surfaces.array[s1]
+        tag2 = contact_surfaces.array[s2]
+        mt_ind1 = np.argwhere(contact_surfaces.offsets < s1 + 1)[-1, 0]
+        mt_ind2 = np.argwhere(contact_surfaces.offsets < s2 + 1)[-1, 0]
+        facets = markers[1 + mt_ind1].find(tag1)
+        facets_opp = markers[1 + mt_ind2].find(tag2)
+        plot_gap(mesh, contact, i, gap, facets, facets_opp)
 
     # Concatenate all coeffs
     coeffs_const = []

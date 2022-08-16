@@ -691,21 +691,24 @@ dolfinx_contact::entities_to_geometry_dofs(
 
 //-------------------------------------------------------------------------------------
 std::vector<std::int32_t> dolfinx_contact::find_candidate_surface_segment(
-    std::shared_ptr<const dolfinx::mesh::Mesh> mesh,
-    const std::vector<std::int32_t>& puppet_facets,
-    const std::vector<std::int32_t>& candidate_facets,
-    const double radius = -1.)
+    const dolfinx::mesh::Mesh& quadrature_mesh,
+    const dolfinx::mesh::Mesh& candidate_mesh,
+    std::span<const std::int32_t> quadrature_facets,
+    std::span<const std::int32_t> candidate_facets, const double radius = -1.)
 {
   if (radius < 0)
   {
     // return all facets for negative radius / no radius
-    return std::vector<std::int32_t>(candidate_facets);
+    std::vector<std::int32_t> cand_patch(candidate_facets.size());
+    std::copy_n(candidate_facets.begin(), candidate_facets.size(),
+                cand_patch.begin());
+    return cand_patch;
   }
-  // Find midpoints of puppet and candidate facets
-  std::vector<double> puppet_midpoints = dolfinx::mesh::compute_midpoints(
-      *mesh, mesh->topology().dim() - 1, puppet_facets);
+  // Find midpoints of quadrature and candidate facets
+  std::vector<double> quadrature_midpoints = dolfinx::mesh::compute_midpoints(
+      quadrature_mesh, quadrature_mesh.topology().dim() - 1, quadrature_facets);
   std::vector<double> candidate_midpoints = dolfinx::mesh::compute_midpoints(
-      *mesh, mesh->topology().dim() - 1, candidate_facets);
+      candidate_mesh, candidate_mesh.topology().dim() - 1, candidate_facets);
 
   double r2 = radius * radius; // radius squared
   double dist; // used for squared distance between two midpoints
@@ -715,14 +718,14 @@ std::vector<std::int32_t> dolfinx_contact::find_candidate_surface_segment(
 
   for (std::size_t i = 0; i < candidate_facets.size(); ++i)
   {
-    for (std::size_t j = 0; j < puppet_facets.size(); ++j)
+    for (std::size_t j = 0; j < quadrature_facets.size(); ++j)
     {
       // compute distance betweeen midpoints of ith candidate facet
-      // and jth puppet facet
+      // and jth quadrature facet
       dist = 0;
       for (std::size_t k = 0; k < 3; ++k)
       {
-        diff = std::abs(puppet_midpoints[j * 3 + k]
+        diff = std::abs(quadrature_midpoints[j * 3 + k]
                         - candidate_midpoints[i * 3 + k]);
         dist += diff * diff;
       }
@@ -798,7 +801,7 @@ dolfinx_contact::compute_distance_map(
     const dolfinx::mesh::Mesh& candidate_mesh,
     std::span<const std::int32_t> candidate_facets,
     const dolfinx_contact::QuadratureRule& q_rule,
-    dolfinx_contact::ContactMode mode)
+    dolfinx_contact::ContactMode mode, const double radius)
 {
 
   const dolfinx::mesh::Geometry& geometry = quadrature_mesh.geometry();
@@ -907,13 +910,13 @@ dolfinx_contact::compute_distance_map(
       {
         return dolfinx_contact::compute_raytracing_map<2, 2>(
             quadrature_mesh, quadrature_facets, q_rule, candidate_mesh,
-            candidate_facets);
+            candidate_facets, radius);
       }
       else if (gdim == 3)
       {
         return dolfinx_contact::compute_raytracing_map<2, 3>(
             quadrature_mesh, quadrature_facets, q_rule, candidate_mesh,
-            candidate_facets);
+            candidate_facets, radius);
       }
       else
         throw std::runtime_error("Invalid gdim: " + std::to_string(gdim));
@@ -922,7 +925,7 @@ dolfinx_contact::compute_distance_map(
     {
       return dolfinx_contact::compute_raytracing_map<3, 3>(
           quadrature_mesh, quadrature_facets, q_rule, candidate_mesh,
-          candidate_facets);
+          candidate_facets, radius);
     }
     else
       throw std::runtime_error("Invalid tdim: " + std::to_string(tdim));
