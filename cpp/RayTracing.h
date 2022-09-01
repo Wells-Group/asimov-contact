@@ -454,7 +454,7 @@ compute_ray(const dolfinx::mesh::Mesh& mesh,
   impl::compute_tangents<gdim>(normal, tangents);
   std::span<double, gdim> m_point = allocated_memory.point();
   auto dxi = allocated_memory.dxi();
-  dolfinx::common::impl::copy_N<gdim>(point.begin(), m_point.begin());
+  std::copy_n(point.begin(), gdim, m_point.begin());
 
   // Check for parameterization and jacobian parameterization
   error::check_cell_type(cell_type);
@@ -483,8 +483,8 @@ compute_ray(const dolfinx::mesh::Mesh& mesh,
     auto x_dofs = x_dofmap.links(cells[c]);
     for (std::size_t j = 0; j < x_dofs.size(); ++j)
     {
-      dolfinx::common::impl::copy_N<gdim>(
-          std::next(x_g.begin(), 3 * x_dofs[j]),
+      std::copy_n(
+          std::next(x_g.begin(), 3 * x_dofs[j]), gdim,
           std::next(coordinate_dofs.begin(), gdim * j));
     }
 
@@ -529,8 +529,8 @@ compute_ray(const dolfinx::mesh::Mesh& mesh,
   std::array<double, tdim> X;
   auto x_fin = allocated_memory.x_k();
   auto X_fin = allocated_memory.X_k();
-  dolfinx::common::impl::copy_N<gdim>(x_fin.begin(), x.begin());
-  dolfinx::common::impl::copy_N<tdim>(X_fin.begin(), X.begin());
+  std::copy_n(x_fin.begin(), gdim, x.begin());
+  std::copy_n(X_fin.begin(), tdim, X.begin());
   std::tuple<int, std::int32_t, std::array<double, gdim>,
              std::array<double, tdim>>
       output = std::make_tuple(status, cell_idx, x, X);
