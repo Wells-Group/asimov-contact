@@ -30,7 +30,8 @@ def test_pack_u():
     cell_type = msh.CellType.triangle
     domain = ufl.Mesh(ufl.VectorElement("Lagrange", ufl.Cell(cell_type.name), 1))
     cells = graph.create_adjacencylist(cells)
-    mesh = msh.create_mesh(MPI.COMM_WORLD, cells, points, domain, msh.GhostMode.none)
+    part = msh.create_cell_partitioner(msh.GhostMode.none)
+    mesh = msh.create_mesh(MPI.COMM_WORLD, cells, points, domain, part)
 
     def f(x):
         vals = np.zeros((2, x.shape[1]))

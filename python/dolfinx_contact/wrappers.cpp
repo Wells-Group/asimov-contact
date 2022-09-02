@@ -13,9 +13,8 @@
 #include <dolfinx_contact/QuadratureRule.h>
 #include <dolfinx_contact/RayTracing.h>
 #include <dolfinx_contact/coefficients.h>
-#include <dolfinx_contact/contact_kernels.hpp>
+#include <dolfinx_contact/contact_kernels.h>
 #include <dolfinx_contact/utils.h>
-#include <iostream>
 #include <pybind11/functional.h>
 #include <pybind11/operators.h>
 #include <pybind11/pybind11.h>
@@ -315,8 +314,8 @@ PYBIND11_MODULE(cpp, m)
          bool constant_normal)
       {
         return contact_wrappers::KernelWrapper(
-            dolfinx_contact::generate_contact_kernel<PetscScalar>(
-                V, type, q_rule, coeffs, constant_normal));
+            dolfinx_contact::generate_contact_kernel(V, type, q_rule, coeffs,
+                                                     constant_normal));
       },
       py::arg("V"), py::arg("kernel_type"), py::arg("quadrature_rule"),
       py::arg("coeffs"), py::arg("constant_normal") = true);

@@ -53,15 +53,15 @@ public:
   bool affine() const { return _affine; }
 
   // return number of dofs pers cell
-  std::uint32_t ndofs_cell() const { return _ndofs_cell; }
+  std::size_t ndofs_cell() const { return _ndofs_cell; }
 
   // Return block size
   std::size_t bs() const { return _bs; }
 
   // Return quadrature rule offsets for index f
-  std::size_t qp_offsets(int f) const
+  std::size_t qp_offsets(std::size_t f) const
   {
-    assert((std::size_t)f < _qp_offsets.size());
+    assert(f < _qp_offsets.size());
     return _qp_offsets[f];
   }
 
@@ -111,8 +111,8 @@ public:
   /// @param[in, out] detJ_scratch - Working memory to compute determinants
   /// @param[in] coords - the coordinates of the facet
   /// @return absolute value of determinant of J_tot
-  double update_jacobian(std::size_t q, const int facet_index, double detJ,
-                         mdspan2_t J, mdspan2_t K, mdspan2_t J_tot,
+  double update_jacobian(std::size_t q, const std::size_t facet_index,
+                         double detJ, mdspan2_t J, mdspan2_t K, mdspan2_t J_tot,
                          std::span<double> detJ_scratch,
                          cmdspan2_t coords) const
   {
@@ -138,41 +138,23 @@ public:
   /// @param[in,out] detJ_scratch - Working memory, min size (2*gdim*tdim)
   /// @param[in] coords - the coordinates of the facet
   /// @return absolute value of determinant of J_tot
-  double compute_first_facet_jacobian(const int facet_index, mdspan2_t J,
-                                      mdspan2_t K, mdspan2_t J_tot,
+  double compute_first_facet_jacobian(const std::size_t facet_index,
+                                      mdspan2_t J, mdspan2_t K, mdspan2_t J_tot,
                                       std::span<double> detJ_scratch,
-                                      cmdspan2_t coords) const
-  {
-    cmdspan4_t full_basis(_c_basis_values.data(), _c_basis_shape);
-    s_cmdspan2_t dphi_fc
-        = stdex::submdspan(full_basis, std::pair{1, (std::size_t)_tdim + 1},
-                           _qp_offsets[facet_index], stdex::full_extent, 0);
-    cmdspan3_t ref_jacs(_ref_jacobians.data(), _jac_shape);
-    auto J_f = stdex::submdspan(ref_jacs, (std::size_t)facet_index,
-                                stdex::full_extent, stdex::full_extent);
-    return std::fabs(dolfinx_contact::compute_facet_jacobian(
-        J, K, J_tot, detJ_scratch, J_f, dphi_fc, coords));
-  }
+                                      cmdspan2_t coords) const;
 
   /// update normal
   /// @param[in, out] n The facet normal
   /// @param[in] K The inverse Jacobian
   /// @param[in] local_index The facet index local to the cell
   void update_normal(std::span<double> n, cmdspan2_t K,
-                     const std::size_t local_index) const
-  {
-    return _update_normal(
-        n, K, cmdspan2_t(_facet_normals.data(), _normals_shape), local_index);
-  }
+                     const std::size_t local_index) const;
 
-  // return quadrature weights for facet f
-  const std::vector<double>& q_weights() const { return _q_weights; }
+  /// Return quadrature weights for the i-th facet
+  std::span<const double> weights(std::size_t i) const;
 
   // return the reference jacobians
-  cmdspan3_t ref_jacobians() const
-  {
-    return cmdspan3_t(_ref_jacobians.data(), _jac_shape);
-  }
+  cmdspan3_t ref_jacobians() const;
 
 private:
   std::uint32_t _gdim;                  // geometrical dimension

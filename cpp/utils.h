@@ -45,8 +45,8 @@ enum class Kernel
 template <typename T>
 using kernel_fn
     = std::function<void(std::vector<std::vector<T>>&, std::span<const T>,
-                         const T*, const double*, const int, const std::size_t,
-                         std::span<const std::int32_t>)>;
+                         const T*, const double*, const std::size_t,
+                         const std::size_t, std::span<const std::int32_t>)>;
 
 /// This function computes the pull back for a set of points x on a cell
 /// described by coordinate_dofs as well as the corresponding Jacobian, their
@@ -409,8 +409,8 @@ compute_raytracing_map(const dolfinx::mesh::Mesh& quadrature_mesh,
     assert(x_dofs.size() == num_nodes_q);
     for (std::size_t j = 0; j < num_nodes_q; ++j)
     {
-      dolfinx::common::impl::copy_N<gdim>(
-          std::next(q_x.begin(), 3 * x_dofs[j]),
+      std::copy_n(
+          std::next(q_x.begin(), 3 * x_dofs[j]), gdim,
           std::next(coordinate_dofs_qb.begin(), j * gdim));
     }
     const std::int32_t facet_index = quadrature_facets[i + 1];
@@ -435,9 +435,9 @@ compute_raytracing_map(const dolfinx::mesh::Mesh& quadrature_mesh,
 
       // Copy data regarding quadrature point into allocated memory for
       // raytracing
-      dolfinx::common::impl::copy_N<gdim>(
+      std::copy_n(
           std::next(quadrature_points.cbegin(),
-                    (i / 2 * num_q_points + j) * gdim),
+                    (i / 2 * num_q_points + j) * gdim), gdim,
           point.begin());
       impl::compute_tangents<gdim>(std::span<double, gdim>(normal.data(), gdim),
                                    tangents);
@@ -451,8 +451,8 @@ compute_raytracing_map(const dolfinx::mesh::Mesh& quadrature_mesh,
         auto x_dofs = c_dofmap.links(candidate_facets[c]);
         for (std::size_t k = 0; k < x_dofs.size(); ++k)
         {
-          dolfinx::common::impl::copy_N<gdim>(
-              std::next(c_x.begin(), 3 * x_dofs[k]),
+          std::copy_n(
+              std::next(c_x.begin(), 3 * x_dofs[k]), gdim,
               std::next(coordinate_dofs_c.begin(), gdim * k));
         }
         // Assign Jacobian of reference mapping
@@ -492,8 +492,8 @@ compute_raytracing_map(const dolfinx::mesh::Mesh& quadrature_mesh,
       if (status > 0)
       {
         colliding_facet[i / 2 * num_q_points + j] = facets[cell_idx];
-        dolfinx::common::impl::copy_N<tdim>(
-            X_fin.begin(), std::next(reference_points.begin(),
+        std::copy_n(
+            X_fin.begin(), tdim, std::next(reference_points.begin(),
                                      tdim * (i / 2 * num_q_points + j)));
       }
     }
@@ -596,9 +596,9 @@ compute_projection_map(const dolfinx::mesh::Mesh& mesh,
       // Get the (geometrical) coordinates of the facets
       for (std::size_t l = 0; l < num_facet_dofs; ++l)
       {
-        dolfinx::common::impl::copy_N<3>(
+        std::copy_n(
             std::next(mesh_geometry.begin(), 3 * candidate_facet_dofs[l]),
-            std::next(coordinate_dofs.begin(), 3 * l));
+            3, std::next(coordinate_dofs.begin(), 3 * l));
       }
 
       // Compute distance between convex hull of facet and point
@@ -643,15 +643,15 @@ compute_projection_map(const dolfinx::mesh::Mesh& mesh,
       assert(x_dofs.size() == num_dofs_g);
       for (std::size_t j = 0; j < num_dofs_g; ++j)
       {
-        dolfinx::common::impl::copy_N<gdim>(
-            std::next(mesh_geometry.begin(), 3 * x_dofs[j]),
+        std::copy_n(
+            std::next(mesh_geometry.begin(), 3 * x_dofs[j]), gdim,
             std::next(coordinate_dofsb.begin(), j * gdim));
       }
 
       // Copy closest point in physical space
       std::fill(x.begin(), x.end(), 0);
-      dolfinx::common::impl::copy_N<gdim>(std::next(candidate_x.begin(), 3 * i),
-                                          x.begin());
+      std::copy_n(std::next(candidate_x.begin(), 3 * i),
+                                          gdim, x.begin());
 
       // NOTE: Would benefit from pulling back all points
       // in a single cell at the same time
@@ -661,8 +661,8 @@ compute_projection_map(const dolfinx::mesh::Mesh& mesh,
                 cmap);
 
       // Copy into output
-      dolfinx::common::impl::copy_N<tdim>(
-          X.begin(), std::next(candidate_X.begin(), i * tdim));
+      std::copy_n(
+          X.begin(), tdim, std::next(candidate_X.begin(), i * tdim));
     }
   }
   return {closest_facets, candidate_X, {candidate_X.size() / tdim, tdim}};
