@@ -199,9 +199,9 @@ void dolfinx_contact::SubMesh::update_geometry(
   std::size_t num_x_dofs = sub_geometry.size() / 3;
   for (std::size_t i = 0; i < num_x_dofs; ++i)
   {
-    dolfinx::common::impl::copy_N<3>(
+    std::copy_n(
         std::next(parent_geometry.begin(), 3 * _submesh_to_mesh_x_dof_map[i]),
-        std::next(sub_geometry.begin(), 3 * i));
+        3, std::next(sub_geometry.begin(), 3 * i));
   }
   // use u to update geometry
   std::shared_ptr<const dolfinx::fem::FunctionSpace> V_parent
