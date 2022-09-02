@@ -118,7 +118,7 @@ if __name__ == "__main__":
     rank = MPI.COMM_WORLD.rank
     refs = np.arange(0, num_refs)
     jit_options = {"cffi_extra_compile_args": ["-O3", "-march=native"], "cffi_libraries": ["m"]}
-    form_compiler_params = {"verbosity": 30}
+    form_compiler_options = {"verbosity": 30}
     for i in refs:
         if i > 0:
             # Refine mesh
@@ -141,7 +141,7 @@ if __name__ == "__main__":
         u1 = nitsche_ufl(mesh=mesh, mesh_data=mesh_data, physical_parameters=physical_parameters,
                          vertical_displacement=vertical_displacement, nitsche_parameters=nitsche_parameters,
                          plane_loc=gap, nitsche_bc=nitsche_bc, petsc_options=petsc_options,
-                         newton_options=newton_options, form_compiler_params=form_compiler_params,
+                         newton_options=newton_options, form_compiler_options=form_compiler_options,
                          jit_options=jit_options)
 
         with XDMFFile(mesh.comm, f"results/u_nitsche_{i}.xdmf", "w") as xdmf:
@@ -151,7 +151,7 @@ if __name__ == "__main__":
         # Solve contact problem using PETSc SNES
         u2 = snes_solver(mesh=mesh, mesh_data=mesh_data, physical_parameters=physical_parameters,
                          vertical_displacement=vertical_displacement, plane_loc=gap,
-                         petsc_options=petsc_snes, form_compiler_params=form_compiler_params,
+                         petsc_options=petsc_snes, form_compiler_options=form_compiler_options,
                          jit_options=jit_options, snes_options=snes_options)
         with XDMFFile(mesh.comm, f"results/u_snes_{i}.xdmf", "w") as xdmf:
             xdmf.write_mesh(mesh)

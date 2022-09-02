@@ -24,7 +24,7 @@ from dolfinx_contact.helpers import (R_minus, epsilon, lame_parameters,
 def nitsche_rigid_surface(mesh: _mesh.Mesh, mesh_data: Tuple[_cpp.mesh.MeshTags_int32, int, int, int, int],
                           physical_parameters: dict = {}, nitsche_parameters: Dict[str, float] = {},
                           vertical_displacement: float = -0.1, nitsche_bc: bool = False, quadrature_degree: int = 5,
-                          form_compiler_params: Dict = {}, jit_options: Dict = {}, petsc_options: Dict = {},
+                          form_compiler_options: Dict = {}, jit_options: Dict = {}, petsc_options: Dict = {},
                           newton_options: Dict = {}):
     """
     Use custom kernel to compute the one sided contact problem with a mesh coming into contact
@@ -53,7 +53,7 @@ def nitsche_rigid_surface(mesh: _mesh.Mesh, mesh_data: Tuple[_cpp.mesh.MeshTags_
         Use Nitche's method to enforce Dirichlet boundary conditions
     quadrature_degree
         The quadrature degree to use for the custom contact kernels
-    form_compiler_params
+    form_compiler_options
         Parameters used in FFCX compilation of this form. Run `ffcx --help` at
         the commandline to see all available opdirichlet_value_rigidtions. Takes priority over all
         other parameter values, except for `scalar_type` which is determined by

@@ -28,7 +28,7 @@ def nitsche_unbiased(ufl_form: ufl.Form, u: _fem.Function, markers: list[_cpp.me
                      bcs: list[_fem.DirichletBCMetaClass],
                      problem_parameters: dict[str, np.float64],
                      search_method: dolfinx_contact.cpp.ContactMode,
-                     quadrature_degree: int = 5, form_compiler_params: dict = None, jit_options: dict = None,
+                     quadrature_degree: int = 5, form_compiler_options: dict = None, jit_options: dict = None,
                      petsc_options: dict = None, newton_options: dict = None,
                      outfile: str = None) -> Tuple[_fem.Function, int, int, float]:
     """
@@ -60,7 +60,7 @@ def nitsche_unbiased(ufl_form: ufl.Form, u: _fem.Function, markers: list[_cpp.me
         Way of detecting contact. Either closest point projection or raytracing
     quadrature_degree
         The quadrature degree to use for the custom contact kernels
-    form_compiler_params
+    form_compiler_options
         Parameters used in FFCX compilation of this form. Run `ffcx --help` at
         the commandline to see all available options. Takes priority over all
         other parameter values, except for `scalar_type` which is determined by
@@ -82,7 +82,7 @@ def nitsche_unbiased(ufl_form: ufl.Form, u: _fem.Function, markers: list[_cpp.me
         File to append solver summary
 
     """
-    form_compiler_params = {} if form_compiler_params is None else form_compiler_params
+    form_compiler_options = {} if form_compiler_options is None else form_compiler_options
     jit_options = {} if jit_options is None else jit_options
     petsc_options = {} if petsc_options is None else petsc_options
     newton_options = {} if newton_options is None else newton_options
@@ -195,14 +195,14 @@ def nitsche_unbiased(ufl_form: ufl.Form, u: _fem.Function, markers: list[_cpp.me
         coeffs_const.append(np.hstack([material[i], h_packed[i], gaps[i], normals[i], test_fns[i]]))
 
     # Generate Jacobian data structures
-    J_custom = _fem.form(J, form_compiler_params=form_compiler_params, jit_options=jit_options)
+    J_custom = _fem.form(J, form_compiler_options=form_compiler_options, jit_options=jit_options)
     with _common.Timer("~Contact: Generate Jacobian kernel"):
         kernel_jac = contact.generate_kernel(kt.Jac)
     with _common.Timer("~Contact: Create matrix"):
         J = contact.create_matrix(J_custom)
 
     # Generate residual data structures
-    F_custom = _fem.form(F, form_compiler_params=form_compiler_params, jit_options=jit_options)
+    F_custom = _fem.form(F, form_compiler_options=form_compiler_options, jit_options=jit_options)
     with _common.Timer("~Contact: Generate residual kernel"):
         kernel_rhs = contact.generate_kernel(kt.Rhs)
     with _common.Timer("~Contact: Create vector"):

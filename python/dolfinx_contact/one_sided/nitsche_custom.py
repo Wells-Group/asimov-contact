@@ -25,7 +25,7 @@ __all__ = ["nitsche_custom"]
 def nitsche_custom(mesh: dmesh.Mesh, mesh_data: Tuple[_cpp.mesh.MeshTags_int32, int, int],
                    physical_parameters: dict = {}, nitsche_parameters: Dict[str, float] = {},
                    plane_loc: float = 0.0, vertical_displacement: float = -0.1,
-                   nitsche_bc: bool = True, quadrature_degree: int = 5, form_compiler_params: Dict = {},
+                   nitsche_bc: bool = True, quadrature_degree: int = 5, form_compiler_options: Dict = {},
                    jit_options: Dict = {}, petsc_options: Dict = {}, newton_options: Dict = {}) -> _fem.Function:
     """
     Use custom kernel to compute the one sided contact problem with a mesh coming into contact
@@ -54,7 +54,7 @@ def nitsche_custom(mesh: dmesh.Mesh, mesh_data: Tuple[_cpp.mesh.MeshTags_int32, 
         Use Nitche's method to enforce Dirichlet boundary conditions
     quadrature_degree
         The quadrature degree to use for the custom contact kernels
-    form_compiler_params
+    form_compiler_options
         Parameters used in FFCX compilation of this form. Run `ffcx --help` at
         the commandline to see all available options. Takes priority over all
         other parameter values, except for `scalar_type` which is determined by
@@ -165,7 +165,7 @@ def nitsche_custom(mesh: dmesh.Mesh, mesh_data: Tuple[_cpp.mesh.MeshTags_int32, 
     coeffs = np.hstack([coeffs, h_facets, g_vec])
 
     # Create RHS kernels
-    L_custom = _fem.form(F, jit_options=jit_options, form_compiler_params=form_compiler_params)
+    L_custom = _fem.form(F, jit_options=jit_options, form_compiler_options=form_compiler_options)
     kernel_rhs = dolfinx_contact.cpp.generate_contact_kernel(V._cpp_object, dolfinx_contact.Kernel.Rhs, q_rule,
                                                              [u._cpp_object, mu2._cpp_object, lmbda2._cpp_object])
     # NOTE: HACK to make "one-sided" contact work with assemble_matrix/assemble_vector
@@ -182,7 +182,7 @@ def nitsche_custom(mesh: dmesh.Mesh, mesh_data: Tuple[_cpp.mesh.MeshTags_int32, 
         _fem.petsc.assemble_vector(b, L_custom)
 
     # Create Jacobian kernels
-    a_custom = _fem.form(J, jit_options=jit_options, form_compiler_params=form_compiler_params)
+    a_custom = _fem.form(J, jit_options=jit_options, form_compiler_options=form_compiler_options)
     kernel_J = dolfinx_contact.cpp.generate_contact_kernel(
         V._cpp_object, dolfinx_contact.Kernel.Jac, q_rule, [u._cpp_object, mu2._cpp_object, lmbda2._cpp_object])
 

@@ -20,7 +20,7 @@ from dolfinx_contact.helpers import (NonlinearPDE_SNESProblem, epsilon,
 
 def snes_solver(mesh: dmesh.Mesh, mesh_data: Tuple[_cpp.mesh.MeshTags_int32, int, int],
                 physical_parameters: dict = {}, plane_loc: float = 0.0, vertical_displacement: float = -0.1,
-                quadrature_degree: int = 5, form_compiler_params: Dict = {},
+                quadrature_degree: int = 5, form_compiler_options: Dict = {},
                 jit_options: Dict = {}, petsc_options: Dict = {}, snes_options: Dict = {}) -> _fem.Function:
     """
     Solving contact problem against a rigid plane with gap -g from y=0 using PETSc SNES solver
@@ -42,7 +42,7 @@ def snes_solver(mesh: dmesh.Mesh, mesh_data: Tuple[_cpp.mesh.MeshTags_int32, int
         The amount of verticial displacment enforced on Dirichlet boundary
     quadrature_degree
         The quadrature degree to use for the custom contact kernels
-    form_compiler_params
+    form_compiler_options
         Parameters used in FFCX compilation of this form. Run `ffcx --help` at
         the commandline to see all available options. Takes priority over all
         other parameter values, except for `scalar_type` which is determined by
@@ -117,7 +117,7 @@ def snes_solver(mesh: dmesh.Mesh, mesh_data: Tuple[_cpp.mesh.MeshTags_int32, int
 
     # create nonlinear problem
     problem = NonlinearPDE_SNESProblem(F, u, bc, jit_options=jit_options,
-                                       form_compiler_params=form_compiler_params)
+                                       form_compiler_options=form_compiler_options)
 
     # Inequality constraints (contact constraints)
     # The displacement u must be such that the current configuration x+u

@@ -26,7 +26,7 @@ def nitsche_meshtie(lhs: ufl.Form, rhs: _fem.Function, u: _fem.Function, markers
                     surface_data: Tuple[AdjacencyList_int32, list[Tuple[int, int]]],
                     bcs: list[_fem.DirichletBCMetaClass],
                     problem_parameters: dict[str, np.float64],
-                    quadrature_degree: int = 5, form_compiler_params: dict = None, jit_options: dict = None,
+                    quadrature_degree: int = 5, form_compiler_options: dict = None, jit_options: dict = None,
                     petsc_options: dict = None, timing_str: str = '') -> Tuple[_fem.Function, int, int, float]:
     """
     Use custom kernel to compute elasticity problem if mesh consists of topologically disconnected parts
@@ -55,7 +55,7 @@ def nitsche_meshtie(lhs: ufl.Form, rhs: _fem.Function, u: _fem.Function, markers
         enforcement of Nitsche conditions
     quadrature_degree
         The quadrature degree to use for the custom contact kernels
-    form_compiler_params
+    form_compiler_options
         Parameters used in FFCX compilation of this form. Run `ffcx --help` at
         the commandline to see all available options. Takes priority over all
         other parameter values, except for `scalar_type` which is determined by
@@ -71,7 +71,7 @@ def nitsche_meshtie(lhs: ufl.Form, rhs: _fem.Function, u: _fem.Function, markers
         <https://petsc4py.readthedocs.io/en/stable/manual/ksp/>`
     """
 
-    form_compiler_params = {} if form_compiler_params is None else form_compiler_params
+    form_compiler_options = {} if form_compiler_options is None else form_compiler_options
     jit_options = {} if jit_options is None else jit_options
     petsc_options = {} if petsc_options is None else petsc_options
 
@@ -161,14 +161,14 @@ def nitsche_meshtie(lhs: ufl.Form, rhs: _fem.Function, u: _fem.Function, markers
         coeffs_const.append(np.hstack([material[i], h_packed[i], test_fns[i], grad_test_fns[i]]))
 
     # Generate Jacobian data structures
-    J_custom = _fem.form(lhs, form_compiler_params=form_compiler_params, jit_options=jit_options)
+    J_custom = _fem.form(lhs, form_compiler_options=form_compiler_options, jit_options=jit_options)
     with _common.Timer("~Contact " + timing_str + ": Generate Jacobian kernel"):
         kernel_jac = contact.generate_kernel(kt.MeshTieJac)
     with _common.Timer("~Contact " + timing_str + ": Create matrix"):
         A = contact.create_matrix(J_custom)
 
     # Generate residual data structures
-    F_custom = _fem.form(rhs, form_compiler_params=form_compiler_params, jit_options=jit_options)
+    F_custom = _fem.form(rhs, form_compiler_options=form_compiler_options, jit_options=jit_options)
     with _common.Timer("~Contact " + timing_str + ": Generate residual kernel"):
         kernel_rhs = contact.generate_kernel(kt.MeshTieRhs)
     with _common.Timer("~Contact " + timing_str + ": Create vector"):
