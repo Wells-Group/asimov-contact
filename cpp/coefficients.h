@@ -62,18 +62,19 @@ std::pair<std::vector<PetscScalar>, int> pack_coefficient_quadrature(
 
 /// @brief Pack the gradient of a coefficient at quadrature points.
 ///
-/// Prepare a coefficient (dolfinx::fem::Function) for assembly with custom
-/// kernels by packing them as a vector. The vector is packed such that the
-/// coefficients for the jth entry in active_entities is in the range
-/// c[j*cstride:(j+1)*cstride] where
-/// cstride=(num_quadrature_points)*block_size*value_size, where
+/// Prepare a the gradient of a coefficient (dolfinx::fem::Function) for
+/// assembly with custom kernels by packing them as a vector. The vector is
+/// packed such that the derivatives of the coefficients for the jth entry in
+/// active_entities is in the range c[j*cstride:(j+1)*cstride] where
+/// cstride=(num_quadrature_points)*block_size*value_size*gdim, where
 /// block_size*value_size is the number of components in coeff.
 ///
 /// @note For the `j`th entry, the coefficients are packed per quadrature point,
-/// i.e. c[j*cstride + q * (block_size * value_size) + k + c] = sum_i c^i[k] *
-/// phi^i(x_q)[c] where c^i[k] is the ith coefficient's kth vector component,
-/// phi^i(x_q)[c] is the ith basis function's c-th value component at the
-/// quadrature point x_q.
+/// i.e. c[j*cstride + q * (block_size * value_size)*gdim + gdim*(k + c) + l] =
+/// sum_i c^i[k] * (dphi/dl)^i(x_q)[c] where c^i[k] is the ith coefficient's kth
+/// vector component, (dphi/dl)^i(x_q)[c] is the c-th value component at the
+/// quadrature point x_q of the derivative with respect to x_l of the ith basis
+/// function.
 ///
 /// @param[in] coeff The coefficient to pack
 /// @param[in] q_degree The quadrature degree

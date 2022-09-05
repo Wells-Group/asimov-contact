@@ -549,10 +549,13 @@ dolfinx_contact::Contact::generate_kernel(Kernel type)
       compute_normal_strain_basis(epsn, tr, K, dphi, n_surf,
                                   std::span(n_phys.data(), gdim), q_pos);
 
+      // compute sig(u)*n_phys
       std::fill(sig_n_u.begin(), sig_n_u.end(), 0.0);
       compute_sigma_n_u(sig_n_u,
                         c.subspan(kd.offsets(7) + q * gdim * gdim, gdim * gdim),
                         std::span(n_phys.data(), gdim), mu, lmbda);
+
+      // compute inner(sig(u)*n_phys, n_surf) and inner(u, n_surf)
       double sign_u = 0;
       double jump_un = 0;
       for (std::size_t j = 0; j < gdim; ++j)
@@ -690,10 +693,13 @@ dolfinx_contact::Contact::generate_kernel(Kernel type)
       compute_normal_strain_basis(epsn, tr, K, dphi, n_surf,
                                   std::span(n_phys.data(), gdim), q_pos);
 
+      // compute sig(u)*n_phys
       std::fill(sig_n_u.begin(), sig_n_u.end(), 0.0);
       compute_sigma_n_u(sig_n_u,
                         c.subspan(kd.offsets(7) + q * gdim * gdim, gdim * gdim),
                         std::span(n_phys.data(), gdim), mu, lmbda);
+
+      // compute inner(sig(u)*n_phys, n_surf) and inner(u, n_surf)
       double sign_u = 0;
       double jump_un = 0;
       for (std::size_t j = 0; j < gdim; ++j)

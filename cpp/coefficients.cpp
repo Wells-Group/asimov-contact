@@ -472,6 +472,7 @@ dolfinx_contact::pack_gradient_quadrature(
         // Pack coefficients for each quadrature point
         if (cmap.is_affine())
         {
+          // compute jacobian and its inverse once for affine geometries
           std::fill(Jb.begin(), Jb.end(), 0);
           auto dphi_q = stdex::submdspan(
               c_basis, std::pair{1, std::size_t(tdim + 1)},
@@ -484,6 +485,7 @@ dolfinx_contact::pack_gradient_quadrature(
 
             // Access each component of the reference basis function (in the
             // case of vector spaces)
+            // multiply by K (the inverse jacobian)
             for (std::size_t l = 0; l < tab_shape[3]; ++l)
             {
               for (std::size_t j = 0; j < gdim; j++)
@@ -501,6 +503,7 @@ dolfinx_contact::pack_gradient_quadrature(
         {
           for (std::size_t q = 0; q < num_points_per_entity; ++q)
           {
+            // compute jacobian for each quadrature point
             std::fill(Jb.begin(), Jb.end(), 0);
             auto dphi_q = stdex::submdspan(
                 c_basis, std::pair{1, std::size_t(tdim + 1)},
@@ -510,6 +513,7 @@ dolfinx_contact::pack_gradient_quadrature(
             dolfinx::fem::CoordinateElement::compute_jacobian_inverse(J, K);
             // Access each component of the reference basis function (in the
             // case of vector spaces)
+            // multiply by K (the inverse jacobian)
             for (std::size_t l = 0; l < tab_shape[3]; ++l)
             {
               for (std::size_t j = 0; j < gdim; j++)

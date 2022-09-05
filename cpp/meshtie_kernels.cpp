@@ -129,7 +129,7 @@ dolfinx_contact::generate_meshtie_kernel(
           sig_n_opp, c.subspan(kd.offsets(4), kd.offsets(5) - kd.offsets(4)),
           std::span(n_phys.data(), gdim), mu, lmbda, q, num_points);
 
-      // compute u, 0.5 sig_n(u)
+      // compute u, sig_n(u)
       std::fill(sig_n_u.begin(), sig_n_u.end(), 0.0);
       compute_sigma_n_u(sig_n_u,
                         c.subspan(kd.offsets(6) + q * gdim * gdim, gdim * gdim),
