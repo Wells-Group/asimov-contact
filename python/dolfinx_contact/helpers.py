@@ -10,7 +10,7 @@ from dolfinx.cpp.mesh import MeshTags_int32
 import dolfinx.fem as _fem
 import dolfinx.la as _la
 import numpy
-import scipy
+import scipy.sparse
 import ufl
 from petsc4py import PETSc
 
@@ -23,6 +23,7 @@ def compare_matrices(a: PETSc.Mat, b: PETSc.Mat, atol: float = 1e-12):
     """
     Helper for comparing two PETSc matrices
     """
+    print("entering")
     # Create scipy CSR matrices
     ai, aj, av = a.getValuesCSR()
     a_sp = scipy.sparse.csr_matrix((av, aj, ai), shape=a.getSize())

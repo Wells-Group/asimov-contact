@@ -22,12 +22,10 @@ void dolfinx_contact::transformed_push_forward(
                            int)>
       transformation = element->get_dof_transformation_function<PetscScalar>();
   // Get push forward function
-  using xu_t = stdex::mdspan<double, stdex::dextents<std::size_t, 2>>;
-  using xU_t = stdex::mdspan<const double, stdex::dextents<std::size_t, 2>>;
-  using xJ_t = stdex::mdspan<const double, stdex::dextents<std::size_t, 2>>;
-  using xK_t = stdex::mdspan<const double, stdex::dextents<std::size_t, 2>>;
   auto push_forward_fn
-      = element->basix_element().map_fn<xu_t, xU_t, xJ_t, xK_t>();
+      = element->basix_element()
+            .map_fn<dolfinx_contact::mdspan2_t, dolfinx_contact::cmdspan2_t,
+                    dolfinx_contact::cmdspan2_t, dolfinx_contact::cmdspan2_t>();
   mdspan2_t element_basis(element_basisb.data(), basis_values.extent(1),
                           basis_values.extent(2));
   // Copy basis values prior to calling transformation
@@ -308,6 +306,229 @@ dolfinx_contact::pack_coefficient_quadrature(
       }
     }
   }
+  return {std::move(coefficients), cstride};
+}
+
+std::pair<std::vector<PetscScalar>, int>
+dolfinx_contact::pack_gradient_quadrature(
+    std::shared_ptr<const dolfinx::fem::Function<PetscScalar>> coeff,
+    const int q_degree, std::span<const std::int32_t> active_entities,
+    dolfinx::fem::IntegralType integral)
+{
+
+  // Get mesh
+  std::shared_ptr<const dolfinx::mesh::Mesh> mesh
+      = coeff->function_space()->mesh();
+  assert(mesh);
+
+  // Get topology data
+  const dolfinx::mesh::Topology& topology = mesh->topology();
+  const std::size_t tdim = topology.dim();
+  const dolfinx::mesh::CellType cell_type = topology.cell_type();
+
+  // Get what entity type we are integrating over
+  std::size_t entity_dim;
+  switch (integral)
+  {
+  case dolfinx::fem::IntegralType::cell:
+    entity_dim = tdim;
+    break;
+  case dolfinx::fem::IntegralType::exterior_facet:
+    entity_dim = tdim - 1;
+    break;
+  default:
+    throw std::invalid_argument("Unsupported integral type.");
+  }
+
+  // Create quadrature rule
+  QuadratureRule q_rule(cell_type, q_degree, (int)entity_dim);
+
+  // Get element information
+  const dolfinx::fem::FiniteElement* element
+      = coeff->function_space()->element().get();
+  const std::size_t bs = element->block_size();
+  const std::size_t value_size = element->value_size();
+
+  // Tabulate function at quadrature points (assuming no derivatives)
+  dolfinx_contact::error::check_cell_type(cell_type);
+  const std::vector<double>& q_points = q_rule.points();
+  const std::vector<std::size_t>& q_offset = q_rule.offset();
+  const std::size_t sum_q_points = q_offset.back();
+  const std::size_t num_points_per_entity = q_offset[1] - q_offset[0];
+  std::array<std::size_t, 2> p_shape = {sum_q_points, tdim};
+  assert(q_rule.tdim() == tdim);
+
+  const basix::FiniteElement& basix_element = element->basix_element();
+  std::array<std::size_t, 4> tab_shape
+      = basix_element.tabulate_shape(1, sum_q_points);
+  std::vector<double> reference_basisb(
+      std::reduce(tab_shape.cbegin(), tab_shape.cend(), 1, std::multiplies{}));
+  element->tabulate(reference_basisb, q_points, p_shape, 1);
+  cmdspan4_t reference_basis(reference_basisb.data(), tab_shape);
+  assert(value_size / bs == tab_shape[3]);
+
+  // Get geometry data
+  const dolfinx::mesh::Geometry& geometry = mesh->geometry();
+  const std::size_t gdim = geometry.dim();
+  const dolfinx::graph::AdjacencyList<std::int32_t>& x_dofmap
+      = mesh->geometry().dofmap();
+  const dolfinx::fem::CoordinateElement& cmap = geometry.cmap();
+  const std::size_t num_dofs_g = cmap.dim();
+  std::span<const double> x_g = geometry.x();
+
+  // Tabulate coordinate basis to compute Jacobian
+  const std::vector<std::size_t>& q_offsets = q_rule.offset();
+  const auto num_points = q_offsets.back();
+  std::array<std::size_t, 4> c_shape = cmap.tabulate_shape(1, num_points);
+  std::vector<double> c_basisb(
+      std::reduce(c_shape.cbegin(), c_shape.cend(), 1, std::multiplies{}));
+  cmap.tabulate(1, q_points, p_shape, c_basisb);
+  cmdspan4_t c_basis(c_basisb.data(), c_shape);
+
+  // Prepare geometry data structures
+  std::vector<double> Jb(gdim * tdim);
+  std::vector<double> Kb(tdim * gdim);
+  mdspan2_t J(Jb.data(), gdim, tdim);
+  mdspan2_t K(Kb.data(), tdim, gdim);
+  std::vector<double> detJ_scratch(2 * gdim * tdim);
+  std::vector<double> coordinate_dofsb(num_dofs_g * gdim);
+  mdspan2_t coordinate_dofs(coordinate_dofsb.data(), num_dofs_g, gdim);
+
+  std::function<std::array<std::int32_t, 2>(std::size_t)> get_cell_info;
+  std::size_t num_active_entities;
+  switch (integral)
+  {
+  case dolfinx::fem::IntegralType::cell:
+    num_active_entities = active_entities.size();
+    break;
+  case dolfinx::fem::IntegralType::exterior_facet:
+    num_active_entities = active_entities.size() / 2;
+    break;
+  default:
+    throw std::invalid_argument("Unsupported integral type.");
+  }
+
+  // Create output array
+  const auto cstride = int(value_size * num_points_per_entity * gdim);
+  std::vector<PetscScalar> coefficients(num_active_entities * cstride, 0.0);
+
+  // Get the coeffs to pack
+  const std::span<const double> data = coeff->x()->array();
+
+  // Get dofmap info
+  const dolfinx::fem::DofMap* dofmap = coeff->function_space()->dofmap().get();
+  const std::size_t dofmap_bs = dofmap->bs();
+
+  // Get dof transformations
+  const bool needs_dof_transformations = element->needs_dof_transformations();
+  std::span<const std::uint32_t> cell_info;
+  if (needs_dof_transformations)
+  {
+    throw std::runtime_error(
+        "Packing of gradients at quadrature points not implemented for "
+        "Function spaces requiring dof transformations.");
+  }
+
+  // Loop over all entities
+  for (std::size_t i = 0; i < num_active_entities; i++)
+  {
+    // Get local cell info
+    std::int32_t cell;
+    std::int32_t entity_index;
+    switch (integral)
+    {
+    case dolfinx::fem::IntegralType::cell:
+      cell = active_entities[i];
+      entity_index = 0;
+      break;
+    case dolfinx::fem::IntegralType::exterior_facet:
+      cell = active_entities[2 * i];
+      entity_index = active_entities[2 * i + 1];
+      break;
+    default:
+      throw std::invalid_argument("Unsupported integral type.");
+    }
+
+    // Get cell geometry (coordinate dofs)
+    auto x_dofs = x_dofmap.links(cell);
+    assert(x_dofs.size() == num_dofs_g);
+    for (std::size_t j = 0; j < num_dofs_g; ++j)
+    {
+      auto pos = 3 * x_dofs[j];
+      for (std::size_t k = 0; k < coordinate_dofs.extent(1); ++k)
+        coordinate_dofs(j, k) = x_g[pos + k];
+    }
+    auto dofs = dofmap->cell_dofs(cell);
+    const std::size_t q_offset = q_offsets[entity_index];
+
+    // Loop over all dofs in cell
+    for (std::size_t d = 0; d < dofs.size(); ++d)
+    {
+      const int pos_v = (int)dofmap_bs * dofs[d];
+      // Unroll dofmap
+      for (std::size_t b = 0; b < dofmap_bs; ++b)
+      {
+        auto coeff = data[pos_v + b];
+        std::div_t pos = std::div(int(d * dofmap_bs + b), (int)bs);
+
+        // Pack coefficients for each quadrature point
+        if (cmap.is_affine())
+        {
+          std::fill(Jb.begin(), Jb.end(), 0);
+          auto dphi_q = stdex::submdspan(
+              c_basis, std::pair{1, std::size_t(tdim + 1)},
+              q_offsets[entity_index], stdex::full_extent, 0);
+          dolfinx::fem::CoordinateElement::compute_jacobian(dphi_q,
+                                                            coordinate_dofs, J);
+          dolfinx::fem::CoordinateElement::compute_jacobian_inverse(J, K);
+          for (std::size_t q = 0; q < num_points_per_entity; ++q)
+          {
+
+            // Access each component of the reference basis function (in the
+            // case of vector spaces)
+            for (std::size_t l = 0; l < tab_shape[3]; ++l)
+            {
+              for (std::size_t j = 0; j < gdim; j++)
+                for (std::size_t k = 0; k < tdim; k++)
+
+                  coefficients[cstride * i + q * bs * tab_shape[3] * gdim
+                               + (l + pos.rem) * gdim + j]
+                      += K(k, j)
+                         * reference_basis(k + 1, q_offset + q, pos.quot, l)
+                         * coeff;
+            }
+          }
+        }
+        else
+        {
+          for (std::size_t q = 0; q < num_points_per_entity; ++q)
+          {
+            std::fill(Jb.begin(), Jb.end(), 0);
+            auto dphi_q = stdex::submdspan(
+                c_basis, std::pair{1, std::size_t(tdim + 1)},
+                q_offsets[entity_index] + q, stdex::full_extent, 0);
+            dolfinx::fem::CoordinateElement::compute_jacobian(
+                dphi_q, coordinate_dofs, J);
+            dolfinx::fem::CoordinateElement::compute_jacobian_inverse(J, K);
+            // Access each component of the reference basis function (in the
+            // case of vector spaces)
+            for (std::size_t l = 0; l < tab_shape[3]; ++l)
+            {
+              for (std::size_t j = 0; j < gdim; j++)
+                for (std::size_t k = 0; k < tdim; k++)
+
+                  coefficients[cstride * i + q * bs * tab_shape[3] * gdim
+                               + (l + pos.rem) * gdim + j]
+                      += K(k, j)
+                         * reference_basis(k + 1, q_offset + q, pos.quot, l)
+                         * coeff;
+            }
+          }
+        }
+      }
+    }
+  }
+
   return {std::move(coefficients), cstride};
 }
 

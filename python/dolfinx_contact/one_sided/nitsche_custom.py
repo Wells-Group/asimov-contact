@@ -5,7 +5,6 @@
 from typing import Dict, Tuple
 
 import basix
-import dolfinx_cuas
 import numpy as np
 import ufl
 from dolfinx import common as _common
@@ -166,16 +165,17 @@ def nitsche_custom(mesh: dmesh.Mesh, mesh_data: Tuple[_cpp.mesh.MeshTags_int32, 
 
     # Create RHS kernels
     L_custom = _fem.form(F, jit_options=jit_options, form_compiler_options=form_compiler_options)
-    kernel_rhs = dolfinx_contact.cpp.generate_contact_kernel(V._cpp_object, dolfinx_contact.Kernel.Rhs, q_rule,
-                                                             [u._cpp_object, mu2._cpp_object, lmbda2._cpp_object])
+    kernel_rhs = dolfinx_contact.cpp.generate_contact_kernel(V._cpp_object, dolfinx_contact.Kernel.Rhs, q_rule)
     # NOTE: HACK to make "one-sided" contact work with assemble_matrix/assemble_vector
     contact_assembler = dolfinx_contact.cpp.Contact([facet_marker], surfaces, [(0, 1)],
                                                     V._cpp_object, quadrature_degree=quadrature_degree)
 
     def assemble_residual(x, b, cf):
         u.vector[:] = x.array
-        u_packed = dolfinx_cuas.pack_coefficients([u._cpp_object], integral_entities)
-        c = np.hstack([u_packed, coeffs])
+        u_packed = dolfinx_contact.cpp.pack_coefficient_quadrature(u._cpp_object, quadrature_degree, integral_entities)
+        grad_u_packed = dolfinx_contact.cpp.pack_gradient_quadrature(
+            u._cpp_object, quadrature_degree, integral_entities)
+        c = np.hstack([coeffs, u_packed, grad_u_packed])
         with b.localForm() as b_local:
             b_local.set(0.0)
         contact_assembler.assemble_vector(b, 0, kernel_rhs, c, consts)
@@ -183,13 +183,14 @@ def nitsche_custom(mesh: dmesh.Mesh, mesh_data: Tuple[_cpp.mesh.MeshTags_int32, 
 
     # Create Jacobian kernels
     a_custom = _fem.form(J, jit_options=jit_options, form_compiler_options=form_compiler_options)
-    kernel_J = dolfinx_contact.cpp.generate_contact_kernel(
-        V._cpp_object, dolfinx_contact.Kernel.Jac, q_rule, [u._cpp_object, mu2._cpp_object, lmbda2._cpp_object])
+    kernel_J = dolfinx_contact.cpp.generate_contact_kernel(V._cpp_object, dolfinx_contact.Kernel.Jac, q_rule)
 
     def assemble_jacobian(x, a_mat, cf):
         u.vector[:] = x.array
-        u_packed = dolfinx_cuas.pack_coefficients([u._cpp_object], integral_entities)
-        c = np.hstack([u_packed, coeffs])
+        u_packed = dolfinx_contact.cpp.pack_coefficient_quadrature(u._cpp_object, quadrature_degree, integral_entities)
+        grad_u_packed = dolfinx_contact.cpp.pack_gradient_quadrature(
+            u._cpp_object, quadrature_degree, integral_entities)
+        c = np.hstack([coeffs, u_packed, grad_u_packed])
         a_mat.zeroEntries()
         contact_assembler.assemble_matrix(a_mat, [], 0, kernel_J, c, consts)
         _fem.petsc.assemble_matrix(a_mat, a_custom)

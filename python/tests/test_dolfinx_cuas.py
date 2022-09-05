@@ -6,8 +6,6 @@ import basix
 import dolfinx.fem
 import dolfinx.io
 import dolfinx.mesh
-import dolfinx_cuas
-import dolfinx_cuas.cpp
 import numpy as np
 import pytest
 import ufl
@@ -17,12 +15,11 @@ import os
 import dolfinx_contact
 import dolfinx_contact.cpp
 from dolfinx_contact.helpers import (R_minus, epsilon, lame_parameters,
-                                     sigma_func)
+                                     sigma_func, compare_matrices)
 from dolfinx_contact.meshing import (convert_mesh, create_disk_mesh,
                                      create_sphere_mesh)
 
 kt = dolfinx_contact.cpp.Kernel
-compare_matrices = dolfinx_contact.helpers.compare_matrices
 
 
 # This tests compares custom assembly and ufl based assembly
@@ -191,12 +188,10 @@ def test_contact_kernel(theta, gamma, dim, gap):
 
         integral_entities = dolfinx_contact.compute_active_entities(
             mesh, bottom_facets, dolfinx.fem.IntegralType.exterior_facet)
-        coeffs = dolfinx_cuas.cpp.pack_coefficients(
-            [u._cpp_object], integral_entities)
-        coeffs = np.hstack([coeffs, dolfinx_contact.cpp.pack_coefficient_quadrature(
-            mu2._cpp_object, 0, integral_entities),
-            dolfinx_contact.cpp.pack_coefficient_quadrature(
-            lmbda2._cpp_object, 0, integral_entities)])
+        mu_packed = dolfinx_contact.cpp.pack_coefficient_quadrature(mu2._cpp_object, 0, integral_entities)
+        lmbda_packed = dolfinx_contact.cpp.pack_coefficient_quadrature(lmbda2._cpp_object, 0, integral_entities)
+        u_packed = dolfinx_contact.cpp.pack_coefficient_quadrature(u._cpp_object, q_deg, integral_entities)
+        grad_u_packed = dolfinx_contact.cpp.pack_gradient_quadrature(u._cpp_object, q_deg, integral_entities)
         h_facets = dolfinx_contact.pack_circumradius(mesh, integral_entities)
         data = np.array([bottom_value, top_value], dtype=np.int32)
         offsets = np.array([0, 2], dtype=np.int32)
@@ -204,30 +199,29 @@ def test_contact_kernel(theta, gamma, dim, gap):
         contact = dolfinx_contact.cpp.Contact([facet_marker], surfaces, [(0, 1)],
                                               V._cpp_object, quadrature_degree=q_deg)
         g_vec = contact.pack_gap_plane(0, g)
-        coeffs = np.hstack([coeffs, h_facets, g_vec])
+        coeffs = np.hstack([mu_packed, lmbda_packed, h_facets, g_vec, u_packed, grad_u_packed])
         # RHS
-        L_cuas = ufl.inner(sigma(u), epsilon(v)) * dx
-        L_cuas = dolfinx.fem.form(L_cuas)
-        b2 = dolfinx.fem.petsc.create_vector(L_cuas)
-        kernel = dolfinx_contact.cpp.generate_contact_kernel(V._cpp_object, kt.Rhs, q_rule,
-                                                             [u._cpp_object, mu2._cpp_object, lmbda2._cpp_object])
+        L_custom = ufl.inner(sigma(u), epsilon(v)) * dx
+        L_custom = dolfinx.fem.form(L_custom)
+        b2 = dolfinx.fem.petsc.create_vector(L_custom)
+        kernel = dolfinx_contact.cpp.generate_contact_kernel(V._cpp_object, kt.Rhs, q_rule)
         b2.zeroEntries()
         contact_assembler = dolfinx_contact.cpp.Contact(
             [facet_marker], surfaces, [(0, 1)], V._cpp_object, quadrature_degree=q_deg)
         contact_assembler.create_distance_map(0)
 
         contact_assembler.assemble_vector(b2, 0, kernel, coeffs, consts)
-        dolfinx.fem.petsc.assemble_vector(b2, L_cuas)
+        dolfinx.fem.petsc.assemble_vector(b2, L_custom)
         b2.assemble()
         # Jacobian
-        a_cuas = ufl.inner(sigma(du), epsilon(v)) * dx
-        a_cuas = dolfinx.fem.form(a_cuas)
-        B = contact_assembler.create_matrix(a_cuas)
+        a_custom = ufl.inner(sigma(du), epsilon(v)) * dx
+        a_custom = dolfinx.fem.form(a_custom)
+        B = contact_assembler.create_matrix(a_custom)
         kernel = dolfinx_contact.cpp.generate_contact_kernel(
-            V._cpp_object, kt.Jac, q_rule, [u._cpp_object, mu2._cpp_object, lmbda2._cpp_object])
+            V._cpp_object, kt.Jac, q_rule)
         B.zeroEntries()
         contact_assembler.assemble_matrix(B, [], 0, kernel, coeffs, consts)
-        dolfinx.fem.petsc.assemble_matrix(B, a_cuas)
+        dolfinx.fem.petsc.assemble_matrix(B, a_custom)
         B.assemble()
         assert np.allclose(b.array, b2.array)
         # Compare matrices, first norm, then entries

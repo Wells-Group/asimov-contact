@@ -10,7 +10,7 @@ from dolfinx.fem import (Expression, Function, FunctionSpace, IntegralType,
 from dolfinx.mesh import (CellType, create_unit_cube, create_unit_square,
                           locate_entities_boundary, to_string)
 from mpi4py import MPI
-from ufl import FiniteElement, MixedElement, VectorElement
+from ufl import FiniteElement, MixedElement, VectorElement, grad
 
 import dolfinx_contact.cpp
 
@@ -59,6 +59,16 @@ def test_pack_coeff_at_quadrature(ct, quadrature_degree, space, degree):
     expr = Expression(v, quadrature_points)
     expr_vals = expr.eval(cells)
     assert np.allclose(coeffs, expr_vals)
+
+    if space not in ['N1curl', 'RTCE']:
+        coeffs = dolfinx_contact.cpp.pack_gradient_quadrature(
+            v._cpp_object, quadrature_degree, integration_entities)
+        if space == 'DG' and degree == 1:
+            assert (np.allclose(0.0, coeffs))
+        else:
+            expr = Expression(grad(v), quadrature_points)
+            expr_vals = expr.eval(cells)
+            assert np.allclose(coeffs, expr_vals)
 
 
 @pytest.mark.parametrize("quadrature_degree", range(1, 6))
@@ -109,6 +119,19 @@ def test_pack_coeff_on_facet(quadrature_degree, space, degree):
         local_index = entity[1]
         assert np.allclose(coeffs[i],
                            expr_vals[i, cstride * local_index:cstride * (local_index + 1)])
+    if space not in ['N1curl', 'RTCE']:
+        coeffs = dolfinx_contact.cpp.pack_gradient_quadrature(
+            v._cpp_object, quadrature_degree, integration_entities)
+        if space == 'DG' and degree == 1:
+            assert (np.allclose(0.0, coeffs))
+        else:
+            gdim = mesh.geometry.dim
+            expr = Expression(grad(v), q_points)
+            expr_vals = expr.eval(integration_entities[:, 0])
+            for i, entity in enumerate(integration_entities):
+                local_index = entity[1]
+                assert np.allclose(coeffs[i],
+                                   expr_vals[i, gdim * cstride * local_index:gdim * cstride * (local_index + 1)])
 
 
 @pytest.mark.parametrize("quadrature_degree", range(1, 5))
@@ -142,6 +165,42 @@ def test_sub_coeff(quadrature_degree, degree):
 
         # Use Expression to verify packing
         expr = Expression(vi, quadrature_points)
+        expr_vals = expr.eval(cells)
+
+        assert np.allclose(coeffs, expr_vals)
+
+
+@pytest.mark.parametrize("quadrature_degree", range(1, 5))
+@pytest.mark.parametrize("degree", range(1, 5))
+def test_sub_coeff_grad(quadrature_degree, degree):
+    N = 10
+    mesh = create_unit_cube(MPI.COMM_WORLD, N, N, N)
+    el = FiniteElement("DG", mesh.ufl_cell(), degree)
+    v_el = VectorElement("CG", mesh.ufl_cell(), degree)
+    V = FunctionSpace(mesh, MixedElement([v_el, el]))
+
+    v = Function(V)
+    v.sub(0).interpolate(lambda x: (x[1], -x[0], 3 * x[2]))
+    v.sub(1).interpolate(lambda x: x[0] < 0.5 + x[1])
+
+    # Pack coeffs
+    tdim = mesh.topology.dim
+    num_cells = mesh.topology.index_map(tdim).size_local
+    cells = np.arange(num_cells, dtype=np.int32)
+    integration_entities = dolfinx_contact.compute_active_entities(mesh, cells,
+                                                                   IntegralType.cell)
+
+    # Use prepare quadrature points and geometry for eval
+    quadrature_points, wts = basix.make_quadrature(
+        basix.QuadratureType.Default, basix.CellType.tetrahedron, quadrature_degree)
+    num_sub_spaces = V.num_sub_spaces
+    for i in range(num_sub_spaces):
+        vi = v.sub(i)
+        coeffs = dolfinx_contact.cpp.pack_gradient_quadrature(
+            vi._cpp_object, quadrature_degree, integration_entities)
+
+        # Use Expression to verify packing
+        expr = Expression(grad(vi), quadrature_points)
         expr_vals = expr.eval(cells)
 
         assert np.allclose(coeffs, expr_vals)
