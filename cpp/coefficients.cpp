@@ -394,7 +394,6 @@ dolfinx_contact::pack_gradient_quadrature(
   std::vector<double> coordinate_dofsb(num_dofs_g * gdim);
   mdspan2_t coordinate_dofs(coordinate_dofsb.data(), num_dofs_g, gdim);
 
-  std::function<std::array<std::int32_t, 2>(std::size_t)> get_cell_info;
   std::size_t num_active_entities;
   switch (integral)
   {
@@ -421,7 +420,6 @@ dolfinx_contact::pack_gradient_quadrature(
 
   // Get dof transformations
   const bool needs_dof_transformations = element->needs_dof_transformations();
-  std::span<const std::uint32_t> cell_info;
   if (needs_dof_transformations)
   {
     throw std::runtime_error(

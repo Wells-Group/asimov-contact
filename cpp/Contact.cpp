@@ -160,15 +160,16 @@ std::size_t dolfinx_contact::Contact::coefficients_size(bool meshtie)
 
     // Coefficient offsets
     // Expecting coefficients in following order:
-    // mu, lmbda, h,test_fn, grad(test_fn), u, u_opposite,
+    // mu, lmbda, h,test_fn, grad(test_fn), u, grad(u), u_opposite,
     // grad(u_opposite)
-    std::array<std::size_t, 8> cstrides
+    std::array<std::size_t, 9> cstrides
         = {1,
            1,
            1,
            num_q_points * ndofs_cell * bs * max_links,
            num_q_points * ndofs_cell * bs * max_links,
-           ndofs_cell * bs,
+           num_q_points * gdim,
+           num_q_points * gdim * gdim,
            num_q_points * bs,
            num_q_points * gdim * bs};
     return std::accumulate(cstrides.cbegin(), cstrides.cend(), 0);
@@ -177,15 +178,16 @@ std::size_t dolfinx_contact::Contact::coefficients_size(bool meshtie)
   {
     // Coefficient offsets
     // Expecting coefficients in the following order
-    // mu, lmbda, h, gap, normals, test_fns, u, u_opposite,
-    std::array<std::size_t, 8> cstrides
+    // mu, lmbda, h, gap, normals, test_fns, u, grad(u), u_opposite,
+    std::array<std::size_t, 9> cstrides
         = {1,
            1,
            1,
            num_q_points * bs,
            num_q_points * bs,
            num_q_points * ndofs_cell * bs * max_links,
-           ndofs_cell * bs,
+           num_q_points * gdim,
+           num_q_points * gdim * gdim,
            num_q_points * bs};
     return std::accumulate(cstrides.cbegin(), cstrides.cend(), 0);
   };
@@ -431,7 +433,7 @@ dolfinx_contact::Contact::generate_kernel(Kernel type)
 
   // Coefficient offsets
   // Expecting coefficients in following order:
-  // mu, lmbda, h, gap, normals, test_fn, u, u_opposite
+  // mu, lmbda, h, gap, normals, test_fn, u, grad(u), u_opposite
   std::vector<std::size_t> cstrides
       = {1,
          1,
@@ -439,7 +441,8 @@ dolfinx_contact::Contact::generate_kernel(Kernel type)
          num_q_points * gdim,
          num_q_points * gdim,
          num_q_points * ndofs_cell * bs * max_links,
-         ndofs_cell * bs,
+         num_q_points * gdim,
+         num_q_points * gdim * gdim,
          num_q_points * bs};
 
   auto kd = dolfinx_contact::KernelData(_V, _quadrature_rule, cstrides);
@@ -517,6 +520,7 @@ dolfinx_contact::Contact::generate_kernel(Kernel type)
     mdspan2_t epsn(epsnb.data(), ndofs_cell, gdim);
     std::vector<double> trb(ndofs_cell * gdim, 0);
     mdspan2_t tr(trb.data(), ndofs_cell, gdim);
+    std::vector<double> sig_n_u(gdim);
 
     // Loop over quadrature points
     const std::size_t q_start = kd.qp_offsets(facet_index);
@@ -544,25 +548,22 @@ dolfinx_contact::Contact::generate_kernel(Kernel type)
 
       compute_normal_strain_basis(epsn, tr, K, dphi, n_surf,
                                   std::span(n_phys.data(), gdim), q_pos);
-      // compute tr(eps(u)), epsn at q
-      double tr_u = 0;
-      double epsn_u = 0;
+
+      std::fill(sig_n_u.begin(), sig_n_u.end(), 0.0);
+      compute_sigma_n_u(sig_n_u,
+                        c.subspan(kd.offsets(7) + q * gdim * gdim, gdim * gdim),
+                        std::span(n_phys.data(), gdim), mu, lmbda);
+      double sign_u = 0;
       double jump_un = 0;
-      for (std::size_t i = 0; i < ndofs_cell; i++)
+      for (std::size_t j = 0; j < gdim; ++j)
       {
-        std::size_t block_index = kd.offsets(6) + i * bs;
-        for (std::size_t j = 0; j < bs; j++)
-        {
-          PetscScalar coeff = c[block_index + j];
-          tr_u += coeff * tr(i, j);
-          epsn_u += coeff * epsn(i, j);
-          jump_un += coeff * phi(q_pos, i) * n_surf[j];
-        }
+        sign_u += sig_n_u[j] * n_surf[j];
+        jump_un += c[kd.offsets(6) + gdim * q + j] * n_surf[j];
       }
-      std::size_t offset_u_opp = kd.offsets(7) + q * bs;
+      std::size_t offset_u_opp = kd.offsets(8) + q * bs;
       for (std::size_t j = 0; j < bs; ++j)
         jump_un += -c[offset_u_opp + j] * n_surf[j];
-      double sign_u = lmbda * tr_u * n_dot + mu * epsn_u;
+
       const double w0 = weights[q] * detJ;
 
       double Pn_u = R_plus((jump_un - gap) - gamma * sign_u) * w0;
@@ -663,6 +664,7 @@ dolfinx_contact::Contact::generate_kernel(Kernel type)
     mdspan2_t epsn(epsnb.data(), ndofs_cell, gdim);
     std::vector<double> trb(ndofs_cell * gdim);
     mdspan2_t tr(trb.data(), ndofs_cell, gdim);
+    std::vector<double> sig_n_u(gdim);
 
     // Loop over quadrature points
     for (auto q : q_indices)
@@ -688,25 +690,21 @@ dolfinx_contact::Contact::generate_kernel(Kernel type)
       compute_normal_strain_basis(epsn, tr, K, dphi, n_surf,
                                   std::span(n_phys.data(), gdim), q_pos);
 
-      // compute tr(eps(u)), epsn at q
-      double tr_u = 0;
-      double epsn_u = 0;
+      std::fill(sig_n_u.begin(), sig_n_u.end(), 0.0);
+      compute_sigma_n_u(sig_n_u,
+                        c.subspan(kd.offsets(7) + q * gdim * gdim, gdim * gdim),
+                        std::span(n_phys.data(), gdim), mu, lmbda);
+      double sign_u = 0;
       double jump_un = 0;
-
-      for (std::size_t i = 0; i < ndofs_cell; i++)
+      for (std::size_t j = 0; j < gdim; ++j)
       {
-        std::size_t block_index = kd.offsets(6) + i * bs;
-        for (std::size_t j = 0; j < bs; j++)
-        {
-          tr_u += c[block_index + j] * tr(i, j);
-          epsn_u += c[block_index + j] * epsn(i, j);
-          jump_un += c[block_index + j] * phi(q_pos, i) * n_surf[j];
-        }
+        sign_u += sig_n_u[j] * n_surf[j];
+        jump_un += c[kd.offsets(6) + gdim * q + j] * n_surf[j];
       }
-      std::size_t offset_u_opp = kd.offsets(7) + q * bs;
+      std::size_t offset_u_opp = kd.offsets(8) + q * bs;
       for (std::size_t j = 0; j < bs; ++j)
         jump_un += -c[offset_u_opp + j] * n_surf[j];
-      double sign_u = lmbda * tr_u * n_dot + mu * epsn_u;
+
       double Pn_u = dR_plus((jump_un - gap) - gamma * sign_u);
 
       // Fill contributions of facet with itself

@@ -8,7 +8,6 @@ import dolfinx.cpp.fem as _cppfem
 import dolfinx.common as _common
 import dolfinx.fem as _fem
 import dolfinx.log as _log
-import dolfinx_cuas
 import numpy as np
 import ufl
 from dolfinx.cpp.graph import AdjacencyList_int32
@@ -183,11 +182,15 @@ def nitsche_meshtie(lhs: ufl.Form, rhs: _fem.Function, u: _fem.Function, markers
             u_candidate.append(contact.pack_u_contact(i, u._cpp_object))
             grad_u_candidate.append(contact.pack_grad_u_contact(i, u._cpp_object, gaps[i], np.zeros(gaps[i].shape)))
     u_puppet = []
+    grad_u_puppet = []
     with _common.Timer("~~Contact " + timing_str + ": Pack u"):
         for i in range(len(surface_pairs)):
-            u_puppet.append(dolfinx_cuas.pack_coefficients([u], entities[i]))
+            u_puppet.append(dolfinx_contact.cpp.pack_coefficient_quadrature(
+                u._cpp_object, quadrature_degree, entities[i]))
+            grad_u_puppet.append(dolfinx_contact.cpp.pack_gradient_quadrature(
+                u._cpp_object, quadrature_degree, entities[i]))
     for i in range(len(surface_pairs)):
-        coeffs.append(np.hstack([coeffs_const[i], u_puppet[i], u_candidate[i], grad_u_candidate[i]]))
+        coeffs.append(np.hstack([coeffs_const[i], u_puppet[i], grad_u_puppet[i], u_candidate[i], grad_u_candidate[i]]))
 
     # Assemble residual vector
     b.zeroEntries()

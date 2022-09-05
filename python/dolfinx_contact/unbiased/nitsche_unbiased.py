@@ -7,7 +7,6 @@ from typing import Tuple
 import dolfinx.common as _common
 import dolfinx.fem as _fem
 import dolfinx.log as _log
-import dolfinx_cuas
 import numpy as np
 import ufl
 from dolfinx.cpp.graph import AdjacencyList_int32
@@ -216,11 +215,15 @@ def nitsche_unbiased(ufl_form: ufl.Form, u: _fem.Function, markers: list[_cpp.me
             for i in range(len(contact_pairs)):
                 u_candidate.append(contact.pack_u_contact(i, u._cpp_object))
         u_puppet = []
+        grad_u_puppet = []
         with _common.Timer("~~Contact: Pack u"):
             for i in range(len(contact_pairs)):
-                u_puppet.append(dolfinx_cuas.pack_coefficients([u], entities[i]))
+                u_puppet.append(dolfinx_contact.cpp.pack_coefficient_quadrature(
+                    u._cpp_object, quadrature_degree, entities[i]))
+                grad_u_puppet.append(dolfinx_contact.cpp.pack_gradient_quadrature(
+                    u._cpp_object, quadrature_degree, entities[i]))
         for i in range(len(contact_pairs)):
-            c_0 = np.hstack([coeffs_const[i], u_puppet[i], u_candidate[i]])
+            c_0 = np.hstack([coeffs_const[i], u_puppet[i], grad_u_puppet[i], u_candidate[i]])
             coeffs[i][:, :] = c_0[:, :]
 
     @_common.timed("~Contact: Assemble residual")
