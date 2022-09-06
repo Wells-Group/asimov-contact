@@ -36,7 +36,6 @@ dolfinx_contact::generate_meshtie_kernel(
          num_q_points * gdim * gdim,
          num_q_points * bs,
          num_q_points * gdim * bs};
-  ;
 
   auto kd = dolfinx_contact::KernelData(V, quadrature_rule, cstrides);
   /// @brief Assemble kernel for RHS gluing two objects with Nitsche

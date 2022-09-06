@@ -152,7 +152,7 @@ dolfinx_contact::generate_contact_kernel(
       kd.update_normal(std::span(n_phys.data(), gdim), K, facet_index);
 
       // if normal not constant, get surface normal at current quadrature point
-      int normal_offset = kd.offsets(6);
+      std::size_t normal_offset = kd.offsets(6);
       if (!constant_normal)
       {
         n_dot = 0;
@@ -165,7 +165,7 @@ dolfinx_contact::generate_contact_kernel(
           n_dot += n_phys[i] * n_surf[i];
         }
       }
-      int gap_offset = kd.offsets(3);
+      std::size_t gap_offset = kd.offsets(3);
       double gap = 0;
       for (std::size_t i = 0; i < gdim; i++)
         gap += c[gap_offset + q * gdim + i] * n_surf[i];
@@ -313,7 +313,7 @@ dolfinx_contact::generate_contact_kernel(
       kd.update_normal(std::span(n_phys.data(), gdim), K, facet_index);
 
       // if normal not constant, get surface normal at current quadrature point
-      int normal_offset = kd.offsets(6);
+      std::size_t normal_offset = kd.offsets(6);
       if (!constant_normal)
       {
         n_dot = 0;
@@ -326,7 +326,7 @@ dolfinx_contact::generate_contact_kernel(
           n_dot += n_phys[i] * n_surf[i];
         }
       }
-      int gap_offset = kd.offsets(3);
+      std::size_t gap_offset = kd.offsets(3);
       double gap = 0;
       for (std::size_t i = 0; i < gdim; i++)
         gap += c[gap_offset + q * gdim + i] * n_surf[i];

@@ -31,9 +31,7 @@ void dolfinx_contact::transformed_push_forward(
   // Copy basis values prior to calling transformation
   for (std::size_t j = 0; j < element_basis.extent(0); ++j)
     for (std::size_t k = 0; k < element_basis.extent(1); ++k)
-    {
       element_basis(j, k) = reference_basis(0, basis_offset + q, j, k);
-    }
 
   // Permute the reference values to account for the cell's
   // orientation
@@ -349,12 +347,12 @@ dolfinx_contact::pack_gradient_quadrature(
   const std::size_t bs = element->block_size();
   const std::size_t value_size = element->value_size();
 
-  // Tabulate function at quadrature points (assuming no derivatives)
+  // Tabulate function at quadrature points (assuming one derivatives)
   dolfinx_contact::error::check_cell_type(cell_type);
   const std::vector<double>& q_points = q_rule.points();
-  const std::vector<std::size_t>& q_offset = q_rule.offset();
-  const std::size_t sum_q_points = q_offset.back();
-  const std::size_t num_points_per_entity = q_offset[1] - q_offset[0];
+  const std::vector<std::size_t>& q_offsets = q_rule.offset();
+  const std::size_t sum_q_points = q_offsets.back();
+  const std::size_t num_points_per_entity = q_offsets[1] - q_offsets[0];
   std::array<std::size_t, 2> p_shape = {sum_q_points, tdim};
   assert(q_rule.tdim() == tdim);
 
@@ -377,9 +375,7 @@ dolfinx_contact::pack_gradient_quadrature(
   std::span<const double> x_g = geometry.x();
 
   // Tabulate coordinate basis to compute Jacobian
-  const std::vector<std::size_t>& q_offsets = q_rule.offset();
-  const auto num_points = q_offsets.back();
-  std::array<std::size_t, 4> c_shape = cmap.tabulate_shape(1, num_points);
+  std::array<std::size_t, 4> c_shape = cmap.tabulate_shape(1, sum_q_points);
   std::vector<double> c_basisb(
       std::reduce(c_shape.cbegin(), c_shape.cend(), 1, std::multiplies{}));
   cmap.tabulate(1, q_points, p_shape, c_basisb);
@@ -419,10 +415,9 @@ dolfinx_contact::pack_gradient_quadrature(
   const std::size_t dofmap_bs = dofmap->bs();
 
   // Get dof transformations
-  const bool needs_dof_transformations = element->needs_dof_transformations();
-  if (needs_dof_transformations)
+  if (element->needs_dof_transformations())
   {
-    throw std::runtime_error(
+    throw std::invalid_argument(
         "Packing of gradients at quadrature points not implemented for "
         "Function spaces requiring dof transformations.");
   }
@@ -466,7 +461,7 @@ dolfinx_contact::pack_gradient_quadrature(
       // Unroll dofmap
       for (std::size_t b = 0; b < dofmap_bs; ++b)
       {
-        auto coeff = data[pos_v + b];
+        auto coeff_val = data[pos_v + b];
         std::div_t pos = std::div(int(d * dofmap_bs + b), (int)bs);
 
         // Pack coefficients for each quadrature point
@@ -495,7 +490,7 @@ dolfinx_contact::pack_gradient_quadrature(
                                + (l + pos.rem) * gdim + j]
                       += K(k, j)
                          * reference_basis(k + 1, q_offset + q, pos.quot, l)
-                         * coeff;
+                         * coeff_val;
             }
           }
         }
@@ -523,7 +518,7 @@ dolfinx_contact::pack_gradient_quadrature(
                                + (l + pos.rem) * gdim + j]
                       += K(k, j)
                          * reference_basis(k + 1, q_offset + q, pos.quot, l)
-                         * coeff;
+                         * coeff_val;
             }
           }
         }

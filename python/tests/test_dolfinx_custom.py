@@ -124,15 +124,12 @@ def test_contact_kernel(theta, gamma, dim, gap):
         g_vec = [i for i in range(mesh.geometry.dim)]
         g_vec[mesh.geometry.dim - 1] = gap
 
-        u = dolfinx.fem.Function(V)
-        v = ufl.TestFunction(V)
         u.interpolate(_u_initial)
         metadata = {}  # {"quadrature_degree": q_deg}
         dx = ufl.Measure("dx", domain=mesh, metadata=metadata)
         ds = ufl.Measure("ds", domain=mesh, metadata=metadata,
                          subdomain_data=facet_marker)
         a = ufl.inner(sigma(u), epsilon(v)) * dx
-        # L = ufl.inner(dolfinx.Constant(mesh, [0, ] * mesh.geometry.dim), v) * dx
 
         # Derivation of one sided Nitsche with gap function
         F = a - theta / gammah * sigma_n(u) * sigma_n(v) * ds(bottom_value)
