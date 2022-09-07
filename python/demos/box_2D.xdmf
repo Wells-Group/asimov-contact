@@ -1,0 +1,32 @@
+<?xml version="1.0"?>
+<!DOCTYPE Xdmf SYSTEM "Xdmf.dtd" []>
+<Xdmf Version="3.0" xmlns:xi="http://www.w3.org/2001/XInclude">
+  <Domain>
+    <Grid Name="mesh" GridType="Uniform">
+      <Topology TopologyType="Triangle" NumberOfElements="92" NodesPerElement="3">
+        <DataItem Dimensions="92 3" NumberType="Int" Format="HDF">box_2D.h5:/Mesh/mesh/topology</DataItem>
+      </Topology>
+      <Geometry GeometryType="XY">
+        <DataItem Dimensions="64 2" Format="HDF">box_2D.h5:/Mesh/mesh/geometry</DataItem>
+      </Geometry>
+    </Grid>
+    <Grid Name="cell_marker" GridType="Uniform">
+      <xi:include xpointer="xpointer(/Xdmf/Domain/Grid/Geometry)" />
+      <Topology TopologyType="Triangle" NumberOfElements="92" NodesPerElement="3">
+        <DataItem Dimensions="92 3" NumberType="Int" Format="HDF">box_2D.h5:/MeshTags/cell_marker/topology</DataItem>
+      </Topology>
+      <Attribute Name="cell_marker" AttributeType="Scalar" Center="Cell">
+        <DataItem Dimensions="92 1" Format="HDF">box_2D.h5:/MeshTags/cell_marker/Values</DataItem>
+      </Attribute>
+    </Grid>
+    <Grid Name="facet_marker" GridType="Uniform">
+      <xi:include xpointer="xpointer(/Xdmf/Domain/Grid/Geometry)" />
+      <Topology TopologyType="PolyLine" NumberOfElements="32" NodesPerElement="2">
+        <DataItem Dimensions="32 2" NumberType="Int" Format="HDF">box_2D.h5:/MeshTags/facet_marker/topology</DataItem>
+      </Topology>
+      <Attribute Name="facet_marker" AttributeType="Scalar" Center="Cell">
+        <DataItem Dimensions="32 1" Format="HDF">box_2D.h5:/MeshTags/facet_marker/Values</DataItem>
+      </Attribute>
+    </Grid>
+  </Domain>
+</Xdmf>
