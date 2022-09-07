@@ -6,7 +6,7 @@ import numpy as np
 
 xdmf = XDMFFile(MPI.COMM_WORLD, 'box_2D.xdmf', 'r')
 mesh = xdmf.read_mesh()
-tdim = 2
+tdim = mesh.topology.dim
 mesh.topology.create_entities(tdim - 1)
 marker = xdmf.read_meshtags(mesh, 'facet_marker')
 
