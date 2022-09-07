@@ -30,7 +30,8 @@ def test_pack_u():
     cell_type = msh.CellType.triangle
     domain = ufl.Mesh(ufl.VectorElement("Lagrange", ufl.Cell(cell_type.name), 1))
     cells = graph.create_adjacencylist(cells)
-    mesh = msh.create_mesh(MPI.COMM_WORLD, cells, points, domain, msh.GhostMode.none)
+    part = msh.create_cell_partitioner(msh.GhostMode.none)
+    mesh = msh.create_mesh(MPI.COMM_WORLD, cells, points, domain, part)
 
     def f(x):
         vals = np.zeros((2, x.shape[1]))
@@ -69,7 +70,7 @@ def test_pack_u():
 
     for i in range(2):
         gap = contact.pack_gap(i)
-        u_opposite = contact.pack_u_contact(i, u._cpp_object, gap)
+        u_opposite = contact.pack_u_contact(i, u._cpp_object)
 
         gap_reshape = gap.reshape(len(ss[i]), -2, 2)
 
@@ -80,4 +81,4 @@ def test_pack_u():
 
         for j in range(len(s0)):
             f_exact = f(new_points[j].T).T.reshape(-1)
-            assert(np.allclose(f_exact, u_opposite[j]))
+            assert np.allclose(f_exact, u_opposite[j])

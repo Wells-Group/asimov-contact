@@ -10,12 +10,28 @@ from dolfinx.cpp.mesh import MeshTags_int32
 import dolfinx.fem as _fem
 import dolfinx.la as _la
 import numpy
+import scipy.sparse
 import ufl
 from petsc4py import PETSc
 
-__all__ = ["lame_parameters", "epsilon", "sigma_func", "R_minus", "dR_minus", "R_plus",
+__all__ = ["compare_matrices", "lame_parameters", "epsilon", "sigma_func", "R_minus", "dR_minus", "R_plus",
            "dR_plus", "ball_projection", "tangential_proj", "NonlinearPDE_SNESProblem",
            "rigid_motions_nullspace", "rigid_motions_nullspace_subdomains", "weak_dirichlet"]
+
+
+def compare_matrices(a: PETSc.Mat, b: PETSc.Mat, atol: float = 1e-12):
+    """
+    Helper for comparing two PETSc matrices
+    """
+    # Create scipy CSR matrices
+    ai, aj, av = a.getValuesCSR()
+    a_sp = scipy.sparse.csr_matrix((av, aj, ai), shape=a.getSize())
+    bi, bj, bv = b.getValuesCSR()
+    b_sp = scipy.sparse.csr_matrix((bv, bj, bi), shape=b.getSize())
+
+    # Compare matrices
+    diff = numpy.abs(a_sp - b_sp)
+    assert diff.max() <= atol
 
 
 def lame_parameters(plane_strain: bool = False):
@@ -90,15 +106,15 @@ def tangential_proj(u, n):
 
 
 class NonlinearPDE_SNESProblem:
-    def __init__(self, F, u, bc, form_compiler_params={}, jit_params={}):
+    def __init__(self, F, u, bc, form_compiler_options={}, jit_options={}):
         V = u.function_space
         du = ufl.TrialFunction(V)
 
-        self.L = _fem.form(F, form_compiler_params=form_compiler_params,
-                           jit_params=jit_params)
+        self.L = _fem.form(F, form_compiler_options=form_compiler_options,
+                           jit_options=jit_options)
         self.a = _fem.form(ufl.derivative(F, u, du),
-                           form_compiler_params=form_compiler_params,
-                           jit_params=jit_params)
+                           form_compiler_options=form_compiler_options,
+                           jit_options=jit_options)
         self.bc = bc
         self._F, self._J = None, None
         self.u = u

@@ -161,4 +161,4 @@ def test_nitsche_dirichlet(theta, gamma, strain, linear_solver):
     rates = np.log(errors[:-1] / errors[1:]) / np.log(hs[:-1] / hs[1:])
     print(errors)
     print(f"Convergence rate: {rates}")
-    assert(np.isclose(rates[-1], 2, atol=0.05))
+    assert np.isclose(rates[-1], 2, atol=0.05)

@@ -11,7 +11,7 @@ using namespace dolfinx_contact;
 
 dolfinx_contact::SubMesh::SubMesh(
     std::shared_ptr<const dolfinx::mesh::Mesh> mesh,
-    xtl::span<const std::int32_t> cell_facet_pairs)
+    std::span<const std::int32_t> cell_facet_pairs)
 {
   const int tdim = mesh->topology().dim(); // topological dimension
 
@@ -169,14 +169,14 @@ void dolfinx_contact::SubMesh::copy_function(
   assert(bs == dofmap_parent->bs());
 
   // retrieve value array
-  tcb::span<PetscScalar> u_sub_data = u_sub.x()->mutable_array();
-  tcb::span<const PetscScalar> u_data = u_parent.x()->array();
+  std::span<PetscScalar> u_sub_data = u_sub.x()->mutable_array();
+  std::span<const PetscScalar> u_data = u_parent.x()->array();
 
   // copy data from u into u_sub
   for (std::int32_t c = 0; c < num_cells; ++c)
   {
-    const tcb::span<const int> dofs_sub = dofmap_sub->cell_dofs(c);
-    const tcb::span<const int> dofs_parent
+    const std::span<const int> dofs_sub = dofmap_sub->cell_dofs(c);
+    const std::span<const int> dofs_parent
         = dofmap_parent->cell_dofs(_parent_cells[c]);
     assert(dofs_sub.size() == dofs_parent.size());
     for (std::size_t i = 0; i < dofs_sub.size(); ++i)
@@ -194,14 +194,14 @@ void dolfinx_contact::SubMesh::update_geometry(
   // Recover original geometry from parent mesh
   std::shared_ptr<const dolfinx::mesh::Mesh> parent_mesh
       = u.function_space()->mesh();
-  tcb::span<double> sub_geometry = _mesh->geometry().x();
-  tcb::span<const double> parent_geometry = parent_mesh->geometry().x();
+  std::span<double> sub_geometry = _mesh->geometry().x();
+  std::span<const double> parent_geometry = parent_mesh->geometry().x();
   std::size_t num_x_dofs = sub_geometry.size() / 3;
   for (std::size_t i = 0; i < num_x_dofs; ++i)
   {
-    dolfinx::common::impl::copy_N<3>(
+    std::copy_n(
         std::next(parent_geometry.begin(), 3 * _submesh_to_mesh_x_dof_map[i]),
-        std::next(sub_geometry.begin(), 3 * i));
+        3, std::next(sub_geometry.begin(), 3 * i));
   }
   // use u to update geometry
   std::shared_ptr<const dolfinx::fem::FunctionSpace> V_parent
@@ -211,4 +211,29 @@ void dolfinx_contact::SubMesh::update_geometry(
   auto u_sub = dolfinx::fem::Function<PetscScalar>(V_sub);
   copy_function(u, u_sub);
   dolfinx_contact::update_geometry(u_sub, _mesh);
+}
+//-----------------------------------------------------------------------------------------------
+
+std::vector<std::int32_t> dolfinx_contact::SubMesh::get_submesh_tuples(
+    std::span<const std::int32_t> facets) const
+{
+  assert(_mesh);
+
+  // Map (cell, facet) tuples from parent to sub mesh
+  std::vector<std::int32_t> submesh_facets(facets.size());
+
+  const int tdim = _mesh->topology().dim();
+  std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> c_to_f
+      = _mesh->topology().connectivity(tdim, tdim - 1);
+  assert(c_to_f);
+
+  for (std::size_t i = 0; i < facets.size(); i += 2)
+  {
+    auto submesh_cells = _mesh_to_submesh_cell_map->links(facets[i]);
+    assert(!submesh_cells.empty());
+    assert(submesh_cells.size() == 1);
+    submesh_facets[i] = submesh_cells.front();
+    submesh_facets[i + 1] = facets[i + 1];
+  }
+  return submesh_facets;
 }

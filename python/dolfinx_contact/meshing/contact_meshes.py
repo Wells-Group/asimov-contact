@@ -267,7 +267,7 @@ def create_box_mesh_3D(filename: str, simplex: bool = True, order: int = 1,
     gmsh.finalize()
 
 
-def create_sphere_plane_mesh(filename: str, order: int = 1):
+def create_sphere_plane_mesh(filename: str, order: int = 1, res=0.05):
     """
     Create a 3D sphere with center (0,0,0), r=0.3
     with a box at [-0.3, 0.6] x [-0.3, 0.6] x [ -0.1, -0.5]
@@ -278,8 +278,8 @@ def create_sphere_plane_mesh(filename: str, order: int = 1):
     gap = 0.05
     H = 0.05
     theta = 0  # np.pi / 10
-    LcMin = 0.05 * r
-    LcMax = 0.2 * r
+    LcMin = res
+    LcMax = 2 * res
     gmsh.initialize()
     if MPI.COMM_WORLD.rank == 0:
         # Create sphere composed of of two volumes

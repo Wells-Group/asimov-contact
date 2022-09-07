@@ -91,7 +91,7 @@ def compare_test_fn(fn_space, test_fn, grad_test_fn, q_indices, link, x_ref, cel
             expr_vals2 = expr2.eval([cell])
             # compare values of test functions
             offset = link * num_q_points * len(dofs) * bs + i * num_q_points * bs
-            assert(np.allclose(expr_vals[0][q_indices * bs + k], test_fn[offset + q_indices * bs + k]))
+            assert np.allclose(expr_vals[0][q_indices * bs + k], test_fn[offset + q_indices * bs + k])
             # retrieve dv from expression values and packed test fn
             dv1 = np.zeros((len(q_indices), gdim))
             dv2 = np.zeros((len(q_indices), gdim))
@@ -99,7 +99,7 @@ def compare_test_fn(fn_space, test_fn, grad_test_fn, q_indices, link, x_ref, cel
             for m in range(gdim):
                 dv1[:, m] = expr_vals2[0][q_indices * gdim + m]
                 dv2[:, m] = grad_test_fn[offset + q_indices * gdim + m]
-            assert(np.allclose(dv1, dv2))
+            assert np.allclose(dv1, dv2)
 
 
 def assert_zero_test_fn(fn_space, test_fn, grad_test_fn, num_q_points, zero_ind, link, cell):
@@ -112,14 +112,14 @@ def assert_zero_test_fn(fn_space, test_fn, grad_test_fn, num_q_points, zero_ind,
         for k in range(bs):
             # ensure values are zero if q not connected to quadrature point
             offset = link * num_q_points * len(dofs) * bs + i * num_q_points * bs
-            assert(np.allclose(0, test_fn[offset + zero_ind * bs + k]))
+            assert np.allclose(0, test_fn[offset + zero_ind * bs + k])
             # retrieve dv from expression values and packed test fn
             if len(zero_ind) > 0:
                 dv2 = np.zeros((len(zero_ind), gdim))
                 offset = link * num_q_points * len(dofs) * gdim + i * gdim * num_q_points
                 for m in range(gdim):
                     dv2[:, m] = grad_test_fn[offset + zero_ind * gdim + m]
-                assert(np.allclose(np.zeros((len(zero_ind), gdim)), dv2))
+                assert np.allclose(np.zeros((len(zero_ind), gdim)), dv2)
 
 
 def compare_u(fn_space, u, u_opposite, grad_u_opposite, q_indices, x_ref, cell):
@@ -136,7 +136,7 @@ def compare_u(fn_space, u, u_opposite, grad_u_opposite, q_indices, x_ref, cell):
         vals[i * bs:(i + 1) * bs] = u_opposite[q * bs:(q + 1) * bs]
 
     # compare expression and packed u
-    assert(np.allclose(expr_vals, vals))
+    assert np.allclose(expr_vals, vals)
 
     # loop over block
     for k in range(bs):
@@ -158,7 +158,7 @@ def compare_u(fn_space, u, u_opposite, grad_u_opposite, q_indices, x_ref, cell):
                 vals2[j] = grad_u_opposite[index]
 
         # compare gradient from expression and u_opposite
-        assert(np.allclose(vals1, vals2))
+        assert np.allclose(vals1, vals2)
 
 
 @pytest.mark.parametrize("ct", ["quadrilateral", "triangle", "tetrahedron", "hexahedron"])
@@ -214,8 +214,8 @@ def test_packing(ct, gap, q_deg, delta, surface):
 
     # Pack gap on surface, pack test functions, u on opposite surface
     gap = contact.pack_gap(0)
-    test_fn = contact.pack_test_functions(0, gap)
-    u_packed = contact.pack_u_contact(0, u._cpp_object, gap)
+    test_fn = contact.pack_test_functions(0)
+    u_packed = contact.pack_u_contact(0, u._cpp_object)
     grad_test_fn = contact.pack_grad_test_functions(0, gap, u_packed)
     grad_u = contact.pack_grad_u_contact(0, u._cpp_object, gap, u_packed)
 

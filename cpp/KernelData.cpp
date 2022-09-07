@@ -27,7 +27,7 @@ dolfinx_contact::KernelData::KernelData(
 
   dolfinx_contact::error::check_cell_type(topology.cell_type());
   // Create quadrature points on reference facet
-  const xt::xtensor<double, 2>& q_points = q_rule->points();
+  const std::vector<double>& q_points = q_rule->points();
   const std::size_t num_quadrature_pts = _q_weights.size();
 
   // Extract function space data (assuming same test and trial space)
@@ -59,24 +59,16 @@ dolfinx_contact::KernelData::KernelData(
 
   /// Pack test and trial functions
   const basix::FiniteElement& basix_element = element->basix_element();
-  std::array<std::size_t, 4> tab_shape
-      = basix_element.tabulate_shape(1, num_quadrature_pts);
-  _phi = xt::xtensor<double, 2>({num_quadrature_pts, _ndofs_cell});
-  _dphi = xt::xtensor<double, 3>({_tdim, num_quadrature_pts, _ndofs_cell});
-  xt::xtensor<double, 4> basis_functions(tab_shape);
-  element->tabulate(basis_functions, q_points, 1);
-  _phi = xt::view(basis_functions, 0, xt::all(), xt::all(), 0);
-  _dphi = xt::view(basis_functions, xt::range(1, _tdim + 1), xt::all(),
-                   xt::all(), 0);
+  _basis_shape = basix_element.tabulate_shape(1, num_quadrature_pts);
+  _basis_values = std::vector<double>(std::reduce(
+      _basis_shape.begin(), _basis_shape.end(), 1, std::multiplies{}));
+  element->tabulate(_basis_values, q_points, {num_quadrature_pts, _tdim}, 1);
 
   // Tabulate Coordinate element (first derivative to compute Jacobian)
-  std::array<std::size_t, 4> cmap_shape
-      = cmap.tabulate_shape(1, _q_weights.size());
-  _dphi_c = xt::xtensor<double, 3>({_tdim, cmap_shape[1], cmap_shape[2]});
-  xt::xtensor<double, 4> cmap_basis(cmap_shape);
-  cmap.tabulate(1, q_points, cmap_basis);
-  _dphi_c
-      = xt::view(cmap_basis, xt::range(1, _tdim + 1), xt::all(), xt::all(), 0);
+  _c_basis_shape = cmap.tabulate_shape(1, _q_weights.size());
+  _c_basis_values = std::vector<double>(std::reduce(
+      _c_basis_shape.begin(), _c_basis_shape.end(), 1, std::multiplies{}));
+  cmap.tabulate(1, q_points, {num_quadrature_pts, _tdim}, _c_basis_values);
 
   // Create offsets from cstrides
   _offsets.resize(cstrides.size() + 1);
@@ -88,20 +80,55 @@ dolfinx_contact::KernelData::KernelData(
   // compute this per quadrature point
   basix::cell::type basix_cell
       = dolfinx::mesh::cell_type_to_basix_type(mesh->topology().cell_type());
-  auto [ref_jac, jac_shape] = basix::cell::facet_jacobians(basix_cell);
-  _ref_jacobians = xt::zeros<double>(jac_shape);
-  std::copy(ref_jac.cbegin(), ref_jac.cend(), _ref_jacobians.begin());
+  std::tie(_ref_jacobians, _jac_shape)
+      = basix::cell::facet_jacobians(basix_cell);
 
   // Get facet normals on reference cell
-  auto [facet_normals, n_shape]
+  std::tie(_facet_normals, _normals_shape)
       = basix::cell::facet_outward_normals(basix_cell);
-  _facet_normals = xt::zeros<double>(n_shape);
-  std::copy(facet_normals.cbegin(), facet_normals.cend(),
-            _facet_normals.begin());
 
   // Get update Jacobian function (for each quadrature point)
   _update_jacobian = dolfinx_contact::get_update_jacobian_dependencies(cmap);
 
   // Get update FacetNormal function (for each quadrature point)
   _update_normal = dolfinx_contact::get_update_normal(cmap);
+}
+//-----------------------------------------------------------------------------
+double dolfinx_contact::KernelData::compute_first_facet_jacobian(
+    const std::size_t facet_index, dolfinx_contact::mdspan2_t J,
+    dolfinx_contact::mdspan2_t K, dolfinx_contact::mdspan2_t J_tot,
+    std::span<double> detJ_scratch, dolfinx_contact::cmdspan2_t coords) const
+{
+  dolfinx_contact::cmdspan4_t full_basis(_c_basis_values.data(),
+                                         _c_basis_shape);
+  dolfinx_contact::s_cmdspan2_t dphi_fc
+      = stdex::submdspan(full_basis, std::pair{1, (std::size_t)_tdim + 1},
+                         _qp_offsets[facet_index], stdex::full_extent, 0);
+  dolfinx_contact::cmdspan3_t ref_jacs(_ref_jacobians.data(), _jac_shape);
+  auto J_f = stdex::submdspan(ref_jacs, (std::size_t)facet_index,
+                              stdex::full_extent, stdex::full_extent);
+  return std::fabs(dolfinx_contact::compute_facet_jacobian(
+      J, K, J_tot, detJ_scratch, J_f, dphi_fc, coords));
+}
+//-----------------------------------------------------------------------------
+void dolfinx_contact::KernelData::update_normal(
+    std::span<double> n, dolfinx_contact::cmdspan2_t K,
+    const std::size_t local_index) const
+{
+  return _update_normal(
+      n, K, dolfinx_contact::cmdspan2_t(_facet_normals.data(), _normals_shape),
+      local_index);
+}
+//-----------------------------------------------------------------------------
+std::span<const double>
+dolfinx_contact::KernelData::weights(std::size_t i) const
+{
+  assert(i + 1 < _qp_offsets.size());
+  return std::span(_q_weights.data() + _qp_offsets[i],
+                   _qp_offsets[i + 1] - _qp_offsets[i]);
+}
+//-----------------------------------------------------------------------------
+dolfinx_contact::cmdspan3_t dolfinx_contact::KernelData::ref_jacobians() const
+{
+  return dolfinx_contact::cmdspan3_t(_ref_jacobians.data(), _jac_shape);
 }

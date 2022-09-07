@@ -19,7 +19,7 @@ import ufl
 from dolfinx_contact.meshing import convert_mesh, create_christmas_tree_mesh, create_christmas_tree_mesh_3D
 from dolfinx_contact.unbiased.nitsche_unbiased import nitsche_unbiased
 from dolfinx_contact.helpers import lame_parameters, sigma_func, weak_dirichlet, epsilon
-from dolfinx_contact.cpp import find_candidate_surface_segment
+from dolfinx_contact.cpp import find_candidate_surface_segment, ContactMode
 
 if __name__ == "__main__":
     desc = "Nitsche's method for two elastic bodies using custom assemblers"
@@ -50,6 +50,10 @@ if __name__ == "__main__":
                         help="File for appending results", dest="outfile")
     parser.add_argument("--split", type=np.int32, default=1, required=False,
                         help="number of surface segments", dest="split")
+    _raytracing = parser.add_mutually_exclusive_group(required=False)
+    _raytracing.add_argument('--raytracing', dest='raytracing', action='store_true',
+                             help="Use raytracing for contact search.",
+                             default=False)
     # Parse input arguments or set to defualt values
     args = parser.parse_args()
 
@@ -203,6 +207,9 @@ if __name__ == "__main__":
         "pc_gamg_square_graph": 2,
     }
 
+    mode = ContactMode.Raytracing if args.raytracing \
+        else ContactMode.ClosestPoint
+
     # Solve contact problem using Nitsche's method
     problem_parameters = {"gamma": E * gamma, "theta": theta, "mu": mu, "lambda": lmbda}
     solver_outfile = args.outfile if args.ksp else None
@@ -210,8 +217,8 @@ if __name__ == "__main__":
     with Timer("~Contact: - all"):
         u1, num_its, krylov_iterations, solver_time = nitsche_unbiased(
             ufl_form=F, u=u, markers=mts, contact_data=(surfaces, contact_pairs),
-            bcs=bcs, problem_parameters=problem_parameters, newton_options=newton_options,
-            petsc_options=petsc_options, outfile=solver_outfile)
+            bcs=bcs, problem_parameters=problem_parameters, search_method=mode,
+            newton_options=newton_options, petsc_options=petsc_options, outfile=solver_outfile)
 
     # write solution to file
     with XDMFFile(mesh.comm, "results/xmas.xdmf", "w") as xdmf:
