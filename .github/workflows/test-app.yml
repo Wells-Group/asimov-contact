@@ -19,7 +19,7 @@ jobs:
 
     strategy:
       matrix:
-        # Complex mode not working in CUAS
+        # Complex mode not working
         petsc_mode: [real]
         petsc_int_type: [32, 64]
         CXX: [c++, clang++]
@@ -77,20 +77,6 @@ jobs:
       - name: Build Python interface (dolfinx)
         run: python3 -m pip -v install ./dolfinx/python/
 
-      - name: Get Custom assemblers
-        uses: actions/checkout@v2
-        with:
-          path: ./asimov-custom-assemblers
-          repository: Wells-Group/asimov-custom-assemblers
-          ref: main
-
-      - name: Install custom assemblers (C++)
-        run: |
-          cmake -G Ninja -DCMAKE_BUILD_TYPE=Debug -B build-cuas -S ./asimov-custom-assemblers/cpp
-          ninja -C build-cuas install
-
-      - name: Install custom assemblers
-        run: BUILD_TYPE=Debug python3 -m pip -v install ./asimov-custom-assemblers/python/
 
       - name: Install contact (C++)
         run: |
