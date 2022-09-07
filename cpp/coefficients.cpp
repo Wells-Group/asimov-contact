@@ -13,8 +13,8 @@ using namespace dolfinx_contact;
 
 void dolfinx_contact::transformed_push_forward(
     const dolfinx::fem::FiniteElement* element, cmdspan4_t reference_basis,
-    std::vector<double>& element_basisb, mdspan3_t basis_values, mdspan2_t J,
-    mdspan2_t K, double detJ, std::size_t basis_offset, std::size_t q,
+    std::vector<double>& element_basisb, mdspan3_t basis_values, cmdspan2_t J,
+    cmdspan2_t K, double detJ, std::size_t basis_offset, std::size_t q,
     std::int32_t cell, std::span<const std::uint32_t> cell_info)
 {
   const std::function<void(const std::span<PetscScalar>&,
@@ -156,8 +156,8 @@ dolfinx_contact::pack_coefficient_quadrature(
     cmdspan4_t c_basis(c_basisb.data(), c_shape);
 
     // Prepare geometry data structures
-    std::vector<double> Jb(gdim * tdim);
-    std::vector<double> Kb(tdim * gdim);
+    std::array<double, 9> Jb;
+    std::array<double, 9> Kb;
     mdspan2_t J(Jb.data(), gdim, tdim);
     mdspan2_t K(Kb.data(), tdim, gdim);
     std::vector<double> detJ_scratch(2 * gdim * tdim);
@@ -382,8 +382,8 @@ dolfinx_contact::pack_gradient_quadrature(
   cmdspan4_t c_basis(c_basisb.data(), c_shape);
 
   // Prepare geometry data structures
-  std::vector<double> Jb(gdim * tdim);
-  std::vector<double> Kb(tdim * gdim);
+  std::array<double, 9> Jb;
+  std::array<double, 9> Kb;
   mdspan2_t J(Jb.data(), gdim, tdim);
   mdspan2_t K(Kb.data(), tdim, gdim);
   std::vector<double> detJ_scratch(2 * gdim * tdim);
@@ -577,8 +577,8 @@ std::vector<PetscScalar> dolfinx_contact::pack_circumradius(
   const int gdim = geometry.dim();
   const std::size_t num_dofs_g = cmap.dim();
 
-  std::vector<double> Jb(gdim * tdim);
-  std::vector<double> Kb(tdim * gdim);
+  std::array<double, 9> Jb;
+  std::array<double, 9> Kb;
   mdspan2_t J(Jb.data(), gdim, tdim);
   mdspan2_t K(Kb.data(), tdim, gdim);
   std::vector<double> detJ_scratch(2 * gdim * tdim);
