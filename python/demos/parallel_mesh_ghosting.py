@@ -23,7 +23,7 @@ def partitioner(comm, n, m, topo):
     dests = []
     offsets = [0]
     for c in range(ncells):
-        dests.append(rank) # Keep ownership
+        dests.append(rank)
         if c in cells:
             dests.extend(other_ranks) # Ghost to other processes
         offsets.append(len(dests))
@@ -36,7 +36,7 @@ topo = topo[:ncells,:]
 
 # Cut off any ghost vertices
 num_vertices = mesh.topology.index_map(0).size_local
-x = mesh.geometry.x[:, :num_vertices]
+x = mesh.geometry.x[:num_vertices, :]
 domain = mesh.ufl_domain()
 new_mesh = create_mesh(mesh.comm, topo, x, domain, partitioner)
 
