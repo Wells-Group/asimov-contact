@@ -32,7 +32,8 @@ dolfinx_contact::generate_meshtie_kernel(
          1,
          num_q_points * ndofs_cell * bs * max_links,
          num_q_points * ndofs_cell * bs * max_links,
-         ndofs_cell * bs,
+         num_q_points * gdim,
+         num_q_points * gdim * gdim,
          num_q_points * bs,
          num_q_points * gdim * bs};
 
@@ -127,29 +128,21 @@ dolfinx_contact::generate_meshtie_kernel(
           sig_n_opp, c.subspan(kd.offsets(4), kd.offsets(5) - kd.offsets(4)),
           std::span(n_phys.data(), gdim), mu, lmbda, q, num_points);
 
-      // compute u, 0.5 sig_n(u)
+      // compute u, sig_n(u)
       std::fill(sig_n_u.begin(), sig_n_u.end(), 0.0);
-      std::fill(jump_u.begin(), jump_u.end(), 0.0);
-      for (std::size_t i = 0; i < ndofs_cell; i++)
-      {
-        std::size_t block_index = kd.offsets(5) + i * bs;
-        for (std::size_t j = 0; j < bs; j++)
-        {
-          PetscScalar coeff = c[block_index + j];
-          jump_u[j] += coeff * phi(q_pos, i);
-          for (std::size_t k = 0; k < bs; ++k)
-            sig_n_u[k] += coeff * sig_n(i, j, k);
-        }
-      }
+      compute_sigma_n_u(sig_n_u,
+                        c.subspan(kd.offsets(6) + q * gdim * gdim, gdim * gdim),
+                        std::span(n_phys.data(), gdim), mu, lmbda);
       // avg(sig_n(u)):  sig_n(u) +=  sig_n(u_opposite)
       compute_sigma_n_u(sig_n_u,
-                        c.subspan(kd.offsets(7) + q * gdim * gdim, gdim * gdim),
+                        c.subspan(kd.offsets(8) + q * gdim * gdim, gdim * gdim),
                         std::span(n_phys.data(), gdim), mu, lmbda);
 
       // compute [[u]] = jump(u) = u - u_opp
-      std::size_t offset_u_opp = kd.offsets(6) + q * bs;
+      std::size_t offset_u_opp = kd.offsets(7) + q * bs;
+      std::size_t offset_u = kd.offsets(5) + q * bs;
       for (std::size_t j = 0; j < bs; ++j)
-        jump_u[j] += -c[offset_u_opp + j];
+        jump_u[j] = c[offset_u + j] - c[offset_u_opp + j];
       const double w0 = 0.5 * weights[q] * detJ;
 
       // Fill contributions of facet with itself

@@ -309,16 +309,14 @@ PYBIND11_MODULE(cpp, m)
       "generate_contact_kernel",
       [](std::shared_ptr<const dolfinx::fem::FunctionSpace> V,
          dolfinx_contact::Kernel type, dolfinx_contact::QuadratureRule& q_rule,
-         std::vector<std::shared_ptr<const dolfinx::fem::Function<PetscScalar>>>
-             coeffs,
          bool constant_normal)
       {
         return contact_wrappers::KernelWrapper(
-            dolfinx_contact::generate_contact_kernel(V, type, q_rule, coeffs,
+            dolfinx_contact::generate_contact_kernel(V, type, q_rule,
                                                      constant_normal));
       },
       py::arg("V"), py::arg("kernel_type"), py::arg("quadrature_rule"),
-      py::arg("coeffs"), py::arg("constant_normal") = true);
+      py::arg("constant_normal") = true);
   py::enum_<dolfinx_contact::Kernel>(m, "Kernel")
       .value("Rhs", dolfinx_contact::Kernel::Rhs)
       .value("Jac", dolfinx_contact::Kernel::Jac)
@@ -354,6 +352,35 @@ PYBIND11_MODULE(cpp, m)
           throw std::invalid_argument("Unsupported entities");
         }
       });
+  m.def("pack_gradient_quadrature",
+        [](std::shared_ptr<const dolfinx::fem::Function<PetscScalar>> coeff,
+           int q, const py::array_t<std::int32_t, py::array::c_style>& entities)
+        {
+          auto e_span
+              = std::span<const std::int32_t>(entities.data(), entities.size());
+          if (entities.ndim() == 1)
+          {
+
+            auto [coeffs, cstride] = dolfinx_contact::pack_gradient_quadrature(
+                coeff, q, e_span, dolfinx::fem::IntegralType::cell);
+            int shape0 = cstride == 0 ? 0 : coeffs.size() / cstride;
+            return dolfinx_wrappers::as_pyarray(std::move(coeffs),
+                                                std::array{shape0, cstride});
+          }
+          else if (entities.ndim() == 2)
+          {
+
+            auto [coeffs, cstride] = dolfinx_contact::pack_gradient_quadrature(
+                coeff, q, e_span, dolfinx::fem::IntegralType::exterior_facet);
+            int shape0 = cstride == 0 ? 0 : coeffs.size() / cstride;
+            return dolfinx_wrappers::as_pyarray(std::move(coeffs),
+                                                std::array{shape0, cstride});
+          }
+          else
+          {
+            throw std::invalid_argument("Unsupported entities");
+          }
+        });
 
   m.def(
       "pack_circumradius",
