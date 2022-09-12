@@ -255,7 +255,7 @@ def weak_dirichlet(F: ufl.Form, u: _fem.Function,
     mesh = V.mesh
     h = ufl.CellDiameter(mesh)
     n = ufl.FacetNormal(mesh)
-    F += - ufl.inner(sigma(u) * n, v) * ds\
+    F = - ufl.inner(sigma(u) * n, v) * ds\
         - theta * ufl.inner(sigma(v) * n, u - f) * \
         ds + gamma / h * ufl.inner(u - f, v) * ds
     return F

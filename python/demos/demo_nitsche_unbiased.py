@@ -28,7 +28,7 @@ from dolfinx_contact.meshing import (convert_mesh, create_box_mesh_2D,
                                      create_circle_plane_mesh,
                                      create_cylinder_cylinder_mesh,
                                      create_sphere_plane_mesh)
-from dolfinx_contact.unbiased.nitsche_unbiased import nitsche_unbiased
+from dolfinx_contact.unbiased.nitsche_pseudo_time import nitsche_pseudo_time
 
 if __name__ == "__main__":
     desc = "Nitsche's method for two elastic bodies using custom assemblers"
@@ -282,24 +282,24 @@ if __name__ == "__main__":
                       "convergence_criterion": "residual",
                       "max_it": 50,
                       "error_on_nonconvergence": True}
-    # petsc_options = {"ksp_type": "preonly", "pc_type": "lu"}
-    petsc_options = {
-        "matptap_via": "scalable",
-        "ksp_type": "cg",
-        "ksp_rtol": ksp_tol,
-        "ksp_atol": ksp_tol,
-        "pc_type": "gamg",
-        "pc_mg_levels": 3,
-        "pc_mg_cycles": 1,   # 1 is v, 2 is w
-        "mg_levels_ksp_type": "chebyshev",
-        "mg_levels_pc_type": "jacobi",
-        "pc_gamg_type": "agg",
-        "pc_gamg_coarse_eq_limit": 100,
-        "pc_gamg_agg_nsmooths": 1,
-        "pc_gamg_sym_graph": True,
-        "pc_gamg_threshold": 1e-3,
-        "pc_gamg_square_graph": 2,
-    }
+    petsc_options = {"ksp_type": "preonly", "pc_type": "lu"}
+    # petsc_options = {
+    #     "matptap_via": "scalable",
+    #     "ksp_type": "cg",
+    #     "ksp_rtol": ksp_tol,
+    #     "ksp_atol": ksp_tol,
+    #     "pc_type": "gamg",
+    #     "pc_mg_levels": 3,
+    #     "pc_mg_cycles": 1,   # 1 is v, 2 is w
+    #     "mg_levels_ksp_type": "chebyshev",
+    #     "mg_levels_pc_type": "jacobi",
+    #     "pc_gamg_type": "agg",
+    #     "pc_gamg_coarse_eq_limit": 100,
+    #     "pc_gamg_agg_nsmooths": 1,
+    #     "pc_gamg_sym_graph": True,
+    #     "pc_gamg_threshold": 1e-3,
+    #     "pc_gamg_square_graph": 2,
+    # }
     # Pack mesh data for Nitsche solver
     dirichlet_vals = [dirichlet_bdy_1, dirichlet_bdy_2]
     contact = [(0, 1), (1, 0)]
@@ -349,7 +349,7 @@ if __name__ == "__main__":
     for j in range(nload_steps):
         disp = []
         bcs = []
-        Fj = F
+        lhs = F
         for k, d in enumerate(load_increment):
             if args.lifting:
                 tag = dirichlet_vals[k]
@@ -358,21 +358,23 @@ if __name__ == "__main__":
                 disp.append(Constant(mesh, ScalarType((d[0], d[1], d[2]))))
             else:
                 disp.append(Constant(mesh, ScalarType((d[0], d[1]))))
+        rhs = 0 * dx
         for k, g in enumerate(disp):
             tag = dirichlet_vals[k]
-            if args.lifting:
-                pass
-                # bdy_dofs = locate_dofs_topological(V, tdim - 1, facet_marker.find(tag))
-                # bcs.append(dirichletbc(g, bdy_dofs, V))
-            else:
-                Fj = weak_dirichlet(Fj, u, g, sigma, E * gamma, theta, ds(tag))
+            h = ufl.CellDiameter(mesh)
+            n = ufl.FacetNormal(mesh)
+            lhs += - ufl.inner(sigma(u) * n, v) * ds(tag)\
+                - theta * ufl.inner(sigma(v) * n, u) * \
+                ds(tag) + E * gamma / h * ufl.inner(u, v) * ds(tag)
+            rhs += - theta * ufl.inner(sigma(v) * n, g) * \
+                ds(tag) + E * gamma / h * ufl.inner(g, v) * ds(tag)
 
         # Solve contact problem using Nitsche's method
-        u, newton_its, krylov_iterations, solver_time = nitsche_unbiased(
-            ufl_form=Fj, u=u, markers=[domain_marker, facet_marker], contact_data=(surfaces, contact),
-            bcs=bcs, problem_parameters=problem_parameters, newton_options=newton_options,
-            petsc_options=petsc_options, outfile=solver_outfile, quadrature_degree=args.q_degree,
-            search_method=mode)
+        u, newton_its, krylov_iterations, solver_time = nitsche_pseudo_time(5,
+                                                                            lhs=lhs, rhs=rhs, u=u, rhs_fns=disp, markers=[domain_marker, facet_marker], contact_data=(
+                                                                                surfaces, contact),
+                                                                            bcs=bcs, problem_parameters=problem_parameters, newton_options=newton_options,
+                                                                            petsc_options=petsc_options, outfile=solver_outfile)
         num_newton_its[j] = newton_its
         num_krylov_its[j] = krylov_iterations
         newton_time[j] = solver_time
