@@ -62,9 +62,12 @@ public:
   }
 
   // Return active entities for surface s
-  const std::vector<std::int32_t>& active_entities(int s) const
+  const std::span<std::int32_t>& active_entities(int s) const
   {
-    return _cell_facet_pairs[s];
+    const std::span<std::int32_t>& active_facets
+        = std::span(_cell_facet_pairs[s]);
+
+    return active_facets.subspan(0, 2 * _local_facets[s]));
   }
   // set quadrature rule
   void set_quadrature_rule(QuadratureRule q_rule)
@@ -277,6 +280,8 @@ private:
   std::vector<SubMesh> _submeshes;
   // facets as (cell, facet) pairs. The pairs are flattened row-major
   std::vector<std::vector<std::int32_t>> _cell_facet_pairs;
+  // number of facets owned by process for each surface
+  std::vector<std::size_t> _local_facets;
 
   // Contact search mode
   ContactMode _mode;

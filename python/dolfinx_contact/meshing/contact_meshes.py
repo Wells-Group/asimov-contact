@@ -152,7 +152,8 @@ def create_box_mesh_2D(filename: str, quads: bool = False, res=0.1, order: int =
     L = 0.5
     H = 0.5
     disp = -0.6
-    delta = 0.1
+    delta = 0.0
+    res = 2.0
 
     gmsh.initialize()
     if MPI.COMM_WORLD.rank == 0:

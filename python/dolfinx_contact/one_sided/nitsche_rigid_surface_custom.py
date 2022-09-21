@@ -166,7 +166,8 @@ def nitsche_rigid_surface_custom(mesh: _mesh.Mesh, mesh_data: Tuple[_cpp.mesh.Me
     # Compute integral entities on exterior facets (cell_index, local_index)
     contact_facets = facet_marker.find(contact_value_elastic)
     integral = _fem.IntegralType.exterior_facet
-    integral_entities = dolfinx_contact.compute_active_entities(mesh, contact_facets, integral)
+    integral_entities, num_local = dolfinx_contact.compute_active_entities(mesh, contact_facets, integral)
+    integral_entities = integral_entities[:num_local, :]
 
     # Pack mu and lambda on facets
     coeffs = np.hstack([dolfinx_contact.cpp.pack_coefficient_quadrature(

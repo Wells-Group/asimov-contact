@@ -140,7 +140,8 @@ def nitsche_custom(mesh: dmesh.Mesh, mesh_data: Tuple[_cpp.mesh.MeshTags_int32, 
     # Compute integral entities on exterior facets (cell_index, local_index)
     bottom_facets = facet_marker.find(contact_value)
     integral = _fem.IntegralType.exterior_facet
-    integral_entities = dolfinx_contact.compute_active_entities(mesh, bottom_facets, integral)
+    integral_entities, num_local = dolfinx_contact.compute_active_entities(mesh, bottom_facets, integral)
+    integral_entities = integral_entities[:num_local, :]
     # Pack mu and lambda on facets
     coeffs = np.hstack([dolfinx_contact.cpp.pack_coefficient_quadrature(
         mu2._cpp_object, 0, integral_entities),

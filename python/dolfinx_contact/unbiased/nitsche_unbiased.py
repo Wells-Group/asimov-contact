@@ -138,6 +138,7 @@ def nitsche_unbiased(ufl_form: ufl.Form, u: _fem.Function, markers: list[_cpp.me
 
     with _common.Timer("~Contact: Distance maps"):
         for i in range(len(contact_pairs)):
+            print(i)
             contact.create_distance_map(i)
 
     # pack constants
@@ -154,7 +155,8 @@ def nitsche_unbiased(ufl_form: ufl.Form, u: _fem.Function, markers: list[_cpp.me
     entities = []
     with _common.Timer("~Contact: Compute active entities"):
         for pair in contact_pairs:
-            entities.append(contact.active_entities(pair[0]))
+            ent, num_local = contact.active_entities(pair[0])
+            entities.append(ent[:num_local])
 
     material = []
     with _common.Timer("~Contact: Pack coeffs (mu, lmbda"):
@@ -209,7 +211,10 @@ def nitsche_unbiased(ufl_form: ufl.Form, u: _fem.Function, markers: list[_cpp.me
 
     @_common.timed("~Contact: Update coefficients")
     def compute_coefficients(x, coeffs):
-        u.vector[:] = x.array
+        size_local = V.dofmap.index_map.size_local
+        bs = V.dofmap.index_map_bs
+        u.x.array[:size_local * bs] = x.array_r[:size_local * bs]
+        u.x.scatter_forward()
         u_candidate = []
         with _common.Timer("~~Contact: Pack u contact"):
             for i in range(len(contact_pairs)):

@@ -175,7 +175,7 @@ get_update_normal(const dolfinx::fem::CoordinateElement& cmap);
 /// @param[in] mesh The mesh
 /// @param[in] entities List of mesh entities
 /// @param[in] integral The type of integral
-std::vector<std::int32_t>
+std::pair<std::vector<std::int32_t>, std::size_t>
 compute_active_entities(std::shared_ptr<const dolfinx::mesh::Mesh> mesh,
                         std::span<const std::int32_t> entities,
                         dolfinx::fem::IntegralType integral);
@@ -409,9 +409,8 @@ compute_raytracing_map(const dolfinx::mesh::Mesh& quadrature_mesh,
     assert(x_dofs.size() == num_nodes_q);
     for (std::size_t j = 0; j < num_nodes_q; ++j)
     {
-      std::copy_n(
-          std::next(q_x.begin(), 3 * x_dofs[j]), gdim,
-          std::next(coordinate_dofs_qb.begin(), j * gdim));
+      std::copy_n(std::next(q_x.begin(), 3 * x_dofs[j]), gdim,
+                  std::next(coordinate_dofs_qb.begin(), j * gdim));
     }
     const std::int32_t facet_index = quadrature_facets[i + 1];
     for (std::size_t j = 0; j < num_q_points; ++j)
@@ -435,10 +434,9 @@ compute_raytracing_map(const dolfinx::mesh::Mesh& quadrature_mesh,
 
       // Copy data regarding quadrature point into allocated memory for
       // raytracing
-      std::copy_n(
-          std::next(quadrature_points.cbegin(),
-                    (i / 2 * num_q_points + j) * gdim), gdim,
-          point.begin());
+      std::copy_n(std::next(quadrature_points.cbegin(),
+                            (i / 2 * num_q_points + j) * gdim),
+                  gdim, point.begin());
       impl::compute_tangents<gdim>(std::span<double, gdim>(normal.data(), gdim),
                                    tangents);
 
@@ -451,9 +449,8 @@ compute_raytracing_map(const dolfinx::mesh::Mesh& quadrature_mesh,
         auto x_dofs = c_dofmap.links(candidate_facets[c]);
         for (std::size_t k = 0; k < x_dofs.size(); ++k)
         {
-          std::copy_n(
-              std::next(c_x.begin(), 3 * x_dofs[k]), gdim,
-              std::next(coordinate_dofs_c.begin(), gdim * k));
+          std::copy_n(std::next(c_x.begin(), 3 * x_dofs[k]), gdim,
+                      std::next(coordinate_dofs_c.begin(), gdim * k));
         }
         // Assign Jacobian of reference mapping
         for (std::size_t l = 0; l < tdim; ++l)
@@ -492,9 +489,9 @@ compute_raytracing_map(const dolfinx::mesh::Mesh& quadrature_mesh,
       if (status > 0)
       {
         colliding_facet[i / 2 * num_q_points + j] = facets[cell_idx];
-        std::copy_n(
-            X_fin.begin(), tdim, std::next(reference_points.begin(),
-                                     tdim * (i / 2 * num_q_points + j)));
+        std::copy_n(X_fin.begin(), tdim,
+                    std::next(reference_points.begin(),
+                              tdim * (i / 2 * num_q_points + j)));
       }
     }
   }
@@ -597,8 +594,8 @@ compute_projection_map(const dolfinx::mesh::Mesh& mesh,
       for (std::size_t l = 0; l < num_facet_dofs; ++l)
       {
         std::copy_n(
-            std::next(mesh_geometry.begin(), 3 * candidate_facet_dofs[l]),
-            3, std::next(coordinate_dofs.begin(), 3 * l));
+            std::next(mesh_geometry.begin(), 3 * candidate_facet_dofs[l]), 3,
+            std::next(coordinate_dofs.begin(), 3 * l));
       }
 
       // Compute distance between convex hull of facet and point
@@ -632,6 +629,7 @@ compute_projection_map(const dolfinx::mesh::Mesh& mesh,
     auto f_to_c = mesh.topology().connectivity(tdim - 1, tdim);
     if (!f_to_c)
       throw std::runtime_error("Missing facet to cell connectivity");
+
     for (std::size_t i = 0; i < closest_facets.size(); ++i)
     {
       // Get cell connected to facet
@@ -643,15 +641,13 @@ compute_projection_map(const dolfinx::mesh::Mesh& mesh,
       assert(x_dofs.size() == num_dofs_g);
       for (std::size_t j = 0; j < num_dofs_g; ++j)
       {
-        std::copy_n(
-            std::next(mesh_geometry.begin(), 3 * x_dofs[j]), gdim,
-            std::next(coordinate_dofsb.begin(), j * gdim));
+        std::copy_n(std::next(mesh_geometry.begin(), 3 * x_dofs[j]), gdim,
+                    std::next(coordinate_dofsb.begin(), j * gdim));
       }
 
       // Copy closest point in physical space
       std::fill(x.begin(), x.end(), 0);
-      std::copy_n(std::next(candidate_x.begin(), 3 * i),
-                                          gdim, x.begin());
+      std::copy_n(std::next(candidate_x.begin(), 3 * i), gdim, x.begin());
 
       // NOTE: Would benefit from pulling back all points
       // in a single cell at the same time
@@ -659,10 +655,8 @@ compute_projection_map(const dolfinx::mesh::Mesh& mesh,
       std::fill(Jb.begin(), Jb.end(), 0);
       pull_back(J, K, detJ, X, cmdspan2_t(x.data(), 1, gdim), coordinate_dofs,
                 cmap);
-
       // Copy into output
-      std::copy_n(
-          X.begin(), tdim, std::next(candidate_X.begin(), i * tdim));
+      std::copy_n(X.begin(), tdim, std::next(candidate_X.begin(), i * tdim));
     }
   }
   return {closest_facets, candidate_X, {candidate_X.size() / tdim, tdim}};

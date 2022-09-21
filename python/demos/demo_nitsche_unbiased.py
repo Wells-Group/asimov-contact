@@ -11,11 +11,11 @@ import ufl
 from dolfinx import log
 from dolfinx.common import TimingType, list_timings, timing
 from dolfinx.cpp.mesh import MeshTags_int32
-from dolfinx.fem import (Constant, Function, VectorFunctionSpace, dirichletbc,
+from dolfinx.fem import (Constant, Function, VectorFunctionSpace, dirichletbc, FunctionSpace,
                          locate_dofs_topological)
 from dolfinx.graph import create_adjacencylist
 from dolfinx.io import XDMFFile
-from dolfinx.mesh import locate_entities_boundary
+from dolfinx.mesh import locate_entities_boundary, locate_entities
 from mpi4py import MPI
 from petsc4py.PETSc import ScalarType
 
@@ -29,6 +29,7 @@ from dolfinx_contact.meshing import (convert_mesh, create_box_mesh_2D,
                                      create_cylinder_cylinder_mesh,
                                      create_sphere_plane_mesh)
 from dolfinx_contact.unbiased.nitsche_unbiased import nitsche_unbiased
+from dolfinx_contact.parallel_mesh_ghosting import create_contact_mesh
 
 if __name__ == "__main__":
     desc = "Nitsche's method for two elastic bodies using custom assemblers"
@@ -210,6 +211,66 @@ if __name__ == "__main__":
             contact_bdy_2 = 9
             dirichlet_bdy_2 = 7
 
+            mesh = create_contact_mesh(
+                fname, "facet_marker", "cell_marker", [contact_bdy_1, contact_bdy_2])
+
+            print("new mesh created")
+
+            tdim = mesh.topology.dim
+            mesh.topology.create_connectivity(tdim - 1, 0)
+            mesh.topology.create_connectivity(tdim - 1, tdim)
+            mesh.topology.create_connectivity(tdim, tdim - 1)
+
+            def top_dir(x):
+                return np.isclose(x[1], 0.5)
+
+            def top_contact(x):
+                return np.isclose(x[1], 0.0)
+
+            def bottom_dir(x):
+                return np.isclose(x[1], -0.6)
+
+            def bottom_contact(x):
+                return np.isclose(x[1], -0.1)
+
+            def top_part(x):
+                return x[1] > -0.05
+
+            def bottom_part(x):
+                return x[1] < -0.05
+
+            # Create meshtag for top and bottom markers
+            top_facets1 = locate_entities(mesh, tdim - 1, top_dir)
+            bottom_facets1 = locate_entities(mesh, tdim - 1, top_contact)
+            top_facets2 = locate_entities(mesh, tdim - 1, bottom_contact)
+            bottom_facets2 = locate_entities(mesh, tdim - 1, bottom_dir)
+            dir_val1 = np.full(len(top_facets1), dirichlet_bdy_1, dtype=np.int32)
+            c_val1 = np.full(len(bottom_facets1), contact_bdy_1, dtype=np.int32)
+            surface_values = np.full(len(top_facets2), contact_bdy_2, dtype=np.int32)
+            sbottom_values = np.full(len(bottom_facets2), dirichlet_bdy_2, dtype=np.int32)
+            indices = np.concatenate([top_facets1, bottom_facets1, top_facets2, bottom_facets2])
+            print("found facets", bottom_facets1, top_facets2)
+            f_to_c = mesh.topology.connectivity(tdim - 1, tdim)
+            cells1 = [f_to_c.links(i)[0] for i in np.concatenate([bottom_facets1, top_facets2])]
+            print(cells1)
+            ncells = mesh.topology.index_map(tdim).size_local
+            print(ncells)
+            values = np.hstack([dir_val1, c_val1, surface_values, sbottom_values])
+            sorted_facets = np.argsort(indices)
+
+            facet_marker = MeshTags_int32(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
+
+            cells_top = locate_entities(mesh, tdim, top_part)
+            cells_bottom = locate_entities(mesh, tdim, bottom_part)
+
+            indices = np.concatenate([cells_top, cells_bottom])
+
+            values = np.concatenate([np.ones(len(cells_top), dtype=np.int32), 2
+                                    * np.ones(len(cells_bottom), dtype=np.int32)])
+            sorted_cells = np.argsort(indices)
+
+            domain_marker = MeshTags_int32(mesh, tdim, indices[sorted_cells], values[sorted_cells])
+
         elif problem == 2:
             fname = f"{mesh_dir}/twomeshes"
             create_circle_plane_mesh(filename=f"{fname}.msh", quads=not simplex, res=args.res, order=args.order)
@@ -268,6 +329,8 @@ if __name__ == "__main__":
 
             facet_marker = MeshTags_int32(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
 
+    domain_marker.name = "cell_marker"
+    facet_marker.name = "facet_marker"
     with XDMFFile(mesh.comm, f"{mesh_dir}/test.xdmf", "w") as xdmf:
         xdmf.write_mesh(mesh)
         xdmf.write_meshtags(domain_marker)

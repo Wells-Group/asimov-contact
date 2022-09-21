@@ -182,9 +182,9 @@ def test_contact_kernel(theta, gamma, dim, gap):
         mu2 = dolfinx.fem.Function(V2)
         mu2.interpolate(mu_func2)
         u.interpolate(_u_initial)
-
-        integral_entities = dolfinx_contact.compute_active_entities(
+        integral_entities, num_local = dolfinx_contact.compute_active_entities(
             mesh, bottom_facets, dolfinx.fem.IntegralType.exterior_facet)
+        integral_entities = integral_entities[:num_local]
         mu_packed = dolfinx_contact.cpp.pack_coefficient_quadrature(mu2._cpp_object, 0, integral_entities)
         lmbda_packed = dolfinx_contact.cpp.pack_coefficient_quadrature(lmbda2._cpp_object, 0, integral_entities)
         u_packed = dolfinx_contact.cpp.pack_coefficient_quadrature(u._cpp_object, q_deg, integral_entities)
