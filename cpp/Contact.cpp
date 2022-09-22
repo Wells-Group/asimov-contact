@@ -1500,12 +1500,9 @@ void dolfinx_contact::Contact::assemble_vector(
   // Select which side of the contact interface to loop from and get the
   // correct map
   const std::array<int, 2>& contact_pair = _contact_pairs[pair];
-
-  const std::span<std::int32_t>& q_facets
-      = std::span(_cell_facet_pairs[contact_pair.front()]);
-  const std::vector<std::int32_t> active_facets
-      = _submeshes[contact_pair.front()].get_submesh_tuples(
-          q_facets.subspan(0, 2 * _local_facets[contact_pair.front()]));
+  const std::vector<std::int32_t>& active_facets
+      = _cell_facet_pairs[contact_pair.front()];
+  const std::size_t local_size = 2 * _local_facets[contact_pair.front()];
   const dolfinx_contact::SubMesh& submesh = _submeshes[contact_pair.back()];
   std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> map
       = _facet_maps[pair];
@@ -1526,7 +1523,7 @@ void dolfinx_contact::Contact::assemble_vector(
       max_links + 1, std::vector<PetscScalar>(bs * ndofs_cell));
   // Tempoary array to hold cell links
   std::vector<std::int32_t> linked_cells;
-  for (std::size_t i = 0; i < active_facets.size(); i += 2)
+  for (std::size_t i = 0; i < local_size; i += 2)
   {
     // Get cell coordinates/geometry
     const std::span<const int> x_dofs = x_dofmap.links(active_facets[i]);
