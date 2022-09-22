@@ -150,7 +150,7 @@ PYBIND11_MODULE(cpp, m)
       .def("active_entities",
            [](dolfinx_contact::Contact& self, int s)
            {
-             const std::vector<std::int32_t>& active_entities
+             const std::span<const std::int32_t> active_entities
                  = self.active_entities(s);
              std::array<py::ssize_t, 2> shape
                  = {py::ssize_t(active_entities.size() / 2), 2};
@@ -230,9 +230,7 @@ PYBIND11_MODULE(cpp, m)
               const py::array_t<PetscScalar, py::array::c_style>& coeffs,
               const py::array_t<PetscScalar, py::array::c_style>& constants)
            {
-             auto ker = kernel.get();
-             std::cout<<"inside wrapper "<< b.size()<< " "<< coeffs.size()<< " "<<coeffs.shape(1)<< " "<< constants.shape(0)<< "\n";
-             
+             auto ker = kernel.get();             
              self.assemble_vector(
                  std::span(b.mutable_data(), b.size()), origin_meshtag, ker,
                  std::span(coeffs.data(), coeffs.size()),

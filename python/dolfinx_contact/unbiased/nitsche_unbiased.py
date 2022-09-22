@@ -155,8 +155,7 @@ def nitsche_unbiased(ufl_form: ufl.Form, u: _fem.Function, markers: list[_cpp.me
     entities = []
     with _common.Timer("~Contact: Compute active entities"):
         for pair in contact_pairs:
-            ent, num_local = contact.active_entities(pair[0])
-            entities.append(ent[:num_local])
+            entities.append(contact.active_entities(pair[0]))
 
     material = []
     with _common.Timer("~Contact: Pack coeffs (mu, lmbda"):

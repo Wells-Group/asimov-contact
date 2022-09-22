@@ -361,11 +361,11 @@ def create_contact_data(V, u, quadrature_degree, lmbda, mu, facets_cg, search, t
     return contact, coeff_0, coeff_1
 
 
-@pytest.mark.parametrize("ct", ["quadrilateral", "triangle", "tetrahedron", "hexahedron"])
-@pytest.mark.parametrize("gap", [1e-13, -1e-13, 0.5, -0.5])
+@pytest.mark.parametrize("ct", ["triangle", "tetrahedron", "hexahedron"])
+@pytest.mark.parametrize("gap", [0.5, -0.5])
 @pytest.mark.parametrize("quadrature_degree", [1, 5])
 @pytest.mark.parametrize("theta", [1, 0, -1])
-@pytest.mark.parametrize("tied", [True, False])
+@pytest.mark.parametrize("tied", [False])
 @pytest.mark.parametrize("search", [dolfinx_contact.cpp.ContactMode.ClosestPoint,
                                     dolfinx_contact.cpp.ContactMode.Raytracing])
 def test_contact_kernels(ct, gap, quadrature_degree, theta, tied, search):
@@ -504,6 +504,8 @@ def test_contact_kernels(ct, gap, quadrature_degree, theta, tied, search):
     ind_cg, ind_dg = compute_dof_permutations(V_ufl, V_custom, gap, [facet_dg], facets_cg)
 
     # Compare rhs
+    print(b0.array[ind_dg])
+    print(b1.array[ind_cg])
     assert np.allclose(b0.array[ind_dg], b1.array[ind_cg])
 
     # create scipy matrix

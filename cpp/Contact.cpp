@@ -1207,6 +1207,7 @@ dolfinx_contact::Contact::pack_gap_plane(int pair, double g)
     for (std::size_t k = 0; k < num_q_point; k++)
       c[offset + (k + 1) * gdim - 1] = g - qp_span(i, k, gdim - 1);
   }
+  _max_links[pair] = 0;
   return {std::move(c), cstride};
 }
 //------------------------------------------------------------------------------------------------
@@ -1469,7 +1470,7 @@ void dolfinx_contact::Contact::assemble_vector(
     const std::span<const PetscScalar>& coeffs, int cstride,
     const std::span<const PetscScalar>& constants)
 {
-  std::cout << "made it into the function \n";
+
   /// Check that we support the function space
   if (_V->element()->needs_dof_transformations())
   {
@@ -1525,7 +1526,6 @@ void dolfinx_contact::Contact::assemble_vector(
       max_links + 1, std::vector<PetscScalar>(bs * ndofs_cell));
   // Tempoary array to hold cell links
   std::vector<std::int32_t> linked_cells;
-  std::cout << "going into facet loop \n";
   for (std::size_t i = 0; i < active_facets.size(); i += 2)
   {
     // Get cell coordinates/geometry
@@ -1545,8 +1545,6 @@ void dolfinx_contact::Contact::assemble_vector(
     {
       assert(map);
       auto connected_facets = map->links((int)i / 2);
-      std::cout << "this might be the issue " << connected_facets.size()
-                << "\n";
       q_indices.reserve(connected_facets.size());
 
       // NOTE: Should probably be pre-computed
@@ -1582,7 +1580,6 @@ void dolfinx_contact::Contact::assemble_vector(
           b[bs * dofs_linked[j] + k] += bes[l + 1][bs * j + k];
     }
   }
-  std::cout << "end of function \n";
 }
 //-----------------------------------------------------------------------------------------------
 std::pair<std::vector<PetscScalar>, int>
@@ -1716,7 +1713,7 @@ dolfinx_contact::Contact::pack_grad_u_contact(
   // correct map
   std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> map
       = _facet_maps[pair];
-  const std::size_t num_facets = _cell_facet_pairs[quadrature_mt].size() / 2;
+  const std::size_t num_facets = _local_facets[quadrature_mt];
   const std::size_t num_q_points
       = _quadrature_rule->offset()[1] - _quadrature_rule->offset()[0];
   mdspan3_t qp_span(_qp_phys[quadrature_mt].data(), num_facets, num_q_points,

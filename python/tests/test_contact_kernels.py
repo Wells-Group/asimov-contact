@@ -39,8 +39,8 @@ def test_vector_surface_kernel(dim, kernel_type, P, Q):
 
     # Find facets on boundary to integrate over
     facets = locate_entities_boundary(mesh, mesh.topology.dim - 1,
-                                      lambda x: np.logical_or(np.isclose(x[0], 0.0),
-                                                              np.isclose(x[0], 1.0)))
+                                      lambda x: np.logical_or(np.isclose(x[1], 0.0),
+                                                              np.isclose(x[1], 1.0)))
     facets = np.sort(facets)
     values = np.ones(len(facets), dtype=np.int32)
     ft = meshtags(mesh, mesh.topology.dim - 1, facets, values)
@@ -140,6 +140,7 @@ def test_vector_surface_kernel(dim, kernel_type, P, Q):
     contact = dolfinx_contact.cpp.Contact([ft], surfaces, [(0, 0)], V._cpp_object, quadrature_degree=2 * P + Q + 1)
     contact.create_distance_map(0)
     g_vec = contact.pack_gap_plane(0, -g)
+    print(g_vec)
     # FIXME: assuming all facets are the same type
     q_rule = dolfinx_contact.QuadratureRule(mesh.topology.cell_type, 2 * P
                                             + Q + 1, mesh.topology.dim - 1, basix.QuadratureType.Default)

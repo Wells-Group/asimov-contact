@@ -62,12 +62,10 @@ public:
   }
 
   // Return active entities for surface s
-  const std::span<std::int32_t>& active_entities(int s) const
+  const std::span<const std::int32_t> active_entities(int s) const
   {
-    const std::span<std::int32_t>& active_facets
-        = std::span(_cell_facet_pairs[s]);
 
-    return active_facets.subspan(0, 2 * _local_facets[s]));
+    return std::span(_cell_facet_pairs[s].data(), 2 * _local_facets[s]);
   }
   // set quadrature rule
   void set_quadrature_rule(QuadratureRule q_rule)
@@ -259,7 +257,7 @@ public:
 private:
   std::shared_ptr<QuadratureRule> _quadrature_rule; // quadrature rule
   std::vector<int> _surfaces; // meshtag values for surfaces
-  // store index of candidate_surface for each puppet_surface
+  // store index of candidate_surface for each quadrature_surface
   std::vector<std::array<int, 2>> _contact_pairs;
   std::shared_ptr<dolfinx::fem::FunctionSpace> _V; // Function space
   // _facets_maps[i] = adjacency list of closest facet on candidate surface
