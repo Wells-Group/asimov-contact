@@ -16,6 +16,7 @@ from petsc4py import PETSc as _PETSc
 import dolfinx_contact
 import dolfinx_contact.cpp
 from dolfinx_contact.helpers import (rigid_motions_nullspace_subdomains, sigma_func)
+from dolfinx_contact.plotting import plot_gap
 
 kt = dolfinx_contact.cpp.Kernel
 
@@ -188,6 +189,15 @@ def nitsche_unbiased(ufl_form: ufl.Form, u: _fem.Function, markers: list[_cpp.me
                 normals.append(contact.pack_ny(i))
             test_fns.append(contact.pack_test_functions(i))
 
+    c_to_f = mesh.topology.connectivity(mesh.topology.dim, mesh.topology.dim - 1)
+    for i, gap in enumerate(gaps):
+        s = contact_pairs[i][1]
+        tag = contact_surfaces.array[s]
+        mt_ind2 = np.argwhere(contact_surfaces.offsets < s + 1)[-1, 0]
+        facets = [c_to_f.links(entity[0])[entity[1]] for entity in entities[i]]
+        facets_opp = markers[1 + mt_ind2].find(tag)
+        plot_gap(mesh, contact, i, gap, facets, facets_opp)
+
     # Concatenate all coeffs
     coeffs_const = []
     for i in range(len(contact_pairs)):
@@ -235,6 +245,8 @@ def nitsche_unbiased(ufl_form: ufl.Form, u: _fem.Function, markers: list[_cpp.me
         with _common.Timer("~~Contact: Contact contributions (in assemble vector)"):
             for i in range(len(contact_pairs)):
                 contact.assemble_vector(b, i, kernel_rhs, coeffs[i], consts)
+                b.ghostUpdate(addv=_PETSc.InsertMode.ADD, mode=_PETSc.ScatterMode.REVERSE)
+                b.ghostUpdate(addv=_PETSc.InsertMode.INSERT, mode=_PETSc.ScatterMode.FORWARD)
         with _common.Timer("~~Contact: Standard contributions (in assemble vector)"):
             _fem.petsc.assemble_vector(b, F_custom)
 

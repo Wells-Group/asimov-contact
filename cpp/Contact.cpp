@@ -1522,6 +1522,7 @@ void dolfinx_contact::Contact::assemble_vector(
       max_links + 1, std::vector<PetscScalar>(bs * ndofs_cell));
   // Tempoary array to hold cell links
   std::vector<std::int32_t> linked_cells;
+  int rank = dolfinx::MPI::rank(mesh->comm());
   for (std::size_t i = 0; i < local_size; i += 2)
   {
     // Get cell coordinates/geometry
@@ -1566,14 +1567,21 @@ void dolfinx_contact::Contact::assemble_vector(
     const std::span<const int> dofs_cell = dofmap->cell_dofs(active_facets[i]);
     for (std::size_t j = 0; j < ndofs_cell; ++j)
       for (int k = 0; k < bs; ++k)
+      {
         b[bs * dofs_cell[j] + k] += bes[0][bs * j + k];
+      }
+
     for (std::size_t l = 0; l < num_linked_cells; ++l)
     {
       const std::span<const int> dofs_linked
           = dofmap->cell_dofs(linked_cells[l]);
       for (std::size_t j = 0; j < ndofs_cell; ++j)
         for (int k = 0; k < bs; ++k)
+        {
           b[bs * dofs_linked[j] + k] += bes[l + 1][bs * j + k];
+          std::cout << "rank " << rank << " l " << l << " k " << k << " j " << j
+                    << " entry " << bes[l + 1][bs * j + k] << std::endl;
+        }
     }
   }
 }

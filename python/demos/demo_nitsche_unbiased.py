@@ -338,7 +338,7 @@ if __name__ == "__main__":
                       "atol": newton_tol,
                       "rtol": newton_tol,
                       "convergence_criterion": "residual",
-                      "max_it": 50,
+                      "max_it": 1,
                       "error_on_nonconvergence": True}
     # petsc_options = {"ksp_type": "preonly", "pc_type": "lu"}
     petsc_options = {
