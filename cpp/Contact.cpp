@@ -1402,7 +1402,7 @@ void dolfinx_contact::Contact::assemble_matrix(
       3 * max_links + 1,
       std::vector<PetscScalar>(bs * ndofs_cell * bs * ndofs_cell));
   std::vector<std::int32_t> linked_cells;
-  for (std::size_t i = 0; i < active_facets.size(); i += 2)
+  for (std::size_t i = 0; i < 2 * _local_facets[contact_pair.front()]; i += 2)
   {
     // Get cell coordinates/geometry
     assert(active_facets[i] < x_dofmap.num_nodes());
