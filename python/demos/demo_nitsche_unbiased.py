@@ -214,8 +214,6 @@ if __name__ == "__main__":
             mesh = create_contact_mesh(
                 fname, "facet_marker", "cell_marker", [contact_bdy_1, contact_bdy_2])
 
-            print("new mesh created")
-
             tdim = mesh.topology.dim
             mesh.topology.create_connectivity(tdim - 1, 0)
             mesh.topology.create_connectivity(tdim - 1, tdim)
@@ -249,12 +247,9 @@ if __name__ == "__main__":
             surface_values = np.full(len(top_facets2), contact_bdy_2, dtype=np.int32)
             sbottom_values = np.full(len(bottom_facets2), dirichlet_bdy_2, dtype=np.int32)
             indices = np.concatenate([top_facets1, bottom_facets1, top_facets2, bottom_facets2])
-            print("found facets", bottom_facets1, top_facets2)
             f_to_c = mesh.topology.connectivity(tdim - 1, tdim)
             cells1 = [f_to_c.links(i)[0] for i in np.concatenate([bottom_facets1, top_facets2])]
-            print(cells1)
             ncells = mesh.topology.index_map(tdim).size_local
-            print(ncells)
             values = np.hstack([dir_val1, c_val1, surface_values, sbottom_values])
             sorted_facets = np.argsort(indices)
 

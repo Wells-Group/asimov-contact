@@ -1265,9 +1265,8 @@ dolfinx_contact::Contact::pack_ny(int pair)
 
   // Loop over quadrature points
   error::check_cell_type(candidate_mesh->topology().cell_type());
-  const int num_facets = candidate_map.num_nodes();
-  const std::size_t num_q_points
-      = num_facets == 0 ? 0 : candidate_map.num_links(0);
+  const int num_facets = quadrature_facets.size() / 2;
+  const std::size_t num_q_points = _quadrature_rule->num_points(0);
 
   std::vector<PetscScalar> normals(num_facets * num_q_points * gdim, 0.0);
   const int cstride = (int)num_q_points * gdim;

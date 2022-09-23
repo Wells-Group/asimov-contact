@@ -504,8 +504,6 @@ def test_contact_kernels(ct, gap, quadrature_degree, theta, tied, search):
     ind_cg, ind_dg = compute_dof_permutations(V_ufl, V_custom, gap, [facet_dg], facets_cg)
 
     # Compare rhs
-    print(b0.array[ind_dg])
-    print(b1.array[ind_cg])
     assert np.allclose(b0.array[ind_dg], b1.array[ind_cg])
 
     # create scipy matrix

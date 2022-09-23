@@ -138,7 +138,6 @@ def nitsche_unbiased(ufl_form: ufl.Form, u: _fem.Function, markers: list[_cpp.me
 
     with _common.Timer("~Contact: Distance maps"):
         for i in range(len(contact_pairs)):
-            print(i)
             contact.create_distance_map(i)
 
     # pack constants
