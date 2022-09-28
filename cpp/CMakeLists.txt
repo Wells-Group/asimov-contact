@@ -38,7 +38,7 @@ add_feature_info(CMAKE_INSTALL_RPATH_USE_LINK_PATH CMAKE_INSTALL_RPATH_USE_LINK_
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_CURRENT_SOURCE_DIR})
 
 # Find packages
-find_package(DOLFINX 0.5.1.0 REQUIRED)
+find_package(DOLFINX 0.5.2.0 REQUIRED)
 find_package(Basix 0.5.1.0 REQUIRED)
 
 feature_summary(WHAT ALL)
