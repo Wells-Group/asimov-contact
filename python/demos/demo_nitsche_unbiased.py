@@ -15,7 +15,7 @@ from dolfinx.fem import (Constant, Function, VectorFunctionSpace, dirichletbc, F
                          locate_dofs_topological)
 from dolfinx.graph import create_adjacencylist
 from dolfinx.io import XDMFFile
-from dolfinx.mesh import locate_entities_boundary, locate_entities
+from dolfinx.mesh import locate_entities_boundary, locate_entities, GhostMode
 from mpi4py import MPI
 from petsc4py.PETSc import ScalarType
 
@@ -142,7 +142,7 @@ if __name__ == "__main__":
             create_sphere_plane_mesh(filename=f"{fname}.msh", order=args.order, res=args.res)
             convert_mesh(fname, fname, gdim=3)
             with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
-                mesh = xdmf.read_mesh()
+                mesh = xdmf.read_mesh(ghost_mode=None)
                 domain_marker = xdmf.read_meshtags(mesh, name="cell_marker")
                 tdim = mesh.topology.dim
                 mesh.topology.create_connectivity(tdim - 1, tdim)
@@ -201,7 +201,7 @@ if __name__ == "__main__":
                                order=args.order)
             convert_mesh(fname, f"{fname}.xdmf", gdim=2)
             with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
-                mesh = xdmf.read_mesh()
+                mesh = xdmf.read_mesh(ghost_mode=GhostMode.none)
                 domain_marker = xdmf.read_meshtags(mesh, name="cell_marker")
                 tdim = mesh.topology.dim
                 mesh.topology.create_connectivity(tdim - 1, tdim)
@@ -261,7 +261,7 @@ if __name__ == "__main__":
             indices = np.concatenate([cells_top, cells_bottom])
 
             values = np.concatenate([np.ones(len(cells_top), dtype=np.int32), 2
-                                    * np.ones(len(cells_bottom), dtype=np.int32)])
+                                     * np.ones(len(cells_bottom), dtype=np.int32)])
             sorted_cells = np.argsort(indices)
 
             domain_marker = MeshTags_int32(mesh, tdim, indices[sorted_cells], values[sorted_cells])
@@ -338,7 +338,7 @@ if __name__ == "__main__":
                       "atol": newton_tol,
                       "rtol": newton_tol,
                       "convergence_criterion": "residual",
-                      "max_it": 1,
+                      "max_it": 50,
                       "error_on_nonconvergence": True}
     # petsc_options = {"ksp_type": "preonly", "pc_type": "lu"}
     petsc_options = {

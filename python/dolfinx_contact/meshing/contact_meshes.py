@@ -152,8 +152,7 @@ def create_box_mesh_2D(filename: str, quads: bool = False, res=0.1, order: int =
     L = 0.5
     H = 0.5
     disp = -0.6
-    delta = 0.0
-    res = 2.0
+    delta = 0.2
 
     gmsh.initialize()
     if MPI.COMM_WORLD.rank == 0:
@@ -161,8 +160,8 @@ def create_box_mesh_2D(filename: str, quads: bool = False, res=0.1, order: int =
 
         # Create box
         p0 = gmsh.model.occ.addPoint(-delta, 0, 0)
-        p1 = gmsh.model.occ.addPoint(L - delta, delta, 0)
-        p2 = gmsh.model.occ.addPoint(L - delta, H + delta, 0)
+        p1 = gmsh.model.occ.addPoint(L - delta, 0, 0)
+        p2 = gmsh.model.occ.addPoint(L - delta, H, 0)
         p3 = gmsh.model.occ.addPoint(-delta, H, 0)
         ps = [p0, p1, p2, p3]
         lines = [gmsh.model.occ.addLine(ps[i - 1], ps[i]) for i in range(len(ps))]

@@ -273,17 +273,6 @@ void dolfinx_contact::Contact::create_distance_map(int pair)
   const std::vector<std::int32_t> submesh_facets
       = _submeshes[candidate_mt].get_submesh_tuples(
           _cell_facet_pairs[candidate_mt]);
-  // int rank = dolfinx::MPI::rank(candidate_mesh->comm());
-  // int size = dolfinx::MPI::size(candidate_mesh->comm());
-  // for (int i = 0; i < size; ++i)
-  // {
-  //   MPI_Barrier(candidate_mesh->comm());
-  //   if (rank == i)
-  //   {
-  //     std::cout << "rank " << rank << " number submesh facets "
-  //               << _cell_facet_pairs[candidate_mt].size() / 2 << "\n";
-  //   }
-  // }
 
   // Compute facet map
   [[maybe_unused]] auto [adj, reference_x, shape]
@@ -1522,7 +1511,6 @@ void dolfinx_contact::Contact::assemble_vector(
       max_links + 1, std::vector<PetscScalar>(bs * ndofs_cell));
   // Tempoary array to hold cell links
   std::vector<std::int32_t> linked_cells;
-  int rank = dolfinx::MPI::rank(mesh->comm());
   for (std::size_t i = 0; i < local_size; i += 2)
   {
     // Get cell coordinates/geometry
@@ -1577,11 +1565,7 @@ void dolfinx_contact::Contact::assemble_vector(
           = dofmap->cell_dofs(linked_cells[l]);
       for (std::size_t j = 0; j < ndofs_cell; ++j)
         for (int k = 0; k < bs; ++k)
-        {
           b[bs * dofs_linked[j] + k] += bes[l + 1][bs * j + k];
-          std::cout << "rank " << rank << " l " << l << " k " << k << " j " << j
-                    << " entry " << bes[l + 1][bs * j + k] << std::endl;
-        }
     }
   }
 }
