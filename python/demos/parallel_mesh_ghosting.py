@@ -19,15 +19,12 @@ ncells = mesh.topology.index_map(tdim).size_local
 
 # Convert marked facets to list of (global) vertices for each facet
 fv_indices = [sorted(mesh.topology.index_map(0).local_to_global(fv.links(f))) for f in marker.indices]
-global_markers = []
-for v in fv_indices:
-    global_markers += v
 
 # Copy facets and markers to all processes
+global_markers = sum(fv_indices, [])
 all_indices = mesh.comm.allgather(global_markers)
 all_indices = np.array(sum(all_indices, [])).reshape(-1, tdim)
 all_values = np.array(sum(mesh.comm.allgather(list(marker.values)), []))
-print(all_indices, all_values)
 
 
 def partitioner(comm, n, m, topo):
@@ -55,26 +52,35 @@ x = mesh.geometry.x[:num_vertices, :]
 domain = mesh.ufl_domain()
 new_mesh = create_mesh(mesh.comm, topo, x, domain, partitioner)
 
-# Recreate facet markers
+# Remap vertices back to input indexing
+global_remap = new_mesh.geometry.input_global_indices
+rmap = np.vectorize(lambda idx: global_remap[idx])
+
+# Recreate facets
 new_mesh.topology.create_entities(tdim - 1)
-# Create a list of all facet-vertices (global index)
+
+# Create a list of all facet-vertices (original global index)
 fv = new_mesh.topology.connectivity(tdim - 1, 0)
-fv_indices = np.array([sorted(new_mesh.topology.index_map(0).local_to_global(fv.links(f)))
-                      for f in range(fv.num_nodes)])
+fv_indices = rmap(fv.array).reshape((-1, 2))
+fv_indices = np.sort(fv_indices, axis=1)
+
 # Search for marked facets in list of all facets
-new_marker_indices = []
-new_marker_values = []
+new_markers = []
 for idx, val in zip(all_indices, all_values):
     f = np.nonzero(np.all(fv_indices == idx, axis=1))[0]
     if len(f) > 0:
         assert len(f) == 1
         f = f[0]
-        new_marker_indices += [f]
-        new_marker_values += [val]
+        new_markers += [[f, val]]
 
-new_meshtag = meshtags(mesh, tdim - 1, np.array(new_marker_indices, dtype=np.int32), new_marker_values)
-print(new_marker_indices, new_marker_values)
+# Sort new markers into order and make unique
+new_markers = np.array(sorted(new_markers), dtype=np.int32)
+new_markers = np.unique(new_markers, axis=0)
 
+new_meshtag = meshtags(mesh, tdim - 1, new_markers[:, 0],
+                       new_markers[:, 1])
+
+# Write out
 new_xdmf = XDMFFile(MPI.COMM_WORLD, "output.xdmf", "w")
 new_xdmf.write_mesh(new_mesh)
 new_xdmf.write_meshtags(new_meshtag)
