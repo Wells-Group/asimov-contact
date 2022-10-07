@@ -11,7 +11,7 @@ import ufl
 from dolfinx import log
 from dolfinx.common import TimingType, list_timings, timing
 from dolfinx.cpp.mesh import MeshTags_int32
-from dolfinx.fem import (Constant, Function, VectorFunctionSpace, dirichletbc, FunctionSpace,
+from dolfinx.fem import (Constant, Function, VectorFunctionSpace, dirichletbc,
                          locate_dofs_topological)
 from dolfinx.graph import create_adjacencylist
 from dolfinx.io import XDMFFile
@@ -136,6 +136,61 @@ if __name__ == "__main__":
             values = np.hstack([top_values, bottom_values, surface_values, sbottom_values])
             sorted_facets = np.argsort(indices)
             facet_marker = MeshTags_int32(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
+
+            domain_marker.name = "cell_marker"
+            facet_marker.name = "facet_marker"
+            with XDMFFile(mesh.comm, f"{fname}.xdmf", "w") as xdmf:
+                xdmf.write_mesh(mesh)
+                xdmf.write_meshtags(domain_marker)
+                xdmf.write_meshtags(facet_marker)
+            mesh = create_contact_mesh(
+                fname, "facet_marker", "cell_marker", [contact_bdy_1, contact_bdy_2])
+
+            tdim = mesh.topology.dim
+            mesh.topology.create_connectivity(tdim - 1, 0)
+            mesh.topology.create_connectivity(tdim - 1, tdim)
+            mesh.topology.create_connectivity(tdim, tdim - 1)
+
+            # Create meshtag for top and bottom markers
+            top_facets1 = locate_entities(mesh, tdim - 1, lambda x: np.isclose(x[2], 0.5))
+            bottom_facets1 = locate_entities(
+                mesh, tdim - 1, lambda x: np.isclose(x[2], 0.0))
+            top_facets2 = locate_entities(mesh, tdim - 1, lambda x: np.isclose(x[2], -0.1))
+            bottom_facets2 = locate_entities(
+                mesh, tdim - 1, lambda x: np.isclose(x[2], -0.6))
+            top_values = np.full(len(top_facets1), dirichlet_bdy_1, dtype=np.int32)
+            bottom_values = np.full(
+                len(bottom_facets1), contact_bdy_1, dtype=np.int32)
+
+            surface_values = np.full(len(top_facets2), contact_bdy_2, dtype=np.int32)
+            sbottom_values = np.full(
+                len(bottom_facets2), dirichlet_bdy_2, dtype=np.int32)
+            indices = np.concatenate([top_facets1, bottom_facets1, top_facets2, bottom_facets2])
+            values = np.hstack([top_values, bottom_values, surface_values, sbottom_values])
+            sorted_facets = np.argsort(indices)
+            facet_marker = MeshTags_int32(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
+
+            def top_part(x):
+                return x[1] > -0.05
+
+            def bottom_part(x):
+                return x[1] < -0.05
+            cells_top = locate_entities(mesh, tdim, top_part)
+            cells_bottom = locate_entities(mesh, tdim, bottom_part)
+
+            indices = np.concatenate([cells_top, cells_bottom])
+
+            values = np.concatenate([np.ones(len(cells_top), dtype=np.int32), 2
+                                     * np.ones(len(cells_bottom), dtype=np.int32)])
+            sorted_cells = np.argsort(indices)
+
+            domain_marker = MeshTags_int32(mesh, tdim, indices[sorted_cells], values[sorted_cells])
+
+            ncells = mesh.topology.index_map(tdim).size_local
+            indices = np.array(range(ncells), dtype=np.int32)
+            values = mesh.comm.rank * np.ones(ncells, dtype=np.int32)
+            process_marker = MeshTags_int32(mesh, tdim, indices, values)
+            process_marker.name = "process_marker"
 
         elif problem == 2:
             fname = f"{mesh_dir}/sphere"
@@ -265,6 +320,11 @@ if __name__ == "__main__":
             sorted_cells = np.argsort(indices)
 
             domain_marker = MeshTags_int32(mesh, tdim, indices[sorted_cells], values[sorted_cells])
+
+            indices = np.array(range(ncells), dtype=np.int32)
+            values = mesh.comm.rank * np.ones(ncells, dtype=np.int32)
+            process_marker = MeshTags_int32(mesh, tdim, indices, values)
+            process_marker.name = "process_marker"
 
         elif problem == 2:
             fname = f"{mesh_dir}/twomeshes"
@@ -447,6 +507,9 @@ if __name__ == "__main__":
         xdmf.write_mesh(mesh)
         u_all.name = "u"
         xdmf.write_function(u_all)
+    with XDMFFile(mesh.comm, "results/partitioning.xdmf", "w") as xdmf:
+        xdmf.write_mesh(mesh)
+        xdmf.write_meshtags(process_marker)
     if args.timing:
         list_timings(mesh.comm, [TimingType.wall])
 
@@ -454,16 +517,18 @@ if __name__ == "__main__":
         outfile = sys.stdout
     else:
         outfile = open(args.outfile, "a")
-    print("-" * 25, file=outfile)
-    print(f"Newton options {newton_options}", file=outfile)
-    print(f"num_dofs: {u.function_space.dofmap.index_map_bs*u.function_space.dofmap.index_map.size_global}"
-          + f", {mesh.topology.cell_type}", file=outfile)
-    print(f"Newton solver {timing('~Contact: Newton (Newton solver)')[1]}", file=outfile)
-    print(f"Krylov solver {timing('~Contact: Newton (Krylov solver)')[1]}", file=outfile)
-    print(f"Newton time: {newton_time}", file=outfile)
-    print(f"Newton iterations {num_newton_its}, {sum(num_newton_its)}", file=outfile)
-    print(f"Krylov iterations {num_krylov_its}, {sum(num_krylov_its)}", file=outfile)
-    print("-" * 25, file=outfile)
+
+    if mesh.comm.rank == 0:
+        print("-" * 25, file=outfile)
+        print(f"Newton options {newton_options}", file=outfile)
+        print(f"num_dofs: {u.function_space.dofmap.index_map_bs*u.function_space.dofmap.index_map.size_global}"
+              + f", {mesh.topology.cell_type}", file=outfile)
+        print(f"Newton solver {timing('~Contact: Newton (Newton solver)')[1]}", file=outfile)
+        print(f"Krylov solver {timing('~Contact: Newton (Krylov solver)')[1]}", file=outfile)
+        print(f"Newton time: {newton_time}", file=outfile)
+        print(f"Newton iterations {num_newton_its}, {sum(num_newton_its)}", file=outfile)
+        print(f"Krylov iterations {num_krylov_its}, {sum(num_krylov_its)}", file=outfile)
+        print("-" * 25, file=outfile)
 
     if args.outfile is not None:
         outfile.close()

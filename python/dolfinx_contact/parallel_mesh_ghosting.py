@@ -4,7 +4,8 @@
 
 from mpi4py import MPI
 from dolfinx.io import XDMFFile
-from dolfinx.mesh import create_mesh, meshtags
+from dolfinx.mesh import create_mesh
+from dolfinx.cpp.mesh import cell_num_vertices
 import dolfinx
 import numpy as np
 
@@ -17,7 +18,6 @@ def create_contact_mesh(fname, facet_marker, domain_marker, tags):
     tdim = mesh.topology.dim
     mesh.topology.create_entities(tdim - 1)
     marker = xdmf.read_meshtags(mesh, facet_marker)
-    dmarker = xdmf.read_meshtags(mesh, domain_marker)
 
     # Get cells attached to marked facets
     mesh.topology.create_connectivity(tdim - 1, tdim)
@@ -42,7 +42,8 @@ def create_contact_mesh(fname, facet_marker, domain_marker, tags):
 
     # Convert topology to global indexing, and restrict to non-ghost cells
     topo = mesh.topology.connectivity(tdim, 0).array
-    topo = mesh.topology.index_map(0).local_to_global(topo).reshape((-1, 3))
+    num_vertices = cell_num_vertices(mesh.topology.cell_type)
+    topo = mesh.topology.index_map(0).local_to_global(topo).reshape((-1, num_vertices))
     topo = topo[:ncells, :]
 
     # Cut off any ghost vertices

@@ -299,6 +299,7 @@ def nitsche_unbiased(ufl_form: ufl.Form, u: _fem.Function, markers: list[_cpp.me
         print("Newton solver did not converge")
     u.x.scatter_forward()
 
-    print(f"{dofs_global}\n Number of Newton iterations: {n:d}\n",
-          f"Number of Krylov iterations {newton_solver.krylov_iterations}\n", flush=True)
+    if mesh.comm.rank == 0:
+        print(f"{dofs_global}\n Number of Newton iterations: {n:d}\n",
+              f"Number of Krylov iterations {newton_solver.krylov_iterations}\n", flush=True)
     return u, n, newton_solver.krylov_iterations, newton_time[1]
