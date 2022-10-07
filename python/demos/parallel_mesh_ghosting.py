@@ -2,6 +2,7 @@ from mpi4py import MPI
 from dolfinx.io import XDMFFile
 from dolfinx.mesh import create_mesh, meshtags
 import dolfinx
+from dolfinx.cpp.mesh import entities_to_geometry
 import numpy as np
 
 xdmf = XDMFFile(MPI.COMM_WORLD, 'box_2D.xdmf', 'r')
@@ -53,8 +54,13 @@ domain = mesh.ufl_domain()
 new_mesh = create_mesh(mesh.comm, topo, x, domain, partitioner)
 
 # Remap vertices back to input indexing
-global_remap = new_mesh.geometry.input_global_indices
-rmap = np.vectorize(lambda idx: global_remap[idx])
+# This is rather messy, we need to map vertices to geometric nodes
+# then back to original index
+global_remap = np.array(new_mesh.geometry.input_global_indices, dtype=np.int32)
+nv = new_mesh.topology.index_map(0).size_local + new_mesh.topology.index_map(0).num_ghosts
+vert_to_geom = entities_to_geometry(new_mesh, 0, np.arange(nv, dtype=np.int32), False).flatten()
+global_remap2 = np.array([global_remap[i] for i in vert_to_geom], dtype=np.int32)
+rmap = np.vectorize(lambda idx: global_remap2[idx])
 
 # Recreate facets
 new_mesh.topology.create_entities(tdim - 1)
@@ -62,7 +68,7 @@ new_mesh.topology.create_connectivity(tdim - 1, tdim)
 
 # Create a list of all facet-vertices (original global index)
 fv = new_mesh.topology.connectivity(tdim - 1, 0)
-fv_indices = rmap(fv.array).reshape((-1, 2))
+fv_indices = rmap(fv.array).reshape((-1, tdim))
 fv_indices = np.sort(fv_indices, axis=1)
 
 # Search for marked facets in list of all facets
