@@ -59,8 +59,7 @@ new_mesh = create_mesh(mesh.comm, topo, x, domain, partitioner)
 global_remap = np.array(new_mesh.geometry.input_global_indices, dtype=np.int32)
 nv = new_mesh.topology.index_map(0).size_local + new_mesh.topology.index_map(0).num_ghosts
 vert_to_geom = entities_to_geometry(new_mesh, 0, np.arange(nv, dtype=np.int32), False).flatten()
-global_remap2 = np.array([global_remap[i] for i in vert_to_geom], dtype=np.int32)
-rmap = np.vectorize(lambda idx: global_remap2[idx])
+rmap = np.vectorize(lambda idx: global_remap[vert_to_geom[idx]])
 
 # Recreate facets
 new_mesh.topology.create_entities(tdim - 1)
