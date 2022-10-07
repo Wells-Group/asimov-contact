@@ -58,6 +58,7 @@ rmap = np.vectorize(lambda idx: global_remap[idx])
 
 # Recreate facets
 new_mesh.topology.create_entities(tdim - 1)
+new_mesh.topology.create_connectivity(tdim - 1, tdim)
 
 # Create a list of all facet-vertices (original global index)
 fv = new_mesh.topology.connectivity(tdim - 1, 0)
@@ -77,8 +78,9 @@ for idx, val in zip(all_indices, all_values):
 new_markers = np.array(sorted(new_markers), dtype=np.int32)
 new_markers = np.unique(new_markers, axis=0)
 
-new_meshtag = meshtags(mesh, tdim - 1, new_markers[:, 0],
+new_meshtag = meshtags(new_mesh, tdim - 1, new_markers[:, 0],
                        new_markers[:, 1])
+
 
 # Write out
 new_xdmf = XDMFFile(MPI.COMM_WORLD, "output.xdmf", "w")
