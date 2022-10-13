@@ -243,11 +243,13 @@ def nitsche_unbiased(ufl_form: ufl.Form, u: _fem.Function, markers: list[_cpp.me
 
         with _common.Timer("~~Contact: Standard contributions (in assemble vector)"):
             _fem.petsc.assemble_vector(b, F_custom)
-        b.ghostUpdate(addv=_PETSc.InsertMode.ADD, mode=_PETSc.ScatterMode.REVERSE)
+        # b.ghostUpdate(addv=_PETSc.InsertMode.ADD, mode=_PETSc.ScatterMode.REVERSE)
         # Apply boundary condition
         if len(bcs) > 0:
             _fem.petsc.apply_lifting(b, [J_custom], bcs=[bcs], x0=[x], scale=-1.0)
-            b.ghostUpdate(addv=_PETSc.InsertMode.ADD, mode=_PETSc.ScatterMode.REVERSE)
+
+        b.ghostUpdate(addv=_PETSc.InsertMode.ADD, mode=_PETSc.ScatterMode.REVERSE)
+        if len(bcs) > 0:
             _fem.petsc.set_bc(b, bcs, x, -1.0)
 
     @_common.timed("~Contact: Assemble matrix")
@@ -263,7 +265,9 @@ def nitsche_unbiased(ufl_form: ufl.Form, u: _fem.Function, markers: list[_cpp.me
         with _common.Timer("~~Contact: Standard contributions (in assemble matrix)"):
             _fem.petsc.assemble_matrix(A, J_custom, bcs=bcs)
         A.assemble()
-
+        norm = A.norm()
+        if mesh.comm.rank == 0:
+            print(f"Matrix norm {norm}", flush=True, end="\n")
     # coefficient arrays
     num_coeffs = contact.coefficients_size(False)
     coeffs = np.array([np.zeros((len(entities[i]), num_coeffs)) for i in range(len(contact_pairs))])

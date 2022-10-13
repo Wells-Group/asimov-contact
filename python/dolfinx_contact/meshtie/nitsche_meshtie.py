@@ -194,6 +194,7 @@ def nitsche_meshtie(lhs: ufl.Form, rhs: _fem.Function, u: _fem.Function, markers
 
     # Assemble residual vector
     b.zeroEntries()
+    b.ghostUpdate(addv=_PETSc.InsertMode.INSERT, mode=_PETSc.ScatterMode.FORWARD)
     with _common.Timer("~~Contact " + timing_str + ": Contact contributions (in assemble vector)"):
         for i in range(len(surface_pairs)):
             contact.assemble_vector(b, i, kernel_rhs, coeffs[i], consts)
@@ -203,7 +204,7 @@ def nitsche_meshtie(lhs: ufl.Form, rhs: _fem.Function, u: _fem.Function, markers
         consts_ufl = _cppfem.pack_constants(F_custom)
     with _common.Timer("~~Contact " + timing_str + ": Standard contributions (in assemble vector)"):
         _fem.petsc.assemble_vector(b, F_custom, constants=consts_ufl, coeffs=coeffs_ufl)  # type: ignore
-
+        b.ghostUpdate(addv=_PETSc.InsertMode.ADD, mode=_PETSc.ScatterMode.REVERSE)
     # Apply boundary condition
     if len(bcs) > 0:
         x = u.vector

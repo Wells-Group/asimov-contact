@@ -358,13 +358,14 @@ def create_split_box_2D(filename: str, res: float = 0.8, L: float = 5.0, H: floa
     points = [[0.0, 0.0], [L, 0.0], [L, H], [0.0, H], x0, x1]
     gmsh.initialize()
     gmsh.option.setNumber("General.Terminal", 0)
+    model = gmsh.model()
     if quads:
         gmsh.option.setNumber("Mesh.RecombinationAlgorithm", 8)
         gmsh.option.setNumber("Mesh.RecombineAll", 2)
         gmsh.option.setNumber("Mesh.SubdivisionAlgorithm", 1)
     if MPI.COMM_WORLD.rank == 0:
         gmsh.option.setNumber("Mesh.CharacteristicLengthFactor", res)
-        model = gmsh.model()
+
         model.add("first")
         model.setCurrent("first")
         # Create box
@@ -423,9 +424,10 @@ def create_split_box_3D(filename: str, res: float = 0.8, L: float = 5.0, H: floa
     points = [[0.0, 0.0], [L, 0.0], [L, H], [0.0, H], x0, x1]
     gmsh.initialize()
     gmsh.option.setNumber("General.Terminal", 0)
+    model = gmsh.model()
     if MPI.COMM_WORLD.rank == 0:
         gmsh.option.setNumber("Mesh.CharacteristicLengthFactor", res)
-        model = gmsh.model()
+
         model.add("first")
         model.setCurrent("first")
         # Create box

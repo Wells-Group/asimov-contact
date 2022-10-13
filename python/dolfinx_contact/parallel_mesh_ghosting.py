@@ -70,8 +70,6 @@ def create_contact_mesh(mesh, fmarker, dmarker, tags):
     domain = mesh.ufl_domain()
     new_mesh = create_mesh(mesh.comm, topo, x, domain, partitioner)
 
-    print(new_mesh.comm.rank, "new mesh created")
-
     # Remap vertices back to input indexing
     # This is rather messy, we need to map vertices to geometric nodes
     # then back to original index
@@ -110,7 +108,6 @@ def create_contact_mesh(mesh, fmarker, dmarker, tags):
     cv = new_mesh.topology.connectivity(tdim, 0)
     cv_indices = rmap(cv.array).reshape((-1, num_cell_vertices))
     cv_indices = np.sort(cv_indices, axis=1)
-    print(new_mesh.comm.rank, " new facet marker")
 
     # Search for marked cells in list of all cells
     new_cmarkers = []
@@ -127,5 +124,4 @@ def create_contact_mesh(mesh, fmarker, dmarker, tags):
 
     new_dmarker = meshtags(new_mesh, tdim, new_cmarkers[:, 0],
                            new_cmarkers[:, 1])
-    print(new_mesh.comm.rank, " new domain marker")
     return new_mesh, new_fmarker, new_dmarker
