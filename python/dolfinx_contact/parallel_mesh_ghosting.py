@@ -2,8 +2,6 @@
 #
 # SPDX-License-Identifier:    MIT
 
-from mpi4py import MPI
-from dolfinx.io import XDMFFile
 from dolfinx.mesh import create_mesh, meshtags
 import dolfinx
 from dolfinx.cpp.mesh import entities_to_geometry, cell_num_vertices, cell_entity_type, to_type
