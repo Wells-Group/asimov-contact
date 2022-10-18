@@ -167,7 +167,7 @@ def create_unsplit_box_2d(H: float = 1.0, L: float = 5.0, res: float = 0.1, x0: 
         gmsh_facet_id = model.mesh.getElementType("line", 1)
         x, cells, cell_data, marked_facets, facet_values = retrieve_mesh_data(
             model, "box", gmsh_cell_id, gmsh_facet_id)
-        num_nodes = MPI.COMM_WORLD.bcast(cells.shape[1], root=0)
+        MPI.COMM_WORLD.bcast(cells.shape[1], root=0)  # num_nodes
     else:
         gmsh_cell_id = MPI.COMM_WORLD.bcast(None, root=0)
         num_nodes = MPI.COMM_WORLD.bcast(None, root=0)
@@ -274,7 +274,7 @@ def create_unsplit_box_3d(L: float = 5.0, H: float = 1.0, W: float = 1.0, res: f
             gmsh_facet_id = model.mesh.getElementType("triangle", 1)
         x, cells, cell_data, marked_facets, facet_values = retrieve_mesh_data(
             model, "box", gmsh_cell_id, gmsh_facet_id)
-        num_nodes = MPI.COMM_WORLD.bcast(cells.shape[1], root=0)
+        MPI.COMM_WORLD.bcast(cells.shape[1], root=0)  # num_nodes
     else:
         gmsh_cell_id = MPI.COMM_WORLD.bcast(None, root=0)
         num_nodes = MPI.COMM_WORLD.bcast(None, root=0)
@@ -388,7 +388,7 @@ def create_split_box_2D(filename: str, res: float = 0.8, L: float = 5.0, H: floa
         gmsh_facet_id = model.mesh.getElementType("line", 1)
         x, cells, cell_data, marked_facets, facet_values = retrieve_mesh_data(
             model, "first", gmsh_cell_id, gmsh_facet_id)
-        num_nodes = MPI.COMM_WORLD.bcast(cells.shape[1], root=0)
+
         model.add("second")
         model.setCurrent("second")
         # Create box
@@ -407,7 +407,7 @@ def create_split_box_2D(filename: str, res: float = 0.8, L: float = 5.0, H: floa
         cell_data = np.hstack([cell_data, cell_data2])
         cells = np.vstack([cells, cells2 + x.shape[0]])
         x = np.vstack([x, x2])
-
+        MPI.COMM_WORLD.bcast(cells.shape[1], root=0)  # num_nodes
     else:
         gmsh_cell_id = MPI.COMM_WORLD.bcast(None, root=0)
         num_nodes = MPI.COMM_WORLD.bcast(None, root=0)
@@ -473,7 +473,7 @@ def create_split_box_3D(filename: str, res: float = 0.8, L: float = 5.0, H: floa
         cell_data = np.hstack([cell_data, cell_data2])
         cells = np.vstack([cells, cells2 + x.shape[0]])
         x = np.vstack([x, x2])
-        num_nodes = MPI.COMM_WORLD.bcast(cells.shape[1], root=0)
+        MPI.COMM_WORLD.bcast(cells.shape[1], root=0)  # num_nodes
 
     else:
         gmsh_cell_id = MPI.COMM_WORLD.bcast(None, root=0)

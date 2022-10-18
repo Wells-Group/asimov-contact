@@ -7,7 +7,7 @@ from mpi4py import MPI
 from dolfinx_contact.meshing import convert_mesh
 
 
-def create_box_mesh_2D(filename: str, quads: bool = False, res=0.1, order: int = 1):
+def create_box_mesh(filename: str, quads: bool = False, res=0.1, order: int = 1):
     """
     Create two boxes, one slightly skewed
     """
@@ -72,6 +72,6 @@ def create_box_mesh_2D(filename: str, quads: bool = False, res=0.1, order: int =
 
 
 fname = "test_mesh"
-create_box_mesh_2D(filename=f"{fname}.msh", quads=False, res=4.0,
-                   order=1)
+create_box_mesh(filename=f"{fname}.msh", quads=False, res=4.0,
+                order=1)
 convert_mesh(fname, f"{fname}.xdmf", gdim=2)

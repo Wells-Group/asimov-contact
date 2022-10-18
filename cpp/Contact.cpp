@@ -1276,7 +1276,7 @@ dolfinx_contact::Contact::pack_ny(int pair)
   mdspan2_t J(Jb.data(), gdim, tdim);
   mdspan2_t K(Kb.data(), tdim, gdim);
   mdspan4_t full_basis(cmap_basisb.data(), basis_shape);
-  for (std::size_t i = 0; i < num_facets; ++i)
+  for (int i = 0; i < (int)num_facets; ++i)
   {
     auto facets = candidate_map.links(i);
     assert(facets.size() == num_q_points);

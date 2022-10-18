@@ -68,7 +68,8 @@ public:
   }
 
   // Return number of facets in surface s owned by the process
-  const std::size_t local_facets(int s) const { return _local_facets[s]; }
+  std::size_t local_facets(int s) const { return _local_facets[s]; }
+
   // set quadrature rule
   void set_quadrature_rule(QuadratureRule q_rule)
   {

@@ -564,7 +564,7 @@ dolfinx_contact::compute_active_entities(
     std::span<const std::int32_t> entities, dolfinx::fem::IntegralType integral)
 {
 
-  std::size_t tdim = mesh->topology().dim();
+  int tdim = mesh->topology().dim();
   const int size_local = mesh->topology().index_map(tdim)->size_local();
   switch (integral)
   {
@@ -586,7 +586,6 @@ dolfinx_contact::compute_active_entities(
     std::vector<std::int32_t> facets(entities.size());
 
     const dolfinx::mesh::Topology& topology = mesh->topology();
-    int tdim = topology.dim();
     auto f_to_c = topology.connectivity(tdim - 1, tdim);
     assert(f_to_c);
     auto c_to_f = topology.connectivity(tdim, tdim - 1);
@@ -621,7 +620,7 @@ dolfinx_contact::compute_active_entities(
     return std::make_pair(active_entities, num_local);
   }
   default:
-    throw std::runtime_error(
+    throw std::invalid_argument(
         "Integral type not supported. Note that this function "
         "has not been implemented for interior facets.");
   }
