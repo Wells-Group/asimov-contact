@@ -62,11 +62,13 @@ public:
   }
 
   // Return active entities for surface s
-  const std::span<const std::int32_t> active_entities(int s) const
+  const std::vector<std::int32_t>& active_entities(int s) const
   {
-
-    return std::span(_cell_facet_pairs[s].data(), 2 * _local_facets[s]);
+    return _cell_facet_pairs[s];
   }
+
+  // Return number of facets in surface s owned by the process
+  const std::size_t local_facets(int s) const { return _local_facets[s]; }
   // set quadrature rule
   void set_quadrature_rule(QuadratureRule q_rule)
   {

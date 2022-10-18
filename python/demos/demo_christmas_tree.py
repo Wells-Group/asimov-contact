@@ -74,8 +74,10 @@ if __name__ == "__main__":
             facet_marker = xdmf.read_meshtags(mesh, "facet_marker")
 
         marker_offset = 6
-        mesh, facet_marker, domain_marker = create_contact_mesh(
-            mesh, facet_marker, domain_marker, [marker_offset + i for i in range(2 * split)])
+
+        if mesh.comm.size > 1:
+            mesh, facet_marker, domain_marker = create_contact_mesh(
+                mesh, facet_marker, domain_marker, [marker_offset + i for i in range(2 * split)])
 
         V = _fem.VectorFunctionSpace(mesh, ("CG", 1))
         # Apply zero Dirichlet boundary conditions in z-direction on part of the xmas-tree
@@ -105,8 +107,9 @@ if __name__ == "__main__":
             facet_marker = xdmf.read_meshtags(mesh, name="facet_marker")
 
         marker_offset = 5
-        mesh, facet_marker, domain_marker = create_contact_mesh(
-            mesh, facet_marker, domain_marker, [marker_offset + i for i in range(2 * split)])
+        if mesh.comm.size > 1:
+            mesh, facet_marker, domain_marker = create_contact_mesh(
+                mesh, facet_marker, domain_marker, [marker_offset + i for i in range(2 * split)])
 
         V = _fem.VectorFunctionSpace(mesh, ("CG", 1))
         bcs = []
@@ -128,30 +131,16 @@ if __name__ == "__main__":
         np.hstack([facet_marker.find(marker_offset + split + i) for i in range(split)]))
 
     for i in range(split):
-        fcts = cand_facets_0  # np.array(find_candidate_surface_segment(
-        #   mesh, facet_marker.find(marker_offset + split + i), cand_facets_0, 0.8), dtype=np.int32)
+        fcts = np.array(find_candidate_surface_segment(
+            mesh, facet_marker.find(marker_offset + split + i), cand_facets_0, 0.8), dtype=np.int32)
         vls = np.full(len(fcts), marker_offset + 2 * split + i, dtype=np.int32)
         mts.append(meshtags(mesh, tdim - 1, fcts, vls))
 
     for i in range(split):
-        fcts = cand_facets_1  # np.array(find_candidate_surface_segment(
-        # mesh, facet_marker.find(marker_offset + i), cand_facets_1, 0.8), dtype=np.int32)
+        fcts = np.array(find_candidate_surface_segment(
+            mesh, facet_marker.find(marker_offset + i), cand_facets_1, 0.8), dtype=np.int32)
         vls = np.full(len(fcts), marker_offset + 3 * split + i, dtype=np.int32)
         mts.append(meshtags(mesh, tdim - 1, fcts, vls))
-
-    fname = f"{mesh_dir}/xmas_tree_2"
-    domain_marker.name = "cell_marker"
-    facet_marker.name = "facet_marker"
-    mts[2].name = "candidate_0"
-    mts[3].name = "candidate_1"
-    with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "w") as xdmf:
-        xdmf.write_mesh(mesh)
-        xdmf.write_meshtags(domain_marker)
-        tdim = mesh.topology.dim
-        mesh.topology.create_connectivity(tdim - 1, tdim)
-        xdmf.write_meshtags(facet_marker)
-        xdmf.write_meshtags(mts[2])
-        xdmf.write_meshtags(mts[3])
 
     # contact surfaces with tags from marker_offset to marker_offset + 4 * split (split = #segments)
     data = np.arange(marker_offset, marker_offset + 4 * split, dtype=np.int32)

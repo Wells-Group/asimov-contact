@@ -864,7 +864,6 @@ dolfinx_contact::compute_distance_map(
     }
     else
       throw std::runtime_error("Invalid gdim: " + std::to_string(gdim));
-
     if (tdim == 2)
     {
       if (gdim == 2)

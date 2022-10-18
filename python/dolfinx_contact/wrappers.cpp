@@ -150,10 +150,10 @@ PYBIND11_MODULE(cpp, m)
       .def("active_entities",
            [](dolfinx_contact::Contact& self, int s)
            {
-             const std::span<const std::int32_t> active_entities
+             const std::vector<std::int32_t>& active_entities
                  = self.active_entities(s);
              std::array<py::ssize_t, 2> shape
-                 = {py::ssize_t(active_entities.size() / 2), 2};
+                 = {py::ssize_t(self.local_facets(s)), 2};
              return py::array_t<std::int32_t>(shape, active_entities.data(),
                                               py::cast(self));
            })

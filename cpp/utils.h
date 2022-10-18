@@ -629,7 +629,6 @@ compute_projection_map(const dolfinx::mesh::Mesh& mesh,
     auto f_to_c = mesh.topology().connectivity(tdim - 1, tdim);
     if (!f_to_c)
       throw std::runtime_error("Missing facet to cell connectivity");
-
     for (std::size_t i = 0; i < closest_facets.size(); ++i)
     {
       // Get cell connected to facet

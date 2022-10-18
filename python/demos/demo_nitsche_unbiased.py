@@ -145,8 +145,8 @@ if __name__ == "__main__":
                 mesh = xdmf.read_mesh()
                 domain_marker = xdmf.read_meshtags(mesh, name="cell_marker")
                 tdim = mesh.topology.dim
-                mesh.topology.create_connectivity(tdim, tdim - 1)
-                facet_marker = xdmf.read_meshtags(mesh, "facet_marker")
+                mesh.topology.create_connectivity(tdim - 1, tdim)
+                facet_marker = xdmf.read_meshtags(mesh, name="facet_marker")
             dirichlet_bdy_1 = 2
             contact_bdy_1 = 1
             contact_bdy_2 = 8
@@ -269,15 +269,11 @@ if __name__ == "__main__":
 
             facet_marker = MeshTags_int32(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
 
-    mesh, facet_marker, domain_marker = create_contact_mesh(
-        mesh, facet_marker, domain_marker, [contact_bdy_1, contact_bdy_2])
-    fname = "test_markers"
-    with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "w") as xdmf:
-        xdmf.write_mesh(mesh)
-        tdim = mesh.topology.dim
-        mesh.topology.create_connectivity(tdim - 1, tdim)
-        xdmf.write_meshtags(facet_marker)
+    if mesh.comm.size > 1:
+        mesh, facet_marker, domain_marker = create_contact_mesh(
+            mesh, facet_marker, domain_marker, [contact_bdy_1, contact_bdy_2])
 
+        print("contact mesh")
     ncells = mesh.topology.index_map(tdim).size_local
     indices = np.array(range(ncells), dtype=np.int32)
     values = mesh.comm.rank * np.ones(ncells, dtype=np.int32)
