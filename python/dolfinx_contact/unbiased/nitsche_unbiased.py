@@ -209,7 +209,10 @@ def nitsche_unbiased(ufl_form: ufl.Form, u: _fem.Function, markers: list[_cpp.me
 
     @_common.timed("~Contact: Update coefficients")
     def compute_coefficients(x, coeffs):
-        u.vector[:] = x.array
+        size_local = V.dofmap.index_map.size_local
+        bs = V.dofmap.index_map_bs
+        u.x.array[:size_local * bs] = x.array_r[:size_local * bs]
+        u.x.scatter_forward()
         u_candidate = []
         with _common.Timer("~~Contact: Pack u contact"):
             for i in range(len(contact_pairs)):
@@ -229,6 +232,11 @@ def nitsche_unbiased(ufl_form: ufl.Form, u: _fem.Function, markers: list[_cpp.me
     @_common.timed("~Contact: Assemble residual")
     def compute_residual(x, b, coeffs):
         b.zeroEntries()
+        b.ghostUpdate(addv=_PETSc.InsertMode.INSERT, mode=_PETSc.ScatterMode.FORWARD)
+        size_local = V.dofmap.index_map.size_local
+        bs = V.dofmap.index_map_bs
+        u.x.array[:size_local * bs] = x.array_r[:size_local * bs]
+        u.x.scatter_forward()
         with _common.Timer("~~Contact: Contact contributions (in assemble vector)"):
             for i in range(len(contact_pairs)):
                 contact.assemble_vector(b, i, kernel_rhs, coeffs[i], consts)
@@ -238,11 +246,16 @@ def nitsche_unbiased(ufl_form: ufl.Form, u: _fem.Function, markers: list[_cpp.me
         # Apply boundary condition
         if len(bcs) > 0:
             _fem.petsc.apply_lifting(b, [J_custom], bcs=[bcs], x0=[x], scale=-1.0)
-            b.ghostUpdate(addv=_PETSc.InsertMode.ADD, mode=_PETSc.ScatterMode.REVERSE)
+        b.ghostUpdate(addv=_PETSc.InsertMode.ADD, mode=_PETSc.ScatterMode.REVERSE)
+        if len(bcs) > 0:
             _fem.petsc.set_bc(b, bcs, x, -1.0)
 
     @_common.timed("~Contact: Assemble matrix")
     def compute_jacobian_matrix(x, A, coeffs):
+        size_local = V.dofmap.index_map.size_local
+        bs = V.dofmap.index_map_bs
+        u.x.array[:size_local * bs] = x.array_r[:size_local * bs]
+        u.x.scatter_forward()
         A.zeroEntries()
         with _common.Timer("~~Contact: Contact contributions (in assemble matrix)"):
             for i in range(len(contact_pairs)):
@@ -286,6 +299,7 @@ def nitsche_unbiased(ufl_form: ufl.Form, u: _fem.Function, markers: list[_cpp.me
         print("Newton solver did not converge")
     u.x.scatter_forward()
 
-    print(f"{dofs_global}\n Number of Newton iterations: {n:d}\n",
-          f"Number of Krylov iterations {newton_solver.krylov_iterations}\n", flush=True)
+    if mesh.comm.rank == 0:
+        print(f"{dofs_global}\n Number of Newton iterations: {n:d}\n",
+              f"Number of Krylov iterations {newton_solver.krylov_iterations}\n", flush=True)
     return u, n, newton_solver.krylov_iterations, newton_time[1]

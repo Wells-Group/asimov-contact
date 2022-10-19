@@ -154,7 +154,7 @@ PYBIND11_MODULE(cpp, m)
              const std::vector<std::int32_t>& active_entities
                  = self.active_entities(s);
              std::array<py::ssize_t, 2> shape
-                 = {py::ssize_t(active_entities.size() / 2), 2};
+                 = {py::ssize_t(self.local_facets(s)), 2};
              return py::array_t<std::int32_t>(shape, active_entities.data(),
                                               py::cast(self));
            })
@@ -237,12 +237,12 @@ PYBIND11_MODULE(cpp, m)
               const py::array_t<PetscScalar, py::array::c_style>& coeffs,
               const py::array_t<PetscScalar, py::array::c_style>& constants)
            {
-             auto ker = kernel.get();
+             auto ker = kernel.get();             
              self.assemble_vector(
-                 std::span(b.mutable_data(), b.shape(0)), origin_meshtag, ker,
-                 std::span<const PetscScalar>(coeffs.data(), coeffs.size()),
+                 std::span(b.mutable_data(), b.size()), origin_meshtag, ker,
+                 std::span(coeffs.data(), coeffs.size()),
                  coeffs.shape(1),
-                 std::span(constants.data(), constants.shape(0)));
+                 std::span(constants.data(), constants.size()));
            })
       .def("pack_test_functions",
            [](dolfinx_contact::Contact& self, int origin_meshtag)
@@ -413,7 +413,7 @@ PYBIND11_MODULE(cpp, m)
         {
           auto entity_span
               = std::span<const std::int32_t>(entities.data(), entities.size());
-          std::vector<std::int32_t> active_entities
+          auto [active_entities, num_local]
               = dolfinx_contact::compute_active_entities(mesh, entity_span,
                                                          integral);
           switch (integral)
@@ -422,24 +422,21 @@ PYBIND11_MODULE(cpp, m)
           {
             py::array_t<std::int32_t> domains(active_entities.size(),
                                               active_entities.data());
-            return domains;
+            return py::make_tuple(domains, num_local);
           }
           case dolfinx::fem::IntegralType::exterior_facet:
           {
             std::array<py::ssize_t, 2> shape
                 = {py::ssize_t(active_entities.size() / 2), 2};
-            return dolfinx_wrappers::as_pyarray(std::move(active_entities),
-                                                shape);
+            return py::make_tuple(
+                dolfinx_wrappers::as_pyarray(std::move(active_entities), shape),
+                num_local);
           }
-          case dolfinx::fem::IntegralType::interior_facet:
-          {
-            std::array<py::ssize_t, 3> shape
-                = {py::ssize_t(active_entities.size() / 4), 2, 2};
-            return dolfinx_wrappers::as_pyarray(std::move(active_entities),
-                                                shape);
-          }
+
           default:
-            throw std::invalid_argument("Unsupported integral type");
+            throw std::invalid_argument(
+                "Integral type not supported. Note that this function "
+                "has not been implemented for interior facets.");
           }
         });
 

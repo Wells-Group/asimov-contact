@@ -66,6 +66,10 @@ public:
   {
     return _cell_facet_pairs[s];
   }
+
+  // Return number of facets in surface s owned by the process
+  std::size_t local_facets(int s) const { return _local_facets[s]; }
+
   // set quadrature rule
   void set_quadrature_rule(QuadratureRule q_rule)
   {
@@ -256,7 +260,7 @@ public:
 private:
   std::shared_ptr<QuadratureRule> _quadrature_rule; // quadrature rule
   std::vector<int> _surfaces; // meshtag values for surfaces
-  // store index of candidate_surface for each puppet_surface
+  // store index of candidate_surface for each quadrature_surface
   std::vector<std::array<int, 2>> _contact_pairs;
   std::shared_ptr<dolfinx::fem::FunctionSpace> _V; // Function space
   // _facets_maps[i] = adjacency list of closest facet on candidate surface
@@ -277,6 +281,8 @@ private:
   std::vector<SubMesh> _submeshes;
   // facets as (cell, facet) pairs. The pairs are flattened row-major
   std::vector<std::vector<std::int32_t>> _cell_facet_pairs;
+  // number of facets owned by process for each surface
+  std::vector<std::size_t> _local_facets;
 
   // Contact search mode
   ContactMode _mode;
