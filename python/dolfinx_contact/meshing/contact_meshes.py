@@ -227,7 +227,7 @@ def create_box_mesh_3D(filename: str, simplex: bool = True, order: int = 1,
             model.occ.add_box(0, 0, disp, L, H, W)
             model.occ.synchronize()
         else:
-            square1 = model.occ.add_rectangle(0, 0, 0, L, H)
+            square1 = model.occ.add_rectangle(0, 0 + 0.2, 0, L, H)
             square2 = model.occ.add_rectangle(0, 0, disp, L, H)
             model.occ.extrude([(2, square1)], 0, 0, W, numElements=[20], recombine=True)
             model.occ.extrude([(2, square2)], 0, 0, W, numElements=[15], recombine=True)
@@ -390,10 +390,9 @@ def create_sphere_sphere_mesh(filename: str, order: int = 1):
 
 
 def create_cylinder_cylinder_mesh(filename: str, order: int = 1, res=0.25, simplex: bool = False):
+    gmsh.initialize()
+    model = gmsh.model()
     if MPI.COMM_WORLD.rank == 0:
-        gmsh.initialize()
-        model = gmsh.model()
-
         # Generate a mesh with 2nd-order hexahedral cells using gmsh
         model_name = "Cylinder-cylinder mesh"
         model.add(model_name)

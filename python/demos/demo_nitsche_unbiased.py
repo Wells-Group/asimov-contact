@@ -15,7 +15,7 @@ from dolfinx.fem import (Constant, Function, VectorFunctionSpace, dirichletbc,
                          locate_dofs_topological)
 from dolfinx.graph import create_adjacencylist
 from dolfinx.io import XDMFFile
-from dolfinx.mesh import locate_entities_boundary
+from dolfinx.mesh import locate_entities_boundary, GhostMode
 from mpi4py import MPI
 from petsc4py.PETSc import ScalarType
 
@@ -29,6 +29,7 @@ from dolfinx_contact.meshing import (convert_mesh, create_box_mesh_2D,
                                      create_cylinder_cylinder_mesh,
                                      create_sphere_plane_mesh)
 from dolfinx_contact.unbiased.nitsche_unbiased import nitsche_unbiased
+from dolfinx_contact.parallel_mesh_ghosting import create_contact_mesh
 
 if __name__ == "__main__":
     desc = "Nitsche's method for two elastic bodies using custom assemblers"
@@ -200,7 +201,7 @@ if __name__ == "__main__":
                                order=args.order)
             convert_mesh(fname, f"{fname}.xdmf", gdim=2)
             with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
-                mesh = xdmf.read_mesh()
+                mesh = xdmf.read_mesh(ghost_mode=GhostMode.none)
                 domain_marker = xdmf.read_meshtags(mesh, name="cell_marker")
                 tdim = mesh.topology.dim
                 mesh.topology.create_connectivity(tdim - 1, tdim)
@@ -268,6 +269,18 @@ if __name__ == "__main__":
 
             facet_marker = MeshTags_int32(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
 
+    if mesh.comm.size > 1:
+        mesh, facet_marker, domain_marker = create_contact_mesh(
+            mesh, facet_marker, domain_marker, [contact_bdy_1, contact_bdy_2])
+
+        print("contact mesh")
+    ncells = mesh.topology.index_map(tdim).size_local
+    indices = np.array(range(ncells), dtype=np.int32)
+    values = mesh.comm.rank * np.ones(ncells, dtype=np.int32)
+    process_marker = MeshTags_int32(mesh, tdim, indices, values)
+    process_marker.name = "process_marker"
+    domain_marker.name = "cell_marker"
+    facet_marker.name = "facet_marker"
     with XDMFFile(mesh.comm, f"{mesh_dir}/test.xdmf", "w") as xdmf:
         xdmf.write_mesh(mesh)
         xdmf.write_meshtags(domain_marker)
@@ -389,6 +402,9 @@ if __name__ == "__main__":
         xdmf.write_mesh(mesh)
         u_all.name = "u"
         xdmf.write_function(u_all)
+    with XDMFFile(mesh.comm, "results/partitioning.xdmf", "w") as xdmf:
+        xdmf.write_mesh(mesh)
+        xdmf.write_meshtags(process_marker)
     if args.timing:
         list_timings(mesh.comm, [TimingType.wall])
 
@@ -396,16 +412,18 @@ if __name__ == "__main__":
         outfile = sys.stdout
     else:
         outfile = open(args.outfile, "a")
-    print("-" * 25, file=outfile)
-    print(f"Newton options {newton_options}", file=outfile)
-    print(f"num_dofs: {u.function_space.dofmap.index_map_bs*u.function_space.dofmap.index_map.size_global}"
-          + f", {mesh.topology.cell_type}", file=outfile)
-    print(f"Newton solver {timing('~Contact: Newton (Newton solver)')[1]}", file=outfile)
-    print(f"Krylov solver {timing('~Contact: Newton (Krylov solver)')[1]}", file=outfile)
-    print(f"Newton time: {newton_time}", file=outfile)
-    print(f"Newton iterations {num_newton_its}, {sum(num_newton_its)}", file=outfile)
-    print(f"Krylov iterations {num_krylov_its}, {sum(num_krylov_its)}", file=outfile)
-    print("-" * 25, file=outfile)
+
+    if mesh.comm.rank == 0:
+        print("-" * 25, file=outfile)
+        print(f"Newton options {newton_options}", file=outfile)
+        print(f"num_dofs: {u.function_space.dofmap.index_map_bs*u.function_space.dofmap.index_map.size_global}"
+              + f", {mesh.topology.cell_type}", file=outfile)
+        print(f"Newton solver {timing('~Contact: Newton (Newton solver)')[1]}", file=outfile)
+        print(f"Krylov solver {timing('~Contact: Newton (Krylov solver)')[1]}", file=outfile)
+        print(f"Newton time: {newton_time}", file=outfile)
+        print(f"Newton iterations {num_newton_its}, {sum(num_newton_its)}", file=outfile)
+        print(f"Krylov iterations {num_krylov_its}, {sum(num_krylov_its)}", file=outfile)
+        print("-" * 25, file=outfile)
 
     if args.outfile is not None:
         outfile.close()

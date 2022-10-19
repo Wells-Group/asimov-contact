@@ -167,9 +167,11 @@ def create_unsplit_box_2d(H: float = 1.0, L: float = 5.0, res: float = 0.1, x0: 
         gmsh_facet_id = model.mesh.getElementType("line", 1)
         x, cells, cell_data, marked_facets, facet_values = retrieve_mesh_data(
             model, "box", gmsh_cell_id, gmsh_facet_id)
+        MPI.COMM_WORLD.bcast(cells.shape[1], root=0)  # num_nodes
     else:
         gmsh_cell_id = MPI.COMM_WORLD.bcast(None, root=0)
         num_nodes = MPI.COMM_WORLD.bcast(None, root=0)
+        cell_data = np.empty((0,), dtype=np.int32)
         cells, x = np.empty([0, num_nodes], dtype=np.int64), np.empty([0, 3])
         marked_facets, facet_values = np.empty((0, 3), dtype=np.int64), np.empty((0,), dtype=np.int32)
 
@@ -266,15 +268,17 @@ def create_unsplit_box_3d(L: float = 5.0, H: float = 1.0, W: float = 1.0, res: f
 
         if hex:
             gmsh_cell_id = MPI.COMM_WORLD.bcast(model.mesh.getElementType("hexahedron", 1), root=0)
-            gmsh_facet_id = MPI.COMM_WORLD.bcast(model.mesh.getElementType("quadrangle", 1), root=0)
+            gmsh_facet_id = model.mesh.getElementType("quadrangle", 1)
         else:
             gmsh_cell_id = MPI.COMM_WORLD.bcast(model.mesh.getElementType("tetrahedron", 1), root=0)
-            gmsh_facet_id = MPI.COMM_WORLD.bcast(model.mesh.getElementType("triangle", 1), root=0)
+            gmsh_facet_id = model.mesh.getElementType("triangle", 1)
         x, cells, cell_data, marked_facets, facet_values = retrieve_mesh_data(
             model, "box", gmsh_cell_id, gmsh_facet_id)
+        MPI.COMM_WORLD.bcast(cells.shape[1], root=0)  # num_nodes
     else:
         gmsh_cell_id = MPI.COMM_WORLD.bcast(None, root=0)
         num_nodes = MPI.COMM_WORLD.bcast(None, root=0)
+        cell_data = np.empty((0,), dtype=np.int32)
         cells, x = np.empty([0, num_nodes], dtype=np.int64), np.empty([0, 3])
         marked_facets, facet_values = np.empty((0, 3), dtype=np.int64), np.empty((0,), dtype=np.int32)
 
@@ -358,13 +362,14 @@ def create_split_box_2D(filename: str, res: float = 0.8, L: float = 5.0, H: floa
     points = [[0.0, 0.0], [L, 0.0], [L, H], [0.0, H], x0, x1]
     gmsh.initialize()
     gmsh.option.setNumber("General.Terminal", 0)
+    model = gmsh.model()
     if quads:
         gmsh.option.setNumber("Mesh.RecombinationAlgorithm", 8)
         gmsh.option.setNumber("Mesh.RecombineAll", 2)
         gmsh.option.setNumber("Mesh.SubdivisionAlgorithm", 1)
     if MPI.COMM_WORLD.rank == 0:
         gmsh.option.setNumber("Mesh.CharacteristicLengthFactor", res)
-        model = gmsh.model()
+
         model.add("first")
         model.setCurrent("first")
         # Create box
@@ -383,6 +388,7 @@ def create_split_box_2D(filename: str, res: float = 0.8, L: float = 5.0, H: floa
         gmsh_facet_id = model.mesh.getElementType("line", 1)
         x, cells, cell_data, marked_facets, facet_values = retrieve_mesh_data(
             model, "first", gmsh_cell_id, gmsh_facet_id)
+
         model.add("second")
         model.setCurrent("second")
         # Create box
@@ -401,11 +407,12 @@ def create_split_box_2D(filename: str, res: float = 0.8, L: float = 5.0, H: floa
         cell_data = np.hstack([cell_data, cell_data2])
         cells = np.vstack([cells, cells2 + x.shape[0]])
         x = np.vstack([x, x2])
-
+        MPI.COMM_WORLD.bcast(cells.shape[1], root=0)  # num_nodes
     else:
         gmsh_cell_id = MPI.COMM_WORLD.bcast(None, root=0)
         num_nodes = MPI.COMM_WORLD.bcast(None, root=0)
         cells, x = np.empty([0, num_nodes], dtype=np.int64), np.empty([0, 3])
+        cell_data = np.empty((0,), dtype=np.int32)
         marked_facets, facet_values = np.empty((0, 3), dtype=np.int64), np.empty((0,), dtype=np.int32)
 
     if quads:
@@ -423,9 +430,10 @@ def create_split_box_3D(filename: str, res: float = 0.8, L: float = 5.0, H: floa
     points = [[0.0, 0.0], [L, 0.0], [L, H], [0.0, H], x0, x1]
     gmsh.initialize()
     gmsh.option.setNumber("General.Terminal", 0)
+    model = gmsh.model()
     if MPI.COMM_WORLD.rank == 0:
         gmsh.option.setNumber("Mesh.CharacteristicLengthFactor", res)
-        model = gmsh.model()
+
         model.add("first")
         model.setCurrent("first")
         # Create box
@@ -435,11 +443,11 @@ def create_split_box_3D(filename: str, res: float = 0.8, L: float = 5.0, H: floa
         if hex:
             create_hex_mesh(domain_1, points, line_pts, model, tags, W, res)
             gmsh_cell_id = MPI.COMM_WORLD.bcast(model.mesh.getElementType("hexahedron", 1), root=0)
-            gmsh_facet_id = MPI.COMM_WORLD.bcast(model.mesh.getElementType("quadrangle", 1), root=0)
+            gmsh_facet_id = model.mesh.getElementType("quadrangle", 1)
         else:
             create_tet_mesh(domain_1, points, line_pts, model, tags, W)
             gmsh_cell_id = MPI.COMM_WORLD.bcast(model.mesh.getElementType("tetrahedron", 1), root=0)
-            gmsh_facet_id = MPI.COMM_WORLD.bcast(model.mesh.getElementType("triangle", 1), root=0)
+            gmsh_facet_id = model.mesh.getElementType("triangle", 1)
         x, cells, cell_data, marked_facets, facet_values = retrieve_mesh_data(
             model, "first", gmsh_cell_id, gmsh_facet_id)
 
@@ -465,11 +473,13 @@ def create_split_box_3D(filename: str, res: float = 0.8, L: float = 5.0, H: floa
         cell_data = np.hstack([cell_data, cell_data2])
         cells = np.vstack([cells, cells2 + x.shape[0]])
         x = np.vstack([x, x2])
+        MPI.COMM_WORLD.bcast(cells.shape[1], root=0)  # num_nodes
 
     else:
         gmsh_cell_id = MPI.COMM_WORLD.bcast(None, root=0)
         num_nodes = MPI.COMM_WORLD.bcast(None, root=0)
         cells, x = np.empty([0, num_nodes], dtype=np.int64), np.empty([0, 3])
+        cell_data = np.empty((0,), dtype=np.int32)
         marked_facets, facet_values = np.empty((0, 3), dtype=np.int64), np.empty((0,), dtype=np.int32)
     if hex:
         gmsh_hex8 = cell_perm_array(CellType.hexahedron, 8)

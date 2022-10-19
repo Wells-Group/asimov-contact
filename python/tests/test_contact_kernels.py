@@ -124,7 +124,9 @@ def test_vector_surface_kernel(dim, kernel_type, P, Q):
     # num_local_cells = mesh.topology.index_map(mesh.topology.dim).size_local
     consts = np.array([gamma, theta])
     consts = np.hstack((consts, n_vec))
-    integral_entities = dolfinx_contact.compute_active_entities(mesh, ft.indices, IntegralType.exterior_facet)
+    integral_entities, num_local = dolfinx_contact.compute_active_entities(
+        mesh, ft.indices, IntegralType.exterior_facet)
+    integral_entities = integral_entities[:num_local]
     mu_packed = dolfinx_contact.cpp.pack_coefficient_quadrature(mu._cpp_object, 0, integral_entities)
     lmbda_packed = dolfinx_contact.cpp.pack_coefficient_quadrature(lmbda._cpp_object, 0, integral_entities)
     u_packed = dolfinx_contact.cpp.pack_coefficient_quadrature(u._cpp_object, 2 * P
@@ -253,7 +255,9 @@ def test_matrix_surface_kernel(dim, kernel_type, P, Q):
                                             + Q + 1, mesh.topology.dim - 1, basix.QuadratureType.Default)
     consts = np.array([gamma, theta])
     consts = np.hstack((consts, n_vec))
-    integral_entities = dolfinx_contact.compute_active_entities(mesh, facets, IntegralType.exterior_facet)
+    integral_entities, num_local = dolfinx_contact.compute_active_entities(
+        mesh, facets, IntegralType.exterior_facet)
+    integral_entities = integral_entities[:num_local]
     mu_packed = dolfinx_contact.cpp.pack_coefficient_quadrature(mu._cpp_object, 0, integral_entities)
     lmbda_packed = dolfinx_contact.cpp.pack_coefficient_quadrature(lmbda._cpp_object, 0, integral_entities)
     u_packed = dolfinx_contact.cpp.pack_coefficient_quadrature(u._cpp_object, 2 * P
