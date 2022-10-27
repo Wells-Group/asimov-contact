@@ -8,7 +8,7 @@ import dolfinx_contact
 
 import numpy as np
 import ufl
-from dolfinx import log
+from dolfinx import log, io
 from dolfinx.common import TimingType, list_timings, timing
 from dolfinx.cpp.mesh import MeshTags_int32
 from dolfinx.fem import (Constant, Function, VectorFunctionSpace, dirichletbc,
@@ -28,7 +28,7 @@ from dolfinx_contact.meshing import (convert_mesh, create_box_mesh_2D,
                                      create_circle_plane_mesh,
                                      create_cylinder_cylinder_mesh,
                                      create_sphere_plane_mesh)
-from dolfinx_contact.unbiased.nitsche_unbiased import nitsche_pseudo_time
+from dolfinx_contact.unbiased.nitsche_pseudo_time import nitsche_pseudo_time
 from dolfinx_contact.parallel_mesh_ghosting import create_contact_mesh
 
 if __name__ == "__main__":
@@ -295,24 +295,24 @@ if __name__ == "__main__":
                       "convergence_criterion": "residual",
                       "max_it": 50,
                       "error_on_nonconvergence": True}
-    petsc_options = {"ksp_type": "preonly", "pc_type": "lu"}
-    # petsc_options = {
-    #     "matptap_via": "scalable",
-    #     "ksp_type": "cg",
-    #     "ksp_rtol": ksp_tol,
-    #     "ksp_atol": ksp_tol,
-    #     "pc_type": "gamg",
-    #     "pc_mg_levels": 3,
-    #     "pc_mg_cycles": 1,   # 1 is v, 2 is w
-    #     "mg_levels_ksp_type": "chebyshev",
-    #     "mg_levels_pc_type": "jacobi",
-    #     "pc_gamg_type": "agg",
-    #     "pc_gamg_coarse_eq_limit": 100,
-    #     "pc_gamg_agg_nsmooths": 1,
-    #     "pc_gamg_sym_graph": True,
-    #     "pc_gamg_threshold": 1e-3,
-    #     "pc_gamg_square_graph": 2,
-    # }
+    # petsc_options = {"ksp_type": "preonly", "pc_type": "lu"}
+    petsc_options = {
+        "matptap_via": "scalable",
+        "ksp_type": "cg",
+        "ksp_rtol": ksp_tol,
+        "ksp_atol": ksp_tol,
+        "pc_type": "gamg",
+        "pc_mg_levels": 3,
+        "pc_mg_cycles": 1,   # 1 is v, 2 is w
+        "mg_levels_ksp_type": "chebyshev",
+        "mg_levels_pc_type": "jacobi",
+        "pc_gamg_type": "agg",
+        "pc_gamg_coarse_eq_limit": 100,
+        "pc_gamg_agg_nsmooths": 1,
+        "pc_gamg_sym_graph": True,
+        "pc_gamg_threshold": 1e-3,
+        "pc_gamg_square_graph": 2,
+    }
     # Pack mesh data for Nitsche solver
     dirichlet_vals = [dirichlet_bdy_1, dirichlet_bdy_2]
     contact = [(0, 1), (1, 0)]
@@ -359,6 +359,7 @@ if __name__ == "__main__":
     mode = dolfinx_contact.cpp.ContactMode.Raytracing if args.raytracing \
         else dolfinx_contact.cpp.ContactMode.ClosestPoint
     # Load geometry over multiple steps
+
     for j in range(nload_steps):
         disp = []
         bcs = []

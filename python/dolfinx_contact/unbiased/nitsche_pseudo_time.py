@@ -20,6 +20,115 @@ kt = dolfinx_contact.cpp.Kernel
 __all__ = ["nitsche_pseudo_time"]
 
 
+def setup_newton_solver(t, steps, contact, contact_pairs, markers, V, material, h_packed, bcs, F_custom,
+                        J_custom, entities, quadrature_degree, u, du, kernel_rhs, kernel_jac, consts, newton_options, petsc_options):
+
+    A = contact.create_matrix(J_custom)
+    b = fem.petsc.create_vector(F_custom)
+    mesh = V.mesh
+    # Pack gap, normals and test functions on each surface
+    gaps = []
+    normals = []
+    test_fns = []
+    with common.Timer("~Contact: Pack gap, normals, testfunction"):
+        for i in range(len(contact_pairs)):
+            gaps.append(contact.pack_gap(i))
+            normals.append(contact.pack_ny(i))
+            test_fns.append(contact.pack_test_functions(i))
+
+    # Concatenate all coeffs
+    coeffs_const = []
+    for i in range(len(contact_pairs)):
+        coeffs_const.append(np.hstack([material[i], h_packed[i], gaps[i], normals[i], test_fns[i]]))
+    tbcs = []
+    for bc in bcs:
+        d = bc[0] / steps
+        tag = bc[1]
+        if mesh.geometry.dim == 3:
+            g = fem.Constant(mesh, _PETSc.ScalarType((d[0], d[1], d[2])))
+        else:
+            g = fem.Constant(mesh, _PETSc.ScalarType((d[0], d[1])))
+        bdy_dofs = fem.locate_dofs_topological(V, mesh.topology.dim - 1, markers[1].find(tag))
+        tbcs.append(fem.dirichletbc(g, bdy_dofs, V))
+
+    grad_u = []
+    with common.Timer("~~Contact: Pack u"):
+        for i in range(len(contact_pairs)):
+            grad_u.append(dolfinx_contact.cpp.pack_gradient_quadrature(
+                u._cpp_object, quadrature_degree, entities[i]))
+
+    @ common.timed("~Contact: Update coefficients")
+    def compute_coefficients(x, coeffs):
+        size_local = V.dofmap.index_map.size_local
+        bs = V.dofmap.index_map_bs
+        du.x.array[:size_local * bs] = x.array_r[:size_local * bs]
+        du.x.scatter_forward()
+        u_candidate = []
+        with common.Timer("~~Contact: Pack u contact"):
+            for i in range(len(contact_pairs)):
+                u_candidate.append(contact.pack_u_contact(i, du._cpp_object))
+        u_puppet = []
+        grad_u_puppet = []
+        with common.Timer("~~Contact: Pack u"):
+            for i in range(len(contact_pairs)):
+                u_puppet.append(dolfinx_contact.cpp.pack_coefficient_quadrature(
+                    du._cpp_object, quadrature_degree, entities[i]))
+                grad_u_puppet.append(dolfinx_contact.cpp.pack_gradient_quadrature(
+                    du._cpp_object, quadrature_degree, entities[i]))
+        for i in range(len(contact_pairs)):
+            c_0 = np.hstack([coeffs_const[i], u_puppet[i], grad_u_puppet[i] + grad_u[i], u_candidate[i]])
+            coeffs[i][:, :] = c_0[:, :]
+
+    @ common.timed("~Contact: Assemble residual")
+    def compute_residual(x, b, coeffs):
+        b.zeroEntries()
+        b.ghostUpdate(addv=_PETSc.InsertMode.INSERT, mode=_PETSc.ScatterMode.FORWARD)
+        with common.Timer("~~Contact: Contact contributions (in assemble vector)"):
+            for i in range(len(contact_pairs)):
+                contact.assemble_vector(b, i, kernel_rhs, coeffs[i], consts)
+        with common.Timer("~~Contact: Standard contributions (in assemble vector)"):
+            fem.petsc.assemble_vector(b, F_custom)
+
+        # Apply boundary condition
+        if len(bcs) > 0:
+            fem.petsc.apply_lifting(b, [J_custom], bcs=[tbcs], x0=[x], scale=-1.0)
+        b.ghostUpdate(addv=_PETSc.InsertMode.ADD, mode=_PETSc.ScatterMode.REVERSE)
+        if len(bcs) > 0:
+            fem.petsc.set_bc(b, tbcs, x, -1.0)
+
+    @ common.timed("~Contact: Assemble matrix")
+    def compute_jacobian_matrix(x, A, coeffs):
+        A.zeroEntries()
+        with common.Timer("~~Contact: Contact contributions (in assemble matrix)"):
+            for i in range(len(contact_pairs)):
+                contact.assemble_matrix(A, [], i, kernel_jac, coeffs[i], consts)
+        with common.Timer("~~Contact: Standard contributions (in assemble matrix)"):
+            fem.petsc.assemble_matrix(A, J_custom, bcs=tbcs)
+        A.assemble()
+
+    # coefficient arrays
+    num_coeffs = contact.coefficients_size(False)
+    coeffs = np.array([np.zeros((len(entities[i]), num_coeffs)) for i in range(len(contact_pairs))])
+    newton_solver = dolfinx_contact.NewtonSolver(mesh.comm, A, b, coeffs)
+
+    # Set matrix-vector computations
+    newton_solver.set_residual(compute_residual)
+    newton_solver.set_jacobian(compute_jacobian_matrix)
+    newton_solver.set_coefficients(compute_coefficients)
+
+    # Set rigid motion nullspace
+    null_space = rigid_motions_nullspace_subdomains(V, markers[0], np.unique(markers[0].values))
+    newton_solver.A.setNearNullSpace(null_space)
+
+    # Set Newton solver options
+    newton_solver.set_newton_options(newton_options)
+
+    # Set Krylov solver options
+    newton_solver.set_krylov_options(petsc_options)
+
+    return newton_solver
+
+
 def nitsche_pseudo_time(steps: int, lhs: ufl.Form, rhs: ufl.Form, u: fem.Function,
                         rhs_fns: list[Union[fem.Function, fem.Constant]], markers: list[_cpp.mesh.MeshTags_int32],
                         contact_data: Tuple[AdjacencyList_int32, list[Tuple[int, int]]],
@@ -172,118 +281,21 @@ def nitsche_pseudo_time(steps: int, lhs: ufl.Form, rhs: ufl.Form, u: fem.Functio
     vtx_mesh0 = io.VTXWriter(mesh.comm, "submesh_0.bp", submesh0)
     vtx_mesh1 = io.VTXWriter(mesh.comm, "submesh_1.bp", submesh1)
     vtx.write(0)
-    for tt in range(steps):
-        with common.Timer("~Contact: Distance maps"):
-            contact.update_submesh_geometry(u._cpp_object)
-            for i in range(len(contact_pairs)):
-                contact.create_distance_map(i)
-
-        # Pack gap, normals and test functions on each surface
-        gaps = []
-        normals = []
-        test_fns = []
-        with common.Timer("~Contact: Pack gap, normals, testfunction"):
-            for i in range(len(contact_pairs)):
-                gaps.append(contact.pack_gap(i))
-                normals.append(contact.pack_ny(i))
-                test_fns.append(contact.pack_test_functions(i))
-
-        # Concatenate all coeffs
-        coeffs_const = []
+    with common.Timer("~Contact: Distance maps"):
         for i in range(len(contact_pairs)):
-            coeffs_const.append(np.hstack([material[i], h_packed[i], gaps[i], normals[i], test_fns[i]]))
+            contact.create_distance_map(i)
+    for tt in range(steps):
         t = (tt + 1) / steps
-        tbcs = []
-        for bc in bcs:
-            d = bc[0] / steps
-            tag = bc[1]
-            print(d)
-            if mesh.geometry.dim == 3:
-                g = fem.Constant(mesh, _PETSc.ScalarType((d[0], d[1], d[2])))
-            else:
-                g = fem.Constant(mesh, _PETSc.ScalarType((d[0], d[1])))
-            bdy_dofs = fem.locate_dofs_topological(V, mesh.topology.dim - 1, markers[1].find(tag))
-            tbcs.append(fem.dirichletbc(g, bdy_dofs, V))
         F_bc = ufl.replace(rhs, {fn: t * fn for fn in rhs_fns})
         F_custom = fem.form(F - F_bc, form_compiler_options=form_compiler_options, jit_options=jit_options)
         J_custom = fem.form(J, form_compiler_options=form_compiler_options, jit_options=jit_options)
-        A = contact.create_matrix(J_custom)
-        b = fem.petsc.create_vector(F_custom)
 
         with common.Timer("~Contact: Generate Jacobian kernel"):
             kernel_jac = contact.generate_kernel(kt.Jac)
         with common.Timer("~Contact: Generate residual kernel"):
             kernel_rhs = contact.generate_kernel(kt.Rhs)
-
-        grad_u = []
-        with common.Timer("~~Contact: Pack u"):
-            for i in range(len(contact_pairs)):
-                grad_u.append(dolfinx_contact.cpp.pack_gradient_quadrature(
-                    u._cpp_object, quadrature_degree, entities[i]))
-
-        @ common.timed("~Contact: Update coefficients")
-        def compute_coefficients(x, coeffs):
-            du.vector[:] = x.array
-            u_candidate = []
-            with common.Timer("~~Contact: Pack u contact"):
-                for i in range(len(contact_pairs)):
-                    u_candidate.append(contact.pack_u_contact(i, du._cpp_object))
-            u_puppet = []
-            grad_u_puppet = []
-            with common.Timer("~~Contact: Pack u"):
-                for i in range(len(contact_pairs)):
-                    u_puppet.append(dolfinx_contact.cpp.pack_coefficient_quadrature(
-                        du._cpp_object, quadrature_degree, entities[i]))
-                    grad_u_puppet.append(dolfinx_contact.cpp.pack_gradient_quadrature(
-                        du._cpp_object, quadrature_degree, entities[i]))
-            for i in range(len(contact_pairs)):
-                c_0 = np.hstack([coeffs_const[i], u_puppet[i], grad_u_puppet[i] + grad_u[i], u_candidate[i]])
-                coeffs[i][:, :] = c_0[:, :]
-
-        @ common.timed("~Contact: Assemble residual")
-        def compute_residual(x, b, coeffs):
-            b.zeroEntries()
-            with common.Timer("~~Contact: Contact contributions (in assemble vector)"):
-                for i in range(len(contact_pairs)):
-                    contact.assemble_vector(b, i, kernel_rhs, coeffs[i], consts)
-            with common.Timer("~~Contact: Standard contributions (in assemble vector)"):
-                fem.petsc.assemble_vector(b, F_custom)
-
-            # Apply boundary condition
-            if len(bcs) > 0:
-                fem.petsc.apply_lifting(b, [J_custom], bcs=[tbcs], x0=[x], scale=-1.0)
-                b.ghostUpdate(addv=_PETSc.InsertMode.ADD, mode=_PETSc.ScatterMode.REVERSE)
-                fem.petsc.set_bc(b, tbcs, x, -1.0)
-
-        @ common.timed("~Contact: Assemble matrix")
-        def compute_jacobian_matrix(x, A, coeffs):
-            A.zeroEntries()
-            with common.Timer("~~Contact: Contact contributions (in assemble matrix)"):
-                for i in range(len(contact_pairs)):
-                    contact.assemble_matrix(A, [], i, kernel_jac, coeffs[i], consts)
-            with common.Timer("~~Contact: Standard contributions (in assemble matrix)"):
-                fem.petsc.assemble_matrix(A, J_custom, bcs=tbcs)
-            A.assemble()
-        # coefficient arrays
-        num_coeffs = contact.coefficients_size(False)
-        coeffs = np.array([np.zeros((len(entities[i]), num_coeffs)) for i in range(len(contact_pairs))])
-        newton_solver = dolfinx_contact.NewtonSolver(mesh.comm, A, b, coeffs)
-
-        # Set matrix-vector computations
-        newton_solver.set_residual(compute_residual)
-        newton_solver.set_jacobian(compute_jacobian_matrix)
-        newton_solver.set_coefficients(compute_coefficients)
-
-        # Set rigid motion nullspace
-        null_space = rigid_motions_nullspace_subdomains(V, markers[0], np.unique(markers[0].values))
-        newton_solver.A.setNearNullSpace(null_space)
-
-        # Set Newton solver options
-        newton_solver.set_newton_options(newton_options)
-
-        # Set Krylov solver options
-        newton_solver.set_krylov_options(petsc_options)
-
+        newton_solver = setup_newton_solver(t, steps, contact, contact_pairs, markers, V, material, h_packed, bcs, F_custom,
+                                            J_custom, entities, quadrature_degree, u, du, kernel_rhs, kernel_jac, consts, newton_options, petsc_options)
         dofs_global = V.dofmap.index_map_bs * V.dofmap.index_map.size_global
         log.set_log_level(log.LogLevel.OFF)
         # Solve non-linear problem
@@ -294,10 +306,14 @@ def nitsche_pseudo_time(steps: int, lhs: ufl.Form, rhs: ufl.Form, u: fem.Functio
         if not converged:
             print("Newton solver did not converge")
         du.x.scatter_forward()
-
         u.x.array[:] += du.x.array[:]
+        u.x.scatter_forward()
+        with common.Timer("~Contact: Distance maps"):
+            contact.update_submesh_geometry(u._cpp_object)
+            for i in range(len(contact_pairs)):
+                contact.create_distance_map(i)
         du.x.array[:].fill(0)
-
+        du.x.scatter_forward()
         print(f"writing out solution for time t = {t}")
         vtx.write(t)
         vtx_mesh0.write((tt) / steps)
