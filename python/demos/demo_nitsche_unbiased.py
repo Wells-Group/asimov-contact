@@ -8,11 +8,10 @@ import dolfinx_contact
 
 import numpy as np
 import ufl
-from dolfinx import log, io
+from dolfinx import log
 from dolfinx.common import TimingType, list_timings, timing
 from dolfinx.cpp.mesh import MeshTags_int32
-from dolfinx.fem import (Constant, Function, VectorFunctionSpace, dirichletbc,
-                         locate_dofs_topological)
+from dolfinx.fem import (Constant, Function, VectorFunctionSpace)
 from dolfinx.graph import create_adjacencylist
 from dolfinx.io import XDMFFile
 from dolfinx.mesh import locate_entities_boundary, GhostMode
@@ -69,6 +68,8 @@ if __name__ == "__main__":
                         help="Displacement BC in negative y direction")
     parser.add_argument("--load_steps", default=1, type=np.int32, dest="nload_steps",
                         help="Number of steps for gradual loading")
+    parser.add_argument("--time_steps", default=1, type=np.int32, dest="time_steps",
+                        help="Number of pseudo time steps")
     parser.add_argument("--res", default=0.1, type=np.float64, dest="res",
                         help="Mesh resolution")
     parser.add_argument("--outfile", type=str, default=None, required=False,
@@ -103,6 +104,7 @@ if __name__ == "__main__":
     if threed:
         displacement = [[0, 0, -args.disp], [0, 0, 0]]
         if problem == 1:
+            outname = "results/problem1_3D_simplex" if simplex else "results/problem1_3D_hex"
             fname = f"{mesh_dir}/box_3D"
             create_box_mesh_3D(f"{fname}.msh", simplex, order=args.order)
             convert_mesh(fname, fname, gdim=3)
@@ -138,6 +140,7 @@ if __name__ == "__main__":
             facet_marker = MeshTags_int32(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
 
         elif problem == 2:
+            outname = "results/problem2_3D_simplex" if simplex else "results/problem2_3D_hex"
             fname = f"{mesh_dir}/sphere"
             create_sphere_plane_mesh(filename=f"{fname}.msh", order=args.order, res=args.res)
             convert_mesh(fname, fname, gdim=3)
@@ -153,6 +156,7 @@ if __name__ == "__main__":
             dirichlet_bdy_2 = 7
 
         elif problem == 3:
+            outname = "results/problem3_3D_simplex" if simplex else "results/problem3_3D_hex"
             fname = "cylinder_cylinder_3D"
             displacement = [[-1, 0, 0], [0, 0, 0]]
             create_cylinder_cylinder_mesh(fname, res=args.res, simplex=simplex)
@@ -196,6 +200,7 @@ if __name__ == "__main__":
     else:
         displacement = [[0, -args.disp], [0, 0]]
         if problem == 1:
+            outname = "results/problem1_2D_simplex" if simplex else "results/problem1_2D_quads"
             fname = f"{mesh_dir}/box_2D"
             create_box_mesh_2D(filename=f"{fname}.msh", quads=not simplex, res=args.res,
                                order=args.order)
@@ -212,6 +217,7 @@ if __name__ == "__main__":
             dirichlet_bdy_2 = 7
 
         elif problem == 2:
+            outname = "results/problem2_2D_simplex" if simplex else "results/problem2_2D_quads"
             fname = f"{mesh_dir}/twomeshes"
             create_circle_plane_mesh(filename=f"{fname}.msh", quads=not simplex, res=args.res, order=args.order)
             convert_mesh(fname, f"{fname}.xdmf", gdim=2)
@@ -227,6 +233,7 @@ if __name__ == "__main__":
             contact_bdy_2 = 9
             dirichlet_bdy_2 = 7
         elif problem == 3:
+            outname = "results/problem3_2D_simplex" if simplex else "results/problem3_2D_quads"
             fname = f"{mesh_dir}/two_disks"
             create_circle_circle_mesh(filename=f"{fname}.msh", quads=(not simplex), res=args.res, order=args.order)
             convert_mesh(fname, f"{fname}.xdmf", gdim=2)
@@ -273,7 +280,6 @@ if __name__ == "__main__":
         mesh, facet_marker, domain_marker = create_contact_mesh(
             mesh, facet_marker, domain_marker, [contact_bdy_1, contact_bdy_2])
 
-        print("contact mesh")
     ncells = mesh.topology.index_map(tdim).size_local
     indices = np.array(range(ncells), dtype=np.int32)
     values = mesh.comm.rank * np.ones(ncells, dtype=np.int32)
@@ -346,9 +352,9 @@ if __name__ == "__main__":
     geometry = mesh.geometry.x[:].copy()
 
     log.set_log_level(log.LogLevel.OFF)
-    num_newton_its = np.zeros(nload_steps, dtype=int)
-    num_krylov_its = np.zeros(nload_steps, dtype=int)
-    newton_time = np.zeros(nload_steps, dtype=np.float64)
+    num_newton_its = np.zeros((nload_steps, args.time_steps), dtype=int)
+    num_krylov_its = np.zeros((nload_steps, args.time_steps), dtype=int)
+    newton_time = np.zeros((nload_steps, args.time_steps), dtype=np.float64)
 
     solver_outfile = args.outfile if args.ksp else None
 
@@ -363,35 +369,31 @@ if __name__ == "__main__":
     for j in range(nload_steps):
         disp = []
         bcs = []
-        lhs = F
+        Fj = F
         for k, d in enumerate(load_increment):
-            if args.lifting:
-                tag = dirichlet_vals[k]
-                bcs.append((d, tag))
-            if mesh.geometry.dim == 3:
-                disp.append(Constant(mesh, ScalarType((d[0], d[1], d[2]))))
-            else:
-                disp.append(Constant(mesh, ScalarType((d[0], d[1]))))
-        rhs = 0 * dx
-        for k, g in enumerate(disp):
             tag = dirichlet_vals[k]
-            h = ufl.CellDiameter(mesh)
-            n = ufl.FacetNormal(mesh)
-            lhs += - ufl.inner(sigma(u) * n, v) * ds(tag)\
-                - theta * ufl.inner(sigma(v) * n, u) * \
-                ds(tag) + E * gamma / h * ufl.inner(u, v) * ds(tag)
-            rhs += - theta * ufl.inner(sigma(v) * n, g) * \
-                ds(tag) + E * gamma / h * ufl.inner(g, v) * ds(tag)
+            if args.lifting:
+                bcs.append((d, tag))
+            else:
+                if mesh.geometry.dim == 3:
+                    disp.append(Constant(mesh, ScalarType((d[0], d[1], d[2]))))
+                else:
+                    disp.append(Constant(mesh, ScalarType((d[0], d[1]))))
+                Fj = weak_dirichlet(Fj, u, disp[k], sigma, E * gamma, theta, ds(tag))
 
         # Solve contact problem using Nitsche's method
-        u, newton_its, krylov_iterations, solver_time = nitsche_pseudo_time(5,
-                                                                            lhs=lhs, rhs=rhs, u=u, rhs_fns=disp, markers=[domain_marker, facet_marker], contact_data=(
-                                                                                surfaces, contact),
-                                                                            bcs=bcs, problem_parameters=problem_parameters, newton_options=newton_options,
-                                                                            petsc_options=petsc_options, outfile=solver_outfile)
-        num_newton_its[j] = newton_its
-        num_krylov_its[j] = krylov_iterations
-        newton_time[j] = solver_time
+        u, newton_its, krylov_iterations, solver_time = nitsche_pseudo_time(args.time_steps, ufl_form=Fj,
+                                                                            u=u, rhs_fns=disp,
+                                                                            markers=[domain_marker, facet_marker],
+                                                                            contact_data=(surfaces, contact), bcs=bcs,
+                                                                            problem_parameters=problem_parameters,
+                                                                            newton_options=newton_options,
+                                                                            petsc_options=petsc_options,
+                                                                            outfile=solver_outfile,
+                                                                            fname=outname)
+        num_newton_its[j, :] = newton_its[:]
+        num_krylov_its[j, :] = krylov_iterations[:]
+        newton_time[j, :] = solver_time[:]
         with XDMFFile(mesh.comm, f"results/u_unbiased_{j}.xdmf", "w") as xdmf:
             xdmf.write_mesh(mesh)
             u.name = "u"
