@@ -52,6 +52,8 @@ if __name__ == "__main__":
                         help="File for appending results", dest="outfile")
     parser.add_argument("--split", type=np.int32, default=1, required=False,
                         help="number of surface segments", dest="split")
+    parser.add_argument("--time_steps", default=1, type=np.int32, dest="time_steps",
+                        help="Number of pseudo time steps")
     _raytracing = parser.add_mutually_exclusive_group(required=False)
     _raytracing.add_argument('--raytracing', dest='raytracing', action='store_true',
                              help="Use raytracing for contact search.",
@@ -89,9 +91,14 @@ if __name__ == "__main__":
         dirichlet_facets1 = locate_entities_boundary(mesh, tdim - 1, lambda x: identifier(x, 0.0))
         dirichlet_facets2 = locate_entities_boundary(mesh, tdim - 1, lambda x: identifier(x, 1.0))
 
+        # create facet_marker including z Dirichlet facets
+        tag = marker_offset + 4 * split + 1
+        indices = np.hstack([facet_marker.indices, dirichlet_facets1, dirichlet_facets2])
+        values = np.hstack([facet_marker.values, tag * np.ones(len(dirichlet_facets1) + len(dirichlet_facets2))])
+        sorted_facets = np.argsort(indices)
+        facet_marker = MeshTags_int32(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
         # Create Dirichlet bdy conditions
-        bdy_dofs_z = _fem.locate_dofs_topological(V.sub(2), tdim - 1, np.hstack([dirichlet_facets1, dirichlet_facets2]))
-        bcs = [_fem.dirichletbc(_PETSc.ScalarType(0), bdy_dofs_z, V.sub(2))]
+        bcs = (np.array([[tag, 2]], dtype=np.int32), [_PETSc.ScalarType(0)])
         g = _fem.Constant(mesh, _PETSc.ScalarType((0, 0, 0)))      # zero dirichlet
         t = _fem.Constant(mesh, _PETSc.ScalarType((0.2, 0.5, 0)))  # traction
         f = _fem.Constant(mesh, _PETSc.ScalarType((1.0, 0.5, 0)))  # body force
@@ -112,7 +119,7 @@ if __name__ == "__main__":
                 mesh, facet_marker, domain_marker, [marker_offset + i for i in range(2 * split)])
 
         V = _fem.VectorFunctionSpace(mesh, ("CG", 1))
-        bcs = []
+        bcs = (np.empty(shape=(2, 0), dtype=np.int32), [])
         g = _fem.Constant(mesh, _PETSc.ScalarType((0, 0)))     # zero Dirichlet
         t = _fem.Constant(mesh, _PETSc.ScalarType((0.2, 0.5)))  # traction
         f = _fem.Constant(mesh, _PETSc.ScalarType((1.0, 0.5)))  # body force
@@ -230,11 +237,19 @@ if __name__ == "__main__":
     problem_parameters = {"gamma": E * gamma, "theta": theta, "mu": mu, "lambda": lmbda}
     solver_outfile = args.outfile if args.ksp else None
     log.set_log_level(log.LogLevel.OFF)
+    rhs_fns = [g, t, f]
+    size = mesh.comm.size
+    outname = f"results/xmas_{tdim}D_{size}"
     with Timer("~Contact: - all"):
-        u1, num_its, krylov_iterations, solver_time = nitsche_unbiased(
-            ufl_form=F, u=u, markers=mts, contact_data=(surfaces, contact_pairs),
-            bcs=bcs, problem_parameters=problem_parameters, search_method=mode,
-            newton_options=newton_options, petsc_options=petsc_options, outfile=solver_outfile)
+        u1, num_its, krylov_iterations, solver_time = nitsche_unbiased(args.time_steps, ufl_form=F, u=u,
+                                                                       rhs_fns=rhs_fns, markers=mts,
+                                                                       contact_data=(surfaces, contact_pairs),
+                                                                       bcs=bcs, problem_parameters=problem_parameters,
+                                                                       search_method=mode,
+                                                                       newton_options=newton_options,
+                                                                       petsc_options=petsc_options,
+                                                                       outfile=solver_outfile,
+                                                                       fname=outname)
 
     # write solution to file
     size = mesh.comm.size
