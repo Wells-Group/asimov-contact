@@ -41,7 +41,7 @@ def setup_newton_solver(F_custom: fem.forms.FormMetaClass, J_custom: fem.forms.F
     contact            The contact class
     markers            The meshtags marking surfaces and domains
     entities           The contact surface entities for integration
-    quadrature_degre   The quadrature degree
+    quadrature_degree  The quadrature degree
     const_coeffs       The coefficients for material parameters and h
     consts             The constants in the forms
     """
@@ -95,7 +95,7 @@ def setup_newton_solver(F_custom: fem.forms.FormMetaClass, J_custom: fem.forms.F
                 u._cpp_object, quadrature_degree, entities[i]))
 
     # function for updating coefficients coefficients
-    @ common.timed("~Contact: Update coefficients")
+    @common.timed("~Contact: Update coefficients")
     def compute_coefficients(x, coeffs):
         size_local = V.dofmap.index_map.size_local
         bs = V.dofmap.index_map_bs
@@ -118,7 +118,7 @@ def setup_newton_solver(F_custom: fem.forms.FormMetaClass, J_custom: fem.forms.F
             coeffs[i][:, :] = c_0[:, :]
 
     # function for computing residual
-    @ common.timed("~Contact: Assemble residual")
+    @common.timed("~Contact: Assemble residual")
     def compute_residual(x, b, coeffs):
         b.zeroEntries()
         b.ghostUpdate(addv=_PETSc.InsertMode.INSERT, mode=_PETSc.ScatterMode.FORWARD)
@@ -136,7 +136,7 @@ def setup_newton_solver(F_custom: fem.forms.FormMetaClass, J_custom: fem.forms.F
             fem.petsc.set_bc(b, tbcs, x, -1.0)
 
     # function for computing jacobian
-    @ common.timed("~Contact: Assemble matrix")
+    @common.timed("~Contact: Assemble matrix")
     def compute_jacobian_matrix(x, A, coeffs):
         A.zeroEntries()
         with common.Timer("~~Contact: Contact contributions (in assemble matrix)"):
@@ -163,15 +163,14 @@ def setup_newton_solver(F_custom: fem.forms.FormMetaClass, J_custom: fem.forms.F
     return newton_solver
 
 
-def get_problem_parameters(problem_parameters):
+def get_problem_parameters(problem_parameters: dict[str, np.float64]):
     """
     Retrieve problem parameters and throw error if parameter missing
     """
-
     if problem_parameters.get("mu") is None:
         raise RuntimeError("Need to supply lame paramters")
     else:
-        mu = mu = problem_parameters.get("mu")
+        mu = problem_parameters.get("mu")
 
     if problem_parameters.get("lambda") is None:
         raise RuntimeError("Need to supply lame paramters")
@@ -190,7 +189,11 @@ def get_problem_parameters(problem_parameters):
     return mu, lmbda, theta, gamma, sigma
 
 
-def copy_fns(fns: list[Union[fem.Function, fem.Constant]], mesh: mesh.Mesh):
+def copy_fns(fns: list[Union[fem.Function, fem.Constant]],
+             mesh: mesh.Mesh) -> list[Union[fem.Function, fem.Constant]]:
+    """
+    Create copy of list of finite element functions/constanst
+    """
     old_fns = []
     for fn in fns:
         if fn is fem.Function:
@@ -207,7 +210,11 @@ def copy_fns(fns: list[Union[fem.Function, fem.Constant]], mesh: mesh.Mesh):
 
 
 def update_fns(t: float, fns: list[Union[fem.Function, fem.Constant]],
-               old_fns: list[Union[fem.Function, fem.Constant]]):
+               old_fns: list[Union[fem.Function, fem.Constant]]) -> None:
+    """
+    Replace function values of function in fns with
+    t* function value of function in old_fns
+    """
     for k, fn in enumerate(fns):
         if fn is fem.Function:
             fn.x.array[:] = t * old_fns[k].x.array[:]
@@ -294,9 +301,7 @@ def nitsche_unbiased(steps: int, ufl_form: ufl.Form, u: fem.Function,
     w = ufl.TrialFunction(V)     # Trial function
     du = fem.Function(V)
     du.x.array[:] = u.x.array[:]
-    du.x.scatter_forward()
     u.x.array[:].fill(0)
-    u.x.scatter_forward()
     h = ufl.CellDiameter(mesh)
     n = ufl.FacetNormal(mesh)
 
@@ -419,12 +424,10 @@ def nitsche_unbiased(steps: int, ufl_form: ufl.Form, u: fem.Function,
         # update u and mesh
         du.x.scatter_forward()
         u.x.array[:] += du.x.array[:]
-        u.x.scatter_forward()
         contact.update_submesh_geometry(u._cpp_object)
 
         # reset du
         du.x.array[:].fill(0)
-        du.x.scatter_forward()
 
         # write solution
         vtx.write(t)
