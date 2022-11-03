@@ -10,7 +10,7 @@ from dolfinx.cpp.mesh import MeshTags_int32
 import dolfinx.fem as _fem
 import dolfinx.la as _la
 import numpy
-import scipy
+import scipy.sparse
 import ufl
 from petsc4py import PETSc
 
@@ -106,15 +106,15 @@ def tangential_proj(u, n):
 
 
 class NonlinearPDE_SNESProblem:
-    def __init__(self, F, u, bc, form_compiler_params={}, jit_params={}):
+    def __init__(self, F, u, bc, form_compiler_options={}, jit_options={}):
         V = u.function_space
         du = ufl.TrialFunction(V)
 
-        self.L = _fem.form(F, form_compiler_params=form_compiler_params,
-                           jit_params=jit_params)
+        self.L = _fem.form(F, form_compiler_options=form_compiler_options,
+                           jit_options=jit_options)
         self.a = _fem.form(ufl.derivative(F, u, du),
-                           form_compiler_params=form_compiler_params,
-                           jit_params=jit_params)
+                           form_compiler_options=form_compiler_options,
+                           jit_options=jit_options)
         self.bc = bc
         self._F, self._J = None, None
         self.u = u

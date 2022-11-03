@@ -22,10 +22,8 @@ namespace dolfinx_contact
 /// @param[in] constant_normal Boolean indicating if normal is constant at every
 /// point of the cell
 /// @returns The integration kernel
-kernel_fn<PetscScalar> generate_contact_kernel(
-    std::shared_ptr<const dolfinx::fem::FunctionSpace> V, Kernel type,
-    QuadratureRule& quadrature_rule,
-    std::vector<std::shared_ptr<const dolfinx::fem::Function<PetscScalar>>>
-        coeffs,
-    bool constant_normal);
+kernel_fn<PetscScalar>
+generate_contact_kernel(std::shared_ptr<const dolfinx::fem::FunctionSpace> V,
+                        Kernel type, QuadratureRule& quadrature_rule,
+                        bool constant_normal);
 } // namespace dolfinx_contact

@@ -227,7 +227,7 @@ def create_box_mesh_3D(filename: str, simplex: bool = True, order: int = 1,
             model.occ.add_box(0, 0, disp, L, H, W)
             model.occ.synchronize()
         else:
-            square1 = model.occ.add_rectangle(0, 0, 0, L, H)
+            square1 = model.occ.add_rectangle(0, 0 + 0.2, 0, L, H)
             square2 = model.occ.add_rectangle(0, 0, disp, L, H)
             model.occ.extrude([(2, square1)], 0, 0, W, numElements=[20], recombine=True)
             model.occ.extrude([(2, square2)], 0, 0, W, numElements=[15], recombine=True)
@@ -289,7 +289,7 @@ def create_sphere_plane_mesh(filename: str, order: int = 1, res=0.05):
         out_vol_tags, _ = gmsh.model.occ.fragment([(3, sphere_bottom)], [(3, sphere_top)])
 
         # Add bottom box
-        box = gmsh.model.occ.add_box(center[0] - r, center[1] - r, center[2] - r - gap - H, 3 * r, 3 * r, H)
+        box = gmsh.model.occ.add_box(center[0] - r, center[1] - r, center[2] - r - gap - 2 * H, 3 * r, 3 * r, 2 * H)
         # Rotate after marking boundaries
         gmsh.model.occ.rotate([(3, box)], center[0], center[1], center[2]
                               - r - 3 * gap, 1, 0, 0, theta)
@@ -390,10 +390,9 @@ def create_sphere_sphere_mesh(filename: str, order: int = 1):
 
 
 def create_cylinder_cylinder_mesh(filename: str, order: int = 1, res=0.25, simplex: bool = False):
+    gmsh.initialize()
+    model = gmsh.model()
     if MPI.COMM_WORLD.rank == 0:
-        gmsh.initialize()
-        model = gmsh.model()
-
         # Generate a mesh with 2nd-order hexahedral cells using gmsh
         model_name = "Cylinder-cylinder mesh"
         model.add(model_name)

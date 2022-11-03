@@ -4,7 +4,6 @@
 
 import basix
 import dolfinx.mesh
-import dolfinx_cuas
 import numpy as np
 import pytest
 import ufl
@@ -113,7 +112,7 @@ def test_vector_surface_kernel(dim, kernel_type, P, Q):
         (theta * sigma_n(v) - (gamma / h) * ufl.dot(v, (-n_2))) * ds(1)
     # Compile UFL form
     cffi_options = ["-O2", "-march=native"]
-    L = form(L, jit_params={"cffi_extra_compile_args": cffi_options, "cffi_libraries": ["m"]})
+    L = form(L, jit_options={"cffi_extra_compile_args": cffi_options, "cffi_libraries": ["m"]})
     b = create_vector(L)
 
     # Normal assembly
@@ -125,8 +124,15 @@ def test_vector_surface_kernel(dim, kernel_type, P, Q):
     # num_local_cells = mesh.topology.index_map(mesh.topology.dim).size_local
     consts = np.array([gamma, theta])
     consts = np.hstack((consts, n_vec))
-    integral_entities = dolfinx_contact.compute_active_entities(mesh, ft.indices, IntegralType.exterior_facet)
-    coeffs = dolfinx_cuas.cpp.pack_coefficients([u._cpp_object, mu._cpp_object, lmbda._cpp_object], integral_entities)
+    integral_entities, num_local = dolfinx_contact.compute_active_entities(
+        mesh, ft.indices, IntegralType.exterior_facet)
+    integral_entities = integral_entities[:num_local]
+    mu_packed = dolfinx_contact.cpp.pack_coefficient_quadrature(mu._cpp_object, 0, integral_entities)
+    lmbda_packed = dolfinx_contact.cpp.pack_coefficient_quadrature(lmbda._cpp_object, 0, integral_entities)
+    u_packed = dolfinx_contact.cpp.pack_coefficient_quadrature(u._cpp_object, 2 * P
+                                                               + Q + 1, integral_entities)
+    grad_u_packed = dolfinx_contact.cpp.pack_gradient_quadrature(u._cpp_object, 2 * P
+                                                                 + Q + 1, integral_entities)
     h_facets = dolfinx_contact.pack_circumradius(mesh, integral_entities)
     data = np.array([1], dtype=np.int32)
     offsets = np.array([0, 1], dtype=np.int32)
@@ -137,13 +143,12 @@ def test_vector_surface_kernel(dim, kernel_type, P, Q):
     # FIXME: assuming all facets are the same type
     q_rule = dolfinx_contact.QuadratureRule(mesh.topology.cell_type, 2 * P
                                             + Q + 1, mesh.topology.dim - 1, basix.QuadratureType.Default)
-    coeffs = np.hstack([coeffs, h_facets, g_vec])
+    coeffs = np.hstack([mu_packed, lmbda_packed, h_facets, g_vec, u_packed, grad_u_packed])
 
     L_custom = ufl.inner(sigma(u), epsilon(v)) * dx
     L_custom = form(L_custom)
     b2 = create_vector(L_custom)
-    kernel = dolfinx_contact.cpp.generate_contact_kernel(V._cpp_object, kernel_type, q_rule,
-                                                         [u._cpp_object, mu._cpp_object, lmbda._cpp_object])
+    kernel = dolfinx_contact.cpp.generate_contact_kernel(V._cpp_object, kernel_type, q_rule)
 
     b2.zeroEntries()
     contact.assemble_vector(b2, 0, kernel, coeffs, consts)
@@ -237,7 +242,7 @@ def test_matrix_surface_kernel(dim, kernel_type, P, Q):
         (theta * sigma_n(v) - gamma / h * ufl.dot(v, (-n_2))) * ds(1)
     # Compile UFL form
     cffi_options = ["-O2", "-march=native"]
-    a = form(a, jit_params={"cffi_extra_compile_args": cffi_options, "cffi_libraries": ["m"]})
+    a = form(a, jit_options={"cffi_extra_compile_args": cffi_options, "cffi_libraries": ["m"]})
     A = create_matrix(a)
 
     # Normal assembly
@@ -250,8 +255,15 @@ def test_matrix_surface_kernel(dim, kernel_type, P, Q):
                                             + Q + 1, mesh.topology.dim - 1, basix.QuadratureType.Default)
     consts = np.array([gamma, theta])
     consts = np.hstack((consts, n_vec))
-    integral_entities = dolfinx_contact.compute_active_entities(mesh, facets, IntegralType.exterior_facet)
-    coeffs = dolfinx_cuas.cpp.pack_coefficients([u._cpp_object, mu._cpp_object, lmbda._cpp_object], integral_entities)
+    integral_entities, num_local = dolfinx_contact.compute_active_entities(
+        mesh, facets, IntegralType.exterior_facet)
+    integral_entities = integral_entities[:num_local]
+    mu_packed = dolfinx_contact.cpp.pack_coefficient_quadrature(mu._cpp_object, 0, integral_entities)
+    lmbda_packed = dolfinx_contact.cpp.pack_coefficient_quadrature(lmbda._cpp_object, 0, integral_entities)
+    u_packed = dolfinx_contact.cpp.pack_coefficient_quadrature(u._cpp_object, 2 * P
+                                                               + Q + 1, integral_entities)
+    grad_u_packed = dolfinx_contact.cpp.pack_gradient_quadrature(u._cpp_object, 2 * P
+                                                                 + Q + 1, integral_entities)
     h_facets = dolfinx_contact.pack_circumradius(mesh, integral_entities)
     data = np.array([1], dtype=np.int32)
     offsets = np.array([0, 1], dtype=np.int32)
@@ -259,12 +271,12 @@ def test_matrix_surface_kernel(dim, kernel_type, P, Q):
     contact = dolfinx_contact.cpp.Contact([ft], surfaces, [(0, 0)], V._cpp_object, quadrature_degree=2 * P + Q + 1)
     contact.create_distance_map(0)
     g_vec = contact.pack_gap_plane(0, -g)
-    coeffs = np.hstack([coeffs, h_facets, g_vec])
+    coeffs = np.hstack([mu_packed, lmbda_packed, h_facets, g_vec, u_packed, grad_u_packed])
     a_custom = ufl.inner(sigma(du), epsilon(v)) * dx
     a_custom = form(a_custom)
     B = create_matrix(a_custom)
     kernel = dolfinx_contact.cpp.generate_contact_kernel(
-        V._cpp_object, kernel_type, q_rule, [u._cpp_object, mu._cpp_object, lmbda._cpp_object])
+        V._cpp_object, kernel_type, q_rule)
     B.zeroEntries()
 
     contact.assemble_matrix(B, [], 0, kernel, coeffs, consts)

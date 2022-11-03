@@ -14,7 +14,7 @@ jobs:
 
     name: Sonarcloud analysis
     runs-on: ubuntu-latest
-    container: dolfinx/dev-env:v0.5.0
+    container: dolfinx/dev-env:nightly
     env:
       SONAR_SCANNER_VERSION:
         4.7.0.2747 # Find the latest version at:
@@ -62,14 +62,14 @@ jobs:
         with:
           path: ./basix
           repository: FEniCS/basix
-          ref: v0.5.0
+          ref: main
 
       - name: Get DOLFINx
         uses: actions/checkout@v2
         with:
           path: ./dolfinx
           repository: FEniCS/dolfinx
-          ref: v0.5.0
+          ref: main
 
       - name: Install FEniCS Python components (DOLFINx)
         run: |
@@ -77,25 +77,12 @@ jobs:
           cmake --build build-basix
           cmake --install build-basix
           python3 -m pip install ./basix/python
-          python3 -m pip install git+https://github.com/FEniCS/ufl.git@2022.2.0
-          python3 -m pip install git+https://github.com/FEniCS/ffcx.git@v0.5.0
+          python3 -m pip install git+https://github.com/FEniCS/ufl.git@main
+          python3 -m pip install git+https://github.com/FEniCS/ffcx.git@main
           cmake -G Ninja -DCMAKE_BUILD_TYPE="Release" -B build-dolfinx -S ./dolfinx/cpp/
           cmake --build build-dolfinx
           cmake --install build-dolfinx
           BUILD_TYPE="Release" python3 -m pip -v install ./dolfinx/python/
-
-      - name: Get Custom assemblers
-        uses: actions/checkout@v2
-        with:
-          path: ./asimov-custom-assemblers
-          repository: Wells-Group/asimov-custom-assemblers
-          ref: main
-
-      - name: Install custom assemblers
-        run: |
-          cmake -G Ninja -DCMAKE_BUILD_TYPE=Debug -B build-cuas -S ./asimov-custom-assemblers/cpp
-          ninja -C build-cuas install
-          BUILD_TYPE=Debug python3 -m pip -v install ./asimov-custom-assemblers/python/
 
       - name: Run build-wrapper
         run: |

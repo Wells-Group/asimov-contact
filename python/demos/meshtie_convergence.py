@@ -5,6 +5,7 @@
 import argparse
 import dolfinx.fem as _fem
 from dolfinx.common import Timer, timing, TimingType, list_timings
+from dolfinx.cpp.mesh import MeshTags_int32
 from dolfinx.fem import Constant, Function, VectorFunctionSpace
 from dolfinx.graph import create_adjacencylist
 from dolfinx.io import XDMFFile
@@ -18,6 +19,7 @@ from dolfinx_contact.helpers import (epsilon, lame_parameters,
 from dolfinx_contact.meshing import (create_split_box_2D, create_split_box_3D,
                                      horizontal_sine, create_unsplit_box_2d, create_unsplit_box_3d)
 from dolfinx_contact.meshtie import nitsche_meshtie
+from dolfinx_contact.parallel_mesh_ghosting import create_contact_mesh
 
 
 # manufactured solution 2D
@@ -92,13 +94,13 @@ def unsplit_domain(threed: bool = False, runs: int = 1):
         print(f"Run {i}")
         # create mesh
         if threed:
-            fname = "box_3D"
-            create_unsplit_box_3d(res=res, num_segments=num_segments)
+            fname = f"box_3D_{i}"
+            create_unsplit_box_3d(res=res, num_segments=num_segments, fname=fname)
             fun = fun_3d
             u_fun = u_fun_3d
         else:
-            fname = "box_2D"
-            create_unsplit_box_2d(res=res, num_segments=num_segments)
+            fname = f"box_2D_{i}"
+            create_unsplit_box_2d(res=res, num_segments=num_segments, filename=fname)
             fun = fun_2d
             u_fun = u_fun_2d
 
@@ -196,7 +198,14 @@ def unsplit_domain(threed: bool = False, runs: int = 1):
         errors.append(np.sqrt(mesh.comm.allreduce(error, op=MPI.SUM)))
         res = 0.5 * res
         num_segments = 2 * num_segments
-
+    ncells = mesh.topology.index_map(tdim).size_local
+    indices = np.array(range(ncells), dtype=np.int32)
+    values = mesh.comm.rank * np.ones(ncells, dtype=np.int32)
+    process_marker = MeshTags_int32(mesh, tdim, indices, values)
+    process_marker.name = "process_marker"
+    with XDMFFile(mesh.comm, "results/partitioning_unsplit.xdmf", "w") as xdmf:
+        xdmf.write_mesh(mesh)
+        xdmf.write_meshtags(process_marker)
     print("L2-error: ", errors)
     print("Number of dofs: ", ndofs)
     print("Linear solver time: ", times)
@@ -250,27 +259,29 @@ def test_meshtie(threed: bool = False, simplex: bool = True, runs: int = 5):
     for i in range(1, runs + 1):
         print(f"Run {i}")
         if threed:
-            fname = "beam3D"
+            fname = fname = f"beam3D_{i}"
             create_split_box_3D(fname, res=res, L=5.0, H=1.0, W=1.0, domain_1=[0, 1, 5, 4], domain_2=[4, 5, 2, 3], x0=[
                 0, 0.5], x1=[5.0, 0.7], curve_fun=horizontal_sine, num_segments=num_segments, hex=not simplex)
             fun = fun_3d
             u_fun = u_fun_3d
         else:
-            fname = "beam"
+            fname = fname = f"beam_{i}"
             create_split_box_2D(fname, res=res, L=5.0, H=1.0, domain_1=[0, 1, 5, 4], domain_2=[4, 5, 2, 3], x0=[
                 0, 0.5], x1=[5.0, 0.7], curve_fun=horizontal_sine, num_segments=num_segments, quads=not simplex)
             fun = fun_2d
             u_fun = u_fun_2d
-
         with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
             mesh = xdmf.read_mesh(name="Grid")
-        tdim = mesh.topology.dim
-        gdim = mesh.geometry.dim
-        mesh.topology.create_connectivity(tdim - 1, 0)
-        mesh.topology.create_connectivity(tdim - 1, tdim)
-        with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
+            tdim = mesh.topology.dim
+            gdim = mesh.geometry.dim
+            mesh.topology.create_connectivity(tdim - 1, 0)
+            mesh.topology.create_connectivity(tdim - 1, tdim)
             domain_marker = xdmf.read_meshtags(mesh, name="domain_marker")
             facet_marker = xdmf.read_meshtags(mesh, name="contact_facets")
+
+        if mesh.comm.size > 1:
+            mesh, facet_marker, domain_marker = create_contact_mesh(
+                mesh, facet_marker, domain_marker, [4, 6])
 
         # Function, TestFunction, TrialFunction and measures
         V = VectorFunctionSpace(mesh, ("CG", 1))
@@ -313,6 +324,8 @@ def test_meshtie(threed: bool = False, simplex: bool = True, runs: int = 5):
                                                       bcs=[], problem_parameters=problem_parameters,
                                                       petsc_options=petsc_options)
 
+        u1.x.scatter_forward()
+
         V_err = _fem.VectorFunctionSpace(mesh, ("CG", 3))
         u_ex = _fem.Function(V_err)
         u_ex.interpolate(lambda x: u_fun(x, c, gdim))
@@ -327,6 +340,14 @@ def test_meshtie(threed: bool = False, simplex: bool = True, runs: int = 5):
         times.append(solver_time)
         dofs.append(ndofs)
 
+    ncells = mesh.topology.index_map(tdim).size_local
+    indices = np.array(range(ncells), dtype=np.int32)
+    values = mesh.comm.rank * np.ones(ncells, dtype=np.int32)
+    process_marker = MeshTags_int32(mesh, tdim, indices, values)
+    process_marker.name = "process_marker"
+    with XDMFFile(mesh.comm, "results/partitioning_split.xdmf", "w") as xdmf:
+        xdmf.write_mesh(mesh)
+        xdmf.write_meshtags(process_marker)
     list_timings(mesh.comm, [TimingType.wall])
     print("L2 errors; ", errors)
     print("Solver time: ", times)

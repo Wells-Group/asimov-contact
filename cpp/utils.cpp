@@ -557,11 +557,15 @@ dolfinx_contact::get_update_normal(const dolfinx::fem::CoordinateElement& cmap)
 /// @param[in] mesh The mesh
 /// @param[in] entities List of mesh entities
 /// @param[in] integral The type of integral
-std::vector<std::int32_t> dolfinx_contact::compute_active_entities(
+/// @return list of active entities sorted by cell and size_local
+std::pair<std::vector<std::int32_t>, std::size_t>
+dolfinx_contact::compute_active_entities(
     std::shared_ptr<const dolfinx::mesh::Mesh> mesh,
     std::span<const std::int32_t> entities, dolfinx::fem::IntegralType integral)
 {
 
+  int tdim = mesh->topology().dim();
+  const int size_local = mesh->topology().index_map(tdim)->size_local();
   switch (integral)
   {
   case dolfinx::fem::IntegralType::cell:
@@ -569,13 +573,19 @@ std::vector<std::int32_t> dolfinx_contact::compute_active_entities(
     std::vector<std::int32_t> active_entities(entities.size());
     std::transform(entities.begin(), entities.end(), active_entities.begin(),
                    [](std::int32_t cell) { return cell; });
-    return active_entities;
+    dolfinx::radix_sort(std::span<std::int32_t>(active_entities));
+    auto cell_it = std::upper_bound(active_entities.begin(),
+                                    active_entities.end(), size_local);
+    std::size_t num_local = std::distance(active_entities.begin(), cell_it);
+    return std::make_pair(active_entities, num_local);
   }
   case dolfinx::fem::IntegralType::exterior_facet:
   {
     std::vector<std::int32_t> active_entities(2 * entities.size());
+    std::vector<std::int32_t> cells(entities.size());
+    std::vector<std::int32_t> facets(entities.size());
+
     const dolfinx::mesh::Topology& topology = mesh->topology();
-    int tdim = topology.dim();
     auto f_to_c = topology.connectivity(tdim - 1, tdim);
     assert(f_to_c);
     auto c_to_f = topology.connectivity(tdim, tdim - 1);
@@ -589,42 +599,30 @@ std::vector<std::int32_t> dolfinx_contact::compute_active_entities(
       auto facet_it
           = std::find(cell_facets.begin(), cell_facets.end(), entities[f]);
       assert(facet_it != cell_facets.end());
-      active_entities[2 * f] = cell;
-      active_entities[2 * f + 1]
-          = (std::int32_t)std::distance(cell_facets.begin(), facet_it);
+      cells[f] = cell;
+      facets[f] = (std::int32_t)std::distance(cell_facets.begin(), facet_it);
     }
-    return active_entities;
-  }
-  case dolfinx::fem::IntegralType::interior_facet:
-  {
-    std::vector<std::int32_t> active_entities(4 * entities.size());
-    const dolfinx::mesh::Topology& topology = mesh->topology();
-    int tdim = topology.dim();
-    auto f_to_c = topology.connectivity(tdim - 1, tdim);
-    if (!f_to_c)
-      throw std::runtime_error("Facet to cell connectivity missing");
-    auto c_to_f = topology.connectivity(tdim, tdim - 1);
-    if (!c_to_f)
-      throw std::runtime_error("Cell to facet connecitivty missing");
+
+    std::vector<std::int32_t> perm(entities.size());
+    std::iota(perm.begin(), perm.end(), 0);
+    dolfinx::argsort_radix<std::int32_t>(cells, perm);
+
+    // Sort cells in accending order
+    std::size_t num_local = 0;
     for (std::size_t f = 0; f < entities.size(); f++)
     {
-      assert(f_to_c->num_links(entities[f]) == 2);
-      auto cells = f_to_c->links(entities[f]);
-      for (std::int32_t i = 0; i < 2; i++)
-      {
-        auto cell_facets = c_to_f->links(cells[i]);
-        auto facet_it
-            = std::find(cell_facets.begin(), cell_facets.end(), entities[f]);
-        assert(facet_it != cell_facets.end());
-        active_entities[4 * f + 2 * i] = cells[i];
-        active_entities[4 * f + 2 * i + 1]
-            = (std::int32_t)std::distance(cell_facets.begin(), facet_it);
-      }
+      active_entities[2 * f] = cells[perm[f]];
+      active_entities[2 * f + 1] = facets[perm[f]];
+      if (cells[perm[f]] < size_local)
+        num_local += 1;
     }
-    return active_entities;
+
+    return std::make_pair(active_entities, num_local);
   }
   default:
-    throw std::runtime_error("Unknown integral type");
+    throw std::invalid_argument(
+        "Integral type not supported. Note that this function "
+        "has not been implemented for interior facets.");
   }
   return {};
 }

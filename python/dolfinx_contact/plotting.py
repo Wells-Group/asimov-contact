@@ -36,4 +36,5 @@ def plot_gap(mesh, contact, tag, gap, facets, facets_opp):
             plt.plot(x, y)
     plt.gca().set_aspect('equal', adjustable='box')
     plt.xlim(min_x, max_x)
-    plt.savefig(f"gap_{tag}.png")
+    rank = mesh.comm.rank
+    plt.savefig(f"gap_{tag}_{rank}.png")

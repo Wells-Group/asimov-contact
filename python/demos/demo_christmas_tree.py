@@ -9,9 +9,10 @@ import numpy as np
 from dolfinx import log
 import dolfinx.fem as _fem
 from dolfinx.common import TimingType, list_timings, timing, Timer
+from dolfinx.cpp.mesh import MeshTags_int32
 from dolfinx.graph import create_adjacencylist
 from dolfinx.io import XDMFFile
-from dolfinx.mesh import meshtags, locate_entities_boundary
+from dolfinx.mesh import meshtags, locate_entities_boundary, GhostMode
 from mpi4py import MPI
 from petsc4py import PETSc as _PETSc
 import ufl
@@ -20,6 +21,7 @@ from dolfinx_contact.meshing import convert_mesh, create_christmas_tree_mesh, cr
 from dolfinx_contact.unbiased.nitsche_unbiased import nitsche_unbiased
 from dolfinx_contact.helpers import lame_parameters, sigma_func, weak_dirichlet, epsilon
 from dolfinx_contact.cpp import find_candidate_surface_segment, ContactMode
+from dolfinx_contact.parallel_mesh_ghosting import create_contact_mesh
 
 if __name__ == "__main__":
     desc = "Nitsche's method for two elastic bodies using custom assemblers"
@@ -50,6 +52,8 @@ if __name__ == "__main__":
                         help="File for appending results", dest="outfile")
     parser.add_argument("--split", type=np.int32, default=1, required=False,
                         help="number of surface segments", dest="split")
+    parser.add_argument("--time_steps", default=1, type=np.int32, dest="time_steps",
+                        help="Number of pseudo time steps")
     _raytracing = parser.add_mutually_exclusive_group(required=False)
     _raytracing.add_argument('--raytracing', dest='raytracing', action='store_true',
                              help="Use raytracing for contact search.",
@@ -65,13 +69,18 @@ if __name__ == "__main__":
         create_christmas_tree_mesh_3D(filename=fname, res=args.res, split=split, n1=81, n2=41)
         convert_mesh(fname, fname, gdim=3)
         with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
-            mesh = xdmf.read_mesh()
+            mesh = xdmf.read_mesh(ghost_mode=GhostMode.none)
             domain_marker = xdmf.read_meshtags(mesh, "cell_marker")
             tdim = mesh.topology.dim
             mesh.topology.create_connectivity(tdim - 1, tdim)
             facet_marker = xdmf.read_meshtags(mesh, "facet_marker")
 
         marker_offset = 6
+
+        if mesh.comm.size > 1:
+            mesh, facet_marker, domain_marker = create_contact_mesh(
+                mesh, facet_marker, domain_marker, [marker_offset + i for i in range(2 * split)])
+
         V = _fem.VectorFunctionSpace(mesh, ("CG", 1))
         # Apply zero Dirichlet boundary conditions in z-direction on part of the xmas-tree
 
@@ -82,9 +91,14 @@ if __name__ == "__main__":
         dirichlet_facets1 = locate_entities_boundary(mesh, tdim - 1, lambda x: identifier(x, 0.0))
         dirichlet_facets2 = locate_entities_boundary(mesh, tdim - 1, lambda x: identifier(x, 1.0))
 
+        # create facet_marker including z Dirichlet facets
+        tag = marker_offset + 4 * split + 1
+        indices = np.hstack([facet_marker.indices, dirichlet_facets1, dirichlet_facets2])
+        values = np.hstack([facet_marker.values, tag * np.ones(len(dirichlet_facets1) + len(dirichlet_facets2))])
+        sorted_facets = np.argsort(indices)
+        facet_marker = MeshTags_int32(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
         # Create Dirichlet bdy conditions
-        bdy_dofs_z = _fem.locate_dofs_topological(V.sub(2), tdim - 1, np.hstack([dirichlet_facets1, dirichlet_facets2]))
-        bcs = [_fem.dirichletbc(_PETSc.ScalarType(0), bdy_dofs_z, V.sub(2))]
+        bcs = (np.array([[tag, 2]], dtype=np.int32), [_PETSc.ScalarType(0)])
         g = _fem.Constant(mesh, _PETSc.ScalarType((0, 0, 0)))      # zero dirichlet
         t = _fem.Constant(mesh, _PETSc.ScalarType((0.2, 0.5, 0)))  # traction
         f = _fem.Constant(mesh, _PETSc.ScalarType((1.0, 0.5, 0)))  # body force
@@ -100,12 +114,21 @@ if __name__ == "__main__":
             facet_marker = xdmf.read_meshtags(mesh, name="facet_marker")
 
         marker_offset = 5
+        if mesh.comm.size > 1:
+            mesh, facet_marker, domain_marker = create_contact_mesh(
+                mesh, facet_marker, domain_marker, [marker_offset + i for i in range(2 * split)])
+
         V = _fem.VectorFunctionSpace(mesh, ("CG", 1))
-        bcs = []
+        bcs = (np.empty(shape=(2, 0), dtype=np.int32), [])
         g = _fem.Constant(mesh, _PETSc.ScalarType((0, 0)))     # zero Dirichlet
         t = _fem.Constant(mesh, _PETSc.ScalarType((0.2, 0.5)))  # traction
         f = _fem.Constant(mesh, _PETSc.ScalarType((1.0, 0.5)))  # body force
 
+    ncells = mesh.topology.index_map(tdim).size_local
+    indices = np.array(range(ncells), dtype=np.int32)
+    values = mesh.comm.rank * np.ones(ncells, dtype=np.int32)
+    process_marker = MeshTags_int32(mesh, tdim, indices, values)
+    process_marker.name = "process_marker"
     gdim = mesh.geometry.dim
     # create meshtags for candidate segments
     mts = [domain_marker, facet_marker]
@@ -214,17 +237,29 @@ if __name__ == "__main__":
     problem_parameters = {"gamma": E * gamma, "theta": theta, "mu": mu, "lambda": lmbda}
     solver_outfile = args.outfile if args.ksp else None
     log.set_log_level(log.LogLevel.OFF)
+    rhs_fns = [g, t, f]
+    size = mesh.comm.size
+    outname = f"results/xmas_{tdim}D_{size}"
     with Timer("~Contact: - all"):
-        u1, num_its, krylov_iterations, solver_time = nitsche_unbiased(
-            ufl_form=F, u=u, markers=mts, contact_data=(surfaces, contact_pairs),
-            bcs=bcs, problem_parameters=problem_parameters, search_method=mode,
-            newton_options=newton_options, petsc_options=petsc_options, outfile=solver_outfile)
+        u1, num_its, krylov_iterations, solver_time = nitsche_unbiased(args.time_steps, ufl_form=F, u=u,
+                                                                       rhs_fns=rhs_fns, markers=mts,
+                                                                       contact_data=(surfaces, contact_pairs),
+                                                                       bcs=bcs, problem_parameters=problem_parameters,
+                                                                       search_method=mode,
+                                                                       newton_options=newton_options,
+                                                                       petsc_options=petsc_options,
+                                                                       outfile=solver_outfile,
+                                                                       fname=outname)
 
     # write solution to file
-    with XDMFFile(mesh.comm, "results/xmas.xdmf", "w") as xdmf:
+    size = mesh.comm.size
+    with XDMFFile(mesh.comm, f"results/xmas_{size}.xdmf", "w") as xdmf:
         xdmf.write_mesh(mesh)
-        u1.name = "u"
+        u1.name = f"u_{size}"
         xdmf.write_function(u1)
+    with XDMFFile(mesh.comm, f"results/xmas_partitioning_{size}.xdmf", "w") as xdmf:
+        xdmf.write_mesh(mesh)
+        xdmf.write_meshtags(process_marker)
 
     if args.timing:
         list_timings(mesh.comm, [TimingType.wall])
@@ -233,16 +268,17 @@ if __name__ == "__main__":
         outfile = sys.stdout
     else:
         outfile = open(args.outfile, "a")
-    print("-" * 25, file=outfile)
-    print(f"Newton options {newton_options}", file=outfile)
-    print(f"num_dofs: {u1.function_space.dofmap.index_map_bs*u1.function_space.dofmap.index_map.size_global}"
-          + f", {mesh.topology.cell_type}", file=outfile)
-    print(f"Newton solver {timing('~Contact: Newton (Newton solver)')[1]}", file=outfile)
-    print(f"Krylov solver {timing('~Contact: Newton (Krylov solver)')[1]}", file=outfile)
-    print(f"Newton time: {solver_time}", file=outfile)
-    print(f"Newton iterations {num_its}, ", file=outfile)
-    print(f"Krylov iterations {krylov_iterations},", file=outfile)
-    print("-" * 25, file=outfile)
+    if mesh.comm.rank == 0:
+        print("-" * 25, file=outfile)
+        print(f"Newton options {newton_options}", file=outfile)
+        print(f"num_dofs: {u1.function_space.dofmap.index_map_bs*u1.function_space.dofmap.index_map.size_global}"
+              + f", {mesh.topology.cell_type}", file=outfile)
+        print(f"Newton solver {timing('~Contact: Newton (Newton solver)')[1]}", file=outfile)
+        print(f"Krylov solver {timing('~Contact: Newton (Krylov solver)')[1]}", file=outfile)
+        print(f"Newton time: {solver_time}", file=outfile)
+        print(f"Newton iterations {num_its}, ", file=outfile)
+        print(f"Krylov iterations {krylov_iterations},", file=outfile)
+        print("-" * 25, file=outfile)
 
     if args.outfile is not None:
         outfile.close()

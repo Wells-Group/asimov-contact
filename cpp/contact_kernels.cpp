@@ -18,10 +18,7 @@ dolfinx_contact::kernel_fn<PetscScalar>
 dolfinx_contact::generate_contact_kernel(
     std::shared_ptr<const dolfinx::fem::FunctionSpace> V,
     dolfinx_contact::Kernel type,
-    dolfinx_contact::QuadratureRule& quadrature_rule,
-    std::vector<std::shared_ptr<const dolfinx::fem::Function<PetscScalar>>>
-        coeffs,
-    bool constant_normal)
+    dolfinx_contact::QuadratureRule& quadrature_rule, bool constant_normal)
 {
 
   auto mesh = V->mesh();
@@ -31,68 +28,24 @@ dolfinx_contact::generate_contact_kernel(
   const std::size_t gdim = mesh->geometry().dim();
   const std::size_t tdim = mesh->topology().dim();
 
-  // Create quadrature points on reference facet
-  const std::vector<double>& q_points = quadrature_rule.points();
-  assert(quadrature_rule.tdim() == tdim);
-  const std::size_t num_quadrature_pts = quadrature_rule.weights().size();
-
   // Structures for coefficient data
-  int num_coeffs = coeffs.size();
-  std::vector<std::size_t> cstrides(num_coeffs + 3);
-  for (int i = 0; i < num_coeffs; i++)
-  {
-    std::shared_ptr<const dolfinx::fem::FiniteElement> coeff_element
-        = coeffs[i]->function_space()->element();
-    cstrides[i]
-        = coeff_element->space_dimension() / coeff_element->block_size();
-  }
-
   // FIXME: This will not work for prism meshes
   const std::vector<std::size_t>& qp_offsets = quadrature_rule.offset();
   const std::size_t num_qp_per_entity = qp_offsets[1] - qp_offsets[0];
-  cstrides[num_coeffs] = 1;                            // h
-  cstrides[num_coeffs + 1] = gdim * num_qp_per_entity; // gap
-  cstrides[num_coeffs + 2] = gdim * num_qp_per_entity; // normals
+  // Coefficient sizes
+  // Expecting coefficients in following order:
+  // mu, lmbda, h, gap, u, grad(u), normals
+  std::vector<std::size_t> cstrides = {1,
+                                       1,
+                                       1,
+                                       gdim * num_qp_per_entity,
+                                       gdim * num_qp_per_entity,
+                                       gdim * gdim * num_qp_per_entity,
+                                       gdim * num_qp_per_entity};
 
   dolfinx_contact::KernelData kd(
       V, std::make_shared<dolfinx_contact::QuadratureRule>(quadrature_rule),
       cstrides);
-
-  // Tabulate basis functions for all input
-  // coefficients
-  std::vector<double> coeff_basis_valuesb(num_quadrature_pts
-                                          * kd.offsets(num_coeffs));
-  const std::array<std::size_t, 2> coeff_shape
-      = {num_quadrature_pts, kd.offsets(num_coeffs)};
-  dolfinx_contact::mdspan2_t coeff_basis_valuesm(coeff_basis_valuesb.data(),
-                                                 coeff_shape);
-
-  // Create finite elements for coefficient functions and tabulate shape
-  // functions
-  for (int i = 0; i < num_coeffs; ++i)
-  {
-    std::shared_ptr<const dolfinx::fem::FiniteElement> coeff_element
-        = coeffs[i]->function_space()->element();
-    assert(coeff_element);
-    const std::array<std::size_t, 4> coeff_i_shape
-        = coeff_element->basix_element().tabulate_shape(0, num_quadrature_pts);
-    if (coeff_i_shape.back() != 1)
-    {
-      throw std::invalid_argument(
-          "Kernel does not support coefficients with value size!=1");
-    }
-    std::vector<double> coeff_basisb(std::reduce(
-        coeff_i_shape.cbegin(), coeff_i_shape.cend(), 1, std::multiplies{}));
-    coeff_element->tabulate(coeff_basisb, q_points, {num_quadrature_pts, tdim},
-                            0);
-    dolfinx_contact::cmdspan4_t coeff_basis(coeff_basisb.data(), coeff_i_shape);
-    auto basis = stdex::submdspan(coeff_basis_valuesm, stdex::full_extent,
-                                  std::pair{kd.offsets(i), kd.offsets(i + 1)});
-    assert(kd.offsets(i + 1) - kd.offsets(i) == coeff_i_shape[2]);
-    for (std::size_t k = 0; k < basis.extent(0); ++k)
-      for (std::size_t l = 0; l < basis.extent(1); ++l)
-        basis(k, l) = coeff_basis(0, k, l, 0);
-  }
 
   /// @brief Kernel for contact with rigid surface (RHS).
   ////
@@ -113,7 +66,7 @@ dolfinx_contact::generate_contact_kernel(
   /// @param[in] q_indices Unused indices. In two sided contact this yields what
   /// quadrature points to add contributions from
   dolfinx_contact::kernel_fn<PetscScalar> nitsche_rigid_rhs
-      = [kd, gdim, tdim, coeff_basis_valuesb, coeff_shape, constant_normal](
+      = [kd, gdim, tdim, constant_normal](
             std::vector<std::vector<PetscScalar>>& b,
             std::span<const PetscScalar> c, const PetscScalar* w,
             const double* coordinate_dofs, const std::size_t facet_index,
@@ -166,24 +119,20 @@ dolfinx_contact::generate_contact_kernel(
         n_dot += n_phys[i] * n_surf[i];
       }
     }
-    int c_offset = (bs - 1) * kd.offsets(1);
     // This is gamma/h
-    double gamma = w[0] / c[c_offset + kd.offsets(3)];
-    double gamma_inv = c[c_offset + kd.offsets(3)] / w[0];
+    double gamma = w[0] / c[2];
+    double gamma_inv = c[2] / w[0];
     double theta = w[1];
+    double mu = c[0];
+    double lmbda = c[1];
     std::span<const double> weights = kd.weights(facet_index);
 
     // Temporary work arrays
-    std::vector<double> epsnb((kd.offsets(1) - kd.offsets(0)) * gdim);
-    dolfinx_contact::mdspan2_t epsn(epsnb.data(), kd.offsets(1) - kd.offsets(0),
-                                    gdim);
-    std::vector<double> trb((kd.offsets(1) - kd.offsets(0)) * gdim);
-    dolfinx_contact::mdspan2_t tr(trb.data(), kd.offsets(1) - kd.offsets(0),
-                                  gdim);
-
-    // Extract basis for coefficients
-    dolfinx_contact::cmdspan2_t phi_coeffs(coeff_basis_valuesb.data(),
-                                           coeff_shape);
+    std::vector<double> epsnb(ndofs_cell * gdim);
+    dolfinx_contact::mdspan2_t epsn(epsnb.data(), ndofs_cell, gdim);
+    std::vector<double> trb(ndofs_cell * gdim);
+    dolfinx_contact::mdspan2_t tr(trb.data(), ndofs_cell, gdim);
+    std::vector<double> sig_n_u(gdim);
 
     // Extract reference to the tabulated basis function
     dolfinx_contact::cmdspan2_t phi = kd.phi();
@@ -202,15 +151,8 @@ dolfinx_contact::generate_contact_kernel(
                                           detJ_scratch, coord));
       kd.update_normal(std::span(n_phys.data(), gdim), K, facet_index);
 
-      double mu = 0;
-      for (std::size_t j = kd.offsets(1); j < kd.offsets(2); j++)
-        mu += c[j + c_offset] * phi_coeffs(q_pos, j);
-      double lmbda = 0;
-      for (std::size_t j = kd.offsets(2); j < kd.offsets(3); j++)
-        lmbda += c[j + c_offset] * phi_coeffs(q_pos, j);
-
       // if normal not constant, get surface normal at current quadrature point
-      int normal_offset = c_offset + kd.offsets(5);
+      std::size_t normal_offset = kd.offsets(6);
       if (!constant_normal)
       {
         n_dot = 0;
@@ -223,7 +165,7 @@ dolfinx_contact::generate_contact_kernel(
           n_dot += n_phys[i] * n_surf[i];
         }
       }
-      int gap_offset = c_offset + kd.offsets(4);
+      std::size_t gap_offset = kd.offsets(3);
       double gap = 0;
       for (std::size_t i = 0; i < gdim; i++)
         gap += c[gap_offset + q * gdim + i] * n_surf[i];
@@ -231,24 +173,19 @@ dolfinx_contact::generate_contact_kernel(
       compute_normal_strain_basis(epsn, tr, K, dphi, n_surf,
                                   std::span(n_phys.data(), gdim), q_pos);
 
-      // compute tr(eps(u)), epsn at q
-      double tr_u = 0;
-      double epsn_u = 0;
+      // compute sig(u)*n_phys
+      std::fill(sig_n_u.begin(), sig_n_u.end(), 0.0);
+      compute_sigma_n_u(sig_n_u,
+                        c.subspan(kd.offsets(5) + q * gdim * gdim, gdim * gdim),
+                        std::span(n_phys.data(), gdim), mu, lmbda);
+      double sign_u = 0;
       double u_dot_nsurf = 0;
-      for (std::size_t i = 0; i < kd.offsets(1) - kd.offsets(0); i++)
+      // compute inner(sig(u)*n_phys, n_surf) and inner(u, n_surf)
+      for (std::size_t j = 0; j < gdim; ++j)
       {
-        const std::int32_t block_index = (i + kd.offsets(0)) * bs;
-        for (std::size_t j = 0; j < bs; j++)
-        {
-          const auto c_val = c[block_index + j];
-          tr_u += c_val * tr(i, j);
-          epsn_u += c_val * epsn(i, j);
-          u_dot_nsurf += c_val * n_surf[j] * phi(q_pos, i);
-        }
+        sign_u += sig_n_u[j] * n_surf[j];
+        u_dot_nsurf += c[kd.offsets(4) + gdim * q + j] * n_surf[j];
       }
-
-      // Multiply  by weight
-      double sign_u = (lmbda * n_dot * tr_u + mu * epsn_u);
       double R_minus_scaled
           = dolfinx_contact::R_minus(gamma_inv * sign_u + (gap - u_dot_nsurf))
             * detJ * weights[q];
@@ -287,7 +224,7 @@ dolfinx_contact::generate_contact_kernel(
   /// @param[in] q_indices Unused indices. In two sided contact this yields what
   /// quadrature points to add contributions from
   dolfinx_contact::kernel_fn<PetscScalar> nitsche_rigid_jacobian
-      = [kd, gdim, tdim, coeff_basis_valuesb, coeff_shape, constant_normal](
+      = [kd, gdim, tdim, constant_normal](
             std::vector<std::vector<double>>& A, std::span<const PetscScalar> c,
             const PetscScalar* w, const double* coordinate_dofs,
             const std::size_t facet_index,
@@ -342,24 +279,20 @@ dolfinx_contact::generate_contact_kernel(
       }
     }
 
-    int c_offset = (bs - 1) * kd.offsets(1);
     // This is gamma/h
-    double gamma = w[0] / c[c_offset + kd.offsets(3)];
-    double gamma_inv = c[c_offset + kd.offsets(3)] / w[0];
+    double gamma = w[0] / c[2];
+    double gamma_inv = c[2] / w[0];
     double theta = w[1];
+    double mu = c[0];
+    double lmbda = c[1];
     std::span<const double> weights = kd.weights(facet_index);
 
     // Temporary work arrays
-    std::vector<double> epsnb((kd.offsets(1) - kd.offsets(0)) * gdim);
-    dolfinx_contact::mdspan2_t epsn(epsnb.data(), kd.offsets(1) - kd.offsets(0),
-                                    gdim);
-    std::vector<double> trb((kd.offsets(1) - kd.offsets(0)) * gdim);
-    dolfinx_contact::mdspan2_t tr(trb.data(), kd.offsets(1) - kd.offsets(0),
-                                  gdim);
-
-    // Extract basis for coefficients
-    dolfinx_contact::cmdspan2_t phi_coeffs(coeff_basis_valuesb.data(),
-                                           coeff_shape);
+    std::vector<double> epsnb(ndofs_cell * gdim);
+    dolfinx_contact::mdspan2_t epsn(epsnb.data(), ndofs_cell, gdim);
+    std::vector<double> trb(ndofs_cell * gdim);
+    dolfinx_contact::mdspan2_t tr(trb.data(), ndofs_cell, gdim);
+    std::vector<double> sig_n_u(gdim);
 
     // Extract reference to the tabulated basis function
     dolfinx_contact::cmdspan2_t phi = kd.phi();
@@ -379,15 +312,8 @@ dolfinx_contact::generate_contact_kernel(
                                           detJ_scratch, coord));
       kd.update_normal(std::span(n_phys.data(), gdim), K, facet_index);
 
-      double mu = 0;
-      for (std::size_t j = kd.offsets(1); j < kd.offsets(2); j++)
-        mu += c[j + c_offset] * phi_coeffs(q_pos, j);
-      double lmbda = 0;
-      for (std::size_t j = kd.offsets(2); j < kd.offsets(3); j++)
-        lmbda += c[j + c_offset] * phi_coeffs(q_pos, j);
-
       // if normal not constant, get surface normal at current quadrature point
-      int normal_offset = c_offset + kd.offsets(5);
+      std::size_t normal_offset = kd.offsets(6);
       if (!constant_normal)
       {
         n_dot = 0;
@@ -400,7 +326,7 @@ dolfinx_contact::generate_contact_kernel(
           n_dot += n_phys[i] * n_surf[i];
         }
       }
-      int gap_offset = c_offset + kd.offsets(4);
+      std::size_t gap_offset = kd.offsets(3);
       double gap = 0;
       for (std::size_t i = 0; i < gdim; i++)
         gap += c[gap_offset + q * gdim + i] * n_surf[i];
@@ -408,23 +334,20 @@ dolfinx_contact::generate_contact_kernel(
       compute_normal_strain_basis(epsn, tr, K, dphi, n_surf,
                                   std::span(n_phys.data(), gdim), q_pos);
 
-      // compute tr(eps(u)), epsn at q
-      double tr_u = 0;
-      double epsn_u = 0;
-      double u_dot_nsurf = 0;
-      for (std::size_t i = 0; i < kd.offsets(1) - kd.offsets(0); i++)
-      {
-        const std::int32_t block_index = (i + kd.offsets(0)) * bs;
-        for (std::size_t j = 0; j < bs; j++)
-        {
-          const auto c_val = c[block_index + j];
-          tr_u += c_val * tr(i, j);
-          epsn_u += c_val * epsn(i, j);
-          u_dot_nsurf += c_val * n_surf[j] * phi(q_pos, i);
-        }
-      }
+      // compute sig(u)*n_phys
+      std::fill(sig_n_u.begin(), sig_n_u.end(), 0.0);
+      compute_sigma_n_u(sig_n_u,
+                        c.subspan(kd.offsets(5) + q * gdim * gdim, gdim * gdim),
+                        std::span(n_phys.data(), gdim), mu, lmbda);
 
-      double sign_u = (lmbda * n_dot * tr_u + mu * epsn_u);
+      // compute inner(sig(u)*n_phys, n_surf) and inner(u, n_surf)
+      double sign_u = 0;
+      double u_dot_nsurf = 0;
+      for (std::size_t j = 0; j < gdim; ++j)
+      {
+        sign_u += sig_n_u[j] * n_surf[j];
+        u_dot_nsurf += c[kd.offsets(4) + gdim * q + j] * n_surf[j];
+      }
       double Pn_u
           = dolfinx_contact::dR_minus(sign_u + gamma * (gap - u_dot_nsurf));
       const double w0 = weights[q] * detJ;

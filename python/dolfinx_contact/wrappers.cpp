@@ -12,6 +12,7 @@
 #include <dolfinx_contact/Contact.h>
 #include <dolfinx_contact/QuadratureRule.h>
 #include <dolfinx_contact/RayTracing.h>
+#include <dolfinx_contact/SubMesh.h>
 #include <dolfinx_contact/coefficients.h>
 #include <dolfinx_contact/contact_kernels.h>
 #include <dolfinx_contact/utils.h>
@@ -153,7 +154,7 @@ PYBIND11_MODULE(cpp, m)
              const std::vector<std::int32_t>& active_entities
                  = self.active_entities(s);
              std::array<py::ssize_t, 2> shape
-                 = {py::ssize_t(active_entities.size() / 2), 2};
+                 = {py::ssize_t(self.local_facets(s)), 2};
              return py::array_t<std::int32_t>(shape, active_entities.data(),
                                               py::cast(self));
            })
@@ -198,6 +199,12 @@ PYBIND11_MODULE(cpp, m)
                  dolfinx::graph::AdjacencyList<std::int32_t>>(
                  std::move(data), std::move(offsets));
            })
+      .def("submesh",
+           [](dolfinx_contact::Contact& self, int surface)
+           {
+             const dolfinx_contact::SubMesh& submesh = self.submesh(surface);
+             return submesh.mesh();
+           })
       .def("coefficients_size", &dolfinx_contact::Contact::coefficients_size,
            py::arg("meshtie"))
       .def("set_quadrature_rule",
@@ -232,12 +239,12 @@ PYBIND11_MODULE(cpp, m)
               const py::array_t<PetscScalar, py::array::c_style>& coeffs,
               const py::array_t<PetscScalar, py::array::c_style>& constants)
            {
-             auto ker = kernel.get();
+             auto ker = kernel.get();             
              self.assemble_vector(
-                 std::span(b.mutable_data(), b.shape(0)), origin_meshtag, ker,
-                 std::span<const PetscScalar>(coeffs.data(), coeffs.size()),
+                 std::span(b.mutable_data(), b.size()), origin_meshtag, ker,
+                 std::span(coeffs.data(), coeffs.size()),
                  coeffs.shape(1),
-                 std::span(constants.data(), constants.shape(0)));
+                 std::span(constants.data(), constants.size()));
            })
       .def("pack_test_functions",
            [](dolfinx_contact::Contact& self, int origin_meshtag)
@@ -311,16 +318,14 @@ PYBIND11_MODULE(cpp, m)
       "generate_contact_kernel",
       [](std::shared_ptr<const dolfinx::fem::FunctionSpace> V,
          dolfinx_contact::Kernel type, dolfinx_contact::QuadratureRule& q_rule,
-         std::vector<std::shared_ptr<const dolfinx::fem::Function<PetscScalar>>>
-             coeffs,
          bool constant_normal)
       {
         return contact_wrappers::KernelWrapper(
-            dolfinx_contact::generate_contact_kernel(V, type, q_rule, coeffs,
+            dolfinx_contact::generate_contact_kernel(V, type, q_rule,
                                                      constant_normal));
       },
       py::arg("V"), py::arg("kernel_type"), py::arg("quadrature_rule"),
-      py::arg("coeffs"), py::arg("constant_normal") = true);
+      py::arg("constant_normal") = true);
   py::enum_<dolfinx_contact::Kernel>(m, "Kernel")
       .value("Rhs", dolfinx_contact::Kernel::Rhs)
       .value("Jac", dolfinx_contact::Kernel::Jac)
@@ -356,6 +361,35 @@ PYBIND11_MODULE(cpp, m)
           throw std::invalid_argument("Unsupported entities");
         }
       });
+  m.def("pack_gradient_quadrature",
+        [](std::shared_ptr<const dolfinx::fem::Function<PetscScalar>> coeff,
+           int q, const py::array_t<std::int32_t, py::array::c_style>& entities)
+        {
+          auto e_span
+              = std::span<const std::int32_t>(entities.data(), entities.size());
+          if (entities.ndim() == 1)
+          {
+
+            auto [coeffs, cstride] = dolfinx_contact::pack_gradient_quadrature(
+                coeff, q, e_span, dolfinx::fem::IntegralType::cell);
+            int shape0 = cstride == 0 ? 0 : coeffs.size() / cstride;
+            return dolfinx_wrappers::as_pyarray(std::move(coeffs),
+                                                std::array{shape0, cstride});
+          }
+          else if (entities.ndim() == 2)
+          {
+
+            auto [coeffs, cstride] = dolfinx_contact::pack_gradient_quadrature(
+                coeff, q, e_span, dolfinx::fem::IntegralType::exterior_facet);
+            int shape0 = cstride == 0 ? 0 : coeffs.size() / cstride;
+            return dolfinx_wrappers::as_pyarray(std::move(coeffs),
+                                                std::array{shape0, cstride});
+          }
+          else
+          {
+            throw std::invalid_argument("Unsupported entities");
+          }
+        });
 
   m.def(
       "pack_circumradius",
@@ -381,7 +415,7 @@ PYBIND11_MODULE(cpp, m)
         {
           auto entity_span
               = std::span<const std::int32_t>(entities.data(), entities.size());
-          std::vector<std::int32_t> active_entities
+          auto [active_entities, num_local]
               = dolfinx_contact::compute_active_entities(mesh, entity_span,
                                                          integral);
           switch (integral)
@@ -390,24 +424,21 @@ PYBIND11_MODULE(cpp, m)
           {
             py::array_t<std::int32_t> domains(active_entities.size(),
                                               active_entities.data());
-            return domains;
+            return py::make_tuple(domains, num_local);
           }
           case dolfinx::fem::IntegralType::exterior_facet:
           {
             std::array<py::ssize_t, 2> shape
                 = {py::ssize_t(active_entities.size() / 2), 2};
-            return dolfinx_wrappers::as_pyarray(std::move(active_entities),
-                                                shape);
+            return py::make_tuple(
+                dolfinx_wrappers::as_pyarray(std::move(active_entities), shape),
+                num_local);
           }
-          case dolfinx::fem::IntegralType::interior_facet:
-          {
-            std::array<py::ssize_t, 3> shape
-                = {py::ssize_t(active_entities.size() / 4), 2, 2};
-            return dolfinx_wrappers::as_pyarray(std::move(active_entities),
-                                                shape);
-          }
+
           default:
-            throw std::invalid_argument("Unsupported integral type");
+            throw std::invalid_argument(
+                "Integral type not supported. Note that this function "
+                "has not been implemented for interior facets.");
           }
         });
 
