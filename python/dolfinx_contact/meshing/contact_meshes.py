@@ -289,7 +289,7 @@ def create_sphere_plane_mesh(filename: str, order: int = 1, res=0.05):
         out_vol_tags, _ = gmsh.model.occ.fragment([(3, sphere_bottom)], [(3, sphere_top)])
 
         # Add bottom box
-        box = gmsh.model.occ.add_box(center[0] - r, center[1] - r, center[2] - r - gap - H, 3 * r, 3 * r, H)
+        box = gmsh.model.occ.add_box(center[0] - r, center[1] - r, center[2] - r - gap - 2 * H, 3 * r, 3 * r, 2 * H)
         # Rotate after marking boundaries
         gmsh.model.occ.rotate([(3, box)], center[0], center[1], center[2]
                               - r - 3 * gap, 1, 0, 0, theta)
