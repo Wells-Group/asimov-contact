@@ -342,7 +342,7 @@ def nitsche_unbiased(steps: int, ufl_form: ufl.Form, u: fem.Function,
         contact = dolfinx_contact.cpp.Contact(markers[1:], contact_surfaces, contact_pairs,
                                               V._cpp_object, quadrature_degree=quadrature_degree,
                                               search_method=search_method)
-    contact.set_search_radius(0.2)
+    contact.set_search_radius(0.3)
 
     # pack constants
     consts = np.array([gamma, theta], dtype=np.float64)

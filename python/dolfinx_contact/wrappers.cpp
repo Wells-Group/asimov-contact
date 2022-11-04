@@ -451,7 +451,7 @@ PYBIND11_MODULE(cpp, m)
       {
         return dolfinx_contact::find_candidate_surface_segment(
             quadrature_mesh, candidate_mesh, quadrature_facets,
-            candidate_facets, radius);
+            candidate_facets, radius, false);
       },
       py::arg("quadrature_mesh"), py::arg("candidate_mesh"),
       py::arg("quadrature_facets"), py::arg("candidate_facets"),

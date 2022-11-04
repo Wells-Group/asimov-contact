@@ -686,13 +686,39 @@ dolfinx_contact::entities_to_geometry_dofs(
 
   return dolfinx::graph::AdjacencyList<std::int32_t>(geometry_indices, offsets);
 }
+//--------------------------------------------------------------------------------------
+std::vector<int32_t> dolfinx_contact::facet_indices_from_pair(
+    std::span<const std::int32_t> facet_pairs, const dolfinx::mesh::Mesh& mesh)
+{
+  // Convert (cell, local facet index) into facet index
+  // (local to process) Convert cell,local_facet_index to
+  // facet_index (local to proc)
+  const int tdim = mesh.topology().dim();
+  std::vector<std::int32_t> facets(facet_pairs.size() / 2);
+  std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> c_to_f
+      = mesh.topology().connectivity(tdim, tdim - 1);
+  if (!c_to_f)
+  {
+    throw std::runtime_error("Missing cell->facet connectivity on "
+                             "mesh.");
+  }
 
+  for (std::size_t i = 0; i < facet_pairs.size(); i += 2)
+  {
+    auto local_facets = c_to_f->links(facet_pairs[i]);
+    assert(!local_facets.empty());
+    assert((std::size_t)facet_pairs[i + 1] < local_facets.size());
+    facets[i / 2] = local_facets[facet_pairs[i + 1]];
+  }
+  return facets;
+}
 //-------------------------------------------------------------------------------------
 std::vector<std::int32_t> dolfinx_contact::find_candidate_surface_segment(
     const dolfinx::mesh::Mesh& quadrature_mesh,
     const dolfinx::mesh::Mesh& candidate_mesh,
     std::span<const std::int32_t> quadrature_facets,
-    std::span<const std::int32_t> candidate_facets, const double radius = -1.)
+    std::span<const std::int32_t> candidate_facets, const double radius = -1.,
+    bool index = false)
 {
   if (radius < 0)
   {
@@ -713,6 +739,7 @@ std::vector<std::int32_t> dolfinx_contact::find_candidate_surface_segment(
   double diff; // used for squared difference between two coordinates
 
   std::vector<std::int32_t> cand_patch;
+  std::vector<double> dists;
 
   for (std::size_t i = 0; i < candidate_facets.size(); ++i)
   {
@@ -730,13 +757,31 @@ std::vector<std::int32_t> dolfinx_contact::find_candidate_surface_segment(
       if (dist < r2)
       {
         // if distance < radius add candidate_facet to output
-        cand_patch.push_back(candidate_facets[i]);
+        if (index)
+        {
+          cand_patch.push_back(i);
+          dists.push_back(dist);
+        }
+        else
+          cand_patch.push_back(candidate_facets[i]);
         // break to avoid adding the same facet more than once
         break;
       }
     }
   }
-  return cand_patch;
+  if (index)
+  {
+    std::vector<int> perm(cand_patch.size());
+    std::iota(perm.begin(), perm.end(), 0); // Initializing
+    std::sort(perm.begin(), perm.end(),
+              [&](int i, int j) { return dists[i] < dists[j]; });
+    std::vector<int32_t> sorted_patch(cand_patch.size());
+    for (std::size_t i = 0; i < cand_patch.size(); ++i)
+      sorted_patch[i] = cand_patch[perm[i]];
+    return sorted_patch;
+  }
+  else
+    return cand_patch;
 }
 
 //-------------------------------------------------------------------------------------
