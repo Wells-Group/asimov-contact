@@ -48,6 +48,8 @@ if __name__ == "__main__":
     parser.add_argument("--nu", default=0.1, type=np.float64, dest="nu", help="Poisson's ratio")
     parser.add_argument("--res", default=0.2, type=np.float64, dest="res",
                         help="Mesh resolution")
+    parser.add_argument("--radius", default=0.5, type=np.float64, dest="radius",
+                        help="Search radius for ray-tracing")
     parser.add_argument("--outfile", type=str, default=None, required=False,
                         help="File for appending results", dest="outfile")
     parser.add_argument("--split", type=np.int32, default=1, required=False,
@@ -94,11 +96,12 @@ if __name__ == "__main__":
         # create facet_marker including z Dirichlet facets
         tag = marker_offset + 4 * split + 1
         indices = np.hstack([facet_marker.indices, dirichlet_facets1, dirichlet_facets2])
-        values = np.hstack([facet_marker.values, tag * np.ones(len(dirichlet_facets1) + len(dirichlet_facets2))])
+        values = np.hstack([facet_marker.values, tag * np.ones(len(dirichlet_facets1)
+                           + len(dirichlet_facets2), dtype=np.int32)])
         sorted_facets = np.argsort(indices)
         facet_marker = MeshTags_int32(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
         # Create Dirichlet bdy conditions
-        bcs = (np.array([[tag, 2]], dtype=np.int32), [_PETSc.ScalarType(0)])
+        bcs = (np.array([[tag, 2]], dtype=np.int32), [_fem.Constant(mesh, _PETSc.ScalarType(0))])
         g = _fem.Constant(mesh, _PETSc.ScalarType((0, 0, 0)))      # zero dirichlet
         t = _fem.Constant(mesh, _PETSc.ScalarType((0.2, 0.5, 0)))  # traction
         f = _fem.Constant(mesh, _PETSc.ScalarType((1.0, 0.5, 0)))  # body force
@@ -249,7 +252,9 @@ if __name__ == "__main__":
                                                                        newton_options=newton_options,
                                                                        petsc_options=petsc_options,
                                                                        outfile=solver_outfile,
-                                                                       fname=outname)
+                                                                       fname=outname,
+                                                                       quadrature_degree=args.q_degree,
+                                                                       search_radius=args.radius)
 
     # write solution to file
     size = mesh.comm.size

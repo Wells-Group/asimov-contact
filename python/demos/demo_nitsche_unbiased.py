@@ -66,6 +66,8 @@ if __name__ == "__main__":
     parser.add_argument("--nu", default=0.1, type=np.float64, dest="nu", help="Poisson's ratio")
     parser.add_argument("--disp", default=0.2, type=np.float64, dest="disp",
                         help="Displacement BC in negative y direction")
+    parser.add_argument("--radius", default=0.5, type=np.float64, dest="radius",
+                        help="Search radius for ray-tracing")
     parser.add_argument("--load_steps", default=1, type=np.int32, dest="nload_steps",
                         help="Number of steps for gradual loading")
     parser.add_argument("--time_steps", default=1, type=np.int32, dest="time_steps",
@@ -397,7 +399,9 @@ if __name__ == "__main__":
                                                                          newton_options=newton_options,
                                                                          petsc_options=petsc_options,
                                                                          outfile=solver_outfile,
-                                                                         fname=outnamej, search_method=mode)
+                                                                         fname=outnamej, search_method=mode,
+                                                                         quadrature_degree=args.q_degree,
+                                                                         search_radius=args.radius)
         num_newton_its[j, :] = newton_its[:]
         num_krylov_its[j, :] = krylov_iterations[:]
         newton_time[j, :] = solver_time[:]

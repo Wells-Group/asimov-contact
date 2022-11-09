@@ -203,12 +203,15 @@ entities_to_geometry_dofs(const mesh::Mesh& mesh, int dim,
 /// @param[in] candidate_facets Candidate facets
 /// @param[in] radius The search radius
 /// @return candidate facets within radius of puppet facets
+/// if sorted indices is set to true, instead the index of the candidate
+/// facets within the input array is returned and the facets are sorted
+/// according to the computed distance
 std::vector<std::int32_t>
 find_candidate_surface_segment(const dolfinx::mesh::Mesh& quadrature_mesh,
                                const dolfinx::mesh::Mesh& candidate_mesh,
                                std::span<const std::int32_t> quadrature_facets,
                                std::span<const std::int32_t> candidate_facets,
-                               const double radius, bool index);
+                               const double radius, bool sorted_indices);
 
 /// @brief compute physical points on set of facets
 ///
@@ -239,6 +242,7 @@ void compute_physical_points(const dolfinx::mesh::Mesh& mesh,
 /// local_facet_index). Flattened row-major.
 /// @param[in] q_rule The quadrature rule for the input facets
 /// @param[in] mode The contact mode, either closest point or ray-tracing
+/// @param[in] radius The search radius. Only used for ray-tracing at the moment
 /// @returns A tuple (closest_facets, reference_points) where `closest_facets`
 /// is an adjacency list for each input facet in quadrature facets, where the
 /// links indicate which facet on the other mesh is closest for each quadrature
@@ -254,9 +258,15 @@ compute_distance_map(const dolfinx::mesh::Mesh& quadrature_mesh,
                      const QuadratureRule& q_rule,
                      dolfinx_contact::ContactMode mode, const double radius);
 
+/// Compute facet indices from given pairs (cell, local__facet)
+/// @param[in] facet_pairs The facets given as pair (cell, local_facet).
+/// Flattened row major.
+/// @param[in] mesh The mesh
+/// @return vector of facet indices
 std::vector<int32_t>
 facet_indices_from_pair(std::span<const std::int32_t> facet_pairs,
                         const dolfinx::mesh::Mesh& mesh);
+
 /// Compute the relation between two meshes (mesh_q) and
 /// (mesh_c) by computing the intersection of rays from
 /// mesh_q onto mesh_c at a specific set of quadrature
@@ -277,6 +287,7 @@ facet_indices_from_pair(std::span<const std::int32_t> facet_pairs,
 /// @param[in] candidate_facets Set of facets in the of
 /// tuples (cell_index, local_facet_index) for the
 /// `quadrature_mesh`. Flattened row major.
+/// @param[in] radius The search radius
 /// @returns A tuple (facet_map, reference_points), where
 /// `facet_map` is an AdjacencyList from the ith facet
 /// tuple in `quadrature_facets` to the facet (index local
@@ -307,6 +318,7 @@ compute_raytracing_map(const dolfinx::mesh::Mesh& quadrature_mesh,
   const std::size_t num_q_points = q_offset[1] - q_offset[0];
   const std::size_t sum_q_points = q_offset.back();
 
+  // Get facet indices for qudrature and candidate facets
   std::vector<std::int32_t> q_facets = dolfinx_contact::facet_indices_from_pair(
       quadrature_facets, quadrature_mesh);
   std::vector<std::int32_t> c_facets = dolfinx_contact::facet_indices_from_pair(
@@ -391,8 +403,15 @@ compute_raytracing_map(const dolfinx::mesh::Mesh& quadrature_mesh,
   auto dxi = allocated_memory.dxi();
   auto X_fin = allocated_memory.X_k();
 
+  // This array stores for the current facet for which quadrature point no
+  // valid contact point is determined
+  std::vector<std::size_t> missing_matches(num_q_points);
+
   for (std::size_t i = 0; i < quadrature_facets.size(); i += 2)
   {
+    std::size_t count_missing_matches = 0; // counter for missing contact points
+
+    // Determine candidate facets within search radius
     std::span<std::int32_t> current_facet(q_facets.begin() + i / 2, 1);
     std::vector<int32_t> cand_patch = find_candidate_surface_segment(
         quadrature_mesh, candidate_mesh, current_facet, c_facets, search_radius,
@@ -487,6 +506,52 @@ compute_raytracing_map(const dolfinx::mesh::Mesh& quadrature_mesh,
         std::copy_n(X_fin.begin(), tdim,
                     std::next(reference_points.begin(),
                               tdim * (i / 2 * num_q_points + j)));
+      }
+      else
+      {
+        // save quadrature points with no valid contact point
+        missing_matches[count_missing_matches] = j;
+        count_missing_matches += 1;
+      }
+    }
+    // If contact points are found for some, but not all quadrature points
+    // Use closest point projection to add contact points for remainig
+    // quadrature points
+    if (count_missing_matches > 0 && count_missing_matches < num_q_points)
+    {
+      std::vector<std::int32_t> cand_facets_patch(2 * cand_patch.size());
+      std::vector<double> padded_qpsb(count_missing_matches * 3);
+      dolfinx_contact::mdspan2_t padded_qps(padded_qpsb.data(),
+                                            count_missing_matches, 3);
+      dolfinx_contact::cmdspan3_t qps(quadrature_points.data(),
+                                      quadrature_facets.size() / 2,
+                                      num_q_points, gdim);
+
+      // Retrieve remaining quadrature points
+      for (std::size_t j = 0; j < padded_qps.extent(0); ++j)
+        for (std::size_t k = 0; k < qps.extent(2); ++k)
+          padded_qps(j, k) = qps(i / 2, missing_matches[j], k);
+
+      // Retrieve candidate facets as (cell, local_facet) pair
+      for (std::size_t c = 0; c < cand_patch.size(); ++c)
+      {
+        cand_facets_patch[2 * c] = candidate_facets[2 * cand_patch[c]];
+        cand_facets_patch[2 * c + 1] = candidate_facets[2 * cand_patch[c] + 1];
+      }
+      // find closest enities
+      auto [closest_entities, reference_points_2, shape_2]
+          = compute_projection_map<tdim, gdim>(candidate_mesh,
+                                               cand_facets_patch, padded_qpsb);
+
+      // insert facets and reference points into the relevant arrays
+      for (std::size_t j = 0; j < count_missing_matches; ++j)
+      {
+        colliding_facet[i / 2 * num_q_points + missing_matches[j]]
+            = closest_entities[j];
+        std::copy_n(
+            std::next(reference_points_2.begin(), j * tdim), tdim,
+            std::next(reference_points.begin(),
+                      tdim * (i / 2 * num_q_points + missing_matches[j])));
       }
     }
   }

@@ -18,8 +18,8 @@ def plot_gap(mesh, contact, tag, gap, facets, facets_opp):
         coords = mesh_geometry[facet_geometry][0]
         plt.plot(coords[:, 0], coords[:, 1], color="black")
     num_facets = len(facets)
-    min_x = 1
-    max_x = 0
+    # min_x = 1
+    # max_x = 0
     for i in range(num_facets):
         facet = facets[i]
         facet_geometry = dolfinx.cpp.mesh.entities_to_geometry(mesh, fdim, [facet], False)
@@ -31,11 +31,11 @@ def plot_gap(mesh, contact, tag, gap, facets, facets_opp):
             g = gap[i, q * gdim:(q + 1) * gdim]
             x = [qp[q, 0], qp[q, 0] + g[0]]
             y = [qp[q, 1], qp[q, 1] + g[1]]
-            max_x = max(x[0], x[1], max_x)
-            min_x = min(x[0], x[1], min_x)
+            # max_x = max(x[0], x[1], max_x)
+            # min_x = min(x[0], x[1], min_x)
             plt.plot(x, y)
     plt.gca().set_aspect('equal', adjustable='box')
-    plt.xlim(0.9, 2)
-    plt.ylim(0, 3)
+    # plt.xlim(6.5, 8.5)
+    # plt.ylim(2.5, 6)
     rank = mesh.comm.rank
-    plt.savefig(f"gap_{tag}_{rank}.svg")
+    plt.savefig(f"gap_{tag}_{rank}.png")

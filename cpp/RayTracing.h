@@ -483,9 +483,8 @@ compute_ray(const dolfinx::mesh::Mesh& mesh,
     auto x_dofs = x_dofmap.links(cells[c]);
     for (std::size_t j = 0; j < x_dofs.size(); ++j)
     {
-      std::copy_n(
-          std::next(x_g.begin(), 3 * x_dofs[j]), gdim,
-          std::next(coordinate_dofs.begin(), gdim * j));
+      std::copy_n(std::next(x_g.begin(), 3 * x_dofs[j]), gdim,
+                  std::next(coordinate_dofs.begin(), gdim * j));
     }
 
     // Assign Jacobian of reference mapping

@@ -15,7 +15,6 @@ from petsc4py import PETSc as _PETSc
 import dolfinx_contact
 import dolfinx_contact.cpp
 from dolfinx_contact.helpers import (rigid_motions_nullspace_subdomains, sigma_func)
-from dolfinx_contact.plotting import plot_gap
 
 kt = dolfinx_contact.cpp.Kernel
 
@@ -27,8 +26,7 @@ def setup_newton_solver(F_custom: fem.forms.FormMetaClass, J_custom: fem.forms.F
                         u: fem.Function, du: fem.Function,
                         contact: dolfinx_contact.cpp.Contact, markers: list[_cpp.mesh.MeshTags_int32],
                         entities: list[npt.NDArray[np.int32]], quadrature_degree: int,
-                        const_coeffs: list[npt.NDArray[np.float64]], consts: npt.NDArray[np.float64],
-                        contact_pairs, contact_surfaces):
+                        const_coeffs: list[npt.NDArray[np.float64]], consts: npt.NDArray[np.float64]):
     """
     Set up newton solver for contact problem.
     Generate kernels and define functions for updating coefficients, stiffness matrix and residual vector.
@@ -71,17 +69,6 @@ def setup_newton_solver(F_custom: fem.forms.FormMetaClass, J_custom: fem.forms.F
             gaps.append(contact.pack_gap(i))
             normals.append(contact.pack_ny(i))
             test_fns.append(contact.pack_test_functions(i))
-
-    for i, gap in enumerate(gaps):
-        s1 = contact_pairs[i][0]
-        s2 = contact_pairs[i][1]
-        tag1 = contact_surfaces.array[s1]
-        tag2 = contact_surfaces.array[s2]
-        mt_ind1 = np.argwhere(contact_surfaces.offsets < s1 + 1)[-1, 0]
-        mt_ind2 = np.argwhere(contact_surfaces.offsets < s2 + 1)[-1, 0]
-        facets = markers[1 + mt_ind1].find(tag1)
-        facets_opp = markers[1 + mt_ind2].find(tag2)
-        plot_gap(mesh, contact, i, gap, facets, facets_opp)
 
     # Concatenate all coeffs
     ccfs = []
@@ -244,7 +231,8 @@ def nitsche_unbiased(steps: int, ufl_form: ufl.Form, u: fem.Function,
                      search_method: dolfinx_contact.cpp.ContactMode,
                      quadrature_degree: int = 5, form_compiler_options: dict = None, jit_options: dict = None,
                      petsc_options: dict = None, newton_options: dict = None, outfile: str = None,
-                     fname: str = "pseudo_time") -> Tuple[fem.Function, list[int], list[int], list[float]]:
+                     fname: str = "pseudo_time",
+                     search_radius: np.float64 = np.float64(-1.)) -> Tuple[fem.Function, list[int], list[int], list[float]]:
     """
     Use custom kernel to compute the contact problem with two elastic bodies coming into contact.
 
@@ -342,7 +330,7 @@ def nitsche_unbiased(steps: int, ufl_form: ufl.Form, u: fem.Function,
         contact = dolfinx_contact.cpp.Contact(markers[1:], contact_surfaces, contact_pairs,
                                               V._cpp_object, quadrature_degree=quadrature_degree,
                                               search_method=search_method)
-    contact.set_search_radius(0.3)
+    contact.set_search_radius(search_radius)
 
     # pack constants
     consts = np.array([gamma, theta], dtype=np.float64)
@@ -410,8 +398,7 @@ def nitsche_unbiased(steps: int, ufl_form: ufl.Form, u: fem.Function,
 
         # setup newton solver
         newton_solver = setup_newton_solver(F_custom, J_custom, bcs, u, du, contact, markers,
-                                            entities, quadrature_degree, const_coeffs, consts,
-                                            contact_pairs, contact_surfaces)
+                                            entities, quadrature_degree, const_coeffs, consts)
 
         # Set Newton solver options
         newton_solver.set_newton_options(newton_options)

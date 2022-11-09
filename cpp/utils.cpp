@@ -718,7 +718,7 @@ std::vector<std::int32_t> dolfinx_contact::find_candidate_surface_segment(
     const dolfinx::mesh::Mesh& candidate_mesh,
     std::span<const std::int32_t> quadrature_facets,
     std::span<const std::int32_t> candidate_facets, const double radius = -1.,
-    bool index = false)
+    bool sorted_indices = false)
 {
   if (radius < 0)
   {
@@ -738,8 +738,9 @@ std::vector<std::int32_t> dolfinx_contact::find_candidate_surface_segment(
   double dist; // used for squared distance between two midpoints
   double diff; // used for squared difference between two coordinates
 
-  std::vector<std::int32_t> cand_patch;
-  std::vector<double> dists;
+  std::vector<std::int32_t>
+      cand_patch;            // vector to store facets within the radius
+  std::vector<double> dists; // vector for storing distances for sorting
 
   for (std::size_t i = 0; i < candidate_facets.size(); ++i)
   {
@@ -757,20 +758,21 @@ std::vector<std::int32_t> dolfinx_contact::find_candidate_surface_segment(
       if (dist < r2)
       {
         // if distance < radius add candidate_facet to output
-        if (index)
+        if (sorted_indices)
         {
-          cand_patch.push_back(i);
-          dists.push_back(dist);
+          cand_patch.push_back(i); // save index of facet within facet array
+          dists.push_back(dist);   // save distance for sorting
         }
         else
-          cand_patch.push_back(candidate_facets[i]);
+          cand_patch.push_back(candidate_facets[i]); // store facet index
         // break to avoid adding the same facet more than once
         break;
       }
     }
   }
-  if (index)
+  if (sorted_indices)
   {
+    // sort indices according to distance of facet
     std::vector<int> perm(cand_patch.size());
     std::iota(perm.begin(), perm.end(), 0); // Initializing
     std::sort(perm.begin(), perm.end(),
