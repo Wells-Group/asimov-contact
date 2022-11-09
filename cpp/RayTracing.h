@@ -9,6 +9,7 @@
 
 #include "QuadratureRule.h"
 #include "error_handling.h"
+#include "geometric_quantities.h"
 #include <dolfinx/common/utils.h>
 #include <dolfinx/mesh/Mesh.h>
 
@@ -236,7 +237,8 @@ int raytracing_cell(
     const dolfinx::fem::CoordinateElement& cmap,
     dolfinx::mesh::CellType cell_type, std::span<const double> coordinate_dofs,
     const std::function<void(std::span<const double, tdim - 1>,
-                             std::span<double, tdim>)>& reference_map)
+                             std::span<double, tdim>)>& reference_map,
+    std::array<double, 3>& normal, std::span<const double> reference_normal)
 {
   if constexpr ((gdim != 2) and (gdim != 3))
     throw std::invalid_argument("The geometrical dimension has to be 2 or 3");
@@ -362,6 +364,11 @@ int raytracing_cell(
     std::transform(xi_k.begin(), xi_k.end(), dxi_k.begin(), xi_k.begin(),
                    [](auto x, auto y) { return x - y; });
   }
+  std::array<double, 9> Kb;
+  mdspan2_t K(Kb.data(), tdim, gdim);
+  dolfinx::fem::CoordinateElement::compute_jacobian_inverse(J, K);
+  dolfinx_contact::physical_facet_normal(std::span(normal.data(), gdim), K,
+                                         reference_normal);
   // Check if converged  parameters are valid
   switch (cell_type)
   {
@@ -455,6 +462,7 @@ compute_ray(const dolfinx::mesh::Mesh& mesh,
   std::span<double, gdim> m_point = allocated_memory.point();
   auto dxi = allocated_memory.dxi();
   std::copy_n(point.begin(), gdim, m_point.begin());
+  std::array<double, 3> normal_c;
 
   // Check for parameterization and jacobian parameterization
   error::check_cell_type(cell_type);
@@ -464,6 +472,8 @@ compute_ray(const dolfinx::mesh::Mesh& mesh,
 
   // Get facet jacobians from Basix
   auto [ref_jac, jac_shape] = basix::cell::facet_jacobians(basix_cell);
+  auto [reference_normals, rn_shape]
+      = basix::cell::facet_outward_normals(basix_cell);
   assert(tdim == jac_shape[1]);
   assert(tdim - 1 == jac_shape[2]);
   cmdspan3_t facet_jacobians(ref_jac.data(), jac_shape);
@@ -511,10 +521,13 @@ compute_ray(const dolfinx::mesh::Mesh& mesh,
       }
     };
     tfc.stop();
-
+    std::fill(normal_c.begin(), normal_c.end(), 0);
     status = raytracing_cell<tdim, gdim>(
         allocated_memory, basis_values, basis_shape, max_iter, tol, cmap,
-        cell_type, coordinate_dofs, reference_map);
+        cell_type, coordinate_dofs, reference_map, normal_c,
+        std::span(
+            std::next(reference_normals.begin(), rn_shape[1] * cells[c + 1]),
+            rn_shape[1]));
     if (status > 0)
     {
       cell_idx = c / 2;

@@ -369,6 +369,7 @@ compute_raytracing_map(const dolfinx::mesh::Mesh& quadrature_mesh,
   std::vector<double> coordinate_dofs_c(num_nodes_c * gdim);
   std::vector<double> basis_values_c(std::reduce(
       basis_shape_c.begin(), basis_shape_c.end(), 1, std::multiplies{}));
+  std::array<double, 3> normal_c;
 
   // Variable to hold jth point for Jacbian computation
   std::array<double, 3> normal;
@@ -457,7 +458,7 @@ compute_raytracing_map(const dolfinx::mesh::Mesh& quadrature_mesh,
       for (std::size_t c = 0; c < cand_patch.size(); ++c)
       {
         std::int32_t cell = candidate_facets[2 * cand_patch[c]];
-        std::int32_t facet_index = candidate_facets[2 * cand_patch[c] + 1];
+        std::int32_t facet_index_c = candidate_facets[2 * cand_patch[c] + 1];
         // Get cell geometry for candidate cell, reusing
         // coordinate dofs to store new coordinate
         auto x_dofs = c_dofmap.links(cell);
@@ -469,15 +470,15 @@ compute_raytracing_map(const dolfinx::mesh::Mesh& quadrature_mesh,
         // Assign Jacobian of reference mapping
         for (std::size_t l = 0; l < tdim; ++l)
           for (std::size_t m = 0; m < tdim - 1; ++m)
-            dxi(l, m) = facet_jacobians(facet_index, l, m);
+            dxi(l, m) = facet_jacobians(facet_index_c, l, m);
 
         // Get parameterization map
         std::function<void(std::span<const double, tdim - 1>,
                            std::span<double, tdim>)>
             reference_map
-            = [&xb, &x_shape, &bfacets,
-               facet_index = facet_index](std::span<const double, tdim - 1> xi,
-                                          std::span<double, tdim> X)
+            = [&xb, &x_shape, &bfacets, facet_index = facet_index_c](
+                  std::span<const double, tdim - 1> xi,
+                  std::span<double, tdim> X)
         {
           const std::vector<int>& facet = bfacets[facet_index];
           dolfinx_contact::cmdspan2_t x(xb.data(), x_shape);
@@ -489,10 +490,18 @@ compute_raytracing_map(const dolfinx::mesh::Mesh& quadrature_mesh,
               X[i] += (x(facet[j + 1], i) - x(f0, i)) * xi[j];
           }
         };
+        std::fill(normal_c.begin(), normal_c.end(), 0);
         status = raytracing_cell<tdim, gdim>(
             allocated_memory, basis_values_c, basis_shape_c, 25, 1e-8, cmap_c,
-            cell_type, coordinate_dofs_c, reference_map);
-
+            cell_type, coordinate_dofs_c, reference_map, normal_c,
+            std::span(std::next(reference_normals.begin(),
+                                rn_shape[1] * facet_index_c),
+                      rn_shape[1]));
+        double dot = 0;
+        for (std::size_t l = 0; l < gdim; ++l)
+          dot += normal[l] * normal_c[l];
+        if (dot > 0)
+          status = -5;
         if (status > 0)
         {
           cell_idx = cand_patch[c];
