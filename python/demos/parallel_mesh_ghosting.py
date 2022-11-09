@@ -55,7 +55,6 @@ marker = xdmf.read_meshtags(mesh, 'facet_marker')
 mesh.topology.create_connectivity(tdim - 1, tdim)
 fc = mesh.topology.connectivity(tdim - 1, tdim)
 fv = mesh.topology.connectivity(tdim - 1, 0)
-cells_to_ghost = [fc.links(f)[0] for f in marker.indices]
 ncells = mesh.topology.index_map(tdim).size_local
 
 # Convert marked facets to list of (global) vertices for each facet
@@ -73,6 +72,7 @@ x_facet = np.array([sum([x[i] for i in idx])/len(idx) for idx in facet_to_geom])
 # 2. Send midpoints to process zero
 comm = mesh.comm
 x_all = comm.gather(x_facet, root=0)
+scatter_back = []
 if comm.rank == 0:
     offsets = np.cumsum([0] + [w.shape[0] for w in x_all])
     x_all_flat = np.concatenate(x_all)
@@ -80,9 +80,40 @@ if comm.rank == 0:
     # 3. Find all pairs of facets within radius R
     R = 0.1
     x_near = point_cloud_pairs(x_all_flat, R)
-    print(x_near)
-quit()
+    
+    # Find which process the neighboring facet came from
+    i = 0
+    procs = [[] for p in range(len(x_all))]
+    for p in range(len(x_all)):
+        for j in range(x_all[p].shape[0]):
+            pr = set()
+            for n in x_near[i]:
+                # Find which process this facet came from
+                q = np.searchsorted(offsets, n, side='right') - 1
+                # Add to the sendback list, if not the same process
+                if q != p:
+                    pr.add(q)
+            procs[p] += [list(pr)]
+            i += 1
+        
+    # Pack up to return to sending processes
+    for i, q in enumerate(procs):
+        off = np.cumsum([0] + [len(w) for w in q])
+        flat_q = sum(q, []) 
+        scatter_back += [[len(off)] + list(off) + flat_q]
 
+d = comm.scatter(scatter_back, root=0)
+# Unpack received data to get additional destinations for each facet/cell
+n = d[0] + 1
+offsets = d[1:n]
+cell_dests = [d[n + offsets[j]:n + offsets[j + 1]] for j in range(n - 2)]
+cells_to_ghost = [fc.links(f)[0] for f in marker_subset]
+assert len(cell_dests) == len(cells_to_ghost)
+print(cell_dests, cells_to_ghost)
+
+# TODO: deal with duplicates here
+cell_to_dests = {c: d for c, d in zip(cells_to_ghost, cell_dests)}
+print(cell_to_dests)
 
 # Copy facets and markers to all processes
 global_markers = sum(fv_indices, [])
@@ -93,14 +124,13 @@ all_values = np.array(sum(mesh.comm.allgather(list(marker.values)), []))
 
 def partitioner(comm, n, m, topo):
     rank = comm.Get_rank()
-    other_ranks = [i for i in range(comm.Get_size()) if i != rank]
 
     dests = []
     offsets = [0]
     for c in range(ncells):
         dests.append(rank)
-        if c in cells_to_ghost:
-            dests.extend(other_ranks)  # Ghost to other processes
+        if c in cell_to_dests:
+            dests.extend(cell_to_dests[c])  # Ghost to other processes
         offsets.append(len(dests))
     return dolfinx.cpp.graph.AdjacencyList_int32(dests, offsets)
 
