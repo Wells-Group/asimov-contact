@@ -4,8 +4,53 @@ from dolfinx.mesh import create_mesh, meshtags
 import dolfinx
 from dolfinx.cpp.mesh import entities_to_geometry
 import numpy as np
+import numba
 
-xdmf = XDMFFile(MPI.COMM_WORLD, 'box_2D.xdmf', 'r')
+@numba.njit
+def point_cloud_pairs(x, r):
+    """Find all neighbors of each point which are within a radius r."""
+
+    print('argsort')
+    # Get sort-order in ascending x-value, and reverse permutation
+    x_fwd = np.argsort(x[:, 0])
+    x_rev = np.empty_like(x_fwd)
+    for i,fi in enumerate(x_fwd):
+        x_rev[fi] = i
+    
+    npoints = len(x_fwd)
+    print('npoints = ', npoints)
+    x_near = [[int(0) for k in range(0)] for j in range(0)]
+    for i in range(npoints):
+        xni = [int(0) for j in range(0)]
+        # Nearest neighbor with greater x-value
+        idx = x_rev[i] + 1
+        while idx < npoints:
+            dx = x[x_fwd[idx], 0] - x[i, 0]
+            # print('+',idx, dx)
+            if dx > r:
+                break
+            dr = np.linalg.norm(x[x_fwd[idx], :] - x[i,:])
+            if dr < r:
+                xni += [x_fwd[idx]]
+            idx += 1
+        # Nearest neighbor with smaller x-value
+        idx = x_rev[i] - 1
+        while idx > 0:
+            dx = x[i, 0] - x[x_fwd[idx], 0] 
+            # print('-',idx, dx)
+            if dx > r:
+                break
+            dr = np.linalg.norm(x[x_fwd[idx], :] - x[i,:])
+            if dr < r:
+                xni += [x_fwd[idx]]
+            idx -= 1
+        print(i, len(xni))
+        x_near += [xni]
+
+    return x_near
+
+
+xdmf = XDMFFile(MPI.COMM_WORLD, 'xmas_tree.xdmf', 'r')
 mesh = xdmf.read_mesh()
 tdim = mesh.topology.dim
 mesh.topology.create_entities(tdim - 1)
@@ -20,6 +65,18 @@ ncells = mesh.topology.index_map(tdim).size_local
 
 # Convert marked facets to list of (global) vertices for each facet
 fv_indices = [sorted(mesh.topology.index_map(0).local_to_global(fv.links(f))) for f in marker.indices]
+
+# 1. Get midpoints of each facet
+x = mesh.geometry.x
+facet_to_geom = entities_to_geometry(mesh, tdim -1, marker.indices, False)
+x_facet = np.array([sum([x[i] for i in idx])/len(idx) for idx in facet_to_geom])
+
+# 2. Send midpoints to process zero
+
+# 3. Find all pairs of facets within radius R of each other 
+x_near = point_cloud_pairs(x, 0.1)
+print(x_near)
+quit()
 
 # Copy facets and markers to all processes
 global_markers = sum(fv_indices, [])
