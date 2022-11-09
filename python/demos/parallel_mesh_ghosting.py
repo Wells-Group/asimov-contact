@@ -6,6 +6,7 @@ from dolfinx.cpp.mesh import entities_to_geometry
 import numpy as np
 import numba
 
+
 @numba.njit
 def point_cloud_pairs(x, r):
     """Find all neighbors of each point which are within a radius r."""
@@ -13,30 +14,30 @@ def point_cloud_pairs(x, r):
     # Get sort-order in ascending x-value, and reverse permutation
     x_fwd = np.argsort(x[:, 0])
     x_rev = np.empty_like(x_fwd)
-    for i,fi in enumerate(x_fwd):
+    for i, fi in enumerate(x_fwd):
         x_rev[fi] = i
-    
+
     npoints = len(x_fwd)
-    x_near = [[int(0) for k in range(0)] for j in range(0)] # weird stuff for numba
+    x_near = [[int(0) for k in range(0)] for j in range(0)]  # weird stuff for numba
     for i in range(npoints):
-        xni = [int(0) for j in range(0)] # empty list of int for numba
+        xni = [int(0) for j in range(0)]  # empty list of int for numba
         # Nearest neighbor with greater x-value
         idx = x_rev[i] + 1
         while idx < npoints:
             dx = x[x_fwd[idx], 0] - x[i, 0]
             if dx > r:
                 break
-            dr = np.linalg.norm(x[x_fwd[idx], :] - x[i,:])
+            dr = np.linalg.norm(x[x_fwd[idx], :] - x[i, :])
             if dr < r:
                 xni += [x_fwd[idx]]
             idx += 1
         # Nearest neighbor with smaller x-value
         idx = x_rev[i] - 1
         while idx > 0:
-            dx = x[i, 0] - x[x_fwd[idx], 0] 
+            dx = x[i, 0] - x[x_fwd[idx], 0]
             if dx > r:
                 break
-            dr = np.linalg.norm(x[x_fwd[idx], :] - x[i,:])
+            dr = np.linalg.norm(x[x_fwd[idx], :] - x[i, :])
             if dr < r:
                 xni += [x_fwd[idx]]
             idx -= 1
@@ -66,8 +67,8 @@ marker_subset = [idx for idx, k in zip(marker.indices, marker.values) if k in co
 
 # 1. Get midpoints of each facet on interface
 x = mesh.geometry.x
-facet_to_geom = entities_to_geometry(mesh, tdim -1, marker_subset, False)
-x_facet = np.array([sum([x[i] for i in idx])/len(idx) for idx in facet_to_geom])
+facet_to_geom = entities_to_geometry(mesh, tdim - 1, marker_subset, False)
+x_facet = np.array([sum([x[i] for i in idx]) / len(idx) for idx in facet_to_geom])
 
 # 2. Send midpoints to process zero
 comm = mesh.comm
@@ -80,7 +81,7 @@ if comm.rank == 0:
     # 3. Find all pairs of facets within radius R
     R = 0.1
     x_near = point_cloud_pairs(x_all_flat, R)
-    
+
     # Find which process the neighboring facet came from
     i = 0
     procs = [[] for p in range(len(x_all))]
@@ -95,11 +96,11 @@ if comm.rank == 0:
                     pr.add(q)
             procs[p] += [list(pr)]
             i += 1
-        
+
     # Pack up to return to sending processes
     for i, q in enumerate(procs):
         off = np.cumsum([0] + [len(w) for w in q])
-        flat_q = sum(q, []) 
+        flat_q = sum(q, [])
         scatter_back += [[len(off)] + list(off) + flat_q]
 
 d = comm.scatter(scatter_back, root=0)
