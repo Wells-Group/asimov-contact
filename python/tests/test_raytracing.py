@@ -22,7 +22,9 @@ def test_raytracing_3D(cell_type):
     tdim = mesh.topology.dim
     facets = dolfinx.mesh.locate_entities_boundary(mesh, tdim - 1, lambda x: np.isclose(x[2], 0))
 
-    integral_pairs = dolfinx_contact.cpp.compute_active_entities(mesh, facets, dolfinx.fem.IntegralType.exterior_facet)
+    integral_pairs, num_local = dolfinx_contact.cpp.compute_active_entities(
+        mesh, facets, dolfinx.fem.IntegralType.exterior_facet)
+    integral_pairs = integral_pairs[:num_local]
 
     status, cell_idx, x, X = dolfinx_contact.cpp.raytracing(mesh, origin, normal, integral_pairs, 10, 1e-6)
 
@@ -55,7 +57,9 @@ def test_raytracing_3D_corner(cell_type):
     tdim = mesh.topology.dim
     facets = dolfinx.mesh.locate_entities_boundary(mesh, tdim - 1, lambda x: np.isclose(x[2], 1))
 
-    integral_pairs = dolfinx_contact.cpp.compute_active_entities(mesh, facets, dolfinx.fem.IntegralType.exterior_facet)
+    integral_pairs, num_local = dolfinx_contact.cpp.compute_active_entities(
+        mesh, facets, dolfinx.fem.IntegralType.exterior_facet)
+    integral_pairs = integral_pairs[:num_local]
     status, cell_idx, x, X = dolfinx_contact.cpp.raytracing(
         mesh, origin, normal, integral_pairs, 10, 1e-6)
     if status > 0:
@@ -86,7 +90,9 @@ def test_raytracing_2D(cell_type):
     tdim = mesh.topology.dim
     facets = dolfinx.mesh.locate_entities_boundary(mesh, tdim - 1, lambda x: np.isclose(x[1], 0))
 
-    integral_pairs = dolfinx_contact.cpp.compute_active_entities(mesh, facets, dolfinx.fem.IntegralType.exterior_facet)
+    integral_pairs, num_local = dolfinx_contact.cpp.compute_active_entities(
+        mesh, facets, dolfinx.fem.IntegralType.exterior_facet)
+    integral_pairs = integral_pairs[:num_local]
 
     status, cell_idx, x, X = dolfinx_contact.cpp.raytracing(mesh, origin, normal, integral_pairs, 10, 1e-6)
 
@@ -119,7 +125,9 @@ def test_raytracing_2D_corner(cell_type):
     tdim = mesh.topology.dim
     facets = dolfinx.mesh.locate_entities_boundary(mesh, tdim - 1, lambda x: np.isclose(x[1], 1))
 
-    integral_pairs = dolfinx_contact.cpp.compute_active_entities(mesh, facets, dolfinx.fem.IntegralType.exterior_facet)
+    integral_pairs, num_local = dolfinx_contact.cpp.compute_active_entities(
+        mesh, facets, dolfinx.fem.IntegralType.exterior_facet)
+    integral_pairs = integral_pairs[:num_local]
     status, cell_idx, x, X = dolfinx_contact.cpp.raytracing(
         mesh, origin, normal, integral_pairs, 10, 1e-6)
     if status > 0:
@@ -164,6 +172,8 @@ def test_raytracing_manifold(cell_type):
     tdim = mesh.topology.dim
     facets = dolfinx.mesh.locate_entities_boundary(mesh, tdim - 1, lambda x: np.isclose(x[1], 1))
 
-    integral_pairs = dolfinx_contact.cpp.compute_active_entities(mesh, facets, dolfinx.fem.IntegralType.exterior_facet)
+    integral_pairs, num_local = dolfinx_contact.cpp.compute_active_entities(
+        mesh, facets, dolfinx.fem.IntegralType.exterior_facet)
+    integral_pairs = integral_pairs[:num_local]
     status, cell_idx, x, X = dolfinx_contact.cpp.raytracing(mesh, origin, normal, integral_pairs, 10, 1e-6)
     assert np.allclose(x, exact_point)

@@ -20,6 +20,7 @@ from dolfinx_contact.helpers import lame_parameters, epsilon, sigma_func
 from dolfinx_contact.meshing import (convert_mesh,
                                      create_box_mesh_3D)
 from dolfinx_contact.meshtie import nitsche_meshtie
+from dolfinx_contact.parallel_mesh_ghosting import create_contact_mesh
 
 if __name__ == "__main__":
     desc = "Nitsche's method for two elastic bodies using custom assemblers"
@@ -99,6 +100,10 @@ if __name__ == "__main__":
     cells = np.arange(mesh.topology.index_map(tdim).size_local
                       + mesh.topology.index_map(tdim).num_ghosts, dtype=np.int32)
     domain_marker = meshtags(mesh, tdim, cells, np.full(cells.shape, 1, dtype=np.int32))
+
+    if mesh.comm.size > 1:
+        mesh, facet_marker, domain_marker = create_contact_mesh(
+            mesh, facet_marker, domain_marker, [contact_bdy_1, contact_bdy_2])
 
     # Function, TestFunction, TrialFunction and measures
     V = VectorFunctionSpace(mesh, ("CG", 1))
