@@ -52,10 +52,16 @@ def test_circumradius(dim):
     uh = problem.solve()
 
     h2 = np.zeros(facets.size)
+    cells = []
     for i, facet in enumerate(facets):
         cell = f_to_c.links(facet)[0]
         h2[i] = uh.vector[cell]
+        cells.append(cell)
 
-    active_facets = dolfinx_contact.cpp.compute_active_entities(mesh, facets, IntegralType.exterior_facet)
+    active_facets, num_local = dolfinx_contact.cpp.compute_active_entities(mesh, facets, IntegralType.exterior_facet)
+    active_facets = active_facets[:num_local, :]
     h = dolfinx_contact.pack_circumradius(mesh, active_facets).reshape(-1)
-    assert np.allclose(h, h2)
+
+    # sort h2, compute_active_entities sorts by cells
+    indices = np.argsort(cells)
+    assert np.allclose(h, h2[indices])

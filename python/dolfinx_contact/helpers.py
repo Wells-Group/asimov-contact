@@ -10,7 +10,7 @@ from dolfinx.cpp.mesh import MeshTags_int32
 import dolfinx.fem as _fem
 import dolfinx.la as _la
 import numpy
-import scipy
+import scipy.sparse
 import ufl
 from petsc4py import PETSc
 
