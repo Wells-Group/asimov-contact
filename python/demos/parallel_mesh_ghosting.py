@@ -47,9 +47,8 @@ def point_cloud_pairs(x, r):
 
 
 def compute_ghost_cell_destinations(mesh, marker_subset, R=0.1):
-    """For each marked facet, given by indices in "marker_subset", get the list of processes which 
+    """For each marked facet, given by indices in "marker_subset", get the list of processes which
     the attached cell should be sent to, for ghosting. Neighbouring facets within distance "R"."""
-    
     # 1. Get midpoints of all facets on interfaces
     tdim = mesh.topology.dim
     x = mesh.geometry.x
@@ -132,7 +131,7 @@ print(cell_to_dests)
 
 # Convert marked facets to list of (global) vertices for each facet
 all_indices = [sorted(mesh.topology.index_map(0).local_to_global(fv.links(f))) for f in marker.indices]
-all_values = marker.values 
+all_values = marker.values
 
 # Send any 'extras' over to processes that need them
 send_buffer = [[] for p in range(mesh.comm.size)]
@@ -146,7 +145,6 @@ recv_buffer = np.array(sum(mesh.comm.alltoall(send_buffer), [])).reshape((-1, nu
 for row in recv_buffer:
     all_indices += [list(row[:-1])]
     all_values += [row[-1]]
-
 
 
 def partitioner(comm, n, m, topo):
