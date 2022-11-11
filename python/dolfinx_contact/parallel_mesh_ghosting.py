@@ -6,8 +6,98 @@ from dolfinx.mesh import create_mesh, meshtags
 import dolfinx
 from dolfinx.cpp.mesh import entities_to_geometry, cell_num_vertices, cell_entity_type, to_type
 import numpy as np
+import numba
 
-__all__ = ["create_contact_mesh"]
+__all__ = ["create_contact_mesh", "point_cloud_pairs", "compute_ghost_cell_destinations"]
+
+
+@numba.njit
+def point_cloud_pairs(x, r):
+    """Find all neighbors of each point which are within a radius r."""
+
+    # Get sort-order in ascending x-value, and reverse permutation
+    x_fwd = np.argsort(x[:, 0])
+    x_rev = np.empty_like(x_fwd)
+    for i, fi in enumerate(x_fwd):
+        x_rev[fi] = i
+
+    npoints = len(x_fwd)
+    x_near = [[int(0) for k in range(0)] for j in range(0)]  # weird stuff for numba
+    for i in range(npoints):
+        xni = [int(0) for j in range(0)]  # empty list of int for numba
+        # Nearest neighbor with greater x-value
+        idx = x_rev[i] + 1
+        while idx < npoints:
+            dx = x[x_fwd[idx], 0] - x[i, 0]
+            if dx > r:
+                break
+            dr = np.linalg.norm(x[x_fwd[idx], :] - x[i, :])
+            if dr < r:
+                xni += [x_fwd[idx]]
+            idx += 1
+        # Nearest neighbor with smaller x-value
+        idx = x_rev[i] - 1
+        while idx > 0:
+            dx = x[i, 0] - x[x_fwd[idx], 0]
+            if dx > r:
+                break
+            dr = np.linalg.norm(x[x_fwd[idx], :] - x[i, :])
+            if dr < r:
+                xni += [x_fwd[idx]]
+            idx -= 1
+        x_near += [xni]
+
+    return x_near
+
+def compute_ghost_cell_destinations(mesh, marker_subset, R=0.1):
+    """For each marked facet, given by indices in "marker_subset", get the list of processes which 
+    the attached cell should be sent to, for ghosting. Neighbouring facets within distance "R"."""
+    
+    # 1. Get midpoints of all facets on interfaces
+    tdim = mesh.topology.dim
+    x = mesh.geometry.x
+    facet_to_geom = entities_to_geometry(mesh, tdim - 1, marker_subset, False)
+    x_facet = np.array([sum([x[i] for i in idx]) / len(idx) for idx in facet_to_geom])
+
+    # 2. Send midpoints to process zero
+    comm = mesh.comm
+    x_all = comm.gather(x_facet, root=0)
+    scatter_back = []
+    if comm.rank == 0:
+        offsets = np.cumsum([0] + [w.shape[0] for w in x_all])
+        x_all_flat = np.concatenate(x_all)
+
+        # Find all pairs of facets within radius R
+        x_near = point_cloud_pairs(x_all_flat, R)
+
+        # Find which process the neighboring facet came from
+        i = 0
+        procs = [[] for p in range(len(x_all))]
+        for p in range(len(x_all)):
+            for j in range(x_all[p].shape[0]):
+                pr = set()
+                for n in x_near[i]:
+                    # Find which process this facet came from
+                    q = np.searchsorted(offsets, n, side='right') - 1
+                    # Add to the sendback list, if not the same process
+                    if q != p:
+                        pr.add(q)
+                procs[p] += [list(pr)]
+                i += 1
+
+        # Pack up to return to sending processes
+        for i, q in enumerate(procs):
+            off = np.cumsum([0] + [len(w) for w in q])
+            flat_q = sum(q, [])
+            scatter_back += [[len(off)] + list(off) + flat_q]
+
+    d = comm.scatter(scatter_back, root=0)
+    # Unpack received data to get additional destinations for each facet/cell
+    n = d[0] + 1
+    offsets = d[1:n]
+    cell_dests = [d[n + offsets[j]:n + offsets[j + 1]] for j in range(n - 2)]
+    assert len(cell_dests) == len(marker_subset)
+    return cell_dests
 
 
 def create_contact_mesh(mesh, fmarker, dmarker, tags):

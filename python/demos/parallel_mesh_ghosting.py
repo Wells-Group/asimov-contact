@@ -2,7 +2,7 @@ from mpi4py import MPI
 from dolfinx.io import XDMFFile
 from dolfinx.mesh import create_mesh, meshtags
 import dolfinx
-from dolfinx.cpp.mesh import entities_to_geometry
+from dolfinx.cpp.mesh import entities_to_geometry, cell_num_vertices, cell_entity_type
 import numpy as np
 import numba
 
@@ -46,9 +46,63 @@ def point_cloud_pairs(x, r):
     return x_near
 
 
+def compute_ghost_cell_destinations(mesh, marker_subset, R=0.1):
+    """For each marked facet, given by indices in "marker_subset", get the list of processes which 
+    the attached cell should be sent to, for ghosting. Neighbouring facets within distance "R"."""
+    
+    # 1. Get midpoints of all facets on interfaces
+    tdim = mesh.topology.dim
+    x = mesh.geometry.x
+    facet_to_geom = entities_to_geometry(mesh, tdim - 1, marker_subset, False)
+    x_facet = np.array([sum([x[i] for i in idx]) / len(idx) for idx in facet_to_geom])
+
+    # 2. Send midpoints to process zero
+    comm = mesh.comm
+    x_all = comm.gather(x_facet, root=0)
+    scatter_back = []
+    if comm.rank == 0:
+        offsets = np.cumsum([0] + [w.shape[0] for w in x_all])
+        x_all_flat = np.concatenate(x_all)
+
+        # Find all pairs of facets within radius R
+        x_near = point_cloud_pairs(x_all_flat, R)
+
+        # Find which process the neighboring facet came from
+        i = 0
+        procs = [[] for p in range(len(x_all))]
+        for p in range(len(x_all)):
+            for j in range(x_all[p].shape[0]):
+                pr = set()
+                for n in x_near[i]:
+                    # Find which process this facet came from
+                    q = np.searchsorted(offsets, n, side='right') - 1
+                    # Add to the sendback list, if not the same process
+                    if q != p:
+                        pr.add(q)
+                procs[p] += [list(pr)]
+                i += 1
+
+        # Pack up to return to sending processes
+        for i, q in enumerate(procs):
+            off = np.cumsum([0] + [len(w) for w in q])
+            flat_q = sum(q, [])
+            scatter_back += [[len(off)] + list(off) + flat_q]
+
+    d = comm.scatter(scatter_back, root=0)
+    # Unpack received data to get additional destinations for each facet/cell
+    n = d[0] + 1
+    offsets = d[1:n]
+    cell_dests = [d[n + offsets[j]:n + offsets[j + 1]] for j in range(n - 2)]
+    assert len(cell_dests) == len(marker_subset)
+    return cell_dests
+
+
 xdmf = XDMFFile(MPI.COMM_WORLD, 'xmas_tree.xdmf', 'r')
 mesh = xdmf.read_mesh()
 tdim = mesh.topology.dim
+num_cell_vertices = cell_num_vertices(mesh.topology.cell_type)
+facet_type = cell_entity_type(mesh.topology.cell_type, tdim - 1, 0)
+num_facet_vertices = cell_num_vertices(facet_type)
 mesh.topology.create_entities(tdim - 1)
 marker = xdmf.read_meshtags(mesh, 'facet_marker')
 
@@ -58,56 +112,14 @@ fc = mesh.topology.connectivity(tdim - 1, tdim)
 fv = mesh.topology.connectivity(tdim - 1, 0)
 ncells = mesh.topology.index_map(tdim).size_local
 
-# Convert marked facets to list of (global) vertices for each facet
-fv_indices = [sorted(mesh.topology.index_map(0).local_to_global(fv.links(f))) for f in marker.indices]
-
 # Get subset of markers on desired interfaces
 contact_keys = (5, 6)
-marker_subset = [idx for idx, k in zip(marker.indices, marker.values) if k in contact_keys]
+marker_subset_i = [i for i, (idx, k) in enumerate(zip(marker.indices, marker.values)) if k in contact_keys]
+marker_subset = marker.indices[marker_subset_i]
+marker_subset_val = marker.values[marker_subset_i]
 
-# 1. Get midpoints of each facet on interface
-x = mesh.geometry.x
-facet_to_geom = entities_to_geometry(mesh, tdim - 1, marker_subset, False)
-x_facet = np.array([sum([x[i] for i in idx]) / len(idx) for idx in facet_to_geom])
+cell_dests = compute_ghost_cell_destinations(mesh, marker_subset, 0.1)
 
-# 2. Send midpoints to process zero
-comm = mesh.comm
-x_all = comm.gather(x_facet, root=0)
-scatter_back = []
-if comm.rank == 0:
-    offsets = np.cumsum([0] + [w.shape[0] for w in x_all])
-    x_all_flat = np.concatenate(x_all)
-
-    # 3. Find all pairs of facets within radius R
-    R = 0.1
-    x_near = point_cloud_pairs(x_all_flat, R)
-
-    # Find which process the neighboring facet came from
-    i = 0
-    procs = [[] for p in range(len(x_all))]
-    for p in range(len(x_all)):
-        for j in range(x_all[p].shape[0]):
-            pr = set()
-            for n in x_near[i]:
-                # Find which process this facet came from
-                q = np.searchsorted(offsets, n, side='right') - 1
-                # Add to the sendback list, if not the same process
-                if q != p:
-                    pr.add(q)
-            procs[p] += [list(pr)]
-            i += 1
-
-    # Pack up to return to sending processes
-    for i, q in enumerate(procs):
-        off = np.cumsum([0] + [len(w) for w in q])
-        flat_q = sum(q, [])
-        scatter_back += [[len(off)] + list(off) + flat_q]
-
-d = comm.scatter(scatter_back, root=0)
-# Unpack received data to get additional destinations for each facet/cell
-n = d[0] + 1
-offsets = d[1:n]
-cell_dests = [d[n + offsets[j]:n + offsets[j + 1]] for j in range(n - 2)]
 cells_to_ghost = [fc.links(f)[0] for f in marker_subset]
 assert len(cell_dests) == len(cells_to_ghost)
 print(cell_dests, cells_to_ghost)
@@ -116,11 +128,25 @@ print(cell_dests, cells_to_ghost)
 cell_to_dests = {c: d for c, d in zip(cells_to_ghost, cell_dests)}
 print(cell_to_dests)
 
-# Copy facets and markers to all processes
-global_markers = sum(fv_indices, [])
-all_indices = mesh.comm.allgather(global_markers)
-all_indices = np.array(sum(all_indices, [])).reshape(-1, tdim)
-all_values = np.array(sum(mesh.comm.allgather(list(marker.values)), []))
+# Collect up locally occuring markers
+
+# Convert marked facets to list of (global) vertices for each facet
+all_indices = [sorted(mesh.topology.index_map(0).local_to_global(fv.links(f))) for f in marker.indices]
+all_values = marker.values 
+
+# Send any 'extras' over to processes that need them
+send_buffer = [[] for p in range(mesh.comm.size)]
+for i, f in enumerate(marker_subset):
+    val = marker_subset_val[i]
+    for dest in cell_dests[i]:
+        send_buffer[dest] += sorted(mesh.topology.index_map(0).local_to_global(fv.links(f))) + [val]
+
+# Append received markers
+recv_buffer = np.array(sum(mesh.comm.alltoall(send_buffer), [])).reshape((-1, num_facet_vertices + 1))
+for row in recv_buffer:
+    all_indices += [list(row[:-1])]
+    all_values += [row[-1]]
+
 
 
 def partitioner(comm, n, m, topo):
@@ -138,7 +164,7 @@ def partitioner(comm, n, m, topo):
 
 # Convert topology to global indexing, and restrict to non-ghost cells
 topo = mesh.topology.connectivity(tdim, 0).array
-topo = mesh.topology.index_map(0).local_to_global(topo).reshape((-1, tdim + 1))
+topo = mesh.topology.index_map(0).local_to_global(topo).reshape((-1, num_cell_vertices))
 topo = topo[:ncells, :]
 
 # Cut off any ghost vertices
