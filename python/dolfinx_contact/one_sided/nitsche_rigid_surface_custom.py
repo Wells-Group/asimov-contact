@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier:    MIT
 
-from typing import Dict, Tuple
+from typing import Optional, Dict, Tuple
 
 import basix
 import dolfinx.common as _common
@@ -24,11 +24,12 @@ kt = dolfinx_contact.cpp.Kernel
 
 
 def nitsche_rigid_surface_custom(mesh: _mesh.Mesh, mesh_data: Tuple[_cpp.mesh.MeshTags_int32, int, int, int, int],
-                                 physical_parameters: dict = None, nitsche_parameters: Dict[str, float] = None,
+                                 physical_parameters: Optional[dict] = None,
+                                 nitsche_parameters: Optional[Dict[str, float]] = None,
                                  vertical_displacement: float = -0.1, nitsche_bc: bool = True,
-                                 quadrature_degree: int = 5, form_compiler_options: Dict = None,
-                                 jit_options: Dict = None, petsc_options: Dict = None,
-                                 newton_options: Dict = None):
+                                 quadrature_degree: int = 5, form_compiler_options: Optional[Dict] = None,
+                                 jit_options: Optional[Dict] = None, petsc_options: Optional[Dict] = None,
+                                 newton_options: Optional[Dict] = None):
     """
     Use custom kernel to compute the one sided contact problem with a mesh coming into contact
     with a rigid surface (meshed).
