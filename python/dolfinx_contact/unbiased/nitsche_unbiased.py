@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier:    MIT
 
-from typing import Tuple, Union
+from typing import Optional, Tuple, Union
 
 from dolfinx import common, fem, mesh, io, log
 import numpy as np
@@ -229,8 +229,12 @@ def nitsche_unbiased(steps: int, ufl_form: ufl.Form, u: fem.Function,
                      bcs: Tuple[npt.NDArray[np.int32], list[Union[fem.Function, fem.Constant]]],
                      problem_parameters: dict[str, np.float64],
                      search_method: dolfinx_contact.cpp.ContactMode,
-                     quadrature_degree: int = 5, form_compiler_options: dict = None, jit_options: dict = None,
-                     petsc_options: dict = None, newton_options: dict = None, outfile: str = None,
+                     quadrature_degree: int = 5,
+                     form_compiler_options: Optional[dict] = None,
+                     jit_options: Optional[dict] = None,
+                     petsc_options: Optional[dict] = None,
+                     newton_options: Optional[dict] = None,
+                     outfile: Optional[str] = None,
                      fname: str = "pseudo_time") -> Tuple[fem.Function, list[int], list[int], list[float]]:
     """
     Use custom kernel to compute the contact problem with two elastic bodies coming into contact.
