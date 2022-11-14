@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier:    MIT
 
-from typing import Tuple
+from typing import Optional, Tuple
 
 import dolfinx.cpp.fem as _cppfem
 import dolfinx.common as _common
@@ -21,12 +21,18 @@ from dolfinx_contact.helpers import rigid_motions_nullspace_subdomains
 kt = dolfinx_contact.cpp.Kernel
 
 
-def nitsche_meshtie(lhs: ufl.Form, rhs: _fem.Function, u: _fem.Function, markers: list[MeshTags_int32],
+def nitsche_meshtie(lhs: ufl.Form,
+                    rhs: _fem.Function,
+                    u: _fem.Function,
+                    markers: list[MeshTags_int32],
                     surface_data: Tuple[AdjacencyList_int32, list[Tuple[int, int]]],
                     bcs: list[_fem.DirichletBCMetaClass],
                     problem_parameters: dict[str, np.float64],
-                    quadrature_degree: int = 5, form_compiler_options: dict = None, jit_options: dict = None,
-                    petsc_options: dict = None, timing_str: str = '') -> Tuple[_fem.Function, int, int, float]:
+                    quadrature_degree: int = 5,
+                    form_compiler_options: Optional[dict] = None,
+                    jit_options: Optional[dict] = None,
+                    petsc_options: Optional[dict] = None,
+                    timing_str: str = '') -> Tuple[_fem.Function, int, int, float]:
     """
     Use custom kernel to compute elasticity problem if mesh consists of topologically disconnected parts
 
