@@ -267,6 +267,162 @@ std::vector<int32_t>
 facet_indices_from_pair(std::span<const std::int32_t> facet_pairs,
                         const dolfinx::mesh::Mesh& mesh);
 
+/// Compute the relation between a set of points and a mesh by computing the
+/// closest point on mesh at a specific set of points. There is also a subset
+/// of facets on mesh we use for intersection checks.
+/// @param[in] mesh The mesh to compute the closest point at
+/// @param[in] facet_tuples Set of facets in the of
+/// tuples (cell_index, local_facet_index) for the
+/// `quadrature_mesh`. Flattened row major.
+/// @param[in] points The points to compute the closest entity from.
+/// Shape (num_quadrature_points, 3). Flattened row-major
+/// @returns A tuple (closest_facets, reference_points), where
+/// `closest_entities[i]` is the closest entity in `facet_tuples` for the ith
+/// input point
+template <std::size_t tdim, std::size_t gdim>
+std::tuple<std::vector<std::int32_t>, std::vector<double>,
+           std::array<std::size_t, 2>>
+compute_projection_map(const dolfinx::mesh::Mesh& mesh,
+                       std::span<const std::int32_t> facet_tuples,
+                       std::span<const double> points)
+{
+  assert(tdim == mesh.topology().dim());
+  assert(mesh.geometry().dim() == gdim);
+
+  const std::size_t num_points = points.size() / 3;
+
+  // Convert cell,local_facet_index to facet_index (local
+  // to proc)
+  std::vector<std::int32_t> facets(facet_tuples.size() / 2);
+  auto c_to_f = mesh.topology().connectivity(tdim, tdim - 1);
+  if (!c_to_f)
+  {
+    throw std::runtime_error("Missing cell->facet connectivity on candidate "
+                             "mesh.");
+  }
+
+  for (std::size_t i = 0; i < facet_tuples.size(); i += 2)
+  {
+    auto local_facets = c_to_f->links(facet_tuples[i]);
+    assert(!local_facets.empty());
+    assert((std::size_t)facet_tuples[i + 1] < local_facets.size());
+    facets[i / 2] = local_facets[facet_tuples[i + 1]];
+  }
+
+  // Compute closest entity for each point
+  dolfinx::geometry::BoundingBoxTree bbox(mesh, tdim - 1, facets);
+  dolfinx::geometry::BoundingBoxTree midpoint_tree
+      = dolfinx::geometry::create_midpoint_tree(mesh, tdim - 1, facets);
+  std::vector<std::int32_t> closest_facets
+      = dolfinx::geometry::compute_closest_entity(bbox, midpoint_tree, mesh,
+                                                  points);
+  std::vector<double> candidate_x(num_points * 3);
+  std::span<const double> mesh_geometry = mesh.geometry().x();
+  const dolfinx::fem::CoordinateElement& cmap = mesh.geometry().cmap();
+  {
+    // Find displacement vector from each point
+    // to closest entity. As a point on the surface
+    // might have penetrated the cell in question, we use
+    // the convex hull of the surface facet for distance
+    // computations
+
+    // Get information aboute cell type and number of
+    // closure dofs on the facet NOTE: Assumption that we
+    // do not have variable facet types (prism/pyramid
+    // cell)
+    const dolfinx::fem::ElementDofLayout layout = cmap.create_dof_layout();
+
+    error::check_cell_type(mesh.topology().cell_type());
+    const std::vector<std::int32_t>& closure_dofs
+        = layout.entity_closure_dofs(tdim - 1, 0);
+    const std::size_t num_facet_dofs = closure_dofs.size();
+
+    // Get the geometry dofs of closest facets
+    const dolfinx::graph::AdjacencyList<std::int32_t> facets_geometry
+        = dolfinx_contact::entities_to_geometry_dofs(mesh, tdim - 1,
+                                                     closest_facets);
+    assert(facets_geometry.num_nodes() == (int)num_points);
+
+    // Compute physical points for each facet
+    std::vector<double> coordinate_dofs(3 * num_facet_dofs);
+    for (std::size_t i = 0; i < num_points; ++i)
+    {
+      // Get the geometry dofs for the ith facet, qth
+      // quadrature point
+      auto candidate_facet_dofs = facets_geometry.links(i);
+      assert(num_facet_dofs == candidate_facet_dofs.size());
+
+      // Get the (geometrical) coordinates of the facets
+      for (std::size_t l = 0; l < num_facet_dofs; ++l)
+      {
+        std::copy_n(
+            std::next(mesh_geometry.begin(), 3 * candidate_facet_dofs[l]), 3,
+            std::next(coordinate_dofs.begin(), 3 * l));
+      }
+
+      // Compute distance between convex hull of facet and point
+      std::array<double, 3> dist_vec = dolfinx::geometry::compute_distance_gjk(
+          coordinate_dofs, std::span(std::next(points.begin(), 3 * i), 3));
+
+      // Compute point on closest facet
+      for (std::size_t l = 0; l < 3; ++l)
+        candidate_x[3 * i + l] = points[3 * i + l] + dist_vec[l];
+    }
+  }
+
+  // Pull back to reference point for each facet on the surface
+  std::vector<double> candidate_X(num_points * tdim);
+  {
+    // Temporary data structures used in loop over each
+    // quadrature point on each facet
+    std::array<double, 9> Jb;
+    mdspan3_t J(Jb.data(), 1, gdim, tdim);
+    std::array<double, 9> Kb;
+    mdspan3_t K(Kb.data(), 1, tdim, gdim);
+    std::array<double, 1> detJ;
+
+    std::array<double, gdim> x;
+    std::array<double, tdim> X;
+    const std::size_t num_dofs_g = cmap.dim();
+    const dolfinx::graph::AdjacencyList<std::int32_t>& x_dofmap
+        = mesh.geometry().dofmap();
+    std::vector<double> coordinate_dofsb(num_dofs_g * gdim);
+    cmdspan2_t coordinate_dofs(coordinate_dofsb.data(), num_dofs_g, gdim);
+    auto f_to_c = mesh.topology().connectivity(tdim - 1, tdim);
+    if (!f_to_c)
+      throw std::runtime_error("Missing facet to cell connectivity");
+    for (std::size_t i = 0; i < closest_facets.size(); ++i)
+    {
+      // Get cell connected to facet
+      auto cells = f_to_c->links(closest_facets[i]);
+      assert(cells.size() == 1);
+
+      // Pack coordinate dofs
+      auto x_dofs = x_dofmap.links(cells.front());
+      assert(x_dofs.size() == num_dofs_g);
+      for (std::size_t j = 0; j < num_dofs_g; ++j)
+      {
+        std::copy_n(std::next(mesh_geometry.begin(), 3 * x_dofs[j]), gdim,
+                    std::next(coordinate_dofsb.begin(), j * gdim));
+      }
+
+      // Copy closest point in physical space
+      std::fill(x.begin(), x.end(), 0);
+      std::copy_n(std::next(candidate_x.begin(), 3 * i), gdim, x.begin());
+
+      // NOTE: Would benefit from pulling back all points
+      // in a single cell at the same time
+      // Pull back coordinates
+      std::fill(Jb.begin(), Jb.end(), 0);
+      pull_back(J, K, detJ, X, cmdspan2_t(x.data(), 1, gdim), coordinate_dofs,
+                cmap);
+      // Copy into output
+      std::copy_n(X.begin(), tdim, std::next(candidate_X.begin(), i * tdim));
+    }
+  }
+  return {closest_facets, candidate_X, {candidate_X.size() / tdim, tdim}};
+}
+
 /// Compute the relation between two meshes (mesh_q) and
 /// (mesh_c) by computing the intersection of rays from
 /// mesh_q onto mesh_c at a specific set of quadrature
@@ -598,162 +754,6 @@ compute_raytracing_map(const dolfinx::mesh::Mesh& quadrature_mesh,
   return {dolfinx::graph::AdjacencyList<std::int32_t>(colliding_facet, offset),
           reference_points,
           std::array<std::size_t, 2>{reference_points.size() / tdim, tdim}};
-}
-
-/// Compute the relation between a set of points and a mesh by computing the
-/// closest point on mesh at a specific set of points. There is also a subset
-/// of facets on mesh we use for intersection checks.
-/// @param[in] mesh The mesh to compute the closest point at
-/// @param[in] facet_tuples Set of facets in the of
-/// tuples (cell_index, local_facet_index) for the
-/// `quadrature_mesh`. Flattened row major.
-/// @param[in] points The points to compute the closest entity from.
-/// Shape (num_quadrature_points, 3). Flattened row-major
-/// @returns A tuple (closest_facets, reference_points), where
-/// `closest_entities[i]` is the closest entity in `facet_tuples` for the ith
-/// input point
-template <std::size_t tdim, std::size_t gdim>
-std::tuple<std::vector<std::int32_t>, std::vector<double>,
-           std::array<std::size_t, 2>>
-compute_projection_map(const dolfinx::mesh::Mesh& mesh,
-                       std::span<const std::int32_t> facet_tuples,
-                       std::span<const double> points)
-{
-  assert(tdim == mesh.topology().dim());
-  assert(mesh.geometry().dim() == gdim);
-
-  const std::size_t num_points = points.size() / 3;
-
-  // Convert cell,local_facet_index to facet_index (local
-  // to proc)
-  std::vector<std::int32_t> facets(facet_tuples.size() / 2);
-  auto c_to_f = mesh.topology().connectivity(tdim, tdim - 1);
-  if (!c_to_f)
-  {
-    throw std::runtime_error("Missing cell->facet connectivity on candidate "
-                             "mesh.");
-  }
-
-  for (std::size_t i = 0; i < facet_tuples.size(); i += 2)
-  {
-    auto local_facets = c_to_f->links(facet_tuples[i]);
-    assert(!local_facets.empty());
-    assert((std::size_t)facet_tuples[i + 1] < local_facets.size());
-    facets[i / 2] = local_facets[facet_tuples[i + 1]];
-  }
-
-  // Compute closest entity for each point
-  dolfinx::geometry::BoundingBoxTree bbox(mesh, tdim - 1, facets);
-  dolfinx::geometry::BoundingBoxTree midpoint_tree
-      = dolfinx::geometry::create_midpoint_tree(mesh, tdim - 1, facets);
-  std::vector<std::int32_t> closest_facets
-      = dolfinx::geometry::compute_closest_entity(bbox, midpoint_tree, mesh,
-                                                  points);
-  std::vector<double> candidate_x(num_points * 3);
-  std::span<const double> mesh_geometry = mesh.geometry().x();
-  const dolfinx::fem::CoordinateElement& cmap = mesh.geometry().cmap();
-  {
-    // Find displacement vector from each point
-    // to closest entity. As a point on the surface
-    // might have penetrated the cell in question, we use
-    // the convex hull of the surface facet for distance
-    // computations
-
-    // Get information aboute cell type and number of
-    // closure dofs on the facet NOTE: Assumption that we
-    // do not have variable facet types (prism/pyramid
-    // cell)
-    const dolfinx::fem::ElementDofLayout layout = cmap.create_dof_layout();
-
-    error::check_cell_type(mesh.topology().cell_type());
-    const std::vector<std::int32_t>& closure_dofs
-        = layout.entity_closure_dofs(tdim - 1, 0);
-    const std::size_t num_facet_dofs = closure_dofs.size();
-
-    // Get the geometry dofs of closest facets
-    const dolfinx::graph::AdjacencyList<std::int32_t> facets_geometry
-        = dolfinx_contact::entities_to_geometry_dofs(mesh, tdim - 1,
-                                                     closest_facets);
-    assert(facets_geometry.num_nodes() == (int)num_points);
-
-    // Compute physical points for each facet
-    std::vector<double> coordinate_dofs(3 * num_facet_dofs);
-    for (std::size_t i = 0; i < num_points; ++i)
-    {
-      // Get the geometry dofs for the ith facet, qth
-      // quadrature point
-      auto candidate_facet_dofs = facets_geometry.links(i);
-      assert(num_facet_dofs == candidate_facet_dofs.size());
-
-      // Get the (geometrical) coordinates of the facets
-      for (std::size_t l = 0; l < num_facet_dofs; ++l)
-      {
-        std::copy_n(
-            std::next(mesh_geometry.begin(), 3 * candidate_facet_dofs[l]), 3,
-            std::next(coordinate_dofs.begin(), 3 * l));
-      }
-
-      // Compute distance between convex hull of facet and point
-      std::array<double, 3> dist_vec = dolfinx::geometry::compute_distance_gjk(
-          coordinate_dofs, std::span(std::next(points.begin(), 3 * i), 3));
-
-      // Compute point on closest facet
-      for (std::size_t l = 0; l < 3; ++l)
-        candidate_x[3 * i + l] = points[3 * i + l] + dist_vec[l];
-    }
-  }
-
-  // Pull back to reference point for each facet on the surface
-  std::vector<double> candidate_X(num_points * tdim);
-  {
-    // Temporary data structures used in loop over each
-    // quadrature point on each facet
-    std::array<double, 9> Jb;
-    mdspan3_t J(Jb.data(), 1, gdim, tdim);
-    std::array<double, 9> Kb;
-    mdspan3_t K(Kb.data(), 1, tdim, gdim);
-    std::array<double, 1> detJ;
-
-    std::array<double, gdim> x;
-    std::array<double, tdim> X;
-    const std::size_t num_dofs_g = cmap.dim();
-    const dolfinx::graph::AdjacencyList<std::int32_t>& x_dofmap
-        = mesh.geometry().dofmap();
-    std::vector<double> coordinate_dofsb(num_dofs_g * gdim);
-    cmdspan2_t coordinate_dofs(coordinate_dofsb.data(), num_dofs_g, gdim);
-    auto f_to_c = mesh.topology().connectivity(tdim - 1, tdim);
-    if (!f_to_c)
-      throw std::runtime_error("Missing facet to cell connectivity");
-    for (std::size_t i = 0; i < closest_facets.size(); ++i)
-    {
-      // Get cell connected to facet
-      auto cells = f_to_c->links(closest_facets[i]);
-      assert(cells.size() == 1);
-
-      // Pack coordinate dofs
-      auto x_dofs = x_dofmap.links(cells.front());
-      assert(x_dofs.size() == num_dofs_g);
-      for (std::size_t j = 0; j < num_dofs_g; ++j)
-      {
-        std::copy_n(std::next(mesh_geometry.begin(), 3 * x_dofs[j]), gdim,
-                    std::next(coordinate_dofsb.begin(), j * gdim));
-      }
-
-      // Copy closest point in physical space
-      std::fill(x.begin(), x.end(), 0);
-      std::copy_n(std::next(candidate_x.begin(), 3 * i), gdim, x.begin());
-
-      // NOTE: Would benefit from pulling back all points
-      // in a single cell at the same time
-      // Pull back coordinates
-      std::fill(Jb.begin(), Jb.end(), 0);
-      pull_back(J, K, detJ, X, cmdspan2_t(x.data(), 1, gdim), coordinate_dofs,
-                cmap);
-      // Copy into output
-      std::copy_n(X.begin(), tdim, std::next(candidate_X.begin(), i * tdim));
-    }
-  }
-  return {closest_facets, candidate_X, {candidate_X.size() / tdim, tdim}};
 }
 
 } // namespace dolfinx_contact
