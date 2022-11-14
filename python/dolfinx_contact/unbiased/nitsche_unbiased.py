@@ -15,7 +15,6 @@ from petsc4py import PETSc as _PETSc
 import dolfinx_contact
 import dolfinx_contact.cpp
 from dolfinx_contact.helpers import (rigid_motions_nullspace_subdomains, sigma_func)
-from dolfinx_contact.plotting import plot_gap
 
 kt = dolfinx_contact.cpp.Kernel
 
@@ -27,8 +26,7 @@ def setup_newton_solver(F_custom: fem.forms.FormMetaClass, J_custom: fem.forms.F
                         u: fem.Function, du: fem.Function,
                         contact: dolfinx_contact.cpp.Contact, markers: list[_cpp.mesh.MeshTags_int32],
                         entities: list[npt.NDArray[np.int32]], quadrature_degree: int,
-                        const_coeffs: list[npt.NDArray[np.float64]], consts: npt.NDArray[np.float64],
-                        contact_pairs, contact_surfaces, step):
+                        const_coeffs: list[npt.NDArray[np.float64]], consts: npt.NDArray[np.float64]):
     """
     Set up newton solver for contact problem.
     Generate kernels and define functions for updating coefficients, stiffness matrix and residual vector.
@@ -71,17 +69,6 @@ def setup_newton_solver(F_custom: fem.forms.FormMetaClass, J_custom: fem.forms.F
             gaps.append(contact.pack_gap(i))
             normals.append(contact.pack_ny(i))
             test_fns.append(contact.pack_test_functions(i))
-
-    for i, gap in enumerate(gaps):
-        s1 = contact_pairs[i][0]
-        s2 = contact_pairs[i][1]
-        tag1 = contact_surfaces.array[s1]
-        tag2 = contact_surfaces.array[s2]
-        mt_ind1 = np.argwhere(contact_surfaces.offsets < s1 + 1)[-1, 0]
-        mt_ind2 = np.argwhere(contact_surfaces.offsets < s2 + 1)[-1, 0]
-        facets = markers[1 + mt_ind1].find(tag1)
-        facets_opp = markers[1 + mt_ind2].find(tag2)
-        plot_gap(mesh, contact, i, gap, facets, facets_opp, step)
 
     # Concatenate all coeffs
     ccfs = []
@@ -411,8 +398,7 @@ def nitsche_unbiased(steps: int, ufl_form: ufl.Form, u: fem.Function,
 
         # setup newton solver
         newton_solver = setup_newton_solver(F_custom, J_custom, bcs, u, du, contact, markers,
-                                            entities, quadrature_degree, const_coeffs, consts,
-                                            contact_pairs, contact_surfaces, tt)
+                                            entities, quadrature_degree, const_coeffs, consts)
 
         # Set Newton solver options
         newton_solver.set_newton_options(newton_options)

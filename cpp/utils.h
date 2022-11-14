@@ -328,6 +328,8 @@ compute_raytracing_map(const dolfinx::mesh::Mesh& quadrature_mesh,
   mdspan2_t J(Jb.data(), gdim, tdim);
   std::array<double, 9> Kb;
   mdspan2_t K(Kb.data(), tdim, gdim);
+  std::array<double, 9> Kcb;
+  mdspan2_t K_c(Kcb.data(), tdim, gdim);
 
   // Get relevant information from quadrature mesh
   const dolfinx::mesh::Geometry& geom_q = quadrature_mesh.geometry();
@@ -414,9 +416,11 @@ compute_raytracing_map(const dolfinx::mesh::Mesh& quadrature_mesh,
 
     // Determine candidate facets within search radius
     std::span<std::int32_t> current_facet(q_facets.begin() + i / 2, 1);
+
+    // FIXME: This is not the most efficient way of finding close facets
     std::vector<int32_t> cand_patch = find_candidate_surface_segment(
-        quadrature_mesh, candidate_mesh, current_facet, c_facets, search_radius,
-        true);
+        quadrature_mesh, candidate_mesh, current_facet, c_facets,
+        2 * search_radius, true);
     // Pack coordinate dofs
     auto x_dofs = q_dofmap.links(quadrature_facets[i]);
     assert(x_dofs.size() == num_nodes_q);
@@ -490,17 +494,39 @@ compute_raytracing_map(const dolfinx::mesh::Mesh& quadrature_mesh,
               X[i] += (x(facet[j + 1], i) - x(f0, i)) * xi[j];
           }
         };
-        std::fill(normal_c.begin(), normal_c.end(), 0);
+
         status = raytracing_cell<tdim, gdim>(
             allocated_memory, basis_values_c, basis_shape_c, 25, 1e-8, cmap_c,
-            cell_type, coordinate_dofs_c, reference_map, normal_c,
+            cell_type, coordinate_dofs_c, reference_map);
+
+        // compute normal of candidate facet
+        std::fill(normal_c.begin(), normal_c.end(), 0);
+        auto J_c = allocated_memory.J();
+        dolfinx::fem::CoordinateElement::compute_jacobian_inverse(J_c, K_c);
+        dolfinx_contact::physical_facet_normal(
+            std::span(normal_c.data(), gdim), K_c,
             std::span(std::next(reference_normals.begin(),
                                 rn_shape[1] * facet_index_c),
                       rn_shape[1]));
+
+        // retrieve ray
+        std::array<double, gdim> ray;
+        for (std::size_t l = 0; l < gdim; ++l)
+          ray[l] = allocated_memory.x_k()[l] - point[l];
+
+        // Compute norm of ray and dot product of normals
+        double norm = 0;
         double dot = 0;
         for (std::size_t l = 0; l < gdim; ++l)
+        {
           dot += normal[l] * normal_c[l];
-        if (dot > 0)
+          norm += ray[l] * ray[l];
+        }
+
+        // check criteria for valid contact pair
+        // 1. Compatible normals (normals pointing in opposite directions)
+        // 2. Point within search radius
+        if (dot > 0 || norm > search_radius)
           status = -5;
         if (status > 0)
         {
