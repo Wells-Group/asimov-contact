@@ -444,18 +444,15 @@ PYBIND11_MODULE(cpp, m)
 
   m.def(
       "find_candidate_surface_segment",
-      [](const dolfinx::mesh::Mesh& quadrature_mesh,
-         const dolfinx::mesh::Mesh& candidate_mesh,
+      [](std::shared_ptr<const dolfinx::mesh::Mesh> mesh,
          const std::vector<std::int32_t>& quadrature_facets,
          const std::vector<std::int32_t>& candidate_facets, const double radius)
       {
         return dolfinx_contact::find_candidate_surface_segment(
-            quadrature_mesh, candidate_mesh, quadrature_facets,
-            candidate_facets, radius, false);
+            mesh, quadrature_facets, candidate_facets, radius);
       },
-      py::arg("quadrature_mesh"), py::arg("candidate_mesh"),
-      py::arg("quadrature_facets"), py::arg("candidate_facets"),
-      py::arg("radius") = -1.0);
+      py::arg("mesh"), py::arg("quadrature_facets"),
+      py::arg("candidate_facets"), py::arg("radius") = -1.0);
   m.def(
       "raytracing",
       [](const dolfinx::mesh::Mesh& mesh,

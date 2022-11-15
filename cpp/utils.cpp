@@ -713,34 +713,75 @@ std::vector<int32_t> dolfinx_contact::facet_indices_from_pair(
   return facets;
 }
 //-------------------------------------------------------------------------------------
-std::vector<std::int32_t> dolfinx_contact::find_candidate_surface_segment(
+std::vector<std::size_t> dolfinx_contact::find_candidate_facets(
     const dolfinx::mesh::Mesh& quadrature_mesh,
     const dolfinx::mesh::Mesh& candidate_mesh,
-    std::span<const std::int32_t> quadrature_facets,
-    std::span<const std::int32_t> candidate_facets, const double radius = -1.,
-    bool sorted_indices = false)
+    const std::int32_t quadrature_facet,
+    std::span<const std::int32_t> candidate_facets, const double radius = -1.)
 {
-  if (radius < 0)
-  {
-    // return all facets for negative radius / no radius
-    std::vector<std::int32_t> cand_patch(candidate_facets.size());
-    std::copy_n(candidate_facets.begin(), candidate_facets.size(),
-                cand_patch.begin());
-    return cand_patch;
-  }
+  std::array<std::int32_t, 1> q_facet = {quadrature_facet};
   // Find midpoints of quadrature and candidate facets
   std::vector<double> quadrature_midpoints = dolfinx::mesh::compute_midpoints(
-      quadrature_mesh, quadrature_mesh.topology().dim() - 1, quadrature_facets);
+      quadrature_mesh, quadrature_mesh.topology().dim() - 1,
+      std::span<int32_t>(q_facet.data(), q_facet.size()));
   std::vector<double> candidate_midpoints = dolfinx::mesh::compute_midpoints(
       candidate_mesh, candidate_mesh.topology().dim() - 1, candidate_facets);
 
   double r2 = radius * radius; // radius squared
   double dist; // used for squared distance between two midpoints
   double diff; // used for squared difference between two coordinates
+  std::vector<std::size_t> cand_patch;
+  std::vector<double> dists;
+  for (std::size_t i = 0; i < candidate_facets.size(); ++i)
+  {
 
-  std::vector<std::int32_t>
-      cand_patch;            // vector to store facets within the radius
-  std::vector<double> dists; // vector for storing distances for sorting
+    // compute distance betweeen midpoints of ith candidate facet
+    // and jth quadrature facet
+    dist = 0;
+    for (std::size_t k = 0; k < 3; ++k)
+    {
+      diff = std::abs(quadrature_midpoints[k] - candidate_midpoints[i * 3 + k]);
+      dist += diff * diff;
+    }
+    if (radius < 0 || dist < r2)
+    {
+      cand_patch.push_back(i); // save index of facet within facet array
+      dists.push_back(dist);   // save distance for sorting
+    }
+  }
+  // sort indices according to distance of facet
+  std::vector<int> perm(cand_patch.size());
+  std::iota(perm.begin(), perm.end(), 0); // Initializing
+  std::sort(perm.begin(), perm.end(),
+            [&](int i, int j) { return dists[i] < dists[j]; });
+  std::vector<size_t> sorted_patch(cand_patch.size());
+  for (std::size_t i = 0; i < cand_patch.size(); ++i)
+    sorted_patch[i] = cand_patch[perm[i]];
+  return sorted_patch;
+}
+//-------------------------------------------------------------------------------------
+std::vector<std::int32_t> dolfinx_contact::find_candidate_surface_segment(
+    std::shared_ptr<const dolfinx::mesh::Mesh> mesh,
+    const std::vector<std::int32_t>& quadrature_facets,
+    const std::vector<std::int32_t>& candidate_facets,
+    const double radius = -1.)
+{
+  if (radius < 0)
+  {
+    // return all facets for negative radius / no radius
+    return std::vector<std::int32_t>(candidate_facets);
+  }
+  // Find midpoints of quadrature and candidate facets
+  std::vector<double> quadrature_midpoints = dolfinx::mesh::compute_midpoints(
+      *mesh, mesh->topology().dim() - 1, quadrature_facets);
+  std::vector<double> candidate_midpoints = dolfinx::mesh::compute_midpoints(
+      *mesh, mesh->topology().dim() - 1, candidate_facets);
+
+  double r2 = radius * radius; // radius squared
+  double dist; // used for squared distance between two midpoints
+  double diff; // used for squared difference between two coordinates
+
+  std::vector<std::int32_t> cand_patch;
 
   for (std::size_t i = 0; i < candidate_facets.size(); ++i)
   {
@@ -758,32 +799,13 @@ std::vector<std::int32_t> dolfinx_contact::find_candidate_surface_segment(
       if (dist < r2)
       {
         // if distance < radius add candidate_facet to output
-        if (sorted_indices)
-        {
-          cand_patch.push_back(i); // save index of facet within facet array
-          dists.push_back(dist);   // save distance for sorting
-        }
-        else
-          cand_patch.push_back(candidate_facets[i]); // store facet index
+        cand_patch.push_back(candidate_facets[i]);
         // break to avoid adding the same facet more than once
         break;
       }
     }
   }
-  if (sorted_indices)
-  {
-    // sort indices according to distance of facet
-    std::vector<int> perm(cand_patch.size());
-    std::iota(perm.begin(), perm.end(), 0); // Initializing
-    std::sort(perm.begin(), perm.end(),
-              [&](int i, int j) { return dists[i] < dists[j]; });
-    std::vector<int32_t> sorted_patch(cand_patch.size());
-    for (std::size_t i = 0; i < cand_patch.size(); ++i)
-      sorted_patch[i] = cand_patch[perm[i]];
-    return sorted_patch;
-  }
-  else
-    return cand_patch;
+  return cand_patch;
 }
 
 //-------------------------------------------------------------------------------------

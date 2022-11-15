@@ -193,25 +193,37 @@ dolfinx::graph::AdjacencyList<std::int32_t>
 entities_to_geometry_dofs(const mesh::Mesh& mesh, int dim,
                           const std::span<const std::int32_t>& entity_list);
 
-/// @brief find candidate facets within a given radius of puppet facets
+/// @brief find candidate facets within a given radius of quadrature facet
 ///
-/// Given a list of puppet facets and a list of candidate facets return
+/// Given one quadrature facet and a list of candidate facets return
+/// the indices of only those candidate facet within the given radius
+/// sorted according to the distance measured at the midpoints
+///
+/// @param[in] mesh The mesh
+/// @param[in] quadrature facet Single quadrature facet
+/// @param[in] candidate_facets Candidate facets
+/// @param[in] radius The search radius
+/// @return sorted indices of candidate facets within radius of quadrature facet
+std::vector<std::size_t>
+find_candidate_facets(const dolfinx::mesh::Mesh& quadrature_mesh,
+                      const dolfinx::mesh::Mesh& candidate_mesh,
+                      const std::int32_t quadrature_facet,
+                      std::span<const std::int32_t> candidate_facets,
+                      const double radius);
+/// @brief find candidate facets within a given radius of quadratuere facets
+///
+/// Given a list of quadrature facets and a list of candidate facets return
 /// only those candidate facet within the given radius
 ///
 /// @param[in] mesh The mesh
-/// @param[in] puppet_facets Puppet facets
+/// @param[in] quadrature_facets Quadrature facets
 /// @param[in] candidate_facets Candidate facets
 /// @param[in] radius The search radius
-/// @return candidate facets within radius of puppet facets
-/// if sorted indices is set to true, instead the index of the candidate
-/// facets within the input array is returned and the facets are sorted
-/// according to the computed distance
-std::vector<std::int32_t>
-find_candidate_surface_segment(const dolfinx::mesh::Mesh& quadrature_mesh,
-                               const dolfinx::mesh::Mesh& candidate_mesh,
-                               std::span<const std::int32_t> quadrature_facets,
-                               std::span<const std::int32_t> candidate_facets,
-                               const double radius, bool sorted_indices);
+/// @return candidate facets within radius of quadrature facets
+std::vector<std::int32_t> find_candidate_surface_segment(
+    std::shared_ptr<const dolfinx::mesh::Mesh> mesh,
+    const std::vector<std::int32_t>& quadrature_facets,
+    const std::vector<std::int32_t>& candidate_facets, const double radius);
 
 /// @brief compute physical points on set of facets
 ///
@@ -571,12 +583,11 @@ compute_raytracing_map(const dolfinx::mesh::Mesh& quadrature_mesh,
     std::size_t count_missing_matches = 0; // counter for missing contact points
 
     // Determine candidate facets within search radius
-    std::span<std::int32_t> current_facet(q_facets.begin() + i / 2, 1);
-
     // FIXME: This is not the most efficient way of finding close facets
-    std::vector<int32_t> cand_patch = find_candidate_surface_segment(
-        quadrature_mesh, candidate_mesh, current_facet, c_facets,
-        2 * search_radius, true);
+    std::vector<size_t> cand_patch
+        = find_candidate_facets(quadrature_mesh, candidate_mesh,
+                                q_facets[i / 2], c_facets, 2 * search_radius);
+
     // Pack coordinate dofs
     auto x_dofs = q_dofmap.links(quadrature_facets[i]);
     assert(x_dofs.size() == num_nodes_q);
@@ -682,7 +693,7 @@ compute_raytracing_map(const dolfinx::mesh::Mesh& quadrature_mesh,
         // check criteria for valid contact pair
         // 1. Compatible normals (normals pointing in opposite directions)
         // 2. Point within search radius
-        if (dot > 0 || norm > search_radius)
+        if (dot > 0 || (search_radius > 0 && norm > search_radius))
           status = -5;
         if (status > 0)
         {

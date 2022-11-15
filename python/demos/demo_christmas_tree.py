@@ -142,13 +142,13 @@ if __name__ == "__main__":
 
     for i in range(split):
         fcts = np.array(find_candidate_surface_segment(
-            mesh, mesh, facet_marker.find(marker_offset + split + i), cand_facets_0, 0.8), dtype=np.int32)
+            mesh, facet_marker.find(marker_offset + split + i), cand_facets_0, 0.8), dtype=np.int32)
         vls = np.full(len(fcts), marker_offset + 2 * split + i, dtype=np.int32)
         mts.append(meshtags(mesh, tdim - 1, fcts, vls))
 
     for i in range(split):
         fcts = np.array(find_candidate_surface_segment(
-            mesh, mesh, facet_marker.find(marker_offset + i), cand_facets_1, 0.8), dtype=np.int32)
+            mesh, facet_marker.find(marker_offset + i), cand_facets_1, 0.8), dtype=np.int32)
         vls = np.full(len(fcts), marker_offset + 3 * split + i, dtype=np.int32)
         mts.append(meshtags(mesh, tdim - 1, fcts, vls))
 
