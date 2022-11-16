@@ -632,10 +632,10 @@ compute_raytracing_map(const dolfinx::mesh::Mesh& quadrature_mesh,
         std::int32_t facet_index_c = candidate_facets[2 * cand_patch[c] + 1];
         // Get cell geometry for candidate cell, reusing
         // coordinate dofs to store new coordinate
-        auto x_dofs = c_dofmap.links(cell);
-        for (std::size_t k = 0; k < x_dofs.size(); ++k)
+        auto x_dofs_c = c_dofmap.links(cell);
+        for (std::size_t k = 0; k < x_dofs_c.size(); ++k)
         {
-          std::copy_n(std::next(c_x.begin(), 3 * x_dofs[k]), gdim,
+          std::copy_n(std::next(c_x.begin(), 3 * x_dofs_c[k]), gdim,
                       std::next(coordinate_dofs_c.begin(), gdim * k));
         }
         // Assign Jacobian of reference mapping
