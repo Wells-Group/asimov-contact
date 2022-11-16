@@ -62,9 +62,9 @@ public:
   }
 
   // Return active entities for surface s
-  const std::vector<std::int32_t>& active_entities(int s) const
+  std::span<const std::int32_t> active_entities(int s) const
   {
-    return _cell_facet_pairs[s];
+    return _cell_facet_pairs->links(s);
   }
 
   // Return number of facets in surface s owned by the process
@@ -97,9 +97,8 @@ public:
   std::pair<std::vector<double>, std::array<std::size_t, 3>>
   qp_phys(int surface);
 
-  /// Return the submesh corresponding to surface
-  /// @param[in] surface The index of the surface (0 or 1).
-  const SubMesh& submesh(int surface) const { return _submeshes[surface]; }
+  /// Return the submesh 
+  const SubMesh& submesh() const { return _submesh; }
 
   // Return mesh
   std::shared_ptr<const dolfinx::mesh::Mesh> mesh() const { return _V->mesh(); }
@@ -255,7 +254,7 @@ public:
   /// This function updates the submesh geometry for all submeshes using
   /// a function given on the parent mesh
   /// @param[in] u - displacement
-  void update_submesh_geometry(dolfinx::fem::Function<PetscScalar>& u) const;
+  void update_submesh_geometry(dolfinx::fem::Function<PetscScalar>& u);
 
 private:
   std::shared_ptr<QuadratureRule> _quadrature_rule; // quadrature rule
@@ -278,9 +277,9 @@ private:
   // maximum number of cells linked to a cell on ith surface
   std::vector<std::size_t> _max_links;
   // submeshes for contact surface
-  std::vector<SubMesh> _submeshes;
+  SubMesh _submesh;
   // facets as (cell, facet) pairs. The pairs are flattened row-major
-  std::vector<std::vector<std::int32_t>> _cell_facet_pairs;
+  std::shared_ptr<const dolfinx::graph::AdjacencyList<std::int32_t>> _cell_facet_pairs;
   // number of facets owned by process for each surface
   std::vector<std::size_t> _local_facets;
 
