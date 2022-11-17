@@ -97,7 +97,7 @@ public:
   std::pair<std::vector<double>, std::array<std::size_t, 3>>
   qp_phys(int surface);
 
-  /// Return the submesh 
+  /// Return the submesh of all cells containing facets of the contact surface
   const SubMesh& submesh() const { return _submesh; }
 
   // Return mesh
@@ -276,10 +276,13 @@ private:
   std::array<std::size_t, 4> _reference_shape;
   // maximum number of cells linked to a cell on ith surface
   std::vector<std::size_t> _max_links;
-  // submeshes for contact surface
+  // submesh containing all cells linked to facets on any of the contact
+  // surfaces
   SubMesh _submesh;
-  // facets as (cell, facet) pairs. The pairs are flattened row-major
-  std::shared_ptr<const dolfinx::graph::AdjacencyList<std::int32_t>> _cell_facet_pairs;
+  // Adjacency list linking facets as (cell, facet) pairs to the index of the
+  // surface. The pairs are flattened row-major
+  std::shared_ptr<const dolfinx::graph::AdjacencyList<std::int32_t>>
+      _cell_facet_pairs;
   // number of facets owned by process for each surface
   std::vector<std::size_t> _local_facets;
 
