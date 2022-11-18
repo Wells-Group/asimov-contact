@@ -96,12 +96,8 @@ dolfinx_contact::Contact::Contact(
   std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> c_to_f
       = topology.connectivity(tdim, fdim);
   assert(c_to_f);
-  // used to store list of (cell, facet) for each surface
-  _cell_facet_pairs.resize(num_surfaces);
   // storing number of facets owned locally for each surface
   _local_facets.resize(num_surfaces);
-  // used to store submesh for each surface
-  _submeshes.resize(num_surfaces);
   // used to store map from quadrature to candidate surface for each contact
   // pair
   _facet_maps.resize(contact_pairs.size());
@@ -109,6 +105,11 @@ dolfinx_contact::Contact::Contact(
   _qp_phys.resize(num_surfaces);
   // store max number of links for each quadrature surface
   _max_links.resize(contact_pairs.size());
+  // Create adjacency list linking facets as (cell, facet) pairs to the index of
+  // the surface. The pairs are flattened row-major
+  std::vector<std::int32_t> all_facet_pairs;
+  std::vector<std::int32_t> offsets;
+  offsets.push_back(0);
   for (std::size_t s = 0; s < markers.size(); ++s)
   {
     std::shared_ptr<dolfinx::mesh::MeshTags<int>> marker = markers[s];
@@ -120,12 +121,18 @@ dolfinx_contact::Contact::Contact(
       auto [cell_facet_pairs, num_local]
           = dolfinx_contact::compute_active_entities(
               mesh, facets, dolfinx::fem::IntegralType::exterior_facet);
-      _cell_facet_pairs[index] = cell_facet_pairs;
-      _local_facets[index] = num_local;
-      _submeshes[index]
-          = dolfinx_contact::SubMesh(mesh, _cell_facet_pairs[index]);
+      all_facet_pairs.insert(all_facet_pairs.end(),
+                             std::begin(cell_facet_pairs),
+                             std::end(cell_facet_pairs));
+      offsets.push_back(offsets.back() + cell_facet_pairs.size());
+      _local_facets[index]
+          = num_local; // store how many facets are owned by the process
     }
   }
+  _submesh = dolfinx_contact::SubMesh(mesh, all_facet_pairs);
+  _cell_facet_pairs
+      = std::make_shared<dolfinx::graph::AdjacencyList<std::int32_t>>(
+          std::move(all_facet_pairs), std::move(offsets));
   _quadrature_rule = std::make_shared<QuadratureRule>(
       topology.cell_type(), q_deg, fdim, basix::quadrature::type::Default);
 }
@@ -219,13 +226,14 @@ Mat dolfinx_contact::Contact::create_petsc_matrix(
   {
     const std::array<int, 2>& contact_pair = _contact_pairs[k];
     std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> facet_map
-        = _submeshes[contact_pair.back()].facet_map();
+        = _submesh.facet_map();
     assert(facet_map);
-    std::span<const std::int32_t> parent_cells
-        = _submeshes[contact_pair.back()].parent_cells();
+    std::span<const std::int32_t> parent_cells = _submesh.parent_cells();
+
+    auto cell_facet_pairs = _cell_facet_pairs->links(contact_pair.front());
     for (int i = 0; i < (int)(2 * _local_facets[contact_pair.front()]); i += 2)
     {
-      std::int32_t cell = _cell_facet_pairs[contact_pair.front()][i];
+      std::int32_t cell = cell_facet_pairs[i];
       std::span<const int> cell_dofs = dofmap->cell_dofs(cell);
 
       linked_dofs.clear();
@@ -258,20 +266,17 @@ void dolfinx_contact::Contact::create_distance_map(int pair)
 {
   // Get quadrature mesh info
   auto [quadrature_mt, candidate_mt] = _contact_pairs[pair];
-  std::shared_ptr<const dolfinx::mesh::Mesh> quadrature_mesh
-      = _submeshes[quadrature_mt].mesh();
-  std::shared_ptr<const dolfinx::mesh::Mesh> candidate_mesh
-      = _submeshes[candidate_mt].mesh();
+  std::shared_ptr<const dolfinx::mesh::Mesh> quadrature_mesh = _submesh.mesh();
+  std::shared_ptr<const dolfinx::mesh::Mesh> candidate_mesh = _submesh.mesh();
   const std::size_t num_facets = _local_facets[quadrature_mt];
   // Get (cell, local_facet_index) tuples on quadrature submesh
   const std::vector<std::int32_t> quadrature_facets
-      = _submeshes[quadrature_mt].get_submesh_tuples(std::span<std::int32_t>(
-          _cell_facet_pairs[quadrature_mt].data(), 2 * num_facets));
+      = _submesh.get_submesh_tuples(
+          _cell_facet_pairs->links(quadrature_mt).subspan(0, 2 * num_facets));
 
   // Get (cell, local_facet_index) tuples on candidate submesh
   const std::vector<std::int32_t> submesh_facets
-      = _submeshes[candidate_mt].get_submesh_tuples(
-          _cell_facet_pairs[candidate_mt]);
+      = _submesh.get_submesh_tuples(_cell_facet_pairs->links(candidate_mt));
 
   // Compute facet map
   [[maybe_unused]] auto [adj, reference_x, shape]
@@ -302,14 +307,14 @@ dolfinx_contact::Contact::pack_nx(int pair)
 {
   auto [quadrature_mt, candidate_mt] = _contact_pairs[pair];
   const std::shared_ptr<const dolfinx::mesh::Mesh>& quadrature_mesh
-      = _submeshes[quadrature_mt].mesh();
+      = _submesh.mesh();
   assert(quadrature_mesh);
 
   const std::size_t num_facets = _local_facets[quadrature_mt];
   // Get (cell, local_facet_index) tuples on quadrature submesh
   const std::vector<std::int32_t> quadrature_facets
-      = _submeshes[quadrature_mt].get_submesh_tuples(std::span<std::int32_t>(
-          _cell_facet_pairs[quadrature_mt].data(), 2 * num_facets));
+      = _submesh.get_submesh_tuples(
+          _cell_facet_pairs->links(quadrature_mt).subspan(0, 2 * num_facets));
   // Get information about submesh geometry and topology
   const dolfinx::mesh::Geometry& geometry = quadrature_mesh->geometry();
   const int gdim = geometry.dim();
@@ -764,11 +769,10 @@ dolfinx_contact::Contact::generate_kernel(Kernel type)
 void dolfinx_contact::Contact::create_q_phys(int origin_meshtag)
 {
   // Get information depending on surface
-  const dolfinx_contact::SubMesh& submesh = _submeshes[origin_meshtag];
 
   const std::vector<std::int32_t> submesh_facets
-      = submesh.get_submesh_tuples(_cell_facet_pairs[origin_meshtag]);
-  auto mesh_sub = submesh.mesh();
+      = _submesh.get_submesh_tuples(_cell_facet_pairs->links(origin_meshtag));
+  auto mesh_sub = _submesh.mesh();
   const std::size_t gdim = mesh_sub->geometry().dim();
   const std::vector<size_t>& qp_offsets = _quadrature_rule->offset();
   _qp_phys[origin_meshtag].resize((qp_offsets[1] - qp_offsets[0])
@@ -784,13 +788,13 @@ void dolfinx_contact::Contact::max_links(int pair)
   // Select which side of the contact interface to loop from and get the
   // correct map
   const std::array<int, 2>& contact_pair = _contact_pairs[pair];
-  const std::vector<std::int32_t>& active_facets
-      = _cell_facet_pairs[contact_pair.front()];
+  std::span<const std::int32_t> active_facets
+      = _cell_facet_pairs->links(contact_pair.front());
   std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> map
       = _facet_maps[pair];
   assert(map);
   std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> facet_map
-      = _submeshes[contact_pair.back()].facet_map();
+      = _submesh.facet_map();
   assert(facet_map);
   for (std::size_t i = 0; i < active_facets.size(); i += 2)
   {
@@ -821,10 +825,10 @@ dolfinx_contact::Contact::pack_gap(int pair)
   auto [quadrature_mt, candidate_mt] = _contact_pairs[pair];
   // Retrieve submeshes
   const std::shared_ptr<const dolfinx::mesh::Mesh>& quadrature_mesh
-      = _submeshes[quadrature_mt].mesh();
+      = _submesh.mesh();
   assert(quadrature_mesh);
   const std::shared_ptr<const dolfinx::mesh::Mesh>& candidate_mesh
-      = _submeshes[candidate_mt].mesh();
+      = _submesh.mesh();
   assert(candidate_mesh);
 
   // Determine coefficient size and allocate coefficient memory
@@ -845,13 +849,12 @@ dolfinx_contact::Contact::pack_gap(int pair)
 
   // Get (cell, local_facet_index) tuples on quadrature submesh
   const std::vector<std::int32_t> quadrature_facets
-      = _submeshes[quadrature_mt].get_submesh_tuples(std::span<std::int32_t>(
-          _cell_facet_pairs[quadrature_mt].data(), 2 * num_facets));
+      = _submesh.get_submesh_tuples(
+          _cell_facet_pairs->links(quadrature_mt).subspan(0, 2 * num_facets));
 
   // Get (cell, local_facet_index) tuples on candidate submesh
   const std::vector<std::int32_t> candidate_facets
-      = _submeshes[candidate_mt].get_submesh_tuples(
-          _cell_facet_pairs[candidate_mt]);
+      = _submesh.get_submesh_tuples(_cell_facet_pairs->links(candidate_mt));
 
   auto [candidate_map, reference_x, shape] = compute_distance_map(
       *quadrature_mesh, quadrature_facets, *candidate_mesh, candidate_facets,
@@ -937,23 +940,22 @@ dolfinx_contact::Contact::pack_test_functions(int pair)
 
   // Get mesh info for candidate side
   const std::shared_ptr<const dolfinx::mesh::Mesh>& candidate_mesh
-      = _submeshes[candidate_mt].mesh();
+      = _submesh.mesh();
   assert(candidate_mesh);
   const std::shared_ptr<const dolfinx::mesh::Mesh>& quadrature_mesh
-      = _submeshes[quadrature_mt].mesh();
+      = _submesh.mesh();
   assert(quadrature_mesh);
 
   // Get (cell, local_facet_index) tuples on quadrature submesh
   const std::size_t num_facets = _local_facets[quadrature_mt];
   // Get (cell, local_facet_index) tuples on quadrature submesh
   const std::vector<std::int32_t> quadrature_facets
-      = _submeshes[quadrature_mt].get_submesh_tuples(std::span<std::int32_t>(
-          _cell_facet_pairs[quadrature_mt].data(), 2 * num_facets));
+      = _submesh.get_submesh_tuples(
+          _cell_facet_pairs->links(quadrature_mt).subspan(0, 2 * num_facets));
 
   // Get (cell, local_facet_index) tuples on candidate submesh
   const std::vector<std::int32_t> candidate_facets
-      = _submeshes[candidate_mt].get_submesh_tuples(
-          _cell_facet_pairs[candidate_mt]);
+      = _submesh.get_submesh_tuples(_cell_facet_pairs->links(candidate_mt));
 
   auto [candidate_map, reference_x, shape]
       = dolfinx_contact::compute_distance_map(
@@ -962,7 +964,7 @@ dolfinx_contact::Contact::pack_test_functions(int pair)
 
   // Compute values of basis functions for all y = Pi(x) in qp
   auto V_sub = std::make_shared<dolfinx::fem::FunctionSpace>(
-      _submeshes[candidate_mt].create_functionspace(_V));
+      _submesh.create_functionspace(_V));
 
   std::shared_ptr<const dolfinx::fem::FiniteElement> element = V_sub->element();
   std::array<std::size_t, 4> b_shape
@@ -1058,17 +1060,17 @@ dolfinx_contact::Contact::pack_u_contact(
 
   // Get mesh info for candidate side
   const std::shared_ptr<const dolfinx::mesh::Mesh>& candidate_mesh
-      = _submeshes[candidate_mt].mesh();
+      = _submesh.mesh();
   assert(candidate_mesh);
   const std::shared_ptr<const dolfinx::mesh::Mesh>& quadrature_mesh
-      = _submeshes[quadrature_mt].mesh();
+      = _submesh.mesh();
   assert(quadrature_mesh);
 
   const std::size_t num_facets = _local_facets[quadrature_mt];
 
   // copy u onto submesh
   auto V_sub = std::make_shared<dolfinx::fem::FunctionSpace>(
-      _submeshes[candidate_mt].create_functionspace(_V));
+      _submesh.create_functionspace(_V));
   std::shared_ptr<const dolfinx::fem::FiniteElement> element = V_sub->element();
   const dolfinx::mesh::Topology& topology = candidate_mesh->topology();
   error::check_cell_type(topology.cell_type());
@@ -1077,7 +1079,7 @@ dolfinx_contact::Contact::pack_u_contact(
   std::shared_ptr<const dolfinx::fem::DofMap> sub_dofmap = V_sub->dofmap();
   assert(sub_dofmap);
   const int bs_dof = sub_dofmap->bs();
-  _submeshes[candidate_mt].copy_function(*u, u_sub);
+  _submesh.copy_function(*u, u_sub);
 
   // Output vector
   const std::size_t num_q_points
@@ -1093,13 +1095,12 @@ dolfinx_contact::Contact::pack_u_contact(
 
   // Get (cell, local_facet_index) tuples on quadrature submesh
   const std::vector<std::int32_t> quadrature_facets
-      = _submeshes[quadrature_mt].get_submesh_tuples(std::span<std::int32_t>(
-          _cell_facet_pairs[quadrature_mt].data(), 2 * num_facets));
+      = _submesh.get_submesh_tuples(
+          _cell_facet_pairs->links(quadrature_mt).subspan(0, 2 * num_facets));
 
   // Get (cell, local_facet_index) tuples on candidate submesh
   const std::vector<std::int32_t> candidate_facets
-      = _submeshes[candidate_mt].get_submesh_tuples(
-          _cell_facet_pairs[candidate_mt]);
+      = _submesh.get_submesh_tuples(_cell_facet_pairs->links(candidate_mt));
 
   auto [candidate_map, reference_x, shape]
       = dolfinx_contact::compute_distance_map(
@@ -1227,10 +1228,10 @@ dolfinx_contact::Contact::pack_ny(int pair)
 
   // Get mesh info for candidate side
   const std::shared_ptr<const dolfinx::mesh::Mesh>& candidate_mesh
-      = _submeshes[candidate_mt].mesh();
+      = _submesh.mesh();
   assert(candidate_mesh);
   const std::shared_ptr<const dolfinx::mesh::Mesh>& quadrature_mesh
-      = _submeshes[quadrature_mt].mesh();
+      = _submesh.mesh();
   assert(quadrature_mesh);
 
   const std::size_t num_facets = _local_facets[quadrature_mt];
@@ -1248,12 +1249,11 @@ dolfinx_contact::Contact::pack_ny(int pair)
 
   // Get (cell, local_facet_index) tuples on quadrature submesh
   const std::vector<std::int32_t> quadrature_facets
-      = _submeshes[quadrature_mt].get_submesh_tuples(std::span<std::int32_t>(
-          _cell_facet_pairs[quadrature_mt].data(), 2 * num_facets));
+      = _submesh.get_submesh_tuples(
+          _cell_facet_pairs->links(quadrature_mt).subspan(0, 2 * num_facets));
   // Get (cell, local_facet_index) tuples on candidate submesh
   const std::vector<std::int32_t> candidate_facets
-      = _submeshes[candidate_mt].get_submesh_tuples(
-          _cell_facet_pairs[candidate_mt]);
+      = _submesh.get_submesh_tuples(_cell_facet_pairs->links(candidate_mt));
 
   auto [candidate_map, reference_x, shape]
       = dolfinx_contact::compute_distance_map(
@@ -1394,16 +1394,15 @@ void dolfinx_contact::Contact::assemble_matrix(
   }
 
   const std::array<int, 2>& contact_pair = _contact_pairs[pair];
-  const std::vector<std::int32_t>& active_facets
-      = _cell_facet_pairs[contact_pair.front()];
+  std::span<const std::int32_t> active_facets
+      = _cell_facet_pairs->links(contact_pair.front());
   std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> map
       = _facet_maps[pair];
   std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> facet_map
-      = _submeshes[contact_pair.back()].facet_map();
+      = _submesh.facet_map();
   assert(facet_map);
 
-  std::span<const std::int32_t> parent_cells
-      = _submeshes[contact_pair.back()].parent_cells();
+  std::span<const std::int32_t> parent_cells = _submesh.parent_cells();
   // Data structures used in assembly
   std::vector<double> coordinate_dofs(3 * num_dofs_g);
   std::vector<std::vector<PetscScalar>> Aes(
@@ -1506,16 +1505,15 @@ void dolfinx_contact::Contact::assemble_vector(
   // Select which side of the contact interface to loop from and get the
   // correct map
   const std::array<int, 2>& contact_pair = _contact_pairs[pair];
-  const std::vector<std::int32_t>& active_facets
-      = _cell_facet_pairs[contact_pair.front()];
+  std::span<const std::int32_t> active_facets
+      = _cell_facet_pairs->links(contact_pair.front());
   const std::size_t local_size = 2 * _local_facets[contact_pair.front()];
-  const dolfinx_contact::SubMesh& submesh = _submeshes[contact_pair.back()];
   std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> map
       = _facet_maps[pair];
   std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> facet_map
-      = submesh.facet_map();
+      = _submesh.facet_map();
   assert(facet_map);
-  std::span<const std::int32_t> parent_cells = submesh.parent_cells();
+  std::span<const std::int32_t> parent_cells = _submesh.parent_cells();
   const std::size_t max_links
       = *std::max_element(_max_links.begin(), _max_links.end());
   if (max_links == 0)
@@ -1592,11 +1590,10 @@ dolfinx_contact::Contact::pack_grad_test_functions(
 {
   auto [quadrature_mt, candidate_mt] = _contact_pairs[pair];
   // Mesh info
-  const dolfinx_contact::SubMesh& submesh = _submeshes[candidate_mt];
   std::shared_ptr<const dolfinx::mesh::Mesh> mesh = _V->mesh(); // mesh
   assert(mesh);
   const std::size_t gdim = mesh->geometry().dim();
-  std::span<const std::int32_t> parent_cells = submesh.parent_cells();
+  std::span<const std::int32_t> parent_cells = _submesh.parent_cells();
   std::shared_ptr<const fem::FiniteElement> element = _V->element();
   assert(element);
   const int bs_element = element->block_size();
@@ -1615,7 +1612,7 @@ dolfinx_contact::Contact::pack_grad_test_functions(
                     gdim);
 
   std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> facet_map
-      = _submeshes[candidate_mt].facet_map();
+      = _submesh.facet_map();
   const std::size_t max_links
       = *std::max_element(_max_links.begin(), _max_links.end());
 
@@ -1708,10 +1705,9 @@ dolfinx_contact::Contact::pack_grad_u_contact(
   auto [quadrature_mt, candidate_mt] = _contact_pairs[pair];
 
   // Mesh info
-  const dolfinx_contact::SubMesh& submesh = _submeshes[candidate_mt];
   std::shared_ptr<const dolfinx::mesh::Mesh> mesh = _V->mesh();
   const std::size_t gdim = mesh->geometry().dim(); // geometrical dimension
-  std::span<const std::int32_t> parent_cells = submesh.parent_cells();
+  std::span<const std::int32_t> parent_cells = _submesh.parent_cells();
   const std::size_t bs_element = _V->element()->block_size();
   std::shared_ptr<const dolfinx::fem::DofMap> dofmap = _V->dofmap();
   assert(dofmap);
@@ -1734,7 +1730,7 @@ dolfinx_contact::Contact::pack_grad_u_contact(
   mdspan3_t qp_span(_qp_phys[quadrature_mt].data(), num_facets, num_q_points,
                     gdim);
   std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> facet_map
-      = submesh.facet_map();
+      = _submesh.facet_map();
   assert(facet_map);
 
   // NOTE: Assuming same number of quadrature points on each cell
@@ -1809,9 +1805,7 @@ dolfinx_contact::Contact::pack_grad_u_contact(
 }
 //-----------------------------------------------------------------------------------------------
 void dolfinx_contact::Contact::update_submesh_geometry(
-    dolfinx::fem::Function<PetscScalar>& u) const
+    dolfinx::fem::Function<PetscScalar>& u)
 {
-
-  for (auto submesh : _submeshes)
-    submesh.update_geometry(u);
+  _submesh.update_geometry(u);
 }
