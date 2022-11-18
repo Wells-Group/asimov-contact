@@ -151,7 +151,7 @@ PYBIND11_MODULE(cpp, m)
       .def("active_entities",
            [](dolfinx_contact::Contact& self, int s)
            {
-             const std::vector<std::int32_t>& active_entities
+             std::span<const std::int32_t> active_entities
                  = self.active_entities(s);
              std::array<py::ssize_t, 2> shape
                  = {py::ssize_t(self.local_facets(s)), 2};
@@ -177,9 +177,9 @@ PYBIND11_MODULE(cpp, m)
              const std::vector<int>& offsets = submesh_map->offsets();
              const std::vector<std::int32_t>& old_data = submesh_map->array();
              std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> facet_map
-                 = self.submesh(contact_pair[1]).facet_map();
+                 = self.submesh().facet_map();
              std::span<const std::int32_t> parent_cells
-                 = self.submesh(contact_pair[1]).parent_cells();
+                 = self.submesh().parent_cells();
              std::vector<std::int32_t> data(old_data.size());
              std::transform(
                  old_data.cbegin(), old_data.cend(), data.begin(),
@@ -200,9 +200,9 @@ PYBIND11_MODULE(cpp, m)
                  std::move(data), std::move(offsets));
            })
       .def("submesh",
-           [](dolfinx_contact::Contact& self, int surface)
+           [](dolfinx_contact::Contact& self)
            {
-             const dolfinx_contact::SubMesh& submesh = self.submesh(surface);
+             const dolfinx_contact::SubMesh& submesh = self.submesh();
              return submesh.mesh();
            })
       .def("coefficients_size", &dolfinx_contact::Contact::coefficients_size,
