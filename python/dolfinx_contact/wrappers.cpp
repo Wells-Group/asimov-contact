@@ -278,7 +278,7 @@ PYBIND11_MODULE(cpp, m)
              return dolfinx_wrappers::as_pyarray(std::move(coeffs),
                                                  std::array{shape0, cstride});
            })
-             .def("pack_nx",
+      .def("pack_nx",
            [](dolfinx_contact::Contact& self, int origin_meshtag)
            {
              auto [coeffs, cstride] = self.pack_nx(origin_meshtag);

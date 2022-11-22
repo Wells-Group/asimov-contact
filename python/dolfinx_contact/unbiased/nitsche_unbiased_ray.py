@@ -49,31 +49,17 @@ def setup_newton_solver(F_custom: fem.forms.FormMetaClass, J_custom: fem.forms.F
     num_pairs = len(const_coeffs)
     V = u.function_space
     mesh = V.mesh
+    u_total = fem.Function(V)
 
     # generate kernels
     with common.Timer("~Contact: Generate Jacobian kernel"):
-        kernel_jac = contact.generate_kernel(kt.Jac)
+        kernel_jac = contact.generate_kernel(kt.RayJac)
     with common.Timer("~Contact: Generate residual kernel"):
         kernel_rhs = contact.generate_kernel(kt.Rhs)
 
     # create vector and matrix
     A = contact.create_matrix(J_custom)
     b = fem.petsc.create_vector(F_custom)
-
-    # Pack gap, normals and test functions on each surface
-    gaps = []
-    normals = []
-    test_fns = []
-    with common.Timer("~Contact: Pack gap, normals, testfunction"):
-        for i in range(num_pairs):
-            gaps.append(contact.pack_gap(i))
-            normals.append(contact.pack_ny(i))
-            test_fns.append(contact.pack_test_functions(i))
-
-    # Concatenate all coeffs
-    ccfs = []
-    for i in range(num_pairs):
-        ccfs.append(np.hstack([const_coeffs[i], gaps[i], normals[i], test_fns[i]]))
 
     # retrieve boundary conditions for time step
     tbcs = []
@@ -101,6 +87,29 @@ def setup_newton_solver(F_custom: fem.forms.FormMetaClass, J_custom: fem.forms.F
         bs = V.dofmap.index_map_bs
         du.x.array[:size_local * bs] = x.array_r[:size_local * bs]
         du.x.scatter_forward()
+        u_total.x.array[:] = u.x.array[:] + du.x.array[:]
+        contact.update_submesh_geometry(u_total._cpp_object)
+        # create distance map
+        with common.Timer("~Contact: Distance maps"):
+            for i in range(len(num_pairs)):
+                contact.create_distance_map(i)
+
+        # Pack gap, normals and test functions on each surface
+        gaps = []
+        normals = []
+        test_fns = []
+        grad_test_fns = []
+        with common.Timer("~Contact: Pack gap, normals, testfunction"):
+            for i in range(num_pairs):
+                gaps.append(contact.pack_gap(i))
+                normals.append(contact.pack_ny(i))
+                test_fns.append(contact.pack_test_functions(i))
+                grad_test_fns.append(contact.pack_grad_test_functions(i, gaps[i], np.zeros(gaps[i].shape)))
+
+        # Concatenate all coeffs
+        ccfs = []
+        for i in range(num_pairs):
+            ccfs.append(np.hstack([const_coeffs[i], gaps[i], normals[i], test_fns[i]]))
         u_candidate = []
         with common.Timer("~~Contact: Pack u contact"):
             for i in range(num_pairs):
@@ -389,10 +398,7 @@ def nitsche_unbiased(steps: int, ufl_form: ufl.Form, u: fem.Function,
     krylov_its = []
     for tt in range(steps):
 
-        # create distance map
-        with common.Timer("~Contact: Distance maps"):
-            for i in range(len(contact_pairs)):
-                contact.create_distance_map(i)
+
 
         # current time
         t = (tt + 1) / steps

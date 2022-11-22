@@ -440,7 +440,7 @@ def test_contact_kernels(ct, gap, quadrature_degree, theta, tied, search):
         F0 = DG_rhs_plus(u0, v0, h, n, gamma_scaled, theta, sigma, gap, dS)
         J0 = DG_jac_plus(u0, v0, w0, h, n, gamma_scaled, theta, sigma, gap, dS)
         kernel_type_rhs = kt.Rhs
-        kernel_type_jac = kt.RayJac
+        kernel_type_jac = kt.Jac
 
     # rhs vector
     F0 = _fem.form(F0)
