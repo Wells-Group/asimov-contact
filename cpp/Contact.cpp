@@ -761,6 +761,10 @@ dolfinx_contact::Contact::generate_kernel(Kernel type)
   {
     return generate_meshtie_kernel(type, _V, _quadrature_rule, max_links);
   }
+  case Kernel::RayJac:
+  {
+    return generate_contact_kernel(type, _V, _quadrature_rule, max_links);
+  }
   default:
     throw std::invalid_argument("Unrecognized kernel");
   }

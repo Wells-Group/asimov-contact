@@ -15,7 +15,7 @@
 #include <dolfinx/fem/FunctionSpace.h>
 
 dolfinx_contact::kernel_fn<PetscScalar>
-dolfinx_contact::generate_contact_kernel(
+dolfinx_contact::generate_rigid_surface_kernel(
     std::shared_ptr<const dolfinx::fem::FunctionSpace> V,
     dolfinx_contact::Kernel type,
     dolfinx_contact::QuadratureRule& quadrature_rule, bool constant_normal)

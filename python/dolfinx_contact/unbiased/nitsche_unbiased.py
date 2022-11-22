@@ -52,7 +52,7 @@ def setup_newton_solver(F_custom: fem.forms.FormMetaClass, J_custom: fem.forms.F
 
     # generate kernels
     with common.Timer("~Contact: Generate Jacobian kernel"):
-        kernel_jac = contact.generate_kernel(kt.Jac)
+        kernel_jac = contact.generate_kernel(kt.RayJac)
     with common.Timer("~Contact: Generate residual kernel"):
         kernel_rhs = contact.generate_kernel(kt.Rhs)
 

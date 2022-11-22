@@ -197,11 +197,11 @@ def nitsche_rigid_surface_custom(mesh: _mesh.Mesh, mesh_data: Tuple[_cpp.mesh.Me
 
     # Create RHS kernels
     F_custom = _fem.form(F, jit_options=jit_options, form_compiler_options=form_compiler_options)
-    kernel_rhs = dolfinx_contact.cpp.generate_contact_kernel(V._cpp_object, kt.Rhs, q_rule, False)
+    kernel_rhs = dolfinx_contact.cpp.generate_rigid_surface_kernel(V._cpp_object, kt.Rhs, q_rule, False)
 
     # Create Jacobian kernels
     J_custom = _fem.form(J, jit_options=jit_options, form_compiler_options=form_compiler_options)
-    kernel_J = dolfinx_contact.cpp.generate_contact_kernel(
+    kernel_J = dolfinx_contact.cpp.generate_rigid_surface_kernel(
         V._cpp_object, kt.Jac, q_rule, False)
 
     # NOTE: HACK to make "one-sided" contact work with assemble_matrix/assemble_vector

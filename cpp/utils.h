@@ -38,7 +38,8 @@ enum class Kernel
   Rhs,
   Jac,
   MeshTieRhs,
-  MeshTieJac
+  MeshTieJac,
+  RayJac
 };
 // NOTE: this function should change signature to T * ,..... , num_links,
 // num_dofs_per_link
