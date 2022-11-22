@@ -4,7 +4,7 @@
 //
 // SPDX-License-Identifier:    MIT
 
-#include "contact_kernels.h"
+#include "rigid_surface_kernels.h"
 #include "Contact.h"
 #include "KernelData.h"
 #include "elasticity.h"
