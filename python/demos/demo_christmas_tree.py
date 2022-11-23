@@ -225,9 +225,9 @@ if __name__ == "__main__":
         "pc_gamg_type": "agg",
         "pc_gamg_coarse_eq_limit": 100,
         "pc_gamg_agg_nsmooths": 1,
-        "pc_gamg_sym_graph": True,
         "pc_gamg_threshold": 1e-3,
         "pc_gamg_square_graph": 2,
+        "pc_gamg_reuse_interpolation": False
     }
 
     mode = ContactMode.Raytracing if args.raytracing \
