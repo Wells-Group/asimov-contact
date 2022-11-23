@@ -20,7 +20,7 @@ import ufl
 from dolfinx_contact.meshing import convert_mesh, create_christmas_tree_mesh, create_christmas_tree_mesh_3D
 from dolfinx_contact.unbiased.nitsche_unbiased import nitsche_unbiased
 from dolfinx_contact.helpers import lame_parameters, sigma_func, weak_dirichlet, epsilon
-from dolfinx_contact.cpp import find_candidate_surface_segment, ContactMode
+from dolfinx_contact.cpp import find_candidate_surface_segment
 from dolfinx_contact.parallel_mesh_ghosting import create_contact_mesh
 
 if __name__ == "__main__":
@@ -233,9 +233,6 @@ if __name__ == "__main__":
         "pc_gamg_square_graph": 2,
     }
 
-    mode = ContactMode.Raytracing if args.raytracing \
-        else ContactMode.ClosestPoint
-
     # Solve contact problem using Nitsche's method
     problem_parameters = {"gamma": E * gamma, "theta": theta, "mu": mu, "lambda": lmbda}
     solver_outfile = args.outfile if args.ksp else None
@@ -248,7 +245,7 @@ if __name__ == "__main__":
                                                                        rhs_fns=rhs_fns, markers=mts,
                                                                        contact_data=(surfaces, contact_pairs),
                                                                        bcs=bcs, problem_parameters=problem_parameters,
-                                                                       search_method=mode,
+                                                                       raytracing=args.raytracing,
                                                                        newton_options=newton_options,
                                                                        petsc_options=petsc_options,
                                                                        outfile=solver_outfile,

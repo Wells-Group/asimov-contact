@@ -4,7 +4,6 @@
 
 import argparse
 import sys
-import dolfinx_contact
 
 import numpy as np
 import ufl
@@ -364,8 +363,6 @@ if __name__ == "__main__":
     gamma = args.gamma
     theta = args.theta
     problem_parameters = {"mu": mu, "lambda": lmbda, "gamma": E * gamma, "theta": theta}
-    mode = dolfinx_contact.cpp.ContactMode.Raytracing if args.raytracing \
-        else dolfinx_contact.cpp.ContactMode.ClosestPoint
 
     # Load geometry over multiple steps
     for j in range(nload_steps):
@@ -399,7 +396,7 @@ if __name__ == "__main__":
                                                                          newton_options=newton_options,
                                                                          petsc_options=petsc_options,
                                                                          outfile=solver_outfile,
-                                                                         fname=outnamej, search_method=mode,
+                                                                         fname=outnamej, raytracing=args.raytracing,
                                                                          quadrature_degree=args.q_degree,
                                                                          search_radius=args.radius)
         num_newton_its[j, :] = newton_its[:]
