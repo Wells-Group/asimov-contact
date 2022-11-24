@@ -282,7 +282,7 @@ void dolfinx_contact::Contact::create_distance_map(int pair)
   [[maybe_unused]] auto [adj, reference_x, shape]
       = dolfinx_contact::compute_distance_map(
           *quadrature_mesh, quadrature_facets, *candidate_mesh, submesh_facets,
-          *_quadrature_rule, _mode);
+          *_quadrature_rule, _mode, _radius);
 
   _facet_maps[pair]
       = std::make_shared<dolfinx::graph::AdjacencyList<std::int32_t>>(adj);
@@ -858,7 +858,7 @@ dolfinx_contact::Contact::pack_gap(int pair)
 
   auto [candidate_map, reference_x, shape] = compute_distance_map(
       *quadrature_mesh, quadrature_facets, *candidate_mesh, candidate_facets,
-      *_quadrature_rule, _mode);
+      *_quadrature_rule, _mode, _radius);
 
   const int q_gdim = quadrature_mesh->geometry().dim();
   mdspan3_t qp_span(_qp_phys[quadrature_mt].data(), num_facets, num_q_point,
@@ -960,7 +960,7 @@ dolfinx_contact::Contact::pack_test_functions(int pair)
   auto [candidate_map, reference_x, shape]
       = dolfinx_contact::compute_distance_map(
           *quadrature_mesh, quadrature_facets, *candidate_mesh,
-          candidate_facets, *_quadrature_rule, _mode);
+          candidate_facets, *_quadrature_rule, _mode, _radius);
 
   // Compute values of basis functions for all y = Pi(x) in qp
   auto V_sub = std::make_shared<dolfinx::fem::FunctionSpace>(
@@ -1105,7 +1105,7 @@ dolfinx_contact::Contact::pack_u_contact(
   auto [candidate_map, reference_x, shape]
       = dolfinx_contact::compute_distance_map(
           *quadrature_mesh, quadrature_facets, *candidate_mesh,
-          candidate_facets, *_quadrature_rule, _mode);
+          candidate_facets, *_quadrature_rule, _mode, _radius);
 
   // Compute values of basis functions for all y = Pi(x) in qp
   std::array<std::size_t, 4> b_shape
@@ -1258,7 +1258,7 @@ dolfinx_contact::Contact::pack_ny(int pair)
   auto [candidate_map, reference_x, shape]
       = dolfinx_contact::compute_distance_map(
           *quadrature_mesh, quadrature_facets, *candidate_mesh,
-          candidate_facets, *_quadrature_rule, _mode);
+          candidate_facets, *_quadrature_rule, _mode, _radius);
 
   // Get information about submesh geometry and topology
   std::span<const double> x_g = geometry.x();

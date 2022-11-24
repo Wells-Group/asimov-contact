@@ -76,6 +76,9 @@ public:
     _quadrature_rule = std::make_shared<QuadratureRule>(q_rule);
   }
 
+  // set search radius for ray-tracing
+  void set_search_radius(double r) { _radius = r; }
+
   /// return size of coefficients vector per facet on s
   /// @param[in] meshtie - Type of constraint,meshtie if true, unbiased contact
   /// if false
@@ -288,5 +291,7 @@ private:
 
   // Contact search mode
   ContactMode _mode;
+  // Search radius for ray-tracing
+  double _radius = -1;
 };
 } // namespace dolfinx_contact

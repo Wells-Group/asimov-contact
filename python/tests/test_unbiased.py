@@ -365,7 +365,7 @@ def create_contact_data(V, u, quadrature_degree, lmbda, mu, facets_cg, search, t
 @pytest.mark.parametrize("gap", [0.5, -0.5])
 @pytest.mark.parametrize("quadrature_degree", [1, 5])
 @pytest.mark.parametrize("theta", [1, 0, -1])
-@pytest.mark.parametrize("tied", [False])
+@pytest.mark.parametrize("tied", [False, True])
 @pytest.mark.parametrize("search", [dolfinx_contact.cpp.ContactMode.ClosestPoint,
                                     dolfinx_contact.cpp.ContactMode.Raytracing])
 def test_contact_kernels(ct, gap, quadrature_degree, theta, tied, search):
