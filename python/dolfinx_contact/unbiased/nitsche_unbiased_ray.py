@@ -96,20 +96,22 @@ def setup_newton_solver(F_custom: fem.forms.FormMetaClass, J_custom: fem.forms.F
 
         # Pack gap, normals and test functions on each surface
         gaps = []
-        normals = []
+        normalsy = []
+        normalsx = []
         test_fns = []
         grad_test_fns = []
         with common.Timer("~Contact: Pack gap, normals, testfunction"):
             for i in range(num_pairs):
                 gaps.append(contact.pack_gap(i))
-                normals.append(contact.pack_ny(i))
+                normalsy.append(contact.pack_ny(i))
+                normalsy.append(contact.pack_nx(i))
                 test_fns.append(contact.pack_test_functions(i))
                 grad_test_fns.append(contact.pack_grad_test_functions(i, gaps[i], np.zeros(gaps[i].shape)))
 
         # Concatenate all coeffs
         ccfs = []
         for i in range(num_pairs):
-            ccfs.append(np.hstack([const_coeffs[i], gaps[i], normals[i], test_fns[i]]))
+            ccfs.append(np.hstack([const_coeffs[i], gaps[i], normalsx[i], normalsy[i], test_fns[i], grad_test_fns[i]]))
         u_candidate = []
         with common.Timer("~~Contact: Pack u contact"):
             for i in range(num_pairs):

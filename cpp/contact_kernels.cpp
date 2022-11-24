@@ -23,13 +23,15 @@ dolfinx_contact::generate_contact_kernel(
 
   // Coefficient offsets
   // Expecting coefficients in following order:
-  // mu, lmbda, h, gap, normals, test_fn, u, grad(u), u_opposite
+  // mu, lmbda, h, gap, normalsx, normalsy, test_fn, grad(test_fn), u, grad(u), u_opposite
   std::vector<std::size_t> cstrides
       = {1,
          1,
          1,
          num_q_points * gdim,
          num_q_points * gdim,
+         num_q_points * gdim,
+         num_q_points * ndofs_cell * bs * max_links,
          num_q_points * ndofs_cell * bs * max_links,
          num_q_points * gdim,
          num_q_points * gdim * gdim,
