@@ -73,7 +73,7 @@ if __name__ == "__main__":
     # petsc_options = {"ksp_type": "cg", "pc_type": "gamg", "rtol": 1e-6, "pc_gamg_coarse_eq_limit": 1000,
     #                  "mg_levels_ksp_type": "chebyshev", "mg_levels_pc_type": "jacobi",
     #                  "mg_levels_esteig_ksp_type": "cg", "matptap_via": "scalable", "ksp_view": None}
-    snes_options = {"snes_monitor": None, "snes_max_it": 50, "snes_no_convergence_test": False,
+    snes_options = {"snes_monitor": None, "snes_max_it": 50,
                     "snes_max_fail": 10, "snes_type": "vinewtonrsls",
                     "snes_rtol": 1e-9, "snes_atol": 1e-9, "snes_view": None}
     # Cannot use GAMG with SNES, see: https://gitlab.com/petsc/petsc/-/issues/829

@@ -163,7 +163,6 @@ def unsplit_domain(threed: bool = False, runs: int = 1):
         opts["mg_levels_pc_type"] = "jacobi"
 
         # Improve estimate of eigenvalues for Chebyshev smoothing
-        opts["mg_levels_esteig_ksp_type"] = "cg"
         opts["mg_levels_ksp_chebyshev_esteig_steps"] = 20
 
         # Create PETSc Krylov solver and turn convergence monitoring on
@@ -248,7 +247,6 @@ def test_meshtie(threed: bool = False, simplex: bool = True, runs: int = 5):
         "pc_type": "gamg",
         "mg_levels_ksp_type": "chebyshev",
         "mg_levels_pc_type": "jacobi",
-        "mg_levels_esteig_ksp_type": "cg",
         "pc_gamg_coarse_eq_limit": 100,
         "mg_levels_ksp_chebyshev_esteig_steps": 20
     }
