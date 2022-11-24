@@ -26,7 +26,8 @@ def setup_newton_solver(F_custom: fem.forms.FormMetaClass, J_custom: fem.forms.F
                         u: fem.Function, du: fem.Function,
                         contact: dolfinx_contact.cpp.Contact, markers: list[_cpp.mesh.MeshTags_int32],
                         entities: list[npt.NDArray[np.int32]], quadrature_degree: int,
-                        const_coeffs: list[npt.NDArray[np.float64]], consts: npt.NDArray[np.float64]):
+                        const_coeffs: list[npt.NDArray[np.float64]], consts: npt.NDArray[np.float64],
+                        raytracing: bool):
     """
     Set up newton solver for contact problem.
     Generate kernels and define functions for updating coefficients, stiffness matrix and residual vector.
@@ -67,7 +68,10 @@ def setup_newton_solver(F_custom: fem.forms.FormMetaClass, J_custom: fem.forms.F
     with common.Timer("~Contact: Pack gap, normals, testfunction"):
         for i in range(num_pairs):
             gaps.append(contact.pack_gap(i))
-            normals.append(contact.pack_ny(i))
+            if raytracing:
+                normals.append(-contact.pack_nx(i))
+            else:
+                normals.append(contact.pack_ny(i))
             test_fns.append(contact.pack_test_functions(i))
 
     # Concatenate all coeffs
@@ -228,7 +232,7 @@ def nitsche_unbiased(steps: int, ufl_form: ufl.Form, u: fem.Function,
                      contact_data: Tuple[AdjacencyList_int32, list[Tuple[int, int]]],
                      bcs: Tuple[npt.NDArray[np.int32], list[Union[fem.Function, fem.Constant]]],
                      problem_parameters: dict[str, np.float64],
-                     search_method: dolfinx_contact.cpp.ContactMode,
+                     raytracing: bool,
                      quadrature_degree: int = 5,
                      form_compiler_options: Optional[dict] = None,
                      jit_options: Optional[dict] = None,
@@ -295,6 +299,10 @@ def nitsche_unbiased(steps: int, ufl_form: ufl.Form, u: fem.Function,
     petsc_options = {} if petsc_options is None else petsc_options
     newton_options = {} if newton_options is None else newton_options
     mu, lmbda, theta, gamma, sigma = get_problem_parameters(problem_parameters)
+
+    # Search mode
+    search_method = dolfinx_contact.cpp.ContactMode.Raytracing if raytracing \
+        else dolfinx_contact.cpp.ContactMode.ClosestPoint
 
     # Contact data
     contact_pairs = contact_data[1]
@@ -403,7 +411,8 @@ def nitsche_unbiased(steps: int, ufl_form: ufl.Form, u: fem.Function,
 
         # setup newton solver
         newton_solver = setup_newton_solver(F_custom, J_custom, bcs, u, du, contact, markers,
-                                            entities, quadrature_degree, const_coeffs, consts)
+                                            entities, quadrature_degree, const_coeffs, consts,
+                                            raytracing)
 
         # Set Newton solver options
         newton_solver.set_newton_options(newton_options)
@@ -433,8 +442,9 @@ def nitsche_unbiased(steps: int, ufl_form: ufl.Form, u: fem.Function,
         u.x.array[:] += du.x.array[:]
         contact.update_submesh_geometry(u._cpp_object)
 
-        # reset du
-        du.x.array[:].fill(0)
+        # take a fraction of du as initial guess
+        # this is to ensure non-singular matrices in the case of no Dirichlet boundary
+        du.x.array[:] = (1. / steps) * du.x.array[:]
 
         # write solution
         vtx.write(t)
