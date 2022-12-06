@@ -1,5 +1,5 @@
 from mpi4py import MPI
-from dolfinx.io import XDMFFile
+from dolfinx.io import XDMFFile, VTKFile
 from dolfinx.mesh import create_mesh, meshtags
 import dolfinx
 from dolfinx.cpp.mesh import entities_to_geometry, cell_num_vertices, cell_entity_type
@@ -46,9 +46,9 @@ def point_cloud_pairs(x, r):
     return x_near
 
 
-def compute_ghost_cell_destinations(mesh, marker_subset, R=0.1):
+def compute_ghost_cell_destinations(mesh, marker_subset, R):
     """For each marked facet, given by indices in "marker_subset", get the list of processes which
-    the attached cell should be sent to, for ghosting. Neighbouring facets within distance "R"."""
+    the attached cell should be sent to, for ghosting. Any neighbouring facets within distance "R" should be ghosted."""
     # 1. Get midpoints of all facets on interfaces
     tdim = mesh.topology.dim
     x = mesh.geometry.x
@@ -117,15 +117,13 @@ marker_subset_i = [i for i, (idx, k) in enumerate(zip(marker.indices, marker.val
 marker_subset = marker.indices[marker_subset_i]
 marker_subset_val = marker.values[marker_subset_i]
 
-cell_dests = compute_ghost_cell_destinations(mesh, marker_subset, 0.1)
+cell_dests = compute_ghost_cell_destinations(mesh, marker_subset, 0.2)
 
 cells_to_ghost = [fc.links(f)[0] for f in marker_subset]
 assert len(cell_dests) == len(cells_to_ghost)
-print(cell_dests, cells_to_ghost)
 
 # TODO: deal with duplicates here
 cell_to_dests = {c: d for c, d in zip(cells_to_ghost, cell_dests)}
-print(cell_to_dests)
 
 # Collect up locally occuring markers
 
@@ -209,3 +207,9 @@ new_meshtag = meshtags(new_mesh, tdim - 1, new_markers[:, 0],
 new_xdmf = XDMFFile(MPI.COMM_WORLD, "output.xdmf", "w")
 new_xdmf.write_mesh(new_mesh)
 new_xdmf.write_meshtags(new_meshtag)
+
+import matplotlib.pyplot as plt
+x = new_mesh.geometry.x
+tri = np.array([vert_to_geom[t] for t in new_mesh.topology.connectivity(2, 0).array]).reshape(-1, 3)
+plt.triplot(x[:,0], x[:, 1], tri)
+plt.show()
