@@ -209,18 +209,21 @@ new_xdmf.write_mesh(new_mesh)
 new_xdmf.write_meshtags(new_meshtag)
 
 import matplotlib.pyplot as plt
+tri = np.array([vert_to_geom[t] for t in new_mesh.topology.connectivity(tdim, 0).array]).reshape(-1, tdim + 1)
+
+# Set colours for owned and ghost cells
+cols = 0.75 * np.ones(tri.shape[0])
+cols[:-new_mesh.topology.index_map(tdim).num_ghosts] = 1.0
+
 x = new_mesh.geometry.x
-tri = np.array([vert_to_geom[t] for t in new_mesh.topology.connectivity(2, 0).array]).reshape(-1, 3)
-cols = np.zeros(tri.shape[0])
-# plt.tripcolor(x[:,0], x[:, 1], tri, facecolors=cols)
-plt.triplot(x[:,0], x[:, 1], tri, linewidth=0.1)
+plt.tripcolor(x[:,0], x[:, 1], tri, cols, linewidth=0.2, color='k', cmap='gray', vmin=0, vmax=1)
 plt.gca().set_aspect('equal')
 
+# Plot facets by marker color
 facet_geom = entities_to_geometry(new_mesh, tdim - 1, new_meshtag.indices, False)
 lc = {5:'red', 6:'green', 4:'blue', 3:'yellow'}
 for k, v in zip(facet_geom, new_meshtag.values):
-    x = np.array([new_mesh.geometry.x[idx] for idx in k])
-    plt.plot(x[:, 0], x[:, 1], color=lc[v])
-    print(k, v)
+    pt = np.array([x[idx] for idx in k])
+    plt.plot(pt[:, 0], pt[:, 1], color=lc[v])
 
 plt.show()
