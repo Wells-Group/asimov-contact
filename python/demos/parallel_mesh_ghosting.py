@@ -129,7 +129,7 @@ cell_to_dests = {c: d for c, d in zip(cells_to_ghost, cell_dests)}
 
 # Convert marked facets to list of (global) vertices for each facet
 all_indices = [sorted(mesh.topology.index_map(0).local_to_global(fv.links(f))) for f in marker.indices]
-all_values = marker.values
+all_values = list(marker.values)
 
 # Send any 'extras' over to processes that need them
 send_buffer = [[] for p in range(mesh.comm.size)]
@@ -211,5 +211,16 @@ new_xdmf.write_meshtags(new_meshtag)
 import matplotlib.pyplot as plt
 x = new_mesh.geometry.x
 tri = np.array([vert_to_geom[t] for t in new_mesh.topology.connectivity(2, 0).array]).reshape(-1, 3)
-plt.triplot(x[:,0], x[:, 1], tri)
+cols = np.zeros(tri.shape[0])
+# plt.tripcolor(x[:,0], x[:, 1], tri, facecolors=cols)
+plt.triplot(x[:,0], x[:, 1], tri, linewidth=0.1)
+plt.gca().set_aspect('equal')
+
+facet_geom = entities_to_geometry(new_mesh, tdim - 1, new_meshtag.indices, False)
+lc = {5:'red', 6:'green', 4:'blue', 3:'yellow'}
+for k, v in zip(facet_geom, new_meshtag.values):
+    x = np.array([new_mesh.geometry.x[idx] for idx in k])
+    plt.plot(x[:, 0], x[:, 1], color=lc[v])
+    print(k, v)
+
 plt.show()
