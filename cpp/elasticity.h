@@ -77,4 +77,9 @@ void compute_sigma_n_opp(mdspan4_t sig_n_opp, std::span<const double> grad_v,
                          const double lmbda, const std::size_t q,
                          const std::size_t num_q_points);
 
+void compute_dnx(std::span<const double> grad_u, cmdspan3_t dphi,
+                          cmdspan2_t K, const std::array<double, 3> n_x,
+                          mdspan3_t dnx, mdspan2_t def_grad,
+                          mdspan2_t def_grad_inv);
+
 } // namespace dolfinx_contact

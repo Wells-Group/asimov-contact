@@ -12,7 +12,7 @@ dolfinx_contact::generate_contact_kernel(
     std::shared_ptr<const dolfinx_contact::QuadratureRule> quadrature_rule,
     const std::size_t max_links)
 {
-      std::shared_ptr<const dolfinx::mesh::Mesh> mesh = V->mesh();
+  std::shared_ptr<const dolfinx::mesh::Mesh> mesh = V->mesh();
   assert(mesh);
   const std::size_t gdim = mesh->geometry().dim(); // geometrical dimension
   const std::size_t bs = V->dofmap()->bs();
@@ -21,11 +21,21 @@ dolfinx_contact::generate_contact_kernel(
   const std::size_t num_q_points = qp_offsets[1] - qp_offsets[0];
   const std::size_t ndofs_cell = V->dofmap()->element_dof_layout().num_dofs();
 
-  // Coefficient offsets
-  // Expecting coefficients in following order:
-  // mu, lmbda, h, gap, normalsx, normalsy, test_fn, grad(test_fn), u, grad(u), u_opposite
+  // Strides for creating coefficient offsets
+  // Expecting coefficients in following order (all arrays flattened row major):
+  // kd.offsets(0)  - mu             - shape (1, )
+  // kd.offsets(1)  - lmbda          - shape (1, )
+  // kd.offsets(2)  - h              - shape (1, )
+  // kd.offsets(3)  - gap            - shape (num_q_points, gdim)
+  // kd.offsets(4)  - normalsx       - shape (num_q_points, gdim)
+  // kd.offsets(5)  - normalsy       - shape (num_q_points, gdim)
+  // kd.offsets(6)  - test_fn        - shape (num_q_points, ndofs_cell, bs, max_links)
+  // kd.offsets(7)  - grad(test_fn)  - shape (num_q_points, ndofs_cell, bs, max_links)
+  // kd.offsets(8)  - u              - shape (num_q_points, gdim)
+  // kd.offsets(9)  - grad(u)        - shape (num_q_points, gdim, gdim)
+  // kd.offsets(10) - u_opposite     - shape (num_q_points, bs)
   std::vector<std::size_t> cstrides
-      = {1,
+      = {1, 
          1,
          1,
          num_q_points * gdim,
@@ -38,7 +48,6 @@ dolfinx_contact::generate_contact_kernel(
          num_q_points * bs};
 
   auto kd = dolfinx_contact::KernelData(V, quadrature_rule, cstrides);
-
 
   /// @brief Assemble kernel for Jacobian (LHS) of unbiased contact
   /// problem
@@ -79,6 +88,10 @@ dolfinx_contact::generate_contact_kernel(
     mdspan2_t J_tot(J_totb.data(), gdim, tdim - 1);
     double detJ = 0;
     std::array<double, 18> detJ_scratch;
+    std::array<double, 9> def_gradb;
+    mdspan2_t def_grad(def_gradb.data(), gdim, gdim);
+    std::array<double, 9> def_grad_invb;
+    mdspan2_t def_grad_inv(def_grad_invb.data(), gdim, gdim);
 
     // Normal vector on physical facet at a single quadrature point
     std::array<double, 3> n_phys;
@@ -107,12 +120,19 @@ dolfinx_contact::generate_contact_kernel(
         = {kd.qp_offsets(facet_index), kd.qp_offsets(facet_index + 1)};
     const std::size_t num_points = q_offset.back() - q_offset.front();
     std::span<const double> weights = kd.weights(facet_index);
-    std::array<double, 3> n_surf = {0, 0, 0};
+    std::array<double, 3> n_x = {0, 0, 0};
+    std::array<double, 3> n_y = {0, 0, 0};
     std::vector<double> epsnb(ndofs_cell * gdim);
     mdspan2_t epsn(epsnb.data(), ndofs_cell, gdim);
     std::vector<double> trb(ndofs_cell * gdim);
     mdspan2_t tr(trb.data(), ndofs_cell, gdim);
     std::vector<double> sig_n_u(gdim);
+    std::array<double, 9> def_gradb;
+    mdspan2_t def_grad(def_gradb.data(), gdim, gdim);
+    std::array<double, 9> def_grad_invb;
+    mdspan2_t def_grad_inv(def_grad_invb.data(), gdim, gdim);
+    std::vector<double> dnxb(gdim * ndofs_cell * bs);
+    mdspan3_t dnx(dnxb.data(), nodfs_cell, bs, gdim);
 
     // Loop over quadrature points
     for (auto q : q_indices)
@@ -126,49 +146,45 @@ dolfinx_contact::generate_contact_kernel(
       double n_dot = 0;
       double gap = 0;
       // The gap is given by n * (Pi(x) -x)
-      // For raytracing n = n_x
-      // For closest point n = -n_y
       for (std::size_t i = 0; i < gdim; i++)
       {
-        n_surf[i] = -c[kd.offsets(4) + q * gdim + i];
-        n_dot += n_phys[i] * n_surf[i];
-        gap += c[kd.offsets(3) + q * gdim + i] * n_surf[i];
+        n_x[i] = -c[kd.offsets(4) + q * gdim + i];
+        n_y[i] = c[kd.offsets(5) + q * gdim + i];
+        n_dot += n_phys[i] * n_x[i];
+        gap += c[kd.offsets(3) + q * gdim + i] * n_x[i];
       }
 
-      compute_normal_strain_basis(epsn, tr, K, dphi, n_surf,
+      compute_normal_strain_basis(epsn, tr, K, dphi, n_x,
                                   std::span(n_phys.data(), gdim), q_pos);
 
-      // compute sig(u)*n_phys
+      // compute sig(u)*n_phys, grad(u) = c.subspan(kd.offsets(9) + q * gdim * gdim, gdim * gdim),
       std::fill(sig_n_u.begin(), sig_n_u.end(), 0.0);
       compute_sigma_n_u(sig_n_u,
-                        c.subspan(kd.offsets(7) + q * gdim * gdim, gdim * gdim),
+                        c.subspan(kd.offsets(9) + q * gdim * gdim, gdim * gdim),
                         std::span(n_phys.data(), gdim), mu, lmbda);
+      // compute Dnx
+      std::fill(dnxb.begin(), dnxb.end(), 0.0);
+      compute_dnx(c.subspan(kd.offsets(9) + q * gdim * gdim, gdim * gdim), dphi,
+                  K, n_x, dnx, def_grad, def_grad_inv);
 
       // compute inner(sig(u)*n_phys, n_surf) and inner(u, n_surf)
       double sign_u = 0;
-      double jump_un = 0;
       for (std::size_t j = 0; j < gdim; ++j)
-      {
-        sign_u += sig_n_u[j] * n_surf[j];
-        jump_un += c[kd.offsets(6) + gdim * q + j] * n_surf[j];
-      }
-      std::size_t offset_u_opp = kd.offsets(8) + q * bs;
-      for (std::size_t j = 0; j < bs; ++j)
-        jump_un += -c[offset_u_opp + j] * n_surf[j];
+        sign_u += sig_n_u[j] * n_x[j];
 
-      double Pn_u = dR_plus((jump_un - gap) - gamma * sign_u);
+      double Pn_u = dR_minus(gap + gamma * sign_u);
 
       // Fill contributions of facet with itself
-      const double w0 = weights[q] * detJ;
+      const double weight = weights[q] * detJ;
       for (std::size_t j = 0; j < ndofs_cell; j++)
       {
         for (std::size_t l = 0; l < bs; l++)
         {
-          double sign_du = (lmbda * tr(j, l) * n_dot + mu * epsn(j, l));
-          double Pn_du
-              = (phi(q_pos, j) * n_surf[l] - gamma * sign_du) * Pn_u * w0;
+          double sign_w = (lmbda * tr(j, l) * n_dot + mu * epsn(j, l));
+          double Pn_w
+              = (gamma * sign_w - phi(q_pos, j) * n_surf[l]) * Pn_u * weight;
 
-          sign_du *= w0;
+          sign_w *= weight;
           for (std::size_t i = 0; i < ndofs_cell; i++)
           {
             for (std::size_t b = 0; b < bs; b++)
@@ -177,26 +193,28 @@ dolfinx_contact::generate_contact_kernel(
               double sign_v = (lmbda * tr(i, b) * n_dot + mu * epsn(i, b));
               double Pn_v = gamma_inv * v_dot_nsurf - theta * sign_v;
               A[0][(b + i * bs) * ndofs_cell * bs + l + j * bs]
-                  += 0.5 * Pn_du * Pn_v;
+                  += 0.5 * Pn_w * Pn_v;
 
               // entries corresponding to u and v on the other surface
               for (std::size_t k = 0; k < num_links; k++)
               {
-                std::size_t index = kd.offsets(5)
+                // index for trial function value on opposite surface
+                std::size_t index = kd.offsets(6)
                                     + k * num_points * ndofs_cell * bs
                                     + j * num_points * bs + q * bs + l;
-                double du_n_opp = c[index] * n_surf[l];
+                double w_n_opp = c[index] * n_surf[l];
 
-                du_n_opp *= w0 * Pn_u;
-                index = kd.offsets(5) + k * num_points * ndofs_cell * bs
+                w_n_opp *= weight * Pn_u;
+                // index for test function value on opposite surface
+                index = kd.offsets(6) + k * num_points * ndofs_cell * bs
                         + i * num_points * bs + q * bs + b;
                 double v_n_opp = c[index] * n_surf[b];
                 A[3 * k + 1][(b + i * bs) * bs * ndofs_cell + l + j * bs]
-                    -= 0.5 * du_n_opp * Pn_v;
+                    -= 0.5 * w_n_opp * Pn_v;
                 A[3 * k + 2][(b + i * bs) * bs * ndofs_cell + l + j * bs]
-                    -= 0.5 * gamma_inv * Pn_du * v_n_opp;
+                    -= 0.5 * gamma_inv * Pn_w * v_n_opp;
                 A[3 * k + 3][(b + i * bs) * bs * ndofs_cell + l + j * bs]
-                    += 0.5 * gamma_inv * du_n_opp * v_n_opp;
+                    += 0.5 * gamma_inv * w_n_opp * v_n_opp;
               }
             }
           }

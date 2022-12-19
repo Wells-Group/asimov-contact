@@ -137,3 +137,43 @@ void dolfinx_contact::compute_sigma_n_opp(mdspan4_t sig_n_opp,
       }
     }
 }
+//-----------------------------------------------------------------------------
+void dolfinx_contact::compute_dnx(std::span<const double> grad_u, cmdspan3_t dphi,
+                          cmdspan2_t K, const std::array<double, 3> n_x,
+                          mdspan3_t dnx, mdspan2_t def_grad,
+                          mdspan2_t def_grad_inv)
+{
+  const std::size_t ndofs_cell = sig_n = dnx.extent(0);
+  const std::size_t bs = K.extent(1);
+  const std::size_t tdim = K.extent(0);
+  assert(K.extent(0) == dphi.extent(0));
+  // temp variable for grad(v)
+  std::array<double, 3> grad_v;
+  for (std::size_t i = 0; i < gdim; ++i)
+  {
+    def_grad(i, i) += 1;
+    for (std::size_t j = 0; j < gdim; ++j)
+      def_grad(j, i) += grad_u[i * gdim + j];
+  }
+  dolfinx::fem::CoordinateElement::compute_jacobian_inverse(def_grad,
+                                                            def_grad_inv);
+  double dot = 0;
+  for (std::size_t dof = 0; dof < ndofs_cell; ++dof)
+  { // Compute grad(v)
+    std::fill(grad_v.begin(), grad_v.end(), 0.0);
+    for (std::size_t j = 0; j < bs; ++j)
+      for (std::size_t k = 0; k < tdim; ++k)
+        grad_v[j] += K(k, j) * dphi(k, q_pos, i);
+    for (std::size_t block = 0; block < bs; ++block)
+    {
+      for (std::size_t i = 0; i < gdim; ++i)
+      {
+        for (std::size_t j = 0; j < gdim; ++j)
+          dnx(dof, block, i) += def_grad_inv(i, j) * grad_v[j] * n_x[block];
+        dot += dnx(dof, block, i) * n[i];
+      }
+      for (std::size_t i = 0; i < gdim; ++i)
+        dnx(dof, block, i) -= dot * n_x[i];
+    }
+  }
+}
