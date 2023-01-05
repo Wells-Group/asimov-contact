@@ -1,0 +1,32 @@
+<?xml version="1.0"?>
+<!DOCTYPE Xdmf SYSTEM "Xdmf.dtd" []>
+<Xdmf Version="3.0" xmlns:xi="http://www.w3.org/2001/XInclude">
+  <Domain>
+    <Grid Name="mesh" GridType="Uniform">
+      <Topology TopologyType="Tetrahedron" NumberOfElements="179929" NodesPerElement="4">
+        <DataItem Dimensions="179929 4" NumberType="Int" Format="HDF">xmas_tree.h5:/Mesh/mesh/topology</DataItem>
+      </Topology>
+      <Geometry GeometryType="XYZ">
+        <DataItem Dimensions="39888 3" Format="HDF">xmas_tree.h5:/Mesh/mesh/geometry</DataItem>
+      </Geometry>
+    </Grid>
+    <Grid Name="cell_marker" GridType="Uniform">
+      <xi:include xpointer="xpointer(/Xdmf/Domain/Grid/Geometry)" />
+      <Topology TopologyType="Tetrahedron" NumberOfElements="179929" NodesPerElement="4">
+        <DataItem Dimensions="179929 4" NumberType="Int" Format="HDF">xmas_tree.h5:/MeshTags/cell_marker/topology</DataItem>
+      </Topology>
+      <Attribute Name="cell_marker" AttributeType="Scalar" Center="Cell">
+        <DataItem Dimensions="179929 1" Format="HDF">xmas_tree.h5:/MeshTags/cell_marker/Values</DataItem>
+      </Attribute>
+    </Grid>
+    <Grid Name="facet_marker" GridType="Uniform">
+      <xi:include xpointer="xpointer(/Xdmf/Domain/Grid/Geometry)" />
+      <Topology TopologyType="Triangle" NumberOfElements="19960" NodesPerElement="3">
+        <DataItem Dimensions="19960 3" NumberType="Int" Format="HDF">xmas_tree.h5:/MeshTags/facet_marker/topology</DataItem>
+      </Topology>
+      <Attribute Name="facet_marker" AttributeType="Scalar" Center="Cell">
+        <DataItem Dimensions="19960 1" Format="HDF">xmas_tree.h5:/MeshTags/facet_marker/Values</DataItem>
+      </Attribute>
+    </Grid>
+  </Domain>
+</Xdmf>

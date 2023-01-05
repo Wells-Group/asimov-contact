@@ -44,24 +44,24 @@ if __name__ == "__main__":
     convert_mesh(fname, fname, gdim=3)
 
     # Read in mesh from xdmf file including markers
-    # Cell markers:  It is expected that all cells are marked and that 
+    # Cell markers:  It is expected that all cells are marked and that
     #                disconnected domains have different markers
     #                This is needed for defining the (near-)nullspace
     #                Currently we have the following cell markers:
     #                Outer box: 2
     #                Tree: 1
-    #                These markers are handled automatically and the input to 
-    #                the contact code does not have to be changed if the 
+    #                These markers are handled automatically and the input to
+    #                the contact code does not have to be changed if the
     #                marker values change.
     # Facet markers: This must include markers used for defining boundary
     #                conditions and markers for the contact surfaces
     #                Currently we have the follwoing facet markers:
     #                Dirichlet boundary (outer box): 4
     #                Neumann boundary (bottom of tree): 3
-    #                Front/back of tree: 5 (part of this will be used 
+    #                Front/back of tree: 5 (part of this will be used
     #                to constrain rigid body movement in z direction)
     #                Contact surface 1 (tree surface): 6
-    #                Contact surface 2 (outer box): 7 
+    #                Contact surface 2 (outer box): 7
     #                If the values of these markers change, the input
     #                to the contact code has to be adjusted
 
@@ -70,8 +70,8 @@ if __name__ == "__main__":
     dirichlet_bdy = 4
     surface_1 = 6
     surface_2 = 7
-    z_Dirichlet = 8 # this tag is defined further down, use value different from all 
-                    # input markers
+    z_Dirichlet = 8  # this tag is defined further down, use value different from all
+    # input markers
 
     with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
         mesh = xdmf.read_mesh(ghost_mode=GhostMode.none)
@@ -91,7 +91,7 @@ if __name__ == "__main__":
     # Find facets for z-Dirichlet bc
     def identifier(x, z):
         return np.logical_and(np.logical_and(np.isclose(x[2], z),
-                                                abs(x[1]) < 0.1), abs(x[0] - 2) < 0.1)
+                                             abs(x[1]) < 0.1), abs(x[0] - 2) < 0.1)
     dirichlet_facets1 = locate_entities_boundary(mesh, tdim - 1, lambda x: identifier(x, 0.0))
     dirichlet_facets2 = locate_entities_boundary(mesh, tdim - 1, lambda x: identifier(x, 1.0))
 
@@ -102,10 +102,9 @@ if __name__ == "__main__":
     sorted_facets = np.argsort(indices)
     facet_marker = MeshTags_int32(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
 
-
     # Create Dirichlet bdy conditions for preventing rigid body motion in z-direction
     bcs = (np.array([[z_Dirichlet, 2]], dtype=np.int32), [_fem.Constant(mesh, _PETSc.ScalarType(0))])
-    
+
     # Functions for Dirichlet and Neuman boundaries, body force
     g = _fem.Constant(mesh, _PETSc.ScalarType((0, 0, 0)))      # zero dirichlet
     t = _fem.Constant(mesh, _PETSc.ScalarType((0.2, 0.5, 0)))  # traction
@@ -204,7 +203,8 @@ if __name__ == "__main__":
     outname = f"results/xmas_{tdim}D_{size}"
     with Timer("~Contact: - all"):
         u1, num_its, krylov_iterations, solver_time = nitsche_unbiased(1, ufl_form=F, u=u,
-                                                                       rhs_fns=rhs_fns, markers=[domain_marker, facet_marker],
+                                                                       rhs_fns=rhs_fns, markers=[
+                                                                           domain_marker, facet_marker],
                                                                        contact_data=(surfaces, contact_pairs),
                                                                        bcs=bcs, problem_parameters=problem_parameters,
                                                                        raytracing=False,
@@ -238,4 +238,3 @@ if __name__ == "__main__":
         print(f"Newton iterations {num_its}, ", file=outfile)
         print(f"Krylov iterations {krylov_iterations},", file=outfile)
         print("-" * 25, file=outfile)
-
