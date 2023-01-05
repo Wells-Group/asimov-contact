@@ -61,25 +61,24 @@ def compute_ghost_cell_destinations(mesh, marker_subset, R):
     scatter_back = []
     if comm.rank == 0:
         offsets = np.cumsum([0] + [w.shape[0] for w in x_all])
-        x_all_flat = np.concatenate(x_all)
+        x_all_joined = np.concatenate(x_all)
 
         # Find all pairs of facets within radius R
-        x_near = point_cloud_pairs(x_all_flat, R)
+        x_near = point_cloud_pairs(x_all_joined, R)
 
         # Find which process the neighboring facet came from
         i = 0
+        sender = np.concatenate([np.ones(arr.shape[0], dtype=int)*p for p, arr in enumerate(x_all)])
         procs = [[] for p in range(len(x_all))]
-        for p in range(len(x_all)):
-            for j in range(x_all[p].shape[0]):
-                pr = set()
-                for n in x_near[i]:
-                    # Find which process this facet came from
-                    q = np.searchsorted(offsets, n, side='right') - 1
-                    # Add to the sendback list, if not the same process
-                    if q != p:
-                        pr.add(q)
-                procs[p] += [list(pr)]
-                i += 1
+        for p, xn in zip(sender, x_near):
+            pr = set()
+            for n in xn:
+                # Find which process this facet came from
+                q = np.searchsorted(offsets, n, side='right') - 1
+                # Add to the sendback list, if not the same process
+                if q != p:
+                    pr.add(q)
+            procs[p] += [list(pr)]
 
         # Pack up to return to sending processes
         for i, q in enumerate(procs):
@@ -117,12 +116,12 @@ marker_subset_i = [i for i, (idx, k) in enumerate(zip(marker.indices, marker.val
 marker_subset = marker.indices[marker_subset_i]
 marker_subset_val = marker.values[marker_subset_i]
 
-cell_dests = compute_ghost_cell_destinations(mesh, marker_subset, 0.2)
+cell_dests = compute_ghost_cell_destinations(mesh, marker_subset, 0.1)
 
 cells_to_ghost = [fc.links(f)[0] for f in marker_subset]
 assert len(cell_dests) == len(cells_to_ghost)
 
-# TODO: deal with duplicates here
+# TODO: deal with duplicates here?
 cell_to_dests = {c: d for c, d in zip(cells_to_ghost, cell_dests)}
 
 # Collect up locally occuring markers
