@@ -128,29 +128,27 @@ public:
   /// Return the solution on the reference domain
   std::span<double, tdim> X_k()
   {
-    return std::span<double, tdim>(std::next(_work_array.begin(), _offsets[1]),
-                                   tdim);
+    return std::span<double, tdim>(_work_array.data() + _offsets[1], tdim);
   }
 
   /// Return the solution in physical space
   std::span<double, gdim> x_k()
   {
-    return std::span<double, gdim>(std::next(_work_array.begin(), _offsets[2]),
-                                   gdim);
+    return std::span<double, gdim>(_work_array.data() + _offsets[2], gdim);
   }
 
   /// Return the reference parameters
   std::span<double, tdim - 1> xi_k()
   {
-    return std::span<double, tdim - 1>(
-        std::next(_work_array.begin(), _offsets[3]), tdim - 1);
+    return std::span<double, tdim - 1>(_work_array.data() + _offsets[3],
+                                       tdim - 1);
   }
 
   ///  Return the gradient of reference parameter
   std::span<double, tdim - 1> dxi_k()
   {
-    return std::span<double, tdim - 1>(
-        std::next(_work_array.begin(), _offsets[4]), tdim - 1);
+    return std::span<double, tdim - 1>(_work_array.data() + _offsets[4],
+                                       tdim - 1);
   }
 
   /// Return the Jacobian of cell basis
@@ -180,8 +178,8 @@ public:
   /// Return resiudal (RHS) of Newton solver
   std::span<double, gdim - 1> Gk()
   {
-    return std::span<double, gdim - 1>(
-        std::next(_work_array.begin(), _offsets[9]), gdim - 1);
+    return std::span<double, gdim - 1>(_work_array.data() + _offsets[9],
+                                       gdim - 1);
   }
 
   /// Return the tangents of the ray
@@ -193,8 +191,7 @@ public:
   /// Return resiudal (RHS) of Newton solver
   std::span<double, gdim> point()
   {
-    return std::span<double, gdim>(std::next(_work_array.begin(), _offsets[11]),
-                                   gdim);
+    return std::span<double, gdim>(_work_array.data() + _offsets[11], gdim);
   }
 
 private:
