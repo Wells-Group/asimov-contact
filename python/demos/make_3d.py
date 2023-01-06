@@ -82,6 +82,6 @@ gmsh.model.setPhysicalName(2, outer_marker, "Outer")
 gmsh.model.mesh.setSize(gmsh.model.getEntities(0), 0.1)
 
 gmsh.model.mesh.generate(3)
-gmsh.write("box-key.msh")
+gmsh.write("meshes/box-key.msh")
 
 gmsh.finalize()

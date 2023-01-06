@@ -67,8 +67,6 @@ if __name__ == "__main__":
     dirichlet_bdy = 4
     surface_1 = 6
     surface_2 = 7
-    z_Dirichlet = 8 # this tag is defined further down, use value different from all
-                    # input markers
 
     with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
         mesh = xdmf.read_mesh(ghost_mode=GhostMode.none)
@@ -84,24 +82,9 @@ if __name__ == "__main__":
 
     V = _fem.VectorFunctionSpace(mesh, ("CG", 1))
 
-    # Apply zero Dirichlet boundary conditions in z-direction on part of the xmas-tree
-    # Find facets for z-Dirichlet bc
-    def identifier(x, z):
-        return np.logical_and(np.logical_and(np.isclose(x[2], z),
-                                                abs(x[1]) < 0.1), abs(x[0] - 2) < 0.1)
-    dirichlet_facets1 = locate_entities_boundary(mesh, tdim - 1, lambda x: identifier(x, 0.0))
-    dirichlet_facets2 = locate_entities_boundary(mesh, tdim - 1, lambda x: identifier(x, 1.0))
-
-    # create new facet_marker including z Dirichlet facets
-    indices = np.hstack([facet_marker.indices, dirichlet_facets1, dirichlet_facets2])
-    values = np.hstack([facet_marker.values, z_Dirichlet * np.ones(len(dirichlet_facets1)
-                        + len(dirichlet_facets2), dtype=np.int32)])
-    sorted_facets = np.argsort(indices)
-    facet_marker = MeshTags_int32(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
-
-
+    inner_bottom_marker = 3
     # Create Dirichlet bdy conditions for preventing rigid body motion in z-direction
-    bcs = (np.array([[z_Dirichlet, 2]], dtype=np.int32), [_fem.Constant(mesh, _PETSc.ScalarType(0))])
+    bcs = (np.array([[inner_bottom_marker, 2]], dtype=np.int32), [_fem.Constant(mesh, _PETSc.ScalarType(0))])
 
     # Functions for Dirichlet and Neuman boundaries, body force
     g = _fem.Constant(mesh, _PETSc.ScalarType((0, 0, 0)))      # zero dirichlet
@@ -146,7 +129,7 @@ if __name__ == "__main__":
     F = weak_dirichlet(F, u, g, sigma, E * gamma, theta, ds(4))
 
     # traction (neumann) boundary condition on mesh boundary with tag 3
-    F -= ufl.inner(t, v) * ds(3)
+#    F -= ufl.inner(t, v) * ds(3)
 
     # body forces
     F -= ufl.inner(f, v) * dx(1)
@@ -195,10 +178,10 @@ if __name__ == "__main__":
     # Solve contact problem using Nitsche's method
     problem_parameters = {"gamma": E * gamma, "theta": theta, "mu": mu, "lambda": lmbda}
     solver_outfile = None
-    log.set_log_level(log.LogLevel.OFF)
+    log.set_log_level(log.LogLevel.INFO)
     rhs_fns = [g, t, f]
     size = mesh.comm.size
-    outname = f"results/xmas_{tdim}D_{size}"
+    outname = f"results/boxkey_{tdim}D_{size}"
     with Timer("~Contact: - all"):
         u1, num_its, krylov_iterations, solver_time = nitsche_unbiased(1, ufl_form=F, u=u,
                                                                        rhs_fns=rhs_fns, markers=[domain_marker, facet_marker],
