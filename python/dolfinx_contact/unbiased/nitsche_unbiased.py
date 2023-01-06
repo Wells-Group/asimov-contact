@@ -388,10 +388,10 @@ def nitsche_unbiased(steps: int, ufl_form: ufl.Form, u: fem.Function,
         const_coeffs.append(np.hstack([material[i], h_packed[i]]))
 
     # initialise vtx write
-    vtx = io.VTXWriter(mesh.comm, f"{fname}.bp", [u])
+#    vtx = io.VTXWriter(mesh.comm, f"{fname}.bp", [u])
 
     # write initial value
-    vtx.write(0)
+#    vtx.write(0)
     timings = []
     newton_its = []
     krylov_its = []
@@ -447,8 +447,8 @@ def nitsche_unbiased(steps: int, ufl_form: ufl.Form, u: fem.Function,
         du.x.array[:] = (1. / steps) * du.x.array[:]
 
         # write solution
-        vtx.write(t)
+#        vtx.write(t)
 
     contact.update_submesh_geometry(u._cpp_object)
-    vtx.close()
+#    vtx.close()
     return u, newton_its, krylov_its, timings
