@@ -29,8 +29,6 @@ if __name__ == "__main__":
 
     parser.add_argument("--quadrature", default=5, type=int, dest="q_degree",
                         help="Quadrature degree used for contact integrals")
-    parser.add_argument("--res", default=0.2, type=np.float64, dest="res",
-                        help="Mesh resolution")
 
     # Parse input arguments or set to defualt values
     args = parser.parse_args()
@@ -54,9 +52,7 @@ if __name__ == "__main__":
     #                conditions and markers for the contact surfaces
     #                Currently we have the follwoing facet markers:
     #                Dirichlet boundary (outer box): 4
-    #                Neumann boundary (bottom of tree): 3
-    #                Front/back of tree: 5 (part of this will be used
-    #                to constrain rigid body movement in z direction)
+    #                Neumann boundary (bottom): 3
     #                Contact surface 1 (tree surface): 6
     #                Contact surface 2 (outer box): 7
     #                If the values of these markers change, the input
@@ -83,13 +79,12 @@ if __name__ == "__main__":
     V = _fem.VectorFunctionSpace(mesh, ("CG", 1))
 
     inner_bottom_marker = 3
-    # Create Dirichlet bdy conditions for preventing rigid body motion in z-direction
     bcs = (np.array([[inner_bottom_marker, 2]], dtype=np.int32), [_fem.Constant(mesh, _PETSc.ScalarType(0))])
 
     # Functions for Dirichlet and Neuman boundaries, body force
     g = _fem.Constant(mesh, _PETSc.ScalarType((0, 0, 0)))      # zero dirichlet
-    t = _fem.Constant(mesh, _PETSc.ScalarType((0.2, 0.5, 0)))  # traction
-    f = _fem.Constant(mesh, _PETSc.ScalarType((1.0, 0.5, 0)))  # body force
+    t = _fem.Constant(mesh, _PETSc.ScalarType((0.2, 0.0, 0)))  # traction
+    f = _fem.Constant(mesh, _PETSc.ScalarType((0.1, 0.0, 0)))  # body force
 
     ncells = mesh.topology.index_map(tdim).size_local
     indices = np.array(range(ncells), dtype=np.int32)
@@ -103,8 +98,6 @@ if __name__ == "__main__":
     data = np.array([surface_1, surface_2], dtype=np.int32)
     offsets = np.array([0, 2], dtype=np.int32)
     surfaces = create_adjacencylist(data, offsets)
-
-    # zero dirichlet boundary condition on mesh boundary with tag 5
 
     # Function, TestFunction, TrialFunction and measures
     u = _fem.Function(V)
@@ -129,21 +122,20 @@ if __name__ == "__main__":
     F = weak_dirichlet(F, u, g, sigma, E * gamma, theta, ds(4))
 
     # traction (neumann) boundary condition on mesh boundary with tag 3
-#    F -= ufl.inner(t, v) * ds(3)
+    F -= ufl.inner(t, v) * ds(3)
 
     # body forces
-    F -= ufl.inner(f, v) * dx(1)
+#    F -= ufl.inner(f, v) * dx(1)
 
     # create initial guess
-    tree_cells = domain_marker.find(1)
+    inner_cells = domain_marker.find(1)
 
     def _u_initial(x):
         values = np.zeros((gdim, x.shape[1]))
-        for i in range(x.shape[1]):
-            values[0, i] = 0.1
+        values[1, :] = 0.1
         return values
 
-    u.interpolate(_u_initial, tree_cells)
+    u.interpolate(_u_initial, inner_cells)
 
     # Solver options
     ksp_tol = 1e-10

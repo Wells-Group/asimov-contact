@@ -8,6 +8,7 @@
 #include "RayTracing.h"
 #include "error_handling.h"
 #include "geometric_quantities.h"
+#include <dolfinx/common/log.h>
 #include <dolfinx/geometry/BoundingBoxTree.h>
 #include <dolfinx/geometry/utils.h>
 
@@ -815,6 +816,7 @@ void dolfinx_contact::compute_physical_points(
     std::span<double> qp_phys)
 {
   dolfinx::common::Timer timer("~Contact: Compute Physical points");
+  LOG(INFO) << "compute_physical_points";
 
   // Geometrical info
   const dolfinx::mesh::Geometry& geometry = mesh.geometry();
@@ -882,6 +884,8 @@ dolfinx_contact::compute_distance_map(
   assert(q_rule.dim() == tdim - 1);
   assert(q_rule.cell_type(0)
          == dolfinx::mesh::cell_entity_type(cell_type, tdim - 1, 0));
+
+  LOG(INFO) << "compute_distance_map";
 
   switch (mode)
   {
@@ -958,6 +962,8 @@ dolfinx_contact::compute_distance_map(
     }
     else if (tdim == 3)
     {
+      LOG(INFO) << "Compute projecttion map <3, 3>";
+
       auto [closest_entities, reference_points, shape]
           = dolfinx_contact::compute_projection_map<3, 3>(
               candidate_mesh, candidate_facets, padded_qpsb);

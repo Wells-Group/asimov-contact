@@ -345,6 +345,9 @@ def nitsche_unbiased(steps: int, ufl_form: ufl.Form, u: fem.Function,
                                               search_method=search_method)
     contact.set_search_radius(search_radius)
 
+    with io.XDMFFile(contact.submesh().comm, f"debug.xdmf", "w") as xdmf:
+        xdmf.write_mesh(contact.submesh())
+
     # pack constants
     consts = np.array([gamma, theta], dtype=np.float64)
 
@@ -390,6 +393,7 @@ def nitsche_unbiased(steps: int, ufl_form: ufl.Form, u: fem.Function,
     # initialise vtx write
 #    vtx = io.VTXWriter(mesh.comm, f"{fname}.bp", [u])
 
+
     # write initial value
 #    vtx.write(0)
     timings = []
@@ -400,7 +404,9 @@ def nitsche_unbiased(steps: int, ufl_form: ufl.Form, u: fem.Function,
         # create distance map
         with common.Timer("~Contact: Distance maps"):
             for i in range(len(contact_pairs)):
+                print('i=', i)
                 contact.create_distance_map(i)
+
 
         # current time
         t = (tt + 1) / steps
