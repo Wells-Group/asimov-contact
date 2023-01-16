@@ -78,13 +78,10 @@ if __name__ == "__main__":
 
     V = _fem.VectorFunctionSpace(mesh, ("CG", 1))
 
-    inner_bottom_marker = 3
-    bcs = (np.array([[inner_bottom_marker, 2]], dtype=np.int32), [_fem.Constant(mesh, _PETSc.ScalarType(0))])
-
     # Functions for Dirichlet and Neuman boundaries, body force
     g = _fem.Constant(mesh, _PETSc.ScalarType((0, 0, 0)))      # zero dirichlet
     t = _fem.Constant(mesh, _PETSc.ScalarType((0.2, 0.0, 0)))  # traction
-    f = _fem.Constant(mesh, _PETSc.ScalarType((0.1, 0.0, 0)))  # body force
+    f = _fem.Constant(mesh, _PETSc.ScalarType((1.0, 0.0, 0)))  # body force
 
     ncells = mesh.topology.index_map(tdim).size_local
     indices = np.array(range(ncells), dtype=np.int32)
@@ -125,14 +122,14 @@ if __name__ == "__main__":
     F -= ufl.inner(t, v) * ds(3)
 
     # body forces
-#    F -= ufl.inner(f, v) * dx(1)
+    F -= ufl.inner(f, v) * dx(1)
 
     # create initial guess
     inner_cells = domain_marker.find(1)
 
     def _u_initial(x):
         values = np.zeros((gdim, x.shape[1]))
-        values[1, :] = 0.1
+        values[0, :] = 0.1
         return values
 
     u.interpolate(_u_initial, inner_cells)
@@ -178,7 +175,7 @@ if __name__ == "__main__":
         u1, num_its, krylov_iterations, solver_time = nitsche_unbiased(1, ufl_form=F, u=u,
                                                                        rhs_fns=rhs_fns, markers=[domain_marker, facet_marker],
                                                                        contact_data=(surfaces, contact_pairs),
-                                                                       bcs=bcs, problem_parameters=problem_parameters,
+                                                                       bcs=[(),[]], problem_parameters=problem_parameters,
                                                                        raytracing=False,
                                                                        newton_options=newton_options,
                                                                        petsc_options=petsc_options,
@@ -189,11 +186,11 @@ if __name__ == "__main__":
 
     # write solution to file
     size = mesh.comm.size
-    with XDMFFile(mesh.comm, f"results/xmas_{size}.xdmf", "w") as xdmf:
+    with XDMFFile(mesh.comm, f"results/box_{size}.xdmf", "w") as xdmf:
         xdmf.write_mesh(mesh)
         u1.name = f"u_{size}"
         xdmf.write_function(u1)
-    with XDMFFile(mesh.comm, f"results/xmas_partitioning_{size}.xdmf", "w") as xdmf:
+    with XDMFFile(mesh.comm, f"results/box_partitioning_{size}.xdmf", "w") as xdmf:
         xdmf.write_mesh(mesh)
         xdmf.write_meshtags(process_marker)
 

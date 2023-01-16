@@ -55,11 +55,13 @@ for s in inner_surfaces:
     if np.isclose(com[0], 10.0):
         inner_list += [s]
     if np.isclose(com[0], 0.0):
-        inner_list += [s]
+        marker = 3
+        gmsh.model.addPhysicalGroup(2, [s], marker)
+        gmsh.model.setPhysicalName(2, marker, "InnerBottom")
     if np.isclose(abs(com[1]), 1.5) or np.isclose(abs(com[2]), 1.5):
         inner_list += [s]
 
-marker = 3
+marker = 2
 gmsh.model.addPhysicalGroup(2, inner_list, marker)
 gmsh.model.setPhysicalName(2, marker, "InnerNonContact")
 
@@ -67,13 +69,15 @@ outside_list = []
 for s in outer_surfaces:
     com = gmsh.model.occ.getCenterOfMass(2, s)
     if np.isclose(com[0], 10.0):
-        outside_list += [s]
+        marker = 4
+        gmsh.model.addPhysicalGroup(2, [s], marker)
+        gmsh.model.setPhysicalName(2, marker, "OuterTop")
     if np.isclose(com[0], 0.0):
         outside_list += [s]
     if np.isclose(abs(com[1]), 1.5) or np.isclose(abs(com[2]), 1.5):
         outside_list += [s]
 
-marker = 4
+marker = 1
 gmsh.model.addPhysicalGroup(2, outside_list, marker)
 gmsh.model.setPhysicalName(2, marker, "OuterNonContact")
 
