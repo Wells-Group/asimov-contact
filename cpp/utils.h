@@ -322,25 +322,25 @@ compute_projection_map(const dolfinx::mesh::Mesh& mesh,
     facets[i / 2] = local_facets[facet_tuples[i + 1]];
   }
 
-  LOG(INFO) << "Compute closest entity";
+  LOG(WARNING) << "Compute closest entity";
 
   // Compute closest entity for each point
-  LOG(INFO) << "BBOX";
+  LOG(WARNING) << "BBOX";
   dolfinx::geometry::BoundingBoxTree bbox(mesh, tdim - 1, facets);
-  LOG(INFO) << "BBOX::midpoint_tree";
+  LOG(WARNING) << "BBOX::midpoint_tree";
   dolfinx::geometry::BoundingBoxTree midpoint_tree
       = dolfinx::geometry::create_midpoint_tree(mesh, tdim - 1, facets);
-  LOG(INFO) << "BBOX::closest entity";
+  LOG(WARNING) << "BBOX::closest entity";
   std::vector<std::int32_t> closest_facets
       = dolfinx::geometry::compute_closest_entity(bbox, midpoint_tree, mesh,
                                                   points);
-  LOG(INFO) << "BBOX::done";
+  LOG(WARNING) << "BBOX::done";
 
   std::vector<double> candidate_x(num_points * 3);
   std::span<const double> mesh_geometry = mesh.geometry().x();
   const dolfinx::fem::CoordinateElement& cmap = mesh.geometry().cmap();
   {
-    LOG(INFO) << "Compute dusplacemnt vector";
+    LOG(WARNING) << "Compute dusplacemnt vector";
     // Find displacement vector from each point
     // to closest entity. As a point on the surface
     // might have penetrated the cell in question, we use
@@ -365,7 +365,7 @@ compute_projection_map(const dolfinx::mesh::Mesh& mesh,
     assert(facets_geometry.num_nodes() == (int)num_points);
 
     // Compute physical points for each facet
-    LOG(INFO) << "Compute phys points";
+    LOG(WARNING) << "Compute phys points";
     std::vector<double> coordinate_dofs(3 * num_facet_dofs);
     for (std::size_t i = 0; i < num_points; ++i)
     {
@@ -392,7 +392,7 @@ compute_projection_map(const dolfinx::mesh::Mesh& mesh,
     }
   }
 
-  LOG(INFO) << "Pull back to ref";
+  LOG(WARNING) << "Pull back to ref";
   // Pull back to reference point for each facet on the surface
   std::vector<double> candidate_X(num_points * tdim);
   {
@@ -443,7 +443,7 @@ compute_projection_map(const dolfinx::mesh::Mesh& mesh,
       std::copy_n(X.begin(), tdim, std::next(candidate_X.begin(), i * tdim));
     }
   }
-  LOG(INFO) << "OK";
+  LOG(WARNING) << "OK";
   return {closest_facets, candidate_X, {candidate_X.size() / tdim, tdim}};
 }
 

@@ -167,7 +167,7 @@ if __name__ == "__main__":
     # Solve contact problem using Nitsche's method
     problem_parameters = {"gamma": E * gamma, "theta": theta, "mu": mu, "lambda": lmbda}
     solver_outfile = None
-    log.set_log_level(log.LogLevel.INFO)
+    log.set_log_level(log.LogLevel.WARNING)
     rhs_fns = [g, t, f]
     size = mesh.comm.size
     outname = f"results/boxkey_{tdim}D_{size}"
