@@ -152,7 +152,8 @@ def setup_newton_solver(F_custom: fem.forms.FormMetaClass, J_custom: fem.forms.F
 
     # coefficient arrays
     num_coeffs = contact.coefficients_size(False)
-    coeffs = np.array([np.zeros((len(entities[i]), num_coeffs)) for i in range(num_pairs)])
+
+    coeffs = [np.zeros((len(entities[i]), num_coeffs)) for i in range(num_pairs)]
     newton_solver = dolfinx_contact.NewtonSolver(mesh.comm, A, b, coeffs)
 
     # Set matrix-vector computations
