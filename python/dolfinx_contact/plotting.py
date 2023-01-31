@@ -14,7 +14,7 @@ def plot_gap(mesh, contact, tag, gap, facets, facets_opp):
     # Draw facets on opposite surface
     plt.figure(dpi=600)
     for facet in facets_opp:
-        facet_geometry = dolfinx.cpp.mesh.entities_to_geometry(mesh, fdim, [facet], False)
+        facet_geometry = dolfinx.cpp.mesh.entities_to_geometry(mesh._cpp_object, fdim, [facet], False)
         coords = mesh_geometry[facet_geometry][0]
         plt.plot(coords[:, 0], coords[:, 1], color="black")
     num_facets = len(facets)
@@ -22,7 +22,7 @@ def plot_gap(mesh, contact, tag, gap, facets, facets_opp):
     max_x = 0
     for i in range(num_facets):
         facet = facets[i]
-        facet_geometry = dolfinx.cpp.mesh.entities_to_geometry(mesh, fdim, [facet], False)
+        facet_geometry = dolfinx.cpp.mesh.entities_to_geometry(mesh._cpp_object, fdim, [facet], False)
         coords = mesh_geometry[facet_geometry][0]
         plt.plot(coords[:, 0], coords[:, 1], color="black")
         qp = contact.qp_phys(tag, i)

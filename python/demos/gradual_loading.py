@@ -193,7 +193,7 @@ if __name__ == "__main__":
             xdmf.write_function(u1)
 
         # Perturb mesh with solution displacement
-        update_geometry(u1._cpp_object, mesh)
+        update_geometry(u1._cpp_object, mesh._cpp_object)
 
         # Accumulate displacements
         u.x.array[:] += u1.x.array[:]

@@ -29,7 +29,7 @@ def test_circumradius(dim):
         u.interpolate(lambda x: (0.1 * (x[1] > 0.5), 0.1 * np.sin(2 * np.pi * x[2]), np.zeros(x.shape[1])))
     else:
         u.interpolate(lambda x: (0.1 * np.cos(x[1]) * (x[0] > 0.2), 0.1 * x[1] + 0.1 * np.sin(2 * np.pi * x[0])))
-    dolfinx_contact.update_geometry(u._cpp_object, mesh)
+    dolfinx_contact.update_geometry(u._cpp_object, mesh._cpp_object)
 
     mesh.topology.create_connectivity(dim - 1, dim)
     f_to_c = mesh.topology.connectivity(dim - 1, dim)
@@ -58,9 +58,10 @@ def test_circumradius(dim):
         h2[i] = uh.vector[cell]
         cells.append(cell)
 
-    active_facets, num_local = dolfinx_contact.cpp.compute_active_entities(mesh, facets, IntegralType.exterior_facet)
+    active_facets, num_local = dolfinx_contact.cpp.compute_active_entities(mesh._cpp_object, facets,
+                                                                           IntegralType.exterior_facet)
     active_facets = active_facets[:num_local, :]
-    h = dolfinx_contact.pack_circumradius(mesh, active_facets).reshape(-1)
+    h = dolfinx_contact.pack_circumradius(mesh._cpp_object, active_facets).reshape(-1)
 
     # sort h2, compute_active_entities sorts by cells
     indices = np.argsort(cells)

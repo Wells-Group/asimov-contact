@@ -46,7 +46,7 @@ def test_pack_coeff_at_quadrature(ct, quadrature_degree, space, degree):
     tdim = mesh.topology.dim
     num_cells = mesh.topology.index_map(tdim).size_local
     cells = np.arange(num_cells, dtype=np.int32)
-    integration_entities, num_local = dolfinx_contact.compute_active_entities(mesh, cells,
+    integration_entities, num_local = dolfinx_contact.compute_active_entities(mesh._cpp_object, cells,
                                                                               IntegralType.cell)
     integration_entities = integration_entities[:num_local]
     coeffs = dolfinx_contact.cpp.pack_coefficient_quadrature(
@@ -98,7 +98,7 @@ def test_pack_coeff_on_facet(quadrature_degree, space, degree):
                                       lambda x: np.logical_or(np.isclose(x[0], 0.0),
                                                               np.isclose(x[0], 1.0)))
     # Compuate integration entitites
-    integration_entities, num_local = dolfinx_contact.compute_active_entities(mesh, facets,
+    integration_entities, num_local = dolfinx_contact.compute_active_entities(mesh._cpp_object, facets,
                                                                               IntegralType.exterior_facet)
     integration_entities = integration_entities[:num_local]
 
@@ -153,7 +153,7 @@ def test_sub_coeff(quadrature_degree, degree):
     tdim = mesh.topology.dim
     num_cells = mesh.topology.index_map(tdim).size_local
     cells = np.arange(num_cells, dtype=np.int32)
-    integration_entities, num_local = dolfinx_contact.compute_active_entities(mesh, cells,
+    integration_entities, num_local = dolfinx_contact.compute_active_entities(mesh._cpp_object, cells,
                                                                               IntegralType.cell)
     integration_entities = integration_entities[:num_local]
 
@@ -190,7 +190,7 @@ def test_sub_coeff_grad(quadrature_degree, degree):
     tdim = mesh.topology.dim
     num_cells = mesh.topology.index_map(tdim).size_local
     cells = np.arange(num_cells, dtype=np.int32)
-    integration_entities, num_local = dolfinx_contact.compute_active_entities(mesh, cells,
+    integration_entities, num_local = dolfinx_contact.compute_active_entities(mesh._cpp_object, cells,
                                                                               IntegralType.cell)
     integration_entities = integration_entities[:num_local]
 

@@ -9,7 +9,6 @@ import numpy as np
 import numpy.typing as npt
 import ufl
 from dolfinx.cpp.graph import AdjacencyList_int32
-import dolfinx.cpp as _cpp
 from petsc4py import PETSc as _PETSc
 
 import dolfinx_contact
@@ -24,7 +23,7 @@ __all__ = ["nitsche_unbiased"]
 def setup_newton_solver(F_custom: fem.forms.FormMetaClass, J_custom: fem.forms.FormMetaClass,
                         bcs: Tuple[npt.NDArray[np.int32], list[Union[fem.Function, fem.Constant]]],
                         u: fem.Function, du: fem.Function,
-                        contact: dolfinx_contact.cpp.Contact, markers: list[_cpp.mesh.MeshTags_int32],
+                        contact: dolfinx_contact.cpp.Contact, markers: list[mesh.meshtags],
                         entities: list[npt.NDArray[np.int32]], quadrature_degree: int,
                         const_coeffs: list[npt.NDArray[np.float64]], consts: npt.NDArray[np.float64],
                         raytracing: bool):
@@ -152,7 +151,8 @@ def setup_newton_solver(F_custom: fem.forms.FormMetaClass, J_custom: fem.forms.F
 
     # coefficient arrays
     num_coeffs = contact.coefficients_size(False)
-    coeffs = np.array([np.zeros((len(entities[i]), num_coeffs)) for i in range(num_pairs)])
+
+    coeffs = [np.zeros((len(entities[i]), num_coeffs)) for i in range(num_pairs)]
     newton_solver = dolfinx_contact.NewtonSolver(mesh.comm, A, b, coeffs)
 
     # Set matrix-vector computations
@@ -228,7 +228,7 @@ def update_fns(t: float, fns: list[Union[fem.Function, fem.Constant]],
 
 
 def nitsche_unbiased(steps: int, ufl_form: ufl.Form, u: fem.Function,
-                     rhs_fns: list[Union[fem.Function, fem.Constant]], markers: list[_cpp.mesh.MeshTags_int32],
+                     rhs_fns: list[Union[fem.Function, fem.Constant]], markers: list[mesh.meshtags],
                      contact_data: Tuple[AdjacencyList_int32, list[Tuple[int, int]]],
                      bcs: Tuple[npt.NDArray[np.int32], list[Union[fem.Function, fem.Constant]]],
                      problem_parameters: dict[str, np.float64],

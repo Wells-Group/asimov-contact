@@ -301,9 +301,9 @@ def create_contact_data(V, u, quadrature_degree, lmbda, mu, facets_cg, search, t
 
     # compute active entities
     integral = _fem.IntegralType.exterior_facet
-    entities_0, num_local_0 = dolfinx_contact.compute_active_entities(mesh, facets_cg[0], integral)
+    entities_0, num_local_0 = dolfinx_contact.compute_active_entities(mesh._cpp_object, facets_cg[0], integral)
     entities_0 = entities_0[:num_local_0]
-    entities_1, num_local_1 = dolfinx_contact.compute_active_entities(mesh, facets_cg[1], integral)
+    entities_1, num_local_1 = dolfinx_contact.compute_active_entities(mesh._cpp_object, facets_cg[1], integral)
     entities_1 = entities_1[:num_local_1]
 
     # pack coeffs mu, lambda

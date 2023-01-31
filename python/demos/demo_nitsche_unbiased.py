@@ -9,11 +9,10 @@ import numpy as np
 import ufl
 from dolfinx import log
 from dolfinx.common import TimingType, list_timings, timing
-from dolfinx.cpp.mesh import MeshTags_int32
 from dolfinx.fem import (Constant, Function, VectorFunctionSpace)
 from dolfinx.graph import create_adjacencylist
 from dolfinx.io import XDMFFile
-from dolfinx.mesh import locate_entities_boundary, GhostMode
+from dolfinx.mesh import locate_entities_boundary, GhostMode, meshtags
 from mpi4py import MPI
 from petsc4py.PETSc import ScalarType
 
@@ -138,7 +137,7 @@ if __name__ == "__main__":
             indices = np.concatenate([top_facets1, bottom_facets1, top_facets2, bottom_facets2])
             values = np.hstack([top_values, bottom_values, surface_values, sbottom_values])
             sorted_facets = np.argsort(indices)
-            facet_marker = MeshTags_int32(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
+            facet_marker = meshtags(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
 
         elif problem == 2:
             outname = "results/problem2_3D_simplex" if simplex else "results/problem2_3D_hex"
@@ -196,7 +195,7 @@ if __name__ == "__main__":
             indices = np.concatenate([dirichlet_facets_1, contact_facets_1, contact_facets_2, dirchlet_facets_2])
             values = np.hstack([val0, val1, val2, val3])
             sorted_facets = np.argsort(indices)
-            facet_marker = MeshTags_int32(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
+            facet_marker = meshtags(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
 
     else:
         displacement = [[0, -args.disp], [0, 0]]
@@ -275,7 +274,7 @@ if __name__ == "__main__":
             values = np.hstack([dir_val1, c_val1, surface_values, sbottom_values])
             sorted_facets = np.argsort(indices)
 
-            facet_marker = MeshTags_int32(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
+            facet_marker = meshtags(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
 
     if mesh.comm.size > 1:
         mesh, facet_marker, domain_marker = create_contact_mesh(
@@ -284,7 +283,7 @@ if __name__ == "__main__":
     ncells = mesh.topology.index_map(tdim).size_local
     indices = np.array(range(ncells), dtype=np.int32)
     values = mesh.comm.rank * np.ones(ncells, dtype=np.int32)
-    process_marker = MeshTags_int32(mesh, tdim, indices, values)
+    process_marker = meshtags(mesh, tdim, indices, values)
     process_marker.name = "process_marker"
     domain_marker.name = "cell_marker"
     facet_marker.name = "facet_marker"
@@ -408,7 +407,7 @@ if __name__ == "__main__":
             xdmf.write_function(u)
 
         # Perturb mesh with solution displacement
-        update_geometry(u._cpp_object, mesh)
+        update_geometry(u._cpp_object, mesh._cpp_object)
 
         # Accumulate displacements
         u_all.x.array[:] += u.x.array[:]
