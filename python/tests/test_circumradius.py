@@ -58,7 +58,8 @@ def test_circumradius(dim):
         h2[i] = uh.vector[cell]
         cells.append(cell)
 
-    active_facets, num_local = dolfinx_contact.cpp.compute_active_entities(mesh._cpp_object, facets, IntegralType.exterior_facet)
+    active_facets, num_local = dolfinx_contact.cpp.compute_active_entities(mesh._cpp_object, facets,
+                                                                           IntegralType.exterior_facet)
     active_facets = active_facets[:num_local, :]
     h = dolfinx_contact.pack_circumradius(mesh._cpp_object, active_facets).reshape(-1)
 
