@@ -9,7 +9,6 @@ import numpy as np
 from dolfinx import log
 import dolfinx.fem as _fem
 from dolfinx.common import TimingType, list_timings, timing, Timer
-from dolfinx.cpp.mesh import MeshTags_int32
 from dolfinx.graph import create_adjacencylist
 from dolfinx.io import XDMFFile
 from dolfinx.mesh import meshtags, locate_entities_boundary, GhostMode
@@ -99,7 +98,7 @@ if __name__ == "__main__":
         values = np.hstack([facet_marker.values, tag * np.ones(len(dirichlet_facets1)
                            + len(dirichlet_facets2), dtype=np.int32)])
         sorted_facets = np.argsort(indices)
-        facet_marker = MeshTags_int32(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
+        facet_marker = meshtags(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
         # Create Dirichlet bdy conditions
         bcs = (np.array([[tag, 2]], dtype=np.int32), [_fem.Constant(mesh, _PETSc.ScalarType(0))])
         g = _fem.Constant(mesh, _PETSc.ScalarType((0, 0, 0)))      # zero dirichlet
@@ -130,7 +129,7 @@ if __name__ == "__main__":
     ncells = mesh.topology.index_map(tdim).size_local
     indices = np.array(range(ncells), dtype=np.int32)
     values = mesh.comm.rank * np.ones(ncells, dtype=np.int32)
-    process_marker = MeshTags_int32(mesh, tdim, indices, values)
+    process_marker = meshtags(mesh, tdim, indices, values)
     process_marker.name = "process_marker"
     gdim = mesh.geometry.dim
     # create meshtags for candidate segments

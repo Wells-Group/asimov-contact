@@ -6,9 +6,9 @@
 from contextlib import ExitStack
 from typing import Union
 
-from dolfinx.cpp.mesh import MeshTags_int32
 import dolfinx.fem as _fem
 import dolfinx.la as _la
+from dolfinx.mesh import meshtags
 import numpy
 import scipy.sparse
 import ufl
@@ -190,7 +190,7 @@ def rigid_motions_nullspace(V: _fem.FunctionSpace):
     return PETSc.NullSpace().create(vectors=nullspace_basis)
 
 
-def rigid_motions_nullspace_subdomains(V: _fem.FunctionSpace, mt: MeshTags_int32,
+def rigid_motions_nullspace_subdomains(V: _fem.FunctionSpace, mt: meshtags,
                                        tags: numpy.typing.NDArray[numpy.int32]):
     """
     Function to build nullspace for 2D/3D elasticity.

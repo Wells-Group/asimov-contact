@@ -6,7 +6,6 @@ from typing import Optional, Dict, Tuple
 
 import basix
 import dolfinx.common as _common
-import dolfinx.cpp as _cpp
 import dolfinx.fem as _fem
 import dolfinx.log as _log
 import dolfinx.mesh as _mesh
@@ -23,7 +22,7 @@ __all__ = ["nitsche_rigid_surface_custom"]
 kt = dolfinx_contact.cpp.Kernel
 
 
-def nitsche_rigid_surface_custom(mesh: _mesh.Mesh, mesh_data: Tuple[_cpp.mesh.MeshTags_int32, int, int, int, int],
+def nitsche_rigid_surface_custom(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.meshtags, int, int, int, int],
                                  physical_parameters: Optional[dict] = None,
                                  nitsche_parameters: Optional[Dict[str, float]] = None,
                                  vertical_displacement: float = -0.1, nitsche_bc: bool = True,
