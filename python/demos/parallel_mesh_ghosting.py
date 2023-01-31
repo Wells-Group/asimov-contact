@@ -116,7 +116,7 @@ marker_subset_i = [i for i, (idx, k) in enumerate(zip(marker.indices, marker.val
 marker_subset = marker.indices[marker_subset_i]
 marker_subset_val = marker.values[marker_subset_i]
 
-cell_dests = compute_ghost_cell_destinations(mesh, marker_subset, 0.1)
+cell_dests = compute_ghost_cell_destinations(mesh, marker_subset, 0.2)
 
 cells_to_ghost = [fc.links(f)[0] for f in marker_subset]
 assert len(cell_dests) == len(cells_to_ghost)
@@ -138,7 +138,7 @@ for i, f in enumerate(marker_subset):
         send_buffer[dest] += sorted(mesh.topology.index_map(0).local_to_global(fv.links(f))) + [val]
 
 # Append received markers
-recv_buffer = np.array(sum(mesh.comm.alltoall(send_buffer), [])).reshape((-1, num_facet_vertices + 1))
+recv_buffer = np.concatenate(mesh.comm.alltoall(send_buffer)).reshape((-1, num_facet_vertices + 1))
 for row in recv_buffer:
     all_indices += [list(row[:-1])]
     all_values += [row[-1]]

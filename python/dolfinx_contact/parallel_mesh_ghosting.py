@@ -50,9 +50,9 @@ def point_cloud_pairs(x, r):
     return x_near
 
 def compute_ghost_cell_destinations(mesh, marker_subset, R=0.1):
-    """For each marked facet, given by indices in "marker_subset", get the list of processes which 
+    """For each marked facet, given by indices in "marker_subset", get the list of processes which
     the attached cell should be sent to, for ghosting. Neighbouring facets within distance "R"."""
-    
+
     # 1. Get midpoints of all facets on interfaces
     tdim = mesh.topology.dim
     x = mesh.geometry.x
@@ -114,8 +114,19 @@ def create_contact_mesh(mesh, fmarker, dmarker, tags):
     fv = mesh.topology.connectivity(tdim - 1, 0)
     cv = mesh.topology.connectivity(tdim, 0)
 
-    facets = np.hstack([fmarker.find(tag) for tag in tags])
-    cells_to_ghost = np.unique([fc.links(f)[0] for f in facets])
+    # Extract facet markers with given tags
+    marker_subset_i = [i for i, (idx, k) in enumerate(zip(fmarker.indices, fmarker.values)) if k in tags]
+    marker_subset = fmarker.indices[marker_subset_i]
+    marker_subset_val = fmarker.values[marker_subset_i]
+    #    facets = np.hstack([fmarker.find(tag) for tag in tags])
+
+    # Find destinations for the cells attached to the tag-marked facets
+    cell_dests = compute_ghost_cell_destinations(mesh, marker_subset, 0.2)
+    cells_to_ghost = [fc.links(f)[0] for f in marker_subset]
+    assert len(cell_dests) == len(cells_to_ghost)
+    cell_to_dests = {c: d for c, d in zip(cells_to_ghost, cell_dests)}
+    print(cell_to_dests)
+
     ncells = mesh.topology.index_map(tdim).size_local
 
     # Convert marked facets to list of (global) vertices for each facet
