@@ -4,7 +4,7 @@
 
 from typing import Optional, Tuple, Union
 
-from dolfinx import common, fem, mesh, io, log, cpp
+from dolfinx import common, fem, mesh, io, log
 import numpy as np
 import numpy.typing as npt
 import ufl
@@ -343,10 +343,6 @@ def nitsche_unbiased(steps: int, ufl_form: ufl.Form, u: fem.Function,
         contact = dolfinx_contact.cpp.Contact(markers[1:], contact_surfaces, contact_pairs,
                                               V._cpp_object, quadrature_degree=quadrature_degree,
                                               search_method=search_method)
-
-    xdmf = cpp.io.XDMFFile(contact.submesh().comm, f"debug.xdmf", "w")
-    xdmf.write_mesh(contact.submesh())
-
     contact.set_search_radius(search_radius)
 
     # pack constants

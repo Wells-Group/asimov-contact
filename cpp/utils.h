@@ -14,7 +14,6 @@
 #include <basix/finite-element.h>
 #include <basix/quadrature.h>
 #include <dolfinx/common/IndexMap.h>
-#include <dolfinx/common/log.h>
 #include <dolfinx/common/sort.h>
 #include <dolfinx/fem/DofMap.h>
 #include <dolfinx/fem/FiniteElement.h>
@@ -314,33 +313,25 @@ compute_projection_map(const dolfinx::mesh::Mesh& mesh,
                              "mesh.");
   }
 
-  for (std::size_t i = 0, j = 0; i < facet_tuples.size(); j++, i += 2)
+  for (std::size_t i = 0; i < facet_tuples.size(); i += 2)
   {
     auto local_facets = c_to_f->links(facet_tuples[i]);
     assert(!local_facets.empty());
     assert((std::size_t)facet_tuples[i + 1] < local_facets.size());
-    facets[j] = local_facets[facet_tuples[i + 1]];
+    facets[i / 2] = local_facets[facet_tuples[i + 1]];
   }
 
-  LOG(WARNING) << "Compute closest entity";
-
   // Compute closest entity for each point
-  LOG(WARNING) << "BBOX";
   dolfinx::geometry::BoundingBoxTree bbox(mesh, tdim - 1, facets);
-  LOG(WARNING) << "BBOX::midpoint_tree";
   dolfinx::geometry::BoundingBoxTree midpoint_tree
       = dolfinx::geometry::create_midpoint_tree(mesh, tdim - 1, facets);
-  LOG(WARNING) << "BBOX::closest entity np = " << points.size() / 3;
   std::vector<std::int32_t> closest_facets
       = dolfinx::geometry::compute_closest_entity(bbox, midpoint_tree, mesh,
                                                   points);
-  LOG(WARNING) << "BBOX::done";
-
   std::vector<double> candidate_x(num_points * 3);
   std::span<const double> mesh_geometry = mesh.geometry().x();
   const dolfinx::fem::CoordinateElement& cmap = mesh.geometry().cmap();
   {
-    LOG(WARNING) << "Compute dusplacemnt vector";
     // Find displacement vector from each point
     // to closest entity. As a point on the surface
     // might have penetrated the cell in question, we use
@@ -365,7 +356,6 @@ compute_projection_map(const dolfinx::mesh::Mesh& mesh,
     assert(facets_geometry.num_nodes() == (int)num_points);
 
     // Compute physical points for each facet
-    LOG(WARNING) << "Compute phys points";
     std::vector<double> coordinate_dofs(3 * num_facet_dofs);
     for (std::size_t i = 0; i < num_points; ++i)
     {
@@ -392,7 +382,6 @@ compute_projection_map(const dolfinx::mesh::Mesh& mesh,
     }
   }
 
-  LOG(WARNING) << "Pull back to ref";
   // Pull back to reference point for each facet on the surface
   std::vector<double> candidate_X(num_points * tdim);
   {
@@ -443,7 +432,6 @@ compute_projection_map(const dolfinx::mesh::Mesh& mesh,
       std::copy_n(X.begin(), tdim, std::next(candidate_X.begin(), i * tdim));
     }
   }
-  LOG(WARNING) << "OK";
   return {closest_facets, candidate_X, {candidate_X.size() / tdim, tdim}};
 }
 

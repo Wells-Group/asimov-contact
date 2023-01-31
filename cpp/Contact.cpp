@@ -135,7 +135,6 @@ dolfinx_contact::Contact::Contact(
           std::move(all_facet_pairs), std::move(offsets));
   _quadrature_rule = std::make_shared<QuadratureRule>(
       topology.cell_type(), q_deg, fdim, basix::quadrature::type::Default);
-  LOG(WARNING) << "Contact Constructor [end]";
 }
 //------------------------------------------------------------------------------------------------
 std::pair<std::vector<double>, std::array<std::size_t, 3>>
