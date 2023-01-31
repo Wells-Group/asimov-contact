@@ -91,7 +91,7 @@ outer_marker = 7
 gmsh.model.addPhysicalGroup(2, outer_surfaces, outer_marker)
 gmsh.model.setPhysicalName(2, outer_marker, "Outer")
 
-gmsh.model.mesh.setSize(gmsh.model.getEntities(0), 0.2)
+gmsh.model.mesh.setSize(gmsh.model.getEntities(0), 0.1)
 
 gmsh.model.mesh.generate(3)
 gmsh.write("meshes/box-key.msh")

@@ -2,6 +2,7 @@
 #
 # SPDX-License-Identifier:    MIT
 
+from dolfinx import log
 from dolfinx.mesh import create_mesh, meshtags
 import dolfinx
 from dolfinx.cpp.mesh import entities_to_geometry, cell_num_vertices, cell_entity_type, to_type
@@ -33,15 +34,15 @@ def create_contact_mesh(mesh, fmarker, dmarker, tags):
     cv_indices = [sorted(mesh.topology.index_map(0).local_to_global(cv.links(c))) for c in dmarker.indices]
 
     # Copy facets and markers to all processes
-    global_fmarkers = sum(fv_indices, [])
+    global_fmarkers = np.concatenate(fv_indices)
     all_indices = mesh.comm.allgather(global_fmarkers)
-    all_indices = np.array(sum(all_indices, [])).reshape(-1, num_facet_vertices)
-    all_values = np.array(sum(mesh.comm.allgather(list(fmarker.values)), []))
+    all_indices = np.concatenate(all_indices).reshape(-1, num_facet_vertices)
+    all_values = np.concatenate(mesh.comm.allgather(fmarker.values))
 
-    global_dmarkers = sum(cv_indices, [])
+    global_dmarkers = np.concatenate(cv_indices)
     all_cell_indices = mesh.comm.allgather(global_dmarkers)
-    all_cell_indices = np.array(sum(all_cell_indices, [])).reshape(-1, num_cell_vertices)
-    all_cell_values = np.array(sum(mesh.comm.allgather(list(dmarker.values)), []))
+    all_cell_indices = np.concatenate(all_cell_indices).reshape(-1, num_cell_vertices)
+    all_cell_values = np.concatenate(mesh.comm.allgather(dmarker.values))
 
     def partitioner(comm, n, m, topo):
         rank = comm.Get_rank()
@@ -86,14 +87,31 @@ def create_contact_mesh(mesh, fmarker, dmarker, tags):
     fv_indices = rmap(fv.array).reshape((-1, num_facet_vertices))
     fv_indices = np.sort(fv_indices, axis=1)
 
-    # Search for marked facets in list of all facets
-    new_fmarkers = []
-    for idx, val in zip(all_indices, all_values):
-        f = np.nonzero(np.all(fv_indices == idx, axis=1))[0]
-        if len(f) > 0:
-            assert len(f) == 1
-            f = f[0]
-            new_fmarkers += [[f, val]]
+    def lex_match(local_indices, in_indices, in_values):
+        lx_loc = np.lexsort(np.flip(local_indices, axis=1).T)
+        lx_in = np.lexsort(np.flip(in_indices, axis=1).T)
+
+        new_markers = []
+        i = 0
+        j = 0
+        while i < len(lx_in) and j < len(lx_loc):
+            a = in_indices[lx_in[i]]
+            b = local_indices[lx_loc[j]]
+            idx = np.where((a>b) != (a<b))[0]
+            if len(idx) == 0:
+                new_markers += [[lx_loc[j], in_values[lx_in[i]]]]
+                i += 1
+                j += 1
+            else:
+                idx = idx[0]
+                if b[idx] > a[idx]:
+                    i += 1
+                elif a[idx] > b[idx]:
+                    j += 1
+        return new_markers
+
+    log.log(log.LogLevel.WARNING, "Lex match facet markers")
+    new_fmarkers = lex_match(fv_indices, all_indices, all_values)
 
     # Sort new markers into order and make unique
     new_fmarkers = np.array(sorted(new_fmarkers), dtype=np.int32)
@@ -108,13 +126,8 @@ def create_contact_mesh(mesh, fmarker, dmarker, tags):
     cv_indices = np.sort(cv_indices, axis=1)
 
     # Search for marked cells in list of all cells
-    new_cmarkers = []
-    for idx, val in zip(all_cell_indices, all_cell_values):
-        c = np.nonzero(np.all(cv_indices == idx, axis=1))[0]
-        if len(c) > 0:
-            assert len(c) == 1
-            c = c[0]
-            new_cmarkers += [[c, val]]
+    log.log(log.LogLevel.WARNING, "Lex match cell markers")
+    new_cmarkers = lex_match(cv_indices, all_cell_indices, all_cell_values)
 
     # Sort new markers into order and make unique
     new_cmarkers = np.array(sorted(new_cmarkers), dtype=np.int32)

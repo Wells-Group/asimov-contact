@@ -8,7 +8,7 @@ import sys
 import numpy as np
 from dolfinx import log
 import dolfinx.fem as _fem
-from dolfinx.common import timing, Timer
+from dolfinx.common import timing, Timer, list_timings, TimingType
 from dolfinx.cpp.mesh import MeshTags_int32
 from dolfinx.graph import create_adjacencylist
 from dolfinx.io import XDMFFile
@@ -35,8 +35,10 @@ if __name__ == "__main__":
     mesh_dir = "meshes"
     fname = f"{mesh_dir}/box-key"
 
+    WARNING = log.LogLevel.WARNING
+    log.set_log_level(WARNING)
     # Convert gmsh output into xdmf
-    convert_mesh(fname, fname, gdim=3)
+    #    convert_mesh(fname, fname, gdim=3)
 
     # Read in mesh from xdmf file including markers
     # Cell markers:  It is expected that all cells are marked and that
@@ -64,12 +66,14 @@ if __name__ == "__main__":
     surface_1 = 6
     surface_2 = 7
 
+    print("read file")
     with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
         mesh = xdmf.read_mesh(ghost_mode=GhostMode.none)
         domain_marker = xdmf.read_meshtags(mesh, "cell_marker")
         tdim = mesh.topology.dim
         mesh.topology.create_connectivity(tdim - 1, tdim)
         facet_marker = xdmf.read_meshtags(mesh, "facet_marker")
+    log.log(WARNING, "HELLO")
 
     # Call function that repartitions mesh for parallel computation
     if mesh.comm.size > 1:
@@ -167,7 +171,7 @@ if __name__ == "__main__":
     # Solve contact problem using Nitsche's method
     problem_parameters = {"gamma": E * gamma, "theta": theta, "mu": mu, "lambda": lmbda}
     solver_outfile = None
-    log.set_log_level(log.LogLevel.WARNING)
+
     rhs_fns = [g, t, f]
     size = mesh.comm.size
     outname = f"results/boxkey_{tdim}D_{size}"
@@ -207,3 +211,5 @@ if __name__ == "__main__":
         print(f"Newton iterations {num_its}, ", file=outfile)
         print(f"Krylov iterations {krylov_iterations},", file=outfile)
         print("-" * 25, file=outfile)
+
+    list_timings(MPI.COMM_WORLD, [TimingType.wall])
