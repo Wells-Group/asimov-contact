@@ -284,7 +284,7 @@ if __name__ == "__main__":
     ncells = mesh.topology.index_map(tdim).size_local
     indices = np.array(range(ncells), dtype=np.int32)
     values = mesh.comm.rank * np.ones(ncells, dtype=np.int32)
-    process_marker = MeshTags_int32(mesh, tdim, indices, values)
+    process_marker = MeshTags_int32(mesh._cpp_object, tdim, indices, values)
     process_marker.name = "process_marker"
     domain_marker.name = "cell_marker"
     facet_marker.name = "facet_marker"
@@ -408,7 +408,7 @@ if __name__ == "__main__":
             xdmf.write_function(u)
 
         # Perturb mesh with solution displacement
-        update_geometry(u._cpp_object, mesh)
+        update_geometry(u._cpp_object, mesh._cpp_object)
 
         # Accumulate displacements
         u_all.x.array[:] += u.x.array[:]
