@@ -6,12 +6,12 @@ from dolfinx.mesh import create_mesh, meshtags
 import dolfinx
 from dolfinx.cpp.mesh import entities_to_geometry, cell_num_vertices, cell_entity_type, to_type
 import numpy as np
-import numba
+# import numba
 
 __all__ = ["create_contact_mesh", "point_cloud_pairs", "compute_ghost_cell_destinations"]
 
 
-@numba.njit
+# @numba.njit
 def point_cloud_pairs(x, r):
     """Find all neighbors of each point which are within a radius r."""
 
@@ -49,14 +49,14 @@ def point_cloud_pairs(x, r):
 
     return x_near
 
-def compute_ghost_cell_destinations(mesh, marker_subset, R=0.1):
+def compute_ghost_cell_destinations(mesh, marker_subset, R):
     """For each marked facet, given by indices in "marker_subset", get the list of processes which
     the attached cell should be sent to, for ghosting. Neighbouring facets within distance "R"."""
 
     # 1. Get midpoints of all facets on interfaces
     tdim = mesh.topology.dim
     x = mesh.geometry.x
-    facet_to_geom = entities_to_geometry(mesh, tdim - 1, marker_subset, False)
+    facet_to_geom = entities_to_geometry(mesh._cpp_object, tdim - 1, marker_subset, False)
     x_facet = np.array([sum([x[i] for i in idx]) / len(idx) for idx in facet_to_geom])
 
     # 2. Send midpoints to process zero
@@ -100,7 +100,7 @@ def compute_ghost_cell_destinations(mesh, marker_subset, R=0.1):
     return cell_dests
 
 
-def create_contact_mesh(mesh, fmarker, dmarker, tags):
+def create_contact_mesh(mesh, fmarker, dmarker, tags, R=0.2):
 
     tdim = mesh.topology.dim
     num_cell_vertices = cell_num_vertices(mesh.topology.cell_type)
@@ -121,11 +121,11 @@ def create_contact_mesh(mesh, fmarker, dmarker, tags):
     #    facets = np.hstack([fmarker.find(tag) for tag in tags])
 
     # Find destinations for the cells attached to the tag-marked facets
-    cell_dests = compute_ghost_cell_destinations(mesh, marker_subset, 0.2)
+    cell_dests = compute_ghost_cell_destinations(mesh, marker_subset, R)
     cells_to_ghost = [fc.links(f)[0] for f in marker_subset]
     assert len(cell_dests) == len(cells_to_ghost)
     cell_to_dests = {c: d for c, d in zip(cells_to_ghost, cell_dests)}
-    print(cell_to_dests)
+
 
     ncells = mesh.topology.index_map(tdim).size_local
 
@@ -144,18 +144,18 @@ def create_contact_mesh(mesh, fmarker, dmarker, tags):
     all_cell_indices = np.concatenate(all_cell_indices).reshape(-1, num_cell_vertices)
     all_cell_values = np.concatenate(mesh.comm.allgather(dmarker.values))
 
+
     def partitioner(comm, n, m, topo):
         rank = comm.Get_rank()
-        other_ranks = [i for i in range(comm.Get_size()) if i != rank]
-
         dests = []
         offsets = [0]
         for c in range(ncells):
             dests.append(rank)
-            if c in cells_to_ghost:
-                dests.extend(other_ranks)  # Ghost to other processes
+            if c in cell_to_dests:
+                dests.extend(cell_to_dests[c])  # Ghost to other processes
             offsets.append(len(dests))
         return dolfinx.cpp.graph.AdjacencyList_int32(dests, offsets)
+
 
     # Convert topology to global indexing, and restrict to non-ghost cells
     topo = mesh.topology.connectivity(tdim, 0).array

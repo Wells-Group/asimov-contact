@@ -3,7 +3,6 @@ cmake_minimum_required(VERSION 3.10)
 set(PROJECT_NAME dolfinx_contact_pybind11)
 project(${PROJECT_NAME})
 
-set(Python3_EXECUTABLE python3.10)
 
 # Set C++ standard before finding pybind11
 set(CMAKE_CXX_STANDARD 20)
@@ -18,7 +17,7 @@ find_package(DOLFINX REQUIRED)
 find_package(DOLFINX_CONTACT REQUIRED)
 
 # Create the binding library
-pybind11_add_module(cpp SHARED
+pybind11_add_module(cpp SHARED 
   dolfinx_contact/wrappers.cpp)
 
 
@@ -53,3 +52,4 @@ target_include_directories(cpp PRIVATE ${PETSC4PY_INCLUDE_DIR})
 
 # Add to CMake search path
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_CURRENT_SOURCE_DIR})
+
