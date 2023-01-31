@@ -98,7 +98,7 @@ if __name__ == "__main__":
 
     # mark the whole domain
     cells = np.arange(mesh.topology.index_map(tdim).size_local
-                      + mesh.topology.index_map(tdim).num_ghosts, dtype=np.int32)
+                      + mesh.topology.index_map(tdim).num_ghosts, dtype=np.int64)
     domain_marker = meshtags(mesh, tdim, cells, np.full(cells.shape, 1, dtype=np.int32))
 
     if mesh.comm.size > 1:
@@ -162,13 +162,11 @@ if __name__ == "__main__":
         "ksp_atol": ksp_tol,
         "pc_type": "gamg",
         "pc_mg_levels": 3,
-        "pc_mg_cycles": 1,   # 1 is v, 2 is w
         "mg_levels_ksp_type": "chebyshev",
         "mg_levels_pc_type": "jacobi",
         "pc_gamg_type": "agg",
         "pc_gamg_coarse_eq_limit": 100,
         "pc_gamg_agg_nsmooths": 1,
-        "pc_gamg_sym_graph": True,
         "pc_gamg_threshold": 1e-3,
         "pc_gamg_square_graph": 2,
     }

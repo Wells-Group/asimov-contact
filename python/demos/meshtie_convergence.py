@@ -5,10 +5,10 @@
 import argparse
 import dolfinx.fem as _fem
 from dolfinx.common import Timer, timing, TimingType, list_timings
-from dolfinx.cpp.mesh import MeshTags_int32
 from dolfinx.fem import Constant, Function, VectorFunctionSpace
 from dolfinx.graph import create_adjacencylist
 from dolfinx.io import XDMFFile
+from dolfinx.mesh import meshtags
 import numpy as np
 import numpy.typing as npt
 import ufl
@@ -163,7 +163,6 @@ def unsplit_domain(threed: bool = False, runs: int = 1):
         opts["mg_levels_pc_type"] = "jacobi"
 
         # Improve estimate of eigenvalues for Chebyshev smoothing
-        opts["mg_levels_esteig_ksp_type"] = "cg"
         opts["mg_levels_ksp_chebyshev_esteig_steps"] = 20
 
         # Create PETSc Krylov solver and turn convergence monitoring on
@@ -201,7 +200,7 @@ def unsplit_domain(threed: bool = False, runs: int = 1):
     ncells = mesh.topology.index_map(tdim).size_local
     indices = np.array(range(ncells), dtype=np.int32)
     values = mesh.comm.rank * np.ones(ncells, dtype=np.int32)
-    process_marker = MeshTags_int32(mesh, tdim, indices, values)
+    process_marker = meshtags(mesh, tdim, indices, values)
     process_marker.name = "process_marker"
     with XDMFFile(mesh.comm, "results/partitioning_unsplit.xdmf", "w") as xdmf:
         xdmf.write_mesh(mesh)
@@ -248,7 +247,6 @@ def test_meshtie(threed: bool = False, simplex: bool = True, runs: int = 5):
         "pc_type": "gamg",
         "mg_levels_ksp_type": "chebyshev",
         "mg_levels_pc_type": "jacobi",
-        "mg_levels_esteig_ksp_type": "cg",
         "pc_gamg_coarse_eq_limit": 100,
         "mg_levels_ksp_chebyshev_esteig_steps": 20
     }
@@ -343,7 +341,7 @@ def test_meshtie(threed: bool = False, simplex: bool = True, runs: int = 5):
     ncells = mesh.topology.index_map(tdim).size_local
     indices = np.array(range(ncells), dtype=np.int32)
     values = mesh.comm.rank * np.ones(ncells, dtype=np.int32)
-    process_marker = MeshTags_int32(mesh, tdim, indices, values)
+    process_marker = meshtags(mesh, tdim, indices, values)
     process_marker.name = "process_marker"
     with XDMFFile(mesh.comm, "results/partitioning_split.xdmf", "w") as xdmf:
         xdmf.write_mesh(mesh)

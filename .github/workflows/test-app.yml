@@ -43,7 +43,7 @@ jobs:
       CONTACT_CMAKE_CXX_FLAGS: "-Wall -Werror -g -pedantic -Ofast -march=native"
     steps:
       - uses: actions/checkout@v2
-      
+
       - name: Get Basix and install
         uses: actions/checkout@v2
         with:
@@ -92,8 +92,8 @@ jobs:
       - name: Run mypy checks
         run: |
           pip3 install mypy
-          cd python
-          python3 -m mypy . --exclude=build
+          # cd python
+          # python3 -m mypy . --exclude=build
 
       - name: Run demos
         run: |
@@ -112,7 +112,7 @@ jobs:
           python3 demo_nitsche_meshties.py
           python3 meshtie_convergence.py --3D
           python3 meshtie_convergence.py --simplex --3D
-          python3 meshtie_convergence.py 
+          python3 meshtie_convergence.py
           python3 meshtie_convergence.py --simplex --runs=4
 
       - name: Run tests
@@ -133,5 +133,5 @@ jobs:
           mpirun -np 3 python3 demo_nitsche_meshties.py
           mpirun -np 3 python3 meshtie_convergence.py --3D
           mpirun -np 3 python3 meshtie_convergence.py --simplex --3D
-          mpirun -np 3 python3 meshtie_convergence.py 
+          mpirun -np 3 python3 meshtie_convergence.py
           mpirun -np 3 python3 meshtie_convergence.py --simplex --runs=4

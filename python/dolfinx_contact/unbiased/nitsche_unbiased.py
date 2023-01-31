@@ -2,14 +2,13 @@
 #
 # SPDX-License-Identifier:    MIT
 
-from typing import Tuple, Union
+from typing import Optional, Tuple, Union
 
 from dolfinx import common, fem, mesh, io, log
 import numpy as np
 import numpy.typing as npt
 import ufl
 from dolfinx.cpp.graph import AdjacencyList_int32
-import dolfinx.cpp as _cpp
 from petsc4py import PETSc as _PETSc
 
 import dolfinx_contact
@@ -24,9 +23,10 @@ __all__ = ["nitsche_unbiased"]
 def setup_newton_solver(F_custom: fem.forms.FormMetaClass, J_custom: fem.forms.FormMetaClass,
                         bcs: Tuple[npt.NDArray[np.int32], list[Union[fem.Function, fem.Constant]]],
                         u: fem.Function, du: fem.Function,
-                        contact: dolfinx_contact.cpp.Contact, markers: list[_cpp.mesh.MeshTags_int32],
+                        contact: dolfinx_contact.cpp.Contact, markers: list[mesh.meshtags],
                         entities: list[npt.NDArray[np.int32]], quadrature_degree: int,
-                        const_coeffs: list[npt.NDArray[np.float64]], consts: npt.NDArray[np.float64]):
+                        const_coeffs: list[npt.NDArray[np.float64]], consts: npt.NDArray[np.float64],
+                        raytracing: bool):
     """
     Set up newton solver for contact problem.
     Generate kernels and define functions for updating coefficients, stiffness matrix and residual vector.
@@ -67,7 +67,10 @@ def setup_newton_solver(F_custom: fem.forms.FormMetaClass, J_custom: fem.forms.F
     with common.Timer("~Contact: Pack gap, normals, testfunction"):
         for i in range(num_pairs):
             gaps.append(contact.pack_gap(i))
-            normals.append(contact.pack_ny(i))
+            if raytracing:
+                normals.append(-contact.pack_nx(i))
+            else:
+                normals.append(contact.pack_ny(i))
             test_fns.append(contact.pack_test_functions(i))
 
     # Concatenate all coeffs
@@ -148,7 +151,8 @@ def setup_newton_solver(F_custom: fem.forms.FormMetaClass, J_custom: fem.forms.F
 
     # coefficient arrays
     num_coeffs = contact.coefficients_size(False)
-    coeffs = np.array([np.zeros((len(entities[i]), num_coeffs)) for i in range(num_pairs)])
+
+    coeffs = [np.zeros((len(entities[i]), num_coeffs)) for i in range(num_pairs)]
     newton_solver = dolfinx_contact.NewtonSolver(mesh.comm, A, b, coeffs)
 
     # Set matrix-vector computations
@@ -224,14 +228,20 @@ def update_fns(t: float, fns: list[Union[fem.Function, fem.Constant]],
 
 
 def nitsche_unbiased(steps: int, ufl_form: ufl.Form, u: fem.Function,
-                     rhs_fns: list[Union[fem.Function, fem.Constant]], markers: list[_cpp.mesh.MeshTags_int32],
+                     rhs_fns: list[Union[fem.Function, fem.Constant]], markers: list[mesh.meshtags],
                      contact_data: Tuple[AdjacencyList_int32, list[Tuple[int, int]]],
                      bcs: Tuple[npt.NDArray[np.int32], list[Union[fem.Function, fem.Constant]]],
                      problem_parameters: dict[str, np.float64],
-                     search_method: dolfinx_contact.cpp.ContactMode,
-                     quadrature_degree: int = 5, form_compiler_options: dict = None, jit_options: dict = None,
-                     petsc_options: dict = None, newton_options: dict = None, outfile: str = None,
-                     fname: str = "pseudo_time") -> Tuple[fem.Function, list[int], list[int], list[float]]:
+                     raytracing: bool,
+                     quadrature_degree: int = 5,
+                     form_compiler_options: Optional[dict] = None,
+                     jit_options: Optional[dict] = None,
+                     petsc_options: Optional[dict] = None,
+                     newton_options: Optional[dict] = None,
+                     outfile: Optional[str] = None,
+                     fname: str = "pseudo_time",
+                     search_radius: np.float64 = np.float64(-1.)) -> Tuple[fem.Function, list[int],
+                                                                           list[int], list[float]]:
     """
     Use custom kernel to compute the contact problem with two elastic bodies coming into contact.
 
@@ -290,6 +300,10 @@ def nitsche_unbiased(steps: int, ufl_form: ufl.Form, u: fem.Function,
     newton_options = {} if newton_options is None else newton_options
     mu, lmbda, theta, gamma, sigma = get_problem_parameters(problem_parameters)
 
+    # Search mode
+    search_method = dolfinx_contact.cpp.ContactMode.Raytracing if raytracing \
+        else dolfinx_contact.cpp.ContactMode.ClosestPoint
+
     # Contact data
     contact_pairs = contact_data[1]
     contact_surfaces = contact_data[0]
@@ -329,6 +343,7 @@ def nitsche_unbiased(steps: int, ufl_form: ufl.Form, u: fem.Function,
         contact = dolfinx_contact.cpp.Contact(markers[1:], contact_surfaces, contact_pairs,
                                               V._cpp_object, quadrature_degree=quadrature_degree,
                                               search_method=search_method)
+    contact.set_search_radius(search_radius)
 
     # pack constants
     consts = np.array([gamma, theta], dtype=np.float64)
@@ -396,7 +411,8 @@ def nitsche_unbiased(steps: int, ufl_form: ufl.Form, u: fem.Function,
 
         # setup newton solver
         newton_solver = setup_newton_solver(F_custom, J_custom, bcs, u, du, contact, markers,
-                                            entities, quadrature_degree, const_coeffs, consts)
+                                            entities, quadrature_degree, const_coeffs, consts,
+                                            raytracing)
 
         # Set Newton solver options
         newton_solver.set_newton_options(newton_options)
@@ -426,8 +442,9 @@ def nitsche_unbiased(steps: int, ufl_form: ufl.Form, u: fem.Function,
         u.x.array[:] += du.x.array[:]
         contact.update_submesh_geometry(u._cpp_object)
 
-        # reset du
-        du.x.array[:].fill(0)
+        # take a fraction of du as initial guess
+        # this is to ensure non-singular matrices in the case of no Dirichlet boundary
+        du.x.array[:] = (1. / steps) * du.x.array[:]
 
         # write solution
         vtx.write(t)

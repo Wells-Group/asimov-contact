@@ -5,7 +5,6 @@
 from typing import Dict, Tuple
 
 import dolfinx.common as _common
-import dolfinx.cpp as _cpp
 import dolfinx.fem as _fem
 import dolfinx.log as _log
 import dolfinx.mesh as dmesh
@@ -20,7 +19,7 @@ from dolfinx_contact.helpers import (R_minus, epsilon, lame_parameters,
 __all__ = ["nitsche_ufl"]
 
 
-def nitsche_ufl(mesh: dmesh.Mesh, mesh_data: Tuple[_cpp.mesh.MeshTags_int32, int, int],
+def nitsche_ufl(mesh: dmesh.Mesh, mesh_data: Tuple[dmesh.meshtags, int, int],
                 physical_parameters: dict = {}, nitsche_parameters: Dict[str, float] = {},
                 plane_loc: float = 0.0, vertical_displacement: float = -0.1,
                 nitsche_bc: bool = True, quadrature_degree: int = 5, form_compiler_options: Dict = {},

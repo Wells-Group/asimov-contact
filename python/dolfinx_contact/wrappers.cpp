@@ -151,7 +151,7 @@ PYBIND11_MODULE(cpp, m)
       .def("active_entities",
            [](dolfinx_contact::Contact& self, int s)
            {
-             const std::vector<std::int32_t>& active_entities
+             std::span<const std::int32_t> active_entities
                  = self.active_entities(s);
              std::array<py::ssize_t, 2> shape
                  = {py::ssize_t(self.local_facets(s)), 2};
@@ -177,9 +177,9 @@ PYBIND11_MODULE(cpp, m)
              const std::vector<int>& offsets = submesh_map->offsets();
              const std::vector<std::int32_t>& old_data = submesh_map->array();
              std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> facet_map
-                 = self.submesh(contact_pair[1]).facet_map();
+                 = self.submesh().facet_map();
              std::span<const std::int32_t> parent_cells
-                 = self.submesh(contact_pair[1]).parent_cells();
+                 = self.submesh().parent_cells();
              std::vector<std::int32_t> data(old_data.size());
              std::transform(
                  old_data.cbegin(), old_data.cend(), data.begin(),
@@ -200,15 +200,17 @@ PYBIND11_MODULE(cpp, m)
                  std::move(data), std::move(offsets));
            })
       .def("submesh",
-           [](dolfinx_contact::Contact& self, int surface)
+           [](dolfinx_contact::Contact& self)
            {
-             const dolfinx_contact::SubMesh& submesh = self.submesh(surface);
+             const dolfinx_contact::SubMesh& submesh = self.submesh();
              return submesh.mesh();
            })
       .def("coefficients_size", &dolfinx_contact::Contact::coefficients_size,
            py::arg("meshtie"))
       .def("set_quadrature_rule",
            &dolfinx_contact::Contact::set_quadrature_rule)
+      .def("set_search_radius",
+           &dolfinx_contact::Contact::set_search_radius)
       .def("generate_kernel",
            [](dolfinx_contact::Contact& self, dolfinx_contact::Kernel type) {
              return contact_wrappers::KernelWrapper(self.generate_kernel(type));
@@ -275,7 +277,7 @@ PYBIND11_MODULE(cpp, m)
              return dolfinx_wrappers::as_pyarray(std::move(coeffs),
                                                  std::array{shape0, cstride});
            })
-             .def("pack_nx",
+      .def("pack_nx",
            [](dolfinx_contact::Contact& self, int origin_meshtag)
            {
              auto [coeffs, cstride] = self.pack_nx(origin_meshtag);
@@ -443,14 +445,14 @@ PYBIND11_MODULE(cpp, m)
   m.def(
       "find_candidate_surface_segment",
       [](std::shared_ptr<const dolfinx::mesh::Mesh> mesh,
-         const std::vector<std::int32_t>& puppet_facets,
+         const std::vector<std::int32_t>& quadrature_facets,
          const std::vector<std::int32_t>& candidate_facets, const double radius)
       {
         return dolfinx_contact::find_candidate_surface_segment(
-            mesh, puppet_facets, candidate_facets, radius);
+            mesh, quadrature_facets, candidate_facets, radius);
       },
-      py::arg("mesh"), py::arg("puppet_facets"), py::arg("candidate_facets"),
-      py::arg("radius") = -1.0);
+      py::arg("mesh"), py::arg("quadrature_facets"),
+      py::arg("candidate_facets"), py::arg("radius") = -1.0);
   m.def(
       "raytracing",
       [](const dolfinx::mesh::Mesh& mesh,

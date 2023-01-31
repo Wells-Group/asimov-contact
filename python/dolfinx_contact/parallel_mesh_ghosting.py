@@ -134,15 +134,15 @@ def create_contact_mesh(mesh, fmarker, dmarker, tags):
     cv_indices = [sorted(mesh.topology.index_map(0).local_to_global(cv.links(c))) for c in dmarker.indices]
 
     # Copy facets and markers to all processes
-    global_fmarkers = sum(fv_indices, [])
+    global_fmarkers = np.concatenate(fv_indices)
     all_indices = mesh.comm.allgather(global_fmarkers)
-    all_indices = np.array(sum(all_indices, [])).reshape(-1, num_facet_vertices)
-    all_values = np.array(sum(mesh.comm.allgather(list(fmarker.values)), []))
+    all_indices = np.concatenate(all_indices).reshape(-1, num_facet_vertices)
+    all_values = np.concatenate(mesh.comm.allgather(fmarker.values))
 
-    global_dmarkers = sum(cv_indices, [])
+    global_dmarkers = np.concatenate(cv_indices)
     all_cell_indices = mesh.comm.allgather(global_dmarkers)
-    all_cell_indices = np.array(sum(all_cell_indices, [])).reshape(-1, num_cell_vertices)
-    all_cell_values = np.array(sum(mesh.comm.allgather(list(dmarker.values)), []))
+    all_cell_indices = np.concatenate(all_cell_indices).reshape(-1, num_cell_vertices)
+    all_cell_values = np.concatenate(mesh.comm.allgather(dmarker.values))
 
     def partitioner(comm, n, m, topo):
         rank = comm.Get_rank()
@@ -174,7 +174,7 @@ def create_contact_mesh(mesh, fmarker, dmarker, tags):
     # then back to original index
     global_remap = np.array(new_mesh.geometry.input_global_indices, dtype=np.int32)
     nv = new_mesh.topology.index_map(0).size_local + new_mesh.topology.index_map(0).num_ghosts
-    vert_to_geom = entities_to_geometry(new_mesh, 0, np.arange(nv, dtype=np.int32), False).flatten()
+    vert_to_geom = entities_to_geometry(new_mesh._cpp_object, 0, np.arange(nv, dtype=np.int32), False).flatten()
     rmap = np.vectorize(lambda idx: global_remap[vert_to_geom[idx]])
 
     # Recreate facets

@@ -4,17 +4,15 @@
 
 import argparse
 import sys
-import dolfinx_contact
 
 import numpy as np
 import ufl
 from dolfinx import log
 from dolfinx.common import TimingType, list_timings, timing
-from dolfinx.cpp.mesh import MeshTags_int32
 from dolfinx.fem import (Constant, Function, VectorFunctionSpace)
 from dolfinx.graph import create_adjacencylist
 from dolfinx.io import XDMFFile
-from dolfinx.mesh import locate_entities_boundary, GhostMode
+from dolfinx.mesh import locate_entities_boundary, GhostMode, meshtags
 from mpi4py import MPI
 from petsc4py.PETSc import ScalarType
 
@@ -66,6 +64,8 @@ if __name__ == "__main__":
     parser.add_argument("--nu", default=0.1, type=np.float64, dest="nu", help="Poisson's ratio")
     parser.add_argument("--disp", default=0.2, type=np.float64, dest="disp",
                         help="Displacement BC in negative y direction")
+    parser.add_argument("--radius", default=0.5, type=np.float64, dest="radius",
+                        help="Search radius for ray-tracing")
     parser.add_argument("--load_steps", default=1, type=np.int32, dest="nload_steps",
                         help="Number of steps for gradual loading")
     parser.add_argument("--time_steps", default=1, type=np.int32, dest="time_steps",
@@ -137,7 +137,7 @@ if __name__ == "__main__":
             indices = np.concatenate([top_facets1, bottom_facets1, top_facets2, bottom_facets2])
             values = np.hstack([top_values, bottom_values, surface_values, sbottom_values])
             sorted_facets = np.argsort(indices)
-            facet_marker = MeshTags_int32(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
+            facet_marker = meshtags(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
 
         elif problem == 2:
             outname = "results/problem2_3D_simplex" if simplex else "results/problem2_3D_hex"
@@ -195,7 +195,7 @@ if __name__ == "__main__":
             indices = np.concatenate([dirichlet_facets_1, contact_facets_1, contact_facets_2, dirchlet_facets_2])
             values = np.hstack([val0, val1, val2, val3])
             sorted_facets = np.argsort(indices)
-            facet_marker = MeshTags_int32(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
+            facet_marker = meshtags(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
 
     else:
         displacement = [[0, -args.disp], [0, 0]]
@@ -274,7 +274,7 @@ if __name__ == "__main__":
             values = np.hstack([dir_val1, c_val1, surface_values, sbottom_values])
             sorted_facets = np.argsort(indices)
 
-            facet_marker = MeshTags_int32(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
+            facet_marker = meshtags(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
 
     if mesh.comm.size > 1:
         mesh, facet_marker, domain_marker = create_contact_mesh(
@@ -283,7 +283,7 @@ if __name__ == "__main__":
     ncells = mesh.topology.index_map(tdim).size_local
     indices = np.array(range(ncells), dtype=np.int32)
     values = mesh.comm.rank * np.ones(ncells, dtype=np.int32)
-    process_marker = MeshTags_int32(mesh, tdim, indices, values)
+    process_marker = meshtags(mesh, tdim, indices, values)
     process_marker.name = "process_marker"
     domain_marker.name = "cell_marker"
     facet_marker.name = "facet_marker"
@@ -315,9 +315,9 @@ if __name__ == "__main__":
         "pc_gamg_type": "agg",
         "pc_gamg_coarse_eq_limit": 100,
         "pc_gamg_agg_nsmooths": 1,
-        "pc_gamg_sym_graph": True,
         "pc_gamg_threshold": 1e-3,
         "pc_gamg_square_graph": 2,
+        "pc_gamg_reuse_interpolation": False
     }
     # Pack mesh data for Nitsche solver
     dirichlet_vals = [dirichlet_bdy_1, dirichlet_bdy_2]
@@ -362,8 +362,6 @@ if __name__ == "__main__":
     gamma = args.gamma
     theta = args.theta
     problem_parameters = {"mu": mu, "lambda": lmbda, "gamma": E * gamma, "theta": theta}
-    mode = dolfinx_contact.cpp.ContactMode.Raytracing if args.raytracing \
-        else dolfinx_contact.cpp.ContactMode.ClosestPoint
 
     # Load geometry over multiple steps
     for j in range(nload_steps):
@@ -397,7 +395,9 @@ if __name__ == "__main__":
                                                                          newton_options=newton_options,
                                                                          petsc_options=petsc_options,
                                                                          outfile=solver_outfile,
-                                                                         fname=outnamej, search_method=mode)
+                                                                         fname=outnamej, raytracing=args.raytracing,
+                                                                         quadrature_degree=args.q_degree,
+                                                                         search_radius=args.radius)
         num_newton_its[j, :] = newton_its[:]
         num_krylov_its[j, :] = krylov_iterations[:]
         newton_time[j, :] = solver_time[:]
@@ -407,7 +407,7 @@ if __name__ == "__main__":
             xdmf.write_function(u)
 
         # Perturb mesh with solution displacement
-        update_geometry(u._cpp_object, mesh)
+        update_geometry(u._cpp_object, mesh._cpp_object)
 
         # Accumulate displacements
         u_all.x.array[:] += u.x.array[:]

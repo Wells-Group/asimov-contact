@@ -160,9 +160,9 @@ if __name__ == "__main__":
     # Solver options
     newton_options = {"relaxation_parameter": 1.0, "max_it": 50}
     # petsc_options = {"ksp_type": "preonly", "pc_type": "lu"}
-    petsc_options = {"ksp_type": "cg", "pc_type": "gamg", "rtol": 1e-6, "pc_gamg_coarse_eq_limit": 1000,
+    petsc_options = {"ksp_type": "cg", "pc_type": "gamg", "pc_gamg_coarse_eq_limit": 1000,
                      "mg_levels_ksp_type": "chebyshev", "mg_levels_pc_type": "jacobi",
-                     "mg_levels_esteig_ksp_type": "cg", "matptap_via": "scalable", "ksp_view": None}
+                     "matptap_via": "scalable", "ksp_view": None}
 
     # Pack mesh data for Nitsche solver
     mesh_data = (facet_marker, top_value, bottom_value, surface_value, surface_bottom)

@@ -9,7 +9,6 @@ import numpy as np
 from dolfinx import log
 import dolfinx.fem as _fem
 from dolfinx.common import TimingType, list_timings, timing, Timer
-from dolfinx.cpp.mesh import MeshTags_int32
 from dolfinx.graph import create_adjacencylist
 from dolfinx.io import XDMFFile
 from dolfinx.mesh import meshtags, locate_entities_boundary, GhostMode
@@ -20,7 +19,7 @@ import ufl
 from dolfinx_contact.meshing import convert_mesh, create_christmas_tree_mesh, create_christmas_tree_mesh_3D
 from dolfinx_contact.unbiased.nitsche_unbiased import nitsche_unbiased
 from dolfinx_contact.helpers import lame_parameters, sigma_func, weak_dirichlet, epsilon
-from dolfinx_contact.cpp import find_candidate_surface_segment, ContactMode
+from dolfinx_contact.cpp import find_candidate_surface_segment
 from dolfinx_contact.parallel_mesh_ghosting import create_contact_mesh
 
 if __name__ == "__main__":
@@ -48,6 +47,8 @@ if __name__ == "__main__":
     parser.add_argument("--nu", default=0.1, type=np.float64, dest="nu", help="Poisson's ratio")
     parser.add_argument("--res", default=0.2, type=np.float64, dest="res",
                         help="Mesh resolution")
+    parser.add_argument("--radius", default=0.5, type=np.float64, dest="radius",
+                        help="Search radius for ray-tracing")
     parser.add_argument("--outfile", type=str, default=None, required=False,
                         help="File for appending results", dest="outfile")
     parser.add_argument("--split", type=np.int32, default=1, required=False,
@@ -94,11 +95,12 @@ if __name__ == "__main__":
         # create facet_marker including z Dirichlet facets
         tag = marker_offset + 4 * split + 1
         indices = np.hstack([facet_marker.indices, dirichlet_facets1, dirichlet_facets2])
-        values = np.hstack([facet_marker.values, tag * np.ones(len(dirichlet_facets1) + len(dirichlet_facets2))])
+        values = np.hstack([facet_marker.values, tag * np.ones(len(dirichlet_facets1)
+                           + len(dirichlet_facets2), dtype=np.int32)])
         sorted_facets = np.argsort(indices)
-        facet_marker = MeshTags_int32(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
+        facet_marker = meshtags(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
         # Create Dirichlet bdy conditions
-        bcs = (np.array([[tag, 2]], dtype=np.int32), [_PETSc.ScalarType(0)])
+        bcs = (np.array([[tag, 2]], dtype=np.int32), [_fem.Constant(mesh, _PETSc.ScalarType(0))])
         g = _fem.Constant(mesh, _PETSc.ScalarType((0, 0, 0)))      # zero dirichlet
         t = _fem.Constant(mesh, _PETSc.ScalarType((0.2, 0.5, 0)))  # traction
         f = _fem.Constant(mesh, _PETSc.ScalarType((1.0, 0.5, 0)))  # body force
@@ -127,7 +129,7 @@ if __name__ == "__main__":
     ncells = mesh.topology.index_map(tdim).size_local
     indices = np.array(range(ncells), dtype=np.int32)
     values = mesh.comm.rank * np.ones(ncells, dtype=np.int32)
-    process_marker = MeshTags_int32(mesh, tdim, indices, values)
+    process_marker = meshtags(mesh, tdim, indices, values)
     process_marker.name = "process_marker"
     gdim = mesh.geometry.dim
     # create meshtags for candidate segments
@@ -139,13 +141,13 @@ if __name__ == "__main__":
 
     for i in range(split):
         fcts = np.array(find_candidate_surface_segment(
-            mesh, facet_marker.find(marker_offset + split + i), cand_facets_0, 0.8), dtype=np.int32)
+            mesh._cpp_object, facet_marker.find(marker_offset + split + i), cand_facets_0, 0.8), dtype=np.int32)
         vls = np.full(len(fcts), marker_offset + 2 * split + i, dtype=np.int32)
         mts.append(meshtags(mesh, tdim - 1, fcts, vls))
 
     for i in range(split):
         fcts = np.array(find_candidate_surface_segment(
-            mesh, facet_marker.find(marker_offset + i), cand_facets_1, 0.8), dtype=np.int32)
+            mesh._cpp_object, facet_marker.find(marker_offset + i), cand_facets_1, 0.8), dtype=np.int32)
         vls = np.full(len(fcts), marker_offset + 3 * split + i, dtype=np.int32)
         mts.append(meshtags(mesh, tdim - 1, fcts, vls))
 
@@ -225,13 +227,10 @@ if __name__ == "__main__":
         "pc_gamg_type": "agg",
         "pc_gamg_coarse_eq_limit": 100,
         "pc_gamg_agg_nsmooths": 1,
-        "pc_gamg_sym_graph": True,
         "pc_gamg_threshold": 1e-3,
         "pc_gamg_square_graph": 2,
+        "pc_gamg_reuse_interpolation": False
     }
-
-    mode = ContactMode.Raytracing if args.raytracing \
-        else ContactMode.ClosestPoint
 
     # Solve contact problem using Nitsche's method
     problem_parameters = {"gamma": E * gamma, "theta": theta, "mu": mu, "lambda": lmbda}
@@ -245,11 +244,13 @@ if __name__ == "__main__":
                                                                        rhs_fns=rhs_fns, markers=mts,
                                                                        contact_data=(surfaces, contact_pairs),
                                                                        bcs=bcs, problem_parameters=problem_parameters,
-                                                                       search_method=mode,
+                                                                       raytracing=args.raytracing,
                                                                        newton_options=newton_options,
                                                                        petsc_options=petsc_options,
                                                                        outfile=solver_outfile,
-                                                                       fname=outname)
+                                                                       fname=outname,
+                                                                       quadrature_degree=args.q_degree,
+                                                                       search_radius=args.radius)
 
     # write solution to file
     size = mesh.comm.size

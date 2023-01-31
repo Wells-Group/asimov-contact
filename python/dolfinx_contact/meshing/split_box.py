@@ -86,12 +86,12 @@ def create_dolfinx_mesh(filename: str, x: npt.NDArray[np.float64], cells: npt.ND
                         facet_values: npt.NDArray[np.int32], tdim: int) -> None:
     msh = create_mesh(MPI.COMM_WORLD, cells, x, ufl_mesh(gmsh_cell_id, 3))
     msh.name = "Grid"
-    entities, values = distribute_entity_data(msh, tdim - 1, marked_facets, facet_values)
+    entities, values = distribute_entity_data(msh._cpp_object, tdim - 1, marked_facets, facet_values)
     msh.topology.create_connectivity(tdim - 1, 0)
     mt = meshtags_from_entities(msh, tdim - 1, create_adjacencylist(entities), values)
     mt.name = "contact_facets"
     msh.topology.create_connectivity(tdim, 0)
-    entities, values = distribute_entity_data(msh, tdim, cells.astype(np.int64), cell_data.astype(np.int32))
+    entities, values = distribute_entity_data(msh._cpp_object, tdim, cells.astype(np.int64), cell_data.astype(np.int32))
     mt_domain = meshtags_from_entities(msh, tdim, create_adjacencylist(entities), values)
     mt_domain.name = "domain_marker"
     gmsh.finalize()
