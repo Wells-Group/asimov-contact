@@ -7,60 +7,23 @@ from dolfinx.mesh import create_mesh, meshtags
 import dolfinx
 from dolfinx.cpp.mesh import entities_to_geometry, cell_num_vertices, cell_entity_type, to_type
 import numpy as np
-# import numba
+from dolfinx_contact.cpp import point_cloud_pairs
 
-__all__ = ["create_contact_mesh", "point_cloud_pairs", "compute_ghost_cell_destinations"]
-
-
-# @numba.njit
-def point_cloud_pairs(x, r):
-    """Find all neighbors of each point which are within a radius r."""
-
-    # Get sort-order in ascending x-value, and reverse permutation
-    x_fwd = np.argsort(x[:, 0])
-    x_rev = np.empty_like(x_fwd)
-    for i, fi in enumerate(x_fwd):
-        x_rev[fi] = i
-
-    npoints = len(x_fwd)
-    x_near = [[int(0) for k in range(0)] for j in range(0)]  # weird stuff for numba
-    for i in range(npoints):
-        xni = [int(0) for j in range(0)]  # empty list of int for numba
-        # Nearest neighbor with greater x-value
-        idx = x_rev[i] + 1
-        while idx < npoints:
-            dx = x[x_fwd[idx], 0] - x[i, 0]
-            if dx > r:
-                break
-            dr = np.linalg.norm(x[x_fwd[idx], :] - x[i, :])
-            if dr < r:
-                xni += [x_fwd[idx]]
-            idx += 1
-        # Nearest neighbor with smaller x-value
-        idx = x_rev[i] - 1
-        while idx > 0:
-            dx = x[i, 0] - x[x_fwd[idx], 0]
-            if dx > r:
-                break
-            dr = np.linalg.norm(x[x_fwd[idx], :] - x[i, :])
-            if dr < r:
-                xni += [x_fwd[idx]]
-            idx -= 1
-        x_near += [xni]
-
-    return x_near
+__all__ = ["create_contact_mesh", "compute_ghost_cell_destinations"]
 
 
 def compute_ghost_cell_destinations(mesh, marker_subset, R):
     """For each marked facet, given by indices in "marker_subset", get the list of processes which
     the attached cell should be sent to, for ghosting. Neighbouring facets within distance "R"."""
 
+    log.log(log.LogLevel.WARNING, "midpoints")
     # 1. Get midpoints of all facets on interfaces
     tdim = mesh.topology.dim
     x = mesh.geometry.x
     facet_to_geom = entities_to_geometry(mesh._cpp_object, tdim - 1, marker_subset, False)
     x_facet = np.array([sum([x[i] for i in idx]) / len(idx) for idx in facet_to_geom])
 
+    log.log(log.LogLevel.WARNING, "send to zero")
     # 2. Send midpoints to process zero
     comm = mesh.comm
     x_all = comm.gather(x_facet, root=0)
@@ -70,7 +33,9 @@ def compute_ghost_cell_destinations(mesh, marker_subset, R):
         x_all_flat = np.concatenate(x_all)
 
         # Find all pairs of facets within radius R
+        log.log(log.LogLevel.WARNING, "point-cloud-pairs")
         x_near = point_cloud_pairs(x_all_flat, R)
+        log.log(log.LogLevel.WARNING, "point-cloud-pairs done")
 
         # Find which process the neighboring facet came from
         i = 0
@@ -78,7 +43,7 @@ def compute_ghost_cell_destinations(mesh, marker_subset, R):
         for p in range(len(x_all)):
             for j in range(x_all[p].shape[0]):
                 pr = set()
-                for n in x_near[i]:
+                for n in x_near.links(i):
                     # Find which process this facet came from
                     q = np.searchsorted(offsets, n, side='right') - 1
                     # Add to the sendback list, if not the same process
@@ -93,6 +58,7 @@ def compute_ghost_cell_destinations(mesh, marker_subset, R):
             flat_q = sum(q, [])
             scatter_back += [[len(off)] + list(off) + flat_q]
 
+    log.log(log.LogLevel.WARNING, "send back")
     d = comm.scatter(scatter_back, root=0)
     # Unpack received data to get additional destinations for each facet/cell
     n = d[0] + 1
@@ -104,6 +70,7 @@ def compute_ghost_cell_destinations(mesh, marker_subset, R):
 
 def create_contact_mesh(mesh, fmarker, dmarker, tags, R=0.2):
 
+    log.log(log.LogLevel.WARNING, "Create Contact Mesh")
     tdim = mesh.topology.dim
     num_cell_vertices = cell_num_vertices(mesh.topology.cell_type)
     facet_type = cell_entity_type(to_type(str(mesh.ufl_cell())), tdim - 1, 0)
@@ -122,8 +89,10 @@ def create_contact_mesh(mesh, fmarker, dmarker, tags, R=0.2):
     # marker_subset_val = fmarker.values[marker_subset_i]
     # facets = np.hstack([fmarker.find(tag) for tag in tags])
 
+    log.log(log.LogLevel.WARNING, "Compute cell destinations")
     # Find destinations for the cells attached to the tag-marked facets
     cell_dests = compute_ghost_cell_destinations(mesh, marker_subset, R)
+    log.log(log.LogLevel.WARNING, "cells to ghost")
     cells_to_ghost = [fc.links(f)[0] for f in marker_subset]
     assert len(cell_dests) == len(cells_to_ghost)
     cell_to_dests = {c: d for c, d in zip(cells_to_ghost, cell_dests)}
