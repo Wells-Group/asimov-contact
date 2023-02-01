@@ -50,6 +50,7 @@ def point_cloud_pairs(x, r):
 
     return x_near
 
+
 def compute_ghost_cell_destinations(mesh, marker_subset, R):
     """For each marked facet, given by indices in "marker_subset", get the list of processes which
     the attached cell should be sent to, for ghosting. Neighbouring facets within distance "R"."""
@@ -118,15 +119,14 @@ def create_contact_mesh(mesh, fmarker, dmarker, tags, R=0.2):
     # Extract facet markers with given tags
     marker_subset_i = [i for i, (idx, k) in enumerate(zip(fmarker.indices, fmarker.values)) if k in tags]
     marker_subset = fmarker.indices[marker_subset_i]
-    marker_subset_val = fmarker.values[marker_subset_i]
-    #    facets = np.hstack([fmarker.find(tag) for tag in tags])
+    # marker_subset_val = fmarker.values[marker_subset_i]
+    # facets = np.hstack([fmarker.find(tag) for tag in tags])
 
     # Find destinations for the cells attached to the tag-marked facets
     cell_dests = compute_ghost_cell_destinations(mesh, marker_subset, R)
     cells_to_ghost = [fc.links(f)[0] for f in marker_subset]
     assert len(cell_dests) == len(cells_to_ghost)
     cell_to_dests = {c: d for c, d in zip(cells_to_ghost, cell_dests)}
-
 
     ncells = mesh.topology.index_map(tdim).size_local
 
@@ -146,7 +146,6 @@ def create_contact_mesh(mesh, fmarker, dmarker, tags, R=0.2):
     all_cell_indices = np.concatenate(all_cell_indices).reshape(-1, num_cell_vertices)
     all_cell_values = np.concatenate(mesh.comm.allgather(dmarker.values))
 
-
     def partitioner(comm, n, m, topo):
         rank = comm.Get_rank()
         dests = []
@@ -157,7 +156,6 @@ def create_contact_mesh(mesh, fmarker, dmarker, tags, R=0.2):
                 dests.extend(cell_to_dests[c])  # Ghost to other processes
             offsets.append(len(dests))
         return dolfinx.cpp.graph.AdjacencyList_int32(dests, offsets)
-
 
     # Convert topology to global indexing, and restrict to non-ghost cells
     topo = mesh.topology.connectivity(tdim, 0).array
@@ -191,7 +189,6 @@ def create_contact_mesh(mesh, fmarker, dmarker, tags, R=0.2):
     fv_indices = rmap(fv.array).reshape((-1, num_facet_vertices))
     fv_indices = np.sort(fv_indices, axis=1)
 
-
     def lex_match(local_indices, in_indices, in_values):
         lx_loc = np.lexsort(np.flip(local_indices, axis=1).T)
         lx_in = np.lexsort(np.flip(in_indices, axis=1).T)
@@ -202,7 +199,7 @@ def create_contact_mesh(mesh, fmarker, dmarker, tags, R=0.2):
         while i < len(lx_in) and j < len(lx_loc):
             a = in_indices[lx_in[i]]
             b = local_indices[lx_loc[j]]
-            idx = np.where((a>b) != (a<b))[0]
+            idx = np.where((a > b) != (a < b))[0]
             if len(idx) == 0:
                 new_markers += [[lx_loc[j], in_values[lx_in[i]]]]
                 i += 1
