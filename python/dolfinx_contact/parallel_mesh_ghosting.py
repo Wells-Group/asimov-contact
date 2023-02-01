@@ -105,10 +105,15 @@ def create_contact_mesh(mesh, fmarker, dmarker, tags, R=0.2):
 
     log.log(log.LogLevel.WARNING, "Copy markers to other processes")
     # Copy facets and markers to all processes
-    global_fmarkers = np.concatenate(fv_indices)
-    all_indices = mesh.comm.allgather(global_fmarkers)
+    if len(fv_indices) > 0:
+        global_fmarkers = np.concatenate(fv_indices)
+    else:
+        global_fmarkers = []
+    all_indices = [f for f in mesh.comm.allgather(global_fmarkers) if len(f) > 0]
     all_indices = np.concatenate(all_indices).reshape(-1, num_facet_vertices)
-    all_values = np.concatenate(mesh.comm.allgather(fmarker.values))
+
+    all_values = np.concatenate([v for v in mesh.comm.allgather(fmarker.values) if len(v) > 0])
+    assert len(all_values) == all_indices.shape[0]
 
     global_dmarkers = np.concatenate(cv_indices)
     all_cell_indices = mesh.comm.allgather(global_dmarkers)
@@ -187,6 +192,9 @@ def create_contact_mesh(mesh, fmarker, dmarker, tags, R=0.2):
     # Sort new markers into order and make unique
     new_fmarkers = np.array(sorted(new_fmarkers), dtype=np.int32)
     new_fmarkers = np.unique(new_fmarkers, axis=0)
+
+    if new_fmarkers.shape[0] == 0:
+        new_fmarkers = np.zeros((0, 2), dtype=np.int32)
 
     new_fmarker = meshtags(new_mesh, tdim - 1, new_fmarkers[:, 0],
                            new_fmarkers[:, 1])
