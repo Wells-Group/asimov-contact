@@ -30,7 +30,7 @@ def compute_ghost_cell_destinations(mesh, marker_subset, R):
     scatter_back = []
     if comm.rank == 0:
         offsets = np.cumsum([0] + [w.shape[0] for w in x_all])
-        x_all_flat = np.concatenate(x_all)
+        x_all_flat = np.concatenate([x for x in x_all if len(x) > 0])
 
         # Find all pairs of facets within radius R
         log.log(log.LogLevel.WARNING, "point-cloud-pairs")
@@ -206,4 +206,6 @@ def create_contact_mesh(mesh, fmarker, dmarker, tags, R=0.2):
 
     new_dmarker = meshtags(new_mesh, tdim, new_cmarkers[:, 0],
                            new_cmarkers[:, 1])
+
+    log.log(log.LogLevel.WARNING, "done")
     return new_mesh, new_fmarker, new_dmarker
