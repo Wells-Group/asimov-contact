@@ -278,7 +278,7 @@ if __name__ == "__main__":
 
     if mesh.comm.size > 1:
         mesh, facet_marker, domain_marker = create_contact_mesh(
-            mesh, facet_marker, domain_marker, [contact_bdy_1, contact_bdy_2], 1.0)
+            mesh, facet_marker, domain_marker, [contact_bdy_1, contact_bdy_2], 2.0)
 
     ncells = mesh.topology.index_map(tdim).size_local
     indices = np.array(range(ncells), dtype=np.int32)
@@ -352,7 +352,7 @@ if __name__ == "__main__":
     u_all.x.array[:] = np.zeros(u.x.array[:].shape)
     geometry = mesh.geometry.x[:].copy()
 
-    log.set_log_level(log.LogLevel.OFF)
+    log.set_log_level(log.LogLevel.WARNING)
     num_newton_its = np.zeros((nload_steps, args.time_steps), dtype=int)
     num_krylov_its = np.zeros((nload_steps, args.time_steps), dtype=int)
     newton_time = np.zeros((nload_steps, args.time_steps), dtype=np.float64)
