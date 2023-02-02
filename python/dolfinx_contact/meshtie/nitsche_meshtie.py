@@ -32,7 +32,8 @@ def nitsche_meshtie(lhs: ufl.Form,
                     form_compiler_options: Optional[dict] = None,
                     jit_options: Optional[dict] = None,
                     petsc_options: Optional[dict] = None,
-                    timing_str: str = '') -> Tuple[_fem.Function, int, int, float]:
+                    timing_str: str = '',
+                    num_domains=1) -> Tuple[_fem.Function, int, int, float]:
     """
     Use custom kernel to compute elasticity problem if mesh consists of topologically disconnected parts
 
@@ -232,7 +233,8 @@ def nitsche_meshtie(lhs: ufl.Form,
     A.assemble()
 
     # Set rigid motion nullspace
-    null_space = rigid_motions_nullspace_subdomains(V, markers[0], np.unique(markers[0].values))
+    null_space = rigid_motions_nullspace_subdomains(V, markers[0], np.unique(markers[0].values),
+                                                    num_domains=num_domains)
     A.setNearNullSpace(null_space)
     # Create PETSc Krylov solver and turn convergence monitoring on
     opts = _PETSc.Options()

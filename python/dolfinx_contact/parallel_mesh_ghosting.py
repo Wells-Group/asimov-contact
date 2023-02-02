@@ -2,16 +2,75 @@
 #
 # SPDX-License-Identifier:    MIT
 
+from dolfinx import log
 from dolfinx.mesh import create_mesh, meshtags
 import dolfinx
 from dolfinx.cpp.mesh import entities_to_geometry, cell_num_vertices, cell_entity_type, to_type
 import numpy as np
+from dolfinx_contact.cpp import point_cloud_pairs
 
-__all__ = ["create_contact_mesh"]
+__all__ = ["create_contact_mesh", "compute_ghost_cell_destinations"]
 
 
-def create_contact_mesh(mesh, fmarker, dmarker, tags):
+def compute_ghost_cell_destinations(mesh, marker_subset, R):
+    """For each marked facet, given by indices in "marker_subset", get the list of processes which
+    the attached cell should be sent to, for ghosting. Neighbouring facets within distance "R"."""
 
+    log.log(log.LogLevel.WARNING, "midpoints")
+    # 1. Get midpoints of all facets on interfaces
+    tdim = mesh.topology.dim
+    x = mesh.geometry.x
+    facet_to_geom = entities_to_geometry(mesh._cpp_object, tdim - 1, marker_subset, False)
+    x_facet = np.array([sum([x[i] for i in idx]) / len(idx) for idx in facet_to_geom])
+
+    log.log(log.LogLevel.WARNING, "send to zero")
+    # 2. Send midpoints to process zero
+    comm = mesh.comm
+    x_all = comm.gather(x_facet, root=0)
+    scatter_back = []
+    if comm.rank == 0:
+        offsets = np.cumsum([0] + [w.shape[0] for w in x_all])
+        x_all_flat = np.concatenate([x for x in x_all if len(x) > 0])
+
+        # Find all pairs of facets within radius R
+        log.log(log.LogLevel.WARNING, "point-cloud-pairs")
+        x_near = point_cloud_pairs(x_all_flat, R)
+        log.log(log.LogLevel.WARNING, "point-cloud-pairs done")
+
+        # Find which process the neighboring facet came from
+        i = 0
+        procs = [[] for p in range(len(x_all))]
+        for p in range(len(x_all)):
+            for j in range(x_all[p].shape[0]):
+                pr = set()
+                for n in x_near.links(i):
+                    # Find which process this facet came from
+                    q = np.searchsorted(offsets, n, side='right') - 1
+                    # Add to the sendback list, if not the same process
+                    if q != p:
+                        pr.add(q)
+                procs[p] += [list(pr)]
+                i += 1
+
+        # Pack up to return to sending processes
+        for i, q in enumerate(procs):
+            off = np.cumsum([0] + [len(w) for w in q])
+            flat_q = sum(q, [])
+            scatter_back += [[len(off)] + list(off) + flat_q]
+
+    log.log(log.LogLevel.WARNING, "send back")
+    d = comm.scatter(scatter_back, root=0)
+    # Unpack received data to get additional destinations for each facet/cell
+    n = d[0] + 1
+    offsets = d[1:n]
+    cell_dests = [d[n + offsets[j]:n + offsets[j + 1]] for j in range(n - 2)]
+    assert len(cell_dests) == len(marker_subset)
+    return cell_dests
+
+
+def create_contact_mesh(mesh, fmarker, dmarker, tags, R=0.2):
+
+    log.log(log.LogLevel.WARNING, "Create Contact Mesh")
     tdim = mesh.topology.dim
     num_cell_vertices = cell_num_vertices(mesh.topology.cell_type)
     facet_type = cell_entity_type(to_type(str(mesh.ufl_cell())), tdim - 1, 0)
@@ -24,19 +83,37 @@ def create_contact_mesh(mesh, fmarker, dmarker, tags):
     fv = mesh.topology.connectivity(tdim - 1, 0)
     cv = mesh.topology.connectivity(tdim, 0)
 
-    facets = np.hstack([fmarker.find(tag) for tag in tags])
-    cells_to_ghost = np.unique([fc.links(f)[0] for f in facets])
+    # Extract facet markers with given tags
+    marker_subset_i = [i for i, (idx, k) in enumerate(zip(fmarker.indices, fmarker.values)) if k in tags]
+    marker_subset = fmarker.indices[marker_subset_i]
+    # marker_subset_val = fmarker.values[marker_subset_i]
+    # facets = np.hstack([fmarker.find(tag) for tag in tags])
+
+    log.log(log.LogLevel.WARNING, "Compute cell destinations")
+    # Find destinations for the cells attached to the tag-marked facets
+    cell_dests = compute_ghost_cell_destinations(mesh, marker_subset, R)
+    log.log(log.LogLevel.WARNING, "cells to ghost")
+    cells_to_ghost = [fc.links(f)[0] for f in marker_subset]
+    assert len(cell_dests) == len(cells_to_ghost)
+    cell_to_dests = {c: d for c, d in zip(cells_to_ghost, cell_dests)}
+
     ncells = mesh.topology.index_map(tdim).size_local
 
     # Convert marked facets to list of (global) vertices for each facet
     fv_indices = [sorted(mesh.topology.index_map(0).local_to_global(fv.links(f))) for f in fmarker.indices]
     cv_indices = [sorted(mesh.topology.index_map(0).local_to_global(cv.links(c))) for c in dmarker.indices]
 
+    log.log(log.LogLevel.WARNING, "Copy markers to other processes")
     # Copy facets and markers to all processes
-    global_fmarkers = np.concatenate(fv_indices)
-    all_indices = mesh.comm.allgather(global_fmarkers)
+    if len(fv_indices) > 0:
+        global_fmarkers = np.concatenate(fv_indices)
+    else:
+        global_fmarkers = []
+    all_indices = [f for f in mesh.comm.allgather(global_fmarkers) if len(f) > 0]
     all_indices = np.concatenate(all_indices).reshape(-1, num_facet_vertices)
-    all_values = np.concatenate(mesh.comm.allgather(fmarker.values))
+
+    all_values = np.concatenate([v for v in mesh.comm.allgather(fmarker.values) if len(v) > 0])
+    assert len(all_values) == all_indices.shape[0]
 
     global_dmarkers = np.concatenate(cv_indices)
     all_cell_indices = mesh.comm.allgather(global_dmarkers)
@@ -45,14 +122,12 @@ def create_contact_mesh(mesh, fmarker, dmarker, tags):
 
     def partitioner(comm, n, m, topo):
         rank = comm.Get_rank()
-        other_ranks = [i for i in range(comm.Get_size()) if i != rank]
-
         dests = []
         offsets = [0]
         for c in range(ncells):
             dests.append(rank)
-            if c in cells_to_ghost:
-                dests.extend(other_ranks)  # Ghost to other processes
+            if c in cell_to_dests:
+                dests.extend(cell_to_dests[c])  # Ghost to other processes
             offsets.append(len(dests))
         return dolfinx.cpp.graph.AdjacencyList_int32(dests, offsets)
 
@@ -66,8 +141,10 @@ def create_contact_mesh(mesh, fmarker, dmarker, tags):
     gdim = mesh.geometry.dim
     x = mesh.geometry.x[:num_vertices, :gdim]
     domain = mesh.ufl_domain()
+    log.log(log.LogLevel.WARNING, "Repartition")
     new_mesh = create_mesh(mesh.comm, topo, x, domain, partitioner)
 
+    log.log(log.LogLevel.WARNING, "Remap markers on new mesh")
     # Remap vertices back to input indexing
     # This is rather messy, we need to map vertices to geometric nodes
     # then back to original index
@@ -86,18 +163,38 @@ def create_contact_mesh(mesh, fmarker, dmarker, tags):
     fv_indices = rmap(fv.array).reshape((-1, num_facet_vertices))
     fv_indices = np.sort(fv_indices, axis=1)
 
-    # Search for marked facets in list of all facets
-    new_fmarkers = []
-    for idx, val in zip(all_indices, all_values):
-        f = np.nonzero(np.all(fv_indices == idx, axis=1))[0]
-        if len(f) > 0:
-            assert len(f) == 1
-            f = f[0]
-            new_fmarkers += [[f, val]]
+    def lex_match(local_indices, in_indices, in_values):
+        lx_loc = np.lexsort(np.flip(local_indices, axis=1).T)
+        lx_in = np.lexsort(np.flip(in_indices, axis=1).T)
+
+        new_markers = []
+        i = 0
+        j = 0
+        while i < len(lx_in) and j < len(lx_loc):
+            a = in_indices[lx_in[i]]
+            b = local_indices[lx_loc[j]]
+            idx = np.where((a > b) != (a < b))[0]
+            if len(idx) == 0:
+                new_markers += [[lx_loc[j], in_values[lx_in[i]]]]
+                i += 1
+                j += 1
+            else:
+                idx = idx[0]
+                if b[idx] > a[idx]:
+                    i += 1
+                elif a[idx] > b[idx]:
+                    j += 1
+        return new_markers
+
+    log.log(log.LogLevel.WARNING, "Lex match facet markers")
+    new_fmarkers = lex_match(fv_indices, all_indices, all_values)
 
     # Sort new markers into order and make unique
     new_fmarkers = np.array(sorted(new_fmarkers), dtype=np.int32)
     new_fmarkers = np.unique(new_fmarkers, axis=0)
+
+    if new_fmarkers.shape[0] == 0:
+        new_fmarkers = np.zeros((0, 2), dtype=np.int32)
 
     new_fmarker = meshtags(new_mesh, tdim - 1, new_fmarkers[:, 0],
                            new_fmarkers[:, 1])
@@ -108,13 +205,8 @@ def create_contact_mesh(mesh, fmarker, dmarker, tags):
     cv_indices = np.sort(cv_indices, axis=1)
 
     # Search for marked cells in list of all cells
-    new_cmarkers = []
-    for idx, val in zip(all_cell_indices, all_cell_values):
-        c = np.nonzero(np.all(cv_indices == idx, axis=1))[0]
-        if len(c) > 0:
-            assert len(c) == 1
-            c = c[0]
-            new_cmarkers += [[c, val]]
+    log.log(log.LogLevel.WARNING, "Lex match cell markers")
+    new_cmarkers = lex_match(cv_indices, all_cell_indices, all_cell_values)
 
     # Sort new markers into order and make unique
     new_cmarkers = np.array(sorted(new_cmarkers), dtype=np.int32)
@@ -122,4 +214,6 @@ def create_contact_mesh(mesh, fmarker, dmarker, tags):
 
     new_dmarker = meshtags(new_mesh, tdim, new_cmarkers[:, 0],
                            new_cmarkers[:, 1])
+
+    log.log(log.LogLevel.WARNING, "done")
     return new_mesh, new_fmarker, new_dmarker
