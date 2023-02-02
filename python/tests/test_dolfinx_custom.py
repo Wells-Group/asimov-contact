@@ -182,14 +182,15 @@ def test_contact_kernel(theta, gamma, dim, gap):
         mu2 = dolfinx.fem.Function(V2)
         mu2.interpolate(mu_func2)
         u.interpolate(_u_initial)
+        integral_entities, num_local = dolfinx_contact.compute_active_entities(
+            mesh._cpp_object, bottom_facets, dolfinx.fem.IntegralType.exterior_facet)
+        integral_entities = integral_entities[:num_local]
 
-        integral_entities = dolfinx_contact.compute_active_entities(
-            mesh, bottom_facets, dolfinx.fem.IntegralType.exterior_facet)
         mu_packed = dolfinx_contact.cpp.pack_coefficient_quadrature(mu2._cpp_object, 0, integral_entities)
         lmbda_packed = dolfinx_contact.cpp.pack_coefficient_quadrature(lmbda2._cpp_object, 0, integral_entities)
         u_packed = dolfinx_contact.cpp.pack_coefficient_quadrature(u._cpp_object, q_deg, integral_entities)
         grad_u_packed = dolfinx_contact.cpp.pack_gradient_quadrature(u._cpp_object, q_deg, integral_entities)
-        h_facets = dolfinx_contact.pack_circumradius(mesh, integral_entities)
+        h_facets = dolfinx_contact.pack_circumradius(mesh._cpp_object, integral_entities)
         data = np.array([bottom_value, top_value], dtype=np.int32)
         offsets = np.array([0, 2], dtype=np.int32)
         surfaces = create_adjacencylist(data, offsets)

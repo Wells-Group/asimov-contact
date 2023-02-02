@@ -12,8 +12,10 @@
 #include <dolfinx_contact/Contact.h>
 #include <dolfinx_contact/QuadratureRule.h>
 #include <dolfinx_contact/RayTracing.h>
+#include <dolfinx_contact/SubMesh.h>
 #include <dolfinx_contact/coefficients.h>
 #include <dolfinx_contact/contact_kernels.h>
+#include <dolfinx_contact/point_cloud.h>
 #include <dolfinx_contact/utils.h>
 #include <pybind11/functional.h>
 #include <pybind11/operators.h>
@@ -150,10 +152,10 @@ PYBIND11_MODULE(cpp, m)
       .def("active_entities",
            [](dolfinx_contact::Contact& self, int s)
            {
-             const std::vector<std::int32_t>& active_entities
+             std::span<const std::int32_t> active_entities
                  = self.active_entities(s);
              std::array<py::ssize_t, 2> shape
-                 = {py::ssize_t(active_entities.size() / 2), 2};
+                 = {py::ssize_t(self.local_facets(s)), 2};
              return py::array_t<std::int32_t>(shape, active_entities.data(),
                                               py::cast(self));
            })
@@ -176,9 +178,9 @@ PYBIND11_MODULE(cpp, m)
              const std::vector<int>& offsets = submesh_map->offsets();
              const std::vector<std::int32_t>& old_data = submesh_map->array();
              std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> facet_map
-                 = self.submesh(contact_pair[1]).facet_map();
+                 = self.submesh().facet_map();
              std::span<const std::int32_t> parent_cells
-                 = self.submesh(contact_pair[1]).parent_cells();
+                 = self.submesh().parent_cells();
              std::vector<std::int32_t> data(old_data.size());
              std::transform(
                  old_data.cbegin(), old_data.cend(), data.begin(),
@@ -198,10 +200,18 @@ PYBIND11_MODULE(cpp, m)
                  dolfinx::graph::AdjacencyList<std::int32_t>>(
                  std::move(data), std::move(offsets));
            })
+      .def("submesh",
+           [](dolfinx_contact::Contact& self)
+           {
+             const dolfinx_contact::SubMesh& submesh = self.submesh();
+             return submesh.mesh();
+           })
       .def("coefficients_size", &dolfinx_contact::Contact::coefficients_size,
            py::arg("meshtie"))
       .def("set_quadrature_rule",
            &dolfinx_contact::Contact::set_quadrature_rule)
+      .def("set_search_radius",
+           &dolfinx_contact::Contact::set_search_radius)
       .def("generate_kernel",
            [](dolfinx_contact::Contact& self, dolfinx_contact::Kernel type) {
              return contact_wrappers::KernelWrapper(self.generate_kernel(type));
@@ -232,10 +242,10 @@ PYBIND11_MODULE(cpp, m)
            {
              auto ker = kernel.get();
              self.assemble_vector(
-                 std::span(b.mutable_data(), b.shape(0)), origin_meshtag, ker,
-                 std::span<const PetscScalar>(coeffs.data(), coeffs.size()),
+                 std::span(b.mutable_data(), b.size()), origin_meshtag, ker,
+                 std::span(coeffs.data(), coeffs.size()),
                  coeffs.shape(1),
-                 std::span(constants.data(), constants.shape(0)));
+                 std::span(constants.data(), constants.size()));
            })
       .def("pack_test_functions",
            [](dolfinx_contact::Contact& self, int origin_meshtag)
@@ -268,7 +278,7 @@ PYBIND11_MODULE(cpp, m)
              return dolfinx_wrappers::as_pyarray(std::move(coeffs),
                                                  std::array{shape0, cstride});
            })
-             .def("pack_nx",
+      .def("pack_nx",
            [](dolfinx_contact::Contact& self, int origin_meshtag)
            {
              auto [coeffs, cstride] = self.pack_nx(origin_meshtag);
@@ -406,7 +416,7 @@ PYBIND11_MODULE(cpp, m)
         {
           auto entity_span
               = std::span<const std::int32_t>(entities.data(), entities.size());
-          std::vector<std::int32_t> active_entities
+          auto [active_entities, num_local]
               = dolfinx_contact::compute_active_entities(mesh, entity_span,
                                                          integral);
           switch (integral)
@@ -415,38 +425,43 @@ PYBIND11_MODULE(cpp, m)
           {
             py::array_t<std::int32_t> domains(active_entities.size(),
                                               active_entities.data());
-            return domains;
+            return py::make_tuple(domains, num_local);
           }
           case dolfinx::fem::IntegralType::exterior_facet:
           {
             std::array<py::ssize_t, 2> shape
                 = {py::ssize_t(active_entities.size() / 2), 2};
-            return dolfinx_wrappers::as_pyarray(std::move(active_entities),
-                                                shape);
+            return py::make_tuple(
+                dolfinx_wrappers::as_pyarray(std::move(active_entities), shape),
+                num_local);
           }
-          case dolfinx::fem::IntegralType::interior_facet:
-          {
-            std::array<py::ssize_t, 3> shape
-                = {py::ssize_t(active_entities.size() / 4), 2, 2};
-            return dolfinx_wrappers::as_pyarray(std::move(active_entities),
-                                                shape);
-          }
+
           default:
-            throw std::invalid_argument("Unsupported integral type");
+            throw std::invalid_argument(
+                "Integral type not supported. Note that this function "
+                "has not been implemented for interior facets.");
           }
         });
 
   m.def(
       "find_candidate_surface_segment",
       [](std::shared_ptr<const dolfinx::mesh::Mesh> mesh,
-         const std::vector<std::int32_t>& puppet_facets,
+         const std::vector<std::int32_t>& quadrature_facets,
          const std::vector<std::int32_t>& candidate_facets, const double radius)
       {
         return dolfinx_contact::find_candidate_surface_segment(
-            mesh, puppet_facets, candidate_facets, radius);
+            mesh, quadrature_facets, candidate_facets, radius);
       },
-      py::arg("mesh"), py::arg("puppet_facets"), py::arg("candidate_facets"),
-      py::arg("radius") = -1.0);
+      py::arg("mesh"), py::arg("quadrature_facets"),
+      py::arg("candidate_facets"), py::arg("radius") = -1.0);
+
+  m.def("point_cloud_pairs",
+        [](py::array_t<double, py::array::c_style>& points, double r)
+        {
+          std::span<const double> point_span(points.data(), points.size());
+          return dolfinx_contact::point_cloud_pairs(point_span, r);
+        });
+
   m.def(
       "raytracing",
       [](const dolfinx::mesh::Mesh& mesh,

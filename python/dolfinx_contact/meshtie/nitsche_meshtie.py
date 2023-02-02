@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier:    MIT
 
-from typing import Tuple
+from typing import Optional, Tuple
 
 import dolfinx.cpp.fem as _cppfem
 import dolfinx.common as _common
@@ -11,7 +11,7 @@ import dolfinx.log as _log
 import numpy as np
 import ufl
 from dolfinx.cpp.graph import AdjacencyList_int32
-from dolfinx.cpp.mesh import MeshTags_int32
+from dolfinx.mesh import meshtags
 from petsc4py import PETSc as _PETSc
 
 import dolfinx_contact
@@ -21,12 +21,18 @@ from dolfinx_contact.helpers import rigid_motions_nullspace_subdomains
 kt = dolfinx_contact.cpp.Kernel
 
 
-def nitsche_meshtie(lhs: ufl.Form, rhs: _fem.Function, u: _fem.Function, markers: list[MeshTags_int32],
+def nitsche_meshtie(lhs: ufl.Form,
+                    rhs: _fem.Function,
+                    u: _fem.Function,
+                    markers: list[meshtags],
                     surface_data: Tuple[AdjacencyList_int32, list[Tuple[int, int]]],
                     bcs: list[_fem.DirichletBCMetaClass],
                     problem_parameters: dict[str, np.float64],
-                    quadrature_degree: int = 5, form_compiler_options: dict = None, jit_options: dict = None,
-                    petsc_options: dict = None, timing_str: str = '') -> Tuple[_fem.Function, int, int, float]:
+                    quadrature_degree: int = 5,
+                    form_compiler_options: Optional[dict] = None,
+                    jit_options: Optional[dict] = None,
+                    petsc_options: Optional[dict] = None,
+                    timing_str: str = '') -> Tuple[_fem.Function, int, int, float]:
     """
     Use custom kernel to compute elasticity problem if mesh consists of topologically disconnected parts
 
@@ -194,6 +200,7 @@ def nitsche_meshtie(lhs: ufl.Form, rhs: _fem.Function, u: _fem.Function, markers
 
     # Assemble residual vector
     b.zeroEntries()
+    b.ghostUpdate(addv=_PETSc.InsertMode.INSERT, mode=_PETSc.ScatterMode.FORWARD)
     with _common.Timer("~~Contact " + timing_str + ": Contact contributions (in assemble vector)"):
         for i in range(len(surface_pairs)):
             contact.assemble_vector(b, i, kernel_rhs, coeffs[i], consts)
@@ -203,7 +210,7 @@ def nitsche_meshtie(lhs: ufl.Form, rhs: _fem.Function, u: _fem.Function, markers
         consts_ufl = _cppfem.pack_constants(F_custom)
     with _common.Timer("~~Contact " + timing_str + ": Standard contributions (in assemble vector)"):
         _fem.petsc.assemble_vector(b, F_custom, constants=consts_ufl, coeffs=coeffs_ufl)  # type: ignore
-
+        b.ghostUpdate(addv=_PETSc.InsertMode.ADD, mode=_PETSc.ScatterMode.REVERSE)
     # Apply boundary condition
     if len(bcs) > 0:
         x = u.vector

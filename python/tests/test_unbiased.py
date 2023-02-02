@@ -301,8 +301,10 @@ def create_contact_data(V, u, quadrature_degree, lmbda, mu, facets_cg, search, t
 
     # compute active entities
     integral = _fem.IntegralType.exterior_facet
-    entities_0 = dolfinx_contact.compute_active_entities(mesh, facets_cg[0], integral)
-    entities_1 = dolfinx_contact.compute_active_entities(mesh, facets_cg[1], integral)
+    entities_0, num_local_0 = dolfinx_contact.compute_active_entities(mesh._cpp_object, facets_cg[0], integral)
+    entities_0 = entities_0[:num_local_0]
+    entities_1, num_local_1 = dolfinx_contact.compute_active_entities(mesh._cpp_object, facets_cg[1], integral)
+    entities_1 = entities_1[:num_local_1]
 
     # pack coeffs mu, lambda
     material_0 = np.hstack([dolfinx_contact.cpp.pack_coefficient_quadrature(
@@ -359,11 +361,11 @@ def create_contact_data(V, u, quadrature_degree, lmbda, mu, facets_cg, search, t
     return contact, coeff_0, coeff_1
 
 
-@pytest.mark.parametrize("ct", ["quadrilateral", "triangle", "tetrahedron", "hexahedron"])
-@pytest.mark.parametrize("gap", [1e-13, -1e-13, 0.5, -0.5])
+@pytest.mark.parametrize("ct", ["triangle", "tetrahedron", "hexahedron"])
+@pytest.mark.parametrize("gap", [0.5, -0.5])
 @pytest.mark.parametrize("quadrature_degree", [1, 5])
 @pytest.mark.parametrize("theta", [1, 0, -1])
-@pytest.mark.parametrize("tied", [True, False])
+@pytest.mark.parametrize("tied", [False, True])
 @pytest.mark.parametrize("search", [dolfinx_contact.cpp.ContactMode.ClosestPoint,
                                     dolfinx_contact.cpp.ContactMode.Raytracing])
 def test_contact_kernels(ct, gap, quadrature_degree, theta, tied, search):

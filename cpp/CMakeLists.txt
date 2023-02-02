@@ -2,7 +2,7 @@
 cmake_minimum_required(VERSION 3.10)
 
 # Set project name and version number
-project(DOLFINX_CONTACT VERSION 0.5.1.0)
+project(DOLFINX_CONTACT VERSION 0.6.0.0)
 
 #------------------------------------------------------------------------------
 # Set CMake options, see `cmake --help-policy CMP00xx`
@@ -38,8 +38,8 @@ add_feature_info(CMAKE_INSTALL_RPATH_USE_LINK_PATH CMAKE_INSTALL_RPATH_USE_LINK_
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_CURRENT_SOURCE_DIR})
 
 # Find packages
-find_package(DOLFINX 0.5.1.0 REQUIRED)
-find_package(Basix 0.5.1.0 REQUIRED)
+find_package(DOLFINX 0.6.0.0 REQUIRED)
+find_package(Basix 0.6.0.0 REQUIRED)
 
 feature_summary(WHAT ALL)
 
@@ -53,7 +53,7 @@ target_link_libraries(dolfinx_contact PUBLIC Basix::basix)
 target_link_libraries(dolfinx_contact PUBLIC dolfinx)
 
 include(GNUInstallDirs)
-install(FILES Contact.h contact_kernels.h error_handling.h utils.h coefficients.h elasticity.h geometric_quantities.h meshtie_kernels.h SubMesh.h QuadratureRule.h RayTracing.h KernelData.h DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/dolfinx_contact COMPONENT Development)
+install(FILES Contact.h contact_kernels.h error_handling.h utils.h coefficients.h elasticity.h geometric_quantities.h meshtie_kernels.h point_cloud.h SubMesh.h QuadratureRule.h RayTracing.h KernelData.h DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/dolfinx_contact COMPONENT Development)
 
 target_sources(dolfinx_contact PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/utils.cpp
@@ -68,6 +68,7 @@ target_sources(dolfinx_contact PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/KernelData.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/error_handling.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/contact_kernels.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/point_cloud.cpp
   )
 
 # Set target include location (for build and installed)
