@@ -98,7 +98,7 @@ if __name__ == "__main__":
 
     # mark the whole domain
     cells = np.arange(mesh.topology.index_map(tdim).size_local
-                      + mesh.topology.index_map(tdim).num_ghosts, dtype=np.int32)
+                      + mesh.topology.index_map(tdim).num_ghosts, dtype=np.int64)
     domain_marker = meshtags(mesh, tdim, cells, np.full(cells.shape, 1, dtype=np.int32))
 
     if mesh.comm.size > 1:
