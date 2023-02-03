@@ -320,7 +320,8 @@ def test_meshtie(threed: bool = False, simplex: bool = True, runs: int = 5):
         u1, its, solver_time, ndofs = nitsche_meshtie(lhs=J, rhs=F, u=u, markers=[domain_marker, facet_marker],
                                                       surface_data=(surfaces, contact),
                                                       bcs=[], problem_parameters=problem_parameters,
-                                                      petsc_options=petsc_options)
+                                                      petsc_options=petsc_options,
+                                                      num_domains=2)
 
         u1.x.scatter_forward()
 

@@ -352,7 +352,7 @@ if __name__ == "__main__":
     u_all.x.array[:] = np.zeros(u.x.array[:].shape)
     geometry = mesh.geometry.x[:].copy()
 
-    log.set_log_level(log.LogLevel.OFF)
+    log.set_log_level(log.LogLevel.WARNING)
     num_newton_its = np.zeros((nload_steps, args.time_steps), dtype=int)
     num_krylov_its = np.zeros((nload_steps, args.time_steps), dtype=int)
     newton_time = np.zeros((nload_steps, args.time_steps), dtype=np.float64)

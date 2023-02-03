@@ -96,12 +96,9 @@ def create_contact_mesh(mesh, fmarker, dmarker, tags, R=0.2):
     cell_dests = compute_ghost_cell_destinations(mesh._cpp_object, marker_subset, R)
     log.log(log.LogLevel.WARNING, "cells to ghost")
     cells_to_ghost = [fc.links(f)[0] for f in marker_subset]
-#    assert cell_dests.num_nodes == len(cells_to_ghost)
     cell_to_dests = {}
     for i, c in enumerate(cells_to_ghost):
- #       print(i, cell_dests.links(i), cell_dests2.links(i))
         cell_to_dests[c] = cell_dests.links(i)
-     #    cell_to_dests = {c: d for c, d in zip(cells_to_ghost, cell_dests)}
 
     ncells = mesh.topology.index_map(tdim).size_local
 
