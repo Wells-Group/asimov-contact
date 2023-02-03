@@ -15,6 +15,7 @@
 #include <dolfinx_contact/SubMesh.h>
 #include <dolfinx_contact/coefficients.h>
 #include <dolfinx_contact/contact_kernels.h>
+#include <dolfinx_contact/parallel_mesh_ghosting.h>
 #include <dolfinx_contact/point_cloud.h>
 #include <dolfinx_contact/utils.h>
 #include <pybind11/functional.h>
@@ -461,6 +462,17 @@ PYBIND11_MODULE(cpp, m)
           std::span<const double> point_span(points.data(), points.size());
           return dolfinx_contact::point_cloud_pairs(point_span, r);
         });
+
+  m.def(
+      "compute_ghost_cell_destinations",
+      [](const dolfinx::mesh::Mesh& mesh,
+         py::array_t<std::int32_t, py::array::c_style>& marker_subset, double r)
+      {
+        std::span<const std::int32_t> marker_span(marker_subset.data(),
+                                                  marker_subset.size());
+        return dolfinx_contact::compute_ghost_cell_destinations(mesh,
+                                                                marker_span, r);
+      });
 
   m.def(
       "raytracing",

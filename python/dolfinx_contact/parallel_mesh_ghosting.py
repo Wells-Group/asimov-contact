@@ -7,12 +7,12 @@ from dolfinx.mesh import create_mesh, meshtags
 import dolfinx
 from dolfinx.cpp.mesh import entities_to_geometry, cell_num_vertices, cell_entity_type, to_type
 import numpy as np
-from dolfinx_contact.cpp import point_cloud_pairs
+from dolfinx_contact.cpp import point_cloud_pairs, compute_ghost_cell_destinations
 
-__all__ = ["create_contact_mesh", "compute_ghost_cell_destinations"]
+__all__ = ["create_contact_mesh", "compute_ghost_cell_destinations_py"]
 
 
-def compute_ghost_cell_destinations(mesh, marker_subset, R):
+def compute_ghost_cell_destinations_py(mesh, marker_subset, R):
     """For each marked facet, given by indices in "marker_subset", get the list of processes which
     the attached cell should be sent to, for ghosting. Neighbouring facets within distance "R"."""
 
@@ -32,10 +32,12 @@ def compute_ghost_cell_destinations(mesh, marker_subset, R):
         offsets = np.cumsum([0] + [w.shape[0] for w in x_all])
         x_all_flat = np.concatenate([x for x in x_all if len(x) > 0])
 
+        log.log(log.LogLevel.WARNING, f"x_all_flat.sum = {sum(x_all_flat)}")
+
         # Find all pairs of facets within radius R
         log.log(log.LogLevel.WARNING, "point-cloud-pairs")
         x_near = point_cloud_pairs(x_all_flat, R)
-        log.log(log.LogLevel.WARNING, "point-cloud-pairs done")
+        log.log(log.LogLevel.WARNING, f"point-cloud-pairs done {x_near.num_nodes, len(x_near.array)}" )
 
         # Find which process the neighboring facet came from
         i = 0
@@ -56,16 +58,15 @@ def compute_ghost_cell_destinations(mesh, marker_subset, R):
         for i, q in enumerate(procs):
             off = np.cumsum([0] + [len(w) for w in q])
             flat_q = sum(q, [])
-            scatter_back += [[len(off)] + list(off) + flat_q]
+            scatter_back += [list(off) + flat_q]
 
     log.log(log.LogLevel.WARNING, "send back")
     d = comm.scatter(scatter_back, root=0)
     # Unpack received data to get additional destinations for each facet/cell
-    n = d[0] + 1
-    offsets = d[1:n]
-    cell_dests = [d[n + offsets[j]:n + offsets[j + 1]] for j in range(n - 2)]
-    assert len(cell_dests) == len(marker_subset)
-    return cell_dests
+    n = len(x_facet) + 1
+    adj = dolfinx.graph.create_adjacencylist(d[n:], d[:n])
+    return adj
+
 
 
 def create_contact_mesh(mesh, fmarker, dmarker, tags, R=0.2):
@@ -91,11 +92,16 @@ def create_contact_mesh(mesh, fmarker, dmarker, tags, R=0.2):
 
     log.log(log.LogLevel.WARNING, "Compute cell destinations")
     # Find destinations for the cells attached to the tag-marked facets
-    cell_dests = compute_ghost_cell_destinations(mesh, marker_subset, R)
+#    cell_dests = compute_ghost_cell_destinations_py(mesh, marker_subset, R)
+    cell_dests = compute_ghost_cell_destinations(mesh._cpp_object, marker_subset, R)
     log.log(log.LogLevel.WARNING, "cells to ghost")
     cells_to_ghost = [fc.links(f)[0] for f in marker_subset]
-    assert len(cell_dests) == len(cells_to_ghost)
-    cell_to_dests = {c: d for c, d in zip(cells_to_ghost, cell_dests)}
+#    assert cell_dests.num_nodes == len(cells_to_ghost)
+    cell_to_dests = {}
+    for i, c in enumerate(cells_to_ghost):
+ #       print(i, cell_dests.links(i), cell_dests2.links(i))
+        cell_to_dests[c] = cell_dests.links(i)
+     #    cell_to_dests = {c: d for c, d in zip(cells_to_ghost, cell_dests)}
 
     ncells = mesh.topology.index_map(tdim).size_local
 
