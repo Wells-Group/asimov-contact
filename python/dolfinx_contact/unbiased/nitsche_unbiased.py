@@ -200,10 +200,10 @@ def copy_fns(fns: list[Union[fem.Function, fem.Constant]],
     """
     old_fns = []
     for fn in fns:
-        if fn is fem.Function:
+        if type(fn) is fem.Function:
             new_fn = fem.Function(fn.function_space)
             new_fn.x.array[:] = fn.x.array[:]
-            new_fn.scatter_forward()
+            new_fn.x.scatter_forward()
         else:
             shape = fn.value.shape
             temp = np.zeros(shape, dtype=_PETSc.ScalarType)
@@ -220,9 +220,9 @@ def update_fns(t: float, fns: list[Union[fem.Function, fem.Constant]],
     t* function value of function in old_fns
     """
     for k, fn in enumerate(fns):
-        if fn is fem.Function:
+        if type(fn) is fem.Function:
             fn.x.array[:] = t * old_fns[k].x.array[:]
-            fn.scatter_forward()
+            fn.x.scatter_forward()
         else:
             fn.value = t * old_fns[k].value
 
@@ -351,9 +351,6 @@ def nitsche_unbiased(steps: int, ufl_form: ufl.Form, u: fem.Function,
 
     contact.set_search_radius(search_radius)
 
-    with io.XDMFFile(contact.submesh().comm, f"debug.xdmf", "w") as xdmf:
-        xdmf.write_mesh(contact.submesh())
-
     # pack constants
     consts = np.array([gamma, theta], dtype=np.float64)
 
@@ -397,22 +394,19 @@ def nitsche_unbiased(steps: int, ufl_form: ufl.Form, u: fem.Function,
         const_coeffs.append(np.hstack([material[i], h_packed[i]]))
 
     # initialise vtx write
-#    vtx = io.VTXWriter(mesh.comm, f"{fname}.bp", [u])
-
+    vtx = io.VTXWriter(mesh.comm, f"{fname}.bp", [u])
 
     # write initial value
-#    vtx.write(0)
+    vtx.write(0)
     timings = []
     newton_its = []
     krylov_its = []
     for tt in range(steps):
-
+        log.log(log.LogLevel.WARNING, "Time step " + str(tt) + " of "+str(steps)+" +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
         # create distance map
         with common.Timer("~Contact: Distance maps"):
             for i in range(len(contact_pairs)):
-                print('i=', i)
                 contact.create_distance_map(i)
-
 
         # current time
         t = (tt + 1) / steps
@@ -432,7 +426,7 @@ def nitsche_unbiased(steps: int, ufl_form: ufl.Form, u: fem.Function,
         # Set Krylov solver options
         newton_solver.set_krylov_options(petsc_options)
         dofs_global = V.dofmap.index_map_bs * V.dofmap.index_map.size_global
-        log.set_log_level(log.LogLevel.OFF)
+        log.set_log_level(log.LogLevel.WARNING)
         # Solve non-linear problem
         timing_str = f"~Contact: {id(dofs_global)} Solve Nitsche"
         with common.Timer(timing_str):
@@ -459,8 +453,8 @@ def nitsche_unbiased(steps: int, ufl_form: ufl.Form, u: fem.Function,
         du.x.array[:] = (1. / steps) * du.x.array[:]
 
         # write solution
-#        vtx.write(t)
+        vtx.write(t)
 
     contact.update_submesh_geometry(u._cpp_object)
-#    vtx.close()
+    vtx.close()
     return u, newton_its, krylov_its, timings

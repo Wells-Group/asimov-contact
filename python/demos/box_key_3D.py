@@ -29,6 +29,9 @@ if __name__ == "__main__":
     parser.add_argument("--quadrature", default=5, type=int, dest="q_degree",
                         help="Quadrature degree used for contact integrals")
 
+    parser.add_argument("--time_steps", default=1, type=np.int32, dest="time_steps",
+                        help="Number of pseudo time steps")
+
     # Parse input arguments or set to defualt values
     args = parser.parse_args()
     mesh_dir = "meshes"
@@ -37,7 +40,7 @@ if __name__ == "__main__":
     WARNING = log.LogLevel.WARNING
     log.set_log_level(WARNING)
     # Convert gmsh output into xdmf
-    #    convert_mesh(fname, fname, gdim=3)
+    convert_mesh(fname, fname, gdim=3)
 
     # Read in mesh from xdmf file including markers
     # Cell markers:  It is expected that all cells are marked and that
@@ -81,10 +84,18 @@ if __name__ == "__main__":
 
     V = _fem.VectorFunctionSpace(mesh, ("CG", 1))
 
+    def _torque(x):
+        values = np.zeros((mesh.geometry.dim, x.shape[1]))
+        for i in range(x.shape[1]):
+            values[1, i] = 10*x[2, i]
+            values[2, i] = -10*x[1, i]
+        return values
+
     # Functions for Dirichlet and Neuman boundaries, body force
     g = _fem.Constant(mesh, _PETSc.ScalarType((0, 0, 0)))      # zero dirichlet
-    t = _fem.Constant(mesh, _PETSc.ScalarType((0.2, 0.0, 0)))  # traction
-    f = _fem.Constant(mesh, _PETSc.ScalarType((1.0, 0.0, 0)))  # body force
+    t = _fem.Function(V)
+    t.interpolate(_torque)  # traction
+    f = _fem.Constant(mesh, _PETSc.ScalarType((0.3, 0.0, 0)))  # body force
 
     ncells = mesh.topology.index_map(tdim).size_local
     indices = np.array(range(ncells), dtype=np.int32)
@@ -175,7 +186,7 @@ if __name__ == "__main__":
     size = mesh.comm.size
     outname = f"results/boxkey_{tdim}D_{size}"
     with Timer("~Contact: - all"):
-        u1, num_its, krylov_iterations, solver_time = nitsche_unbiased(1, ufl_form=F, u=u,
+        u1, num_its, krylov_iterations, solver_time = nitsche_unbiased(args.time_steps, ufl_form=F, u=u,
                                                                        rhs_fns=rhs_fns, markers=[domain_marker, facet_marker],
                                                                        contact_data=(surfaces, contact_pairs),
                                                                        bcs=[(),[]], problem_parameters=problem_parameters,
