@@ -92,7 +92,6 @@ def create_contact_mesh(mesh, fmarker, dmarker, tags, R=0.2):
 
     log.log(log.LogLevel.WARNING, "Compute cell destinations")
     # Find destinations for the cells attached to the tag-marked facets
-#    cell_dests = compute_ghost_cell_destinations_py(mesh, marker_subset, R)
     cell_dests = compute_ghost_cell_destinations(mesh._cpp_object, marker_subset, R)
     log.log(log.LogLevel.WARNING, "cells to ghost")
     cells_to_ghost = [fc.links(f)[0] for f in marker_subset]

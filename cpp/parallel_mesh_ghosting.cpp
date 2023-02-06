@@ -16,11 +16,11 @@ dolfinx_contact::compute_ghost_cell_destinations(
   // For each marked facet, given by indices in "marker_subset", get the list of
   // processes which the attached cell should be sent to, for ghosting.
   // Neighbouring facets within distance "R".
+  LOG(WARNING) << "Compute ghost cell destinations";
 
   const int size = dolfinx::MPI::size(mesh.comm());
   const int rank = dolfinx::MPI::rank(mesh.comm());
 
-  LOG(WARNING) << "midpoints " << rank << ": " << marker_subset.size();
   // 1. Get midpoints of all facets on interfaces
   const int tdim = mesh.topology().dim();
 
@@ -45,8 +45,6 @@ dolfinx_contact::compute_ghost_cell_destinations(
                           midpoint.end());
   }
 
-  LOG(WARNING) << "send to zero " << facet_midpoint.size();
-
   // 2. Send midpoints to process zero
   int count = facet_midpoint.size();
   std::vector<int> all_counts;
@@ -55,14 +53,9 @@ dolfinx_contact::compute_ghost_cell_destinations(
   MPI_Gather(&count, 1, MPI_INT, all_counts.data(), 1, MPI_INT, 0, mesh.comm());
   std::vector<int> offsets = {0};
   for (auto c : all_counts)
-  {
-    LOG(WARNING) << "All counts " << rank << ":" << c;
     offsets.push_back(offsets.back() + c);
-  }
 
   std::vector<double> x_all_flat(offsets.back());
-  LOG(WARNING) << "xallflat = " << x_all_flat.size();
-
   MPI_Gatherv(facet_midpoint.data(), facet_midpoint.size(), MPI_DOUBLE,
               x_all_flat.data(), all_counts.data(), offsets.data(), MPI_DOUBLE,
               0, mesh.comm());
@@ -77,13 +70,12 @@ dolfinx_contact::compute_ghost_cell_destinations(
     std::for_each(offsets.begin(), offsets.end(), [](int& i) { i /= 3; });
 
     // Find all pairs of facets within radius R
-    LOG(WARNING) << "point-cloud-pairs";
     auto x_near = dolfinx_contact::point_cloud_pairs(x_all_flat, R);
-    LOG(WARNING) << "point-cloud-pairs done " << x_near.num_nodes() << ","
-                 << x_near.array().size();
 
     int i = 0;
     std::vector<int> neighbor_p;
+    std::vector<int> pr;
+
     for (int p = 0; p < size; ++p)
     {
       assert(all_counts[p] % 3 == 0);
@@ -94,8 +86,7 @@ dolfinx_contact::compute_ghost_cell_destinations(
 
       for (int j = 0; j < num_facets_p; ++j)
       {
-        std::set<int> pr;
-
+        pr.clear();
         for (int n : x_near.links(i))
         {
           // Find which process this facet came from
@@ -106,7 +97,13 @@ dolfinx_contact::compute_ghost_cell_destinations(
 
           // Add to the sendback list, if not the same process
           if (q != p)
-            pr.insert(q);
+          {
+            if (std::find(pr.begin(), pr.end(), q) == pr.end())
+            {
+              pr.push_back(q);
+              std::sort(pr.begin(), pr.end());
+            }
+          }
         }
         neighbor_p.insert(neighbor_p.end(), pr.begin(), pr.end());
         neighbor_p[j + 1] = neighbor_p.size() - (num_facets_p + 1);
@@ -117,15 +114,13 @@ dolfinx_contact::compute_ghost_cell_destinations(
     }
   }
 
-  LOG(WARNING) << "send back " << rank;
-
+  // Scatter back sharing data to original process
   std::vector<int> dsizes(size);
   for (int i = 0; i < size; ++i)
     dsizes[i] = nbr_offsets[i + 1] - nbr_offsets[i];
   int my_recv_size;
   MPI_Scatter(dsizes.data(), 1, MPI_INT, &my_recv_size, 1, MPI_INT, 0,
               mesh.comm());
-  LOG(WARNING) << "my recv size = " << my_recv_size;
 
   std::vector<int> my_recv_data(my_recv_size);
   MPI_Scatterv(nbr_procs.data(), dsizes.data(), nbr_offsets.data(), MPI_INT,
@@ -137,8 +132,6 @@ dolfinx_contact::compute_ghost_cell_destinations(
 
   std::vector<int> cell_dests(std::next(my_recv_data.begin(), num_facets + 1),
                               my_recv_data.end());
-
-  LOG(WARNING) << rank << "]" << doffsets.back() << " " << cell_dests.size();
 
   return dolfinx::graph::AdjacencyList<std::int32_t>(cell_dests, doffsets);
 }
