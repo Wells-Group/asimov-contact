@@ -87,15 +87,15 @@ if __name__ == "__main__":
     def _torque(x):
         values = np.zeros((mesh.geometry.dim, x.shape[1]))
         for i in range(x.shape[1]):
-            values[1, i] = 10*x[2, i]
-            values[2, i] = -10*x[1, i]
+            values[1, i] = 100*x[2, i]
+            values[2, i] = -100*x[1, i]
         return values
 
     # Functions for Dirichlet and Neuman boundaries, body force
     g = _fem.Constant(mesh, _PETSc.ScalarType((0, 0, 0)))      # zero dirichlet
     t = _fem.Function(V)
     t.interpolate(_torque)  # traction
-    f = _fem.Constant(mesh, _PETSc.ScalarType((0.3, 0.0, 0)))  # body force
+    f = _fem.Constant(mesh, _PETSc.ScalarType((2.0, 0.0, 0)))  # body force
 
     ncells = mesh.topology.index_map(tdim).size_local
     indices = np.array(range(ncells), dtype=np.int32)
