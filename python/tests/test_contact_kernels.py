@@ -137,7 +137,8 @@ def test_vector_surface_kernel(dim, kernel_type, P, Q):
     data = np.array([1], dtype=np.int32)
     offsets = np.array([0, 1], dtype=np.int32)
     surfaces = create_adjacencylist(data, offsets)
-    contact = dolfinx_contact.cpp.Contact([ft], surfaces, [(0, 0)], V._cpp_object, quadrature_degree=2 * P + Q + 1)
+    contact = dolfinx_contact.cpp.Contact([ft._cpp_object], surfaces, [(0, 0)],
+                                          V._cpp_object, quadrature_degree=2 * P + Q + 1)
     contact.create_distance_map(0)
     g_vec = contact.pack_gap_plane(0, -g)
     # FIXME: assuming all facets are the same type
@@ -268,7 +269,8 @@ def test_matrix_surface_kernel(dim, kernel_type, P, Q):
     data = np.array([1], dtype=np.int32)
     offsets = np.array([0, 1], dtype=np.int32)
     surfaces = create_adjacencylist(data, offsets)
-    contact = dolfinx_contact.cpp.Contact([ft], surfaces, [(0, 0)], V._cpp_object, quadrature_degree=2 * P + Q + 1)
+    contact = dolfinx_contact.cpp.Contact([ft._cpp_object], surfaces, [(0, 0)],
+                                          V._cpp_object, quadrature_degree=2 * P + Q + 1)
     contact.create_distance_map(0)
     g_vec = contact.pack_gap_plane(0, -g)
     coeffs = np.hstack([mu_packed, lmbda_packed, h_facets, g_vec, u_packed, grad_u_packed])
