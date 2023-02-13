@@ -5,6 +5,7 @@
 // SPDX-License-Identifier:    MIT
 
 #include "error_handling.h"
+#include <algorithm>
 
 void dolfinx_contact::error::check_cell_type(dolfinx::mesh::CellType cell_type)
 {

@@ -200,10 +200,10 @@ def copy_fns(fns: list[Union[fem.Function, fem.Constant]],
     """
     old_fns = []
     for fn in fns:
-        if fn is fem.Function:
+        if type(fn) is fem.Function:
             new_fn = fem.Function(fn.function_space)
             new_fn.x.array[:] = fn.x.array[:]
-            new_fn.scatter_forward()
+            new_fn.x.scatter_forward()
         else:
             shape = fn.value.shape
             temp = np.zeros(shape, dtype=_PETSc.ScalarType)
@@ -220,9 +220,9 @@ def update_fns(t: float, fns: list[Union[fem.Function, fem.Constant]],
     t* function value of function in old_fns
     """
     for k, fn in enumerate(fns):
-        if fn is fem.Function:
+        if type(fn) is fem.Function:
             fn.x.array[:] = t * old_fns[k].x.array[:]
-            fn.scatter_forward()
+            fn.x.scatter_forward()
         else:
             fn.value = t * old_fns[k].value
 
@@ -339,14 +339,16 @@ def nitsche_unbiased(steps: int, ufl_form: ufl.Form, u: fem.Function,
     old_bc_fns = copy_fns(bcs[1], mesh)
 
     # create contact class
+    markers_cpp = [marker._cpp_object for marker in markers[1:]]
     with common.Timer("~Contact: Init"):
-        contact = dolfinx_contact.cpp.Contact(markers[1:], contact_surfaces, contact_pairs,
+        contact = dolfinx_contact.cpp.Contact(markers_cpp, contact_surfaces, contact_pairs,
                                               V._cpp_object, quadrature_degree=quadrature_degree,
                                               search_method=search_method)
 
     xdmf = cpp.io.XDMFFile(mesh.comm, "debug.xdmf", "w")
-    xdmf.write_mesh(contact.submesh())
-    del xdmf
+    xdmf.write_mesh(contact.submesh(), xpath="/Xdmf/Domain")
+    del (xdmf)
+
     log.log(log.LogLevel.WARNING, "Done debug I/O")
 
     contact.set_search_radius(search_radius)
@@ -402,7 +404,8 @@ def nitsche_unbiased(steps: int, ufl_form: ufl.Form, u: fem.Function,
     newton_its = []
     krylov_its = []
     for tt in range(steps):
-
+        log.log(log.LogLevel.WARNING, "Time step " + str(tt) + " of " + str(steps)
+                + " +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
         # create distance map
         with common.Timer("~Contact: Distance maps"):
             for i in range(len(contact_pairs)):
@@ -426,7 +429,7 @@ def nitsche_unbiased(steps: int, ufl_form: ufl.Form, u: fem.Function,
         # Set Krylov solver options
         newton_solver.set_krylov_options(petsc_options)
         dofs_global = V.dofmap.index_map_bs * V.dofmap.index_map.size_global
-        log.set_log_level(log.LogLevel.OFF)
+        log.set_log_level(log.LogLevel.WARNING)
         # Solve non-linear problem
         timing_str = f"~Contact: {id(dofs_global)} Solve Nitsche"
         with common.Timer(timing_str):

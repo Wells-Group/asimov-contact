@@ -186,7 +186,7 @@ def nitsche_rigid_surface_custom(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.meshta
     data = np.array([contact_value_elastic, contact_value_rigid], dtype=np.int32)
     offsets = np.array([0, 2], dtype=np.int32)
     surfaces = create_adjacencylist(data, offsets)
-    contact = dolfinx_contact.cpp.Contact([facet_marker], surfaces, [(0, 1)],
+    contact = dolfinx_contact.cpp.Contact([facet_marker._cpp_object], surfaces, [(0, 1)],
                                           V._cpp_object, quadrature_degree=quadrature_degree)
 
     # Compute gap and normals
@@ -205,7 +205,7 @@ def nitsche_rigid_surface_custom(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.meshta
 
     # NOTE: HACK to make "one-sided" contact work with assemble_matrix/assemble_vector
     contact_assembler = dolfinx_contact.cpp.Contact(
-        [facet_marker], surfaces, [(0, 1)], V._cpp_object, quadrature_degree=quadrature_degree)
+        [facet_marker._cpp_object], surfaces, [(0, 1)], V._cpp_object, quadrature_degree=quadrature_degree)
 
     # Pack coefficients to get numpy array of correct size for Newton solver
     u_packed = dolfinx_contact.cpp.pack_coefficient_quadrature(u._cpp_object, quadrature_degree, integral_entities)
