@@ -339,14 +339,16 @@ def nitsche_unbiased(steps: int, ufl_form: ufl.Form, u: fem.Function,
     old_bc_fns = copy_fns(bcs[1], mesh)
 
     # create contact class
+    markers_cpp = [marker._cpp_object for marker in markers[1:]]
     with common.Timer("~Contact: Init"):
-        contact = dolfinx_contact.cpp.Contact(markers[1:], contact_surfaces, contact_pairs,
+        contact = dolfinx_contact.cpp.Contact(markers_cpp, contact_surfaces, contact_pairs,
                                               V._cpp_object, quadrature_degree=quadrature_degree,
                                               search_method=search_method)
 
     xdmf = cpp.io.XDMFFile(mesh.comm, "debug.xdmf", "w")
-    xdmf.write_mesh(contact.submesh())
-    del xdmf
+    xdmf.write_mesh(contact.submesh(), xpath="/Xdmf/Domain")
+    del (xdmf)
+
     log.log(log.LogLevel.WARNING, "Done debug I/O")
 
     contact.set_search_radius(search_radius)
