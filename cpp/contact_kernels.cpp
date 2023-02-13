@@ -127,12 +127,8 @@ dolfinx_contact::generate_contact_kernel(
     std::vector<double> trb(ndofs_cell * gdim);
     mdspan2_t tr(trb.data(), ndofs_cell, gdim);
     std::vector<double> sig_n_u(gdim);
-    std::array<double, 9> def_gradb;
-    mdspan2_t def_grad(def_gradb.data(), gdim, gdim);
-    std::array<double, 9> def_grad_invb;
-    mdspan2_t def_grad_inv(def_grad_invb.data(), gdim, gdim);
     std::vector<double> dnxb(gdim * ndofs_cell * bs);
-    mdspan3_t dnx(dnxb.data(), nodfs_cell, bs, gdim);
+    mdspan3_t dnx(dnxb.data(), ndofs_cell, bs, gdim);
 
     // Loop over quadrature points
     for (auto q : q_indices)
@@ -165,7 +161,7 @@ dolfinx_contact::generate_contact_kernel(
       // compute Dnx
       std::fill(dnxb.begin(), dnxb.end(), 0.0);
       compute_dnx(c.subspan(kd.offsets(9) + q * gdim * gdim, gdim * gdim), dphi,
-                  K, n_x, dnx, def_grad, def_grad_inv);
+                  K, n_x, dnx, def_grad, def_grad_inv, q_pos);
 
       // compute inner(sig(u)*n_phys, n_surf) and inner(u, n_surf)
       double sign_u = 0;
@@ -182,14 +178,14 @@ dolfinx_contact::generate_contact_kernel(
         {
           double sign_w = (lmbda * tr(j, l) * n_dot + mu * epsn(j, l));
           double Pn_w
-              = (gamma * sign_w - phi(q_pos, j) * n_surf[l]) * Pn_u * weight;
+              = (gamma * sign_w - phi(q_pos, j) * n_x[l]) * Pn_u * weight;
 
           sign_w *= weight;
           for (std::size_t i = 0; i < ndofs_cell; i++)
           {
             for (std::size_t b = 0; b < bs; b++)
             {
-              double v_dot_nsurf = n_surf[b] * phi(q_pos, i);
+              double v_dot_nsurf = n_x[b] * phi(q_pos, i);
               double sign_v = (lmbda * tr(i, b) * n_dot + mu * epsn(i, b));
               double Pn_v = gamma_inv * v_dot_nsurf - theta * sign_v;
               A[0][(b + i * bs) * ndofs_cell * bs + l + j * bs]
@@ -202,13 +198,13 @@ dolfinx_contact::generate_contact_kernel(
                 std::size_t index = kd.offsets(6)
                                     + k * num_points * ndofs_cell * bs
                                     + j * num_points * bs + q * bs + l;
-                double w_n_opp = c[index] * n_surf[l];
+                double w_n_opp = c[index] * n_x[l];
 
                 w_n_opp *= weight * Pn_u;
                 // index for test function value on opposite surface
                 index = kd.offsets(6) + k * num_points * ndofs_cell * bs
                         + i * num_points * bs + q * bs + b;
-                double v_n_opp = c[index] * n_surf[b];
+                double v_n_opp = c[index] * n_x[b];
                 A[3 * k + 1][(b + i * bs) * bs * ndofs_cell + l + j * bs]
                     -= 0.5 * w_n_opp * Pn_v;
                 A[3 * k + 2][(b + i * bs) * bs * ndofs_cell + l + j * bs]

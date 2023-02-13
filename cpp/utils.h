@@ -375,7 +375,7 @@ compute_projection_map(const dolfinx::mesh::Mesh& mesh,
 
       // Compute distance between convex hull of facet and point
       std::array<double, 3> dist_vec = dolfinx::geometry::compute_distance_gjk(
-          coordinate_dofs, std::span(std::next(points.begin(), 3 * i), 3));
+          coordinate_dofs, std::span(points.data() + 3 * i, 3));
 
       // Compute point on closest facet
       for (std::size_t l = 0; l < 3; ++l)
@@ -612,10 +612,10 @@ compute_raytracing_map(const dolfinx::mesh::Mesh& quadrature_mesh,
       // Push forward normal using covariant Piola
       // transform
       std::fill(normal.begin(), normal.end(), 0);
-      physical_facet_normal(std::span(normal.data(), gdim), K,
-                            std::span(std::next(reference_normals.begin(),
-                                                rn_shape[1] * facet_index),
-                                      rn_shape[1]));
+      physical_facet_normal(
+          std::span(normal.data(), gdim), K,
+          std::span(reference_normals.data() + rn_shape[1] * facet_index,
+                    rn_shape[1]));
 
       // Copy data regarding quadrature point into allocated memory for
       // raytracing
@@ -673,8 +673,7 @@ compute_raytracing_map(const dolfinx::mesh::Mesh& quadrature_mesh,
         dolfinx::fem::CoordinateElement::compute_jacobian_inverse(J_c, K_c);
         dolfinx_contact::physical_facet_normal(
             std::span(normal_c.data(), gdim), K_c,
-            std::span(std::next(reference_normals.begin(),
-                                rn_shape[1] * facet_index_c),
+            std::span(reference_normals.data() + rn_shape[1] * facet_index_c,
                       rn_shape[1]));
 
         // retrieve ray

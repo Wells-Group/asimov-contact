@@ -9,6 +9,7 @@
 
 #include "QuadratureRule.h"
 #include <span>
+#include <dolfinx/fem/CoordinateElement.h>
 
 namespace dolfinx_contact
 {
@@ -80,6 +81,6 @@ void compute_sigma_n_opp(mdspan4_t sig_n_opp, std::span<const double> grad_v,
 void compute_dnx(std::span<const double> grad_u, cmdspan3_t dphi,
                           cmdspan2_t K, const std::array<double, 3> n_x,
                           mdspan3_t dnx, mdspan2_t def_grad,
-                          mdspan2_t def_grad_inv);
+                          mdspan2_t def_grad_inv, const std::size_t q_pos);
 
 } // namespace dolfinx_contact

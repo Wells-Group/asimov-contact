@@ -393,9 +393,7 @@ dolfinx_contact::Contact::pack_nx(int pair)
 
       // Push forward normal using covariant Piola
       physical_facet_normal(
-          std::span(std::next(normals.begin(), i / 2 * cstride + q * gdim),
-                    gdim),
-          K,
+          std::span(normals.data() + i / 2 * cstride + q * gdim, gdim), K,
           stdex::submdspan(facet_normals, quadrature_facets[i + 1],
                            stdex::full_extent));
     }
@@ -1351,8 +1349,8 @@ dolfinx_contact::Contact::pack_ny(int pair)
 
       // Push forward normal using covariant Piola
       physical_facet_normal(
-          std::span(std::next(normals.begin(), i * cstride + q * gdim), gdim),
-          K, stdex::submdspan(facet_normals, local_idx, stdex::full_extent));
+          std::span(normals.data() + i * cstride + q * gdim, gdim), K,
+          stdex::submdspan(facet_normals, local_idx, stdex::full_extent));
     }
   }
   return {std::move(normals), cstride};

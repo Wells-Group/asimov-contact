@@ -286,7 +286,7 @@ def create_contact_data(V, u, quadrature_degree, lmbda, mu, facets_cg, search, t
     offsets = np.array([0, 2], dtype=np.int32)
     surfaces = create_adjacencylist(data, offsets)
     # create contact class
-    contact = dolfinx_contact.cpp.Contact([facet_marker], surfaces, [(0, 1), (1, 0)],
+    contact = dolfinx_contact.cpp.Contact([facet_marker._cpp_object], surfaces, [(0, 1), (1, 0)],
                                           V._cpp_object, quadrature_degree=quadrature_degree,
                                           search_method=search)
     contact.create_distance_map(0)
@@ -301,9 +301,9 @@ def create_contact_data(V, u, quadrature_degree, lmbda, mu, facets_cg, search, t
 
     # compute active entities
     integral = _fem.IntegralType.exterior_facet
-    entities_0, num_local_0 = dolfinx_contact.compute_active_entities(mesh, facets_cg[0], integral)
+    entities_0, num_local_0 = dolfinx_contact.compute_active_entities(mesh._cpp_object, facets_cg[0], integral)
     entities_0 = entities_0[:num_local_0]
-    entities_1, num_local_1 = dolfinx_contact.compute_active_entities(mesh, facets_cg[1], integral)
+    entities_1, num_local_1 = dolfinx_contact.compute_active_entities(mesh._cpp_object, facets_cg[1], integral)
     entities_1 = entities_1[:num_local_1]
 
     # pack coeffs mu, lambda

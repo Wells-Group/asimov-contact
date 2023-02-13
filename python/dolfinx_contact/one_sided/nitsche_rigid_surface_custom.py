@@ -6,7 +6,6 @@ from typing import Optional, Dict, Tuple
 
 import basix
 import dolfinx.common as _common
-import dolfinx.cpp as _cpp
 import dolfinx.fem as _fem
 import dolfinx.log as _log
 import dolfinx.mesh as _mesh
@@ -23,7 +22,7 @@ __all__ = ["nitsche_rigid_surface_custom"]
 kt = dolfinx_contact.cpp.Kernel
 
 
-def nitsche_rigid_surface_custom(mesh: _mesh.Mesh, mesh_data: Tuple[_cpp.mesh.MeshTags_int32, int, int, int, int],
+def nitsche_rigid_surface_custom(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.meshtags, int, int, int, int],
                                  physical_parameters: Optional[dict] = None,
                                  nitsche_parameters: Optional[Dict[str, float]] = None,
                                  vertical_displacement: float = -0.1, nitsche_bc: bool = True,
@@ -167,7 +166,7 @@ def nitsche_rigid_surface_custom(mesh: _mesh.Mesh, mesh_data: Tuple[_cpp.mesh.Me
     # Compute integral entities on exterior facets (cell_index, local_index)
     contact_facets = facet_marker.find(contact_value_elastic)
     integral = _fem.IntegralType.exterior_facet
-    integral_entities, num_local = dolfinx_contact.compute_active_entities(mesh, contact_facets, integral)
+    integral_entities, num_local = dolfinx_contact.compute_active_entities(mesh._cpp_object, contact_facets, integral)
     integral_entities = integral_entities[:num_local, :]
 
     # Pack mu and lambda on facets
@@ -187,7 +186,7 @@ def nitsche_rigid_surface_custom(mesh: _mesh.Mesh, mesh_data: Tuple[_cpp.mesh.Me
     data = np.array([contact_value_elastic, contact_value_rigid], dtype=np.int32)
     offsets = np.array([0, 2], dtype=np.int32)
     surfaces = create_adjacencylist(data, offsets)
-    contact = dolfinx_contact.cpp.Contact([facet_marker], surfaces, [(0, 1)],
+    contact = dolfinx_contact.cpp.Contact([facet_marker._cpp_object], surfaces, [(0, 1)],
                                           V._cpp_object, quadrature_degree=quadrature_degree)
 
     # Compute gap and normals
@@ -206,7 +205,7 @@ def nitsche_rigid_surface_custom(mesh: _mesh.Mesh, mesh_data: Tuple[_cpp.mesh.Me
 
     # NOTE: HACK to make "one-sided" contact work with assemble_matrix/assemble_vector
     contact_assembler = dolfinx_contact.cpp.Contact(
-        [facet_marker], surfaces, [(0, 1)], V._cpp_object, quadrature_degree=quadrature_degree)
+        [facet_marker._cpp_object], surfaces, [(0, 1)], V._cpp_object, quadrature_degree=quadrature_degree)
 
     # Pack coefficients to get numpy array of correct size for Newton solver
     u_packed = dolfinx_contact.cpp.pack_coefficient_quadrature(u._cpp_object, quadrature_degree, integral_entities)

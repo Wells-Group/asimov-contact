@@ -21,7 +21,7 @@ from dolfinx_contact.helpers import (R_minus, epsilon, lame_parameters,
                                      rigid_motions_nullspace, sigma_func)
 
 
-def nitsche_rigid_surface(mesh: _mesh.Mesh, mesh_data: Tuple[_cpp.mesh.MeshTags_int32, int, int, int, int],
+def nitsche_rigid_surface(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.meshtags, int, int, int, int],
                           physical_parameters: dict = {}, nitsche_parameters: Dict[str, float] = {},
                           vertical_displacement: float = -0.1, nitsche_bc: bool = False, quadrature_degree: int = 5,
                           form_compiler_options: Dict = {}, jit_options: Dict = {}, petsc_options: Dict = {},
@@ -162,7 +162,8 @@ def nitsche_rigid_surface(mesh: _mesh.Mesh, mesh_data: Tuple[_cpp.mesh.MeshTags_
     offsets = np.array([0, 2], dtype=np.int32)
     surfaces = create_adjacencylist(data, offsets)
     # Ensures that we find closest facet to midpoint of facet by setting quadrature degree to 1
-    contact = dolfinx_contact.cpp.Contact([facet_marker], surfaces, [(0, 1)], V._cpp_object, quadrature_degree=1)
+    contact = dolfinx_contact.cpp.Contact([facet_marker._cpp_object], surfaces, [(0, 1)],
+                                          V._cpp_object, quadrature_degree=1)
 
     # Create gap function
     gdim = mesh.geometry.dim
@@ -183,7 +184,7 @@ def nitsche_rigid_surface(mesh: _mesh.Mesh, mesh_data: Tuple[_cpp.mesh.MeshTags_
             facet = facets[i]
             # Compute distance between point and closest facet
             index = np.argwhere(np.array(contact_facets) == facet)[0, 0]
-            facet_geometry = _cpp.mesh.entities_to_geometry(mesh, fdim, [facet], False)
+            facet_geometry = _cpp.mesh.entities_to_geometry(mesh._cpp_object, fdim, [facet], False)
             coords0 = mesh_geometry[facet_geometry][0]
             R = np.linalg.norm(_cpp.geometry.compute_distance_gjk(coords0, xi))
             # If point on a facet in contact surface (i.e., if distance between point and closest
@@ -191,7 +192,7 @@ def nitsche_rigid_surface(mesh: _mesh.Mesh, mesh_data: Tuple[_cpp.mesh.MeshTags_
             # compute distance vector
             if np.isclose(R, 0):
                 facet_2 = lookup.links(index)[0]
-                facet2_geometry = _cpp.mesh.entities_to_geometry(mesh, fdim, [facet_2], False)
+                facet2_geometry = _cpp.mesh.entities_to_geometry(mesh._cpp_object, fdim, [facet_2], False)
                 coords = mesh_geometry[facet2_geometry][0]
                 dist_vec = _cpp.geometry.compute_distance_gjk(coords, xi)
                 dist_vec_array[: gdim, i] = dist_vec[: gdim]

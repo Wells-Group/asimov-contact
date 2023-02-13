@@ -23,16 +23,16 @@ def test_raytracing_3D(cell_type):
     facets = dolfinx.mesh.locate_entities_boundary(mesh, tdim - 1, lambda x: np.isclose(x[2], 0))
 
     integral_pairs, num_local = dolfinx_contact.cpp.compute_active_entities(
-        mesh, facets, dolfinx.fem.IntegralType.exterior_facet)
+        mesh._cpp_object, facets, dolfinx.fem.IntegralType.exterior_facet)
     integral_pairs = integral_pairs[:num_local]
 
-    status, cell_idx, x, X = dolfinx_contact.cpp.raytracing(mesh, origin, normal, integral_pairs, 10, 1e-6)
+    status, cell_idx, x, X = dolfinx_contact.cpp.raytracing(mesh._cpp_object, origin, normal, integral_pairs, 10, 1e-6)
 
     if status > 0:
         # Create structures needed for closest point projections
-        boundary_cells = dolfinx.mesh.compute_incident_entities(mesh, facets, tdim - 1, tdim)
+        boundary_cells = dolfinx.mesh.compute_incident_entities(mesh.topology, facets, tdim - 1, tdim)
         bb_tree = dolfinx.geometry.BoundingBoxTree(mesh, tdim, boundary_cells)
-        midpoint_tree = dolfinx.cpp.geometry.create_midpoint_tree(mesh, tdim, boundary_cells)
+        midpoint_tree = dolfinx.cpp.geometry.create_midpoint_tree(mesh._cpp_object, tdim, boundary_cells)
 
         # Find closest cell using closest point projection
         closest_cell = dolfinx.geometry.compute_closest_entity(
@@ -58,15 +58,15 @@ def test_raytracing_3D_corner(cell_type):
     facets = dolfinx.mesh.locate_entities_boundary(mesh, tdim - 1, lambda x: np.isclose(x[2], 1))
 
     integral_pairs, num_local = dolfinx_contact.cpp.compute_active_entities(
-        mesh, facets, dolfinx.fem.IntegralType.exterior_facet)
+        mesh._cpp_object, facets, dolfinx.fem.IntegralType.exterior_facet)
     integral_pairs = integral_pairs[:num_local]
     status, cell_idx, x, X = dolfinx_contact.cpp.raytracing(
-        mesh, origin, normal, integral_pairs, 10, 1e-6)
+        mesh._cpp_object, origin, normal, integral_pairs, 10, 1e-6)
     if status > 0:
         # Create structures needed for closest point projections
-        boundary_cells = dolfinx.mesh.compute_incident_entities(mesh, facets, tdim - 1, tdim)
+        boundary_cells = dolfinx.mesh.compute_incident_entities(mesh.topology, facets, tdim - 1, tdim)
         bb_tree = dolfinx.geometry.BoundingBoxTree(mesh, tdim, boundary_cells)
-        midpoint_tree = dolfinx.cpp.geometry.create_midpoint_tree(mesh, tdim, boundary_cells)
+        midpoint_tree = dolfinx.cpp.geometry.create_midpoint_tree(mesh._cpp_object, tdim, boundary_cells)
 
         # Find closest cell using closest point projection
         closest_cell = dolfinx.geometry.compute_closest_entity(
@@ -91,16 +91,16 @@ def test_raytracing_2D(cell_type):
     facets = dolfinx.mesh.locate_entities_boundary(mesh, tdim - 1, lambda x: np.isclose(x[1], 0))
 
     integral_pairs, num_local = dolfinx_contact.cpp.compute_active_entities(
-        mesh, facets, dolfinx.fem.IntegralType.exterior_facet)
+        mesh._cpp_object, facets, dolfinx.fem.IntegralType.exterior_facet)
     integral_pairs = integral_pairs[:num_local]
 
-    status, cell_idx, x, X = dolfinx_contact.cpp.raytracing(mesh, origin, normal, integral_pairs, 10, 1e-6)
+    status, cell_idx, x, X = dolfinx_contact.cpp.raytracing(mesh._cpp_object, origin, normal, integral_pairs, 10, 1e-6)
 
     if status > 0:
         # Create structures needed for closest point projections
-        boundary_cells = dolfinx.mesh.compute_incident_entities(mesh, facets, tdim - 1, tdim)
+        boundary_cells = dolfinx.mesh.compute_incident_entities(mesh.topology, facets, tdim - 1, tdim)
         bb_tree = dolfinx.geometry.BoundingBoxTree(mesh, tdim, boundary_cells)
-        midpoint_tree = dolfinx.cpp.geometry.create_midpoint_tree(mesh, tdim, boundary_cells)
+        midpoint_tree = dolfinx.cpp.geometry.create_midpoint_tree(mesh._cpp_object, tdim, boundary_cells)
         op = np.array([origin[0], origin[1], 0])
         # Find closest cell using closest point projection
         closest_cell = dolfinx.geometry.compute_closest_entity(
@@ -126,15 +126,15 @@ def test_raytracing_2D_corner(cell_type):
     facets = dolfinx.mesh.locate_entities_boundary(mesh, tdim - 1, lambda x: np.isclose(x[1], 1))
 
     integral_pairs, num_local = dolfinx_contact.cpp.compute_active_entities(
-        mesh, facets, dolfinx.fem.IntegralType.exterior_facet)
+        mesh._cpp_object, facets, dolfinx.fem.IntegralType.exterior_facet)
     integral_pairs = integral_pairs[:num_local]
     status, cell_idx, x, X = dolfinx_contact.cpp.raytracing(
-        mesh, origin, normal, integral_pairs, 10, 1e-6)
+        mesh._cpp_object, origin, normal, integral_pairs, 10, 1e-6)
     if status > 0:
         # Create structures needed for closest point projections
-        boundary_cells = dolfinx.mesh.compute_incident_entities(mesh, facets, tdim - 1, tdim)
+        boundary_cells = dolfinx.mesh.compute_incident_entities(mesh.topology, facets, tdim - 1, tdim)
         bb_tree = dolfinx.geometry.BoundingBoxTree(mesh, tdim, boundary_cells)
-        midpoint_tree = dolfinx.cpp.geometry.create_midpoint_tree(mesh, tdim, boundary_cells)
+        midpoint_tree = dolfinx.cpp.geometry.create_midpoint_tree(mesh._cpp_object, tdim, boundary_cells)
 
         # Find closest cell using closest point projection
         op = np.array([origin[0], origin[1], 0])
@@ -173,7 +173,7 @@ def test_raytracing_manifold(cell_type):
     facets = dolfinx.mesh.locate_entities_boundary(mesh, tdim - 1, lambda x: np.isclose(x[1], 1))
 
     integral_pairs, num_local = dolfinx_contact.cpp.compute_active_entities(
-        mesh, facets, dolfinx.fem.IntegralType.exterior_facet)
+        mesh._cpp_object, facets, dolfinx.fem.IntegralType.exterior_facet)
     integral_pairs = integral_pairs[:num_local]
-    status, cell_idx, x, X = dolfinx_contact.cpp.raytracing(mesh, origin, normal, integral_pairs, 10, 1e-6)
+    status, cell_idx, x, X = dolfinx_contact.cpp.raytracing(mesh._cpp_object, origin, normal, integral_pairs, 10, 1e-6)
     assert np.allclose(x, exact_point)

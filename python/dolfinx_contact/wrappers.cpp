@@ -16,6 +16,7 @@
 #include <dolfinx_contact/coefficients.h>
 #include <dolfinx_contact/contact_kernels.h>
 #include <dolfinx_contact/rigid_surface_kernels.h>
+#include <dolfinx_contact/point_cloud.h>
 #include <dolfinx_contact/utils.h>
 #include <pybind11/functional.h>
 #include <pybind11/operators.h>
@@ -240,7 +241,7 @@ PYBIND11_MODULE(cpp, m)
               const py::array_t<PetscScalar, py::array::c_style>& coeffs,
               const py::array_t<PetscScalar, py::array::c_style>& constants)
            {
-             auto ker = kernel.get();             
+             auto ker = kernel.get();
              self.assemble_vector(
                  std::span(b.mutable_data(), b.size()), origin_meshtag, ker,
                  std::span(coeffs.data(), coeffs.size()),
@@ -455,6 +456,14 @@ PYBIND11_MODULE(cpp, m)
       },
       py::arg("mesh"), py::arg("quadrature_facets"),
       py::arg("candidate_facets"), py::arg("radius") = -1.0);
+
+  m.def("point_cloud_pairs",
+        [](py::array_t<double, py::array::c_style>& points, double r)
+        {
+          std::span<const double> point_span(points.data(), points.size());
+          return dolfinx_contact::point_cloud_pairs(point_span, r);
+        });
+
   m.def(
       "raytracing",
       [](const dolfinx::mesh::Mesh& mesh,

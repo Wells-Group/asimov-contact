@@ -11,7 +11,6 @@ from dolfinx import common as _common
 from dolfinx import fem as _fem
 from dolfinx import log as _log
 from dolfinx import mesh as dmesh
-from dolfinx import cpp as _cpp
 from dolfinx.graph import create_adjacencylist
 import dolfinx_contact
 import dolfinx_contact.cpp
@@ -21,7 +20,7 @@ from dolfinx_contact.helpers import (epsilon, lame_parameters,
 __all__ = ["nitsche_custom"]
 
 
-def nitsche_custom(mesh: dmesh.Mesh, mesh_data: Tuple[_cpp.mesh.MeshTags_int32, int, int],
+def nitsche_custom(mesh: dmesh.Mesh, mesh_data: Tuple[dmesh.meshtags, int, int],
                    physical_parameters: dict = {}, nitsche_parameters: Dict[str, float] = {},
                    plane_loc: float = 0.0, vertical_displacement: float = -0.1,
                    nitsche_bc: bool = True, quadrature_degree: int = 5, form_compiler_options: Dict = {},
@@ -140,7 +139,7 @@ def nitsche_custom(mesh: dmesh.Mesh, mesh_data: Tuple[_cpp.mesh.MeshTags_int32, 
     # Compute integral entities on exterior facets (cell_index, local_index)
     bottom_facets = facet_marker.find(contact_value)
     integral = _fem.IntegralType.exterior_facet
-    integral_entities, num_local = dolfinx_contact.compute_active_entities(mesh, bottom_facets, integral)
+    integral_entities, num_local = dolfinx_contact.compute_active_entities(mesh._cpp_object, bottom_facets, integral)
     integral_entities = integral_entities[:num_local, :]
     # Pack mu and lambda on facets
     coeffs = np.hstack([dolfinx_contact.cpp.pack_coefficient_quadrature(
@@ -148,13 +147,13 @@ def nitsche_custom(mesh: dmesh.Mesh, mesh_data: Tuple[_cpp.mesh.MeshTags_int32, 
         dolfinx_contact.cpp.pack_coefficient_quadrature(
         lmbda2._cpp_object, 0, integral_entities)])
     # Pack circumradius of facets
-    h_facets = dolfinx_contact.pack_circumradius(mesh, integral_entities)
+    h_facets = dolfinx_contact.pack_circumradius(mesh._cpp_object, integral_entities)
 
     # Create contact class
     data = np.array([contact_value, dirichlet_value], dtype=np.int32)
     offsets = np.array([0, 2], dtype=np.int32)
     surfaces = create_adjacencylist(data, offsets)
-    contact = dolfinx_contact.cpp.Contact([facet_marker], surfaces, [(0, 1)],
+    contact = dolfinx_contact.cpp.Contact([facet_marker._cpp_object], surfaces, [(0, 1)],
                                           V._cpp_object, quadrature_degree=quadrature_degree)
     contact.create_distance_map(0)
 
@@ -168,7 +167,7 @@ def nitsche_custom(mesh: dmesh.Mesh, mesh_data: Tuple[_cpp.mesh.MeshTags_int32, 
     L_custom = _fem.form(F, jit_options=jit_options, form_compiler_options=form_compiler_options)
     kernel_rhs = dolfinx_contact.cpp.generate_rigid_surface_kernel(V._cpp_object, dolfinx_contact.Kernel.Rhs, q_rule)
     # NOTE: HACK to make "one-sided" contact work with assemble_matrix/assemble_vector
-    contact_assembler = dolfinx_contact.cpp.Contact([facet_marker], surfaces, [(0, 1)],
+    contact_assembler = dolfinx_contact.cpp.Contact([facet_marker._cpp_object], surfaces, [(0, 1)],
                                                     V._cpp_object, quadrature_degree=quadrature_degree)
 
     def assemble_residual(x, b, cf):

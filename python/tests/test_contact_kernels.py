@@ -125,7 +125,7 @@ def test_vector_surface_kernel(dim, kernel_type, P, Q):
     consts = np.array([gamma, theta])
     consts = np.hstack((consts, n_vec))
     integral_entities, num_local = dolfinx_contact.compute_active_entities(
-        mesh, ft.indices, IntegralType.exterior_facet)
+        mesh._cpp_object, ft.indices, IntegralType.exterior_facet)
     integral_entities = integral_entities[:num_local]
     mu_packed = dolfinx_contact.cpp.pack_coefficient_quadrature(mu._cpp_object, 0, integral_entities)
     lmbda_packed = dolfinx_contact.cpp.pack_coefficient_quadrature(lmbda._cpp_object, 0, integral_entities)
@@ -133,11 +133,12 @@ def test_vector_surface_kernel(dim, kernel_type, P, Q):
                                                                + Q + 1, integral_entities)
     grad_u_packed = dolfinx_contact.cpp.pack_gradient_quadrature(u._cpp_object, 2 * P
                                                                  + Q + 1, integral_entities)
-    h_facets = dolfinx_contact.pack_circumradius(mesh, integral_entities)
+    h_facets = dolfinx_contact.pack_circumradius(mesh._cpp_object, integral_entities)
     data = np.array([1], dtype=np.int32)
     offsets = np.array([0, 1], dtype=np.int32)
     surfaces = create_adjacencylist(data, offsets)
-    contact = dolfinx_contact.cpp.Contact([ft], surfaces, [(0, 0)], V._cpp_object, quadrature_degree=2 * P + Q + 1)
+    contact = dolfinx_contact.cpp.Contact([ft._cpp_object], surfaces, [(0, 0)],
+                                          V._cpp_object, quadrature_degree=2 * P + Q + 1)
     contact.create_distance_map(0)
     g_vec = contact.pack_gap_plane(0, -g)
     # FIXME: assuming all facets are the same type
@@ -256,7 +257,7 @@ def test_matrix_surface_kernel(dim, kernel_type, P, Q):
     consts = np.array([gamma, theta])
     consts = np.hstack((consts, n_vec))
     integral_entities, num_local = dolfinx_contact.compute_active_entities(
-        mesh, facets, IntegralType.exterior_facet)
+        mesh._cpp_object, facets, IntegralType.exterior_facet)
     integral_entities = integral_entities[:num_local]
     mu_packed = dolfinx_contact.cpp.pack_coefficient_quadrature(mu._cpp_object, 0, integral_entities)
     lmbda_packed = dolfinx_contact.cpp.pack_coefficient_quadrature(lmbda._cpp_object, 0, integral_entities)
@@ -264,11 +265,12 @@ def test_matrix_surface_kernel(dim, kernel_type, P, Q):
                                                                + Q + 1, integral_entities)
     grad_u_packed = dolfinx_contact.cpp.pack_gradient_quadrature(u._cpp_object, 2 * P
                                                                  + Q + 1, integral_entities)
-    h_facets = dolfinx_contact.pack_circumradius(mesh, integral_entities)
+    h_facets = dolfinx_contact.pack_circumradius(mesh._cpp_object, integral_entities)
     data = np.array([1], dtype=np.int32)
     offsets = np.array([0, 1], dtype=np.int32)
     surfaces = create_adjacencylist(data, offsets)
-    contact = dolfinx_contact.cpp.Contact([ft], surfaces, [(0, 0)], V._cpp_object, quadrature_degree=2 * P + Q + 1)
+    contact = dolfinx_contact.cpp.Contact([ft._cpp_object], surfaces, [(0, 0)],
+                                          V._cpp_object, quadrature_degree=2 * P + Q + 1)
     contact.create_distance_map(0)
     g_vec = contact.pack_gap_plane(0, -g)
     coeffs = np.hstack([mu_packed, lmbda_packed, h_facets, g_vec, u_packed, grad_u_packed])

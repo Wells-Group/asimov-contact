@@ -183,18 +183,18 @@ def test_contact_kernel(theta, gamma, dim, gap):
         mu2.interpolate(mu_func2)
         u.interpolate(_u_initial)
         integral_entities, num_local = dolfinx_contact.compute_active_entities(
-            mesh, bottom_facets, dolfinx.fem.IntegralType.exterior_facet)
+            mesh._cpp_object, bottom_facets, dolfinx.fem.IntegralType.exterior_facet)
         integral_entities = integral_entities[:num_local]
 
         mu_packed = dolfinx_contact.cpp.pack_coefficient_quadrature(mu2._cpp_object, 0, integral_entities)
         lmbda_packed = dolfinx_contact.cpp.pack_coefficient_quadrature(lmbda2._cpp_object, 0, integral_entities)
         u_packed = dolfinx_contact.cpp.pack_coefficient_quadrature(u._cpp_object, q_deg, integral_entities)
         grad_u_packed = dolfinx_contact.cpp.pack_gradient_quadrature(u._cpp_object, q_deg, integral_entities)
-        h_facets = dolfinx_contact.pack_circumradius(mesh, integral_entities)
+        h_facets = dolfinx_contact.pack_circumradius(mesh._cpp_object, integral_entities)
         data = np.array([bottom_value, top_value], dtype=np.int32)
         offsets = np.array([0, 2], dtype=np.int32)
         surfaces = create_adjacencylist(data, offsets)
-        contact = dolfinx_contact.cpp.Contact([facet_marker], surfaces, [(0, 1)],
+        contact = dolfinx_contact.cpp.Contact([facet_marker._cpp_object], surfaces, [(0, 1)],
                                               V._cpp_object, quadrature_degree=q_deg)
         g_vec = contact.pack_gap_plane(0, g)
         coeffs = np.hstack([mu_packed, lmbda_packed, h_facets, g_vec, u_packed, grad_u_packed])
@@ -205,7 +205,7 @@ def test_contact_kernel(theta, gamma, dim, gap):
         kernel = dolfinx_contact.cpp.generate_rigid_surface_kernel(V._cpp_object, kt.Rhs, q_rule)
         b2.zeroEntries()
         contact_assembler = dolfinx_contact.cpp.Contact(
-            [facet_marker], surfaces, [(0, 1)], V._cpp_object, quadrature_degree=q_deg)
+            [facet_marker._cpp_object], surfaces, [(0, 1)], V._cpp_object, quadrature_degree=q_deg)
         contact_assembler.create_distance_map(0)
 
         contact_assembler.assemble_vector(b2, 0, kernel, coeffs, consts)
