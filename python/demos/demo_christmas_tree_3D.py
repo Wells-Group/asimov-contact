@@ -70,8 +70,8 @@ if __name__ == "__main__":
     dirichlet_bdy = 4
     surface_1 = 6
     surface_2 = 7
-    z_Dirichlet = 8 # this tag is defined further down, use value different from all
-                    # input markers
+    z_Dirichlet = 8  # this tag is defined further down, use value different from all
+    # input markers
 
     with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
         mesh = xdmf.read_mesh(ghost_mode=GhostMode.none)
@@ -91,7 +91,7 @@ if __name__ == "__main__":
     # Find facets for z-Dirichlet bc
     def identifier(x, z):
         return np.logical_and(np.logical_and(np.isclose(x[2], z),
-                                                abs(x[1]) < 0.1), abs(x[0] - 2) < 0.1)
+                                             abs(x[1]) < 0.1), abs(x[0] - 2) < 0.1)
     dirichlet_facets1 = locate_entities_boundary(mesh, tdim - 1, lambda x: identifier(x, 0.0))
     dirichlet_facets2 = locate_entities_boundary(mesh, tdim - 1, lambda x: identifier(x, 1.0))
 
@@ -101,7 +101,6 @@ if __name__ == "__main__":
                         + len(dirichlet_facets2), dtype=np.int32)])
     sorted_facets = np.argsort(indices)
     facet_marker = MeshTags_int32(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
-
 
     # Create Dirichlet bdy conditions for preventing rigid body motion in z-direction
     bcs = (np.array([[z_Dirichlet, 2]], dtype=np.int32), [_fem.Constant(mesh, _PETSc.ScalarType(0))])
@@ -204,7 +203,8 @@ if __name__ == "__main__":
     outname = f"results/xmas_{tdim}D_{size}"
     with Timer("~Contact: - all"):
         u1, num_its, krylov_iterations, solver_time = nitsche_unbiased(1, ufl_form=F, u=u,
-                                                                       rhs_fns=rhs_fns, markers=[domain_marker, facet_marker],
+                                                                       rhs_fns=rhs_fns, markers=[
+                                                                           domain_marker, facet_marker],
                                                                        contact_data=(surfaces, contact_pairs),
                                                                        bcs=bcs, problem_parameters=problem_parameters,
                                                                        raytracing=False,

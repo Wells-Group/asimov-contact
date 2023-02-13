@@ -1,37 +1,39 @@
 import numpy as np
 import gmsh
-from mpi4py import MPI
+from dolfinx_contact.meshing import convert_mesh
+
 
 def add_bars(idx, r, n):
     L = 1.5
     for j in range(n):
-        gmsh.model.occ.addCylinder(5.0 + j, 0.0, -L, 0.0, 0.0, 2*L, r,
+        gmsh.model.occ.addCylinder(5.0 + j, 0.0, -L, 0.0, 0.0, 2 * L, r,
                                    idx + j * 2)
-        gmsh.model.occ.addCylinder(5.0 + j, -L, 0.0, 0.0, 2*L, 0.0, r,
+        gmsh.model.occ.addCylinder(5.0 + j, -L, 0.0, 0.0, 2 * L, 0.0, r,
                                    idx + j * 2 + 1)
+
 
 gmsh.initialize()
 
 gmsh.model.add("box-key")
 
 d0 = 0.05
-gmsh.model.occ.addBox(0, -1+d0, -1+d0, 10, 2-2*d0, 2-2*d0, 0)
+gmsh.model.occ.addBox(0, -1 + d0, -1 + d0, 10, 2 - 2 * d0, 2 - 2 * d0, 0)
 gmsh.model.occ.addBox(0, -1, -1, 10, 2, 2, 1)
 d1 = 0.5
-gmsh.model.occ.addBox(0, -1-d1, -1-d1, 10, 2+2*d1, 2+2*d1, 2)
+gmsh.model.occ.addBox(0, -1 - d1, -1 - d1, 10, 2 + 2 * d1, 2 + 2 * d1, 2)
 gmsh.model.occ.cut([(3, 2)], [(3, 1)], 3)
 
 idx = 4
 n = 2
 r = 0.4
 add_bars(idx, r, n)
-tag_outer = gmsh.model.occ.cut([(3, 3)], [(3, i) for i in range(idx, idx + 2*n)])
+tag_outer = gmsh.model.occ.cut([(3, 3)], [(3, i) for i in range(idx, idx + 2 * n)])
 tag_outer = tag_outer[0][0][1]
 
-idx += 2*n
+idx += 2 * n
 d2 = 0.05
 add_bars(idx, r - d2, n)
-tag_inner = gmsh.model.occ.fuse([(3, 0)], [(3, i) for i in range(idx, idx + 2*n)])
+tag_inner = gmsh.model.occ.fuse([(3, 0)], [(3, i) for i in range(idx, idx + 2 * n)])
 tag_inner = tag_inner[0][0][1]
 
 gmsh.model.occ.synchronize()
@@ -97,3 +99,8 @@ gmsh.model.mesh.generate(3)
 gmsh.write("meshes/box-key.msh")
 
 gmsh.finalize()
+
+mesh_dir = "meshes"
+fname = f"{mesh_dir}/box-key"
+# Convert gmsh output into xdmf
+convert_mesh(fname, fname, gdim=3)

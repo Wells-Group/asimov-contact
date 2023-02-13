@@ -402,7 +402,8 @@ def nitsche_unbiased(steps: int, ufl_form: ufl.Form, u: fem.Function,
     newton_its = []
     krylov_its = []
     for tt in range(steps):
-        log.log(log.LogLevel.WARNING, "Time step " + str(tt) + " of "+str(steps)+" +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
+        log.log(log.LogLevel.WARNING, "Time step " + str(tt) + " of " + str(steps)
+                + " +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
         # create distance map
         with common.Timer("~Contact: Distance maps"):
             for i in range(len(contact_pairs)):

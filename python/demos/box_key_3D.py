@@ -11,12 +11,11 @@ import dolfinx.fem as _fem
 from dolfinx.common import timing, Timer, list_timings, TimingType
 from dolfinx.graph import create_adjacencylist
 from dolfinx.io import XDMFFile
-from dolfinx.mesh import locate_entities_boundary, GhostMode, meshtags
+from dolfinx.mesh import GhostMode, meshtags
 from mpi4py import MPI
 from petsc4py import PETSc as _PETSc
 import ufl
 
-from dolfinx_contact.meshing import convert_mesh
 from dolfinx_contact.unbiased.nitsche_unbiased import nitsche_unbiased
 from dolfinx_contact.helpers import lame_parameters, sigma_func, weak_dirichlet, epsilon
 from dolfinx_contact.parallel_mesh_ghosting import create_contact_mesh
@@ -39,8 +38,6 @@ if __name__ == "__main__":
 
     WARNING = log.LogLevel.WARNING
     log.set_log_level(WARNING)
-    # Convert gmsh output into xdmf
-    convert_mesh(fname, fname, gdim=3)
 
     # Read in mesh from xdmf file including markers
     # Cell markers:  It is expected that all cells are marked and that
@@ -68,7 +65,6 @@ if __name__ == "__main__":
     surface_1 = 6
     surface_2 = 7
 
-    print("read file")
     with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
         mesh = xdmf.read_mesh(ghost_mode=GhostMode.none)
         domain_marker = xdmf.read_meshtags(mesh, "cell_marker")
@@ -87,8 +83,8 @@ if __name__ == "__main__":
     def _torque(x):
         values = np.zeros((mesh.geometry.dim, x.shape[1]))
         for i in range(x.shape[1]):
-            values[1, i] = 100*x[2, i]
-            values[2, i] = -100*x[1, i]
+            values[1, i] = 100 * x[2, i]
+            values[2, i] = -100 * x[1, i]
         return values
 
     # Functions for Dirichlet and Neuman boundaries, body force
@@ -187,9 +183,11 @@ if __name__ == "__main__":
     outname = f"results/boxkey_{tdim}D_{size}"
     with Timer("~Contact: - all"):
         u1, num_its, krylov_iterations, solver_time = nitsche_unbiased(args.time_steps, ufl_form=F, u=u,
-                                                                       rhs_fns=rhs_fns, markers=[domain_marker, facet_marker],
+                                                                       rhs_fns=rhs_fns,
+                                                                       markers=[domain_marker, facet_marker],
                                                                        contact_data=(surfaces, contact_pairs),
-                                                                       bcs=[(),[]], problem_parameters=problem_parameters,
+                                                                       bcs=[(), []],
+                                                                       problem_parameters=problem_parameters,
                                                                        raytracing=False,
                                                                        newton_options=newton_options,
                                                                        petsc_options=petsc_options,
