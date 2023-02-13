@@ -30,7 +30,7 @@ def test_raytracing_3D(cell_type):
 
     if status > 0:
         # Create structures needed for closest point projections
-        boundary_cells = dolfinx.mesh.compute_incident_entities(mesh, facets, tdim - 1, tdim)
+        boundary_cells = dolfinx.mesh.compute_incident_entities(mesh.topology, facets, tdim - 1, tdim)
         bb_tree = dolfinx.geometry.BoundingBoxTree(mesh, tdim, boundary_cells)
         midpoint_tree = dolfinx.cpp.geometry.create_midpoint_tree(mesh._cpp_object, tdim, boundary_cells)
 
@@ -64,7 +64,7 @@ def test_raytracing_3D_corner(cell_type):
         mesh._cpp_object, origin, normal, integral_pairs, 10, 1e-6)
     if status > 0:
         # Create structures needed for closest point projections
-        boundary_cells = dolfinx.mesh.compute_incident_entities(mesh, facets, tdim - 1, tdim)
+        boundary_cells = dolfinx.mesh.compute_incident_entities(mesh.topology, facets, tdim - 1, tdim)
         bb_tree = dolfinx.geometry.BoundingBoxTree(mesh, tdim, boundary_cells)
         midpoint_tree = dolfinx.cpp.geometry.create_midpoint_tree(mesh._cpp_object, tdim, boundary_cells)
 
@@ -98,7 +98,7 @@ def test_raytracing_2D(cell_type):
 
     if status > 0:
         # Create structures needed for closest point projections
-        boundary_cells = dolfinx.mesh.compute_incident_entities(mesh, facets, tdim - 1, tdim)
+        boundary_cells = dolfinx.mesh.compute_incident_entities(mesh.topology, facets, tdim - 1, tdim)
         bb_tree = dolfinx.geometry.BoundingBoxTree(mesh, tdim, boundary_cells)
         midpoint_tree = dolfinx.cpp.geometry.create_midpoint_tree(mesh._cpp_object, tdim, boundary_cells)
         op = np.array([origin[0], origin[1], 0])
@@ -132,7 +132,7 @@ def test_raytracing_2D_corner(cell_type):
         mesh._cpp_object, origin, normal, integral_pairs, 10, 1e-6)
     if status > 0:
         # Create structures needed for closest point projections
-        boundary_cells = dolfinx.mesh.compute_incident_entities(mesh, facets, tdim - 1, tdim)
+        boundary_cells = dolfinx.mesh.compute_incident_entities(mesh.topology, facets, tdim - 1, tdim)
         bb_tree = dolfinx.geometry.BoundingBoxTree(mesh, tdim, boundary_cells)
         midpoint_tree = dolfinx.cpp.geometry.create_midpoint_tree(mesh._cpp_object, tdim, boundary_cells)
 

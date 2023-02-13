@@ -153,7 +153,7 @@ def nitsche_custom(mesh: dmesh.Mesh, mesh_data: Tuple[dmesh.meshtags, int, int],
     data = np.array([contact_value, dirichlet_value], dtype=np.int32)
     offsets = np.array([0, 2], dtype=np.int32)
     surfaces = create_adjacencylist(data, offsets)
-    contact = dolfinx_contact.cpp.Contact([facet_marker], surfaces, [(0, 1)],
+    contact = dolfinx_contact.cpp.Contact([facet_marker._cpp_object], surfaces, [(0, 1)],
                                           V._cpp_object, quadrature_degree=quadrature_degree)
     contact.create_distance_map(0)
 
@@ -167,7 +167,7 @@ def nitsche_custom(mesh: dmesh.Mesh, mesh_data: Tuple[dmesh.meshtags, int, int],
     L_custom = _fem.form(F, jit_options=jit_options, form_compiler_options=form_compiler_options)
     kernel_rhs = dolfinx_contact.cpp.generate_contact_kernel(V._cpp_object, dolfinx_contact.Kernel.Rhs, q_rule)
     # NOTE: HACK to make "one-sided" contact work with assemble_matrix/assemble_vector
-    contact_assembler = dolfinx_contact.cpp.Contact([facet_marker], surfaces, [(0, 1)],
+    contact_assembler = dolfinx_contact.cpp.Contact([facet_marker._cpp_object], surfaces, [(0, 1)],
                                                     V._cpp_object, quadrature_degree=quadrature_degree)
 
     def assemble_residual(x, b, cf):
