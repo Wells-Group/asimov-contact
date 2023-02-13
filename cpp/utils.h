@@ -314,12 +314,12 @@ compute_projection_map(const dolfinx::mesh::Mesh& mesh,
                              "mesh.");
   }
 
-  for (std::size_t i = 0; i < facet_tuples.size(); i += 2)
+  for (std::size_t i = 0, j = 0; i < facet_tuples.size(); j++, i += 2)
   {
     auto local_facets = c_to_f->links(facet_tuples[i]);
     assert(!local_facets.empty());
     assert((std::size_t)facet_tuples[i + 1] < local_facets.size());
-    facets[i / 2] = local_facets[facet_tuples[i + 1]];
+    facets[j] = local_facets[facet_tuples[i + 1]];
   }
 
   // Compute closest entity for each point
