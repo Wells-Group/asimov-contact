@@ -17,7 +17,7 @@ find_package(DOLFINX REQUIRED)
 find_package(DOLFINX_CONTACT REQUIRED)
 
 # Create the binding library
-pybind11_add_module(cpp SHARED 
+pybind11_add_module(cpp SHARED
   dolfinx_contact/wrappers.cpp)
 
 
@@ -27,6 +27,7 @@ target_link_libraries(cpp PUBLIC pybind11::module)
 target_link_libraries(cpp PUBLIC dolfinx)
 
 
+set (Python3_EXECUTABLE python3.10)
 
 # Get python include-dirs
 execute_process(
@@ -52,4 +53,3 @@ target_include_directories(cpp PRIVATE ${PETSC4PY_INCLUDE_DIR})
 
 # Add to CMake search path
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_CURRENT_SOURCE_DIR})
-
