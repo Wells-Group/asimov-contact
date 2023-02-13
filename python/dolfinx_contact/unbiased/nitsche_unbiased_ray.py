@@ -400,8 +400,6 @@ def nitsche_unbiased(steps: int, ufl_form: ufl.Form, u: fem.Function,
     krylov_its = []
     for tt in range(steps):
 
-
-
         # current time
         t = (tt + 1) / steps
 
