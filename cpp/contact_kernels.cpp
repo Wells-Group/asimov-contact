@@ -29,13 +29,16 @@ dolfinx_contact::generate_contact_kernel(
   // kd.offsets(3)  - gap            - shape (num_q_points, gdim)
   // kd.offsets(4)  - normalsx       - shape (num_q_points, gdim)
   // kd.offsets(5)  - normalsy       - shape (num_q_points, gdim)
-  // kd.offsets(6)  - test_fn        - shape (num_q_points, ndofs_cell, bs, max_links)
-  // kd.offsets(7)  - grad(test_fn)  - shape (num_q_points, ndofs_cell, bs, max_links)
+  // kd.offsets(6)  - test_fn        - shape (num_q_points, ndofs_cell, bs,
+  //                                          max_links)
+  // kd.offsets(7)  - grad(test_fn)  - shape (num_q_points,
+  //                                          ndofs_cell, bs, max_links)
   // kd.offsets(8)  - u              - shape (num_q_points, gdim)
   // kd.offsets(9)  - grad(u)        - shape (num_q_points, gdim, gdim)
   // kd.offsets(10) - u_opposite     - shape (num_q_points, bs)
+  // kd.offsets(11) - grad(u_opp)    - shape (num_q_points, gdim, gdim)
   std::vector<std::size_t> cstrides
-      = {1, 
+      = {1,
          1,
          1,
          num_q_points * gdim,
@@ -45,7 +48,8 @@ dolfinx_contact::generate_contact_kernel(
          num_q_points * ndofs_cell * bs * max_links,
          num_q_points * gdim,
          num_q_points * gdim * gdim,
-         num_q_points * bs};
+         num_q_points * bs,
+         num_q_points * gdim * bs};
 
   auto kd = dolfinx_contact::KernelData(V, quadrature_rule, cstrides);
 
@@ -129,6 +133,10 @@ dolfinx_contact::generate_contact_kernel(
     std::vector<double> sig_n_u(gdim);
     std::vector<double> dnxb(gdim * ndofs_cell * bs);
     mdspan3_t dnx(dnxb.data(), ndofs_cell, bs, gdim);
+    std::vector<double> dgb((num_links + 1) * ndofs_cell * bs);
+    mdspan3_t dg(dgb.data(), num_links + 1, ndofs_cell, bs);
+    std::vector<double> dyb((num_links + 1) * ndofs_cell * bs * gdim);
+    mdspan4_t dy(dyb.data(), num_links + 1, ndofs_cell, bs, gdim);
 
     // Loop over quadrature points
     for (auto q : q_indices)
@@ -153,7 +161,8 @@ dolfinx_contact::generate_contact_kernel(
       compute_normal_strain_basis(epsn, tr, K, dphi, n_x,
                                   std::span(n_phys.data(), gdim), q_pos);
 
-      // compute sig(u)*n_phys, grad(u) = c.subspan(kd.offsets(9) + q * gdim * gdim, gdim * gdim),
+      // compute sig(u)*n_phys, grad(u) = c.subspan(kd.offsets(9) + q * gdim *
+      // gdim, gdim * gdim),
       std::fill(sig_n_u.begin(), sig_n_u.end(), 0.0);
       compute_sigma_n_u(sig_n_u,
                         c.subspan(kd.offsets(9) + q * gdim * gdim, gdim * gdim),
@@ -163,6 +172,18 @@ dolfinx_contact::generate_contact_kernel(
       compute_dnx(c.subspan(kd.offsets(9) + q * gdim * gdim, gdim * gdim), dphi,
                   K, n_x, dnx, def_grad, def_grad_inv, q_pos);
 
+      // compute Dg
+      std::fill(dgb.begin(), dgb.end(), 0.0);
+      compute_dg(dg, dnx,
+                 c.subspan(kd.offsets(6), kd.offsets(7) - kd.offsets(6)), phi,
+                 n_x, n_y, q_offset.front(), q, q_indices.size(), gap);
+
+      // compute DY
+      std::fill(dyb.begin(), dyb.end(), 0.0);
+      compute_dy(
+          dy, dnx, c.subspan(kd.offsets(11), kd.offsets(12) - kd.offsets(11)),
+          c.subspan(kd.offsets(6), kd.offsets(7) - kd.offsets(6)), phi, n_x,
+          n_y, def_grad, def_grad_inv, q_offset.front(), q, q_indices.size(), gap);
       // compute inner(sig(u)*n_phys, n_surf) and inner(u, n_surf)
       double sign_u = 0;
       for (std::size_t j = 0; j < gdim; ++j)

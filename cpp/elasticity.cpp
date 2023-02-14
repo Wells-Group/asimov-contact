@@ -138,10 +138,11 @@ void dolfinx_contact::compute_sigma_n_opp(mdspan4_t sig_n_opp,
     }
 }
 //-----------------------------------------------------------------------------
-void dolfinx_contact::compute_dnx(std::span<const double> grad_u, cmdspan3_t dphi,
-                          cmdspan2_t K, const std::array<double, 3> n_x,
-                          mdspan3_t dnx, mdspan2_t def_grad,
-                          mdspan2_t def_grad_inv, std::size_t q_pos)
+void dolfinx_contact::compute_dnx(std::span<const double> grad_u,
+                                  cmdspan3_t dphi, cmdspan2_t K,
+                                  const std::array<double, 3> n_x,
+                                  mdspan3_t dnx, mdspan2_t def_grad,
+                                  mdspan2_t def_grad_inv, std::size_t q_pos)
 {
   const std::size_t ndofs_cell = dnx.extent(0);
   const std::size_t bs = K.extent(1);
@@ -175,6 +176,103 @@ void dolfinx_contact::compute_dnx(std::span<const double> grad_u, cmdspan3_t dph
       }
       for (std::size_t i = 0; i < gdim; ++i)
         dnx(dof, block, i) -= dot * n_x[i];
+    }
+  }
+}
+
+//-----------------------------------------------------------------------------
+void dolfinx_contact::compute_dy(
+    mdspan4_t dy, mdspan3_t dnx, std::span<const double> grad_u_opp,
+    std::span<const double> v, cmdspan2_t phi, const std::array<double, 3> n_x,
+    const std::array<double, 3> n_y, mdspan2_t def_grad, mdspan2_t def_grad_inv,
+    const std::size_t q_offset,
+    const std::size_t q, const std::size_t num_q_points, const double gap)
+{
+  const std::size_t num_links = dy.extent(0) - 1;
+  const std::size_t ndofs_cell = dy.extent(1);
+  const std::size_t bs = dy.extent(2);
+  const std::size_t gdim = dy.extent(3);
+
+  double dot_ny_nx = 0;
+  for (std::size_t i = 0; i < gdim; ++i)
+  {
+    def_grad(i, i) += 1;
+    dot_ny_nx += n_x[i] * n_y[i];
+    for (std::size_t j = 0; j < gdim; ++j)
+      def_grad(i, j) += grad_u_opp[i * gdim + j];
+  }
+  dolfinx::fem::CoordinateElement::compute_jacobian_inverse(def_grad,
+                                                            def_grad_inv);
+  double dot = 0;
+  std::array<double, 3> temp;
+
+  for (std::size_t dof = 0; dof < ndofs_cell; ++dof)
+  {
+    for (std::size_t block = 0; block < bs; ++block)
+    {
+      dot = 0;
+      for (std::size_t i = 0; i < gdim; ++i)
+      {
+        temp[i] = phi(q_offset + q, i) + gap * dnx(dof, block, i);
+        dot += temp[i] * n_y[i];
+      }
+      for (std::size_t i = 0; i < gdim; ++i)
+        for (std::size_t j = 0; j < gdim; ++j)
+          dy(0, dof, block, i)
+              += def_grad_inv(i, j) * (temp[j] - (dot / dot_ny_nx) * n_x[j]);
+
+      for (std::size_t link = 0; link < num_links; ++link)
+      {
+        dot = 0;
+        std::size_t offset = link * num_q_points * ndofs_cell * gdim
+                             + dof * num_q_points * gdim + q * bs;
+        for (std::size_t i = 0; i < gdim; ++i)
+        {
+          temp[i] = -v[offset + i] + gap * dnx(dof, block, i);
+          dot += temp[i] * n_y[i];
+        }
+        for (std::size_t i = 0; i < gdim; ++i)
+          for (std::size_t j = 0; j < gdim; ++j)
+            dy(link + 1, dof, block, i)
+                += def_grad_inv(i, j) * (-temp[j] - (dot / dot_ny_nx) * n_x[j]);
+      }
+    }
+  }
+}
+
+//-----------------------------------------------------------------------------
+void dolfinx_contact::compute_dg(
+    mdspan3_t dg, mdspan3_t dnx, std::span<const double> v, cmdspan2_t phi,
+    const std::array<double, 3> n_x, const std::array<double, 3> n_y,
+    const std::size_t q_offset,
+    const std::size_t q, const std::size_t num_q_points, const double gap)
+{
+  const std::size_t num_links = dg.extent(0) - 1;
+  const std::size_t ndofs_cell = dg.extent(1);
+  const std::size_t gdim = dg.extent(2);
+
+  double dot_ny_nx = 0;
+  for (std::size_t i = 0; i < gdim; ++i)
+    dot_ny_nx += n_x[i] * n_y[i];
+
+  for (std::size_t dof = 0; dof < ndofs_cell; ++dof)
+  {
+    for (std::size_t block = 0; block < gdim; ++block)
+    {
+      for (std::size_t i = 0; i < gdim; ++i)
+        dg(0, dof, block) += -n_y[i]
+                             * (phi(q_offset + q, i) + gap * dnx(dof, block, i))
+                             / dot_ny_nx;
+
+      for (std::size_t link = 0; link < num_links; ++link)
+      {
+        std::size_t offset = link * num_q_points * ndofs_cell * gdim
+                             + dof * num_q_points * gdim + q * gdim;
+        for (std::size_t i = 0; i < gdim; ++i)
+          dg(link + 1, dof, block) += n_y[i]
+                               * (v[offset + i] - gap * dnx(dof, block, i))
+                               / dot_ny_nx;
+      }
     }
   }
 }

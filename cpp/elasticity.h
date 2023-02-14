@@ -8,8 +8,8 @@
 // kernels
 
 #include "QuadratureRule.h"
-#include <span>
 #include <dolfinx/fem/CoordinateElement.h>
+#include <span>
 
 namespace dolfinx_contact
 {
@@ -78,9 +78,22 @@ void compute_sigma_n_opp(mdspan4_t sig_n_opp, std::span<const double> grad_v,
                          const double lmbda, const std::size_t q,
                          const std::size_t num_q_points);
 
-void compute_dnx(std::span<const double> grad_u, cmdspan3_t dphi,
-                          cmdspan2_t K, const std::array<double, 3> n_x,
-                          mdspan3_t dnx, mdspan2_t def_grad,
-                          mdspan2_t def_grad_inv, const std::size_t q_pos);
+void compute_dnx(std::span<const double> grad_u, cmdspan3_t dphi, cmdspan2_t K,
+                 const std::array<double, 3> n_x, mdspan3_t dnx,
+                 mdspan2_t def_grad, mdspan2_t def_grad_inv,
+                 const std::size_t q_pos);
+
+void compute_dy(mdspan4_t dy, mdspan3_t dnx, std::span<const double> grad_u_opp,
+                std::span<const double> v, cmdspan2_t phi,
+                const std::array<double, 3> n_x,
+                const std::array<double, 3> n_y, mdspan2_t def_grad,
+                mdspan2_t def_grad_inv, const std::size_t q_offset,
+                const std::size_t q, const std::size_t num_q_points, const double gap);
+
+void compute_dg(mdspan3_t dg, mdspan3_t dnx, std::span<const double> v,
+                cmdspan2_t phi, const std::array<double, 3> n_x,
+                const std::array<double, 3> n_y, const std::size_t q_offset,
+                const std::size_t q, const std::size_t num_q_points,
+                const double gap);
 
 } // namespace dolfinx_contact
