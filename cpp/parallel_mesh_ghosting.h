@@ -1,3 +1,8 @@
+// Copyright (C) 2023 Chris N. Richardson
+//
+// This file is part of DOLFINx_CONTACT
+//
+// SPDX-License-Identifier:    MIT
 
 #include <dolfinx/graph/AdjacencyList.h>
 #include <dolfinx/mesh/Mesh.h>
