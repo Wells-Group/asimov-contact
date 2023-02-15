@@ -7,66 +7,9 @@ from dolfinx.mesh import create_mesh, meshtags
 import dolfinx
 from dolfinx.cpp.mesh import entities_to_geometry, cell_num_vertices, cell_entity_type, to_type
 import numpy as np
-from dolfinx_contact.cpp import point_cloud_pairs, compute_ghost_cell_destinations
+from dolfinx_contact.cpp import compute_ghost_cell_destinations
 
-__all__ = ["create_contact_mesh", "compute_ghost_cell_destinations_py"]
-
-
-def compute_ghost_cell_destinations_py(mesh, marker_subset, R):
-    """For each marked facet, given by indices in "marker_subset", get the list of processes which
-    the attached cell should be sent to, for ghosting. Neighbouring facets within distance "R"."""
-
-    log.log(log.LogLevel.WARNING, "midpoints")
-    # 1. Get midpoints of all facets on interfaces
-    tdim = mesh.topology.dim
-    x = mesh.geometry.x
-    facet_to_geom = entities_to_geometry(mesh._cpp_object, tdim - 1, marker_subset, False)
-    x_facet = np.array([sum([x[i] for i in idx]) / len(idx) for idx in facet_to_geom])
-
-    log.log(log.LogLevel.WARNING, "send to zero")
-    # 2. Send midpoints to process zero
-    comm = mesh.comm
-    x_all = comm.gather(x_facet, root=0)
-    scatter_back = []
-    if comm.rank == 0:
-        offsets = np.cumsum([0] + [w.shape[0] for w in x_all])
-        x_all_flat = np.concatenate([x for x in x_all if len(x) > 0])
-
-        log.log(log.LogLevel.WARNING, f"x_all_flat.sum = {sum(x_all_flat)}")
-
-        # Find all pairs of facets within radius R
-        log.log(log.LogLevel.WARNING, "point-cloud-pairs")
-        x_near = point_cloud_pairs(x_all_flat, R)
-        log.log(log.LogLevel.WARNING, f"point-cloud-pairs done {x_near.num_nodes, len(x_near.array)}" )
-
-        # Find which process the neighboring facet came from
-        i = 0
-        procs = [[] for p in range(len(x_all))]
-        for p in range(len(x_all)):
-            for j in range(x_all[p].shape[0]):
-                pr = set()
-                for n in x_near.links(i):
-                    # Find which process this facet came from
-                    q = np.searchsorted(offsets, n, side='right') - 1
-                    # Add to the sendback list, if not the same process
-                    if q != p:
-                        pr.add(q)
-                procs[p] += [list(pr)]
-                i += 1
-
-        # Pack up to return to sending processes
-        for i, q in enumerate(procs):
-            off = np.cumsum([0] + [len(w) for w in q])
-            flat_q = sum(q, [])
-            scatter_back += [list(off) + flat_q]
-
-    log.log(log.LogLevel.WARNING, "send back")
-    d = comm.scatter(scatter_back, root=0)
-    # Unpack received data to get additional destinations for each facet/cell
-    n = len(x_facet) + 1
-    adj = dolfinx.graph.create_adjacencylist(d[n:], d[:n])
-    return adj
-
+__all__ = ["create_contact_mesh"]
 
 
 def create_contact_mesh(mesh, fmarker, dmarker, tags, R=0.2):
