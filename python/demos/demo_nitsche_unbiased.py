@@ -278,7 +278,7 @@ if __name__ == "__main__":
 
     if mesh.comm.size > 1:
         mesh, facet_marker, domain_marker = create_contact_mesh(
-            mesh, facet_marker, domain_marker, [contact_bdy_1, contact_bdy_2], 1.0)
+            mesh, facet_marker, domain_marker, [contact_bdy_1, contact_bdy_2], 2.0)
 
     ncells = mesh.topology.index_map(tdim).size_local
     indices = np.array(range(ncells), dtype=np.int32)

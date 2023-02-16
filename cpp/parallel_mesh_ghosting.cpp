@@ -69,7 +69,7 @@ dolfinx_contact::compute_ghost_cell_destinations(
               0, mesh.comm());
 
   // For each facet, get a list of neighbor processes
-  // These are only build on process zero
+  // These are only built on process zero
   std::vector<int> nbr_procs;
   std::vector<int> nbr_offsets = {0};
 
