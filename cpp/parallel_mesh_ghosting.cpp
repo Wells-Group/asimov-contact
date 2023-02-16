@@ -33,21 +33,24 @@ dolfinx_contact::compute_ghost_cell_destinations(
   std::vector<std::int32_t> facet_to_geom
       = entities_to_geometry(mesh, tdim - 1, marker_subset, false);
   const int num_facets = marker_subset.size();
-  const int nv_per_facet = facet_to_geom.size() / num_facets;
   std::vector<double> facet_midpoint;
   facet_midpoint.reserve(num_facets * 3);
-  std::array<double, 3> midpoint;
-  for (int i = 0; i < num_facets; ++i)
+  if (num_facets > 0)
   {
-    midpoint = {0, 0, 0};
-    for (int j = 0; j < nv_per_facet; ++j)
+    const int nv_per_facet = facet_to_geom.size() / num_facets;
+    std::array<double, 3> midpoint;
+    for (int i = 0; i < num_facets; ++i)
     {
-      int vidx = facet_to_geom[i * nv_per_facet + j] * 3;
-      for (int k = 0; k < 3; ++k)
-        midpoint[k] += x[vidx + k] / nv_per_facet;
+      midpoint = {0, 0, 0};
+      for (int j = 0; j < nv_per_facet; ++j)
+      {
+        int vidx = facet_to_geom[i * nv_per_facet + j] * 3;
+        for (int k = 0; k < 3; ++k)
+          midpoint[k] += x[vidx + k] / nv_per_facet;
+      }
+      facet_midpoint.insert(facet_midpoint.end(), midpoint.begin(),
+                            midpoint.end());
     }
-    facet_midpoint.insert(facet_midpoint.end(), midpoint.begin(),
-                          midpoint.end());
   }
 
   // 2. Send midpoints to process zero
@@ -72,6 +75,8 @@ dolfinx_contact::compute_ghost_cell_destinations(
 
   if (rank == 0)
   {
+    LOG(WARNING) << "Point cloud search on root process";
+
     std::for_each(offsets.begin(), offsets.end(), [](int& i) { i /= 3; });
 
     // Find all pairs of facets within radius R
