@@ -189,7 +189,7 @@ dolfinx_contact::generate_contact_kernel(
       for (std::size_t j = 0; j < gdim; ++j)
         sign_u += sig_n_u[j] * n_x[j];
 
-      double Pn_u = dR_minus(gap + gamma * sign_u);
+      double dPn_u = dR_minus(gap + gamma * sign_u);
 
       // Fill contributions of facet with itself
       const double weight = weights[q] * detJ;
@@ -198,8 +198,6 @@ dolfinx_contact::generate_contact_kernel(
         for (std::size_t l = 0; l < bs; l++)
         {
           double sign_w = (lmbda * tr(j, l) * n_dot + mu * epsn(j, l));
-          double Pn_w
-              = (gamma * sign_w - phi(q_pos, j) * n_x[l]) * Pn_u * weight;
 
           sign_w *= weight;
           for (std::size_t i = 0; i < ndofs_cell; i++)
@@ -210,7 +208,7 @@ dolfinx_contact::generate_contact_kernel(
               double sign_v = (lmbda * tr(i, b) * n_dot + mu * epsn(i, b));
               double Pn_v = gamma_inv * v_dot_nsurf - theta * sign_v;
               A[0][(b + i * bs) * ndofs_cell * bs + l + j * bs]
-                  += 0.5 * Pn_w * Pn_v;
+                  += 0.5 * (gamma *dPn_u * sign_w + dg(0, j, l)*n_x[l]*weight) * Pn_v;
 
               // entries corresponding to u and v on the other surface
               for (std::size_t k = 0; k < num_links; k++)
@@ -227,11 +225,11 @@ dolfinx_contact::generate_contact_kernel(
                         + i * num_points * bs + q * bs + b;
                 double v_n_opp = c[index] * n_x[b];
                 A[3 * k + 1][(b + i * bs) * bs * ndofs_cell + l + j * bs]
-                    -= 0.5 * w_n_opp * Pn_v;
+                    -= 0.5 * gamma_inv * dg(k, j, l)*n_x[l] * Pn_v;
                 A[3 * k + 2][(b + i * bs) * bs * ndofs_cell + l + j * bs]
-                    -= 0.5 * gamma_inv * Pn_w * v_n_opp;
+                    -= 0.5 * dPn_u * sign_w * v_n_opp;
                 A[3 * k + 3][(b + i * bs) * bs * ndofs_cell + l + j * bs]
-                    += 0.5 * gamma_inv * w_n_opp * v_n_opp;
+                    += 0.5 * gamma_inv * dg(k, j, l) *n_x[l] * v_n_opp;
               }
             }
           }
