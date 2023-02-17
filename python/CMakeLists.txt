@@ -27,8 +27,6 @@ target_link_libraries(cpp PUBLIC pybind11::module)
 target_link_libraries(cpp PUBLIC dolfinx)
 
 
-set (Python3_EXECUTABLE python3.10)
-
 # Get python include-dirs
 execute_process(
   COMMAND ${Python3_EXECUTABLE} -c "import dolfinx.wrappers, sys; sys.stdout.write(str(dolfinx.wrappers.get_include_path()))"
