@@ -14,31 +14,29 @@ __all__ = ["create_circle_plane_mesh", "create_circle_circle_mesh", "create_box_
 
 def create_circle_plane_mesh(filename: str, quads: bool = False, res=0.1, order: int = 1):
     """
-    Create a circular mesh, with center at (0.5,0.5,0) with radius 3 and a box [0,1]x[0,0.1]
+    Create a circular mesh, with center at (0.0,0.0,0) with radius 0.25 and a box [-0.5,0.5]x[-0.5,-0.25]
     """
-    center = [0.5, 0.5, 0]
-    r = 0.3
-    angle = np.pi / 4
-    L = 1
-    H = 0.1
+    center = [0, 0, 0]
+    r = 0.25
     gmsh.initialize()
     if MPI.COMM_WORLD.rank == 0:
         # Create circular mesh (divided into 4 segments)
         c = gmsh.model.occ.addPoint(center[0], center[1], center[2])
-        # Add 4 points on circle (clockwise, starting in top left)
-        angles = [angle, -angle, np.pi + angle, np.pi - angle]
-        c_points = [gmsh.model.occ.addPoint(center[0] + r * np.cos(angle), center[1]
-                                            + r * np.sin(angle), center[2]) for angle in angles]
+        left = gmsh.model.occ.addPoint(-0.25, 0, 0)
+        right = gmsh.model.occ.addPoint(0.25, 0, 0)
+
+
         arcs = [gmsh.model.occ.addCircleArc(
-            c_points[i - 1], c, c_points[i]) for i in range(len(c_points))]
+            left, c, right), gmsh.model.occ.addCircleArc(
+            right, c, left)]
         curve = gmsh.model.occ.addCurveLoop(arcs)
         gmsh.model.occ.synchronize()
         surface = gmsh.model.occ.addPlaneSurface([curve])
-        # Create box
-        p0 = gmsh.model.occ.addPoint(0, 0, 0)
-        p1 = gmsh.model.occ.addPoint(L, 0, 0)
-        p2 = gmsh.model.occ.addPoint(L, H, 0)
-        p3 = gmsh.model.occ.addPoint(0, H, 0)
+        # Create boxpy
+        p0 = gmsh.model.occ.addPoint(-0.5, -0.5, 0)
+        p1 = gmsh.model.occ.addPoint(0.5, -0.5, 0)
+        p2 = gmsh.model.occ.addPoint(0.5, -0.25, 0)
+        p3 = gmsh.model.occ.addPoint(-0.5, -0.25, 0)
         ps = [p0, p1, p2, p3]
         lines = [gmsh.model.occ.addLine(ps[i - 1], ps[i]) for i in range(len(ps))]
         curve2 = gmsh.model.occ.addCurveLoop(lines)
@@ -47,12 +45,12 @@ def create_circle_plane_mesh(filename: str, quads: bool = False, res=0.1, order:
         # Synchronize and create physical tags
         gmsh.model.occ.synchronize()
         gmsh.model.addPhysicalGroup(2, [surface], tag=1)
-        bndry = gmsh.model.getBoundary([(2, surface)], oriented=False)
-        [gmsh.model.addPhysicalGroup(b[0], [b[1]]) for b in bndry]
+        
 
         gmsh.model.addPhysicalGroup(2, [surface2], tag=2)
         bndry2 = gmsh.model.getBoundary([(2, surface2)], oriented=False)
         [gmsh.model.addPhysicalGroup(b[0], [b[1]]) for b in bndry2]
+        [gmsh.model.addPhysicalGroup(1, [arc]) for arc in arcs]
 
         gmsh.model.mesh.field.add("Distance", 1)
         gmsh.model.mesh.field.setNumbers(1, "NodesList", [c])
@@ -269,14 +267,14 @@ def create_box_mesh_3D(filename: str, simplex: bool = True, order: int = 1,
 
 def create_sphere_plane_mesh(filename: str, order: int = 1, res=0.05):
     """
-    Create a 3D sphere with center (0,0,0), r=0.3
-    with a box at [-0.3, 0.6] x [-0.3, 0.6] x [ -0.1, -0.5]
+    Create a 3D sphere with center (0,0,0), r=0.25
+    with a box at [-0.5, 0.5] x [-0.5, 0.5] x [ -0.5, -0.25]
     """
     center = [0.0, 0.0, 0.0]
-    r = 0.3
-    angle = np.pi / 8
-    gap = 0.05
-    H = 0.05
+    r = 0.25
+    angle = 0
+    gap = 0.0
+    H = 0.25
     theta = 0  # np.pi / 10
     LcMin = res
     LcMax = 2 * res
@@ -289,7 +287,7 @@ def create_sphere_plane_mesh(filename: str, order: int = 1, res=0.05):
         out_vol_tags, _ = gmsh.model.occ.fragment([(3, sphere_bottom)], [(3, sphere_top)])
 
         # Add bottom box
-        box = gmsh.model.occ.add_box(center[0] - r, center[1] - r, center[2] - r - gap - 2 * H, 3 * r, 3 * r, 2 * H)
+        box = gmsh.model.occ.add_box(-0.5,-0.5, -0.5, 1, 1, 0.25)
         # Rotate after marking boundaries
         gmsh.model.occ.rotate([(3, box)], center[0], center[1], center[2]
                               - r - 3 * gap, 1, 0, 0, theta)

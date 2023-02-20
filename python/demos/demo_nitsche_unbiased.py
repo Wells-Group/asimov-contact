@@ -218,7 +218,7 @@ if __name__ == "__main__":
 
         elif problem == 2:
             outname = "results/problem2_2D_simplex" if simplex else "results/problem2_2D_quads"
-            fname = f"{mesh_dir}/twomeshes"
+            fname = f"{mesh_dir}/problem2_2D_simplex" if simplex else f"{mesh_dir}/problem2_2D_quads"
             create_circle_plane_mesh(filename=f"{fname}.msh", quads=not simplex, res=args.res, order=args.order)
             convert_mesh(fname, f"{fname}.xdmf", gdim=2)
 
@@ -228,10 +228,10 @@ if __name__ == "__main__":
                 tdim = mesh.topology.dim
                 mesh.topology.create_connectivity(tdim - 1, tdim)
                 facet_marker = xdmf.read_meshtags(mesh, name="facet_marker")
-            dirichlet_bdy_1 = 2
-            contact_bdy_1 = 4
-            contact_bdy_2 = 9
-            dirichlet_bdy_2 = 7
+            dirichlet_bdy_1 = 7
+            contact_bdy_1 = 8
+            contact_bdy_2 = 6
+            dirichlet_bdy_2 = 4
         elif problem == 3:
             outname = "results/problem3_2D_simplex" if simplex else "results/problem3_2D_quads"
             fname = f"{mesh_dir}/two_disks"
