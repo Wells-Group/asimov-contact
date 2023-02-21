@@ -22,6 +22,7 @@ def create_circle_plane_mesh(filename: str, quads: bool = False, res=0.1, order:
     if MPI.COMM_WORLD.rank == 0:
         # Create circular mesh (divided into 4 segments)
         c = gmsh.model.occ.addPoint(center[0], center[1], center[2])
+        pin_pt = gmsh.model.occ.addPoint(0.0, 0.1, 0.0)
         left = gmsh.model.occ.addPoint(-0.25, 0, 0)
         right = gmsh.model.occ.addPoint(0.25, 0, 0)
 
@@ -61,6 +62,7 @@ def create_circle_plane_mesh(filename: str, quads: bool = False, res=0.1, order:
         gmsh.model.mesh.field.setNumber(2, "LcMax", 2 * res)
         gmsh.model.mesh.field.setNumber(2, "DistMin", 0.3)
         gmsh.model.mesh.field.setNumber(2, "DistMax", 0.6)
+        gmsh.model.mesh.embed(0, [c, pin_pt], 2, 1)
         if quads:
             gmsh.option.setNumber("Mesh.RecombinationAlgorithm", 8)
             gmsh.option.setNumber("Mesh.RecombineAll", 2)

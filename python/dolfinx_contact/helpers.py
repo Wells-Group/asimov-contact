@@ -8,6 +8,7 @@ from typing import Union
 
 import dolfinx.fem as _fem
 import dolfinx.la as _la
+from dolfinx import cpp
 from dolfinx.mesh import meshtags
 import numpy
 import scipy.sparse
@@ -254,7 +255,12 @@ def weak_dirichlet(F: ufl.Form, u: _fem.Function,
     V = u.function_space
     v = F.arguments()[0]
     mesh = V.mesh
-    h = ufl.CellDiameter(mesh)
+    V2 = _fem.FunctionSpace(mesh, ("DG", 0))
+    tdim = mesh.topology.dim
+    ncells = mesh.topology.index_map(tdim).size_local
+    h = _fem.Function(V2)
+    h_vals = cpp.mesh.h(mesh._cpp_object, mesh.topology.dim,  numpy.arange(0, ncells, dtype=numpy.int32))
+    h.x.array[:ncells] = h_vals[:]
     n = ufl.FacetNormal(mesh)
     F += - ufl.inner(sigma(u) * n, v) * ds\
         - theta * ufl.inner(sigma(v) * n, u - f) * \

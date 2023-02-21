@@ -3,7 +3,6 @@
 # SPDX-License-Identifier:    MIT
 
 from typing import Optional, Tuple, Union
-
 from dolfinx import common, fem, mesh, io, log, cpp
 import numpy as np
 import numpy.typing as npt
@@ -311,13 +310,18 @@ def nitsche_unbiased(steps: int, ufl_form: ufl.Form, u: fem.Function,
     # Mesh, function space and FEM functions
     V = u.function_space
     mesh = V.mesh
+    V2 = fem.FunctionSpace(mesh, ("DG", 0))
     v = ufl_form.arguments()[0]  # Test function
     w = ufl.TrialFunction(V)     # Trial function
     du = fem.Function(V)
     du.x.array[:] = u.x.array[:]
     u.x.array[:].fill(0)
-    h = ufl.CellDiameter(mesh)
     n = ufl.FacetNormal(mesh)
+    tdim = mesh.topology.dim
+    ncells = mesh.topology.index_map(tdim).size_local
+    h = fem.Function(V2)
+    h_vals = cpp.mesh.h(mesh._cpp_object, mesh.topology.dim,  np.arange(0, ncells, dtype=np.int32))
+    h.x.array[:ncells] = h_vals[:]
 
     # Integration measure and ufl part of linear/bilinear form
     ds = ufl.Measure("ds", domain=mesh, subdomain_data=markers[1])
@@ -358,7 +362,6 @@ def nitsche_unbiased(steps: int, ufl_form: ufl.Form, u: fem.Function,
 
     # Pack material parameters mu and lambda on each contact surface
     with common.Timer("~Contact: Interpolate coeffs (mu, lmbda)"):
-        V2 = fem.FunctionSpace(mesh, ("DG", 0))
         lmbda2 = fem.Function(V2)
         lmbda2.interpolate(lambda x: np.full((1, x.shape[1]), lmbda))
         mu2 = fem.Function(V2)
@@ -388,7 +391,7 @@ def nitsche_unbiased(steps: int, ufl_form: ufl.Form, u: fem.Function,
         h_int.interpolate(expr, surface_cells)
         for i in range(len(contact_pairs)):
             h_packed.append(dolfinx_contact.cpp.pack_coefficient_quadrature(
-                h_int._cpp_object, 0, entities[i]))
+                h._cpp_object, 0, entities[i]))
 
     # Concatenate material parameters, h
     const_coeffs = []

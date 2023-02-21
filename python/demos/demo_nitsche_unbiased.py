@@ -9,7 +9,7 @@ import numpy as np
 import ufl
 from dolfinx import log
 from dolfinx.common import TimingType, list_timings, timing
-from dolfinx.fem import (Constant, Function, VectorFunctionSpace)
+from dolfinx.fem import (Constant, Function, VectorFunctionSpace, locate_dofs_geometrical)
 from dolfinx.graph import create_adjacencylist
 from dolfinx.io import XDMFFile
 from dolfinx.mesh import locate_entities_boundary, GhostMode, meshtags
@@ -96,8 +96,8 @@ if __name__ == "__main__":
     hex_ext = {1: "", 2: "27"}
     quad_ext = {1: "", 2: "9", 3: "16"}
     line_ext = {1: "", 2: "3", 3: "4"}
-    if args.order > 1:
-        raise NotImplementedError("More work in DOLFINx (SubMesh) required for this to work.")
+    # if args.order > 1:
+    #     raise NotImplementedError("More work in DOLFINx (SubMesh) required for this to work.")
     # Load mesh and create identifier functions for the top (Displacement condition)
     # and the bottom (contact condition)
 
@@ -328,11 +328,15 @@ if __name__ == "__main__":
     surfaces = create_adjacencylist(data, offsets)
 
     # Function, TestFunction, TrialFunction and measures
-    V = VectorFunctionSpace(mesh, ("CG", 1))
+    V = VectorFunctionSpace(mesh, ("CG", args.order))
     u = Function(V)
     v = ufl.TestFunction(V)
     dx = ufl.Measure("dx", domain=mesh, subdomain_data=domain_marker)
     ds = ufl.Measure("ds", domain=mesh, subdomain_data=facet_marker)
+    dofs = locate_dofs_geometrical(V, lambda x: np.logical_or(np.logical_and(np.isclose(x[0], 0.0),
+                                                                        np.isclose(x[1], 0.0)),np.logical_and(np.isclose(x[0], 0.0),
+                                                                        np.isclose(x[1], 0.1)) ))
+    print(dofs)
 
     # Compute lame parameters
     E = args.E
