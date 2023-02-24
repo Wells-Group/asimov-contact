@@ -80,13 +80,13 @@ def setup_newton_solver(F_custom: fem.forms.FormMetaClass, J_custom: fem.forms.F
     # retrieve boundary conditions for time step
     tbcs = []
     for k, g in enumerate(bcs[1]):
-        tag = bcs[0][k][0]
+        bdy_dofs = bcs[0][k][0]
         sub = bcs[0][k][1]
         if sub == -1:
             fn_space = V
         else:
             fn_space = V.sub(sub)
-        bdy_dofs = fem.locate_dofs_topological(fn_space, mesh.topology.dim - 1, markers[1].find(tag))
+        # bdy_dofs = fem.locate_dofs_topological(fn_space, mesh.topology.dim - 1, markers[1].find(tag))
         tbcs.append(fem.dirichletbc(g, bdy_dofs, fn_space))
 
     # pack grad u
