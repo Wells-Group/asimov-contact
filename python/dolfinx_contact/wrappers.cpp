@@ -163,12 +163,11 @@ PYBIND11_MODULE(cpp, m)
       .def("facet_map",
            [](dolfinx_contact::Contact& self, int pair)
            {
-             // This exposes facet_map() to python but replaces the
+             // This exposes facet_map() to Python but replaces the
              // facet indices on the submesh with the facet indices in
              // the parent mesh This is only exposed for testing (in
              // particular
              // nitsche_rigid_surface.py/demo_nitsche_rigid_surface_ufl.py)
-             auto contact_pair = self.contact_pair(pair);
              std::shared_ptr<const dolfinx::mesh::Mesh> mesh = self.mesh();
              const int tdim = mesh->topology().dim(); // topological dimension
              const int fdim = tdim - 1; // topological dimension of facet

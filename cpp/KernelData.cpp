@@ -16,7 +16,7 @@ dolfinx_contact::KernelData::KernelData(
   std::shared_ptr<const dolfinx::mesh::Mesh> mesh = V->mesh();
   assert(mesh);
   // Get mesh info
-  const dolfinx::mesh::Geometry& geometry = mesh->geometry();
+  const dolfinx::mesh::Geometry<double>& geometry = mesh->geometry();
   const dolfinx::fem::CoordinateElement& cmap = geometry.cmap();
   _affine = cmap.is_affine();
   _num_coordinate_dofs = cmap.dim();

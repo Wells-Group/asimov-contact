@@ -140,7 +140,7 @@ dolfinx_contact::pack_coefficient_quadrature(
     const auto num_points = q_offsets.back();
 
     // Get geometry data
-    const dolfinx::mesh::Geometry& geometry = mesh->geometry();
+    const dolfinx::mesh::Geometry<double>& geometry = mesh->geometry();
     const int gdim = geometry.dim();
     const dolfinx::graph::AdjacencyList<std::int32_t>& x_dofmap
         = mesh->geometry().dofmap();
@@ -366,7 +366,7 @@ dolfinx_contact::pack_gradient_quadrature(
   assert(value_size / bs == tab_shape[3]);
 
   // Get geometry data
-  const dolfinx::mesh::Geometry& geometry = mesh->geometry();
+  const dolfinx::mesh::Geometry<double>& geometry = mesh->geometry();
   const std::size_t gdim = geometry.dim();
   const dolfinx::graph::AdjacencyList<std::int32_t>& x_dofmap
       = mesh->geometry().dofmap();
@@ -534,7 +534,7 @@ std::vector<PetscScalar> dolfinx_contact::pack_circumradius(
     const dolfinx::mesh::Mesh& mesh,
     const std::span<const std::int32_t>& active_facets)
 {
-  const dolfinx::mesh::Geometry& geometry = mesh.geometry();
+  const dolfinx::mesh::Geometry<double>& geometry = mesh.geometry();
   const dolfinx::mesh::Topology& topology = mesh.topology();
   if (!geometry.cmap().is_affine())
     throw std::invalid_argument("Non-affine circumradius is not implemented");

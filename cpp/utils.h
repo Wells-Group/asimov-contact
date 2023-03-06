@@ -329,8 +329,9 @@ compute_projection_map(const dolfinx::mesh::Mesh& mesh,
       = dolfinx::geometry::compute_closest_entity(bbox, midpoint_tree, mesh,
                                                   points);
   std::vector<double> candidate_x(num_points * 3);
-  std::span<const double> mesh_geometry = mesh.geometry().x();
-  const dolfinx::fem::CoordinateElement& cmap = mesh.geometry().cmap();
+  const dolfinx::mesh::Geometry<double>& geometry = mesh.geometry();
+  std::span<const double> mesh_geometry = geometry.x();
+  const dolfinx::fem::CoordinateElement& cmap = geometry.cmap();
   {
     // Find displacement vector from each point
     // to closest entity. As a point on the surface
@@ -397,7 +398,7 @@ compute_projection_map(const dolfinx::mesh::Mesh& mesh,
     std::array<double, tdim> X;
     const std::size_t num_dofs_g = cmap.dim();
     const dolfinx::graph::AdjacencyList<std::int32_t>& x_dofmap
-        = mesh.geometry().dofmap();
+        = geometry.dofmap();
     std::vector<double> coordinate_dofsb(num_dofs_g * gdim);
     cmdspan2_t coordinate_dofs(coordinate_dofsb.data(), num_dofs_g, gdim);
     auto f_to_c = mesh.topology().connectivity(tdim - 1, tdim);
@@ -500,7 +501,7 @@ compute_raytracing_map(const dolfinx::mesh::Mesh& quadrature_mesh,
   mdspan2_t K_c(Kcb.data(), tdim, gdim);
 
   // Get relevant information from quadrature mesh
-  const dolfinx::mesh::Geometry& geom_q = quadrature_mesh.geometry();
+  const dolfinx::mesh::Geometry<double>& geom_q = quadrature_mesh.geometry();
   const dolfinx::fem::CoordinateElement& cmap_q
       = quadrature_mesh.geometry().cmap();
   const dolfinx::mesh::Topology& top_q = quadrature_mesh.topology();
@@ -528,7 +529,7 @@ compute_raytracing_map(const dolfinx::mesh::Mesh& quadrature_mesh,
 
   // Structures used for raytracing
   dolfinx::mesh::CellType cell_type = candidate_mesh.topology().cell_type();
-  const dolfinx::mesh::Geometry& c_geometry = candidate_mesh.geometry();
+  const dolfinx::mesh::Geometry<double>& c_geometry = candidate_mesh.geometry();
   const dolfinx::fem::CoordinateElement& cmap_c = c_geometry.cmap();
   const dolfinx::graph::AdjacencyList<std::int32_t>& c_dofmap
       = c_geometry.dofmap();
