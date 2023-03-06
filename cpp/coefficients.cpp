@@ -143,7 +143,7 @@ dolfinx_contact::pack_coefficient_quadrature(
     const dolfinx::mesh::Geometry<double>& geometry = mesh->geometry();
     const int gdim = geometry.dim();
     const dolfinx::graph::AdjacencyList<std::int32_t>& x_dofmap
-        = mesh->geometry().dofmap();
+        = geometry.dofmap();
     const dolfinx::fem::CoordinateElement& cmap = geometry.cmap();
     const std::size_t num_dofs_g = cmap.dim();
     std::span<const double> x_g = geometry.x();
@@ -369,7 +369,7 @@ dolfinx_contact::pack_gradient_quadrature(
   const dolfinx::mesh::Geometry<double>& geometry = mesh->geometry();
   const std::size_t gdim = geometry.dim();
   const dolfinx::graph::AdjacencyList<std::int32_t>& x_dofmap
-      = mesh->geometry().dofmap();
+      = geometry.dofmap();
   const dolfinx::fem::CoordinateElement& cmap = geometry.cmap();
   const std::size_t num_dofs_g = cmap.dim();
   std::span<const double> x_g = geometry.x();

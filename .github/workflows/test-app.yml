@@ -20,6 +20,7 @@ jobs:
     strategy:
       matrix:
         # Complex mode not working
+        run_mode: ["Release", "Debug"]
         petsc_mode: [real]
         petsc_int_type: [32, 64]
         CXX: [c++, clang++]
@@ -87,7 +88,7 @@ jobs:
 
       - name: Install contact (C++)
         run: |
-          cmake -G Ninja -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_FLAGS="${CONTACT_CMAKE_CXX_FLAGS}" -B build-contact -S cpp/
+          cmake -G Ninja -DCMAKE_BUILD_TYPE=${{ matrix.run_mode }} -DCMAKE_CXX_FLAGS="${CONTACT_CMAKE_CXX_FLAGS}" -B build-contact -S cpp/
           ninja -C build-contact install
 
       - name: Install contact
