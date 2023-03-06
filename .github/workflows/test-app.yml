@@ -44,6 +44,12 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
+      - name: Install clang
+        if: ${{ matrix.CC }} == "clang"
+        run: |
+          apt-get update
+          apt-get install -y clang
+
       - name: Get Basix and install
         uses: actions/checkout@v3
         with:
@@ -66,11 +72,6 @@ jobs:
           repository: FEniCS/dolfinx
           ref: main
    
-      - name: Install clang
-        if: ${{ matrix.CC }} == "clang"
-        run: |
-          apt-get update
-          apt-get install -y clang
 
       - name: Configure C++ (dolfinx)
         run: cmake -G Ninja -DCMAKE_BUILD_TYPE=Release -B build-dolfinx -S ./dolfinx/cpp/
