@@ -316,7 +316,7 @@ dolfinx_contact::Contact::pack_nx(int pair)
       = _submesh.get_submesh_tuples(
           _cell_facet_pairs->links(quadrature_mt).subspan(0, 2 * num_facets));
   // Get information about submesh geometry and topology
-  const dolfinx::mesh::Geometry& geometry = quadrature_mesh->geometry();
+  const dolfinx::mesh::Geometry<double>& geometry = quadrature_mesh->geometry();
   const int gdim = geometry.dim();
   std::span<const double> x_g = geometry.x();
   auto x_dofmap = geometry.dofmap();
@@ -835,7 +835,7 @@ dolfinx_contact::Contact::pack_gap(int pair)
   error::check_cell_type(candidate_mesh->topology().cell_type());
   const std::size_t num_q_point
       = _quadrature_rule->offset()[1] - _quadrature_rule->offset()[0];
-  const dolfinx::mesh::Geometry& geometry = candidate_mesh->geometry();
+  const dolfinx::mesh::Geometry<double>& geometry = candidate_mesh->geometry();
   const int gdim = geometry.dim();
   // Pack gap function for each quadrature point on each facet
   std::vector<PetscScalar> c(num_facets * num_q_point * gdim, 0.0);
@@ -1235,7 +1235,7 @@ dolfinx_contact::Contact::pack_ny(int pair)
   const std::size_t num_facets = _local_facets[quadrature_mt];
 
   // create coefficient vector
-  const dolfinx::mesh::Geometry& geometry = candidate_mesh->geometry();
+  const dolfinx::mesh::Geometry<double>& geometry = candidate_mesh->geometry();
   const int gdim = geometry.dim();
   const std::size_t num_q_points = _quadrature_rule->num_points(0);
   std::vector<PetscScalar> normals(num_facets * num_q_points * gdim, 0.0);
@@ -1365,7 +1365,7 @@ void dolfinx_contact::Contact::assemble_matrix(
   assert(mesh);
 
   // Extract geometry data
-  const dolfinx::mesh::Geometry& geometry = mesh->geometry();
+  const dolfinx::mesh::Geometry<double>& geometry = mesh->geometry();
   const int gdim = geometry.dim();
   const dolfinx::graph::AdjacencyList<std::int32_t>& x_dofmap
       = geometry.dofmap();
@@ -1484,7 +1484,7 @@ void dolfinx_contact::Contact::assemble_vector(
   // Extract mesh
   std::shared_ptr<const dolfinx::mesh::Mesh> mesh = _V->mesh();
   assert(mesh);
-  const dolfinx::mesh::Geometry& geometry = mesh->geometry();
+  const dolfinx::mesh::Geometry<double>& geometry = mesh->geometry();
   const int gdim = geometry.dim(); // geometrical dimension
 
   // Prepare cell geometry

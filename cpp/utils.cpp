@@ -234,7 +234,7 @@ void dolfinx_contact::evaluate_basis_functions(
   // Get mesh
   std::shared_ptr<const dolfinx::mesh::Mesh> mesh = V.mesh();
   assert(mesh);
-  const dolfinx::mesh::Geometry& geometry = mesh->geometry();
+  const dolfinx::mesh::Geometry<double>& geometry = mesh->geometry();
   const dolfinx::mesh::Topology& topology = mesh->topology();
   const std::size_t tdim = topology.dim();
   const std::size_t gdim = geometry.dim();
@@ -635,7 +635,7 @@ dolfinx_contact::entities_to_geometry_dofs(
 {
 
   // Get mesh geometry and topology data
-  const dolfinx::mesh::Geometry& geometry = mesh.geometry();
+  const dolfinx::mesh::Geometry<double>& geometry = mesh.geometry();
   const dolfinx::fem::ElementDofLayout layout
       = geometry.cmap().create_dof_layout();
   // FIXME: What does this return for prisms?
@@ -817,7 +817,7 @@ void dolfinx_contact::compute_physical_points(
   dolfinx::common::Timer timer("~Contact: Compute Physical points");
 
   // Geometrical info
-  const dolfinx::mesh::Geometry& geometry = mesh.geometry();
+  const dolfinx::mesh::Geometry<double>& geometry = mesh.geometry();
   std::span<const double> mesh_geometry = geometry.x();
   const dolfinx::fem::CoordinateElement& cmap = geometry.cmap();
   const std::size_t num_dofs_g = cmap.dim();
@@ -871,7 +871,7 @@ dolfinx_contact::compute_distance_map(
     dolfinx_contact::ContactMode mode, const double radius)
 {
 
-  const dolfinx::mesh::Geometry& geometry = quadrature_mesh.geometry();
+  const dolfinx::mesh::Geometry<double>& geometry = quadrature_mesh.geometry();
   const dolfinx::fem::CoordinateElement& cmap = geometry.cmap();
   const std::size_t gdim = geometry.dim();
   const dolfinx::mesh::Topology& topology = quadrature_mesh.topology();

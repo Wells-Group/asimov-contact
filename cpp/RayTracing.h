@@ -433,7 +433,7 @@ compute_ray(const dolfinx::mesh::Mesh& mesh,
   const dolfinx::fem::CoordinateElement& cmap = mesh.geometry().cmap();
 
   // Get cell coordinates/geometry
-  const dolfinx::mesh::Geometry& geometry = mesh.geometry();
+  const dolfinx::mesh::Geometry<double>& geometry = mesh.geometry();
   const dolfinx::graph::AdjacencyList<std::int32_t>& x_dofmap
       = geometry.dofmap();
   std::span<const double> x_g = geometry.x();
