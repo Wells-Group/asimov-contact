@@ -62,7 +62,8 @@ dolfinx_contact::QuadratureRule::QuadratureRule(dolfinx::mesh::CellType ct,
       basix::cell::type et = basix::cell::sub_entity_type(b_ct, dim, i);
       basix::FiniteElement entity_element
           = basix::create_element(basix::element::family::P, et, 1,
-                                  basix::element::lagrange_variant::gll_warped);
+                                  basix::element::lagrange_variant::gll_warped,
+                                  basix::element::dpc_variant::unset, false);
       // Create quadrature and tabulate on entity
       std::array<std::vector<double>, 2> quadrature
           = basix::quadrature::make_quadrature(type, et, degree);
