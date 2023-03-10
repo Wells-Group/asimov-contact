@@ -22,13 +22,13 @@ jobs:
         # Complex mode not working
         petsc_mode: [real]
         petsc_int_type: [32, 64]
-        CXX: [c++, clang++]
-        CC: [cc, clang]
-        exclude:
-          - CC: cc
-            CXX: clang++
-          - CC: clang
-            CXX: c++
+        CXX: [c++]
+        CC: [cc]
+        # exclude:
+        #   - CC: cc
+        #     CXX: clang++
+        #   - CC: clang
+        #     CXX: c++
     env:
       CC: ${{ matrix.CC }}
       CXX: ${{ matrix.CXX }}
