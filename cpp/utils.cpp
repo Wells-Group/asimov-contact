@@ -870,7 +870,7 @@ dolfinx_contact::compute_distance_map(
     const dolfinx_contact::QuadratureRule& q_rule,
     dolfinx_contact::ContactMode mode, const double radius)
 {
-
+  dolfinx::common::Timer t("~Contact: compute distance map");
   const dolfinx::mesh::Geometry<double>& geometry = quadrature_mesh.geometry();
   const dolfinx::fem::CoordinateElement& cmap = geometry.cmap();
   const std::size_t gdim = geometry.dim();
@@ -1000,4 +1000,5 @@ dolfinx_contact::compute_distance_map(
   default:
     throw std::runtime_error("Unsupported contact mode");
   }
+  t.stop();
 }
