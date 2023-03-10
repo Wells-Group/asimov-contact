@@ -500,7 +500,7 @@ compute_raytracing_map(const dolfinx::mesh::Mesh& quadrature_mesh,
   mdspan2_t K_c(Kcb.data(), tdim, gdim);
 
   // Get relevant information from quadrature mesh
-  const dolfinx::mesh::Geometry& geom_q = quadrature_mesh.geometry();
+  const dolfinx::mesh::Geometry<double>& geom_q = quadrature_mesh.geometry();
   const dolfinx::fem::CoordinateElement& cmap_q
       = quadrature_mesh.geometry().cmap();
   const dolfinx::mesh::Topology& top_q = quadrature_mesh.topology();
@@ -528,7 +528,7 @@ compute_raytracing_map(const dolfinx::mesh::Mesh& quadrature_mesh,
 
   // Structures used for raytracing
   dolfinx::mesh::CellType cell_type = candidate_mesh.topology().cell_type();
-  const dolfinx::mesh::Geometry& c_geometry = candidate_mesh.geometry();
+  const dolfinx::mesh::Geometry<double>& c_geometry = candidate_mesh.geometry();
   const dolfinx::fem::CoordinateElement& cmap_c = c_geometry.cmap();
   const dolfinx::graph::AdjacencyList<std::int32_t>& c_dofmap
       = c_geometry.dofmap();
