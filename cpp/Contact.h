@@ -271,8 +271,8 @@ private:
   std::vector<
       std::shared_ptr<const dolfinx::graph::AdjacencyList<std::int32_t>>>
       _facet_maps;
-  // reference points of the contact points on the opposite surface for each surface
-  // output of compute_distance_map
+  // reference points of the contact points on the opposite surface for each
+  // surface output of compute_distance_map
   std::vector<std::vector<double>> _reference_contact_points;
   // shape  associated with _reference_contact_points
   std::vector<std::array<std::size_t, 2>> _reference_contact_shape;

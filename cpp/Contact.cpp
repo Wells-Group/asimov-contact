@@ -861,9 +861,10 @@ dolfinx_contact::Contact::pack_gap(int pair)
   const std::vector<std::int32_t> candidate_facets
       = _submesh.get_submesh_tuples(_cell_facet_pairs->links(candidate_mt));
 
-  std::shared_ptr<const dolfinx::graph::AdjacencyList<std::int32_t>> candidate_map = _facet_maps[pair];
+  std::shared_ptr<const dolfinx::graph::AdjacencyList<std::int32_t>>
+      candidate_map = _facet_maps[pair];
   const std::vector<double>& reference_x = _reference_contact_points[pair];
-  std::array<std::size_t ,2> shape = _reference_contact_shape[pair];
+  std::array<std::size_t, 2> shape = _reference_contact_shape[pair];
 
   const int q_gdim = quadrature_mesh->geometry().dim();
   mdspan3_t qp_span(_qp_phys[quadrature_mt].data(), num_facets, num_q_point,
@@ -962,9 +963,10 @@ dolfinx_contact::Contact::pack_test_functions(int pair)
   const std::vector<std::int32_t> candidate_facets
       = _submesh.get_submesh_tuples(_cell_facet_pairs->links(candidate_mt));
 
-  std::shared_ptr<const dolfinx::graph::AdjacencyList<std::int32_t>> candidate_map = _facet_maps[pair];
+  std::shared_ptr<const dolfinx::graph::AdjacencyList<std::int32_t>>
+      candidate_map = _facet_maps[pair];
   const std::vector<double>& reference_x = _reference_contact_points[pair];
-  std::array<std::size_t ,2> shape = _reference_contact_shape[pair];
+  std::array<std::size_t, 2> shape = _reference_contact_shape[pair];
 
   // Compute values of basis functions for all y = Pi(x) in qp
   auto V_sub = std::make_shared<dolfinx::fem::FunctionSpace>(
@@ -1106,9 +1108,10 @@ dolfinx_contact::Contact::pack_u_contact(
   const std::vector<std::int32_t> candidate_facets
       = _submesh.get_submesh_tuples(_cell_facet_pairs->links(candidate_mt));
 
-  std::shared_ptr<const dolfinx::graph::AdjacencyList<std::int32_t>> candidate_map = _facet_maps[pair];
+  std::shared_ptr<const dolfinx::graph::AdjacencyList<std::int32_t>>
+      candidate_map = _facet_maps[pair];
   const std::vector<double>& reference_x = _reference_contact_points[pair];
-  std::array<std::size_t ,2> shape = _reference_contact_shape[pair];
+  std::array<std::size_t, 2> shape = _reference_contact_shape[pair];
 
   // Compute values of basis functions for all y = Pi(x) in qp
   std::array<std::size_t, 4> b_shape
@@ -1258,9 +1261,10 @@ dolfinx_contact::Contact::pack_ny(int pair)
   const std::vector<std::int32_t> candidate_facets
       = _submesh.get_submesh_tuples(_cell_facet_pairs->links(candidate_mt));
 
-  std::shared_ptr<const dolfinx::graph::AdjacencyList<std::int32_t>> candidate_map = _facet_maps[pair];
+  std::shared_ptr<const dolfinx::graph::AdjacencyList<std::int32_t>>
+      candidate_map = _facet_maps[pair];
   const std::vector<double>& reference_x = _reference_contact_points[pair];
-  std::array<std::size_t ,2> shape = _reference_contact_shape[pair];
+  std::array<std::size_t, 2> shape = _reference_contact_shape[pair];
 
   // Get information about submesh geometry and topology
   std::span<const double> x_g = geometry.x();
