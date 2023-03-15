@@ -160,5 +160,4 @@ def create_contact_mesh(mesh, fmarker, dmarker, tags, R=0.2):
     new_dmarker = meshtags(new_mesh, tdim, new_cmarkers[:, 0],
                            new_cmarkers[:, 1])
 
-    log.log(log.LogLevel.WARNING, "done")
     return new_mesh, new_fmarker, new_dmarker

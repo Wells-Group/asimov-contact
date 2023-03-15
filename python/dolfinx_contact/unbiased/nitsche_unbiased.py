@@ -91,7 +91,7 @@ def setup_newton_solver(F_custom: fem.forms.FormMetaClass, J_custom: fem.forms.F
 
     # pack grad u
     grad_u = []
-    with common.Timer("~~Contact: Pack u"):
+    with common.Timer("~~Contact: Pack grad(u)"):
         for i in range(num_pairs):
             grad_u.append(dolfinx_contact.cpp.pack_gradient_quadrature(
                 u._cpp_object, quadrature_degree, entities[i]))
@@ -353,8 +353,6 @@ def nitsche_unbiased(steps: int, ufl_form: ufl.Form, u: fem.Function,
     xdmf.write_mesh(contact.submesh(), xpath="/Xdmf/Domain")
     del (xdmf)
 
-    log.log(log.LogLevel.WARNING, "Done debug I/O")
-
     contact.set_search_radius(search_radius)
 
     # pack constants
@@ -407,7 +405,7 @@ def nitsche_unbiased(steps: int, ufl_form: ufl.Form, u: fem.Function,
     newton_its = []
     krylov_its = []
     for tt in range(steps):
-        log.log(log.LogLevel.WARNING, "Time step " + str(tt) + " of " + str(steps)
+        log.log(log.LogLevel.WARNING, "Time step " + str(tt + 1) + " of " + str(steps)
                 + " +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
         # create distance map
         with common.Timer("~Contact: Distance maps"):
@@ -431,10 +429,9 @@ def nitsche_unbiased(steps: int, ufl_form: ufl.Form, u: fem.Function,
 
         # Set Krylov solver options
         newton_solver.set_krylov_options(petsc_options)
-        dofs_global = V.dofmap.index_map_bs * V.dofmap.index_map.size_global
         log.set_log_level(log.LogLevel.WARNING)
         # Solve non-linear problem
-        timing_str = f"~Contact: {id(dofs_global)} Solve Nitsche"
+        timing_str = f"~Contact: {tt+1} Solve Nitsche"
         with common.Timer(timing_str):
             n, converged = newton_solver.solve(du)
         if outfile is not None:
