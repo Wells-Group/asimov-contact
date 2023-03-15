@@ -9,7 +9,7 @@ import numpy as np
 import ufl
 from dolfinx import log
 from dolfinx.common import TimingType, list_timings, timing
-from dolfinx.fem import (Constant, Function, Expression, FunctionSpace,VectorFunctionSpace, locate_dofs_geometrical)
+from dolfinx.fem import (Constant, Function, Expression, FunctionSpace, VectorFunctionSpace)
 from dolfinx.graph import create_adjacencylist
 from dolfinx.io import XDMFFile
 from dolfinx.mesh import locate_entities_boundary, GhostMode, meshtags
@@ -333,7 +333,6 @@ if __name__ == "__main__":
     dx = ufl.Measure("dx", domain=mesh, subdomain_data=domain_marker)
     ds = ufl.Measure("ds", domain=mesh, subdomain_data=facet_marker)
 
-
     # Compute lame parameters
     E = args.E
     nu = args.nu
@@ -420,7 +419,7 @@ if __name__ == "__main__":
 
     sigma_dev = sigma(u_all) - (1 / 3) * ufl.tr(sigma(u_all)) * ufl.Identity(len(u_all))
     sigma_vm = ufl.sqrt((3 / 2) * ufl.inner(sigma_dev, sigma_dev))
-    W = FunctionSpace(mesh, ("Discontinuous Lagrange", args.order -1))
+    W = FunctionSpace(mesh, ("Discontinuous Lagrange", args.order - 1))
     sigma_vm_expr = Expression(sigma_vm, W.element.interpolation_points())
     sigma_vm_h = Function(W)
     sigma_vm_h.interpolate(sigma_vm_expr)
@@ -430,7 +429,7 @@ if __name__ == "__main__":
         u_all.name = "u"
         xdmf.write_function(u_all)
         xdmf.write_function(sigma_vm_h)
-        
+
     with XDMFFile(mesh.comm, "results/partitioning.xdmf", "w") as xdmf:
         xdmf.write_mesh(mesh)
         xdmf.write_meshtags(process_marker)
