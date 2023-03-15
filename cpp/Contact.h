@@ -271,10 +271,13 @@ private:
   std::vector<
       std::shared_ptr<const dolfinx::graph::AdjacencyList<std::int32_t>>>
       _facet_maps;
+  // reference points of the contact points on the opposite surface for each surface
+  // output of compute_distance_map
+  std::vector<std::vector<double>> _reference_contact_points;
+  // shape  associated with _reference_contact_points
+  std::vector<std::array<std::size_t, 2>> _reference_contact_shape;
   //  _qp_phys[i] contains the quadrature points on the physical facets for
   //  each facet on ith surface in _surfaces
-  std::vector<std::vector<double>> _reference_contact_points;
-  std::vector<std::array<std::size_t, 2>> _reference_contact_shape;
   std::vector<std::vector<double>> _qp_phys;
   // quadrature points on facets of reference cell
   std::vector<double> _reference_basis;
