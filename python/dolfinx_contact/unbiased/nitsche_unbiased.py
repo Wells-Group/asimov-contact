@@ -460,4 +460,4 @@ def nitsche_unbiased(steps: int, ufl_form: ufl.Form, u: fem.Function,
 
     contact.update_submesh_geometry(u._cpp_object)
     vtx.close()
-    return u, newton_its, krylov_its, timings
+    return u, newton_its, krylov_its, timings, contact
