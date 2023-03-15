@@ -426,7 +426,6 @@ def nitsche_unbiased(steps: int, ufl_form: ufl.Form, u: fem.Function,
 
         # Set Krylov solver options
         newton_solver.set_krylov_options(petsc_options)
-        dofs_global = V.dofmap.index_map_bs * V.dofmap.index_map.size_global
         log.set_log_level(log.LogLevel.WARNING)
         # Solve non-linear problem
         timing_str = f"~Contact: {tt+1} Solve Nitsche"
