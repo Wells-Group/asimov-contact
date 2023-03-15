@@ -76,5 +76,10 @@ void compute_sigma_n_opp(mdspan4_t sig_n_opp, std::span<const double> grad_v,
                          std::span<const double> n, const double mu,
                          const double lmbda, const std::size_t q,
                          const std::size_t num_q_points);
+std::vector<double> compute_contact_pressure(
+    std::span<const double> grad_u, std::span<const double> n_x,
+    std::span<const double> n_contact, const std::size_t num_q_points,
+    std::size_t num_facets, const std::size_t gdim, const double mu,
+    const double lmbda);
 
 } // namespace dolfinx_contact

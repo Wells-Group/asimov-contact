@@ -91,24 +91,24 @@ if __name__ == "__main__":
                       "convergence_criterion": "residual",
                       "max_it": 50,
                       "error_on_nonconvergence": True}
-    # petsc_options = {"ksp_type": "preonly", "pc_type": "lu"}
-    petsc_options = {
-        "matptap_via": "scalable",
-        "ksp_type": "cg",
-        "ksp_rtol": ksp_tol,
-        "ksp_atol": ksp_tol,
-        "pc_type": "gamg",
-        "pc_mg_levels": 3,
-        "pc_mg_cycles": 1,   # 1 is v, 2 is w
-        "mg_levels_ksp_type": "chebyshev",
-        "mg_levels_pc_type": "jacobi",
-        "pc_gamg_type": "agg",
-        "pc_gamg_coarse_eq_limit": 100,
-        "pc_gamg_agg_nsmooths": 1,
-        "pc_gamg_threshold": 1e-3,
-        "pc_gamg_square_graph": 2,
-        "pc_gamg_reuse_interpolation": False
-    }
+    petsc_options = {"ksp_type": "preonly", "pc_type": "lu"}
+    # petsc_options = {
+    #     "matptap_via": "scalable",
+    #     "ksp_type": "cg",
+    #     "ksp_rtol": ksp_tol,
+    #     "ksp_atol": ksp_tol,
+    #     "pc_type": "gamg",
+    #     "pc_mg_levels": 3,
+    #     "pc_mg_cycles": 1,   # 1 is v, 2 is w
+    #     "mg_levels_ksp_type": "chebyshev",
+    #     "mg_levels_pc_type": "jacobi",
+    #     "pc_gamg_type": "agg",
+    #     "pc_gamg_coarse_eq_limit": 100,
+    #     "pc_gamg_agg_nsmooths": 1,
+    #     "pc_gamg_threshold": 1e-3,
+    #     "pc_gamg_square_graph": 2,
+    #     "pc_gamg_reuse_interpolation": False
+    # }
 
     # Pack mesh data for Nitsche solver
     contact = [(0, 1), (1, 0)]
@@ -131,15 +131,18 @@ if __name__ == "__main__":
     problem_parameters = {"mu": mu, "lambda": lmbda, "gamma": E * 15, "theta": 1}
 
     # Set initial condition
-
+    Estar = E/(2*(1-nu**2))
+    load = 0.25
+    R = 0.25
+    d = 4*load*0.25**2/Estar
     def _u_initial(x):
         values = np.zeros((mesh.geometry.dim, x.shape[1]))
-        values[-1] = -0.1
+        values[-1] = -d
         return values
     u.interpolate(_u_initial)
 
     # Solve contact problem using Nitsche's method
-    u, newton_its, krylov_iterations, solver_time, contact = nitsche_unbiased(1, ufl_form=F,
+    u, newton_its, krylov_iterations, solver_time, contact, pn = nitsche_unbiased(8, ufl_form=F,
                                                                               u=u, rhs_fns=[f],
                                                                               markers=[domain_marker, facet_marker],
                                                                               contact_data=(surfaces, contact), bcs=bcs,
@@ -190,18 +193,18 @@ if __name__ == "__main__":
     print(len(coeffs.reshape(-1)))
 
     plt.figure()
-    plt.plot(x, abs(coeffs.reshape(-1)), '*')
+    plt.plot(x, pn[1], '*')
     plt.xlabel('x')
     plt.ylabel('p')
     plt.xlim(-0.25, 0.25)
     plt.ylim(0, 0.35)
     plt.grid()
 
-    F = (4 / 3) * np.sqrt(0.01**3) / 2.5
-    a = np.sqrt(0.01 * 0.25)
-    p0 = 3 * F / (2 * np.pi * a * a)
+
+    a = np.sqrt(d*R)
     r = np.linspace(-a, a, 100)
+    p0 = np.sqrt(Estar*load*R)
     p = p0 * np.sqrt(1 - r**2 / a**2)
     plt.plot(r, p)
-
+    print(p0, a)
     plt.savefig("contact_pressure.png")

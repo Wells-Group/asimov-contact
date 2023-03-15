@@ -137,3 +137,34 @@ void dolfinx_contact::compute_sigma_n_opp(mdspan4_t sig_n_opp,
       }
     }
 }
+
+std::vector<double> dolfinx_contact::compute_contact_pressure(
+    std::span<const double> grad_u, std::span<const double> n_x,
+    std::span<const double> n_contact, const std::size_t num_q_points,
+    std::size_t num_facets, const std::size_t gdim, const double mu,
+    const double lmbda)
+{
+  std::vector<double> sig_n_u(gdim);
+  std::vector<double> pn(num_facets * num_q_points);
+  for (std::size_t f = 0; f < num_facets; ++f)
+  {
+    std::size_t f_offset = num_q_points * gdim * f;
+    for (std::size_t q = 0; q < num_q_points; ++q)
+    {
+      // compute sig(u)*n_x
+      std::fill(sig_n_u.begin(), sig_n_u.end(), 0.0);
+      dolfinx_contact::compute_sigma_n_u(
+          sig_n_u,
+          grad_u.subspan(f_offset * gdim + q * gdim * gdim, gdim * gdim),
+          n_x.subspan(f_offset + q * gdim, gdim), mu, lmbda);
+
+      double sign_u = 0;
+      for (std::size_t j = 0; j < gdim; ++j)
+      {
+        sign_u += sig_n_u[j] * n_contact[f_offset + q * gdim + j];
+      }
+      pn[num_q_points * f + q] = sign_u;
+    }
+  }
+  return pn;
+}

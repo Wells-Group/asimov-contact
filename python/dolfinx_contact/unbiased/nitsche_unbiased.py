@@ -460,4 +460,21 @@ def nitsche_unbiased(steps: int, ufl_form: ufl.Form, u: fem.Function,
 
     contact.update_submesh_geometry(u._cpp_object)
     vtx.close()
-    return u, newton_its, krylov_its, timings, contact
+
+    # Compute contact pressure on surfaces
+    gdim = mesh.geometry.dim
+    pn = []
+    for i in range(len(contact_pairs)):
+        n_x = contact.pack_nx(i)
+        grad_u = dolfinx_contact.cpp.pack_gradient_quadrature(
+                u._cpp_object, quadrature_degree, entities[i])
+        if raytracing:
+            n_contact = -contact.pack_nx(i)
+        else:
+            n_contact = contact.pack_ny(i)
+
+        num_facets = entities[i].shape[0]
+        num_q_points = n_x.shape[1] // gdim
+        pn.append(dolfinx_contact.cpp.compute_contact_pressure(grad_u, n_x, n_contact, num_q_points, num_facets, gdim, mu, lmbda))
+        
+    return u, newton_its, krylov_its, timings, contact, pn
