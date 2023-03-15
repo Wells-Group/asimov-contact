@@ -273,6 +273,8 @@ private:
       _facet_maps;
   //  _qp_phys[i] contains the quadrature points on the physical facets for
   //  each facet on ith surface in _surfaces
+  std::vector<std::vector<double>> _reference_contact_points;
+  std::vector<std::array<std::size_t, 2>> _reference_contact_shape;
   std::vector<std::vector<double>> _qp_phys;
   // quadrature points on facets of reference cell
   std::vector<double> _reference_basis;
