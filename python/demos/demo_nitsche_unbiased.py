@@ -291,7 +291,6 @@ if __name__ == "__main__":
         xdmf.write_mesh(mesh)
         xdmf.write_meshtags(domain_marker)
         xdmf.write_meshtags(facet_marker)
-    log.log(log.LogLevel.WARNING, "Done marker mesh I/O")
 
     # Solver options
     ksp_tol = 1e-10
