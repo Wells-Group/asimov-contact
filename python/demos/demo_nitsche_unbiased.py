@@ -196,6 +196,8 @@ if __name__ == "__main__":
             values = np.hstack([val0, val1, val2, val3])
             sorted_facets = np.argsort(indices)
             facet_marker = meshtags(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
+            if args.radius > 0.8 / args.time_steps:
+                args.radius = 0.8 / args.time_steps
 
     else:
         displacement = [[0, -args.disp], [0, 0]]

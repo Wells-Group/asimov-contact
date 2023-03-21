@@ -2,9 +2,10 @@
 #
 # SPDX-License-Identifier:    MIT
 
-from typing import Optional, Tuple, Union
+from typing import Any, Optional, Tuple, Union
 
-from dolfinx import common, fem, mesh, io, log, cpp
+from dolfinx import common, fem, io, log, cpp
+from dolfinx import mesh as _mesh
 import numpy as np
 import numpy.typing as npt
 import ufl
@@ -21,9 +22,9 @@ __all__ = ["nitsche_unbiased"]
 
 
 def setup_newton_solver(F_custom: fem.forms.FormMetaClass, J_custom: fem.forms.FormMetaClass,
-                        bcs: Tuple[npt.NDArray[np.int32], list[Union[fem.Function, fem.Constant]]],
+                        bcs: Tuple[npt.NDArray[np.int32], list[Union[fem.Function, fem.function.Constant]]],
                         u: fem.Function, du: fem.Function,
-                        contact: dolfinx_contact.cpp.Contact, markers: list[mesh.meshtags],
+                        contact: dolfinx_contact.cpp.Contact, markers: list[_mesh.MeshTags],
                         entities: list[npt.NDArray[np.int32]], quadrature_degree: int,
                         const_coeffs: list[npt.NDArray[np.float64]], consts: npt.NDArray[np.float64],
                         raytracing: bool):
@@ -194,7 +195,7 @@ def get_problem_parameters(problem_parameters: dict[str, np.float64]):
 
 
 def copy_fns(fns: list[Union[fem.Function, fem.Constant]],
-             mesh: mesh.Mesh) -> list[Union[fem.Function, fem.Constant]]:
+             mesh: _mesh.Mesh) -> list[Union[fem.Function, fem.Constant]]:
     """
     Create copy of list of finite element functions/constanst
     """
@@ -228,7 +229,7 @@ def update_fns(t: float, fns: list[Union[fem.Function, fem.Constant]],
 
 
 def nitsche_unbiased(steps: int, ufl_form: ufl.Form, u: fem.Function,
-                     rhs_fns: list[Union[fem.Function, fem.Constant]], markers: list[mesh.meshtags],
+                     rhs_fns: list[Any], markers: list[_mesh.MeshTags],
                      contact_data: Tuple[AdjacencyList_int32, list[Tuple[int, int]]],
                      bcs: Tuple[npt.NDArray[np.int32], list[Union[fem.Function, fem.Constant]]],
                      problem_parameters: dict[str, np.float64],

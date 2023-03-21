@@ -187,7 +187,7 @@ if __name__ == "__main__":
                                                                    rhs_fns=rhs_fns,
                                                                    markers=[domain_marker, facet_marker],
                                                                    contact_data=(surfaces, contact_pairs),
-                                                                   bcs=[(), []],
+                                                                   bcs=(np.empty(shape=(2, 0), dtype=np.int32), []),
                                                                    problem_parameters=problem_parameters,
                                                                    raytracing=False,
                                                                    newton_options=newton_options,
@@ -195,7 +195,7 @@ if __name__ == "__main__":
                                                                    outfile=solver_outfile,
                                                                    fname=outname,
                                                                    quadrature_degree=args.q_degree,
-                                                                   search_radius=-1)
+                                                                   search_radius=np.float64(-1))
 
     timer.stop()
     # write solution to file

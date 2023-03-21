@@ -213,7 +213,7 @@ if __name__ == "__main__":
                                                                        outfile=solver_outfile,
                                                                        fname=outname,
                                                                        quadrature_degree=args.q_degree,
-                                                                       search_radius=-1)
+                                                                       search_radius=np.float64(-1))
 
     # write solution to file
     size = mesh.comm.size
