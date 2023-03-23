@@ -103,12 +103,11 @@ PYBIND11_MODULE(cpp, m)
                     std::shared_ptr<
                         const dolfinx::graph::AdjacencyList<std::int32_t>>,
                     std::vector<std::array<int, 2>>,
-                    std::shared_ptr<dolfinx::fem::FunctionSpace>, const int,
-                    dolfinx_contact::ContactMode>(),
+                    std::shared_ptr<dolfinx::fem::FunctionSpace>,
+                    std::vector<dolfinx_contact::ContactMode>, const int>(),
            py::arg("markers"), py::arg("surfaces"), py::arg("contact_pairs"),
-           py::arg("V"), py::arg("quadrature_degree") = 3,
-           py::arg("search_method")
-           = dolfinx_contact::ContactMode::ClosestPoint)
+           py::arg("V"),py::arg("search_method"), py::arg("quadrature_degree") = 3
+           )
       .def("create_distance_map",
 
            [](dolfinx_contact::Contact& self, int pair)

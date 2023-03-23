@@ -186,8 +186,9 @@ def nitsche_rigid_surface_custom(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.meshta
     data = np.array([contact_value_elastic, contact_value_rigid], dtype=np.int32)
     offsets = np.array([0, 2], dtype=np.int32)
     surfaces = create_adjacencylist(data, offsets)
+    search_mode = [dolfinx_contact.cpp.ContactMode.ClosestPoint]
     contact = dolfinx_contact.cpp.Contact([facet_marker._cpp_object], surfaces, [(0, 1)],
-                                          V._cpp_object, quadrature_degree=quadrature_degree)
+                                          V._cpp_object, search_mode, quadrature_degree=quadrature_degree)
 
     # Compute gap and normals
     contact.create_distance_map(0)

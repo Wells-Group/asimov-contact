@@ -77,7 +77,7 @@ def create_circle_plane_mesh(filename: str, quads: bool = False, res=0.1, order:
     MPI.COMM_WORLD.Barrier()
     gmsh.finalize()
 
-def create_halfdisk_plane_mesh(filename: str,  res=0.1, order: int = 1):
+def create_halfdisk_plane_mesh(filename: str,  res=0.1, order: int = 1, quads = False):
     """
     Create a circular mesh, with center at (0.0,0.0,0) with radius 0.25 and a box [-0.5,0.5]x[-0.5,-0.25]
     """
@@ -133,6 +133,10 @@ def create_halfdisk_plane_mesh(filename: str,  res=0.1, order: int = 1):
         gmsh.model.mesh.field.setNumber(2, "DistMax", 0.6)
         gmsh.model.mesh.embed(0, [c, pin_pt], 2, 1)
         gmsh.model.mesh.field.setAsBackgroundMesh(2)
+        if quads:
+            gmsh.option.setNumber("Mesh.RecombinationAlgorithm", 8)
+            gmsh.option.setNumber("Mesh.RecombineAll", 2)
+            gmsh.option.setNumber("Mesh.SubdivisionAlgorithm", 1)
 
         gmsh.model.mesh.generate(2)
         gmsh.model.mesh.setOrder(order)

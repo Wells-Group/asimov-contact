@@ -153,8 +153,9 @@ def nitsche_custom(mesh: dmesh.Mesh, mesh_data: Tuple[dmesh.meshtags, int, int],
     data = np.array([contact_value, dirichlet_value], dtype=np.int32)
     offsets = np.array([0, 2], dtype=np.int32)
     surfaces = create_adjacencylist(data, offsets)
+    search_mode = [dolfinx_contact.cpp.ContactMode.ClosestPoint]
     contact = dolfinx_contact.cpp.Contact([facet_marker._cpp_object], surfaces, [(0, 1)],
-                                          V._cpp_object, quadrature_degree=quadrature_degree)
+                                          V._cpp_object, search_mode, quadrature_degree=quadrature_degree)
     contact.create_distance_map(0)
 
     # Compute gap from contact boundary

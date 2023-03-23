@@ -19,6 +19,7 @@ import ufl
 from dolfinx_contact.unbiased.nitsche_unbiased import nitsche_unbiased
 from dolfinx_contact.helpers import lame_parameters, sigma_func, weak_dirichlet, epsilon
 from dolfinx_contact.parallel_mesh_ghosting import create_contact_mesh
+import dolfinx_contact.cpp
 
 if __name__ == "__main__":
     desc = "Nitsche's method for two elastic bodies using custom assemblers"
@@ -182,14 +183,14 @@ if __name__ == "__main__":
     rhs_fns = [g, t, f]
     size = mesh.comm.size
     outname = f"results/boxkey_{tdim}D_{size}"
-
+    search_mode = [dolfinx_contact.cpp.ContactMode.ClosestPoint, dolfinx_contact.cpp.ContactMode.ClosestPoint]
     u1, num_its, krylov_iterations, solver_time = nitsche_unbiased(args.time_steps, ufl_form=F, u=u,
                                                                    rhs_fns=rhs_fns,
                                                                    markers=[domain_marker, facet_marker],
                                                                    contact_data=(surfaces, contact_pairs),
                                                                    bcs=[(), []],
                                                                    problem_parameters=problem_parameters,
-                                                                   raytracing=False,
+                                                                   search_method = search_mode,
                                                                    newton_options=newton_options,
                                                                    petsc_options=petsc_options,
                                                                    outfile=solver_outfile,

@@ -13,6 +13,7 @@ from petsc4py import PETSc as _PETSc
 import dolfinx_contact
 import dolfinx_contact.cpp
 from dolfinx_contact.helpers import (rigid_motions_nullspace_subdomains, sigma_func)
+from dolfinx_contact.plotting import plot_gap
 
 kt = dolfinx_contact.cpp.Kernel
 
@@ -25,7 +26,7 @@ def setup_newton_solver(F_custom: fem.forms.FormMetaClass, J_custom: fem.forms.F
                         contact: dolfinx_contact.cpp.Contact, markers: list[mesh.meshtags],
                         entities: list[npt.NDArray[np.int32]], quadrature_degree: int,
                         const_coeffs: list[npt.NDArray[np.float64]], consts: npt.NDArray[np.float64],
-                        raytracing: bool):
+                        search_method: list[dolfinx_contact.cpp.ContactMode]):
     """
     Set up newton solver for contact problem.
     Generate kernels and define functions for updating coefficients, stiffness matrix and residual vector.
@@ -66,11 +67,13 @@ def setup_newton_solver(F_custom: fem.forms.FormMetaClass, J_custom: fem.forms.F
     with common.Timer("~Contact: Pack gap, normals, testfunction"):
         for i in range(num_pairs):
             gaps.append(contact.pack_gap(i))
-            if raytracing:
+            if search_method[i] == dolfinx_contact.cpp.ContactMode.Raytracing:
                 normals.append(-contact.pack_nx(i))
             else:
                 normals.append(contact.pack_ny(i))
             test_fns.append(contact.pack_test_functions(i))
+    plot_gap(mesh, contact, gaps, entities, num_pairs)
+        
 
     # Concatenate all coeffs
     ccfs = []
@@ -160,7 +163,7 @@ def setup_newton_solver(F_custom: fem.forms.FormMetaClass, J_custom: fem.forms.F
     newton_solver.set_coefficients(compute_coefficients)
 
     # Set rigid motion nullspace
-    null_space = rigid_motions_nullspace_subdomains(V, markers[0], np.unique(markers[0].values))
+    null_space = rigid_motions_nullspace_subdomains(V, markers[0], np.unique(markers[0].values), num_domains=len(np.unique(markers[0].values)))
     newton_solver.A.setNearNullSpace(null_space)
 
     return newton_solver
@@ -231,7 +234,7 @@ def nitsche_unbiased(steps: int, ufl_form: ufl.Form, u: fem.Function,
                      contact_data: Tuple[AdjacencyList_int32, list[Tuple[int, int]]],
                      bcs: Tuple[npt.NDArray[np.int32], list[Union[fem.Function, fem.Constant]]],
                      problem_parameters: dict[str, np.float64],
-                     raytracing: bool,
+                     search_method: list[dolfinx_contact.cpp.ContactMode],
                      quadrature_degree: int = 5,
                      form_compiler_options: Optional[dict] = None,
                      jit_options: Optional[dict] = None,
@@ -298,10 +301,6 @@ def nitsche_unbiased(steps: int, ufl_form: ufl.Form, u: fem.Function,
     petsc_options = {} if petsc_options is None else petsc_options
     newton_options = {} if newton_options is None else newton_options
     mu, lmbda, theta, gamma, sigma = get_problem_parameters(problem_parameters)
-
-    # Search mode
-    search_method = dolfinx_contact.cpp.ContactMode.Raytracing if raytracing \
-        else dolfinx_contact.cpp.ContactMode.ClosestPoint
 
     # Contact data
     contact_pairs = contact_data[1]
@@ -422,7 +421,7 @@ def nitsche_unbiased(steps: int, ufl_form: ufl.Form, u: fem.Function,
         # setup newton solver
         newton_solver = setup_newton_solver(F_custom, J_custom, bcs, u, du, contact, markers,
                                             entities, quadrature_degree, const_coeffs, consts,
-                                            raytracing)
+                                            search_method)
 
         # Set Newton solver options
         newton_solver.set_newton_options(newton_options)
@@ -468,7 +467,7 @@ def nitsche_unbiased(steps: int, ufl_form: ufl.Form, u: fem.Function,
         n_x = contact.pack_nx(i)
         grad_u = dolfinx_contact.cpp.pack_gradient_quadrature(
                 u._cpp_object, quadrature_degree, entities[i])
-        if raytracing:
+        if search_method[i] == dolfinx_contact.cpp.ContactMode.Raytracing:
             n_contact = -contact.pack_nx(i)
         else:
             n_contact = contact.pack_ny(i)

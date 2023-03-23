@@ -47,8 +47,8 @@ public:
           std::shared_ptr<const dolfinx::graph::AdjacencyList<std::int32_t>>
               surfaces,
           const std::vector<std::array<int, 2>>& contact_pairs,
-          std::shared_ptr<dolfinx::fem::FunctionSpace> V, const int q_deg = 3,
-          ContactMode mode = ContactMode::ClosestPoint);
+          std::shared_ptr<dolfinx::fem::FunctionSpace> V,
+          std::vector<ContactMode> mode, const int q_deg = 3);
 
   /// Return meshtag value for surface with index surface
   /// @param[in] surface - the index of the surface
@@ -295,7 +295,7 @@ private:
   std::vector<std::size_t> _local_facets;
 
   // Contact search mode
-  ContactMode _mode;
+  std::vector<ContactMode> _mode;
   // Search radius for ray-tracing
   double _radius = -1;
 };
