@@ -287,7 +287,7 @@ def create_contact_data(V, u, quadrature_degree, lmbda, mu, facets_cg, search, t
     surfaces = create_adjacencylist(data, offsets)
     # create contact class
     contact = dolfinx_contact.cpp.Contact([facet_marker._cpp_object], surfaces, [(0, 1), (1, 0)],
-                                          V._cpp_object,[search, search], quadrature_degree=quadrature_degree)
+                                          V._cpp_object, [search, search], quadrature_degree=quadrature_degree)
     contact.create_distance_map(0)
     contact.create_distance_map(1)
 

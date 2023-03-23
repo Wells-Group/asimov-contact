@@ -13,7 +13,7 @@ from petsc4py import PETSc as _PETSc
 import dolfinx_contact
 import dolfinx_contact.cpp
 from dolfinx_contact.helpers import (rigid_motions_nullspace_subdomains, sigma_func)
-from dolfinx_contact.plotting import plot_gap
+# from dolfinx_contact.plotting import plot_gap
 
 kt = dolfinx_contact.cpp.Kernel
 
@@ -72,8 +72,7 @@ def setup_newton_solver(F_custom: fem.forms.FormMetaClass, J_custom: fem.forms.F
             else:
                 normals.append(contact.pack_ny(i))
             test_fns.append(contact.pack_test_functions(i))
-    plot_gap(mesh, contact, gaps, entities, num_pairs)
-        
+    # plot_gap(mesh, contact, gaps, entities, num_pairs)
 
     # Concatenate all coeffs
     ccfs = []
@@ -163,7 +162,8 @@ def setup_newton_solver(F_custom: fem.forms.FormMetaClass, J_custom: fem.forms.F
     newton_solver.set_coefficients(compute_coefficients)
 
     # Set rigid motion nullspace
-    null_space = rigid_motions_nullspace_subdomains(V, markers[0], np.unique(markers[0].values), num_domains=len(np.unique(markers[0].values)))
+    null_space = rigid_motions_nullspace_subdomains(V, markers[0], np.unique(
+        markers[0].values), num_domains=len(np.unique(markers[0].values)))
     newton_solver.A.setNearNullSpace(null_space)
 
     return newton_solver
@@ -319,7 +319,7 @@ def nitsche_unbiased(steps: int, ufl_form: ufl.Form, u: fem.Function,
     tdim = mesh.topology.dim
     ncells = mesh.topology.index_map(tdim).size_local
     h = fem.Function(V2)
-    h_vals = cpp.mesh.h(mesh._cpp_object, mesh.topology.dim,  np.arange(0, ncells, dtype=np.int32))
+    h_vals = cpp.mesh.h(mesh._cpp_object, mesh.topology.dim, np.arange(0, ncells, dtype=np.int32))
     h.x.array[:ncells] = h_vals[:]
 
     # Integration measure and ufl part of linear/bilinear form
@@ -466,7 +466,7 @@ def nitsche_unbiased(steps: int, ufl_form: ufl.Form, u: fem.Function,
     for i in range(len(contact_pairs)):
         n_x = contact.pack_nx(i)
         grad_u = dolfinx_contact.cpp.pack_gradient_quadrature(
-                u._cpp_object, quadrature_degree, entities[i])
+            u._cpp_object, quadrature_degree, entities[i])
         if search_method[i] == dolfinx_contact.cpp.ContactMode.Raytracing:
             n_contact = -contact.pack_nx(i)
         else:
@@ -474,6 +474,7 @@ def nitsche_unbiased(steps: int, ufl_form: ufl.Form, u: fem.Function,
 
         num_facets = entities[i].shape[0]
         num_q_points = n_x.shape[1] // gdim
-        pn.append(dolfinx_contact.cpp.compute_contact_pressure(grad_u, n_x, n_contact, num_q_points, num_facets, gdim, mu, lmbda))
-        
+        pn.append(dolfinx_contact.cpp.compute_contact_pressure(
+            grad_u, n_x, n_contact, num_q_points, num_facets, gdim, mu, lmbda))
+
     return u, newton_its, krylov_its, timings, contact, pn

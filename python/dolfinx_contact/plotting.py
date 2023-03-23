@@ -15,17 +15,16 @@ def plot_gap(mesh, contact, gaps, entities, num_pairs):
 
     for i in range(num_pairs):
         facet_map = contact.facet_map(i)
-        c_to_f = mesh.topology.connectivity(tdim, tdim -1)
+        c_to_f = mesh.topology.connectivity(tdim, tdim - 1)
         num_facets = entities[i].shape[0]
-        facet_origin = np.zeros(num_facets, dtype =np.int32)
+        facet_origin = np.zeros(num_facets, dtype=np.int32)
         for j in range(num_facets):
             cell = entities[i][j, 0]
-            f_index = entities[i][j , 1]
+            f_index = entities[i][j, 1]
             facet_origin[j] = c_to_f.links(cell)[f_index]
         facets_opp = facet_map.array
-        facets_opp = facets_opp[facets_opp >=0]
+        facets_opp = facets_opp[facets_opp >= 0]
 
-        
         # Draw facets on opposite surface
         plt.figure(dpi=600)
         for facet in facets_opp:

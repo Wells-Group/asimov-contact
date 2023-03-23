@@ -17,7 +17,7 @@ def create_circle_plane_mesh(filename: str, quads: bool = False, res=0.1, order:
     Create a circular mesh, with center at (0.0,0.0,0) with radius 0.25 and a box [-0.5,0.5]x[-0.5,-0.25]
     """
     center = [0, 0, 0]
-    r = 0.25
+    # r = 0.25
     gmsh.initialize()
     if MPI.COMM_WORLD.rank == 0:
         # Create circular mesh (divided into 4 segments)
@@ -25,7 +25,6 @@ def create_circle_plane_mesh(filename: str, quads: bool = False, res=0.1, order:
         pin_pt = gmsh.model.occ.addPoint(0.0, 0.1, 0.0)
         left = gmsh.model.occ.addPoint(-0.25, 0, 0)
         right = gmsh.model.occ.addPoint(0.25, 0, 0)
-
 
         arcs = [gmsh.model.occ.addLine(
             left, right), gmsh.model.occ.addCircleArc(
@@ -46,7 +45,6 @@ def create_circle_plane_mesh(filename: str, quads: bool = False, res=0.1, order:
         # Synchronize and create physical tags
         gmsh.model.occ.synchronize()
         gmsh.model.addPhysicalGroup(2, [surface], tag=1)
-        
 
         gmsh.model.addPhysicalGroup(2, [surface2], tag=2)
         bndry2 = gmsh.model.getBoundary([(2, surface2)], oriented=False)
@@ -77,7 +75,8 @@ def create_circle_plane_mesh(filename: str, quads: bool = False, res=0.1, order:
     MPI.COMM_WORLD.Barrier()
     gmsh.finalize()
 
-def create_halfdisk_plane_mesh(filename: str,  res=0.1, order: int = 1, quads = False):
+
+def create_halfdisk_plane_mesh(filename: str, res=0.1, order: int = 1, quads=False):
     """
     Create a circular mesh, with center at (0.0,0.0,0) with radius 0.25 and a box [-0.5,0.5]x[-0.5,-0.25]
     """
@@ -90,12 +89,12 @@ def create_halfdisk_plane_mesh(filename: str,  res=0.1, order: int = 1, quads = 
         pin_pt = gmsh.model.occ.addPoint(0.0, 0.1, 0.0)
         left = gmsh.model.occ.addPoint(-0.25, 0, 0)
         right = gmsh.model.occ.addPoint(0.25, 0, 0)
-        angle = np.pi/3
-        top_left = gmsh.model.occ.addPoint( -r * np.cos(angle), r * np.sin(angle), 0) 
-        top_right = gmsh.model.occ.addPoint( r * np.cos(angle), r * np.sin(angle), 0) 
+        angle = np.pi / 3
+        top_left = gmsh.model.occ.addPoint(-r * np.cos(angle), r * np.sin(angle), 0)
+        top_right = gmsh.model.occ.addPoint(r * np.cos(angle), r * np.sin(angle), 0)
 
         arcs = [gmsh.model.occ.addCircleArc(
-            left, c, top_left),gmsh.model.occ.addCircleArc(
+            left, c, top_left), gmsh.model.occ.addCircleArc(
             top_left, c, top_right), gmsh.model.occ.addCircleArc(
             top_right, c, right), gmsh.model.occ.addCircleArc(
             right, c, left)]
@@ -115,7 +114,6 @@ def create_halfdisk_plane_mesh(filename: str,  res=0.1, order: int = 1, quads = 
         # Synchronize and create physical tags
         gmsh.model.occ.synchronize()
         gmsh.model.addPhysicalGroup(2, [surface], tag=1)
-        
 
         gmsh.model.addPhysicalGroup(2, [surface2], tag=2)
         bndry2 = gmsh.model.getBoundary([(2, surface2)], oriented=False)
@@ -145,6 +143,7 @@ def create_halfdisk_plane_mesh(filename: str,  res=0.1, order: int = 1, quads = 
         gmsh.write(filename)
     MPI.COMM_WORLD.Barrier()
     gmsh.finalize()
+
 
 def create_circle_circle_mesh(filename: str, quads: bool = False, res: float = 0.1, order: int = 1):
     """
@@ -344,7 +343,7 @@ def create_sphere_plane_mesh(filename: str, order: int = 1, res=0.05):
     r = 0.25
     angle = 0
     gap = 0.0
-    H = 0.25
+    # H = 0.25
     theta = 0  # np.pi / 10
     LcMin = res
     LcMax = 2 * res
@@ -357,7 +356,7 @@ def create_sphere_plane_mesh(filename: str, order: int = 1, res=0.05):
         out_vol_tags, _ = gmsh.model.occ.fragment([(3, sphere_bottom)], [(3, sphere_top)])
 
         # Add bottom box
-        box = gmsh.model.occ.add_box(-0.5,-0.5, -0.5, 1, 1, 0.25)
+        box = gmsh.model.occ.add_box(-0.5, -0.5, -0.5, 1, 1, 0.25)
         # Rotate after marking boundaries
         gmsh.model.occ.rotate([(3, box)], center[0], center[1], center[2]
                               - r - 3 * gap, 1, 0, 0, theta)

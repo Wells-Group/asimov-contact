@@ -190,7 +190,7 @@ if __name__ == "__main__":
                                                                    contact_data=(surfaces, contact_pairs),
                                                                    bcs=[(), []],
                                                                    problem_parameters=problem_parameters,
-                                                                   search_method = search_mode,
+                                                                   search_method=search_mode,
                                                                    newton_options=newton_options,
                                                                    petsc_options=petsc_options,
                                                                    outfile=solver_outfile,

@@ -259,7 +259,7 @@ def weak_dirichlet(F: ufl.Form, u: _fem.Function,
     tdim = mesh.topology.dim
     ncells = mesh.topology.index_map(tdim).size_local
     h = _fem.Function(V2)
-    h_vals = cpp.mesh.h(mesh._cpp_object, mesh.topology.dim,  numpy.arange(0, ncells, dtype=numpy.int32))
+    h_vals = cpp.mesh.h(mesh._cpp_object, mesh.topology.dim, numpy.arange(0, ncells, dtype=numpy.int32))
     h.x.array[:ncells] = h_vals[:]
     n = ufl.FacetNormal(mesh)
     F += - ufl.inner(sigma(u) * n, v) * ds\

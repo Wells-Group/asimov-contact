@@ -114,7 +114,7 @@ def nitsche_meshtie(lhs: ufl.Form,
     search_mode = [dolfinx_contact.cpp.ContactMode.ClosestPoint for i in range(len(surface_pairs))]
     with _common.Timer("~Contact " + timing_str + ": Init"):
         contact = dolfinx_contact.cpp.Contact(markers_cpp, surfaces, surface_pairs,
-                                              V._cpp_object, search_mode , quadrature_degree=quadrature_degree)
+                                              V._cpp_object, search_mode, quadrature_degree=quadrature_degree)
     with _common.Timer("~Contact " + timing_str + ": Distance maps"):
         for i in range(len(surface_pairs)):
             contact.create_distance_map(i)
