@@ -291,8 +291,8 @@ if __name__ == "__main__":
     facet_marker.name = "facet_marker"
     with XDMFFile(mesh.comm, f"{mesh_dir}/test.xdmf", "w") as xdmf:
         xdmf.write_mesh(mesh)
-        xdmf.write_meshtags(domain_marker)
-        xdmf.write_meshtags(facet_marker)
+        xdmf.write_meshtags(domain_marker, mesh.geometry)
+        xdmf.write_meshtags(facet_marker, mesh.geometry)
 
     # Solver options
     ksp_tol = 1e-10
@@ -424,7 +424,7 @@ if __name__ == "__main__":
         xdmf.write_function(u_all)
     with XDMFFile(mesh.comm, "results/partitioning.xdmf", "w") as xdmf:
         xdmf.write_mesh(mesh)
-        xdmf.write_meshtags(process_marker)
+        xdmf.write_meshtags(process_marker, mesh.geometry)
     if args.timing:
         list_timings(mesh.comm, [TimingType.wall])
 

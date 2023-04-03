@@ -223,7 +223,7 @@ if __name__ == "__main__":
         xdmf.write_function(u1)
     with XDMFFile(mesh.comm, f"results/xmas_partitioning_{size}.xdmf", "w") as xdmf:
         xdmf.write_mesh(mesh)
-        xdmf.write_meshtags(process_marker)
+        xdmf.write_meshtags(process_marker, mesh.geometry)
 
     outfile = sys.stdout
 

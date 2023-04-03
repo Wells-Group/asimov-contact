@@ -29,7 +29,7 @@ def convert_mesh(filename: str, outname: str, gdim: int = 3):
         ft.name = "facet_marker"
         with dolfinx.io.XDMFFile(mesh.comm, f"{oname}.xdmf", "w") as xdmf:
             xdmf.write_mesh(mesh)
-            xdmf.write_meshtags(ct)
+            xdmf.write_meshtags(ct, mesh.geometry)
             mesh.topology.create_connectivity(mesh.topology.dim - 1, mesh.topology.dim)
-            xdmf.write_meshtags(ft)
+            xdmf.write_meshtags(ft, mesh.geometry)
     MPI.COMM_WORLD.Barrier()
