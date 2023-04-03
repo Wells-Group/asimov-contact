@@ -7,6 +7,7 @@
 #include <dolfinx/common/MPI.h>
 #include <dolfinx/common/log.h>
 #include <dolfinx/graph/AdjacencyList.h>
+#include <dolfinx/mesh/utils.h>
 
 #include "parallel_mesh_ghosting.h"
 #include "point_cloud.h"
@@ -15,7 +16,7 @@
 
 dolfinx::graph::AdjacencyList<std::int32_t>
 dolfinx_contact::compute_ghost_cell_destinations(
-    const dolfinx::mesh::Mesh& mesh,
+    const dolfinx::mesh::Mesh<double>& mesh,
     std::span<const std::int32_t> marker_subset, double R)
 {
   // For each marked facet, given by indices in "marker_subset", get the list of
@@ -27,7 +28,7 @@ dolfinx_contact::compute_ghost_cell_destinations(
   const int rank = dolfinx::MPI::rank(mesh.comm());
 
   // 1. Get midpoints of all facets on interfaces
-  const int tdim = mesh.topology().dim();
+  const int tdim = mesh.topology()->dim();
 
   auto x = mesh.geometry().x();
   std::vector<std::int32_t> facet_to_geom

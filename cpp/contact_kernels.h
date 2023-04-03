@@ -23,7 +23,7 @@ namespace dolfinx_contact
 /// point of the cell
 /// @returns The integration kernel
 kernel_fn<PetscScalar>
-generate_contact_kernel(std::shared_ptr<const dolfinx::fem::FunctionSpace> V,
+generate_contact_kernel(std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V,
                         Kernel type, QuadratureRule& quadrature_rule,
                         bool constant_normal);
 } // namespace dolfinx_contact

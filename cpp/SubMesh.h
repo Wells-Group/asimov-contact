@@ -29,11 +29,14 @@ public:
   /// @param[in] facets - vector of pairs (cell, facet) of exterior facets,
   /// where cell is the index of the cell local to the process and facet is
   /// the facet index within the cell. The data is flattened row-major.
-  SubMesh(std::shared_ptr<const dolfinx::mesh::Mesh> mesh,
+  SubMesh(std::shared_ptr<const dolfinx::mesh::Mesh<double>> mesh,
           std::span<const std::int32_t> facets);
 
   // Return mesh
-  std::shared_ptr<const dolfinx::mesh::Mesh> mesh() const { return _mesh; }
+  std::shared_ptr<const dolfinx::mesh::Mesh<double>> mesh() const
+  {
+    return _mesh;
+  }
 
   // Return adjacency list mapping from parent mesh cell to submesh cell
   std::shared_ptr<const dolfinx::graph::AdjacencyList<std::int32_t>>
@@ -62,8 +65,9 @@ public:
   // FunctionSpace on the parent mesh but restricted to submesh
   /// @param[in] V_parent - the function space on the the parent mesh
   /// @return the function space on the submesh
-  dolfinx::fem::FunctionSpace create_functionspace(
-      std::shared_ptr<const dolfinx::fem::FunctionSpace> V_parent) const;
+  dolfinx::fem::FunctionSpace<double> create_functionspace(
+      std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V_parent)
+      const;
 
   // Copy of a function on the parent mesh/ in the parent function space
   // to submesh/ function space on submesh
@@ -87,7 +91,7 @@ public:
 
 private:
   // the submesh mesh
-  std::shared_ptr<dolfinx::mesh::Mesh> _mesh;
+  std::shared_ptr<dolfinx::mesh::Mesh<double>> _mesh;
 
   // submesh to mesh vertex map returned by dolfinx::mesh::create_submesh
   std::vector<std::int32_t> _submesh_to_mesh_vertex_map;

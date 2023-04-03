@@ -12,6 +12,6 @@ namespace dolfinx_contact
 {
   /// Compute destinations
 dolfinx::graph::AdjacencyList<std::int32_t>
-compute_ghost_cell_destinations(const dolfinx::mesh::Mesh& mesh,
+compute_ghost_cell_destinations(const dolfinx::mesh::Mesh<double>& mesh,
                                 std::span<const std::int32_t> marker_subset, double R);
 }

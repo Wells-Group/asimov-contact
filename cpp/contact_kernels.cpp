@@ -16,7 +16,7 @@
 
 dolfinx_contact::kernel_fn<PetscScalar>
 dolfinx_contact::generate_contact_kernel(
-    std::shared_ptr<const dolfinx::fem::FunctionSpace> V,
+    std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V,
     dolfinx_contact::Kernel type,
     dolfinx_contact::QuadratureRule& quadrature_rule, bool constant_normal)
 {
@@ -26,7 +26,7 @@ dolfinx_contact::generate_contact_kernel(
 
   // Get mesh info
   const std::size_t gdim = mesh->geometry().dim();
-  const std::size_t tdim = mesh->topology().dim();
+  const std::size_t tdim = mesh->topology()->dim();
 
   // Structures for coefficient data
   // FIXME: This will not work for prism meshes

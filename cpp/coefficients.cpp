@@ -50,14 +50,14 @@ dolfinx_contact::pack_coefficient_quadrature(
 {
 
   // Get mesh
-  std::shared_ptr<const dolfinx::mesh::Mesh> mesh
+  std::shared_ptr<const dolfinx::mesh::Mesh<double>> mesh
       = coeff->function_space()->mesh();
   assert(mesh);
 
   // Get topology data
-  const dolfinx::mesh::Topology& topology = mesh->topology();
-  const std::size_t tdim = topology.dim();
-  const dolfinx::mesh::CellType cell_type = topology.cell_type();
+  auto topology = mesh->topology();
+  const std::size_t tdim = topology->dim();
+  const dolfinx::mesh::CellType cell_type = topology->cell_types()[0];
 
   // Get what entity type we are integrating over
   std::size_t entity_dim;
@@ -131,8 +131,8 @@ dolfinx_contact::pack_coefficient_quadrature(
   std::span<const std::uint32_t> cell_info;
   if (needs_dof_transformations)
   {
-    mesh->topology_mutable().create_entity_permutations();
-    cell_info = topology.get_cell_permutation_info();
+    mesh->topology_mutable()->create_entity_permutations();
+    cell_info = topology->get_cell_permutation_info();
   }
 
   if (needs_dof_transformations)
@@ -144,7 +144,7 @@ dolfinx_contact::pack_coefficient_quadrature(
     const int gdim = geometry.dim();
     const dolfinx::graph::AdjacencyList<std::int32_t>& x_dofmap
         = mesh->geometry().dofmap();
-    const dolfinx::fem::CoordinateElement& cmap = geometry.cmap();
+    const dolfinx::fem::CoordinateElement& cmap = geometry.cmaps()[0];
     const std::size_t num_dofs_g = cmap.dim();
     std::span<const double> x_g = geometry.x();
 
@@ -315,14 +315,14 @@ dolfinx_contact::pack_gradient_quadrature(
 {
 
   // Get mesh
-  std::shared_ptr<const dolfinx::mesh::Mesh> mesh
+  std::shared_ptr<const dolfinx::mesh::Mesh<double>> mesh
       = coeff->function_space()->mesh();
   assert(mesh);
 
   // Get topology data
-  const dolfinx::mesh::Topology& topology = mesh->topology();
-  const std::size_t tdim = topology.dim();
-  const dolfinx::mesh::CellType cell_type = topology.cell_type();
+  auto topology = mesh->topology();
+  const std::size_t tdim = topology->dim();
+  const dolfinx::mesh::CellType cell_type = topology->cell_types()[0];
 
   // Get what entity type we are integrating over
   std::size_t entity_dim;
@@ -370,7 +370,7 @@ dolfinx_contact::pack_gradient_quadrature(
   const std::size_t gdim = geometry.dim();
   const dolfinx::graph::AdjacencyList<std::int32_t>& x_dofmap
       = mesh->geometry().dofmap();
-  const dolfinx::fem::CoordinateElement& cmap = geometry.cmap();
+  const dolfinx::fem::CoordinateElement& cmap = geometry.cmaps()[0];
   const std::size_t num_dofs_g = cmap.dim();
   std::span<const double> x_g = geometry.x();
 
@@ -531,19 +531,19 @@ dolfinx_contact::pack_gradient_quadrature(
 
 //-----------------------------------------------------------------------------
 std::vector<PetscScalar> dolfinx_contact::pack_circumradius(
-    const dolfinx::mesh::Mesh& mesh,
+    const dolfinx::mesh::Mesh<double>& mesh,
     const std::span<const std::int32_t>& active_facets)
 {
   const dolfinx::mesh::Geometry<double>& geometry = mesh.geometry();
-  const dolfinx::mesh::Topology& topology = mesh.topology();
-  if (!geometry.cmap().is_affine())
+  auto topology = mesh.topology();
+  if (!geometry.cmaps()[0].is_affine())
     throw std::invalid_argument("Non-affine circumradius is not implemented");
 
   // Tabulate element at quadrature points
-  const dolfinx::mesh::CellType cell_type = topology.cell_type();
+  const dolfinx::mesh::CellType cell_type = topology->cell_types()[0];
   dolfinx_contact::error::check_cell_type(cell_type);
 
-  const int tdim = topology.dim();
+  const int tdim = topology->dim();
   const int fdim = tdim - 1;
   const dolfinx_contact::QuadratureRule q_rule(cell_type, 0, fdim);
 
@@ -555,7 +555,7 @@ std::vector<PetscScalar> dolfinx_contact::pack_circumradius(
   assert(q_rule.tdim() == (std::size_t)tdim);
 
   // Tabulate coordinate basis for Jacobian computation
-  const dolfinx::fem::CoordinateElement& cmap = geometry.cmap();
+  const dolfinx::fem::CoordinateElement& cmap = geometry.cmaps()[0];
   const std::array<std::size_t, 4> tab_shape
       = cmap.tabulate_shape(1, sum_q_points);
   std::vector<double> coordinate_basisb(

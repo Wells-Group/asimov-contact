@@ -36,7 +36,7 @@ public:
   ///@param[in] q_rule The quadrature rules
   ///@param[in] cstrides The strides for individual coeffcients used in the
   /// kernel
-  KernelData(std::shared_ptr<const dolfinx::fem::FunctionSpace> V,
+  KernelData(std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V,
              std::shared_ptr<const dolfinx_contact::QuadratureRule> q_rule,
              const std::vector<std::size_t>& cstrides);
 
