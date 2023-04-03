@@ -142,7 +142,7 @@ def test_vector_surface_kernel(dim, kernel_type, P, Q):
     contact.create_distance_map(0)
     g_vec = contact.pack_gap_plane(0, -g)
     # FIXME: assuming all facets are the same type
-    q_rule = dolfinx_contact.QuadratureRule(mesh.topology.cell_type, 2 * P
+    q_rule = dolfinx_contact.QuadratureRule(mesh.topology.cell_types[0], 2 * P
                                             + Q + 1, mesh.topology.dim - 1, basix.QuadratureType.Default)
     coeffs = np.hstack([mu_packed, lmbda_packed, h_facets, g_vec, u_packed, grad_u_packed])
 
@@ -252,7 +252,7 @@ def test_matrix_surface_kernel(dim, kernel_type, P, Q):
     A.assemble()
 
     # Custom assembly
-    q_rule = dolfinx_contact.QuadratureRule(mesh.topology.cell_type, 2 * P
+    q_rule = dolfinx_contact.QuadratureRule(mesh.topology.cell_types[0], 2 * P
                                             + Q + 1, mesh.topology.dim - 1, basix.QuadratureType.Default)
     consts = np.array([gamma, theta])
     consts = np.hstack((consts, n_vec))
