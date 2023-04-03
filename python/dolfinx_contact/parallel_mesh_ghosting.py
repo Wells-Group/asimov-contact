@@ -16,7 +16,7 @@ def create_contact_mesh(mesh, fmarker, dmarker, tags, R=0.2):
 
     log.log(log.LogLevel.WARNING, "Create Contact Mesh")
     tdim = mesh.topology.dim
-    num_cell_vertices = cell_num_vertices(mesh.topology.cell_type)
+    num_cell_vertices = cell_num_vertices(mesh.topology.cell_types[0])
     facet_type = cell_entity_type(to_type(str(mesh.ufl_cell())), tdim - 1, 0)
     num_facet_vertices = cell_num_vertices(facet_type)
 
