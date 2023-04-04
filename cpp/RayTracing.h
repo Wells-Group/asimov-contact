@@ -419,18 +419,18 @@ int raytracing_cell(
 template <std::size_t tdim, std::size_t gdim>
 std::tuple<int, std::int32_t, std::array<double, gdim>,
            std::array<double, tdim>>
-compute_ray(const dolfinx::mesh::Mesh& mesh,
+compute_ray(const dolfinx::mesh::Mesh<double>& mesh,
             std::span<const double, gdim> point,
             std::span<const double, gdim> normal,
             std::span<const std::int32_t> cells, const int max_iter = 25,
             const double tol = 1e-8)
 {
   int status = -1;
-  dolfinx::mesh::CellType cell_type = mesh.topology().cell_type();
-  if ((mesh.topology().dim() != tdim) or (mesh.geometry().dim() != gdim))
+  dolfinx::mesh::CellType cell_type = mesh.topology()->cell_types()[0];
+  if ((mesh.topology()->dim() != tdim) or (mesh.geometry().dim() != gdim))
     throw std::invalid_argument("Invalid topological or geometrical dimension");
 
-  const dolfinx::fem::CoordinateElement& cmap = mesh.geometry().cmap();
+  const dolfinx::fem::CoordinateElement& cmap = mesh.geometry().cmaps()[0];
 
   // Get cell coordinates/geometry
   const dolfinx::mesh::Geometry<double>& geometry = mesh.geometry();
@@ -554,8 +554,9 @@ compute_ray(const dolfinx::mesh::Mesh& mesh,
 /// parallel with the tangent, -3 if the Newton solver finds a solution
 /// outside the element.
 std::tuple<int, std::int32_t, std::vector<double>, std::vector<double>>
-raytracing(const dolfinx::mesh::Mesh& mesh, std::span<const double> point,
-           std::span<const double> normal, std::span<const std::int32_t> cells,
-           const int max_iter = 25, const double tol = 1e-8);
+raytracing(const dolfinx::mesh::Mesh<double>& mesh,
+           std::span<const double> point, std::span<const double> normal,
+           std::span<const std::int32_t> cells, const int max_iter = 25,
+           const double tol = 1e-8);
 
 } // namespace dolfinx_contact

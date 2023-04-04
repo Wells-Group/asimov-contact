@@ -10,10 +10,10 @@
 using namespace dolfinx_contact;
 
 dolfinx_contact::SubMesh::SubMesh(
-    std::shared_ptr<const dolfinx::mesh::Mesh> mesh,
+    std::shared_ptr<const dolfinx::mesh::Mesh<double>> mesh,
     std::span<const std::int32_t> cell_facet_pairs)
 {
-  const int tdim = mesh->topology().dim(); // topological dimension
+  const int tdim = mesh->topology()->dim(); // topological dimension
 
   // create sorted vector of unique cells adjacent to the input facets
   std::vector<std::int32_t> cells(cell_facet_pairs.size() / 2);
@@ -32,18 +32,18 @@ dolfinx_contact::SubMesh::SubMesh(
                                       std::span(cells.data(), cells.size()));
   _parent_cells = cell_map;
 
-  _mesh = std::make_shared<dolfinx::mesh::Mesh>(submesh);
+  _mesh = std::make_shared<dolfinx::mesh::Mesh<double>>(submesh);
   _submesh_to_mesh_vertex_map = vertex_map;
   _submesh_to_mesh_x_dof_map = x_dof_map;
 
   // create/retrieve connectivities on submesh
-  _mesh->topology_mutable().create_connectivity(tdim - 1, tdim);
+  _mesh->topology_mutable()->create_connectivity(tdim - 1, tdim);
   std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> f_to_c
-      = _mesh->topology().connectivity(tdim - 1, tdim);
+      = _mesh->topology()->connectivity(tdim - 1, tdim);
   assert(f_to_c);
-  _mesh->topology_mutable().create_connectivity(tdim, tdim - 1);
+  _mesh->topology_mutable()->create_connectivity(tdim, tdim - 1);
   std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> c_to_f
-      = _mesh->topology().connectivity(tdim, tdim - 1);
+      = _mesh->topology()->connectivity(tdim, tdim - 1);
   assert(c_to_f);
 
   // create adjacency list mapping cells on parent mesh to cells on submesh
@@ -52,7 +52,7 @@ dolfinx_contact::SubMesh::SubMesh(
 
   // get number of cells on process
   std::shared_ptr<const dolfinx::common::IndexMap> map_c
-      = mesh->topology().index_map(tdim);
+      = mesh->topology()->index_map(tdim);
   const int num_cells = map_c->size_local() + map_c->num_ghosts();
 
   // mark which cells are in cells, i.e. which cells are in the submesh
@@ -81,7 +81,7 @@ dolfinx_contact::SubMesh::SubMesh(
   {
     // Retrieve number of facets on process
     std::shared_ptr<const dolfinx::common::IndexMap> map_f
-        = _mesh->topology().index_map(tdim - 1);
+        = _mesh->topology()->index_map(tdim - 1);
     const int num_facets = map_f->size_local() + map_f->num_ghosts();
 
     // mark which facets are in any of the facet lists
@@ -128,8 +128,9 @@ dolfinx_contact::SubMesh::SubMesh(
 }
 
 //------------------------------------------------------------------------------------------------
-dolfinx::fem::FunctionSpace dolfinx_contact::SubMesh::create_functionspace(
-    std::shared_ptr<const dolfinx::fem::FunctionSpace> V_parent) const
+dolfinx::fem::FunctionSpace<double>
+dolfinx_contact::SubMesh::create_functionspace(
+    std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V_parent) const
 {
   // get element and element_dof_layout from parent mesh
   std::shared_ptr<const dolfinx::fem::FiniteElement> element
@@ -139,7 +140,7 @@ dolfinx::fem::FunctionSpace dolfinx_contact::SubMesh::create_functionspace(
   // use parent mesh data and submesh comm/topology to create new dofmap
   auto dofmap = std::make_shared<dolfinx::fem::DofMap>(
       dolfinx::fem::create_dofmap(_mesh->comm(), element_dof_layout,
-                                  _mesh->topology(), nullptr, *element));
+                                  *_mesh->topology(), nullptr, *element));
   // create and return function space
   return dolfinx::fem::FunctionSpace(_mesh, element, dofmap);
 }
@@ -150,17 +151,17 @@ void dolfinx_contact::SubMesh::copy_function(
     dolfinx::fem::Function<PetscScalar>& u_sub)
 {
   // retrieve function space on submesh
-  std::shared_ptr<const dolfinx::fem::FunctionSpace> V_sub
+  std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V_sub
       = u_sub.function_space();
   // get dofmaps for both function spaces
   std::shared_ptr<const dolfinx::fem::DofMap> dofmap_sub = V_sub->dofmap();
   std::shared_ptr<const dolfinx::fem::DofMap> dofmap_parent
       = u_parent.function_space()->dofmap();
   // Assume tdim is the same for both
-  const int tdim = _mesh->topology().dim();
+  const int tdim = _mesh->topology()->dim();
   // get number of submesh cells on proces
   std::shared_ptr<const dolfinx::common::IndexMap> cell_map
-      = _mesh->topology().index_map(tdim);
+      = _mesh->topology()->index_map(tdim);
   assert(cell_map);
   const std::int32_t num_cells
       = cell_map->size_local() + cell_map->num_ghosts();
@@ -192,7 +193,7 @@ void dolfinx_contact::SubMesh::update_geometry(
     dolfinx::fem::Function<PetscScalar>& u)
 {
   // Recover original geometry from parent mesh
-  std::shared_ptr<const dolfinx::mesh::Mesh> parent_mesh
+  std::shared_ptr<const dolfinx::mesh::Mesh<double>> parent_mesh
       = u.function_space()->mesh();
   std::span<double> sub_geometry = _mesh->geometry().x();
   std::span<const double> parent_geometry = parent_mesh->geometry().x();
@@ -204,9 +205,9 @@ void dolfinx_contact::SubMesh::update_geometry(
         3, std::next(sub_geometry.begin(), 3 * i));
   }
   // use u to update geometry
-  std::shared_ptr<const dolfinx::fem::FunctionSpace> V_parent
+  std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V_parent
       = u.function_space();
-  auto V_sub = std::make_shared<dolfinx::fem::FunctionSpace>(
+  auto V_sub = std::make_shared<dolfinx::fem::FunctionSpace<double>>(
       create_functionspace(V_parent));
   auto u_sub = dolfinx::fem::Function<PetscScalar>(V_sub);
   copy_function(u, u_sub);
@@ -222,9 +223,9 @@ std::vector<std::int32_t> dolfinx_contact::SubMesh::get_submesh_tuples(
   // Map (cell, facet) tuples from parent to sub mesh
   std::vector<std::int32_t> submesh_facets(facets.size());
 
-  const int tdim = _mesh->topology().dim();
+  const int tdim = _mesh->topology()->dim();
   std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> c_to_f
-      = _mesh->topology().connectivity(tdim, tdim - 1);
+      = _mesh->topology()->connectivity(tdim, tdim - 1);
   assert(c_to_f);
 
   for (std::size_t i = 0; i < facets.size(); i += 2)

@@ -175,7 +175,7 @@ def test_packing(ct, gap, q_deg, delta, surface):
     mesh = V.mesh
     tdim = mesh.topology.dim
     gdim = mesh.geometry.dim
-    cmap = mesh.geometry.cmap
+    cmap = mesh.geometry.cmaps[0]
     geometry_dofmap = mesh.geometry.dofmap
 
     # locate facets

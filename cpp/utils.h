@@ -86,7 +86,7 @@ sort_cells(const std::span<const std::int32_t>& cells,
 /// @param[in] mesh: mesh to be updated
 /// Adds perturbation u to mesh
 void update_geometry(const dolfinx::fem::Function<PetscScalar>& u,
-                     std::shared_ptr<dolfinx::mesh::Mesh> mesh);
+                     std::shared_ptr<dolfinx::mesh::Mesh<double>> mesh);
 
 /// Compute the positive restriction of a double, i.e. f(x)= x if x>0 else 0
 double R_plus(double x);
@@ -105,7 +105,7 @@ double dR_minus(double x);
 /// Get shape of in,out variable for filling basis functions in for
 /// evaluate_basis_functions
 std::array<std::size_t, 4>
-evaluate_basis_shape(const dolfinx::fem::FunctionSpace& V,
+evaluate_basis_shape(const dolfinx::fem::FunctionSpace<double>& V,
                      const std::size_t num_points,
                      const std::size_t num_derivatives);
 
@@ -122,7 +122,7 @@ evaluate_basis_shape(const dolfinx::fem::FunctionSpace& V,
 /// with the correct size (num_points, number_of_dofs, value_size). The basis
 /// values are flattened row-major.
 /// @param[in] number_of_derivatives FIXME: Add docs
-void evaluate_basis_functions(const dolfinx::fem::FunctionSpace& V,
+void evaluate_basis_functions(const dolfinx::fem::FunctionSpace<double>& V,
                               std::span<const double> x,
                               std::span<const std::int32_t> cells,
                               std::span<double> basis_values,
@@ -176,7 +176,7 @@ get_update_normal(const dolfinx::fem::CoordinateElement& cmap);
 /// @param[in] entities List of mesh entities
 /// @param[in] integral The type of integral
 std::pair<std::vector<std::int32_t>, std::size_t>
-compute_active_entities(std::shared_ptr<const dolfinx::mesh::Mesh> mesh,
+compute_active_entities(std::shared_ptr<const dolfinx::mesh::Mesh<double>> mesh,
                         std::span<const std::int32_t> entities,
                         dolfinx::fem::IntegralType integral);
 
@@ -190,7 +190,7 @@ compute_active_entities(std::shared_ptr<const dolfinx::mesh::Mesh> mesh,
 /// @returns An adjacency list where the i-th link corresponds to the
 /// closure dofs of the i-th input entity
 dolfinx::graph::AdjacencyList<std::int32_t>
-entities_to_geometry_dofs(const mesh::Mesh& mesh, int dim,
+entities_to_geometry_dofs(const mesh::Mesh<double>& mesh, int dim,
                           const std::span<const std::int32_t>& entity_list);
 
 /// @brief find candidate facets within a given radius of quadrature facet
@@ -205,8 +205,8 @@ entities_to_geometry_dofs(const mesh::Mesh& mesh, int dim,
 /// @param[in] radius The search radius
 /// @return sorted indices of candidate facets within radius of quadrature facet
 std::vector<std::size_t>
-find_candidate_facets(const dolfinx::mesh::Mesh& quadrature_mesh,
-                      const dolfinx::mesh::Mesh& candidate_mesh,
+find_candidate_facets(const dolfinx::mesh::Mesh<double>& quadrature_mesh,
+                      const dolfinx::mesh::Mesh<double>& candidate_mesh,
                       const std::int32_t quadrature_facet,
                       std::span<const std::int32_t> candidate_facets,
                       const double radius);
@@ -221,7 +221,7 @@ find_candidate_facets(const dolfinx::mesh::Mesh& quadrature_mesh,
 /// @param[in] radius The search radius
 /// @return candidate facets within radius of quadrature facets
 std::vector<std::int32_t> find_candidate_surface_segment(
-    std::shared_ptr<const dolfinx::mesh::Mesh> mesh,
+    std::shared_ptr<const dolfinx::mesh::Mesh<double>> mesh,
     const std::vector<std::int32_t>& quadrature_facets,
     const std::vector<std::int32_t>& candidate_facets, const double radius);
 
@@ -238,7 +238,7 @@ std::vector<std::int32_t> find_candidate_surface_segment(
 /// reference facet
 /// @param[in, out] qp_phys Vector to store the quadrature points. Shape
 /// (num_facets, num_q_points_per_facet, gdim). Flattened row-major
-void compute_physical_points(const dolfinx::mesh::Mesh& mesh,
+void compute_physical_points(const dolfinx::mesh::Mesh<double>& mesh,
                              std::span<const std::int32_t> facets,
                              std::span<const std::size_t> offsets,
                              cmdspan4_t phi, std::span<double> qp_phys);
@@ -263,9 +263,9 @@ void compute_physical_points(const dolfinx::mesh::Mesh& mesh,
 /// Flattened to (num_facets*num_q_points, tdim).
 std::tuple<dolfinx::graph::AdjacencyList<std::int32_t>, std::vector<double>,
            std::array<std::size_t, 2>>
-compute_distance_map(const dolfinx::mesh::Mesh& quadrature_mesh,
+compute_distance_map(const dolfinx::mesh::Mesh<double>& quadrature_mesh,
                      std::span<const std::int32_t> quadrature_facets,
-                     const dolfinx::mesh::Mesh& candidate_mesh,
+                     const dolfinx::mesh::Mesh<double>& candidate_mesh,
                      std::span<const std::int32_t> candidate_facets,
                      const QuadratureRule& q_rule,
                      dolfinx_contact::ContactMode mode, const double radius);
@@ -277,7 +277,7 @@ compute_distance_map(const dolfinx::mesh::Mesh& quadrature_mesh,
 /// @return vector of facet indices
 std::vector<int32_t>
 facet_indices_from_pair(std::span<const std::int32_t> facet_pairs,
-                        const dolfinx::mesh::Mesh& mesh);
+                        const dolfinx::mesh::Mesh<double>& mesh);
 
 /// Compute the relation between a set of points and a mesh by computing the
 /// closest point on mesh at a specific set of points. There is also a subset
@@ -294,11 +294,11 @@ facet_indices_from_pair(std::span<const std::int32_t> facet_pairs,
 template <std::size_t tdim, std::size_t gdim>
 std::tuple<std::vector<std::int32_t>, std::vector<double>,
            std::array<std::size_t, 2>>
-compute_projection_map(const dolfinx::mesh::Mesh& mesh,
+compute_projection_map(const dolfinx::mesh::Mesh<double>& mesh,
                        std::span<const std::int32_t> facet_tuples,
                        std::span<const double> points)
 {
-  assert(tdim == mesh.topology().dim());
+  assert(tdim == mesh.topology()->dim());
   assert(mesh.geometry().dim() == gdim);
 
   const std::size_t num_points = points.size() / 3;
@@ -306,7 +306,7 @@ compute_projection_map(const dolfinx::mesh::Mesh& mesh,
   // Convert cell,local_facet_index to facet_index (local
   // to proc)
   std::vector<std::int32_t> facets(facet_tuples.size() / 2);
-  auto c_to_f = mesh.topology().connectivity(tdim, tdim - 1);
+  auto c_to_f = mesh.topology()->connectivity(tdim, tdim - 1);
   if (!c_to_f)
   {
     throw std::runtime_error("Missing cell->facet connectivity on candidate "
@@ -330,7 +330,7 @@ compute_projection_map(const dolfinx::mesh::Mesh& mesh,
                                                   points);
   std::vector<double> candidate_x(num_points * 3);
   std::span<const double> mesh_geometry = mesh.geometry().x();
-  const dolfinx::fem::CoordinateElement& cmap = mesh.geometry().cmap();
+  const dolfinx::fem::CoordinateElement& cmap = mesh.geometry().cmaps()[0];
   {
     // Find displacement vector from each point
     // to closest entity. As a point on the surface
@@ -344,7 +344,7 @@ compute_projection_map(const dolfinx::mesh::Mesh& mesh,
     // cell)
     const dolfinx::fem::ElementDofLayout layout = cmap.create_dof_layout();
 
-    error::check_cell_type(mesh.topology().cell_type());
+    error::check_cell_type(mesh.topology()->cell_types()[0]);
     const std::vector<std::int32_t>& closure_dofs
         = layout.entity_closure_dofs(tdim - 1, 0);
     const std::size_t num_facet_dofs = closure_dofs.size();
@@ -374,7 +374,8 @@ compute_projection_map(const dolfinx::mesh::Mesh& mesh,
 
       // Compute distance between convex hull of facet and point
       std::array<double, 3> dist_vec = dolfinx::geometry::compute_distance_gjk(
-          coordinate_dofs, std::span(points.data() + 3 * i, 3));
+          std::span<const double>(coordinate_dofs),
+          std::span(points.data() + 3 * i, 3));
 
       // Compute point on closest facet
       for (std::size_t l = 0; l < 3; ++l)
@@ -400,7 +401,7 @@ compute_projection_map(const dolfinx::mesh::Mesh& mesh,
         = mesh.geometry().dofmap();
     std::vector<double> coordinate_dofsb(num_dofs_g * gdim);
     cmdspan2_t coordinate_dofs(coordinate_dofsb.data(), num_dofs_g, gdim);
-    auto f_to_c = mesh.topology().connectivity(tdim - 1, tdim);
+    auto f_to_c = mesh.topology()->connectivity(tdim - 1, tdim);
     if (!f_to_c)
       throw std::runtime_error("Missing facet to cell connectivity");
     for (std::size_t i = 0; i < closest_facets.size(); ++i)
@@ -467,18 +468,18 @@ compute_projection_map(const dolfinx::mesh::Mesh& mesh,
 template <std::size_t tdim, std::size_t gdim>
 std::tuple<dolfinx::graph::AdjacencyList<std::int32_t>, std::vector<double>,
            std::array<std::size_t, 2>>
-compute_raytracing_map(const dolfinx::mesh::Mesh& quadrature_mesh,
+compute_raytracing_map(const dolfinx::mesh::Mesh<double>& quadrature_mesh,
                        std::span<const std::int32_t> quadrature_facets,
                        const QuadratureRule& q_rule,
-                       const dolfinx::mesh::Mesh& candidate_mesh,
+                       const dolfinx::mesh::Mesh<double>& candidate_mesh,
                        std::span<const std::int32_t> candidate_facets,
                        const double search_radius = -1.)
 {
   dolfinx::common::Timer timer("~Raytracing");
   assert(candidate_mesh.geometry().dim() == gdim);
   assert(quadrature_mesh.geometry().dim() == gdim);
-  assert(candidate_mesh.topology().dim() == tdim);
-  assert(quadrature_mesh.topology().dim() == tdim);
+  assert(candidate_mesh.topology()->dim() == tdim);
+  assert(quadrature_mesh.topology()->dim() == tdim);
 
   // Get quadrature points on reference facets
   const std::vector<double>& q_points = q_rule.points();
@@ -502,15 +503,15 @@ compute_raytracing_map(const dolfinx::mesh::Mesh& quadrature_mesh,
   // Get relevant information from quadrature mesh
   const dolfinx::mesh::Geometry<double>& geom_q = quadrature_mesh.geometry();
   const dolfinx::fem::CoordinateElement& cmap_q
-      = quadrature_mesh.geometry().cmap();
-  const dolfinx::mesh::Topology& top_q = quadrature_mesh.topology();
+      = quadrature_mesh.geometry().cmaps()[0];
+  auto top_q = quadrature_mesh.topology();
   std::span<const double> q_x = geom_q.x();
   const dolfinx::graph::AdjacencyList<std::int32_t>& q_dofmap = geom_q.dofmap();
   const std::size_t num_nodes_q = cmap_q.dim();
   std::vector<double> coordinate_dofs_qb(num_nodes_q * gdim);
   cmdspan2_t coordinate_dofs_q(coordinate_dofs_qb.data(), num_nodes_q, gdim);
   auto [reference_normals, rn_shape] = basix::cell::facet_outward_normals(
-      dolfinx::mesh::cell_type_to_basix_type(top_q.cell_type()));
+      dolfinx::mesh::cell_type_to_basix_type(top_q->cell_types()[0]));
 
   // Tabulate at all quadrature points in quadrature rule with quadrature cmap
   const std::array<std::size_t, 4> basis_shape_q
@@ -527,9 +528,10 @@ compute_raytracing_map(const dolfinx::mesh::Mesh& quadrature_mesh,
                           basis_values_q, quadrature_points);
 
   // Structures used for raytracing
-  dolfinx::mesh::CellType cell_type = candidate_mesh.topology().cell_type();
+  dolfinx::mesh::CellType cell_type
+      = candidate_mesh.topology()->cell_types()[0];
   const dolfinx::mesh::Geometry<double>& c_geometry = candidate_mesh.geometry();
-  const dolfinx::fem::CoordinateElement& cmap_c = c_geometry.cmap();
+  const dolfinx::fem::CoordinateElement& cmap_c = c_geometry.cmaps()[0];
   const dolfinx::graph::AdjacencyList<std::int32_t>& c_dofmap
       = c_geometry.dofmap();
   std::span<const double> c_x = c_geometry.x();

@@ -93,6 +93,6 @@ std::pair<std::vector<PetscScalar>, int> pack_gradient_quadrature(
 /// @returns[out] The packed coefficients
 /// @note Circumradius is constant and therefore the cstride is 1
 std::vector<PetscScalar>
-pack_circumradius(const dolfinx::mesh::Mesh& mesh,
+pack_circumradius(const dolfinx::mesh::Mesh<double>& mesh,
                   const std::span<const std::int32_t>& active_facets);
 } // namespace dolfinx_contact

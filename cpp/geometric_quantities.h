@@ -72,8 +72,8 @@ void pull_back_nonaffine(std::span<double> X, std::span<double> work_array,
 /// reference cell
 /// @param[in] coordinate_dofs The cell geometry
 /// @returns The circumradius of the cell
-double compute_circumradius(const dolfinx::mesh::Mesh& mesh, double detJ,
-                            cmdspan2_t coordinate_dofs);
+double compute_circumradius(const dolfinx::mesh::Mesh<double>& mesh,
+                            double detJ, cmdspan2_t coordinate_dofs);
 
 /// @brief Push forward facet normal
 ///

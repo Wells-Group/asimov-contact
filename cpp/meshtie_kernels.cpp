@@ -8,16 +8,16 @@
 dolfinx_contact::kernel_fn<PetscScalar>
 dolfinx_contact::generate_meshtie_kernel(
     dolfinx_contact::Kernel type,
-    std::shared_ptr<const dolfinx::fem::FunctionSpace> V,
+    std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V,
     std::shared_ptr<const dolfinx_contact::QuadratureRule> quadrature_rule,
     const std::size_t max_links)
 {
-  std::shared_ptr<const dolfinx::mesh::Mesh> mesh = V->mesh();
+  std::shared_ptr<const dolfinx::mesh::Mesh<double>> mesh = V->mesh();
   assert(mesh);
   const std::size_t gdim = mesh->geometry().dim(); // geometrical dimension
   const std::size_t bs = V->dofmap()->bs();
   // NOTE: Assuming same number of quadrature points on each cell
-  dolfinx_contact::error::check_cell_type(mesh->topology().cell_type());
+  dolfinx_contact::error::check_cell_type(mesh->topology()->cell_types()[0]);
   const std::vector<std::size_t>& qp_offsets = quadrature_rule->offset();
   const std::size_t num_q_points = qp_offsets[1] - qp_offsets[0];
   const std::size_t ndofs_cell = V->dofmap()->element_dof_layout().num_dofs();

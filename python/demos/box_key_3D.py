@@ -206,7 +206,7 @@ if __name__ == "__main__":
         xdmf.write_function(u1)
     with XDMFFile(mesh.comm, f"results/box_partitioning_{size}.xdmf", "w") as xdmf:
         xdmf.write_mesh(mesh)
-        xdmf.write_meshtags(process_marker)
+        xdmf.write_meshtags(process_marker, mesh.geometry)
 
     outfile = sys.stdout
 
@@ -214,7 +214,7 @@ if __name__ == "__main__":
         print("-" * 25, file=outfile)
         print(f"Newton options {newton_options}", file=outfile)
         print(f"num_dofs: {u1.function_space.dofmap.index_map_bs*u1.function_space.dofmap.index_map.size_global}"
-              + f", {mesh.topology.cell_type}", file=outfile)
+              + f", {mesh.topology.cell_types[0]}", file=outfile)
         print(f"Newton solver {timing('~Contact: Newton (Newton solver)')[1]}", file=outfile)
         print(f"Krylov solver {timing('~Contact: Newton (Krylov solver)')[1]}", file=outfile)
         print(f"Newton time: {solver_time}", file=outfile)

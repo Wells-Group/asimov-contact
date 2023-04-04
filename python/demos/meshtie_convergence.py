@@ -204,7 +204,7 @@ def unsplit_domain(threed: bool = False, runs: int = 1):
     process_marker.name = "process_marker"
     with XDMFFile(mesh.comm, "results/partitioning_unsplit.xdmf", "w") as xdmf:
         xdmf.write_mesh(mesh)
-        xdmf.write_meshtags(process_marker)
+        xdmf.write_meshtags(process_marker, mesh.geometry)
     print("L2-error: ", errors)
     print("Number of dofs: ", ndofs)
     print("Linear solver time: ", times)
@@ -346,7 +346,7 @@ def test_meshtie(threed: bool = False, simplex: bool = True, runs: int = 5):
     process_marker.name = "process_marker"
     with XDMFFile(mesh.comm, "results/partitioning_split.xdmf", "w") as xdmf:
         xdmf.write_mesh(mesh)
-        xdmf.write_meshtags(process_marker)
+        xdmf.write_meshtags(process_marker, mesh.geometry)
     list_timings(mesh.comm, [TimingType.wall])
     print("L2 errors; ", errors)
     print("Solver time: ", times)
