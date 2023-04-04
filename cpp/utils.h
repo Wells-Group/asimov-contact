@@ -398,7 +398,7 @@ compute_projection_map(const dolfinx::mesh::Mesh<double>& mesh,
     std::array<double, tdim> X;
     const std::size_t num_dofs_g = cmap.dim();
     const dolfinx::graph::AdjacencyList<std::int32_t>& x_dofmap
-        = geometry.dofmap();
+        = mesh.geometry().dofmap();
     std::vector<double> coordinate_dofsb(num_dofs_g * gdim);
     cmdspan2_t coordinate_dofs(coordinate_dofsb.data(), num_dofs_g, gdim);
     auto f_to_c = mesh.topology()->connectivity(tdim - 1, tdim);
