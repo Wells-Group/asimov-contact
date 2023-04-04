@@ -45,11 +45,11 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      - name: Install clang
-        if: ${{ matrix.CC }} == "clang"
-        run: |
-          apt-get update
-          apt-get install -y clang
+      # - name: Install clang
+      #   if: ${{ matrix.CC }} == "clang"
+      #   run: |
+      #     apt-get update
+      #     apt-get install -y clang
 
       - name: Get Basix and install
         uses: actions/checkout@v3
