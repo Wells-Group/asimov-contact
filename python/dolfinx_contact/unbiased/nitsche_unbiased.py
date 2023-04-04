@@ -2,9 +2,10 @@
 #
 # SPDX-License-Identifier:    MIT
 
-from typing import Optional, Tuple, Union
+from typing import Any, Optional, Tuple, Union
 
-from dolfinx import common, fem, mesh, io, log, cpp
+from dolfinx import common, fem, io, log, cpp
+from dolfinx import mesh as _mesh
 import numpy as np
 import numpy.typing as npt
 import ufl
@@ -21,9 +22,9 @@ __all__ = ["nitsche_unbiased"]
 
 
 def setup_newton_solver(F_custom: fem.forms.FormMetaClass, J_custom: fem.forms.FormMetaClass,
-                        bcs: Tuple[npt.NDArray[np.int32], list[Union[fem.Function, fem.Constant]]],
+                        bcs: Tuple[npt.NDArray[np.int32], list[Union[fem.Function, fem.function.Constant]]],
                         u: fem.Function, du: fem.Function,
-                        contact: dolfinx_contact.cpp.Contact, markers: list[mesh.meshtags],
+                        contact: dolfinx_contact.cpp.Contact, markers: list[_mesh.MeshTags],
                         entities: list[npt.NDArray[np.int32]], quadrature_degree: int,
                         const_coeffs: list[npt.NDArray[np.float64]], consts: npt.NDArray[np.float64],
                         raytracing: bool):
@@ -92,7 +93,7 @@ def setup_newton_solver(F_custom: fem.forms.FormMetaClass, J_custom: fem.forms.F
 
     # pack grad u
     grad_u = []
-    with common.Timer("~~Contact: Pack u"):
+    with common.Timer("~~Contact: Pack grad(u)"):
         for i in range(num_pairs):
             grad_u.append(dolfinx_contact.cpp.pack_gradient_quadrature(
                 u._cpp_object, quadrature_degree, entities[i]))
@@ -194,7 +195,7 @@ def get_problem_parameters(problem_parameters: dict[str, np.float64]):
 
 
 def copy_fns(fns: list[Union[fem.Function, fem.Constant]],
-             mesh: mesh.Mesh) -> list[Union[fem.Function, fem.Constant]]:
+             mesh: _mesh.Mesh) -> list[Union[fem.Function, fem.Constant]]:
     """
     Create copy of list of finite element functions/constanst
     """
@@ -228,7 +229,7 @@ def update_fns(t: float, fns: list[Union[fem.Function, fem.Constant]],
 
 
 def nitsche_unbiased(steps: int, ufl_form: ufl.Form, u: fem.Function,
-                     rhs_fns: list[Union[fem.Function, fem.Constant]], markers: list[mesh.meshtags],
+                     rhs_fns: list[Any], markers: list[_mesh.MeshTags],
                      contact_data: Tuple[AdjacencyList_int32, list[Tuple[int, int]]],
                      bcs: Tuple[npt.NDArray[np.int32], list[Union[fem.Function, fem.Constant]]],
                      problem_parameters: dict[str, np.float64],
@@ -349,8 +350,6 @@ def nitsche_unbiased(steps: int, ufl_form: ufl.Form, u: fem.Function,
     xdmf.write_mesh(contact.submesh(), xpath="/Xdmf/Domain")
     del (xdmf)
 
-    log.log(log.LogLevel.WARNING, "Done debug I/O")
-
     contact.set_search_radius(search_radius)
 
     # pack constants
@@ -404,7 +403,7 @@ def nitsche_unbiased(steps: int, ufl_form: ufl.Form, u: fem.Function,
     newton_its = []
     krylov_its = []
     for tt in range(steps):
-        log.log(log.LogLevel.WARNING, "Time step " + str(tt) + " of " + str(steps)
+        log.log(log.LogLevel.WARNING, "Time step " + str(tt + 1) + " of " + str(steps)
                 + " +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
         # create distance map
         with common.Timer("~Contact: Distance maps"):
@@ -428,10 +427,9 @@ def nitsche_unbiased(steps: int, ufl_form: ufl.Form, u: fem.Function,
 
         # Set Krylov solver options
         newton_solver.set_krylov_options(petsc_options)
-        dofs_global = V.dofmap.index_map_bs * V.dofmap.index_map.size_global
         log.set_log_level(log.LogLevel.WARNING)
         # Solve non-linear problem
-        timing_str = f"~Contact: {id(dofs_global)} Solve Nitsche"
+        timing_str = f"~Contact: {tt+1} Solve Nitsche"
         with common.Timer(timing_str):
             n, converged = newton_solver.solve(du)
         if outfile is not None:

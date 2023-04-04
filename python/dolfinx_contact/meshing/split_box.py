@@ -98,8 +98,8 @@ def create_dolfinx_mesh(filename: str, x: npt.NDArray[np.float64], cells: npt.ND
     with XDMFFile(MPI.COMM_WORLD, f"{filename}.xdmf", "w") as file:
         file.write_mesh(msh)
         msh.topology.create_connectivity(tdim - 1, tdim)
-        file.write_meshtags(mt_domain)
-        file.write_meshtags(mt)
+        file.write_meshtags(mt_domain, msh.geometry)
+        file.write_meshtags(mt, msh.geometry)
 
 
 def create_surface_mesh(domain: list[int], points: list[list[float]], line_pts: list[list[float]],

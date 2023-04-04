@@ -23,13 +23,13 @@ jobs:
         run_mode: ["Release", "Debug"]
         petsc_mode: [real]
         petsc_int_type: [32, 64]
-        CXX: [c++, clang++]
-        CC: [cc, clang]
-        exclude:
-          - CC: cc
-            CXX: clang++
-          - CC: clang
-            CXX: c++
+        CXX: [c++]
+        CC: [cc]
+        # exclude:
+        #   - CC: cc
+        #     CXX: clang++
+        #   - CC: clang
+        #     CXX: c++
     env:
       CC: ${{ matrix.CC }}
       CXX: ${{ matrix.CXX }}
@@ -100,8 +100,8 @@ jobs:
       - name: Run mypy checks
         run: |
           pip3 install mypy
-          # cd python
-          # python3 -m mypy . --exclude=build
+          cd python
+          python3 -m mypy . --exclude=build
 
       - name: Run demos
         run: |

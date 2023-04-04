@@ -102,7 +102,7 @@ PYBIND11_MODULE(cpp, m)
                     std::shared_ptr<
                         const dolfinx::graph::AdjacencyList<std::int32_t>>,
                     std::vector<std::array<int, 2>>,
-                    std::shared_ptr<dolfinx::fem::FunctionSpace>, const int,
+           std::shared_ptr<dolfinx::fem::FunctionSpace<double>>, const int,
                     dolfinx_contact::ContactMode>(),
            py::arg("markers"), py::arg("surfaces"), py::arg("contact_pairs"),
            py::arg("V"), py::arg("quadrature_degree") = 3,
@@ -168,10 +168,12 @@ PYBIND11_MODULE(cpp, m)
              // the parent mesh This is only exposed for testing (in
              // particular
              // nitsche_rigid_surface.py/demo_nitsche_rigid_surface_ufl.py)
-             std::shared_ptr<const dolfinx::mesh::Mesh> mesh = self.mesh();
-             const int tdim = mesh->topology().dim(); // topological dimension
+             auto contact_pair = self.contact_pair(pair);
+             std::shared_ptr<const dolfinx::mesh::Mesh<double>> mesh = self.mesh();
+             const int tdim = mesh->topology()->dim(); // topological dimension
+
              const int fdim = tdim - 1; // topological dimension of facet
-             auto c_to_f = mesh->topology().connectivity(tdim, fdim);
+             auto c_to_f = mesh->topology()->connectivity(tdim, fdim);
              assert(c_to_f);
              std::shared_ptr<const dolfinx::graph::AdjacencyList<std::int32_t>>
                  submesh_map = self.facet_map(pair);
@@ -317,7 +319,7 @@ PYBIND11_MODULE(cpp, m)
            &dolfinx_contact::Contact::update_submesh_geometry);
   m.def(
       "generate_contact_kernel",
-      [](std::shared_ptr<const dolfinx::fem::FunctionSpace> V,
+      [](std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V,
          dolfinx_contact::Kernel type, dolfinx_contact::QuadratureRule& q_rule,
          bool constant_normal)
       {
@@ -394,7 +396,7 @@ PYBIND11_MODULE(cpp, m)
 
   m.def(
       "pack_circumradius",
-      [](const dolfinx::mesh::Mesh& mesh,
+      [](const dolfinx::mesh::Mesh<double>& mesh,
          const py::array_t<std::int32_t, py::array::c_style>& active_facets)
       {
         auto e_span = std::span<const std::int32_t>(active_facets.data(),
@@ -406,11 +408,11 @@ PYBIND11_MODULE(cpp, m)
             std::array{std::size_t(active_facets.size() / 2), (std::size_t)1});
       });
   m.def("update_geometry", [](const dolfinx::fem::Function<PetscScalar>& u,
-                              std::shared_ptr<dolfinx::mesh::Mesh> mesh)
+                              std::shared_ptr<dolfinx::mesh::Mesh<double>> mesh)
         { dolfinx_contact::update_geometry(u, mesh); });
 
   m.def("compute_active_entities",
-        [](std::shared_ptr<const dolfinx::mesh::Mesh> mesh,
+        [](std::shared_ptr<const dolfinx::mesh::Mesh<double>> mesh,
            py::array_t<std::int32_t, py::array::c_style>& entities,
            dolfinx::fem::IntegralType integral)
         {
@@ -445,7 +447,7 @@ PYBIND11_MODULE(cpp, m)
 
   m.def(
       "find_candidate_surface_segment",
-      [](std::shared_ptr<const dolfinx::mesh::Mesh> mesh,
+      [](std::shared_ptr<const dolfinx::mesh::Mesh<double>> mesh,
          const std::vector<std::int32_t>& quadrature_facets,
          const std::vector<std::int32_t>& candidate_facets, const double radius)
       {
@@ -464,7 +466,7 @@ PYBIND11_MODULE(cpp, m)
 
   m.def(
       "compute_ghost_cell_destinations",
-      [](const dolfinx::mesh::Mesh& mesh,
+      [](const dolfinx::mesh::Mesh<double>& mesh,
          py::array_t<std::int32_t, py::array::c_style>& marker_subset, double r)
       {
         std::span<const std::int32_t> marker_span(marker_subset.data(),
@@ -475,7 +477,7 @@ PYBIND11_MODULE(cpp, m)
 
   m.def(
       "raytracing",
-      [](const dolfinx::mesh::Mesh& mesh,
+      [](const dolfinx::mesh::Mesh<double>& mesh,
          py::array_t<double, py::array::c_style>& point,
          py::array_t<double, py::array::c_style>& normal,
          py::array_t<std::int32_t, py::array::c_style>& cells, int max_iter,

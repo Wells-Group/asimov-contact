@@ -196,6 +196,8 @@ if __name__ == "__main__":
             values = np.hstack([val0, val1, val2, val3])
             sorted_facets = np.argsort(indices)
             facet_marker = meshtags(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
+            if args.radius > 0.8 / args.time_steps:
+                args.radius = 0.8 / args.time_steps
 
     else:
         displacement = [[0, -args.disp], [0, 0]]
@@ -289,9 +291,8 @@ if __name__ == "__main__":
     facet_marker.name = "facet_marker"
     with XDMFFile(mesh.comm, f"{mesh_dir}/test.xdmf", "w") as xdmf:
         xdmf.write_mesh(mesh)
-        xdmf.write_meshtags(domain_marker)
-        xdmf.write_meshtags(facet_marker)
-    log.log(log.LogLevel.WARNING, "Done marker mesh I/O")
+        xdmf.write_meshtags(domain_marker, mesh.geometry)
+        xdmf.write_meshtags(facet_marker, mesh.geometry)
 
     # Solver options
     ksp_tol = 1e-10
@@ -423,7 +424,7 @@ if __name__ == "__main__":
         xdmf.write_function(u_all)
     with XDMFFile(mesh.comm, "results/partitioning.xdmf", "w") as xdmf:
         xdmf.write_mesh(mesh)
-        xdmf.write_meshtags(process_marker)
+        xdmf.write_meshtags(process_marker, mesh.geometry)
     if args.timing:
         list_timings(mesh.comm, [TimingType.wall])
 
@@ -436,7 +437,7 @@ if __name__ == "__main__":
         print("-" * 25, file=outfile)
         print(f"Newton options {newton_options}", file=outfile)
         print(f"num_dofs: {u.function_space.dofmap.index_map_bs*u.function_space.dofmap.index_map.size_global}"
-              + f", {mesh.topology.cell_type}", file=outfile)
+              + f", {mesh.topology.cell_types[0]}", file=outfile)
         print(f"Newton solver {timing('~Contact: Newton (Newton solver)')[1]}", file=outfile)
         print(f"Krylov solver {timing('~Contact: Newton (Krylov solver)')[1]}", file=outfile)
         print(f"Newton time: {newton_time}", file=outfile)

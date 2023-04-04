@@ -47,8 +47,8 @@ public:
           std::shared_ptr<const dolfinx::graph::AdjacencyList<std::int32_t>>
               surfaces,
           const std::vector<std::array<int, 2>>& contact_pairs,
-          std::shared_ptr<dolfinx::fem::FunctionSpace> V, const int q_deg = 3,
-          ContactMode mode = ContactMode::ClosestPoint);
+          std::shared_ptr<dolfinx::fem::FunctionSpace<double>> V,
+          const int q_deg = 3, ContactMode mode = ContactMode::ClosestPoint);
 
   /// Return meshtag value for surface with index surface
   /// @param[in] surface - the index of the surface
@@ -104,7 +104,10 @@ public:
   const SubMesh& submesh() const { return _submesh; }
 
   // Return mesh
-  std::shared_ptr<const dolfinx::mesh::Mesh> mesh() const { return _V->mesh(); }
+  std::shared_ptr<const dolfinx::mesh::Mesh<double>> mesh() const
+  {
+    return _V->mesh();
+  }
 
   /// @brief Create a PETSc matrix with contact sparsity pattern
   ///
@@ -264,13 +267,18 @@ private:
   std::vector<int> _surfaces; // meshtag values for surfaces
   // store index of candidate_surface for each quadrature_surface
   std::vector<std::array<int, 2>> _contact_pairs;
-  std::shared_ptr<dolfinx::fem::FunctionSpace> _V; // Function space
+  std::shared_ptr<dolfinx::fem::FunctionSpace<double>> _V; // Function space
   // _facets_maps[i] = adjacency list of closest facet on candidate surface
   // for every quadrature point in _qp_phys[i] (quadrature points on every
   // facet of ith surface)
   std::vector<
       std::shared_ptr<const dolfinx::graph::AdjacencyList<std::int32_t>>>
       _facet_maps;
+  // reference points of the contact points on the opposite surface for each
+  // surface output of compute_distance_map
+  std::vector<std::vector<double>> _reference_contact_points;
+  // shape  associated with _reference_contact_points
+  std::vector<std::array<std::size_t, 2>> _reference_contact_shape;
   //  _qp_phys[i] contains the quadrature points on the physical facets for
   //  each facet on ith surface in _surfaces
   std::vector<std::vector<double>> _qp_phys;

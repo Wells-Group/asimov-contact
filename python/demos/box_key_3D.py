@@ -30,7 +30,7 @@ if __name__ == "__main__":
 
     parser.add_argument("--time_steps", default=1, type=np.int32, dest="time_steps",
                         help="Number of pseudo time steps")
-
+    timer = Timer("~Contact: - all")
     # Parse input arguments or set to defualt values
     args = parser.parse_args()
     mesh_dir = "meshes"
@@ -75,8 +75,9 @@ if __name__ == "__main__":
 
     # Call function that repartitions mesh for parallel computation
     if mesh.comm.size > 1:
-        mesh, facet_marker, domain_marker = create_contact_mesh(
-            mesh, facet_marker, domain_marker, [6, 7])
+        with Timer("~Contact: Add ghosts"):
+            mesh, facet_marker, domain_marker = create_contact_mesh(
+                mesh, facet_marker, domain_marker, [6, 7])
 
     V = _fem.VectorFunctionSpace(mesh, ("CG", 1))
 
@@ -181,21 +182,22 @@ if __name__ == "__main__":
     rhs_fns = [g, t, f]
     size = mesh.comm.size
     outname = f"results/boxkey_{tdim}D_{size}"
-    with Timer("~Contact: - all"):
-        u1, num_its, krylov_iterations, solver_time = nitsche_unbiased(args.time_steps, ufl_form=F, u=u,
-                                                                       rhs_fns=rhs_fns,
-                                                                       markers=[domain_marker, facet_marker],
-                                                                       contact_data=(surfaces, contact_pairs),
-                                                                       bcs=[(), []],
-                                                                       problem_parameters=problem_parameters,
-                                                                       raytracing=False,
-                                                                       newton_options=newton_options,
-                                                                       petsc_options=petsc_options,
-                                                                       outfile=solver_outfile,
-                                                                       fname=outname,
-                                                                       quadrature_degree=args.q_degree,
-                                                                       search_radius=-1)
 
+    u1, num_its, krylov_iterations, solver_time = nitsche_unbiased(args.time_steps, ufl_form=F, u=u,
+                                                                   rhs_fns=rhs_fns,
+                                                                   markers=[domain_marker, facet_marker],
+                                                                   contact_data=(surfaces, contact_pairs),
+                                                                   bcs=(np.empty(shape=(2, 0), dtype=np.int32), []),
+                                                                   problem_parameters=problem_parameters,
+                                                                   raytracing=False,
+                                                                   newton_options=newton_options,
+                                                                   petsc_options=petsc_options,
+                                                                   outfile=solver_outfile,
+                                                                   fname=outname,
+                                                                   quadrature_degree=args.q_degree,
+                                                                   search_radius=np.float64(-1))
+
+    timer.stop()
     # write solution to file
     size = mesh.comm.size
     with XDMFFile(mesh.comm, f"results/box_{size}.xdmf", "w") as xdmf:
@@ -204,7 +206,7 @@ if __name__ == "__main__":
         xdmf.write_function(u1)
     with XDMFFile(mesh.comm, f"results/box_partitioning_{size}.xdmf", "w") as xdmf:
         xdmf.write_mesh(mesh)
-        xdmf.write_meshtags(process_marker)
+        xdmf.write_meshtags(process_marker, mesh.geometry)
 
     outfile = sys.stdout
 
@@ -212,7 +214,7 @@ if __name__ == "__main__":
         print("-" * 25, file=outfile)
         print(f"Newton options {newton_options}", file=outfile)
         print(f"num_dofs: {u1.function_space.dofmap.index_map_bs*u1.function_space.dofmap.index_map.size_global}"
-              + f", {mesh.topology.cell_type}", file=outfile)
+              + f", {mesh.topology.cell_types[0]}", file=outfile)
         print(f"Newton solver {timing('~Contact: Newton (Newton solver)')[1]}", file=outfile)
         print(f"Krylov solver {timing('~Contact: Newton (Krylov solver)')[1]}", file=outfile)
         print(f"Newton time: {solver_time}", file=outfile)

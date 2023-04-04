@@ -98,7 +98,7 @@ if __name__ == "__main__":
 
     # mark the whole domain
     cells = np.arange(mesh.topology.index_map(tdim).size_local
-                      + mesh.topology.index_map(tdim).num_ghosts, dtype=np.int64)
+                      + mesh.topology.index_map(tdim).num_ghosts, dtype=np.int32)
     domain_marker = meshtags(mesh, tdim, cells, np.full(cells.shape, 1, dtype=np.int32))
 
     if mesh.comm.size > 1:
@@ -199,7 +199,7 @@ if __name__ == "__main__":
         outfile = open(args.outfile, "a")
     print("-" * 25, file=outfile)
     print(f"num_dofs: {u.function_space.dofmap.index_map_bs*u.function_space.dofmap.index_map.size_global}"
-          + f", {mesh.topology.cell_type}", file=outfile)
+          + f", {mesh.topology.cell_types[0]}", file=outfile)
     print(f"Krylov solver {solver_time}", file=outfile)
     print(f"Krylov iterations {krylov_iterations}", file=outfile)
     print("-" * 25, file=outfile)

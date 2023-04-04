@@ -20,7 +20,7 @@ from dolfinx_contact.helpers import (epsilon, lame_parameters,
 __all__ = ["nitsche_custom"]
 
 
-def nitsche_custom(mesh: dmesh.Mesh, mesh_data: Tuple[dmesh.meshtags, int, int],
+def nitsche_custom(mesh: dmesh.Mesh, mesh_data: Tuple[dmesh.MeshTags, int, int],
                    physical_parameters: dict = {}, nitsche_parameters: Dict[str, float] = {},
                    plane_loc: float = 0.0, vertical_displacement: float = -0.1,
                    nitsche_bc: bool = True, quadrature_degree: int = 5, form_compiler_options: Dict = {},
@@ -124,7 +124,7 @@ def nitsche_custom(mesh: dmesh.Mesh, mesh_data: Tuple[dmesh.meshtags, int, int],
         raise RuntimeError("Dirichlet bc not implemented in custom assemblers yet.")
 
     # Custom assembly of contact boundary condition
-    q_rule = dolfinx_contact.QuadratureRule(mesh.topology.cell_type, quadrature_degree,
+    q_rule = dolfinx_contact.QuadratureRule(mesh.topology.cell_types[0], quadrature_degree,
                                             mesh.topology.dim - 1, basix.QuadratureType.Default)
     consts = np.array([E * gamma, theta])
     consts = np.hstack((consts, n_vec))
@@ -201,7 +201,7 @@ def nitsche_custom(mesh: dmesh.Mesh, mesh_data: Tuple[dmesh.meshtags, int, int],
         pass
     a_mat = _fem.petsc.create_matrix(a_custom)
     b = _fem.petsc.create_vector(L_custom)
-    solver = dolfinx_contact.NewtonSolver(mesh.comm, a_mat, b, np.empty((0, 0)))
+    solver = dolfinx_contact.NewtonSolver(mesh.comm, a_mat, b, [np.empty((0, 0))])
     solver.set_jacobian(assemble_jacobian)
     solver.set_residual(assemble_residual)
     solver.set_coefficients(update_cf)

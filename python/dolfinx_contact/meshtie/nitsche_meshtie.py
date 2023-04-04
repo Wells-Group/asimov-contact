@@ -11,7 +11,7 @@ import dolfinx.log as _log
 import numpy as np
 import ufl
 from dolfinx.cpp.graph import AdjacencyList_int32
-from dolfinx.mesh import meshtags
+from dolfinx.mesh import MeshTags
 from petsc4py import PETSc as _PETSc
 
 import dolfinx_contact
@@ -24,7 +24,7 @@ kt = dolfinx_contact.cpp.Kernel
 def nitsche_meshtie(lhs: ufl.Form,
                     rhs: _fem.Function,
                     u: _fem.Function,
-                    markers: list[meshtags],
+                    markers: list[MeshTags],
                     surface_data: Tuple[AdjacencyList_int32, list[Tuple[int, int]]],
                     bcs: list[_fem.DirichletBCMetaClass],
                     problem_parameters: dict[str, np.float64],

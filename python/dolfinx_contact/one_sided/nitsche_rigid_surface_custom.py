@@ -22,7 +22,7 @@ __all__ = ["nitsche_rigid_surface_custom"]
 kt = dolfinx_contact.cpp.Kernel
 
 
-def nitsche_rigid_surface_custom(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.meshtags, int, int, int, int],
+def nitsche_rigid_surface_custom(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTags, int, int, int, int],
                                  physical_parameters: Optional[dict] = None,
                                  nitsche_parameters: Optional[Dict[str, float]] = None,
                                  vertical_displacement: float = -0.1, nitsche_bc: bool = True,
@@ -152,7 +152,7 @@ def nitsche_rigid_surface_custom(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.meshta
 
     # Custom assembly of contact boundary conditions
     _log.set_log_level(_log.LogLevel.OFF)  # avoid large amounts of output
-    q_rule = dolfinx_contact.QuadratureRule(mesh.topology.cell_type, quadrature_degree,
+    q_rule = dolfinx_contact.QuadratureRule(mesh.topology.cell_types[0], quadrature_degree,
                                             mesh.topology.dim - 1, basix.QuadratureType.Default)
     consts = np.array([gamma * E, theta])
 
@@ -222,8 +222,9 @@ def nitsche_rigid_surface_custom(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.meshta
         u_packed = dolfinx_contact.cpp.pack_coefficient_quadrature(u._cpp_object, quadrature_degree, integral_entities)
         grad_u_packed = dolfinx_contact.cpp.pack_gradient_quadrature(
             u._cpp_object, quadrature_degree, integral_entities)
-        solver_coeffs[:, offset:offset + u_packed.shape[1]] = u_packed
-        solver_coeffs[:, offset + u_packed.shape[1]:offset + u_packed.shape[1] + grad_u_packed.shape[1]] = grad_u_packed
+        solver_coeffs[0][:, offset:offset + u_packed.shape[1]] = u_packed
+        solver_coeffs[0][:, offset + u_packed.shape[1]:offset + u_packed.shape[1]
+                         + grad_u_packed.shape[1]] = grad_u_packed
 
     def compute_residual(x, b, coeffs):
         """
@@ -231,7 +232,7 @@ def nitsche_rigid_surface_custom(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.meshta
         """
         with b.localForm() as b_local:
             b_local.set(0.0)
-        contact_assembler.assemble_vector(b, 0, kernel_rhs, coeffs, consts)
+        contact_assembler.assemble_vector(b, 0, kernel_rhs, coeffs[0], consts)
         _fem.petsc.assemble_vector(b, F_custom)
 
     def compute_jacobian(x, A, coeffs):
@@ -239,7 +240,7 @@ def nitsche_rigid_surface_custom(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.meshta
         Compute Jacobian for Newton solver LHS, given precomputed coefficients
         """
         A.zeroEntries()
-        contact_assembler.assemble_matrix(A, [], 0, kernel_J, coeffs, consts)
+        contact_assembler.assemble_matrix(A, [], 0, kernel_J, coeffs[0], consts)
         _fem.petsc.assemble_matrix(A, J_custom)
         A.assemble()
 
@@ -248,7 +249,7 @@ def nitsche_rigid_surface_custom(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.meshta
     b = _fem.petsc.create_vector(F_custom)
 
     coefficients = np.hstack([coeffs, h_facets, g_vec, u_packed, grad_u_packed, n_surf])
-    solver = dolfinx_contact.NewtonSolver(mesh.comm, A, b, coefficients)
+    solver = dolfinx_contact.NewtonSolver(mesh.comm, A, b, [coefficients])
     solver.set_jacobian(compute_jacobian)
     solver.set_residual(compute_residual)
     solver.set_coefficients(pack_coefficients)

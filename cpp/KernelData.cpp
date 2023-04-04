@@ -7,25 +7,26 @@
 #include "KernelData.h"
 
 dolfinx_contact::KernelData::KernelData(
-    std::shared_ptr<const dolfinx::fem::FunctionSpace> V,
+    std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V,
     std::shared_ptr<const dolfinx_contact::QuadratureRule> q_rule,
     const std::vector<std::size_t>& cstrides)
     : _qp_offsets(q_rule->offset()), _q_weights(q_rule->weights())
 {
   // Extract mesh
-  std::shared_ptr<const dolfinx::mesh::Mesh> mesh = V->mesh();
+  std::shared_ptr<const dolfinx::mesh::Mesh<double>> mesh = V->mesh();
   assert(mesh);
   // Get mesh info
   const dolfinx::mesh::Geometry<double>& geometry = mesh->geometry();
-  const dolfinx::fem::CoordinateElement& cmap = geometry.cmap();
+  const dolfinx::fem::CoordinateElement& cmap = geometry.cmaps()[0];
+
   _affine = cmap.is_affine();
   _num_coordinate_dofs = cmap.dim();
 
   _gdim = geometry.dim();
-  const dolfinx::mesh::Topology& topology = mesh->topology();
-  _tdim = topology.dim();
+  auto topology = mesh->topology();
+  _tdim = topology->dim();
 
-  dolfinx_contact::error::check_cell_type(topology.cell_type());
+  dolfinx_contact::error::check_cell_type(topology->cell_types()[0]);
   // Create quadrature points on reference facet
   const std::vector<double>& q_points = q_rule->points();
   const std::size_t num_quadrature_pts = _q_weights.size();
@@ -78,8 +79,8 @@ dolfinx_contact::KernelData::KernelData(
 
   // As reference facet and reference cell are affine, we do not need to
   // compute this per quadrature point
-  basix::cell::type basix_cell
-      = dolfinx::mesh::cell_type_to_basix_type(mesh->topology().cell_type());
+  basix::cell::type basix_cell = dolfinx::mesh::cell_type_to_basix_type(
+      mesh->topology()->cell_types()[0]);
   std::tie(_ref_jacobians, _jac_shape)
       = basix::cell::facet_jacobians(basix_cell);
 
