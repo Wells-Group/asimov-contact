@@ -18,6 +18,7 @@ dolfinx_contact::KernelData::KernelData(
   // Get mesh info
   const dolfinx::mesh::Geometry<double>& geometry = mesh->geometry();
   const dolfinx::fem::CoordinateElement& cmap = geometry.cmaps()[0];
+
   _affine = cmap.is_affine();
   _num_coordinate_dofs = cmap.dim();
 

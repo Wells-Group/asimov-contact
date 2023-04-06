@@ -874,6 +874,7 @@ dolfinx_contact::compute_distance_map(
   dolfinx::common::Timer t("~Contact: compute distance map");
   const dolfinx::mesh::Geometry<double>& geometry = quadrature_mesh.geometry();
   const dolfinx::fem::CoordinateElement& cmap = geometry.cmaps()[0];
+
   const std::size_t gdim = geometry.dim();
   auto topology = quadrature_mesh.topology();
   const dolfinx::mesh::CellType cell_type = topology->cell_types()[0];
