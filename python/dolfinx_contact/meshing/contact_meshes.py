@@ -9,7 +9,7 @@ from mpi4py import MPI
 
 __all__ = ["create_circle_plane_mesh", "create_circle_circle_mesh", "create_box_mesh_2D",
            "create_box_mesh_3D", "create_sphere_plane_mesh", "create_sphere_sphere_mesh",
-           "create_cylinder_cylinder_mesh"]
+           "create_cylinder_cylinder_mesh", "create_2D_rectangle_split"]
 
 
 def create_circle_plane_mesh(filename: str, quads: bool = False, res=0.1, order: int = 1):
@@ -515,3 +515,65 @@ def create_cylinder_cylinder_mesh(filename: str, order: int = 1, res=0.25, simpl
     with XDMFFile(MPI.COMM_WORLD, f"{filename}.xdmf", "w") as file:
         file.write_mesh(msh)
         file.write_meshtags(mt_domain)
+
+def create_2D_rectangle_split(filename: str, quads: bool = False, res=0.1, order: int = 1):
+    """
+    Create rectangle split into two domains
+    """
+    L = 0.5
+    H = 0.5
+
+    gmsh.initialize()
+    if MPI.COMM_WORLD.rank == 0:
+        gmsh.option.setNumber("Mesh.CharacteristicLengthFactor", res)
+
+        # Create box
+        p0 = gmsh.model.occ.addPoint(0, 0, 0)
+        p1 = gmsh.model.occ.addPoint(L , 0, 0)
+        p2 = gmsh.model.occ.addPoint(L, H, 0)
+        p3 = gmsh.model.occ.addPoint(0, H, 0)
+        ps = [p0, p1, p2, p3]
+        lines = [gmsh.model.occ.addLine(ps[i - 1], ps[i]) for i in range(len(ps))]
+        curve = gmsh.model.occ.addCurveLoop(lines)
+        surface = gmsh.model.occ.addPlaneSurface([curve])
+
+        # Create box
+        gap = 0.2
+        p4 = gmsh.model.occ.addPoint(L + gap, 0, 0)
+        p5 = gmsh.model.occ.addPoint(2*L + gap, 0, 0)
+        p6 = gmsh.model.occ.addPoint(2*L +gap, H, 0)
+        p7 = gmsh.model.occ.addPoint(L + gap, H, 0)
+        ps2 = [p4, p5, p6, p7]
+        lines2 = [gmsh.model.occ.addLine(ps2[i - 1], ps2[i]) for i in range(len(ps2))]
+        curve2 = gmsh.model.occ.addCurveLoop(lines2)
+        surface2 = gmsh.model.occ.addPlaneSurface([curve2])
+
+
+        gmsh.model.occ.synchronize()
+        # Set mesh sizes on the points from the surface we are extruding
+        top_nodes = gmsh.model.getBoundary([(2, surface)], recursive=True, oriented=False)
+        gmsh.model.occ.mesh.setSize(top_nodes, 1.2*res)
+        bottom_nodes = gmsh.model.getBoundary([(2, surface2)], recursive=True, oriented=False)
+        gmsh.model.occ.mesh.setSize(bottom_nodes, res)
+        # Synchronize and create physical tags
+        gmsh.model.occ.synchronize()
+        gmsh.model.addPhysicalGroup(2, [surface], tag=1)
+        bndry = gmsh.model.getBoundary([(2, surface)], oriented=False)
+        [gmsh.model.addPhysicalGroup(b[0], [b[1]]) for b in bndry]
+
+        gmsh.model.addPhysicalGroup(2, [surface2], tag=2)
+        bndry2 = gmsh.model.getBoundary([(2, surface2)], oriented=False)
+        [gmsh.model.addPhysicalGroup(b[0], [b[1]]) for b in bndry2]
+
+        if quads:
+            gmsh.option.setNumber("Mesh.RecombinationAlgorithm", 8)
+            gmsh.option.setNumber("Mesh.RecombineAll", 2)
+            gmsh.option.setNumber("Mesh.SubdivisionAlgorithm", 1)
+        gmsh.model.mesh.generate(2)
+        gmsh.model.mesh.setOrder(order)
+
+        # gmsh.option.setNumber("Mesh.SaveAll", 1)
+        gmsh.write(filename)
+    MPI.COMM_WORLD.Barrier()
+
+    gmsh.finalize()

@@ -13,7 +13,7 @@ from petsc4py import PETSc as _PETSc
 import dolfinx_contact
 import dolfinx_contact.cpp
 from dolfinx_contact.helpers import (rigid_motions_nullspace_subdomains, sigma_func)
-# from dolfinx_contact.plotting import plot_gap
+from dolfinx_contact.plotting import plot_gap
 
 kt = dolfinx_contact.cpp.Kernel
 
@@ -72,7 +72,7 @@ def setup_newton_solver(F_custom: fem.forms.FormMetaClass, J_custom: fem.forms.F
             else:
                 normals.append(contact.pack_ny(i))
             test_fns.append(contact.pack_test_functions(i))
-    # plot_gap(mesh, contact, gaps, entities, num_pairs)
+    plot_gap(mesh, contact, gaps, entities, num_pairs)
 
     # Concatenate all coeffs
     ccfs = []

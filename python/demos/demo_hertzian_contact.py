@@ -64,12 +64,13 @@ if __name__ == "__main__":
             facet_marker = xdmf.read_meshtags(mesh, name="facet_marker")
         V = VectorFunctionSpace(mesh, ("CG", args.order))
         # lame parameters
-        mu = 1
-        lmbda = 1
+        load = 0.25
+        mu = 1.0
+        lmbda = 1.0
         sigma = sigma_func(mu, lmbda)
         # Set initial condition
         Estar = 2.5 / (2 * (1 - 0.25**2))
-        load = 0.25
+
         R = 0.25
         d = 4 * load * 0.25**2 / Estar
         dirichlet_nodes = locate_entities(mesh, 0, lambda x: np.logical_and(
@@ -205,7 +206,6 @@ if __name__ == "__main__":
     a = np.sqrt(d * R)
     r = np.linspace(-a, a, 100)
     p0 = np.sqrt(Estar * load * R)
-    plt.ylim(-0.05, 0.32)
     plt.grid()
 
     p = p0 * np.sqrt(1 - r**2 / a**2)
