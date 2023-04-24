@@ -73,7 +73,7 @@ dolfinx_contact::pack_coefficient_quadrature(
     throw std::invalid_argument("Unsupported integral type.");
   }
   // Create quadrature rule
-  QuadratureRule q_rule(cell_type, q_degree, (int)entity_dim);
+  QuadratureRule q_rule(cell_type, q_degree, (int)entity_dim, basix::quadrature::type::Default);
 
   // Get element information
   const dolfinx::fem::FiniteElement* element
@@ -339,7 +339,7 @@ dolfinx_contact::pack_gradient_quadrature(
   }
 
   // Create quadrature rule
-  QuadratureRule q_rule(cell_type, q_degree, (int)entity_dim);
+  QuadratureRule q_rule(cell_type, q_degree, (int)entity_dim, basix::quadrature::type::Default);
 
   // Get element information
   const dolfinx::fem::FiniteElement* element

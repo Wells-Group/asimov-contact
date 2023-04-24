@@ -579,8 +579,8 @@ dolfinx_contact::Contact::generate_kernel(Kernel type)
           double v_dot_nsurf = n_surf[n] * phi(q_pos, i);
           double sign_v = (lmbda * tr(i, n) * n_dot + mu * epsn(i, n));
           // This is (1./gamma)*Pn_v to avoid the product gamma*(1./gamma)
-          double Pn_v = gamma_inv * v_dot_nsurf - theta * sign_v;
-          b[0][n + i * bs] += 0.5 * Pn_u * Pn_v;
+          double Pn_v = v_dot_nsurf - gamma * theta * sign_v;
+          b[0][n + i * bs] += 0.5 * gamma_inv * Pn_u * Pn_v;
 
           // entries corresponding to v on the other surface
           for (std::size_t k = 0; k < num_links; k++)
@@ -731,9 +731,9 @@ dolfinx_contact::Contact::generate_kernel(Kernel type)
             {
               double v_dot_nsurf = n_surf[b] * phi(q_pos, i);
               double sign_v = (lmbda * tr(i, b) * n_dot + mu * epsn(i, b));
-              double Pn_v = gamma_inv * v_dot_nsurf - theta * sign_v;
+              double Pn_v =  v_dot_nsurf - gamma * theta * sign_v;
               A[0][(b + i * bs) * ndofs_cell * bs + l + j * bs]
-                  += 0.5 * Pn_du * Pn_v;
+                  += 0.5 * gamma_inv * Pn_du * Pn_v;
 
               // entries corresponding to u and v on the other surface
               for (std::size_t k = 0; k < num_links; k++)
@@ -748,7 +748,7 @@ dolfinx_contact::Contact::generate_kernel(Kernel type)
                         + i * num_points * bs + q * bs + b;
                 double v_n_opp = c[index] * n_surf[b];
                 A[3 * k + 1][(b + i * bs) * bs * ndofs_cell + l + j * bs]
-                    -= 0.5 * du_n_opp * Pn_v;
+                    -= 0.5 * gamma_inv * du_n_opp * Pn_v;
                 A[3 * k + 2][(b + i * bs) * bs * ndofs_cell + l + j * bs]
                     -= 0.5 * gamma_inv * Pn_du * v_n_opp;
                 A[3 * k + 3][(b + i * bs) * bs * ndofs_cell + l + j * bs]

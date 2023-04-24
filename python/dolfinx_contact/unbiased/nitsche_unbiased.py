@@ -72,7 +72,6 @@ def setup_newton_solver(F_custom: fem.forms.FormMetaClass, J_custom: fem.forms.F
             else:
                 normals.append(contact.pack_ny(i))
             test_fns.append(contact.pack_test_functions(i))
-    plot_gap(mesh, contact, gaps, entities, num_pairs)
 
     # Concatenate all coeffs
     ccfs = []
@@ -173,15 +172,6 @@ def get_problem_parameters(problem_parameters: dict[str, np.float64]):
     """
     Retrieve problem parameters and throw error if parameter missing
     """
-    if problem_parameters.get("mu") is None:
-        raise RuntimeError("Need to supply lame paramters")
-    else:
-        mu = problem_parameters.get("mu")
-
-    if problem_parameters.get("lambda") is None:
-        raise RuntimeError("Need to supply lame paramters")
-    else:
-        lmbda = problem_parameters.get("lambda")
     if problem_parameters.get("theta") is None:
         raise RuntimeError("Need to supply theta for Nitsche's method")
     else:
@@ -190,9 +180,8 @@ def get_problem_parameters(problem_parameters: dict[str, np.float64]):
         raise RuntimeError("Need to supply gamma for Nitsche's method")
     else:
         gamma = problem_parameters.get("gamma")
-    sigma = sigma_func(mu, lmbda)
 
-    return mu, lmbda, theta, gamma, sigma
+    return theta, gamma
 
 
 def copy_fns(fns: list[Union[fem.Function, fem.Constant]],
@@ -229,7 +218,7 @@ def update_fns(t: float, fns: list[Union[fem.Function, fem.Constant]],
             fn.value = t * old_fns[k].value
 
 
-def nitsche_unbiased(steps: int, ufl_form: ufl.Form, u: fem.Function,
+def nitsche_unbiased(steps: int, ufl_form: ufl.Form, u: fem.Function, mu: fem.Function, lmbda: fem.Function,
                      rhs_fns: list[Union[fem.Function, fem.Constant]], markers: list[mesh.meshtags],
                      contact_data: Tuple[AdjacencyList_int32, list[Tuple[int, int]]],
                      bcs: Tuple[npt.NDArray[np.int32], list[Union[fem.Function, fem.Constant]]],
@@ -300,7 +289,8 @@ def nitsche_unbiased(steps: int, ufl_form: ufl.Form, u: fem.Function,
     jit_options = {} if jit_options is None else jit_options
     petsc_options = {} if petsc_options is None else petsc_options
     newton_options = {} if newton_options is None else newton_options
-    mu, lmbda, theta, gamma, sigma = get_problem_parameters(problem_parameters)
+    theta, gamma = get_problem_parameters(problem_parameters)
+    sigma = sigma_func(mu, lmbda)
 
     # Contact data
     contact_pairs = contact_data[1]
@@ -357,13 +347,6 @@ def nitsche_unbiased(steps: int, ufl_form: ufl.Form, u: fem.Function,
     # pack constants
     consts = np.array([gamma, theta], dtype=np.float64)
 
-    # Pack material parameters mu and lambda on each contact surface
-    with common.Timer("~Contact: Interpolate coeffs (mu, lmbda)"):
-        lmbda2 = fem.Function(V2)
-        lmbda2.interpolate(lambda x: np.full((1, x.shape[1]), lmbda))
-        mu2 = fem.Function(V2)
-        mu2.interpolate(lambda x: np.full((1, x.shape[1]), mu))
-
     # Retrieve active entities
     entities = []
     with common.Timer("~Contact: Compute active entities"):
@@ -375,9 +358,9 @@ def nitsche_unbiased(steps: int, ufl_form: ufl.Form, u: fem.Function,
     with common.Timer("~Contact: Pack coeffs (mu, lmbda"):
         for i in range(len(contact_pairs)):
             material.append(np.hstack([dolfinx_contact.cpp.pack_coefficient_quadrature(
-                mu2._cpp_object, 0, entities[i]),
+                mu._cpp_object, 0, entities[i]),
                 dolfinx_contact.cpp.pack_coefficient_quadrature(
-                lmbda2._cpp_object, 0, entities[i])]))
+                lmbda._cpp_object, 0, entities[i])]))
 
     # Pack celldiameter on each surface
     h_packed = []
@@ -457,8 +440,11 @@ def nitsche_unbiased(steps: int, ufl_form: ufl.Form, u: fem.Function,
         # write solution
         vtx.write(t)
 
-    contact.update_submesh_geometry(u._cpp_object)
     vtx.close()
+
+    # Recover original geometry for pressure computation
+    du.x.array[:] = 0
+    contact.update_submesh_geometry(du._cpp_object)
 
     # Compute contact pressure on surfaces
     gdim = mesh.geometry.dim
@@ -474,7 +460,9 @@ def nitsche_unbiased(steps: int, ufl_form: ufl.Form, u: fem.Function,
 
         num_facets = entities[i].shape[0]
         num_q_points = n_x.shape[1] // gdim
+        # this assumes mu, lmbda are constant for each body
         pn.append(dolfinx_contact.cpp.compute_contact_pressure(
-            grad_u, n_x, n_contact, num_q_points, num_facets, gdim, mu, lmbda))
-
+            grad_u, n_x, n_contact, num_q_points, num_facets, gdim, material[i][0, 0], material[i][0, 1]))
+        
+    contact.update_submesh_geometry(u._cpp_object)
     return u, newton_its, krylov_its, timings, contact, pn

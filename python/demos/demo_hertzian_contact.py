@@ -10,20 +10,33 @@ import numpy as np
 import ufl
 from dolfinx.io import XDMFFile
 from dolfinx.fem import (Constant, Expression, Function, FunctionSpace, IntegralType,
-                         VectorFunctionSpace, locate_dofs_topological)
+                         VectorFunctionSpace, locate_dofs_topological, form)
+from dolfinx.fem.petsc import assemble_matrix, assemble_vector
 from dolfinx.graph import create_adjacencylist
-from dolfinx.mesh import locate_entities
+from dolfinx.geometry import BoundingBoxTree, compute_closest_entity
+from dolfinx.mesh import locate_entities, create_submesh
 from mpi4py import MPI
 from petsc4py.PETSc import ScalarType
+import petsc4py.PETSc as PETSc
 
-from dolfinx_contact.helpers import (epsilon, sigma_func)  # , lame_parameters)
+from dolfinx_contact.helpers import (epsilon, sigma_func, lame_parameters)
 from dolfinx_contact.meshing import (convert_mesh,
-                                     create_halfdisk_plane_mesh)
+                                     create_halfdisk_plane_mesh,
+                                     create_hertz3D)
 import dolfinx_contact
 from dolfinx_contact.cpp import ContactMode
 
 
 from dolfinx_contact.unbiased.nitsche_unbiased import nitsche_unbiased
+
+
+
+def closest_node_in_mesh(mesh, point):
+    points = np.reshape(point, (1,3))
+    bounding_box = BoundingBoxTree(mesh, 0)
+    node = compute_closest_entity(bounding_box, bounding_box, mesh, points[0])
+    return node
+
 if __name__ == "__main__":
     desc = "Example for verifying correctness of code"
     parser = argparse.ArgumentParser(description=desc,
@@ -46,12 +59,81 @@ if __name__ == "__main__":
     threed = args.threed
     simplex = args.simplex
     mesh_dir = "meshes"
+
+    # Problem paramters
+    # R = 50 # in mm
+    # L = 200 # in mm
+    # H = 200
+    R = 0.25
+    L = 1.0
+    H = 2.0
+    #load = 0.25*np.pi*R**2
+    load = 0.25*4.0*np.pi*R**3/3.0
+    
+    # lame parameters
+    # E1 = 210e3 # in MPa
+    # E2 = 70e3 # in MPa
+    # nu = 0.3
+    # load = 35e3 # in N
+    E1 = 2.5
+    E2 = 2.5
+    nu = 0.25 
+    
+    mu_func, lambda_func = lame_parameters(True)
+    mu1 = mu_func(E1, nu)
+    mu2 = mu_func(E2, nu)
+    lmbda1 = lambda_func(E1, nu)
+    lmbda2 = lambda_func(E2, nu)
+    Estar = E1*E2 / (E2*(1-nu**2)+E1*(1-nu**2))
+
+
+
     if threed:
-        pass
+        outname = "results/problem_hertz3D" 
+        fname = f"{mesh_dir}/hertz3D"
+        create_hertz3D(filename=f"{fname}.msh", res=args.res, order=args.order, r=R, H=H, L=L, W = L)
+        convert_mesh(fname, f"{fname}.xdmf", gdim=3)
+        with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
+            mesh = xdmf.read_mesh()
+            domain_marker = xdmf.read_meshtags(mesh, name="cell_marker")
+            tdim = mesh.topology.dim
+            mesh.topology.create_connectivity(tdim - 1, tdim)
+            facet_marker = xdmf.read_meshtags(mesh, name="facet_marker")
+        V = VectorFunctionSpace(mesh, ("CG", args.order))
+        node1 = closest_node_in_mesh(mesh, [0.0, 0.0, 0.0])
+        node2 = closest_node_in_mesh(mesh, [0.0, 0.0, R/2.0])
+        node3 = closest_node_in_mesh(mesh, [0.0, R/2.0, R/2])
+        dirichlet_nodes = np.array([node1, node2, node3], dtype=np.int32)
+        # dirichlet_dofs1 = locate_dofs_topological(V.sub(0), 0, dirichlet_nodes)
+        d = 0.1
+        dirichlet_dofs1 = locate_dofs_topological(V, mesh.topology.dim - 1, facet_marker.find(2))
+        bc_fns = [Constant(mesh, ScalarType((0.0, 0.0, -d))), Constant(mesh, ScalarType((0.0, 0.0, 0.0)))]
+        # bc_fns = [Constant(mesh, ScalarType((0.0))), Constant(mesh, ScalarType((0.0, 0.0, 0.0))), Constant(mesh, ScalarType((0.0)))]
+        dirichlet_dofs2 = locate_dofs_topological(V, mesh.topology.dim - 1, facet_marker.find(7))
+        # dirichlet_dofs3 = locate_dofs_topological(V.sub(1), 0, dirichlet_nodes)
+        # print(dirichlet_dofs1, dirichlet_dofs3)
+
+        # bcs = ([(dirichlet_dofs1, 0), (dirichlet_dofs2, -1), (dirichlet_dofs3, 1)], bc_fns)
+        bcs = ([(dirichlet_dofs1, -1), (dirichlet_dofs2, -1)], bc_fns)
+        contact_bdy_1 = 1
+        contact_bdy_2 = 8
+        distributed_load = 0# 3*load/(4*np.pi*R**3)
+        f = Constant(mesh, ScalarType((0.0, 0.0, -distributed_load)))  # body force
+        a = np.sqrt(R*d)#np.cbrt(3.0*load*R/(4*Estar))
+        force = 4*a**3*Estar/(3*R)
+        p0 = 3*force/(2*np.pi*a**2)
+        def _pressure(x):
+            vals = np.zeros(x.shape[1])
+            for i in range(x.shape[1]):
+                rsquared = x[0][i]**2 + x[1][i]**2
+                if rsquared < a**2:
+                    vals[i] = p0 * np.sqrt(1 - rsquared / a**2)
+            return vals
     else:
         outname = "results/problem2_2D_simplex" if simplex else "results/problem2_2D_quads"
         fname = f"{mesh_dir}/halfdisk" if simplex else f"{mesh_dir}/halfdisk"
-        create_halfdisk_plane_mesh(filename=f"{fname}.msh", res=args.res, order=args.order, quads=not simplex)
+
+        create_halfdisk_plane_mesh(filename=f"{fname}.msh", res=args.res, order=args.order, quads=not simplex, r=R, H=H, L=L)
 
         convert_mesh(fname, f"{fname}.xdmf", gdim=2)
         print("converted")
@@ -63,55 +145,71 @@ if __name__ == "__main__":
             mesh.topology.create_connectivity(tdim - 1, tdim)
             facet_marker = xdmf.read_meshtags(mesh, name="facet_marker")
         V = VectorFunctionSpace(mesh, ("CG", args.order))
-        # lame parameters
-        load = 0.25
-        mu = 1.0
-        lmbda = 1.0
-        sigma = sigma_func(mu, lmbda)
-        # Set initial condition
-        Estar = 2.5 / (2 * (1 - 0.25**2))
 
-        R = 0.25
-        d = 4 * load * 0.25**2 / Estar
         dirichlet_nodes = locate_entities(mesh, 0, lambda x: np.logical_and(
-            np.isclose(x[0], 0), np.logical_or(np.isclose(x[1], 0), np.isclose(x[1], 0.1))))
+            np.isclose(x[0], 0), np.logical_or(np.isclose(x[1], 0), np.isclose(x[1], R/5.0))))
         dirichlet_dofs1 = locate_dofs_topological(V.sub(0), 0, dirichlet_nodes)
         bc_fns = [Constant(mesh, ScalarType((0.0))), Constant(mesh, ScalarType((0.0, 0.0)))]
         dirichlet_dofs2 = locate_dofs_topological(V, mesh.topology.dim - 1, facet_marker.find(4))
 
-        bcs = ([(dirichlet_dofs1, 0), (dirichlet_dofs2, -1)], bc_fns)
+        bcs = ([(dirichlet_dofs1, 0), (dirichlet_dofs2, -1) ],  bc_fns)
         contact_bdy_1 = 10
         contact_bdy_2 = 6
-        f = Constant(mesh, ScalarType((0.0, -load)))  # body force
+        distributed_load = load/(np.pi*R**2)
+        f = Constant(mesh, ScalarType((0.0, -distributed_load)))  # body force
+        a = np.sqrt(8*load*R/(np.pi*Estar))
+        p0 = np.sqrt(load*Estar/(2*np.pi*R))
+        def _pressure(x):
+            vals = np.zeros(x.shape[1])
+            for i in range(x.shape[1]):
+                if abs(x[0][i]) < a:
+                    vals[i] = p0 * np.sqrt(1 - x[0][i]**2 / a**2)
+            return vals
+        
 
     # Solver options
     ksp_tol = 1e-10
-    newton_tol = 1e-7
+    newton_tol = 1e-6
     newton_options = {"relaxation_parameter": 1,
                       "atol": newton_tol,
                       "rtol": newton_tol,
                       "convergence_criterion": "residual",
                       "max_it": 50,
                       "error_on_nonconvergence": True}
-    petsc_options = {"ksp_type": "preonly", "pc_type": "lu"}
-    # petsc_options = {
-    #     "matptap_via": "scalable",
-    #     "ksp_type": "cg",
-    #     "ksp_rtol": ksp_tol,
-    #     "ksp_atol": ksp_tol,
-    #     "pc_type": "gamg",
-    #     "pc_mg_levels": 3,
-    #     "pc_mg_cycles": 1,   # 1 is v, 2 is w
-    #     "mg_levels_ksp_type": "chebyshev",
-    #     "mg_levels_pc_type": "jacobi",
-    #     "pc_gamg_type": "agg",
-    #     "pc_gamg_coarse_eq_limit": 100,
-    #     "pc_gamg_agg_nsmooths": 1,
-    #     "pc_gamg_threshold": 1e-3,
-    #     "pc_gamg_square_graph": 2,
-    #     "pc_gamg_reuse_interpolation": False
-    # }
+    # petsc_options = {"ksp_type": "preonly", "pc_type": "lu"}
+    petsc_options = {
+        "matptap_via": "scalable",
+        "ksp_type": "cg",
+        "ksp_rtol": ksp_tol,
+        "ksp_atol": ksp_tol,
+        "pc_type": "gamg",
+        "pc_mg_levels": 3,
+        "pc_mg_cycles": 1,   # 1 is v, 2 is w
+        "mg_levels_ksp_type": "chebyshev",
+        "mg_levels_pc_type": "jacobi",
+        "pc_gamg_type": "agg",
+        "pc_gamg_coarse_eq_limit": 100,
+        "pc_gamg_agg_nsmooths": 1,
+        "pc_gamg_threshold": 1e-3,
+        "pc_gamg_square_graph": 2,
+        "pc_gamg_reuse_interpolation": False
+    }
 
+
+    # DG-0 funciton for material
+    V0 = FunctionSpace(mesh, ("DG", 0))
+    mu = Function(V0)
+    lmbda = Function(V0)
+    disk_cells = domain_marker.find(1)
+    block_cells = domain_marker.find(2)
+    mu.interpolate(lambda x: np.full((1, x.shape[1]), mu2), disk_cells)
+    mu.interpolate(lambda x: np.full((1, x.shape[1]), mu1), block_cells)
+    lmbda.interpolate(lambda x: np.full((1, x.shape[1]), lmbda2), disk_cells)
+    lmbda.interpolate(lambda x: np.full((1, x.shape[1]), lmbda1), block_cells)
+
+    sigma = sigma_func(mu, lmbda)
+    # Set initial condition
+    
     # Pack mesh data for Nitsche solver
     contact = [(0, 1), (1, 0)]
     data = np.array([contact_bdy_1, contact_bdy_2], dtype=np.int32)
@@ -130,21 +228,18 @@ if __name__ == "__main__":
     # body forces
     F -= ufl.inner(f, v) * dx(1)
 
-    problem_parameters = {"mu": mu, "lambda": lmbda, "gamma": 100, "theta": -1}
+    problem_parameters = {"gamma": E1*100, "theta": 1}
 
     # create initial guess
-    disk_cells = domain_marker.find(1)
-
     def _u_initial(x):
         values = np.zeros((mesh.geometry.dim, x.shape[1]))
-        values[-1] = -0.1
+        values[-1] = -H/10
         return values
     u.interpolate(_u_initial, disk_cells)
-
     search_mode = [ContactMode.ClosestPoint, ContactMode.Raytracing]
     # Solve contact problem using Nitsche's method
     u, newton_its, krylov_iterations, solver_time, contact, pn = nitsche_unbiased(1, ufl_form=F,
-                                                                                  u=u, rhs_fns=[f],
+                                                                                  u=u, mu=mu, lmbda=lmbda, rhs_fns=[f],
                                                                                   markers=[domain_marker, facet_marker],
                                                                                   contact_data=(
                                                                                       surfaces, contact), bcs=bcs,
@@ -164,54 +259,119 @@ if __name__ == "__main__":
     sigma_vm_h = Function(W)
     sigma_vm_h.interpolate(sigma_vm_expr)
     sigma_vm_h.name = "vonMises"
-    sigma_n_h = Function(W)
-    n = ufl.FacetNormal(mesh)
-    sigma_n = ufl.inner(sigma(u) * Constant(mesh, ScalarType((0.0, 1.0))), Constant(mesh, ScalarType((0.0, 1.0))))
-    sigma_n_expr = Expression(sigma_n, W.element.interpolation_points())
-    sigma_n_h.interpolate(sigma_n_expr)
-    sigma_n_h.name = "p"
     u.name = "u"
     with XDMFFile(mesh.comm, "test_hertz.xdmf", "w") as xdmf:
         xdmf.write_mesh(mesh)
         u.name = "u"
         xdmf.write_function(u)
         # xdmf.write_function(sigma_vm_h)
-        # xdmf.write_function(sigma_n_h)
 
     # Compuate integration entitites
-    integration_entities, num_local = dolfinx_contact.compute_active_entities(mesh._cpp_object,
+    integration_entities2, num_local2 = dolfinx_contact.compute_active_entities(mesh._cpp_object,
                                                                               facet_marker.find(contact_bdy_2),
                                                                               IntegralType.exterior_facet)
-    integration_entities = integration_entities[:num_local]
-    coeffs = dolfinx_contact.cpp.pack_coefficient_quadrature(
-        sigma_n_h._cpp_object, args.q_degree, integration_entities)
+    integration_entities1, num_local1 = dolfinx_contact.compute_active_entities(mesh._cpp_object,
+                                                                              facet_marker.find(contact_bdy_1),
+                                                                              IntegralType.exterior_facet)
+
+    c_to_f = mesh.topology.connectivity(tdim, tdim - 1)
+    f2 = np.zeros(num_local2, dtype=np.int32)
+    f1 = np.zeros(num_local1, dtype=np.int32)
+    for i, e in enumerate(integration_entities1[:num_local1]):
+        facet = c_to_f.links(e[0])[e[1]]
+        f1[i] = facet
+    for i, e in enumerate(integration_entities2[:num_local2]):
+        facet = c_to_f.links(e[0])[e[1]]
+        f2[i] = facet
+    facets = np.sort(np.hstack([facet_marker.find(contact_bdy_1), facet_marker.find(contact_bdy_2)]))
+    facet_mesh, fm_to_msh = create_submesh(mesh, tdim-1, facets)[:2]
+
+    # Create msh to submsh entity map
+    num_facets = mesh.topology.index_map(tdim - 1).size_local + \
+    mesh.topology.index_map(tdim - 1).num_ghosts
+    msh_to_fm = np.full(num_facets, -1)
+    msh_to_fm[fm_to_msh] = np.arange(len(fm_to_msh))
+    entity_maps = {facet_mesh: msh_to_fm}
+
+    # Use quadrature element
+    if tdim == 2:
+        Q_element = ufl.FiniteElement("Quadrature", ufl.Cell("interval", geometric_dimension=facet_mesh.geometry.dim), degree=args.q_degree, quad_scheme="default")
+    else:
+        Q_element = ufl.FiniteElement("Quadrature", ufl.Cell("triangle", geometric_dimension=facet_mesh.geometry.dim), degree=args.q_degree, quad_scheme="default")
+    Q = FunctionSpace(facet_mesh, Q_element)
+    P = FunctionSpace(facet_mesh, ("DG", args.order-1))
+    num_q_points = np.int32(len(pn[0])/num_local1)
+    dofs1 = np.array(np.hstack([range(msh_to_fm[f1][i]*num_q_points, num_q_points*(msh_to_fm[f1][i]+1)) for i in range(num_local1)]))
+    dofs2 = np.hstack([range(msh_to_fm[f2][i]*num_q_points, num_q_points*(msh_to_fm[f2][i]+1)) for i in range(num_local2)])
+    print(dofs1.size, len(pn[0]), dofs2.size, len(pn[1]))
+    p = Function(Q)
+    p.x.array[dofs1] = pn[0][:]
+    p.x.array[dofs2] = pn[1][:]
+    u_f = ufl.TrialFunction(P)
+    v_f = ufl.TestFunction(P)
+
+    # Define forms for the projection
+    dx_f = ufl.Measure("dx", domain=facet_mesh)
+    a_form= form(ufl.inner(u_f, v_f) * dx_f)
+    L = form(ufl.inner(p, v_f) * dx_f)
+
+    # Assemble matrix and vector
+    A = assemble_matrix(a_form)
+    A.assemble()
+    b = assemble_vector(L)
+    b.ghostUpdate(addv=PETSc.InsertMode.ADD, mode=PETSc.ScatterMode.REVERSE)
+
+    # Setup solver
+    ksp = PETSc.KSP().create(facet_mesh.comm)
+    ksp.setOperators(A)
+    ksp.setType("preonly")
+    ksp.getPC().setType("lu")
+    ksp.getPC().setFactorSolverType("mumps")
+
+    # Compute projection
+    p_f = Function(P)
+    ksp.solve(b, p_f.vector)
+    p_f.x.scatter_forward()
+
+
+
+    p_hertz = Function(P)
+    p_hertz.interpolate(_pressure)
+    with XDMFFile(facet_mesh.comm, "surface_pressure.xdmf", "w") as xdmf:
+        xdmf.write_mesh(facet_mesh)
+        p_f.name = "pressure"
+        xdmf.write_function(p_f)
+
+
+    with XDMFFile(facet_mesh.comm, "hertz_pressure.xdmf", "w") as xdmf:
+        xdmf.write_mesh(facet_mesh)
+        p_hertz.name = "analytical"
+        xdmf.write_function(p_hertz)
+
     # Create quadrature points for integration on facets
-    ct = mesh.topology.cell_type
-    x = []
-    for i in range(num_local):
-        qps = contact.qp_phys(1, i)
-        for pt in qps:
-            x.append(pt[0])
-    print(len(x))
-    print(len(coeffs.reshape(-1)))
-    displacement = dolfinx_contact.cpp.pack_coefficient_quadrature(
-        u._cpp_object, args.q_degree, integration_entities)
+    # ct = mesh.topology.cell_type
+    # x = []
+    # for i in range(num_local):
+    #     qps = contact.qp_phys(1, i)
+    #     for pt in qps:
+    #         x.append(pt[0])
+    # print(len(x))
 
-    u_max = np.max(abs(displacement))
-    plt.figure()
-    plt.plot(x, pn[1], '*')
-    plt.xlabel('x')
-    plt.ylabel('p')
-    plt.xlim(-0.25, 0.25)
-    a = np.sqrt(d * R)
-    r = np.linspace(-a, a, 100)
-    p0 = np.sqrt(Estar * load * R)
-    plt.grid()
+    # plt.figure()
+    # plt.plot(x, pn[1], '*')
+    # plt.xlabel('x')
+    # plt.ylabel('p')
+    
+    # a = np.sqrt(8*load*R/(np.pi*Estar))
+    # plt.xlim(-a-0.1, a+0.1)
+    # r = np.linspace(-a, a, 100)
+    # p0 = np.sqrt(load*Estar/(2*np.pi*R))
+    # print(a, p0)
+    # plt.grid()
 
-    p = p0 * np.sqrt(1 - r**2 / a**2)
-    plt.plot(r, p)
-    print(p0, a)
-    p_max = np.max(pn[1])
-    E_star_actual = p_max**2 / (load * R)
-    print(Estar, E_star_actual)
-    plt.savefig("contact_pressure.png")
+    # p = p0 * np.sqrt(1 - r**2 / a**2)
+    # plt.plot(r, p)
+    # p_max = np.max(pn[1])
+    # rel_err = np.abs(p_max - p0)/(max(p_max, p0))*100
+    # print(p0, p_max, rel_err)
+    # plt.savefig("contact_pressure.png")

@@ -49,7 +49,8 @@ if __name__ == "__main__":
     mesh_dir = "meshes"
     outname = "results/quasi_1D_simplex" if simplex else "results/quasi_1D_quads"
     fname = f"{mesh_dir}/quasi_1D_simplex" if simplex else f"{mesh_dir}/quasi_1D_quads"
-    create_2D_rectangle_split(filename=f"{fname}.msh", res=args.res, order=args.order, quads=not simplex)
+    gap = 0.2
+    create_2D_rectangle_split(filename=f"{fname}.msh", res=args.res, order=args.order, quads=not simplex, gap=gap)
     convert_mesh(fname, f"{fname}.xdmf", gdim=2)
 
 
@@ -65,15 +66,20 @@ if __name__ == "__main__":
     contact_bdy_1 = 4
     contact_bdy_2 = 6
 
-    gap = 0.2
     disp_x = 0.2
 
     V = VectorFunctionSpace(mesh, ("CG", args.order))
     dirichlet_dofs1 = locate_dofs_topological(V, mesh.topology.dim - 1, facet_marker.find(dirichlet_bdy_1))
-    dirichlet_dofs2 = locate_dofs_topological(V, mesh.topology.dim - 1, facet_marker.find(dirichlet_bdy_2))
-    bc_fns = [Constant(mesh, ScalarType((0, 0))), Constant(mesh, ScalarType((-disp_x-gap, 0.0)))]
+    L = 0.5
+    H = 0.5
+    dirichlet_nodes = locate_entities(mesh, 0, lambda x: np.logical_and(
+            np.isclose(x[1], 0.5*H), np.logical_or(np.isclose(x[0], 2*L+gap-args.res/5), np.isclose(x[0], 2*L+gap-args.res/10))))
+    print(dirichlet_nodes)
+    dirichlet_dofs2 = locate_dofs_topological(V.sub(1), 0, dirichlet_nodes)
+    # dirichlet_dofs2 = locate_dofs_topological(V, mesh.topology.dim - 1, facet_marker.find(dirichlet_bdy_2))
+    bc_fns = [Constant(mesh, ScalarType((0, 0))), Constant(mesh, ScalarType(0.0))]
 
-    bcs = ([(dirichlet_dofs1, -1), (dirichlet_dofs2, -1)], bc_fns)
+    bcs = ([(dirichlet_dofs1, -1), (dirichlet_dofs2, 1)], bc_fns)
 
     # Solver options
     ksp_tol = 1e-10
@@ -106,14 +112,30 @@ if __name__ == "__main__":
     lmbda = lambda_func(E, nu)
     sigma = sigma_func(mu, lmbda)
 
+    def _f1(x):
+        values = np.zeros((mesh.geometry.dim, x.shape[1]))
+        values[0] = -disp_x*E*0.25*np.pi**2*np.sin(np.pi*x[0]/2)
+        return values
+    
+    def _f2(x):
+        values = np.zeros((mesh.geometry.dim, x.shape[1]))
+        values[0] = -disp_x*E*0.25*np.pi**2*np.sin(np.pi*(x[0]-gap)/2)
+        return values
+    
+    
+    f = Function(V)
+    cells_right = domain_marker.find(2)
+    cells_left = domain_marker.find(1)
+    f.interpolate(_f1, cells_left)
+    f.interpolate(_f2, cells_right)
     # Create variational form without contact contributions
     F = ufl.inner(sigma(u), epsilon(v)) * dx
+    # body forces
+    F -= ufl.inner(f, v) * dx
 
-    problem_parameters = {"mu": mu, "lambda": lmbda, "gamma": 10*E, "theta": -1}
+    problem_parameters = {"mu": mu, "lambda": lmbda, "gamma": 1000*E, "theta": -1}
 
     # create initial guess
-    cells_right = domain_marker.find(2)
-
     def _u_initial(x):
         values = np.zeros((mesh.geometry.dim, x.shape[1]))
         values[0] = -0.1-gap
@@ -124,7 +146,7 @@ if __name__ == "__main__":
     search_mode = [ContactMode.ClosestPoint, ContactMode.ClosestPoint]
     # Solve contact problem using Nitsche's method
     u, newton_its, krylov_iterations, solver_time, contact, pn = nitsche_unbiased(1, ufl_form=F,
-                                                                                  u=u, rhs_fns=[],
+                                                                                  u=u, rhs_fns=[f],
                                                                                   markers=[domain_marker, facet_marker],
                                                                                   contact_data=(
                                                                                       surfaces, contact), bcs=bcs,
@@ -139,18 +161,16 @@ if __name__ == "__main__":
     
     def _exact1(x):
         values = np.zeros((mesh.geometry.dim, x.shape[1]))
-        values[0] = -x[0]*disp_x
+        values[0] = -disp_x*np.sin(np.pi*x[0]/2)
         return values
     
     def _exact2(x):
         values = np.zeros((mesh.geometry.dim, x.shape[1]))
-        values[0] = -(x[0]-gap)*disp_x -gap
+        values[0] = -disp_x*np.sin(np.pi*(x[0]-gap)/2) - gap
         return values
     
     
     exact = Function(V)
-
-    cells_left = domain_marker.find(1)
     exact.interpolate(_exact1, cells_left)
     exact.interpolate(_exact2, cells_right)
 
@@ -165,9 +185,14 @@ if __name__ == "__main__":
 
     exact.x.array[:] -= u.x.array[:]
 
-    error_form = form(ufl.inner(exact, exact) * dx)
+    error_form = form(ufl.inner(ufl.grad(exact), ufl.grad(exact)) * dx)
     error = assemble_scalar(error_form)
-    print(args.res, error)
+    error = np.sqrt(error)
+    error_form_l2 = form(ufl.inner(exact, exact) * dx)
+    error_l2 = assemble_scalar(error_form_l2)
+    error_l2 = np.sqrt(error_l2)
+    nnodes = V.dofmap.index_map.size_global
+    print(args.res, nnodes, error, error_l2)
     with XDMFFile(mesh.comm, "results/error.xdmf", "w") as xdmf:
         xdmf.write_mesh(mesh)
         exact.name = "error"
