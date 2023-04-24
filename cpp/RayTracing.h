@@ -230,7 +230,7 @@ template <std::size_t tdim, std::size_t gdim>
 int raytracing_cell(
     NewtonStorage<tdim, gdim>& storage, std::span<double> basis_values,
     const std::array<std::size_t, 4>& basis_shape, int max_iter, double tol,
-    const dolfinx::fem::CoordinateElement& cmap,
+    const dolfinx::fem::CoordinateElement<double>& cmap,
     dolfinx::mesh::CellType cell_type, std::span<const double> coordinate_dofs,
     const std::function<void(std::span<const double, tdim - 1>,
                              std::span<double, tdim>)>& reference_map)
@@ -281,7 +281,7 @@ int raytracing_cell(
     cmap.tabulate(1, X_k, {1, tdim}, basis_values);
 
     // Push forward reference coordinate
-    dolfinx::fem::CoordinateElement::push_forward(
+    dolfinx::fem::CoordinateElement<double>::push_forward(
         _xk, coords,
         stdex::submdspan(basis, 0, stdex::full_extent, stdex::full_extent, 0));
 
@@ -295,7 +295,7 @@ int raytracing_cell(
     for (std::size_t i = 0; i < gdim; ++i)
       for (std::size_t j = 0; j < tdim; ++j)
         J(i, j) = 0;
-    dolfinx::fem::CoordinateElement::compute_jacobian(dphi, coords, J);
+    dolfinx::fem::CoordinateElement<double>::compute_jacobian(dphi, coords, J);
     /// Compute dGk/dxi
     for (std::size_t i = 0; i < gdim; ++i)
       for (std::size_t j = 0; j < tdim - 1; ++j)
@@ -430,11 +430,12 @@ compute_ray(const dolfinx::mesh::Mesh<double>& mesh,
   if ((mesh.topology()->dim() != tdim) or (mesh.geometry().dim() != gdim))
     throw std::invalid_argument("Invalid topological or geometrical dimension");
 
-  const dolfinx::fem::CoordinateElement& cmap = mesh.geometry().cmaps()[0];
+  const dolfinx::fem::CoordinateElement<double>& cmap
+      = mesh.geometry().cmaps()[0];
 
   // Get cell coordinates/geometry
   const dolfinx::mesh::Geometry<double>& geometry = mesh.geometry();
-  const dolfinx::graph::AdjacencyList<std::int32_t>& x_dofmap
+  stdex::mdspan<const std::int32_t, stdex::dextents<std::size_t, 2>> x_dofmap
       = geometry.dofmap();
   std::span<const double> x_g = geometry.x();
   const std::size_t num_dofs_g = cmap.dim();
@@ -460,14 +461,14 @@ compute_ray(const dolfinx::mesh::Mesh<double>& mesh,
   assert(dolfinx::mesh::cell_dim(cell_type) == tdim);
 
   // Get facet jacobians from Basix
-  auto [ref_jac, jac_shape] = basix::cell::facet_jacobians(basix_cell);
+  auto [ref_jac, jac_shape] = basix::cell::facet_jacobians<double>(basix_cell);
   assert(tdim == jac_shape[1]);
   assert(tdim - 1 == jac_shape[2]);
   cmdspan3_t facet_jacobians(ref_jac.data(), jac_shape);
 
   // Get basix geometry information
   std::pair<std::vector<double>, std::array<std::size_t, 2>> bgeometry
-      = basix::cell::geometry(basix_cell);
+      = basix::cell::geometry<double>(basix_cell);
   auto xb = bgeometry.first;
   auto x_shape = bgeometry.second;
   const std::vector<std::vector<int>> facets
@@ -477,7 +478,7 @@ compute_ray(const dolfinx::mesh::Mesh<double>& mesh,
   {
 
     // Get cell geometry
-    auto x_dofs = x_dofmap.links(cells[c]);
+    auto x_dofs = stdex::submdspan(x_dofmap, cells[c], stdex::full_extent);
     for (std::size_t j = 0; j < x_dofs.size(); ++j)
     {
       std::copy_n(std::next(x_g.begin(), 3 * x_dofs[j]), gdim,

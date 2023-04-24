@@ -12,12 +12,11 @@
 #include <dolfinx/geometry/utils.h>
 
 //-----------------------------------------------------------------------------
-void dolfinx_contact::pull_back(dolfinx_contact::mdspan3_t J,
-                                dolfinx_contact::mdspan3_t K,
-                                std::span<double> detJ, std::span<double> X,
-                                dolfinx_contact::cmdspan2_t x,
-                                dolfinx_contact::cmdspan2_t coordinate_dofs,
-                                const dolfinx::fem::CoordinateElement& cmap)
+void dolfinx_contact::pull_back(
+    dolfinx_contact::mdspan3_t J, dolfinx_contact::mdspan3_t K,
+    std::span<double> detJ, std::span<double> X, dolfinx_contact::cmdspan2_t x,
+    dolfinx_contact::cmdspan2_t coordinate_dofs,
+    const dolfinx::fem::CoordinateElement<double>& cmap)
 {
   const std::size_t num_points = x.extent(0);
   assert(J.extent(0) >= num_points);
@@ -50,26 +49,27 @@ void dolfinx_contact::pull_back(dolfinx_contact::mdspan3_t J,
 
     // Compute Jacobian at origin of reference element
     auto J0 = stdex::submdspan(J, 0, stdex::full_extent, stdex::full_extent);
-    dolfinx::fem::CoordinateElement::compute_jacobian(dphi0, coordinate_dofs,
-                                                      J0);
+    dolfinx::fem::CoordinateElement<double>::compute_jacobian(
+        dphi0, coordinate_dofs, J0);
 
     for (std::size_t j = 0; j < K.extent(1); ++j)
       for (std::size_t k = 0; k < K.extent(2); ++k)
         K(0, j, k) = 0;
     // Compute inverse Jacobian
     auto K0 = stdex::submdspan(K, 0, stdex::full_extent, stdex::full_extent);
-    dolfinx::fem::CoordinateElement::compute_jacobian_inverse(J0, K0);
+    dolfinx::fem::CoordinateElement<double>::compute_jacobian_inverse(J0, K0);
 
     // Compute determinant
-    detJ[0] = dolfinx::fem::CoordinateElement::compute_jacobian_determinant(
-        J0, detJ_scratch);
+    detJ[0]
+        = dolfinx::fem::CoordinateElement<double>::compute_jacobian_determinant(
+            J0, detJ_scratch);
 
     // Pull back all physical coordinates
     std::array<double, 3> x0 = {0, 0, 0};
     for (std::size_t i = 0; i < coordinate_dofs.extent(1); ++i)
       x0[i] += coordinate_dofs(0, i);
     dolfinx_contact::mdspan2_t Xs(X.data(), num_points, tdim);
-    dolfinx::fem::CoordinateElement::pull_back_affine(Xs, K0, x0, x);
+    dolfinx::fem::CoordinateElement<double>::pull_back_affine(Xs, K0, x0, x);
 
     // Copy Jacobian, inverse and determinant to all other inputs
     for (std::size_t p = 1; p < num_points; ++p)
@@ -111,12 +111,12 @@ void dolfinx_contact::pull_back(dolfinx_contact::mdspan3_t J,
       auto _J = stdex::submdspan(J, p, stdex::full_extent, stdex::full_extent);
       auto dphi = stdex::submdspan(c_basis, std::pair{1, tdim + 1}, p,
                                    stdex::full_extent, 0);
-      dolfinx::fem::CoordinateElement::compute_jacobian(dphi, coordinate_dofs,
-                                                        _J);
+      dolfinx::fem::CoordinateElement<double>::compute_jacobian(
+          dphi, coordinate_dofs, _J);
       auto _K = stdex::submdspan(K, p, stdex::full_extent, stdex::full_extent);
-      dolfinx::fem::CoordinateElement::compute_jacobian_inverse(_J, _K);
-      detJ[p] = dolfinx::fem::CoordinateElement::compute_jacobian_determinant(
-          _J, detJ_scratch);
+      dolfinx::fem::CoordinateElement<double>::compute_jacobian_inverse(_J, _K);
+      detJ[p] = dolfinx::fem::CoordinateElement<
+          double>::compute_jacobian_determinant(_J, detJ_scratch);
     }
   }
 }
@@ -178,7 +178,7 @@ void dolfinx_contact::update_geometry(
       = cell_map->size_local() + cell_map->num_ghosts();
 
   // Get dof array and retrieve u at the mesh dofs
-  const dolfinx::graph::AdjacencyList<std::int32_t>& dofmap_x
+  stdex::mdspan<const std::int32_t, stdex::dextents<std::size_t, 2>> dofmap_x
       = mesh->geometry().dofmap();
   const int bs = dofmap->bs();
   const auto& u_data = u.x()->array();
@@ -187,7 +187,7 @@ void dolfinx_contact::update_geometry(
   for (std::int32_t c = 0; c < num_cells; ++c)
   {
     const std::span<const int> dofs = dofmap->cell_dofs(c);
-    const std::span<const int> dofs_x = dofmap_x.links(c);
+    auto dofs_x = stdex::submdspan(dofmap_x, c, stdex::full_extent);
     for (std::size_t i = 0; i < dofs.size(); ++i)
       for (int j = 0; j < bs; ++j)
       {
@@ -215,7 +215,8 @@ std::array<std::size_t, 4> dolfinx_contact::evaluate_basis_shape(
   // Get element
   assert(V.element());
   std::size_t gdim = V.mesh()->geometry().dim();
-  std::shared_ptr<const dolfinx::fem::FiniteElement> element = V.element();
+  std::shared_ptr<const dolfinx::fem::FiniteElement<double>> element
+      = V.element();
   assert(element);
   const int bs_element = element->block_size();
   const std::size_t value_size = element->value_size() / bs_element;
@@ -254,14 +255,15 @@ void dolfinx_contact::evaluate_basis_functions(
 
   // Get geometry data
   std::span<const double> x_g = geometry.x();
-  const dolfinx::graph::AdjacencyList<std::int32_t>& x_dofmap
+  stdex::mdspan<const std::int32_t, stdex::dextents<std::size_t, 2>> x_dofmap
       = geometry.dofmap();
-  const dolfinx::fem::CoordinateElement& cmap = geometry.cmaps()[0];
+  const dolfinx::fem::CoordinateElement<double>& cmap = geometry.cmaps()[0];
   const std::size_t num_dofs_g = cmap.dim();
 
   // Get element
   assert(V.element());
-  std::shared_ptr<const dolfinx::fem::FiniteElement> element = V.element();
+  std::shared_ptr<const dolfinx::fem::FiniteElement<double>> element
+      = V.element();
   assert(element);
   const int bs_element = element->block_size();
   const std::size_t reference_value_size
@@ -305,11 +307,12 @@ void dolfinx_contact::evaluate_basis_functions(
                               auto&& X, const auto& cell_geometry, auto&& J,
                               auto&& K, const auto& x) mutable
   {
-    dolfinx::fem::CoordinateElement::compute_jacobian(dphi_0, cell_geometry, J);
-    dolfinx::fem::CoordinateElement::compute_jacobian_inverse(J, K);
+    dolfinx::fem::CoordinateElement<double>::compute_jacobian(dphi_0,
+                                                              cell_geometry, J);
+    dolfinx::fem::CoordinateElement<double>::compute_jacobian_inverse(J, K);
     for (std::size_t i = 0; i < cell_geometry.extent(1); ++i)
       x0[i] = cell_geometry(0, i);
-    dolfinx::fem::CoordinateElement::pull_back_affine(X, K, x0, x);
+    dolfinx::fem::CoordinateElement<double>::pull_back_affine(X, K, x0, x);
   };
 
   // Create buffer for pull back
@@ -330,10 +333,10 @@ void dolfinx_contact::evaluate_basis_functions(
     // Skip negative cell indices
     if (cell_index < 0)
       continue;
-    assert(cell_index < x_dofmap.num_nodes());
+    assert((std::size_t)cell_index < x_dofmap.extent(0));
 
     // Get cell geometry (coordinate dofs)
-    const std::span<const int> x_dofs = x_dofmap.links(cell_index);
+    auto x_dofs = stdex::submdspan(x_dofmap, cell_index, stdex::full_extent);
     for (std::size_t j = 0; j < num_dofs_g; ++j)
     {
       auto pos = 3 * x_dofs[j];
@@ -349,8 +352,8 @@ void dolfinx_contact::evaluate_basis_functions(
     if (cmap.is_affine())
     {
       pull_back_affine(Xp, coordinate_dofs, _J, _K, xp);
-      detJ[p] = dolfinx::fem::CoordinateElement::compute_jacobian_determinant(
-          _J, detJ_scratch);
+      detJ[p] = dolfinx::fem::CoordinateElement<
+          double>::compute_jacobian_determinant(_J, detJ_scratch);
       assert(std::fabs(detJ[p]) > 1e-10);
     }
     else
@@ -360,11 +363,11 @@ void dolfinx_contact::evaluate_basis_functions(
                     basisb);
       auto dphi = stdex::submdspan(basis, std::pair{1, tdim + 1}, 0,
                                    stdex::full_extent, 0);
-      dolfinx::fem::CoordinateElement::compute_jacobian(dphi, coordinate_dofs,
-                                                        _J);
-      dolfinx::fem::CoordinateElement::compute_jacobian_inverse(_J, _K);
-      detJ[p] = dolfinx::fem::CoordinateElement::compute_jacobian_determinant(
-          _J, detJ_scratch);
+      dolfinx::fem::CoordinateElement<double>::compute_jacobian(
+          dphi, coordinate_dofs, _J);
+      dolfinx::fem::CoordinateElement<double>::compute_jacobian_inverse(_J, _K);
+      detJ[p] = dolfinx::fem::CoordinateElement<
+          double>::compute_jacobian_determinant(_J, detJ_scratch);
       assert(std::fabs(detJ[p]) > 1e-10);
     }
   }
@@ -472,14 +475,15 @@ double dolfinx_contact::compute_facet_jacobian(
   for (std::size_t i = 0; i < J.extent(0); ++i)
     for (std::size_t j = 0; j < J.extent(1); ++j)
       J(i, j) = 0;
-  dolfinx::fem::CoordinateElement::compute_jacobian(dphi, coordinate_dofs, J);
-  dolfinx::fem::CoordinateElement::compute_jacobian_inverse(J, K);
+  dolfinx::fem::CoordinateElement<double>::compute_jacobian(dphi,
+                                                            coordinate_dofs, J);
+  dolfinx::fem::CoordinateElement<double>::compute_jacobian_inverse(J, K);
   for (std::size_t i = 0; i < J_tot.extent(0); ++i)
     for (std::size_t j = 0; j < J_tot.extent(1); ++j)
       J_tot(i, j) = 0;
   dolfinx::math::dot(J, J_f, J_tot);
   return std::fabs(
-      dolfinx::fem::CoordinateElement::compute_jacobian_determinant(
+      dolfinx::fem::CoordinateElement<double>::compute_jacobian_determinant(
           J_tot, detJ_scratch));
 }
 //-------------------------------------------------------------------------------------
@@ -488,7 +492,7 @@ std::function<double(
     dolfinx_contact::mdspan2_t, std::span<double>, dolfinx_contact::cmdspan2_t,
     dolfinx_contact::s_cmdspan2_t, dolfinx_contact::cmdspan2_t)>
 dolfinx_contact::get_update_jacobian_dependencies(
-    const dolfinx::fem::CoordinateElement& cmap)
+    const dolfinx::fem::CoordinateElement<double>& cmap)
 {
   if (cmap.is_affine())
   {
@@ -522,7 +526,8 @@ dolfinx_contact::get_update_jacobian_dependencies(
 //-------------------------------------------------------------------------------------
 std::function<void(std::span<double>, dolfinx_contact::cmdspan2_t,
                    dolfinx_contact::cmdspan2_t, const std::size_t)>
-dolfinx_contact::get_update_normal(const dolfinx::fem::CoordinateElement& cmap)
+dolfinx_contact::get_update_normal(
+    const dolfinx::fem::CoordinateElement<double>& cmap)
 {
   if (cmap.is_affine())
   {
@@ -640,7 +645,8 @@ dolfinx_contact::entities_to_geometry_dofs(
       = geometry.cmaps()[0].create_dof_layout();
   // FIXME: What does this return for prisms?
   const std::size_t num_entity_dofs = layout.num_entity_closure_dofs(dim);
-  const graph::AdjacencyList<std::int32_t>& xdofs = geometry.dofmap();
+  stdex::mdspan<const std::int32_t, stdex::dextents<std::size_t, 2>> xdofs
+      = geometry.dofmap();
 
   auto topology = mesh.topology();
   const int tdim = topology->dim();
@@ -678,7 +684,7 @@ dolfinx_contact::entities_to_geometry_dofs(
     const std::vector<std::int32_t>& entity_dofs
         = closure_dofs[dim][local_entity];
 
-    auto xc = xdofs.links(cell);
+    auto xc = stdex::submdspan(xdofs, cell, stdex::full_extent);
     assert(num_entity_dofs <= xc.size());
     for (std::size_t j = 0; j < num_entity_dofs; ++j)
       geometry_indices[i * num_entity_dofs + j] = xc[entity_dofs[j]];
@@ -820,9 +826,9 @@ void dolfinx_contact::compute_physical_points(
   // Geometrical info
   const dolfinx::mesh::Geometry<double>& geometry = mesh.geometry();
   std::span<const double> mesh_geometry = geometry.x();
-  const dolfinx::fem::CoordinateElement& cmap = geometry.cmaps()[0];
+  const dolfinx::fem::CoordinateElement<double>& cmap = geometry.cmaps()[0];
   const std::size_t num_dofs_g = cmap.dim();
-  const dolfinx::graph::AdjacencyList<std::int32_t>& x_dofmap
+  stdex::mdspan<const std::int32_t, stdex::dextents<std::size_t, 2>> x_dofmap
       = geometry.dofmap();
   const int gdim = geometry.dim();
 
@@ -841,7 +847,7 @@ void dolfinx_contact::compute_physical_points(
                                               num_dofs_g, gdim);
   for (std::size_t i = 0; i < facets.size(); i += 2)
   {
-    auto x_dofs = x_dofmap.links(facets[i]);
+    auto x_dofs = stdex::submdspan(x_dofmap, facets[i], stdex::full_extent);
     assert(x_dofs.size() == num_dofs_g);
     for (std::size_t j = 0; j < num_dofs_g; ++j)
     {
@@ -856,7 +862,8 @@ void dolfinx_contact::compute_physical_points(
                                   stdex::full_extent, (std::size_t)0);
     auto qp = stdex::submdspan(all_qps, i / 2, stdex::full_extent,
                                stdex::full_extent);
-    dolfinx::fem::CoordinateElement::push_forward(qp, coordinate_dofs, phi_f);
+    dolfinx::fem::CoordinateElement<double>::push_forward(qp, coordinate_dofs,
+                                                          phi_f);
   }
 }
 
@@ -873,7 +880,7 @@ dolfinx_contact::compute_distance_map(
 {
   dolfinx::common::Timer t("~Contact: compute distance map");
   const dolfinx::mesh::Geometry<double>& geometry = quadrature_mesh.geometry();
-  const dolfinx::fem::CoordinateElement& cmap = geometry.cmaps()[0];
+  const dolfinx::fem::CoordinateElement<double>& cmap = geometry.cmaps()[0];
 
   const std::size_t gdim = geometry.dim();
   auto topology = quadrature_mesh.topology();

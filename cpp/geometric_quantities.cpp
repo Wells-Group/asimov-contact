@@ -9,7 +9,7 @@
 using namespace dolfinx_contact;
 
 std::vector<double> dolfinx_contact::allocate_pull_back_nonaffine(
-    const dolfinx::fem::CoordinateElement& cmap, int gdim, int tdim)
+    const dolfinx::fem::CoordinateElement<double>& cmap, int gdim, int tdim)
 {
   const std::array<std::size_t, 4> c_shape = cmap.tabulate_shape(1, 1);
   const std::size_t basis_size
@@ -19,7 +19,8 @@ std::vector<double> dolfinx_contact::allocate_pull_back_nonaffine(
 
 void dolfinx_contact::pull_back_nonaffine(
     std::span<double> X, std::span<double> work_array,
-    std::span<const double> x, const dolfinx::fem::CoordinateElement& cmap,
+    std::span<const double> x,
+    const dolfinx::fem::CoordinateElement<double>& cmap,
     cmdspan2_t cell_geometry, double tol, const int max_it)
 {
   assert((std::size_t)cmap.dim() == cell_geometry.extent(0));
@@ -60,8 +61,9 @@ void dolfinx_contact::pull_back_nonaffine(
               0.0);
     auto dphi = stdex::submdspan(basis_values, std::pair{1, tdim + 1}, 0,
                                  stdex::full_extent, 0);
-    dolfinx::fem::CoordinateElement::compute_jacobian(dphi, cell_geometry, J);
-    dolfinx::fem::CoordinateElement::compute_jacobian_inverse(J, K);
+    dolfinx::fem::CoordinateElement<double>::compute_jacobian(dphi,
+                                                              cell_geometry, J);
+    dolfinx::fem::CoordinateElement<double>::compute_jacobian_inverse(J, K);
 
     // Compute dXk = K (x-xk)
     std::fill(dX.begin(), dX.end(), 0.0);
@@ -92,7 +94,8 @@ void dolfinx_contact::pull_back_nonaffine(
 std::array<double, 3> dolfinx_contact::push_forward_facet_normal(
     std::span<double> work_array, std::span<const double> x, std::size_t gdim,
     std::size_t tdim, cmdspan2_t coordinate_dofs, const std::size_t facet_index,
-    const dolfinx::fem::CoordinateElement& cmap, cmdspan2_t reference_normals)
+    const dolfinx::fem::CoordinateElement<double>& cmap,
+    cmdspan2_t reference_normals)
 {
   const std::array<std::size_t, 4> c_shape = cmap.tabulate_shape(1, 1);
   const std::size_t basis_size
@@ -117,8 +120,9 @@ std::array<double, 3> dolfinx_contact::push_forward_facet_normal(
 
     auto dphi = stdex::submdspan(basis_values, std::pair{1, tdim + 1}, 0,
                                  stdex::full_extent, 0);
-    dolfinx::fem::CoordinateElement::compute_jacobian(dphi, coordinate_dofs, J);
-    dolfinx::fem::CoordinateElement::compute_jacobian_inverse(J, K);
+    dolfinx::fem::CoordinateElement<double>::compute_jacobian(
+        dphi, coordinate_dofs, J);
+    dolfinx::fem::CoordinateElement<double>::compute_jacobian_inverse(J, K);
   }
   else
   {
@@ -133,8 +137,9 @@ std::array<double, 3> dolfinx_contact::push_forward_facet_normal(
               0.0);
     auto dphi = stdex::submdspan(basis_values, std::pair{1, tdim + 1}, 0,
                                  stdex::full_extent, 0);
-    dolfinx::fem::CoordinateElement::compute_jacobian(dphi, coordinate_dofs, J);
-    dolfinx::fem::CoordinateElement::compute_jacobian_inverse(J, K);
+    dolfinx::fem::CoordinateElement<double>::compute_jacobian(
+        dphi, coordinate_dofs, J);
+    dolfinx::fem::CoordinateElement<double>::compute_jacobian_inverse(J, K);
   }
   // Push forward reference facet normal
   std::array<double, 3> normal = {0, 0, 0};
@@ -158,7 +163,8 @@ dolfinx_contact::compute_circumradius(const dolfinx::mesh::Mesh<double>& mesh,
   {
     // Formula for circumradius of a triangle with sides with length a, b, c
     // is R = a b c / (4 A) where A is the area of the triangle
-    const double ref_area = basix::cell::volume(basix::cell::type::triangle);
+    const double ref_area
+        = basix::cell::volume<double>(basix::cell::type::triangle);
     double area = ref_area * std::abs(detJ);
 
     // Compute the lenghts of each side of the cell
@@ -183,7 +189,7 @@ dolfinx_contact::compute_circumradius(const dolfinx::mesh::Mesh<double>& mesh,
     // circumradius
     // R = sqrt((aA + bB + cC)(aA+bB-cC)(aA-bB+cC)(-aA +bB+cC))/24V
     const double ref_volume
-        = basix::cell::volume(basix::cell::type::tetrahedron);
+        = basix::cell::volume<double>(basix::cell::type::tetrahedron);
     double cellvolume = std::abs(detJ) * ref_volume;
 
     // Edges ordered as a, b, c, A, B, C
