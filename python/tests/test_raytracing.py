@@ -40,7 +40,7 @@ def test_raytracing_3D(cell_type):
         assert integral_pairs[cell_idx][0] == closest_cell
 
         # Compute actual distance between cell and point using GJK
-        cell_dofs = mesh.geometry.dofmap.links(closest_cell)
+        cell_dofs = mesh.geometry.dofmap[closest_cell, :]
         cell_geometry = np.empty((len(cell_dofs), 3), dtype=np.float64)
         for i, dof in enumerate(cell_dofs):
             cell_geometry[i, :] = mesh.geometry.x[dof, :]
@@ -73,7 +73,7 @@ def test_raytracing_3D_corner(cell_type):
             bb_tree, midpoint_tree, mesh, np.reshape(origin, (1, 3)))[0]
 
         # Compute actual distance between cell and point using GJK
-        cell_dofs = mesh.geometry.dofmap.links(closest_cell)
+        cell_dofs = mesh.geometry.dofmap[closest_cell, :]
         cell_geometry = np.empty((len(cell_dofs), 3), dtype=np.float64)
         for i, dof in enumerate(cell_dofs):
             cell_geometry[i, :] = mesh.geometry.x[dof, :]
@@ -108,7 +108,7 @@ def test_raytracing_2D(cell_type):
         assert integral_pairs[cell_idx][0] == closest_cell
 
         # Compute actual distance between cell and point using GJK
-        cell_dofs = mesh.geometry.dofmap.links(closest_cell)
+        cell_dofs = mesh.geometry.dofmap[closest_cell, :]
         cell_geometry = np.empty((len(cell_dofs), 3), dtype=np.float64)
         for i, dof in enumerate(cell_dofs):
             cell_geometry[i, :] = mesh.geometry.x[dof, :]
@@ -142,7 +142,7 @@ def test_raytracing_2D_corner(cell_type):
             bb_tree, midpoint_tree, mesh, op)[0]
 
         # Compute actual distance between cell and point using GJK
-        cell_dofs = mesh.geometry.dofmap.links(closest_cell)
+        cell_dofs = mesh.geometry.dofmap[closest_cell, :]
         cell_geometry = np.empty((len(cell_dofs), 3), dtype=np.float64)
         for i, dof in enumerate(cell_dofs):
             cell_geometry[i, :] = mesh.geometry.x[dof, :]
