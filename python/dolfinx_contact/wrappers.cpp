@@ -208,6 +208,11 @@ PYBIND11_MODULE(cpp, m)
              const dolfinx_contact::SubMesh& submesh = self.submesh();
              return submesh.mesh();
            })
+      .def("copy_to_submesh",
+          [] (dolfinx_contact::Contact& self, std::shared_ptr<dolfinx::fem::Function<PetscScalar>> u, std::shared_ptr<dolfinx::fem::Function<PetscScalar>> u_sub){
+              dolfinx_contact::SubMesh submesh = self.submesh();
+              submesh.copy_function(*u, *u_sub);
+          })
       .def("coefficients_size", &dolfinx_contact::Contact::coefficients_size,
            py::arg("meshtie"))
       .def("set_quadrature_rule",
