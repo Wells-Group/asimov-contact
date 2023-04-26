@@ -17,7 +17,7 @@ dolfinx_contact::KernelData::KernelData(
   assert(mesh);
   // Get mesh info
   const dolfinx::mesh::Geometry<double>& geometry = mesh->geometry();
-  const dolfinx::fem::CoordinateElement& cmap = geometry.cmaps()[0];
+  const dolfinx::fem::CoordinateElement<double>& cmap = geometry.cmaps()[0];
 
   _affine = cmap.is_affine();
   _num_coordinate_dofs = cmap.dim();
@@ -32,7 +32,7 @@ dolfinx_contact::KernelData::KernelData(
   const std::size_t num_quadrature_pts = _q_weights.size();
 
   // Extract function space data (assuming same test and trial space)
-  std::shared_ptr<const dolfinx::fem::FiniteElement> element = V->element();
+  std::shared_ptr<const dolfinx::fem::FiniteElement<double>> element = V->element();
   std::shared_ptr<const dolfinx::fem::DofMap> dofmap = V->dofmap();
   _ndofs_cell = dofmap->element_dof_layout().num_dofs();
   _bs = dofmap->bs();
@@ -59,7 +59,7 @@ dolfinx_contact::KernelData::KernelData(
   }
 
   /// Pack test and trial functions
-  const basix::FiniteElement& basix_element = element->basix_element();
+  const basix::FiniteElement<double>& basix_element = element->basix_element();
   _basis_shape = basix_element.tabulate_shape(1, num_quadrature_pts);
   _basis_values = std::vector<double>(std::reduce(
       _basis_shape.begin(), _basis_shape.end(), 1, std::multiplies{}));
@@ -82,11 +82,11 @@ dolfinx_contact::KernelData::KernelData(
   basix::cell::type basix_cell = dolfinx::mesh::cell_type_to_basix_type(
       mesh->topology()->cell_types()[0]);
   std::tie(_ref_jacobians, _jac_shape)
-      = basix::cell::facet_jacobians(basix_cell);
+      = basix::cell::facet_jacobians<double>(basix_cell);
 
   // Get facet normals on reference cell
   std::tie(_facet_normals, _normals_shape)
-      = basix::cell::facet_outward_normals(basix_cell);
+      = basix::cell::facet_outward_normals<double>(basix_cell);
 
   // Get update Jacobian function (for each quadrature point)
   _update_jacobian = dolfinx_contact::get_update_jacobian_dependencies(cmap);

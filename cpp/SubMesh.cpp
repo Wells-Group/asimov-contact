@@ -133,14 +133,18 @@ dolfinx_contact::SubMesh::create_functionspace(
     std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V_parent) const
 {
   // get element and element_dof_layout from parent mesh
-  std::shared_ptr<const dolfinx::fem::FiniteElement> element
+  std::shared_ptr<const dolfinx::fem::FiniteElement<double>> element
       = V_parent->element();
   const dolfinx::fem::ElementDofLayout& element_dof_layout
       = V_parent->dofmap()->element_dof_layout();
   // use parent mesh data and submesh comm/topology to create new dofmap
+  std::function<void(const std::span<std::int32_t>&, std::uint32_t)>
+      unpermute_dofs = nullptr;
+  if (element->needs_dof_permutations())
+    unpermute_dofs = element->get_dof_permutation_function(true, true);
   auto dofmap = std::make_shared<dolfinx::fem::DofMap>(
       dolfinx::fem::create_dofmap(_mesh->comm(), element_dof_layout,
-                                  *_mesh->topology(), nullptr, *element));
+                                  *_mesh->topology(), unpermute_dofs, nullptr));
   // create and return function space
   return dolfinx::fem::FunctionSpace(_mesh, element, dofmap);
 }
