@@ -1,4 +1,4 @@
-# Copyright (C) 2021 Jørgen S. Dokken
+# Copyright (C) 2023 Jørgen S. Dokken and Sarah Roggendorf
 #
 # SPDX-License-Identifier:    MIT
 
@@ -12,31 +12,38 @@ __all__ = ["create_circle_plane_mesh", "create_circle_circle_mesh", "create_box_
            "create_cylinder_cylinder_mesh", "create_2D_rectangle_split"]
 
 
-def create_circle_plane_mesh(filename: str, quads: bool = False, res=0.1, order: int = 1):
+def create_circle_plane_mesh(filename: str, quads: bool = False, res=0.1, order: int = 1,
+                             r: float = 0.25, H: float = 0.25, L: float = 1.0, gap: float = 0.01):
     """
-    Create a circular mesh, with center at (0.0,0.0,0) with radius 0.25 and a box [-0.5,0.5]x[-0.5,-0.25]
+    Create a circular mesh, with center at (0.0,0.0,0) with radius r 
+    and a box [-L/2, L/2]x[-H-gap-r,-gap-r]
     """
     center = [0, 0, 0]
-    # r = 0.25
     gmsh.initialize()
     if MPI.COMM_WORLD.rank == 0:
         # Create circular mesh (divided into 4 segments)
         c = gmsh.model.occ.addPoint(center[0], center[1], center[2])
-        pin_pt = gmsh.model.occ.addPoint(0.0, 0.1, 0.0)
-        left = gmsh.model.occ.addPoint(-0.25, 0, 0)
-        right = gmsh.model.occ.addPoint(0.25, 0, 0)
+        contact_pt = gmsh.model.occ.addPoint(center[0], center[1]-r, center[2])
+        left = gmsh.model.occ.addPoint(-r, 0, 0)
+        right = gmsh.model.occ.addPoint(r, 0, 0)
+        angle = np.pi / 3
+        top_left = gmsh.model.occ.addPoint(-r * np.cos(angle), r * np.sin(angle), 0)
+        top_right = gmsh.model.occ.addPoint(r * np.cos(angle), r * np.sin(angle), 0)
 
-        arcs = [gmsh.model.occ.addLine(
-            left, right), gmsh.model.occ.addCircleArc(
+        arcs = [gmsh.model.occ.addCircleArc(
+            left, c, top_left), gmsh.model.occ.addCircleArc(
+            top_left, c, top_right), gmsh.model.occ.addCircleArc(
+            top_right, c, right), gmsh.model.occ.addCircleArc(
             right, c, left)]
         curve = gmsh.model.occ.addCurveLoop(arcs)
         gmsh.model.occ.synchronize()
+
         surface = gmsh.model.occ.addPlaneSurface([curve])
-        # Create boxpy
-        p0 = gmsh.model.occ.addPoint(-0.5, -0.5, 0)
-        p1 = gmsh.model.occ.addPoint(0.5, -0.5, 0)
-        p2 = gmsh.model.occ.addPoint(0.5, -0.25, 0)
-        p3 = gmsh.model.occ.addPoint(-0.5, -0.25, 0)
+        # Create box
+        p0 = gmsh.model.occ.addPoint(-L/2, -H-r-gap, 0)
+        p1 = gmsh.model.occ.addPoint(L/2, -H-r-gap, 0)
+        p2 = gmsh.model.occ.addPoint(L/2, -r-gap, 0)
+        p3 = gmsh.model.occ.addPoint(-L/2, -r-gap, 0)
         ps = [p0, p1, p2, p3]
         lines = [gmsh.model.occ.addLine(ps[i - 1], ps[i]) for i in range(len(ps))]
         curve2 = gmsh.model.occ.addCurveLoop(lines)
@@ -52,15 +59,13 @@ def create_circle_plane_mesh(filename: str, quads: bool = False, res=0.1, order:
         [gmsh.model.addPhysicalGroup(1, [arc]) for arc in arcs]
 
         gmsh.model.mesh.field.add("Distance", 1)
-        gmsh.model.mesh.field.setNumbers(1, "NodesList", [c])
-
+        gmsh.model.mesh.field.setNumbers(1, "NodesList", [contact_pt])
         gmsh.model.mesh.field.add("Threshold", 2)
         gmsh.model.mesh.field.setNumber(2, "IField", 1)
-        gmsh.model.mesh.field.setNumber(2, "LcMin", res)
+        gmsh.model.mesh.field.setNumber(2, "LcMin", 0.5*res)
         gmsh.model.mesh.field.setNumber(2, "LcMax", 2 * res)
-        gmsh.model.mesh.field.setNumber(2, "DistMin", 0.3)
-        gmsh.model.mesh.field.setNumber(2, "DistMax", 0.6)
-        gmsh.model.mesh.embed(0, [c, pin_pt], 2, 1)
+        gmsh.model.mesh.field.setNumber(2, "DistMin", r/2)
+        gmsh.model.mesh.field.setNumber(2, "DistMax", r)
         if quads:
             gmsh.option.setNumber("Mesh.RecombinationAlgorithm", 8)
             gmsh.option.setNumber("Mesh.RecombineAll", 2)
@@ -76,7 +81,7 @@ def create_circle_plane_mesh(filename: str, quads: bool = False, res=0.1, order:
     gmsh.finalize()
 
 
-def create_halfdisk_plane_mesh(filename: str, res=0.1, order: int = 1, quads=False, r=0.25, H=0.25, L=1.0):
+def create_halfdisk_plane_mesh(filename: str, res=0.1, order: int = 1, quads=False, r=0.25, H=0.25, L=1.0, gap=0.01):
     """
     Create a circular mesh, with center at (0.0,0.0,0) with radius 0.25 and a box [-0.5,0.5]x[-0.5,-0.25]
     """
@@ -85,26 +90,20 @@ def create_halfdisk_plane_mesh(filename: str, res=0.1, order: int = 1, quads=Fal
     if MPI.COMM_WORLD.rank == 0:
         # Create circular mesh (divided into 4 segments)
         c = gmsh.model.occ.addPoint(center[0], center[1], center[2])
-        pin_pt = gmsh.model.occ.addPoint(0.0, r/5.0, 0.0)
+        pt_refine = gmsh.model.occ.addPoint(0.0, -r, 0.0)
         left = gmsh.model.occ.addPoint(-r, 0, 0)
         right = gmsh.model.occ.addPoint(r, 0, 0)
-        angle = np.pi / 3
-        top_left = gmsh.model.occ.addPoint(-r * np.cos(angle), r * np.sin(angle), 0)
-        top_right = gmsh.model.occ.addPoint(r * np.cos(angle), r * np.sin(angle), 0)
+        arc = gmsh.model.occ.addCircleArc(right, c, left)
+        line = gmsh.model.occ.addLine(left, right)
 
-        arcs = [gmsh.model.occ.addCircleArc(
-            left, c, top_left), gmsh.model.occ.addCircleArc(
-            top_left, c, top_right), gmsh.model.occ.addCircleArc(
-            top_right, c, right), gmsh.model.occ.addCircleArc(
-            right, c, left)]
-        curve = gmsh.model.occ.addCurveLoop(arcs)
+        curve = gmsh.model.occ.addCurveLoop([arc, line])
         gmsh.model.occ.synchronize()
         surface = gmsh.model.occ.addPlaneSurface([curve])
         # Create boxpy
-        p0 = gmsh.model.occ.addPoint(-L/2, -r-H, 0)
-        p1 = gmsh.model.occ.addPoint(L/2, -r-H, 0)
-        p2 = gmsh.model.occ.addPoint(L/2, -r, 0)
-        p3 = gmsh.model.occ.addPoint(-L/2, -r, 0)
+        p0 = gmsh.model.occ.addPoint(-L/2, -r-H-gap, 0)
+        p1 = gmsh.model.occ.addPoint(L/2, -r-H-gap, 0)
+        p2 = gmsh.model.occ.addPoint(L/2, -r-gap, 0)
+        p3 = gmsh.model.occ.addPoint(-L/2, -r-gap, 0)
         ps = [p0, p1, p2, p3]
         lines = [gmsh.model.occ.addLine(ps[i - 1], ps[i]) for i in range(len(ps))]
         curve2 = gmsh.model.occ.addCurveLoop(lines)
@@ -117,18 +116,18 @@ def create_halfdisk_plane_mesh(filename: str, res=0.1, order: int = 1, quads=Fal
         gmsh.model.addPhysicalGroup(2, [surface2], tag=2)
         bndry2 = gmsh.model.getBoundary([(2, surface2)], oriented=False)
         [gmsh.model.addPhysicalGroup(b[0], [b[1]]) for b in bndry2]
-        [gmsh.model.addPhysicalGroup(1, [arc]) for arc in arcs]
+        gmsh.model.addPhysicalGroup(1, [arc])
+        gmsh.model.addPhysicalGroup(1, [line])
 
         gmsh.model.mesh.field.add("Distance", 1)
-        gmsh.model.mesh.field.setNumbers(1, "NodesList", [c])
+        gmsh.model.mesh.field.setNumbers(1, "NodesList", [pt_refine])
 
         gmsh.model.mesh.field.add("Threshold", 2)
         gmsh.model.mesh.field.setNumber(2, "IField", 1)
-        gmsh.model.mesh.field.setNumber(2, "LcMin", res)
+        gmsh.model.mesh.field.setNumber(2, "LcMin", 0.5*res)
         gmsh.model.mesh.field.setNumber(2, "LcMax", 2 * res)
-        gmsh.model.mesh.field.setNumber(2, "DistMin", 0.3)
-        gmsh.model.mesh.field.setNumber(2, "DistMax", 0.6)
-        gmsh.model.mesh.embed(0, [c, pin_pt], 2, 1)
+        gmsh.model.mesh.field.setNumber(2, "DistMin", r/2)
+        gmsh.model.mesh.field.setNumber(2, "DistMax", r)
         gmsh.model.mesh.field.setAsBackgroundMesh(2)
         if quads:
             gmsh.option.setNumber("Mesh.RecombinationAlgorithm", 8)
