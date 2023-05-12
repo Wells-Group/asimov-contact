@@ -4,23 +4,19 @@
 
 import argparse
 
-import matplotlib.pyplot as plt
-
 import numpy as np
 import ufl
 from dolfinx.io import XDMFFile
-from dolfinx.fem import (Constant, Expression, Function, FunctionSpace, IntegralType,
-                         VectorFunctionSpace, locate_dofs_topological, form,
-                         assemble_scalar)
+from dolfinx.fem import (Constant, Function, FunctionSpace, VectorFunctionSpace,
+                         locate_dofs_topological, form, assemble_scalar)
 from dolfinx.graph import create_adjacencylist
 from dolfinx.mesh import locate_entities
 from mpi4py import MPI
 from petsc4py.PETSc import ScalarType
 
 from dolfinx_contact.helpers import (epsilon, sigma_func, lame_parameters)
-from dolfinx_contact.meshing import (convert_mesh, 
+from dolfinx_contact.meshing import (convert_mesh,
                                      create_2D_rectangle_split)
-import dolfinx_contact
 from dolfinx_contact.cpp import ContactMode
 from dolfinx_contact.unbiased.nitsche_unbiased import nitsche_unbiased
 
@@ -53,7 +49,6 @@ if __name__ == "__main__":
     create_2D_rectangle_split(filename=f"{fname}.msh", res=args.res, order=args.order, quads=not simplex, gap=gap)
     convert_mesh(fname, f"{fname}.xdmf", gdim=2)
 
-
     with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
         mesh = xdmf.read_mesh()
         domain_marker = xdmf.read_meshtags(mesh, name="cell_marker")
@@ -73,10 +68,10 @@ if __name__ == "__main__":
     L = 0.5
     H = 0.5
     dirichlet_nodes = locate_entities(mesh, 0, lambda x: np.logical_and(
-            np.isclose(x[1], 0.5*H), np.logical_or(np.isclose(x[0], 2*L+gap-args.res/5), np.isclose(x[0], 2*L+gap-args.res/10))))
+        np.isclose(x[1], 0.5 * H), np.logical_or(np.isclose(x[0], 2 * L + gap - args.res / 5),
+                                                 np.isclose(x[0], 2 * L + gap - args.res / 10))))
     print(dirichlet_nodes)
     dirichlet_dofs2 = locate_dofs_topological(V.sub(1), 0, dirichlet_nodes)
-    # dirichlet_dofs2 = locate_dofs_topological(V, mesh.topology.dim - 1, facet_marker.find(dirichlet_bdy_2))
     bc_fns = [Constant(mesh, ScalarType((0, 0))), Constant(mesh, ScalarType(0.0))]
 
     bcs = ([(dirichlet_dofs1, -1), (dirichlet_dofs2, 1)], bc_fns)
@@ -114,15 +109,14 @@ if __name__ == "__main__":
 
     def _f1(x):
         values = np.zeros((mesh.geometry.dim, x.shape[1]))
-        values[0] = -disp_x*E*0.25*np.pi**2*np.sin(np.pi*x[0]/2)
+        values[0] = -disp_x * E * 0.25 * np.pi**2 * np.sin(np.pi * x[0] / 2)
         return values
-    
+
     def _f2(x):
         values = np.zeros((mesh.geometry.dim, x.shape[1]))
-        values[0] = -disp_x*E*0.25*np.pi**2*np.sin(np.pi*(x[0]-gap)/2)
+        values[0] = -disp_x * E * 0.25 * np.pi**2 * np.sin(np.pi * (x[0] - gap) / 2)
         return values
-    
-    
+
     f = Function(V)
     cells_right = domain_marker.find(2)
     cells_left = domain_marker.find(1)
@@ -133,43 +127,47 @@ if __name__ == "__main__":
     # body forces
     F -= ufl.inner(f, v) * dx
 
-    problem_parameters = {"mu": mu, "lambda": lmbda, "gamma": 1000*E, "theta": -1}
-
+    problem_parameters = {"gamma": np.float64(E * 1000), "theta": np.float64(-1)}
+    V0 = FunctionSpace(mesh, ("DG", 0))
+    mu0 = Function(V0)
+    lmbda0 = Function(V0)
+    mu0.interpolate(lambda x: np.full((1, x.shape[1]), mu))
+    lmbda0.interpolate(lambda x: np.full((1, x.shape[1]), lmbda))
     # create initial guess
+
     def _u_initial(x):
         values = np.zeros((mesh.geometry.dim, x.shape[1]))
-        values[0] = -0.1-gap
+        values[0] = -0.1 - gap
         return values
     u.interpolate(_u_initial, cells_right)
 
-
     search_mode = [ContactMode.ClosestPoint, ContactMode.ClosestPoint]
     # Solve contact problem using Nitsche's method
-    u, newton_its, krylov_iterations, solver_time, contact, pn = nitsche_unbiased(1, ufl_form=F,
-                                                                                  u=u, rhs_fns=[f],
-                                                                                  markers=[domain_marker, facet_marker],
-                                                                                  contact_data=(
-                                                                                      surfaces, contact), bcs=bcs,
-                                                                                  problem_parameters=problem_parameters,
-                                                                                  newton_options=newton_options,
-                                                                                  petsc_options=petsc_options,
-                                                                                  search_method=search_mode,
-                                                                                  outfile=None,
-                                                                                  fname=outname,
-                                                                                  quadrature_degree=args.q_degree,
-                                                                                  search_radius=-1)
-    
+    u, newton_its, krylov_iterations, solver_time = nitsche_unbiased(1, ufl_form=F,
+                                                                     u=u, rhs_fns=[f],
+                                                                     mu=mu0, lmbda=lmbda0,
+                                                                     markers=[domain_marker, facet_marker],
+                                                                     contact_data=(
+                                                                         surfaces, contact), bcs=bcs,
+                                                                     problem_parameters=problem_parameters,
+                                                                     newton_options=newton_options,
+                                                                     petsc_options=petsc_options,
+                                                                     search_method=search_mode,
+                                                                     outfile=None,
+                                                                     fname=outname,
+                                                                     quadrature_degree=args.q_degree,
+                                                                     search_radius=np.float64(-1))
+
     def _exact1(x):
         values = np.zeros((mesh.geometry.dim, x.shape[1]))
-        values[0] = -disp_x*np.sin(np.pi*x[0]/2)
+        values[0] = -disp_x * np.sin(np.pi * x[0] / 2)
         return values
-    
+
     def _exact2(x):
         values = np.zeros((mesh.geometry.dim, x.shape[1]))
-        values[0] = -disp_x*np.sin(np.pi*(x[0]-gap)/2) - gap
+        values[0] = -disp_x * np.sin(np.pi * (x[0] - gap) / 2) - gap
         return values
-    
-    
+
     exact = Function(V)
     exact.interpolate(_exact1, cells_left)
     exact.interpolate(_exact2, cells_right)

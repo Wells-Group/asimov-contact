@@ -100,7 +100,9 @@ if __name__ == "__main__":
         sorted_facets = np.argsort(indices)
         facet_marker = meshtags(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
         # Create Dirichlet bdy conditions
-        bcs = (np.array([[tag, 2]], dtype=np.int32), [_fem.Constant(mesh, _PETSc.ScalarType(0))])
+        dirichlet_dofs = _fem.locate_dofs_topological(V.sub(2), tdim - 1, indices[sorted_facets])
+
+        bcs = ([(dirichlet_dofs, 2)], [_fem.Constant(mesh, _PETSc.ScalarType(0))])
         g = _fem.Constant(mesh, _PETSc.ScalarType((0, 0, 0)))      # zero dirichlet
         t = _fem.Constant(mesh, _PETSc.ScalarType((0.2, 0.5, 0)))  # traction
         f = _fem.Constant(mesh, _PETSc.ScalarType((1.0, 0.5, 0)))  # body force
@@ -121,7 +123,7 @@ if __name__ == "__main__":
                 mesh, facet_marker, domain_marker, [marker_offset + i for i in range(2 * split)])
 
         V = _fem.VectorFunctionSpace(mesh, ("CG", 1))
-        bcs = (np.empty(shape=(2, 0), dtype=np.int32), [])
+        bcs = ([(np.empty(shape=(2, 0), dtype=np.int32), -1)], [])
         g = _fem.Constant(mesh, _PETSc.ScalarType((0, 0)))     # zero Dirichlet
         t = _fem.Constant(mesh, _PETSc.ScalarType((0.2, 0.5)))  # traction
         f = _fem.Constant(mesh, _PETSc.ScalarType((1.0, 0.5)))  # body force
@@ -233,7 +235,12 @@ if __name__ == "__main__":
     }
 
     # Solve contact problem using Nitsche's method
-    problem_parameters = {"gamma": E * gamma, "theta": theta, "mu": mu, "lambda": lmbda}
+    problem_parameters = {"gamma": np.float64(E * gamma), "theta": np.float64(theta)}
+    V0 = _fem.FunctionSpace(mesh, ("DG", 0))
+    mu0 = _fem.Function(V0)
+    lmbda0 = _fem.Function(V0)
+    mu0.interpolate(lambda x: np.full((1, x.shape[1]), mu))
+    lmbda0.interpolate(lambda x: np.full((1, x.shape[1]), lmbda))
     solver_outfile = args.outfile if args.ksp else None
     log.set_log_level(log.LogLevel.OFF)
     rhs_fns = [g, t, f]
@@ -245,6 +252,7 @@ if __name__ == "__main__":
         search_mode = [ContactMode.ClosestPoint for i in range(len(contact_pairs))]
     with Timer("~Contact: - all"):
         u1, num_its, krylov_iterations, solver_time = nitsche_unbiased(args.time_steps, ufl_form=F, u=u,
+                                                                       mu=mu0, lmbda=lmbda0,
                                                                        rhs_fns=rhs_fns, markers=mts,
                                                                        contact_data=(surfaces, contact_pairs),
                                                                        bcs=bcs, problem_parameters=problem_parameters,

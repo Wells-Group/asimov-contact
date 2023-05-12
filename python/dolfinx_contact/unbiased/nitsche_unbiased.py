@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier:    MIT
 
-from typing import Optional, Tuple, Union
+from typing import Optional, Tuple, Union, Any
 from dolfinx import common, fem, mesh, io, log, cpp
 import numpy as np
 import numpy.typing as npt
@@ -13,7 +13,7 @@ from petsc4py import PETSc as _PETSc
 import dolfinx_contact
 import dolfinx_contact.cpp
 from dolfinx_contact.helpers import (rigid_motions_nullspace_subdomains, sigma_func)
-from dolfinx_contact.plotting import plot_gap
+from dolfinx_contact.output import write_pressure_xdmf
 
 kt = dolfinx_contact.cpp.Kernel
 
@@ -21,9 +21,9 @@ __all__ = ["nitsche_unbiased"]
 
 
 def setup_newton_solver(F_custom: fem.forms.FormMetaClass, J_custom: fem.forms.FormMetaClass,
-                        bcs: Tuple[npt.NDArray[np.int32], list[Union[fem.Function, fem.Constant]]],
+                        bcs: Tuple[list[Tuple[npt.NDArray[np.int32], int]], list[Union[fem.Function, fem.Constant]]],
                         u: fem.Function, du: fem.Function,
-                        contact: dolfinx_contact.cpp.Contact, markers: list[mesh.meshtags],
+                        contact: dolfinx_contact.cpp.Contact, markers: list[mesh.MeshTags],
                         entities: list[npt.NDArray[np.int32]], quadrature_degree: int,
                         const_coeffs: list[npt.NDArray[np.float64]], consts: npt.NDArray[np.float64],
                         search_method: list[dolfinx_contact.cpp.ContactMode]):
@@ -219,9 +219,9 @@ def update_fns(t: float, fns: list[Union[fem.Function, fem.Constant]],
 
 
 def nitsche_unbiased(steps: int, ufl_form: ufl.Form, u: fem.Function, mu: fem.Function, lmbda: fem.Function,
-                     rhs_fns: list[Union[fem.Function, fem.Constant]], markers: list[mesh.meshtags],
+                     rhs_fns: list[Any], markers: list[mesh.MeshTags],
                      contact_data: Tuple[AdjacencyList_int32, list[Tuple[int, int]]],
-                     bcs: Tuple[npt.NDArray[np.int32], list[Union[fem.Function, fem.Constant]]],
+                     bcs: Tuple[list[Tuple[npt.NDArray[np.int32], int]], list[Union[fem.Function, fem.Constant]]],
                      problem_parameters: dict[str, np.float64],
                      search_method: list[dolfinx_contact.cpp.ContactMode],
                      quadrature_degree: int = 5,
@@ -231,8 +231,10 @@ def nitsche_unbiased(steps: int, ufl_form: ufl.Form, u: fem.Function, mu: fem.Fu
                      newton_options: Optional[dict] = None,
                      outfile: Optional[str] = None,
                      fname: str = "pseudo_time",
-                     search_radius: np.float64 = np.float64(-1.)) -> Tuple[fem.Function, list[int],
-                                                                           list[int], list[float]]:
+                     search_radius: np.float64 = np.float64(-1.),
+                     order=1, simplex=True, pressure_function=None,
+                     projection_coordinates=(0, 0)) -> Tuple[fem.Function, list[int],
+                                                             list[int], list[float]]:
     """
     Use custom kernel to compute the contact problem with two elastic bodies coming into contact.
 
@@ -441,28 +443,9 @@ def nitsche_unbiased(steps: int, ufl_form: ufl.Form, u: fem.Function, mu: fem.Fu
         vtx.write(t)
 
     vtx.close()
+    write_pressure_xdmf(mesh, contact, u, du, contact_pairs, quadrature_degree,
+                        search_method, entities, material, order, simplex, pressure_function,
+                        projection_coordinates)
 
-    # Recover original geometry for pressure computation
-    du.x.array[:] = 0
-    contact.update_submesh_geometry(du._cpp_object)
-
-    # Compute contact pressure on surfaces
-    gdim = mesh.geometry.dim
-    pn = []
-    for i in range(len(contact_pairs)):
-        n_x = contact.pack_nx(i)
-        grad_u = dolfinx_contact.cpp.pack_gradient_quadrature(
-            u._cpp_object, quadrature_degree, entities[i])
-        if search_method[i] == dolfinx_contact.cpp.ContactMode.Raytracing:
-            n_contact = -contact.pack_nx(i)
-        else:
-            n_contact = contact.pack_ny(i)
-
-        num_facets = entities[i].shape[0]
-        num_q_points = n_x.shape[1] // gdim
-        # this assumes mu, lmbda are constant for each body
-        pn.append(dolfinx_contact.cpp.compute_contact_pressure(
-            grad_u, n_x, n_contact, num_q_points, num_facets, gdim, material[i][0, 0], material[i][0, 1]))
-        
     contact.update_submesh_geometry(u._cpp_object)
-    return u, newton_its, krylov_its, timings, contact, pn
+    return u, newton_its, krylov_its, timings

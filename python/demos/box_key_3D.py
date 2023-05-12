@@ -177,7 +177,12 @@ if __name__ == "__main__":
     }
 
     # Solve contact problem using Nitsche's method
-    problem_parameters = {"gamma": E * gamma, "theta": theta, "mu": mu, "lambda": lmbda}
+    problem_parameters = {"gamma": np.float64(E * gamma), "theta": np.float64(theta)}
+    V0 = _fem.FunctionSpace(mesh, ("DG", 0))
+    mu0 = _fem.Function(V0)
+    lmbda0 = _fem.Function(V0)
+    mu0.interpolate(lambda x: np.full((1, x.shape[1]), mu))
+    lmbda0.interpolate(lambda x: np.full((1, x.shape[1]), lmbda))
     solver_outfile = None
 
     rhs_fns = [g, t, f]
@@ -185,10 +190,12 @@ if __name__ == "__main__":
     outname = f"results/boxkey_{tdim}D_{size}"
     search_mode = [dolfinx_contact.cpp.ContactMode.ClosestPoint, dolfinx_contact.cpp.ContactMode.ClosestPoint]
     u1, num_its, krylov_iterations, solver_time = nitsche_unbiased(args.time_steps, ufl_form=F, u=u,
+                                                                   mu=mu0, lmbda=lmbda0,
                                                                    rhs_fns=rhs_fns,
                                                                    markers=[domain_marker, facet_marker],
                                                                    contact_data=(surfaces, contact_pairs),
-                                                                   bcs=[(), []],
+                                                                   bcs=([(np.empty(shape=(0, 0),
+                                                                                   dtype=np.int32), -1)], []),
                                                                    problem_parameters=problem_parameters,
                                                                    search_method=search_mode,
                                                                    newton_options=newton_options,
@@ -196,7 +203,7 @@ if __name__ == "__main__":
                                                                    outfile=solver_outfile,
                                                                    fname=outname,
                                                                    quadrature_degree=args.q_degree,
-                                                                   search_radius=-1)
+                                                                   search_radius=np.float64(-1))
 
     timer.stop()
     # write solution to file

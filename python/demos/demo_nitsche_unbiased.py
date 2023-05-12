@@ -9,7 +9,8 @@ import numpy as np
 import ufl
 from dolfinx import log
 from dolfinx.common import TimingType, list_timings, timing
-from dolfinx.fem import (Constant, Function, Expression, FunctionSpace, VectorFunctionSpace)
+from dolfinx.fem import (Constant, Function, Expression, FunctionSpace,
+                         VectorFunctionSpace, locate_dofs_topological)
 from dolfinx.graph import create_adjacencylist
 from dolfinx.io import XDMFFile
 from dolfinx.mesh import locate_entities_boundary, GhostMode, meshtags
@@ -27,6 +28,7 @@ from dolfinx_contact.meshing import (convert_mesh, create_box_mesh_2D,
                                      create_sphere_plane_mesh)
 from dolfinx_contact.unbiased.nitsche_unbiased import nitsche_unbiased
 from dolfinx_contact.parallel_mesh_ghosting import create_contact_mesh
+from dolfinx_contact.cpp import ContactMode
 
 if __name__ == "__main__":
     desc = "Nitsche's method for two elastic bodies using custom assemblers"
@@ -361,14 +363,23 @@ if __name__ == "__main__":
     # dictionary with problem parameters
     gamma = args.gamma
     theta = args.theta
-    problem_parameters = {"mu": mu, "lambda": lmbda, "gamma": E * gamma, "theta": theta}
+    problem_parameters = {"gamma": np.float64(E * gamma), "theta": np.float64(theta)}
+    V0 = FunctionSpace(mesh, ("DG", 0))
+    mu0 = Function(V0)
+    lmbda0 = Function(V0)
+    mu0.interpolate(lambda x: np.full((1, x.shape[1]), mu))
+    lmbda0.interpolate(lambda x: np.full((1, x.shape[1]), lmbda))
 
+    if args.raytracing:
+        search_mode = [ContactMode.Raytracing for i in range(len(contact))]
+    else:
+        search_mode = [ContactMode.ClosestPoint for i in range(len(contact))]
     # Load geometry over multiple steps
     for j in range(nload_steps):
         outnamej = f"{outname}_{j}"
         bc_fns = []
-        bc_tags = []
         Fj = F
+        dirichlet_bcs = []
         for k, d in enumerate(load_increment):
             tag = dirichlet_vals[k]
             if mesh.geometry.dim == 3:
@@ -376,26 +387,29 @@ if __name__ == "__main__":
             else:
                 bc_fns.append(Constant(mesh, ScalarType((d[0], d[1]))))
             if args.lifting:
-                bc_tags.append([tag, -1])
+                dirichlet_dofs = locate_dofs_topological(V, mesh.topology.dim - 1, facet_marker.find(tag))
+                dirichlet_bcs.append((dirichlet_dofs, -1))
             else:
                 Fj = weak_dirichlet(Fj, u, bc_fns[k], sigma, E * gamma, theta, ds(tag))
         if args.lifting:
-            bcs = (np.array(bc_tags, dtype=np.int32), bc_fns)
+            bcs = (dirichlet_bcs, bc_fns)
             rhs_fns = []
         else:
             rhs_fns = bc_fns
-            bcs = (np.empty(shape=(2, 0), dtype=np.int32), [])
+            bcs = ([(np.empty(shape=(2, 0), dtype=np.int32), -1)], [])
 
         # Solve contact problem using Nitsche's method
         u, newton_its, krylov_iterations, solver_time = nitsche_unbiased(args.time_steps, ufl_form=Fj,
                                                                          u=u, rhs_fns=rhs_fns,
+                                                                         mu=mu0, lmbda=lmbda0,
                                                                          markers=[domain_marker, facet_marker],
                                                                          contact_data=(surfaces, contact), bcs=bcs,
                                                                          problem_parameters=problem_parameters,
                                                                          newton_options=newton_options,
                                                                          petsc_options=petsc_options,
                                                                          outfile=solver_outfile,
-                                                                         fname=outnamej, raytracing=args.raytracing,
+                                                                         fname=outnamej,
+                                                                         search_method=search_mode,
                                                                          quadrature_degree=args.q_degree,
                                                                          search_radius=args.radius)
         num_newton_its[j, :] = newton_its[:]

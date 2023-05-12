@@ -26,7 +26,7 @@ class NewtonSolver():
                  "iteration", "residual", "initial_residual", "krylov_solver", "_dx", "comm",
                  "_A", "_b", "_coeffs", "_P"]
 
-    def __init__(self, comm: MPI.Comm, J: PETSc.Mat, b: PETSc.Vec, coeffs: npt.NDArray[PETSc.ScalarType]):
+    def __init__(self, comm: MPI.Comm, J: PETSc.Mat, b: PETSc.Vec, coeffs: list[npt.NDArray[PETSc.ScalarType]]):
         """
         Create a Newton solver
 
@@ -109,7 +109,7 @@ class NewtonSolver():
         """Get the residual vector"""
         return self._b
 
-    def set_jacobian(self, func: Callable[[PETSc.Vec, PETSc.Mat, npt.NDArray[PETSc.ScalarType]], None]):
+    def set_jacobian(self, func: Callable[[PETSc.Vec, PETSc.Mat, list[npt.NDArray[PETSc.ScalarType]]], None]):
         """
         Set the function for computing the Jacobian
         Args:
@@ -117,7 +117,7 @@ class NewtonSolver():
         """
         self._compute_jacobian = func
 
-    def set_residual(self, func: Callable[[PETSc.Vec, PETSc.Vec, npt.NDArray[PETSc.ScalarType]], None]):
+    def set_residual(self, func: Callable[[PETSc.Vec, PETSc.Vec, list[npt.NDArray[PETSc.ScalarType]]], None]):
         """
         Set the function for computing the residual
         Args:
@@ -125,7 +125,7 @@ class NewtonSolver():
         """
         self._compute_residual = func
 
-    def set_preconditioner(self, func: Callable[[PETSc.Vec, PETSc.Mat, npt.NDArray[PETSc.ScalarType]], None],
+    def set_preconditioner(self, func: Callable[[PETSc.Vec, PETSc.Mat, list[npt.NDArray[PETSc.ScalarType]]], None],
                            P: PETSc.Mat):
         """
         Set the function for computing the preconditioner matrix
@@ -136,7 +136,7 @@ class NewtonSolver():
         self._compute_preconditioner = func
         self._P = P
 
-    def set_coefficients(self, func: Callable[[PETSc.Vec, npt.NDArray[PETSc.ScalarType]], None]):
+    def set_coefficients(self, func: Callable[[PETSc.Vec, list[npt.NDArray[PETSc.ScalarType]]], None]):
         """
         Set the function for computing the coefficients needed for assembly
         Args:

@@ -9,7 +9,7 @@ from typing import Union
 import dolfinx.fem as _fem
 import dolfinx.la as _la
 from dolfinx import cpp
-from dolfinx.mesh import meshtags
+from dolfinx.mesh import MeshTags
 import numpy
 import scipy.sparse
 import ufl
@@ -191,7 +191,7 @@ def rigid_motions_nullspace(V: _fem.FunctionSpace):
     return PETSc.NullSpace().create(vectors=nullspace_basis)
 
 
-def rigid_motions_nullspace_subdomains(V: _fem.FunctionSpace, mt: meshtags,
+def rigid_motions_nullspace_subdomains(V: _fem.FunctionSpace, mt: MeshTags,
                                        tags: numpy.typing.NDArray[numpy.int32],
                                        num_domains=2):
     """

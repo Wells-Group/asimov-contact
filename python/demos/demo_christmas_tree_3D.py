@@ -103,8 +103,9 @@ if __name__ == "__main__":
     sorted_facets = np.argsort(indices)
     facet_marker = MeshTags_int32(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
 
+    dirichlet_dofs = _fem.locate_dofs_topological(V.sub(2), tdim - 1, indices[sorted_facets])
     # Create Dirichlet bdy conditions for preventing rigid body motion in z-direction
-    bcs = (np.array([[z_Dirichlet, 2]], dtype=np.int32), [_fem.Constant(mesh, _PETSc.ScalarType(0))])
+    bcs = ([(dirichlet_dofs, 2)], [_fem.Constant(mesh, _PETSc.ScalarType(0))])
 
     # Functions for Dirichlet and Neuman boundaries, body force
     g = _fem.Constant(mesh, _PETSc.ScalarType((0, 0, 0)))      # zero dirichlet
@@ -196,7 +197,12 @@ if __name__ == "__main__":
     }
 
     # Solve contact problem using Nitsche's method
-    problem_parameters = {"gamma": E * gamma, "theta": theta, "mu": mu, "lambda": lmbda}
+    problem_parameters = {"gamma": np.float64(E * gamma), "theta": np.float64(theta)}
+    V0 = _fem.FunctionSpace(mesh, ("DG", 0))
+    mu0 = _fem.Function(V0)
+    lmbda0 = _fem.Function(V0)
+    mu0.interpolate(lambda x: np.full((1, x.shape[1]), mu))
+    lmbda0.interpolate(lambda x: np.full((1, x.shape[1]), lmbda))
     solver_outfile = None
     log.set_log_level(log.LogLevel.INFO)
     rhs_fns = [g, t, f]
@@ -205,6 +211,7 @@ if __name__ == "__main__":
     search_mode = [ContactMode.ClosestPoint for i in range(len(contact_pairs))]
     with Timer("~Contact: - all"):
         u1, num_its, krylov_iterations, solver_time = nitsche_unbiased(1, ufl_form=F, u=u,
+                                                                       mu=mu0, lmbda=lmbda0,
                                                                        rhs_fns=rhs_fns, markers=[
                                                                            domain_marker, facet_marker],
                                                                        contact_data=(surfaces, contact_pairs),
@@ -215,7 +222,7 @@ if __name__ == "__main__":
                                                                        outfile=solver_outfile,
                                                                        fname=outname,
                                                                        quadrature_degree=args.q_degree,
-                                                                       search_radius=-1)
+                                                                       search_radius=np.float64(-1))
 
     # write solution to file
     size = mesh.comm.size
