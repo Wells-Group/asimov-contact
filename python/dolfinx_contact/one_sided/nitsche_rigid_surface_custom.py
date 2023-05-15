@@ -14,12 +14,13 @@ import ufl
 from dolfinx.graph import create_adjacencylist
 
 import dolfinx_contact
-import dolfinx_contact.cpp
+from dolfinx_contact.cpp import (Contact, ContactMode, Kernel, generate_contact_kernel,
+                                 pack_coefficient_quadrature, pack_gradient_quadrature)
 from dolfinx_contact.helpers import (epsilon, lame_parameters,
                                      rigid_motions_nullspace, sigma_func)
 
 __all__ = ["nitsche_rigid_surface_custom"]
-kt = dolfinx_contact.cpp.Kernel
+kt = Kernel
 
 
 def nitsche_rigid_surface_custom(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTags, int, int, int, int],
@@ -170,25 +171,23 @@ def nitsche_rigid_surface_custom(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTa
     integral_entities = integral_entities[:num_local, :]
 
     # Pack mu and lambda on facets
-    coeffs = np.hstack([dolfinx_contact.cpp.pack_coefficient_quadrature(
-        mu2._cpp_object, 0, integral_entities),
-        dolfinx_contact.cpp.pack_coefficient_quadrature(
-        lmbda2._cpp_object, 0, integral_entities)])
+    coeffs = np.hstack([pack_coefficient_quadrature(mu2._cpp_object, 0, integral_entities),
+                        pack_coefficient_quadrature(lmbda2._cpp_object, 0, integral_entities)])
     # Pack celldiameter on facets
     surface_cells = np.unique(integral_entities[:, 0])
     h_int = _fem.Function(V2)
     expr = _fem.Expression(h, V2.element.interpolation_points())
     h_int.interpolate(expr, surface_cells)
-    h_facets = dolfinx_contact.cpp.pack_coefficient_quadrature(
+    h_facets = pack_coefficient_quadrature(
         h_int._cpp_object, 0, integral_entities)
 
     # Create contact class
     data = np.array([contact_value_elastic, contact_value_rigid], dtype=np.int32)
     offsets = np.array([0, 2], dtype=np.int32)
     surfaces = create_adjacencylist(data, offsets)
-    search_mode = [dolfinx_contact.cpp.ContactMode.ClosestPoint]
-    contact = dolfinx_contact.cpp.Contact([facet_marker._cpp_object], surfaces, [(0, 1)],
-                                          V._cpp_object, search_mode, quadrature_degree=quadrature_degree)
+    search_mode = [ContactMode.ClosestPoint]
+    contact = Contact([facet_marker._cpp_object], surfaces, [(0, 1)],
+                      V._cpp_object, search_mode, quadrature_degree=quadrature_degree)
 
     # Compute gap and normals
     contact.create_distance_map(0)
@@ -197,20 +196,19 @@ def nitsche_rigid_surface_custom(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTa
 
     # Create RHS kernels
     F_custom = _fem.form(F, jit_options=jit_options, form_compiler_options=form_compiler_options)
-    kernel_rhs = dolfinx_contact.cpp.generate_contact_kernel(V._cpp_object, kt.Rhs, q_rule, False)
+    kernel_rhs = generate_contact_kernel(V._cpp_object, kt.Rhs, q_rule, False)
 
     # Create Jacobian kernels
     J_custom = _fem.form(J, jit_options=jit_options, form_compiler_options=form_compiler_options)
-    kernel_J = dolfinx_contact.cpp.generate_contact_kernel(
-        V._cpp_object, kt.Jac, q_rule, False)
+    kernel_J = generate_contact_kernel(V._cpp_object, kt.Jac, q_rule, False)
 
     # NOTE: HACK to make "one-sided" contact work with assemble_matrix/assemble_vector
-    contact_assembler = dolfinx_contact.cpp.Contact(
-        [facet_marker._cpp_object], surfaces, [(0, 1)], V._cpp_object, quadrature_degree=quadrature_degree)
+    contact_assembler = Contact([facet_marker._cpp_object], surfaces, [(0, 1)], V._cpp_object,
+                                search_mode, quadrature_degree=quadrature_degree)
 
     # Pack coefficients to get numpy array of correct size for Newton solver
-    u_packed = dolfinx_contact.cpp.pack_coefficient_quadrature(u._cpp_object, quadrature_degree, integral_entities)
-    grad_u_packed = dolfinx_contact.cpp.pack_gradient_quadrature(u._cpp_object, quadrature_degree, integral_entities)
+    u_packed = pack_coefficient_quadrature(u._cpp_object, quadrature_degree, integral_entities)
+    grad_u_packed = pack_gradient_quadrature(u._cpp_object, quadrature_degree, integral_entities)
 
     offset = coeffs.shape[1] + h_facets.shape[1] + g_vec.shape[1]
 
@@ -220,8 +218,8 @@ def nitsche_rigid_surface_custom(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTa
         As only u is varying withing the Newton solver, we only update it.
         """
         u.vector[:] = x.array
-        u_packed = dolfinx_contact.cpp.pack_coefficient_quadrature(u._cpp_object, quadrature_degree, integral_entities)
-        grad_u_packed = dolfinx_contact.cpp.pack_gradient_quadrature(
+        u_packed = pack_coefficient_quadrature(u._cpp_object, quadrature_degree, integral_entities)
+        grad_u_packed = pack_gradient_quadrature(
             u._cpp_object, quadrature_degree, integral_entities)
         solver_coeffs[0][:, offset:offset + u_packed.shape[1]] = u_packed
         end = offset + u_packed.shape[1] + grad_u_packed.shape[1]

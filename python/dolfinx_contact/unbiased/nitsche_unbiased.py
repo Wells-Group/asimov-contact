@@ -443,9 +443,10 @@ def nitsche_unbiased(steps: int, ufl_form: ufl.Form, u: fem.Function, mu: fem.Fu
         vtx.write(t)
 
     vtx.close()
-    write_pressure_xdmf(mesh, contact, u, du, contact_pairs, quadrature_degree,
-                        search_method, entities, material, order, simplex, pressure_function,
-                        projection_coordinates)
+    if pressure_function is not None:
+        write_pressure_xdmf(mesh, contact, u, du, contact_pairs, quadrature_degree,
+                            search_method, entities, material, order, simplex, pressure_function,
+                            projection_coordinates)
 
     contact.update_submesh_geometry(u._cpp_object)
     return u, newton_its, krylov_its, timings

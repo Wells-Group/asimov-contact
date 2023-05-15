@@ -205,8 +205,8 @@ def test_contact_kernel(theta, gamma, dim, gap):
         b2 = dolfinx.fem.petsc.create_vector(L_custom)
         kernel = dolfinx_contact.cpp.generate_contact_kernel(V._cpp_object, kt.Rhs, q_rule)
         b2.zeroEntries()
-        contact_assembler = dolfinx_contact.cpp.Contact(
-            [facet_marker._cpp_object], surfaces, [(0, 1)], V._cpp_object, quadrature_degree=q_deg)
+        contact_assembler = dolfinx_contact.cpp.Contact([facet_marker._cpp_object], surfaces, [(0, 1)],
+                                                        V._cpp_object, search_mode, quadrature_degree=q_deg)
         contact_assembler.create_distance_map(0)
 
         contact_assembler.assemble_vector(b2, 0, kernel, coeffs, consts)

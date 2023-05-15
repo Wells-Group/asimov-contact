@@ -223,7 +223,8 @@ if __name__ == "__main__":
         elif problem == 2:
             outname = "results/problem2_2D_simplex" if simplex else "results/problem2_2D_quads"
             fname = f"{mesh_dir}/problem2_2D_simplex" if simplex else f"{mesh_dir}/problem2_2D_quads"
-            create_circle_plane_mesh(filename=f"{fname}.msh", quads=not simplex, res=args.res, order=args.order)
+            create_circle_plane_mesh(filename=f"{fname}.msh", quads=not simplex,
+                                     res=args.res, order=args.order, r=0.3, gap=0.1, H=0.1, L=1.0)
             convert_mesh(fname, f"{fname}.xdmf", gdim=2)
 
             with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
@@ -232,8 +233,8 @@ if __name__ == "__main__":
                 tdim = mesh.topology.dim
                 mesh.topology.create_connectivity(tdim - 1, tdim)
                 facet_marker = xdmf.read_meshtags(mesh, name="facet_marker")
-            dirichlet_bdy_1 = 7
-            contact_bdy_1 = 8
+            dirichlet_bdy_1 = 8
+            contact_bdy_1 = 10
             contact_bdy_2 = 6
             dirichlet_bdy_2 = 4
         elif problem == 3:
@@ -444,6 +445,9 @@ if __name__ == "__main__":
         xdmf.write_mesh(mesh)
         u_all.name = "u"
         xdmf.write_function(u_all)
+
+    with XDMFFile(mesh.comm, "results/u_unbiased_vonMises.xdmf", "w") as xdmf:
+        xdmf.write_mesh(mesh)
         xdmf.write_function(sigma_vm_h)
 
     with XDMFFile(mesh.comm, "results/partitioning.xdmf", "w") as xdmf:
