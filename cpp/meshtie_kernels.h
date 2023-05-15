@@ -34,7 +34,7 @@ namespace dolfinx_contact
 {
 dolfinx_contact::kernel_fn<PetscScalar> generate_meshtie_kernel(
     dolfinx_contact::Kernel type,
-    std::shared_ptr<const dolfinx::fem::FunctionSpace> V,
+    std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V,
     std::shared_ptr<const dolfinx_contact::QuadratureRule> quadrature_rule,
     const std::size_t max_links);
 } // namespace dolfinx_contact

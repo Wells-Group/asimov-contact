@@ -175,7 +175,7 @@ def test_packing(ct, gap, q_deg, delta, surface):
     mesh = V.mesh
     tdim = mesh.topology.dim
     gdim = mesh.geometry.dim
-    cmap = mesh.geometry.cmap
+    cmap = mesh.geometry.cmaps[0]
     geometry_dofmap = mesh.geometry.dofmap
 
     # locate facets
@@ -236,7 +236,7 @@ def test_packing(ct, gap, q_deg, delta, surface):
         # Compute evaluation points
         qp_phys = contact.qp_phys(s, f)
         num_q_points = qp_phys.shape[0]
-        points = np.zeros((num_q_points, 3))
+        points = np.zeros((num_q_points, gdim))
 
         points[:, :gdim] = qp_phys[:, :gdim] + \
             gap[f].reshape((num_q_points, gdim)) - u_packed[f].reshape((num_q_points, gdim))
@@ -256,8 +256,8 @@ def test_packing(ct, gap, q_deg, delta, surface):
             zero_ind = np.argwhere(connected_facets != facet_o).reshape(-1)
 
             # retrieve cell geometry and compute pull back of physical points to reference cell
-            gdofs = geometry_dofmap.links(cell)
-            xg = mesh.geometry.x[gdofs]
+            gdofs = geometry_dofmap[cell][0]
+            xg = mesh.geometry.x[gdofs, :gdim]
             x_ref = cmap.pull_back(points, xg)
 
             compare_test_fn(V, test_fn[f], grad_test_fn[f], q_indices, link, x_ref, cell)

@@ -28,7 +28,7 @@ dolfinx_contact::QuadratureRule::QuadratureRule(dolfinx::mesh::CellType ct,
   if (_tdim == std::size_t(dim))
   {
     std::array<std::vector<double>, 2> quadrature
-        = basix::quadrature::make_quadrature(type, b_ct, degree);
+        = basix::quadrature::make_quadrature<double>(type, b_ct, degree);
     std::vector<double>& q_weights = quadrature.back();
     std::size_t num_points = q_weights.size();
     std::size_t pt_shape = quadrature.front().size() / num_points;
@@ -60,13 +60,13 @@ dolfinx_contact::QuadratureRule::QuadratureRule(dolfinx::mesh::CellType ct,
     {
       // Create reference element to map facet quadrature to
       basix::cell::type et = basix::cell::sub_entity_type(b_ct, dim, i);
-      basix::FiniteElement entity_element
-          = basix::create_element(basix::element::family::P, et, 1,
-                                  basix::element::lagrange_variant::gll_warped,
-                                  basix::element::dpc_variant::unset, false);
+      basix::FiniteElement entity_element = basix::create_element<double>(
+          basix::element::family::P, et, 1,
+          basix::element::lagrange_variant::gll_warped,
+          basix::element::dpc_variant::unset, false);
       // Create quadrature and tabulate on entity
       std::array<std::vector<double>, 2> quadrature
-          = basix::quadrature::make_quadrature(type, et, degree);
+          = basix::quadrature::make_quadrature<double>(type, et, degree);
       const std::vector<double>& q_weights = quadrature.back();
       const std::vector<double>& q_points = quadrature.front();
       const std::size_t num_points = q_weights.size();
@@ -86,7 +86,7 @@ dolfinx_contact::QuadratureRule::QuadratureRule(dolfinx::mesh::CellType ct,
                                   stdex::full_extent, 0);
 
       auto [sub_geomb, sub_geom_shape]
-          = basix::cell::sub_entity_geometry(b_ct, dim, i);
+          = basix::cell::sub_entity_geometry<double>(b_ct, dim, i);
       cmdspan2_t coords(sub_geomb.data(), sub_geom_shape);
 
       // Push forward quadrature point from reference entity to reference

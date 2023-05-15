@@ -506,7 +506,7 @@ def create_cylinder_cylinder_mesh(filename: str, order: int = 1, res=0.25, simpl
     # Permute also entities which are tagged
     with XDMFFile(MPI.COMM_WORLD, f"{filename}.xdmf", "w") as file:
         file.write_mesh(msh)
-        file.write_meshtags(mt_domain)
+        file.write_meshtags(mt_domain, msh.geometry)
     gmsh.finalize()
 
 

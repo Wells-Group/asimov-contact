@@ -15,11 +15,12 @@ jobs:
   build:
     if: "!(contains(github.event.head_commit.message, '[ci skip]') || contains(github.event.head_commit.message, '[skip ci]'))"
     runs-on: ubuntu-20.04
-    container: dolfinx/dev-env:nightly
+    container: ghcr.io/fenics/test-env:nightly-mpich
 
     strategy:
       matrix:
         # Complex mode not working
+        run_mode: ["Release", "Debug"]
         petsc_mode: [real]
         petsc_int_type: [32, 64]
         CXX: [c++]
@@ -42,10 +43,16 @@ jobs:
       OMPI_MCA_hwloc_base_binding_policy: none
       CONTACT_CMAKE_CXX_FLAGS: "-Wall -Werror -g -pedantic -Ofast -march=native"
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
+
+      # - name: Install clang
+      #   if: ${{ matrix.CC }} == "clang"
+      #   run: |
+      #     apt-get update
+      #     apt-get install -y clang
 
       - name: Get Basix and install
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           path: ./basix
           repository: FEniCS/basix
@@ -60,11 +67,12 @@ jobs:
           python3 -m pip install git+https://github.com/FEniCS/ufl.git@main
           python3 -m pip install git+https://github.com/FEniCS/ffcx.git@main
       - name: Install dolfinx
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           path: ./dolfinx
           repository: FEniCS/dolfinx
           ref: main
+   
 
       - name: Configure C++ (dolfinx)
         run: cmake -G Ninja -DCMAKE_BUILD_TYPE=Release -B build-dolfinx -S ./dolfinx/cpp/
@@ -80,7 +88,7 @@ jobs:
 
       - name: Install contact (C++)
         run: |
-          cmake -G Ninja -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_FLAGS="${CONTACT_CMAKE_CXX_FLAGS}" -B build-contact -S cpp/
+          cmake -G Ninja -DCMAKE_BUILD_TYPE=${{ matrix.run_mode }} -DCMAKE_CXX_FLAGS="${CONTACT_CMAKE_CXX_FLAGS}" -B build-contact -S cpp/
           ninja -C build-contact install
 
       - name: Install contact
@@ -92,8 +100,8 @@ jobs:
       - name: Run mypy checks
         run: |
           pip3 install mypy
-          # cd python
-          # python3 -m mypy . --exclude=build
+          cd python
+          python3 -m mypy . --exclude=build
 
       - name: Run demos
         run: |

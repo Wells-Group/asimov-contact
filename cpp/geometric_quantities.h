@@ -33,7 +33,7 @@ namespace dolfinx_contact
 std::array<double, 3> push_forward_facet_normal(
     std::span<double> work_array, std::span<const double> x, std::size_t gdim,
     std::size_t tdim, cmdspan2_t coordinate_dofs, const std::size_t facet_index,
-    const dolfinx::fem::CoordinateElement& cmap, cmdspan2_t reference_normals);
+    const dolfinx::fem::CoordinateElement<double>& cmap, cmdspan2_t reference_normals);
 
 /// @brief Allocate memory for pull-back on a non affine cell for a single
 /// point.
@@ -42,7 +42,7 @@ std::array<double, 3> push_forward_facet_normal(
 /// @param[in] tdim The topological dimension
 /// @returns Vector of sufficient size
 std::vector<double>
-allocate_pull_back_nonaffine(const dolfinx::fem::CoordinateElement& cmap,
+allocate_pull_back_nonaffine(const dolfinx::fem::CoordinateElement<double>& cmap,
                              int gdim, int tdim);
 
 /// @brief Pull back a single point of a non-affine cell to the reference
@@ -61,7 +61,7 @@ allocate_pull_back_nonaffine(const dolfinx::fem::CoordinateElement& cmap,
 /// @param[in] max_it The maximum number of Newton iterations
 void pull_back_nonaffine(std::span<double> X, std::span<double> work_array,
                          std::span<const double> x,
-                         const dolfinx::fem::CoordinateElement& cmap,
+                         const dolfinx::fem::CoordinateElement<double>& cmap,
                          cmdspan2_t cell_geometry, double tol = 1e-8,
                          const int max_it = 10);
 
@@ -72,8 +72,8 @@ void pull_back_nonaffine(std::span<double> X, std::span<double> work_array,
 /// reference cell
 /// @param[in] coordinate_dofs The cell geometry
 /// @returns The circumradius of the cell
-double compute_circumradius(const dolfinx::mesh::Mesh& mesh, double detJ,
-                            cmdspan2_t coordinate_dofs);
+double compute_circumradius(const dolfinx::mesh::Mesh<double>& mesh,
+                            double detJ, cmdspan2_t coordinate_dofs);
 
 /// @brief Push forward facet normal
 ///

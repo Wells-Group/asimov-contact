@@ -10,7 +10,7 @@ from dolfinx.io import XDMFFile
 from dolfinx.mesh import locate_entities_boundary, meshtags, Mesh
 from dolfinx_contact.meshing import (convert_mesh,
                                      create_cylinder_cylinder_mesh,
-                                     create_halfdisk_plane_mesh,
+                                     create_circle_plane_mesh,
                                      create_sphere_plane_mesh)
 from dolfinx_contact.cpp import ContactMode, Contact
 from mpi4py import MPI
@@ -24,7 +24,7 @@ def test_copy_to_submesh(order, res, simplex, dim):
     mesh_dir = "meshes"
     if dim == 3:
         if simplex:
-            fname = f"{mesh_dir}/hertz3D"
+            fname = f"{mesh_dir}/sphere3D"
             create_sphere_plane_mesh(filename=f"{fname}.msh", res=res, order=order, r=0.25, H=0.25, L=1.0, W=1.0)
             convert_mesh(fname, f"{fname}.xdmf", gdim=3)
             with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
@@ -74,7 +74,7 @@ def test_copy_to_submesh(order, res, simplex, dim):
             facet_marker = meshtags(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
     else:
         fname = f"{mesh_dir}/hertz2D_simplex" if simplex else f"{mesh_dir}/hertz2D_quads"
-        create_halfdisk_plane_mesh(filename=f"{fname}.msh", res=res, order=order,
+        create_circle_plane_mesh(filename=f"{fname}.msh", res=res, order=order,
                                    quads=not simplex, r=0.25, H=0.25, L=1.0)
         convert_mesh(fname, f"{fname}.xdmf", gdim=2)
         with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
@@ -82,8 +82,8 @@ def test_copy_to_submesh(order, res, simplex, dim):
             tdim = mesh.topology.dim
             mesh.topology.create_connectivity(tdim - 1, tdim)
             facet_marker = xdmf.read_meshtags(mesh, name="facet_marker")
-        contact_bdy_1 = 10
-        contact_bdy_2 = 6
+        contact_bdy_1 = 4
+        contact_bdy_2 = 9
 
     def _test_fun(x):
         tdim = mesh.topology.dim

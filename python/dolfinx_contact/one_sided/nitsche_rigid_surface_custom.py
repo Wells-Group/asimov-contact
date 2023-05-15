@@ -152,7 +152,7 @@ def nitsche_rigid_surface_custom(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTa
 
     # Custom assembly of contact boundary conditions
     _log.set_log_level(_log.LogLevel.OFF)  # avoid large amounts of output
-    q_rule = dolfinx_contact.QuadratureRule(mesh.topology.cell_type, quadrature_degree,
+    q_rule = dolfinx_contact.QuadratureRule(mesh.topology.cell_types[0], quadrature_degree,
                                             mesh.topology.dim - 1, basix.QuadratureType.Default)
     consts = np.array([gamma * E, theta])
 
@@ -233,7 +233,7 @@ def nitsche_rigid_surface_custom(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTa
         """
         with b.localForm() as b_local:
             b_local.set(0.0)
-        contact_assembler.assemble_vector(b, 0, kernel_rhs, coeffs, consts)
+        contact_assembler.assemble_vector(b, 0, kernel_rhs, coeffs[0], consts)
         _fem.petsc.assemble_vector(b, F_custom)
 
     def compute_jacobian(x, A, coeffs):
@@ -241,7 +241,7 @@ def nitsche_rigid_surface_custom(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTa
         Compute Jacobian for Newton solver LHS, given precomputed coefficients
         """
         A.zeroEntries()
-        contact_assembler.assemble_matrix(A, [], 0, kernel_J, coeffs, consts)
+        contact_assembler.assemble_matrix(A, [], 0, kernel_J, coeffs[0], consts)
         _fem.petsc.assemble_matrix(A, J_custom)
         A.assemble()
 

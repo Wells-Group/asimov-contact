@@ -12,10 +12,11 @@
 using namespace dolfinx_contact;
 
 void dolfinx_contact::transformed_push_forward(
-    const dolfinx::fem::FiniteElement* element, cmdspan4_t reference_basis,
-    std::vector<double>& element_basisb, mdspan3_t basis_values, cmdspan2_t J,
-    cmdspan2_t K, double detJ, std::size_t basis_offset, std::size_t q,
-    std::int32_t cell, std::span<const std::uint32_t> cell_info)
+    const dolfinx::fem::FiniteElement<double>* element,
+    cmdspan4_t reference_basis, std::vector<double>& element_basisb,
+    mdspan3_t basis_values, cmdspan2_t J, cmdspan2_t K, double detJ,
+    std::size_t basis_offset, std::size_t q, std::int32_t cell,
+    std::span<const std::uint32_t> cell_info)
 {
   const std::function<void(const std::span<PetscScalar>&,
                            const std::span<const std::uint32_t>&, std::int32_t,
@@ -50,14 +51,14 @@ dolfinx_contact::pack_coefficient_quadrature(
 {
 
   // Get mesh
-  std::shared_ptr<const dolfinx::mesh::Mesh> mesh
+  std::shared_ptr<const dolfinx::mesh::Mesh<double>> mesh
       = coeff->function_space()->mesh();
   assert(mesh);
 
   // Get topology data
-  const dolfinx::mesh::Topology& topology = mesh->topology();
-  const std::size_t tdim = topology.dim();
-  const dolfinx::mesh::CellType cell_type = topology.cell_type();
+  auto topology = mesh->topology();
+  const std::size_t tdim = topology->dim();
+  const dolfinx::mesh::CellType cell_type = topology->cell_types()[0];
 
   // Get what entity type we are integrating over
   std::size_t entity_dim;
@@ -76,7 +77,7 @@ dolfinx_contact::pack_coefficient_quadrature(
   QuadratureRule q_rule(cell_type, q_degree, (int)entity_dim, basix::quadrature::type::Default);
 
   // Get element information
-  const dolfinx::fem::FiniteElement* element
+  const dolfinx::fem::FiniteElement<double>* element
       = coeff->function_space()->element().get();
   const std::size_t bs = element->block_size();
   const std::size_t value_size = element->value_size();
@@ -90,7 +91,7 @@ dolfinx_contact::pack_coefficient_quadrature(
   std::array<std::size_t, 2> p_shape = {sum_q_points, tdim};
   assert(q_rule.tdim() == tdim);
 
-  const basix::FiniteElement& basix_element = element->basix_element();
+  const basix::FiniteElement<double>& basix_element = element->basix_element();
   std::array<std::size_t, 4> tab_shape
       = basix_element.tabulate_shape(0, sum_q_points);
   std::vector<double> reference_basisb(
@@ -131,8 +132,8 @@ dolfinx_contact::pack_coefficient_quadrature(
   std::span<const std::uint32_t> cell_info;
   if (needs_dof_transformations)
   {
-    mesh->topology_mutable().create_entity_permutations();
-    cell_info = topology.get_cell_permutation_info();
+    mesh->topology_mutable()->create_entity_permutations();
+    cell_info = topology->get_cell_permutation_info();
   }
 
   if (needs_dof_transformations)
@@ -142,9 +143,9 @@ dolfinx_contact::pack_coefficient_quadrature(
     // Get geometry data
     const dolfinx::mesh::Geometry<double>& geometry = mesh->geometry();
     const int gdim = geometry.dim();
-    const dolfinx::graph::AdjacencyList<std::int32_t>& x_dofmap
+    stdex::mdspan<const std::int32_t, stdex::dextents<std::size_t, 2>> x_dofmap
         = mesh->geometry().dofmap();
-    const dolfinx::fem::CoordinateElement& cmap = geometry.cmap();
+    const dolfinx::fem::CoordinateElement<double>& cmap = geometry.cmaps()[0];
     const std::size_t num_dofs_g = cmap.dim();
     std::span<const double> x_g = geometry.x();
 
@@ -191,7 +192,7 @@ dolfinx_contact::pack_coefficient_quadrature(
       }
 
       // Get cell geometry (coordinate dofs)
-      auto x_dofs = x_dofmap.links(cell);
+      auto x_dofs = stdex::submdspan(x_dofmap, cell, stdex::full_extent);
       assert(x_dofs.size() == num_dofs_g);
       for (std::size_t j = 0; j < num_dofs_g; ++j)
       {
@@ -206,12 +207,11 @@ dolfinx_contact::pack_coefficient_quadrature(
         auto dphi_q
             = stdex::submdspan(c_basis, std::pair{1, std::size_t(tdim + 1)},
                                q_offsets[entity_index], stdex::full_extent, 0);
-        dolfinx::fem::CoordinateElement::compute_jacobian(dphi_q,
-                                                          coordinate_dofs, J);
-        dolfinx::fem::CoordinateElement::compute_jacobian_inverse(J, K);
-        double detJ
-            = dolfinx::fem::CoordinateElement::compute_jacobian_determinant(
-                J, detJ_scratch);
+        dolfinx::fem::CoordinateElement<double>::compute_jacobian(
+            dphi_q, coordinate_dofs, J);
+        dolfinx::fem::CoordinateElement<double>::compute_jacobian_inverse(J, K);
+        double detJ = dolfinx::fem::CoordinateElement<
+            double>::compute_jacobian_determinant(J, detJ_scratch);
 
         for (std::size_t q = 0; q < num_points_per_entity; ++q)
         {
@@ -228,12 +228,12 @@ dolfinx_contact::pack_coefficient_quadrature(
           auto dphi_q = stdex::submdspan(
               c_basis, std::pair{1, std::size_t(tdim + 1)},
               q_offsets[entity_index] + q, stdex::full_extent, 0);
-          dolfinx::fem::CoordinateElement::compute_jacobian(dphi_q,
-                                                            coordinate_dofs, J);
-          dolfinx::fem::CoordinateElement::compute_jacobian_inverse(J, K);
-          double detJ
-              = dolfinx::fem::CoordinateElement::compute_jacobian_determinant(
-                  J, detJ_scratch);
+          dolfinx::fem::CoordinateElement<double>::compute_jacobian(
+              dphi_q, coordinate_dofs, J);
+          dolfinx::fem::CoordinateElement<double>::compute_jacobian_inverse(J,
+                                                                            K);
+          double detJ = dolfinx::fem::CoordinateElement<
+              double>::compute_jacobian_determinant(J, detJ_scratch);
 
           transformed_push_forward(element, reference_basis, element_basisb,
                                    basis_values, J, K, detJ,
@@ -315,14 +315,14 @@ dolfinx_contact::pack_gradient_quadrature(
 {
 
   // Get mesh
-  std::shared_ptr<const dolfinx::mesh::Mesh> mesh
+  std::shared_ptr<const dolfinx::mesh::Mesh<double>> mesh
       = coeff->function_space()->mesh();
   assert(mesh);
 
   // Get topology data
-  const dolfinx::mesh::Topology& topology = mesh->topology();
-  const std::size_t tdim = topology.dim();
-  const dolfinx::mesh::CellType cell_type = topology.cell_type();
+  auto topology = mesh->topology();
+  const std::size_t tdim = topology->dim();
+  const dolfinx::mesh::CellType cell_type = topology->cell_types()[0];
 
   // Get what entity type we are integrating over
   std::size_t entity_dim;
@@ -342,7 +342,7 @@ dolfinx_contact::pack_gradient_quadrature(
   QuadratureRule q_rule(cell_type, q_degree, (int)entity_dim, basix::quadrature::type::Default);
 
   // Get element information
-  const dolfinx::fem::FiniteElement* element
+  const dolfinx::fem::FiniteElement<double>* element
       = coeff->function_space()->element().get();
   const std::size_t bs = element->block_size();
   const std::size_t value_size = element->value_size();
@@ -356,7 +356,7 @@ dolfinx_contact::pack_gradient_quadrature(
   std::array<std::size_t, 2> p_shape = {sum_q_points, tdim};
   assert(q_rule.tdim() == tdim);
 
-  const basix::FiniteElement& basix_element = element->basix_element();
+  const basix::FiniteElement<double>& basix_element = element->basix_element();
   std::array<std::size_t, 4> tab_shape
       = basix_element.tabulate_shape(1, sum_q_points);
   std::vector<double> reference_basisb(
@@ -368,9 +368,10 @@ dolfinx_contact::pack_gradient_quadrature(
   // Get geometry data
   const dolfinx::mesh::Geometry<double>& geometry = mesh->geometry();
   const std::size_t gdim = geometry.dim();
-  const dolfinx::graph::AdjacencyList<std::int32_t>& x_dofmap
-      = mesh->geometry().dofmap();
-  const dolfinx::fem::CoordinateElement& cmap = geometry.cmap();
+  stdex::mdspan<const std::int32_t, stdex::dextents<std::size_t, 2>> x_dofmap
+      = geometry.dofmap();
+  const dolfinx::fem::CoordinateElement<double>& cmap = geometry.cmaps()[0];
+
   const std::size_t num_dofs_g = cmap.dim();
   std::span<const double> x_g = geometry.x();
 
@@ -443,7 +444,7 @@ dolfinx_contact::pack_gradient_quadrature(
     }
 
     // Get cell geometry (coordinate dofs)
-    auto x_dofs = x_dofmap.links(cell);
+    auto x_dofs = stdex::submdspan(x_dofmap, cell, stdex::full_extent);
     assert(x_dofs.size() == num_dofs_g);
     for (std::size_t j = 0; j < num_dofs_g; ++j)
     {
@@ -472,9 +473,10 @@ dolfinx_contact::pack_gradient_quadrature(
           auto dphi_q = stdex::submdspan(
               c_basis, std::pair{1, std::size_t(tdim + 1)},
               q_offsets[entity_index], stdex::full_extent, 0);
-          dolfinx::fem::CoordinateElement::compute_jacobian(dphi_q,
-                                                            coordinate_dofs, J);
-          dolfinx::fem::CoordinateElement::compute_jacobian_inverse(J, K);
+          dolfinx::fem::CoordinateElement<double>::compute_jacobian(
+              dphi_q, coordinate_dofs, J);
+          dolfinx::fem::CoordinateElement<double>::compute_jacobian_inverse(J,
+                                                                            K);
           for (std::size_t q = 0; q < num_points_per_entity; ++q)
           {
 
@@ -503,9 +505,10 @@ dolfinx_contact::pack_gradient_quadrature(
             auto dphi_q = stdex::submdspan(
                 c_basis, std::pair{1, std::size_t(tdim + 1)},
                 q_offsets[entity_index] + q, stdex::full_extent, 0);
-            dolfinx::fem::CoordinateElement::compute_jacobian(
+            dolfinx::fem::CoordinateElement<double>::compute_jacobian(
                 dphi_q, coordinate_dofs, J);
-            dolfinx::fem::CoordinateElement::compute_jacobian_inverse(J, K);
+            dolfinx::fem::CoordinateElement<double>::compute_jacobian_inverse(
+                J, K);
             // Access each component of the reference basis function (in the
             // case of vector spaces)
             // multiply by K (the inverse jacobian)
@@ -531,19 +534,20 @@ dolfinx_contact::pack_gradient_quadrature(
 
 //-----------------------------------------------------------------------------
 std::vector<PetscScalar> dolfinx_contact::pack_circumradius(
-    const dolfinx::mesh::Mesh& mesh,
+    const dolfinx::mesh::Mesh<double>& mesh,
     const std::span<const std::int32_t>& active_facets)
 {
   const dolfinx::mesh::Geometry<double>& geometry = mesh.geometry();
-  const dolfinx::mesh::Topology& topology = mesh.topology();
-  if (!geometry.cmap().is_affine())
+
+  auto topology = mesh.topology();
+  if (!geometry.cmaps()[0].is_affine())
     throw std::invalid_argument("Non-affine circumradius is not implemented");
 
   // Tabulate element at quadrature points
-  const dolfinx::mesh::CellType cell_type = topology.cell_type();
+  const dolfinx::mesh::CellType cell_type = topology->cell_types()[0];
   dolfinx_contact::error::check_cell_type(cell_type);
 
-  const int tdim = topology.dim();
+  const int tdim = topology->dim();
   const int fdim = tdim - 1;
   const dolfinx_contact::QuadratureRule q_rule(cell_type, 0, fdim);
 
@@ -555,7 +559,7 @@ std::vector<PetscScalar> dolfinx_contact::pack_circumradius(
   assert(q_rule.tdim() == (std::size_t)tdim);
 
   // Tabulate coordinate basis for Jacobian computation
-  const dolfinx::fem::CoordinateElement& cmap = geometry.cmap();
+  const dolfinx::fem::CoordinateElement<double>& cmap = geometry.cmaps()[0];
   const std::array<std::size_t, 4> tab_shape
       = cmap.tabulate_shape(1, sum_q_points);
   std::vector<double> coordinate_basisb(
@@ -569,7 +573,7 @@ std::vector<PetscScalar> dolfinx_contact::pack_circumradius(
   circumradius.reserve(active_facets.size() / 2);
 
   // Get geometry data
-  const dolfinx::graph::AdjacencyList<std::int32_t>& x_dofmap
+  stdex::mdspan<const std::int32_t, stdex::dextents<std::size_t, 2>> x_dofmap
       = geometry.dofmap();
   std::span<const double> x_g = geometry.x();
 
@@ -591,7 +595,7 @@ std::vector<PetscScalar> dolfinx_contact::pack_circumradius(
     std::int32_t cell = active_facets[i];
     std::int32_t local_index = active_facets[i + 1];
     // Get cell geometry (coordinate dofs)
-    auto x_dofs = x_dofmap.links(cell);
+    auto x_dofs = stdex::submdspan(x_dofmap, cell, stdex::full_extent);
     for (std::size_t j = 0; j < x_dofs.size(); ++j)
     {
       std::copy_n(std::next(x_g.begin(), 3 * x_dofs[j]), gdim,
@@ -605,10 +609,11 @@ std::vector<PetscScalar> dolfinx_contact::pack_circumradius(
     auto dphi_q = stdex::submdspan(
         coordinate_basis, std::pair{1, (std::size_t)tdim + 1},
         q_offset[local_index], stdex::full_extent, 0);
-    dolfinx::fem::CoordinateElement::compute_jacobian(dphi_q, coordinate_dofs,
-                                                      J);
-    double detJ = dolfinx::fem::CoordinateElement::compute_jacobian_determinant(
-        J, detJ_scratch);
+    dolfinx::fem::CoordinateElement<double>::compute_jacobian(
+        dphi_q, coordinate_dofs, J);
+    double detJ
+        = dolfinx::fem::CoordinateElement<double>::compute_jacobian_determinant(
+            J, detJ_scratch);
     circumradius.push_back(compute_circumradius(mesh, detJ, coordinate_dofs));
   }
   assert(circumradius.size() == active_facets.size() / 2);
