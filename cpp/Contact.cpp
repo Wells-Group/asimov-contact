@@ -261,7 +261,7 @@ Mat dolfinx_contact::Contact::create_petsc_matrix(
     }
   }
   // Finalise communication
-  pattern.assemble();
+  pattern.finalize();
 
   return dolfinx::la::petsc::create_matrix(a.mesh()->comm(), pattern, type);
 }
