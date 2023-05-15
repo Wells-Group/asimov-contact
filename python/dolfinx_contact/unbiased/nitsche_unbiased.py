@@ -312,13 +312,18 @@ def nitsche_unbiased(steps: int, ufl_form: ufl.Form, u: fem.Function,
     # Mesh, function space and FEM functions
     V = u.function_space
     mesh = V.mesh
+    V2 = fem.FunctionSpace(mesh, ("DG", 0))
     v = ufl_form.arguments()[0]  # Test function
     w = ufl.TrialFunction(V)     # Trial function
     du = fem.Function(V)
     du.x.array[:] = u.x.array[:]
     u.x.array[:].fill(0)
-    h = ufl.CellDiameter(mesh)
     n = ufl.FacetNormal(mesh)
+    tdim = mesh.topology.dim
+    ncells = mesh.topology.index_map(tdim).size_local
+    h = fem.Function(V2)
+    h_vals = cpp.mesh.h(mesh._cpp_object, mesh.topology.dim, np.arange(0, ncells, dtype=np.int32))
+    h.x.array[:ncells] = h_vals[:]
 
     # Integration measure and ufl part of linear/bilinear form
     ds = ufl.Measure("ds", domain=mesh, subdomain_data=markers[1])
@@ -331,7 +336,7 @@ def nitsche_unbiased(steps: int, ufl_form: ufl.Form, u: fem.Function,
     F = ufl.replace(ufl_form, {u: u + du})
     J = ufl.derivative(F, du, w)
 
-    # compiled forms for rhs and tangen system
+    # compiled forms for rhs and tangent system
     F_custom = fem.form(F, form_compiler_options=form_compiler_options, jit_options=jit_options)
     J_custom = fem.form(J, form_compiler_options=form_compiler_options, jit_options=jit_options)
 
@@ -382,12 +387,10 @@ def nitsche_unbiased(steps: int, ufl_form: ufl.Form, u: fem.Function,
     h_packed = []
     with common.Timer("~Contact: Compute and pack celldiameter"):
         surface_cells = np.unique(np.hstack([entities[i][:, 0] for i in range(len(contact_pairs))]))
-        h_int = fem.Function(V2)
-        expr = fem.Expression(h, V2.element.interpolation_points())
-        h_int.interpolate(expr, surface_cells)
+
         for i in range(len(contact_pairs)):
             h_packed.append(dolfinx_contact.cpp.pack_coefficient_quadrature(
-                h_int._cpp_object, 0, entities[i]))
+                h._cpp_object, 0, entities[i]))
 
     # Concatenate material parameters, h
     const_coeffs = []

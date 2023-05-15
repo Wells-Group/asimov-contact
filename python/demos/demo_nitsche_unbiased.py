@@ -96,8 +96,6 @@ if __name__ == "__main__":
     hex_ext = {1: "", 2: "27"}
     quad_ext = {1: "", 2: "9", 3: "16"}
     line_ext = {1: "", 2: "3", 3: "4"}
-    if args.order > 1:
-        raise NotImplementedError("More work in DOLFINx (SubMesh) required for this to work.")
     # Load mesh and create identifier functions for the top (Displacement condition)
     # and the bottom (contact condition)
 
@@ -329,7 +327,7 @@ if __name__ == "__main__":
     surfaces = create_adjacencylist(data, offsets)
 
     # Function, TestFunction, TrialFunction and measures
-    V = VectorFunctionSpace(mesh, ("CG", 1))
+    V = VectorFunctionSpace(mesh, ("CG", args.order))
     u = Function(V)
     v = ufl.TestFunction(V)
     dx = ufl.Measure("dx", domain=mesh, subdomain_data=domain_marker)
