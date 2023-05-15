@@ -9,10 +9,9 @@ import numpy as np
 from dolfinx import log
 import dolfinx.fem as _fem
 from dolfinx.common import timing, Timer
-from dolfinx.cpp.mesh import MeshTags_int32
 from dolfinx.graph import create_adjacencylist
 from dolfinx.io import XDMFFile
-from dolfinx.mesh import locate_entities_boundary, GhostMode
+from dolfinx.mesh import locate_entities_boundary, GhostMode, meshtags
 from mpi4py import MPI
 from petsc4py import PETSc as _PETSc
 import ufl
@@ -101,7 +100,7 @@ if __name__ == "__main__":
     values = np.hstack([facet_marker.values, z_Dirichlet * np.ones(len(dirichlet_facets1)
                         + len(dirichlet_facets2), dtype=np.int32)])
     sorted_facets = np.argsort(indices)
-    facet_marker = MeshTags_int32(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
+    facet_marker = meshtags(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
 
     dirichlet_dofs = _fem.locate_dofs_topological(V.sub(2), tdim - 1, indices[sorted_facets])
     # Create Dirichlet bdy conditions for preventing rigid body motion in z-direction
@@ -115,7 +114,7 @@ if __name__ == "__main__":
     ncells = mesh.topology.index_map(tdim).size_local
     indices = np.array(range(ncells), dtype=np.int32)
     values = mesh.comm.rank * np.ones(ncells, dtype=np.int32)
-    process_marker = MeshTags_int32(mesh, tdim, indices, values)
+    process_marker = meshtags(mesh, tdim, indices, values)
     process_marker.name = "process_marker"
     gdim = mesh.geometry.dim
 
@@ -204,7 +203,7 @@ if __name__ == "__main__":
     mu0.interpolate(lambda x: np.full((1, x.shape[1]), mu))
     lmbda0.interpolate(lambda x: np.full((1, x.shape[1]), lmbda))
     solver_outfile = None
-    log.set_log_level(log.LogLevel.INFO)
+    log.set_log_level(log.LogLevel.WARNING)
     rhs_fns = [g, t, f]
     size = mesh.comm.size
     outname = f"results/xmas_{tdim}D_{size}"

@@ -83,7 +83,8 @@ def create_circle_plane_mesh(filename: str, quads: bool = False, res=0.1, order:
 
 def create_halfdisk_plane_mesh(filename: str, res=0.1, order: int = 1, quads=False, r=0.25, H=0.25, L=1.0, gap=0.01):
     """
-    Create a circular mesh, with center at (0.0,0.0,0) with radius 0.25 and a box [-0.5,0.5]x[-0.5,-0.25]
+    Create a halfdisk, with center at (0.0,0.0,0), radius r and  y<=0.0
+    and a box [-L/2, L/2]x[-H-gap-r,-gap-r]
     """
     center = [0, 0, 0]
     gmsh.initialize()
@@ -576,8 +577,8 @@ def create_2D_rectangle_split(filename: str, quads: bool = False, res=0.1, order
 
 def create_halfsphere_box_mesh(filename: str, order: int = 1, res=0.05, r=0.25, H=0.25, L=1.0, W=1.0, gap=0.0):
     """
-    Create a 3D sphere with center (0,0,0), r=0.25
-    with a box at [-0.5, 0.5] x [-0.5, 0.5] x [ -0.5, -0.25]
+    Create a 3D half-sphere with center (0,0,0), radius r and z<=0.0
+    with a box at [-L/2, L/2] x [ -W/2, W/2] x [-gap-H-r, -gap-r]
     """
     center = [0.0, 0.0, 0.0]
     angle = 0

@@ -33,9 +33,9 @@ def setup_newton_solver(F_custom: fem.forms.FormMetaClass, J_custom: fem.forms.F
 
     Parameters
     ==========
-    incr               The load increment in [0,1]
     F_custom           The compiled form for the residual vector
     J_custom           The compiled form for the jacobian
+    bcs                The boundary conditions
     u                  The displacement from previous step
     du                 The change in displacement to be computed
     contact            The contact class
@@ -44,6 +44,7 @@ def setup_newton_solver(F_custom: fem.forms.FormMetaClass, J_custom: fem.forms.F
     quadrature_degree  The quadrature degree
     const_coeffs       The coefficients for material parameters and h
     consts             The constants in the forms
+    search_method      The contact detection algorithms used for each pair
     """
 
     num_pairs = len(const_coeffs)
@@ -243,6 +244,8 @@ def nitsche_unbiased(steps: int, ufl_form: ufl.Form, u: fem.Function, mu: fem.Fu
     steps:    The number of pseudo time steps
     ufl_form: The variational form without contact contribution
     u:        The function to be solved for. Also serves as initial value.
+    mu:       The first Lame parameter as a DG0 function
+    lmbda:    The second Lame parameter as a DG0 function
     rhs_fns:  The functions defining forces/boundary conditions in the variational form
     markers
         A list of meshtags. The first element must mark all separate objects in order to create the correct nullspace.
@@ -256,9 +259,8 @@ def nitsche_unbiased(steps: int, ufl_form: ufl.Form, u: fem.Function, mu: fem.Fu
                   surface and the jth surface as the corresponding candidate
                   surface
     problem_parameters
-        Dictionary with lame parameters and Nitsche parameters.
-        Valid (key, value) tuples are: ('gamma': float), ('theta', float), ('mu', float),
-        (lambda, float),
+        Dictionary with Nitsche parameters.
+        Valid (key, value) tuples are: ('gamma': float), ('theta', float)
         where theta can be -1, 0 or 1 for skew-symmetric, penalty like or symmetric
         enforcement of Nitsche conditions
     search_method
@@ -285,6 +287,18 @@ def nitsche_unbiased(steps: int, ufl_form: ufl.Form, u: fem.Function, mu: fem.Fu
         ("max_it", int), ("error_on_nonconvergence", bool), ("relaxation_parameter", float)
     outfile
         File to append solver summary
+    fname
+        filename for vtx output
+    search_radius
+        search radius for raytracing
+    order
+        order of function space and geometry
+    simplex
+        bool indicating whether it is a simplicial mesh
+    pressure_function
+        function for analytical surface pressure
+    projection_coordinates
+        work around for pressure visualisation on curved meshes
 
     """
     form_compiler_options = {} if form_compiler_options is None else form_compiler_options
@@ -446,7 +460,7 @@ def nitsche_unbiased(steps: int, ufl_form: ufl.Form, u: fem.Function, mu: fem.Fu
     if pressure_function is not None:
         write_pressure_xdmf(mesh, contact, u, du, contact_pairs, quadrature_degree,
                             search_method, entities, material, order, simplex, pressure_function,
-                            projection_coordinates)
+                            projection_coordinates, fname)
 
     contact.update_submesh_geometry(u._cpp_object)
     return u, newton_its, krylov_its, timings

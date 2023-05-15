@@ -41,6 +41,7 @@ public:
   /// @param[in] contact_pairs list of pairs (i, j) marking the ith and jth
   /// surface in surfaces->array() as a contact pair
   /// @param[in] V The functions space
+  /// @param[in] mode Contact detection algorithm for each pair
   /// @param[in] q_deg The quadrature degree.
   Contact(const std::vector<
               std::shared_ptr<dolfinx::mesh::MeshTags<std::int32_t>>>& markers,

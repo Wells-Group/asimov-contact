@@ -12,12 +12,12 @@ import dolfinx_contact
 import petsc4py.PETSc as PETSc
 import ufl
 
-# write pressure on surface to file
 
-
+# write pressure on surface to file for visualisation
 def write_pressure_xdmf(mesh, contact, u, du, contact_pairs, quadrature_degree,
                         search_method, entities, material, order, simplex,
-                        pressure_function, projection_coordinates):
+                        pressure_function, projection_coordinates, fname):
+
     # Recover original geometry for pressure computation
     du.x.array[:] = 0
     contact.update_submesh_geometry(du._cpp_object)
@@ -105,28 +105,28 @@ def write_pressure_xdmf(mesh, contact, u, du, contact_pairs, quadrature_degree,
     ksp.solve(b, p_f.vector)
     p_f.x.scatter_forward()
 
+    # interpolate exact pressure
     p_hertz = Function(P_exact)
     p_hertz.interpolate(pressure_function)
     xi = projection_coordinates[0]
     vali = projection_coordinates[1]
     geom_xi = facet_mesh.geometry.x[:, xi].copy()
-    with XDMFFile(facet_mesh.comm, "surface_pressure.xdmf", "w") as xdmf:
+    with XDMFFile(facet_mesh.comm, f"{fname}_surface_pressure.xdmf", "w") as xdmf:
         facet_mesh.geometry.x[geom_xi > vali - 1e-5, xi] = vali
         xdmf.write_mesh(facet_mesh)
         p_f.name = "pressure"
         facet_mesh.geometry.x[:, xi] = geom_xi[:]
         xdmf.write_function(p_f)
 
-    with XDMFFile(facet_mesh.comm, "hertz_pressure.xdmf", "w") as xdmf:
+    with XDMFFile(facet_mesh.comm, f"{fname}_hertz_pressure.xdmf", "w") as xdmf:
         facet_mesh.geometry.x[geom_xi > vali - 1e-5, xi] = vali
         xdmf.write_mesh(facet_mesh)
         p_hertz.name = "analytical"
         facet_mesh.geometry.x[:, tdim - 1] = geom_xi[:]
         xdmf.write_function(p_hertz)
 
+
 # Visualise the gap. For debugging. Works in 2D only
-
-
 def plot_gap(mesh, contact, gaps, entities, num_pairs):
     gdim = mesh.geometry.dim
     tdim = mesh.topology.dim

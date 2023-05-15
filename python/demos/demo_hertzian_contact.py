@@ -194,8 +194,6 @@ if __name__ == "__main__":
 
         a = 2 * np.sqrt(R * load / (np.pi * Estar))
         p0 = 2 * load / (np.pi * a)
-        print(load)
-        print(a)
 
         def _pressure(x):
             vals = np.zeros(x.shape[1])
@@ -273,6 +271,7 @@ if __name__ == "__main__":
         return values
     u.interpolate(_u_initial, disk_cells)
     search_mode = [ContactMode.ClosestPoint, ContactMode.Raytracing]
+
     # Solve contact problem using Nitsche's method
     u, newton_its, krylov_iterations, solver_time = nitsche_unbiased(1, ufl_form=F,
                                                                      u=u, mu=mu, lmbda=lmbda, rhs_fns=[f, t],
