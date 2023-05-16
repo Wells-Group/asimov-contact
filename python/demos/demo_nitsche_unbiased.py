@@ -35,7 +35,7 @@ if __name__ == "__main__":
     parser.add_argument("--theta", default=1., type=float, dest="theta",
                         help="Theta parameter for Nitsche, 1 symmetric, -1 skew symmetric, 0 Penalty-like",
                         choices=[1., -1., 0.])
-    parser.add_argument("--gamma", default=10, type=float, dest="gamma",
+    parser.add_argument("--gamma", default=100, type=float, dest="gamma",
                         help="Coercivity/Stabilization parameter for Nitsche condition")
     parser.add_argument("--quadrature", default=5, type=int, dest="q_degree",
                         help="Quadrature degree used for contact integrals")
@@ -96,6 +96,8 @@ if __name__ == "__main__":
     hex_ext = {1: "", 2: "27"}
     quad_ext = {1: "", 2: "9", 3: "16"}
     line_ext = {1: "", 2: "3", 3: "4"}
+    if args.order > 2:
+        raise NotImplementedError("More work in DOLFINx required for this to work.")
     # Load mesh and create identifier functions for the top (Displacement condition)
     # and the bottom (contact condition)
 
@@ -138,7 +140,7 @@ if __name__ == "__main__":
             facet_marker = meshtags(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
 
         elif problem == 2:
-            outname = "results/problem2_3D_simplex" if simplex else "results/problem2_3D_hex"
+            outname = "results/problem2_3D_simplex"
             fname = f"{mesh_dir}/sphere"
             create_sphere_plane_mesh(filename=f"{fname}.msh", order=args.order, res=args.res)
             convert_mesh(fname, fname, gdim=3)
@@ -157,7 +159,7 @@ if __name__ == "__main__":
             outname = "results/problem3_3D_simplex" if simplex else "results/problem3_3D_hex"
             fname = "cylinder_cylinder_3D"
             displacement = [[-1, 0, 0], [0, 0, 0]]
-            create_cylinder_cylinder_mesh(fname, res=args.res, simplex=simplex)
+            create_cylinder_cylinder_mesh(fname, res=args.res, simplex=simplex, order=args.order)
             with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
                 mesh = xdmf.read_mesh(name="cylinder_cylinder")
                 domain_marker = xdmf.read_meshtags(mesh, name="domain_marker")

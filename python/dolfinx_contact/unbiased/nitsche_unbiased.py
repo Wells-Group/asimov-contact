@@ -386,8 +386,6 @@ def nitsche_unbiased(steps: int, ufl_form: ufl.Form, u: fem.Function,
     # Pack celldiameter on each surface
     h_packed = []
     with common.Timer("~Contact: Compute and pack celldiameter"):
-        surface_cells = np.unique(np.hstack([entities[i][:, 0] for i in range(len(contact_pairs))]))
-
         for i in range(len(contact_pairs)):
             h_packed.append(dolfinx_contact.cpp.pack_coefficient_quadrature(
                 h._cpp_object, 0, entities[i]))
