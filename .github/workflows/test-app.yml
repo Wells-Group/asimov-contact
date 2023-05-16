@@ -134,12 +134,12 @@ jobs:
           cd python/demos
           mkdir -p results
           mkdir -p meshes
-          mpirun -np 3 python3 demo_nitsche_unbiased.py --problem=1
-          mpirun -np 3 python3 demo_nitsche_unbiased.py --problem=2
-          mpirun -np 3 python3 demo_nitsche_unbiased.py --problem=3
-          mpirun -np 3 python3 demo_nitsche_unbiased.py --problem=3 --3D
-          mpirun -np 3 python3 demo_nitsche_meshties.py
-          mpirun -np 3 python3 meshtie_convergence.py --3D
-          mpirun -np 3 python3 meshtie_convergence.py --simplex --3D
-          mpirun -np 3 python3 meshtie_convergence.py
-          mpirun -np 3 python3 meshtie_convergence.py --simplex --runs=4
+          mpirun -np 2 python3 demo_nitsche_unbiased.py --problem=1
+          mpirun -np 2 python3 demo_nitsche_unbiased.py --problem=2
+          mpirun -np 2 python3 demo_nitsche_unbiased.py --problem=3
+          mpirun -np 2 python3 demo_nitsche_unbiased.py --problem=3 --3D
+          mpirun -np 2 python3 demo_nitsche_meshties.py
+          mpirun -np 2 python3 meshtie_convergence.py --3D
+          mpirun -np 2 python3 meshtie_convergence.py --simplex --3D
+          mpirun -np 2 python3 meshtie_convergence.py
+          mpirun -np 2 python3 meshtie_convergence.py --simplex --runs=4
