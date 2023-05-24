@@ -227,7 +227,7 @@ def create_functionspaces(ct, gap):
     cell_custom = ufl.Cell(ct, geometric_dimension=x_custom.shape[1])
     domain_custom = ufl.Mesh(ufl.VectorElement("Lagrange", cell_custom, 1))
     mesh_custom = create_mesh(MPI.COMM_WORLD, cells_custom, x_custom, domain_custom)
-    el_custom = ufl.VectorElement("CG", mesh_custom.ufl_cell(), 1)
+    el_custom = ufl.VectorElement("Lagrange", mesh_custom.ufl_cell(), 1)
     V_custom = _fem.FunctionSpace(mesh_custom, el_custom)
 
     return V_ufl, V_custom

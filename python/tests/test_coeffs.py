@@ -18,11 +18,11 @@ import dolfinx_contact.cpp
 @pytest.mark.parametrize("ct", [CellType.triangle, CellType.quadrilateral])
 @pytest.mark.parametrize("quadrature_degree", range(1, 6))
 @pytest.mark.parametrize("degree", range(1, 6))
-@pytest.mark.parametrize("space", ["CG", "N1curl", "DG"])
+@pytest.mark.parametrize("space", ["Lagrange", "N1curl", "DG"])
 def test_pack_coeff_at_quadrature(ct, quadrature_degree, space, degree):
     N = 15
     mesh = create_unit_square(MPI.COMM_WORLD, N, N, cell_type=ct)
-    if space == "CG":
+    if space == "Lagrange":
         V = VectorFunctionSpace(mesh, (space, degree))
     elif space == "N1curl":
         if ct == CellType.quadrilateral:
@@ -74,11 +74,11 @@ def test_pack_coeff_at_quadrature(ct, quadrature_degree, space, degree):
 
 @pytest.mark.parametrize("quadrature_degree", range(1, 6))
 @pytest.mark.parametrize("degree", range(1, 6))
-@pytest.mark.parametrize("space", ["CG", "DG", "N1curl"])
+@pytest.mark.parametrize("space", ["Lagrange", "DG", "N1curl"])
 def test_pack_coeff_on_facet(quadrature_degree, space, degree):
     N = 15
     mesh = create_unit_square(MPI.COMM_WORLD, N, N)
-    if space == "CG":
+    if space == "Lagrange":
         V = VectorFunctionSpace(mesh, (space, degree))
     elif space == "N1curl":
         V = FunctionSpace(mesh, (space, degree))
@@ -142,7 +142,7 @@ def test_sub_coeff(quadrature_degree, degree):
     N = 10
     mesh = create_unit_cube(MPI.COMM_WORLD, N, N, N)
     el = FiniteElement("N1curl", mesh.ufl_cell(), degree)
-    v_el = VectorElement("CG", mesh.ufl_cell(), degree)
+    v_el = VectorElement("Lagrange", mesh.ufl_cell(), degree)
     V = FunctionSpace(mesh, MixedElement([v_el, el]))
 
     v = Function(V)
@@ -179,7 +179,7 @@ def test_sub_coeff_grad(quadrature_degree, degree):
     N = 10
     mesh = create_unit_cube(MPI.COMM_WORLD, N, N, N)
     el = FiniteElement("DG", mesh.ufl_cell(), degree)
-    v_el = VectorElement("CG", mesh.ufl_cell(), degree)
+    v_el = VectorElement("Lagrange", mesh.ufl_cell(), degree)
     V = FunctionSpace(mesh, MixedElement([v_el, el]))
 
     v = Function(V)

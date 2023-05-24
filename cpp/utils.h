@@ -38,7 +38,9 @@ enum class Kernel
   Rhs,
   Jac,
   MeshTieRhs,
-  MeshTieJac
+  MeshTieJac,
+  TrescaRhs,
+  TrescaJac
 };
 // NOTE: this function should change signature to T * ,..... , num_links,
 // num_dofs_per_link
@@ -102,6 +104,9 @@ double dR_plus(double x);
 /// @note Evaluates to 0 at x=0
 double dR_minus(double x);
 
+std::array<double, 3> ball_projection(std::array<double, 3>x, double alpha, std::size_t bs);
+std::array<double, 9> d_ball_projection(std::array<double, 3> x, double alpha,
+                                   std::size_t bs);
 /// Get shape of in,out variable for filling basis functions in for
 /// evaluate_basis_functions
 std::array<std::size_t, 4>

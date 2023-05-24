@@ -207,6 +207,48 @@ double dolfinx_contact::dR_minus(double x) { return double(x < 0); }
 //-------------------------------------------------------------------------------------
 
 double dolfinx_contact::dR_plus(double x) { return double(x > 0); }
+
+std::array<double, 3> dolfinx_contact::ball_projection(std::array<double, 3> x,
+                                                       double alpha,
+                                                       std::size_t bs)
+{
+  double norm = 0;
+  for (std::size_t j = 0; j < bs; ++j)
+    norm += x[j] * x[j];
+  norm = std::sqrt(norm);
+  std::array<double, 3> proj = {0, 0, 0};
+  if (norm <= alpha)
+    for (std::size_t j = 0; j < bs; ++j)
+      proj[j] = x[j];
+  else
+    for (std::size_t j = 0; j < bs; ++j)
+      proj[j] = alpha * x[j] / norm;
+  return proj;
+}
+
+std::array<double, 9>
+dolfinx_contact::d_ball_projection(std::array<double, 3> x, double alpha,
+                                   std::size_t bs)
+{
+  std::array<double, 9> d_proj = {0, 0, 0, 0, 0, 0, 0, 0, 0};
+  if (alpha < 1E-14)
+    return d_proj;
+  double norm_squared = 0;
+  for (std::size_t j = 0; j < bs; ++j)
+    norm_squared += x[j] * x[j];
+  double norm = std::sqrt(norm_squared);
+  if (norm < alpha)
+    for (std::size_t j = 0; j < bs; ++j)
+      d_proj[j * bs + j] = 1;
+  else
+    for (std::size_t i = 0; i < bs; ++i)
+    {
+      d_proj[i * bs + i] += alpha / norm;
+      for (std::size_t j = 0; j < bs; ++j)
+        d_proj[j] -= alpha * x[i]*x[j] / (norm * norm_squared);
+    }
+  return d_proj;
+}
 //-------------------------------------------------------------------------------------
 std::array<std::size_t, 4> dolfinx_contact::evaluate_basis_shape(
     const dolfinx::fem::FunctionSpace<double>& V, const std::size_t num_points,

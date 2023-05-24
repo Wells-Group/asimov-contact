@@ -91,7 +91,7 @@ def test_contact_kernel(theta, gamma, dim, gap):
         facet_marker = dolfinx.mesh.meshtags(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
         bottom_facets = np.sort(bottom_facets)
 
-        V = dolfinx.fem.VectorFunctionSpace(mesh, ("CG", 1))
+        V = dolfinx.fem.VectorFunctionSpace(mesh, ("Lagrange", 1))
         u = dolfinx.fem.Function(V)
         v = ufl.TestFunction(V)
         du = ufl.TrialFunction(V)
@@ -202,7 +202,7 @@ def test_contact_kernel(theta, gamma, dim, gap):
         L_custom = ufl.inner(sigma(u), epsilon(v)) * dx
         L_custom = dolfinx.fem.form(L_custom)
         b2 = dolfinx.fem.petsc.create_vector(L_custom)
-        kernel = dolfinx_contact.cpp.generate_contact_kernel(V._cpp_object, kt.Rhs, q_rule)
+        kernel = dolfinx_contact.cpp.generate_rigid_surface_kernel(V._cpp_object, kt.Rhs, q_rule)
         b2.zeroEntries()
         contact_assembler = dolfinx_contact.cpp.Contact(
             [facet_marker._cpp_object], surfaces, [(0, 1)], V._cpp_object, quadrature_degree=q_deg)
@@ -215,7 +215,7 @@ def test_contact_kernel(theta, gamma, dim, gap):
         a_custom = ufl.inner(sigma(du), epsilon(v)) * dx
         a_custom = dolfinx.fem.form(a_custom)
         B = contact_assembler.create_matrix(a_custom)
-        kernel = dolfinx_contact.cpp.generate_contact_kernel(
+        kernel = dolfinx_contact.cpp.generate_rigid_surface_kernel(
             V._cpp_object, kt.Jac, q_rule)
         B.zeroEntries()
         contact_assembler.assemble_matrix(B, [], 0, kernel, coeffs, consts)

@@ -123,7 +123,7 @@ def unsplit_domain(threed: bool = False, runs: int = 1):
         sigma = sigma_func(mu, lmbda)
 
         # Functions space and FEM functions
-        V = _fem.VectorFunctionSpace(mesh, ("CG", 1))
+        V = _fem.VectorFunctionSpace(mesh, ("Lagrange", 1))
         ndofs.append(V.dofmap.index_map_bs * V.dofmap.index_map.size_global)
         f = _fem.Function(V)
         c = 0.01  # amplitude of solution
@@ -188,7 +188,7 @@ def unsplit_domain(threed: bool = False, runs: int = 1):
         uh.x.scatter_forward()
 
         # Error computation
-        V_err = _fem.VectorFunctionSpace(mesh, ("CG", 3))
+        V_err = _fem.VectorFunctionSpace(mesh, ("Lagrange", 3))
         u_ex = _fem.Function(V_err)
         u_ex.interpolate(lambda x: u_fun(x, c, gdim))
 
@@ -282,7 +282,7 @@ def test_meshtie(threed: bool = False, simplex: bool = True, runs: int = 5):
                 mesh, facet_marker, domain_marker, [4, 6])
 
         # Function, TestFunction, TrialFunction and measures
-        V = VectorFunctionSpace(mesh, ("CG", 1))
+        V = VectorFunctionSpace(mesh, ("Lagrange", 1))
         u = Function(V)
         v = ufl.TestFunction(V)
         w = ufl.TrialFunction(V)
@@ -325,7 +325,7 @@ def test_meshtie(threed: bool = False, simplex: bool = True, runs: int = 5):
 
         u1.x.scatter_forward()
 
-        V_err = _fem.VectorFunctionSpace(mesh, ("CG", 3))
+        V_err = _fem.VectorFunctionSpace(mesh, ("Lagrange", 3))
         u_ex = _fem.Function(V_err)
         u_ex.interpolate(lambda x: u_fun(x, c, gdim))
 

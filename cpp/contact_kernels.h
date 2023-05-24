@@ -1,29 +1,40 @@
-// Copyright (C) 2021-2022 Sarah Roggendorf
+// Copyright (C) 2023 Sarah Roggendorf
 //
-// This file is part of DOLFINx_CONTACT
+// This file is part of DOLFINx_Contact
 //
 // SPDX-License-Identifier:    MIT
 
 #pragma once
-
+#include "KernelData.h"
 #include "QuadratureRule.h"
+#include "elasticity.h"
+#include "geometric_quantities.h"
 #include "utils.h"
-#include <petsc.h>
 
+/// @brief Generate contact kernel
+///
+/// @param[in] type The kernel type (Either `TrescaJac` or`TrescaRhs`).
+/// @param[in] V               The function space
+/// @param[in] quadrature_rule The quadrature rule
+/// @param[in] max_links       The maximum number of facets linked to one cell
+/// @returns Kernel function that takes in a vector (b) to assemble into, the
+/// coefficients (`c`), the constants (`w`), the local facet entity (`entity
+/// _local_index`), the quadrature permutation and the number of cells on the
+/// other contact boundary coefficients are extracted from.
+/// @note The ordering of coefficients are expected to be `mu`, `lmbda`, `h`,
+///  `test_fn`, `grad(test_fn)`, `u`, `u_opposite`, `grad(u_opposite)`.
+/// @note The scalar valued coefficients `mu`,`lmbda` and `h` are expected to
+/// be DG-0 functions, with a single value per facet.
+/// @note The coefficients`test_fn`, `grad(test_fn)`,  `u_opposite`,
+/// `grad(u_opposite)` are packed at quadrature points. The coefficient `u` is
+/// packed at dofs.
+/// @note The vector valued coefficents `test_fn`, `grad(test_fn)`, `u`,
+/// `u_opposite`, `grad(u_opposite)` have dimension `bs == gdim`.
 namespace dolfinx_contact
 {
-
-/// Generate one-sided contact kernels
-///
-/// @param[in] V The function space of the trial/test function
-/// @param[in] type The kernel type (Rhs or Jac)
-/// @param[in] quadrature_rule The quadrature rule used in kernels
-/// @param[in] coeffs The coefficients. Ordered as (u, mu, lambda).
-/// @param[in] constant_normal Boolean indicating if normal is constant at every
-/// point of the cell
-/// @returns The integration kernel
-kernel_fn<PetscScalar>
-generate_contact_kernel(std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V,
-                        Kernel type, QuadratureRule& quadrature_rule,
-                        bool constant_normal);
+dolfinx_contact::kernel_fn<PetscScalar> generate_contact_kernel(
+    dolfinx_contact::Kernel type,
+    std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V,
+    std::shared_ptr<const dolfinx_contact::QuadratureRule> quadrature_rule,
+    const std::size_t max_links);
 } // namespace dolfinx_contact

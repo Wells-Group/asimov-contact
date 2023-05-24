@@ -87,7 +87,7 @@ def test_projection(q_deg, surf, dim):
     facet_marker = meshtags(mesh, tdim - 1, indices[sorted_ind], values[sorted_ind])
 
     # Functions space
-    V = _fem.VectorFunctionSpace(mesh, ("CG", 1))
+    V = _fem.VectorFunctionSpace(mesh, ("Lagrange", 1))
 
     # Create contact class, gap function and normals
     data = np.array([surface_0_val, surface_1_val], dtype=np.int32)
