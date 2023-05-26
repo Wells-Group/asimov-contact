@@ -15,7 +15,7 @@ import ufl
 from petsc4py import PETSc
 
 __all__ = ["compare_matrices", "lame_parameters", "epsilon", "sigma_func", "R_minus", "dR_minus", "R_plus",
-           "dR_plus", "ball_projection", "tangential_proj", "NonlinearPDE_SNESProblem",
+           "dR_plus", "ball_projection", "d_ball_projection", "tangential_proj", "NonlinearPDE_SNESProblem",
            "rigid_motions_nullspace", "rigid_motions_nullspace_subdomains", "weak_dirichlet"]
 
 
@@ -88,13 +88,19 @@ def dR_plus(x):
     return 0.5 * (1 + ufl.sign(x))
 
 
-def ball_projection(x, s):
+def ball_projection(x, s, dim):
     """
     Ball projection, project a vector quantity x onto a ball of radius r  if |x|>r
     """
-    dim = x.geometric_dimension()
     abs_x = ufl.sqrt(sum([x[i]**2 for i in range(dim)]))
     return ufl.conditional(ufl.le(abs_x, s), x, s * x / abs_x)
+
+def d_ball_projection(x, s, dim):
+    """
+    Derivative of ball projection, project a vector quantity x onto a ball of radius r  if |x|>r
+    """
+    abs_x = ufl.sqrt(sum([x[i]**2 for i in range(dim)]))
+    return ufl.conditional(ufl.le(abs_x, s), ufl.Identity(dim), (s/abs_x)*(ufl.Identity(dim) - ufl.outer(x/abs_x, x/abs_x)))
 
 
 def tangential_proj(u, n):
