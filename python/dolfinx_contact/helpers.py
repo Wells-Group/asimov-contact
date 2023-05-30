@@ -95,12 +95,14 @@ def ball_projection(x, s, dim):
     abs_x = ufl.sqrt(sum([x[i]**2 for i in range(dim)]))
     return ufl.conditional(ufl.le(abs_x, s), x, s * x / abs_x)
 
+
 def d_ball_projection(x, s, dim):
     """
     Derivative of ball projection, project a vector quantity x onto a ball of radius r  if |x|>r
     """
     abs_x = ufl.sqrt(sum([x[i]**2 for i in range(dim)]))
-    return ufl.conditional(ufl.le(abs_x, s), ufl.Identity(dim), (s/abs_x)*(ufl.Identity(dim) - ufl.outer(x/abs_x, x/abs_x)))
+    return ufl.conditional(ufl.le(abs_x, s), ufl.Identity(dim),
+                           (s / abs_x) * (ufl.Identity(dim) - ufl.outer(x / abs_x, x / abs_x)))
 
 
 def tangential_proj(u, n):

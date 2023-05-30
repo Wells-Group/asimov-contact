@@ -72,6 +72,8 @@ if __name__ == "__main__":
                         help="Number of pseudo time steps")
     parser.add_argument("--res", default=0.1, type=np.float64, dest="res",
                         help="Mesh resolution")
+    parser.add_argument("--friction", default=0.0, type=np.float64, dest="fric",
+                        help="Friction coefficient for Tresca friction")
     parser.add_argument("--outfile", type=str, default=None, required=False,
                         help="File for appending results", dest="outfile")
     _lifting = parser.add_mutually_exclusive_group(required=False)
@@ -303,24 +305,24 @@ if __name__ == "__main__":
                       "convergence_criterion": "residual",
                       "max_it": 50,
                       "error_on_nonconvergence": True}
-    petsc_options = {"ksp_type": "preonly", "pc_type": "lu"}
-    # petsc_options = {
-    #     "matptap_via": "scalable",
-    #     "ksp_type": "cg",
-    #     "ksp_rtol": ksp_tol,
-    #     "ksp_atol": ksp_tol,
-    #     "pc_type": "gamg",
-    #     "pc_mg_levels": 3,
-    #     "pc_mg_cycles": 1,   # 1 is v, 2 is w
-    #     "mg_levels_ksp_type": "chebyshev",
-    #     "mg_levels_pc_type": "jacobi",
-    #     "pc_gamg_type": "agg",
-    #     "pc_gamg_coarse_eq_limit": 100,
-    #     "pc_gamg_agg_nsmooths": 1,
-    #     "pc_gamg_threshold": 1e-3,
-    #     "pc_gamg_square_graph": 2,
-    #     "pc_gamg_reuse_interpolation": False
-    # }
+    # petsc_options = {"ksp_type": "preonly", "pc_type": "lu"}
+    petsc_options = {
+        "matptap_via": "scalable",
+        "ksp_type": "cg",
+        "ksp_rtol": ksp_tol,
+        "ksp_atol": ksp_tol,
+        "pc_type": "gamg",
+        "pc_mg_levels": 3,
+        "pc_mg_cycles": 1,   # 1 is v, 2 is w
+        "mg_levels_ksp_type": "chebyshev",
+        "mg_levels_pc_type": "jacobi",
+        "pc_gamg_type": "agg",
+        "pc_gamg_coarse_eq_limit": 100,
+        "pc_gamg_agg_nsmooths": 1,
+        "pc_gamg_threshold": 1e-3,
+        "pc_gamg_square_graph": 2,
+        "pc_gamg_reuse_interpolation": False
+    }
     # Pack mesh data for Nitsche solver
     dirichlet_vals = [dirichlet_bdy_1, dirichlet_bdy_2]
     contact = [(0, 1), (1, 0)]
@@ -363,7 +365,7 @@ if __name__ == "__main__":
     # dictionary with problem parameters
     gamma = args.gamma
     theta = args.theta
-    problem_parameters = {"mu": mu, "lambda": lmbda, "gamma": E * gamma, "theta": theta, "friction": 0.1}
+    problem_parameters = {"mu": mu, "lambda": lmbda, "gamma": E * gamma, "theta": theta, "friction": args.fric}
 
     # Load geometry over multiple steps
     for j in range(nload_steps):

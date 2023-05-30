@@ -349,8 +349,8 @@ dolfinx_contact::generate_contact_kernel(
     }
   };
 
-  /// @brief Assemble kernel for RHS of unbiased contact problem
-  ///
+  /// @brief Assemble kernel for RHS of the friction term for unbiased contact problem
+  /// with tresca friction
   /// Assemble of the residual of the unbiased contact problem into vector
   /// `b`.
   /// @param[in,out] b The vector to assemble the residual into
@@ -484,8 +484,8 @@ dolfinx_contact::generate_contact_kernel(
       }
       const double w0 = weights[q] * detJ;
 
-      std::array<double, 3> Pt_u_proj
-          = ball_projection(Pt_u, gamma * fric, bs);
+      // compute ball projection
+      std::array<double, 3> Pt_u_proj = ball_projection(Pt_u, gamma * fric, bs);
       // Fill contributions of facet with itself
       for (std::size_t i = 0; i < ndofs_cell; i++)
       {
@@ -495,7 +495,8 @@ dolfinx_contact::generate_contact_kernel(
           double sign_v = (lmbda * tr(i, n) * n_dot + mu * epsn(i, n));
 
           // inner(Pt_u_proj, v[x])
-          b[0][n + i * bs] += 0.5 * gamma_inv * Pt_u_proj[n] * phi(q_pos, i)* w0;
+          b[0][n + i * bs]
+              += 0.5 * gamma_inv * Pt_u_proj[n] * phi(q_pos, i) * w0;
           for (std::size_t j = 0; j < bs; j++)
           {
             // -v_n[x]*n[j] - theta/gamma*sigma_t(v)[j]
@@ -513,16 +514,37 @@ dolfinx_contact::generate_contact_kernel(
                                 + i * num_points * bs + q * bs;
             double v_n_opp = c[index + n] * n_surf[n];
 
-            b[k + 1][n + i * bs] -= 0.5 * gamma_inv * Pt_u_proj[n] * c[index + n] * w0;
+            // inner(Pt_u_proj, v[y])
+            b[k + 1][n + i * bs]
+                -= 0.5 * gamma_inv * Pt_u_proj[n] * c[index + n] * w0;
             for (std::size_t j = 0; j < bs; j++)
+
+            { // Pt_u_proj[j] * v_n n[j]
               b[k + 1][n + i * bs]
                   += 0.5 * gamma_inv * Pt_u_proj[j] * v_n_opp * n_surf[j] * w0;
+            }
           }
         }
       }
     }
   };
 
+  /// @brief Assemble kernel for Jacobian (LHS) of the friction term for unbiased contact
+  /// problem with tresca friction
+  ///
+  /// Assemble of the residual of the unbiased contact problem into matrix
+  /// `A`.
+  /// @param[in,out] A The matrix to assemble the Jacobian into
+  /// @param[in] c The coefficients used in kernel. Assumed to be
+  /// ordered as mu, lmbda, h, gap, normals, test_fn, u, u_opposite.
+  /// @param[in] w The constants used in kernel. Assumed to be ordered as
+  /// `gamma`, `theta`.
+  /// @param[in] coordinate_dofs The physical coordinates of cell. Assumed
+  /// to be padded to 3D, (shape (num_nodes, 3)).
+  /// @param[in] facet_index Local facet index (relative to cell)
+  /// @param[in] num_links How many cells from opposite surface are connected
+  /// with the cell.
+  /// @param[in] q_indices The quadrature points to loop over
   kernel_fn<PetscScalar> tresca_jac
       = [kd, gdim, ndofs_cell, bs](
             std::vector<std::vector<PetscScalar>>& A, std::span<const double> c,
@@ -645,19 +667,21 @@ dolfinx_contact::generate_contact_kernel(
       {
         for (std::size_t l = 0; l < bs; l++)
         {
+          double w_dot_nsurf = n_surf[l] * phi(q_pos, j);
           double sign_w = (lmbda * tr(j, l) * n_dot + mu * epsn(j, l));
-          std::array<double, 3> Pt_w = {0, 0, 0};
 
           // Pt_w = J_ball * w_t[X] + gamma* J_ball * sigma_t(w)
-          for (std::size_t i = 0; i < bs; ++i)
-          {
-            // J_ball * w[X]
-            Pt_w[i] = Pt_u_proj[i * bs + l] * phi(q_pos, l) * w0;
-            // - w_n[X] J_ball * n_surf + gamma * J_ball * sgima_t(w)
-            for (std::size_t b = 0; b < bs; b++)
-              Pt_w[i] += -w0 * Pt_u_proj[i * bs + b]
-                         * (phi(q_pos, l) * n_surf[l] * n_surf[b]
-                            + gamma * (sig_n(j, l, b) - sign_w * n_surf[b]));
+          std::array<double, 3> Pt_w = {0, 0, 0};
+          for (std::size_t m = 0; m < bs; ++m)
+          { // J_ball * w[X]
+            Pt_w[m] += Pt_u_proj[l * bs + m] * phi(q_pos, j);
+            for (std::size_t n = 0; n < bs; n++)
+            {
+              // - w_n[X] J_ball * n_surf - gamma * J_ball * sgima_t(w)
+              Pt_w[m] -= Pt_u_proj[n * bs + m]
+                         * (w_dot_nsurf * n_surf[n]
+                            + gamma * (sig_n(j, l, n) - sign_w * n_surf[n]));
+            }
           }
 
           for (std::size_t i = 0; i < ndofs_cell; i++)
@@ -668,16 +692,16 @@ dolfinx_contact::generate_contact_kernel(
               double sign_v = (lmbda * tr(i, b) * n_dot + mu * epsn(i, b));
               // inner (Pt_w, v[X])
               A[0][(b + i * bs) * ndofs_cell * bs + l + j * bs]
-                  += 0.5 * gamma_inv*Pt_w[b] * phi(q_pos, i);
+                  += 0.5 * gamma_inv * Pt_w[b] * phi(q_pos, i) * w0;
               for (std::size_t n = 0; n < bs; n++)
               {
                 // - inner(v[X], n_surf[X])*v_n[X] -theta/gamma*sgima_t(v)[X]
-                double Pt_vn = -v_dot_nsurf * n_surf[n]
-                               - theta * gamma
-                                     * (sig_n(i, b, n) - sign_v * n_surf[n]);
+                double Pt_vn
+                    = -v_dot_nsurf * n_surf[n]
+                      - theta * gamma * (sig_n(i, b, n) - sign_v * n_surf[n]);
                 // Pt_w[n] * Pt_vn
                 A[0][(b + i * bs) * ndofs_cell * bs + l + j * bs]
-                    += 0.5 * gamma_inv * Pt_w[n] * Pt_vn;
+                    += 0.5 * gamma_inv * Pt_w[n] * Pt_vn * w0;
               }
 
               // entries corresponding to u and v on the other surface
@@ -689,41 +713,41 @@ dolfinx_contact::generate_contact_kernel(
                 double wn_opp = c[index] * n_surf[l];
                 // Pt_w_opp = - J_ball * w_t[Y]
                 std::array<double, 3> Pt_w_opp = {0, 0, 0};
-                for (std::size_t p = 0; p < bs; ++p)
+
+                for (std::size_t m = 0; m < bs; ++m)
                 {
-                  Pt_w_opp[p] -= Pt_u_proj[p * bs + l] * c[index] * w0;
+                  Pt_w_opp[m] += Pt_u_proj[l * bs + m] * c[index];
                   for (std::size_t n = 0; n < bs; ++n)
-                    Pt_w_opp[p]
-                        += Pt_u_proj[p * bs + n] * wn_opp * n_surf[n] * w0;
+                    Pt_w_opp[m] -= Pt_u_proj[n * bs + m] * wn_opp * n_surf[n];
                 }
                 index = kd.offsets(3) + k * num_points * ndofs_cell * bs
                         + i * num_points * bs + q * bs;
                 double v_n_opp = c[index + b] * n_surf[b];
                 // inner(Pt_w_opp, v[X])
                 A[3 * k + 1][(b + i * bs) * bs * ndofs_cell + l + j * bs]
-                    += 0.5 * gamma_inv * Pt_w_opp[b] * phi(q_pos, i);
+                    -= 0.5 * gamma_inv * Pt_w_opp[b] * phi(q_pos, i) * w0;
                 // -inner (Pt_w, v[y])
                 A[3 * k + 2][(b + i * bs) * bs * ndofs_cell + l + j * bs]
-                  -= 0.5 * gamma_inv * Pt_w[b] * c[index + b];
-                // -inner(Pt_w_opp, v[y])
+                    -= 0.5 * gamma_inv * Pt_w[b] * c[index + b] * w0;
+                // inner(Pt_w_opp, v[y])
                 A[3 * k + 3][(b + i * bs) * bs * ndofs_cell + l + j * bs]
-                    -= 0.5 * gamma_inv * Pt_w_opp[b] * c[index + b];
+                    += 0.5 * gamma_inv * Pt_w_opp[b] * c[index + b] * w0;
                 for (std::size_t n = 0; n < bs; ++n)
 
                 {
                   // - inner(v[X], n_surf[X])*v_n[X] -theta/gamma*sgima_t(v)[X]
-                  double Pt_vn = -v_dot_nsurf * n_surf[n]
-                                 - theta * gamma
-                                       * (sig_n(i, b, n) - sign_v * n_surf[n]);
+                  double Pt_vn
+                      = -v_dot_nsurf * n_surf[n]
+                        - theta * gamma * (sig_n(i, b, n) - sign_v * n_surf[n]);
                   // inner(Pt_w_opp, Pt_vn)
                   A[3 * k + 1][(b + i * bs) * bs * ndofs_cell + l + j * bs]
-                      += 0.5 * gamma_inv * Pt_w_opp[n] * Pt_vn;
-                  // inner(Pt_w, Pt_vn)
+                      -= 0.5 * gamma_inv * Pt_w_opp[n] * Pt_vn * w0;
+                  // inner(Pt_w, n_surf) v_n_opp
                   A[3 * k + 2][(b + i * bs) * bs * ndofs_cell + l + j * bs]
-                      += 0.5 * gamma_inv * Pt_w[n] * Pt_vn;
+                      += 0.5 * gamma_inv * Pt_w[n] * n_surf[n] * v_n_opp * w0;
                   // inner(Pt_w_opp, n_surf) v_n_opp
                   A[3 * k + 3][(b + i * bs) * bs * ndofs_cell + l + j * bs]
-                      += 0.5 * gamma_inv * Pt_w_opp[n] * n_surf[n] * v_n_opp;
+                      -= 0.5 * gamma_inv * Pt_w_opp[n] * n_surf[n] * v_n_opp;
                 }
               }
             }

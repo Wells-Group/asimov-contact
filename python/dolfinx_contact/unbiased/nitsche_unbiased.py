@@ -194,9 +194,9 @@ def get_problem_parameters(problem_parameters: dict[str, np.float64]):
     else:
         gamma = problem_parameters.get("gamma")
     if problem_parameters.get("friction") is None:
-        s = 0.0
+        s = np.float64(0.0)
     else:
-        s = problem_parameters.get("friction")
+        s = problem_parameters["friction"]
     sigma = sigma_func(mu, lmbda)
 
     return mu, lmbda, theta, gamma, sigma, s
@@ -386,7 +386,7 @@ def nitsche_unbiased(steps: int, ufl_form: ufl.Form, u: fem.Function,
             material.append(np.hstack([dolfinx_contact.cpp.pack_coefficient_quadrature(
                 mu2._cpp_object, 0, entities[i]),
                 dolfinx_contact.cpp.pack_coefficient_quadrature(
-                lmbda2._cpp_object, 0, entities[i]), 
+                lmbda2._cpp_object, 0, entities[i]),
                 dolfinx_contact.cpp.pack_coefficient_quadrature(
                 fric_coeff._cpp_object, 0, entities[i])]))
 

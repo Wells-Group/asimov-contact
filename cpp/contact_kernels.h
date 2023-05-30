@@ -13,7 +13,8 @@
 
 /// @brief Generate contact kernel
 ///
-/// @param[in] type The kernel type (Either `TrescaJac` or`TrescaRhs`).
+/// @param[in] type The kernel type (`Rhs`, `Jac`, `TrescaJac` or`TrescaRhs`).
+/// for the right hand side vector/jacobian for frictionless contact or tresca friction
 /// @param[in] V               The function space
 /// @param[in] quadrature_rule The quadrature rule
 /// @param[in] max_links       The maximum number of facets linked to one cell
@@ -23,8 +24,8 @@
 /// other contact boundary coefficients are extracted from.
 /// @note The ordering of coefficients are expected to be `mu`, `lmbda`, `h`,
 ///  `test_fn`, `grad(test_fn)`, `u`, `u_opposite`, `grad(u_opposite)`.
-/// @note The scalar valued coefficients `mu`,`lmbda` and `h` are expected to
-/// be DG-0 functions, with a single value per facet.
+/// @note The scalar valued coefficients `mu`,`lmbda`, the friciont coefficient `s`,
+/// and `h` are expected to be DG-0 functions, with a single value per facet.
 /// @note The coefficients`test_fn`, `grad(test_fn)`,  `u_opposite`,
 /// `grad(u_opposite)` are packed at quadrature points. The coefficient `u` is
 /// packed at dofs.

@@ -108,20 +108,30 @@ def DG_jac_minus(u0, v0, w0, h, n, gamma, theta, sigma, gap, dS):
 
     return J
 
+
 def DG_rhs_tresca(u0, v0, h, n, gamma, theta, sigma, fric, dS, gdim):
+    # This is the ufl version of the tresca friction term for the unbiased Nitsche formulation
     def Pt_g(u, a, b, c):
-        return tangential_proj(u(a) - u(b) - h(a)*c*sigma(u(a))*n(a), -n(b))
-    return 0.5*gamma/h('+')*ufl.dot(ball_projection(Pt_g(u0, '+', '-', 1./gamma), fric*h('+')/gamma, gdim), Pt_g(v0, '+', '-', theta/gamma))*dS\
-            +0.5*gamma/h('-')*ufl.dot(ball_projection(Pt_g(u0, '-', '+', 1./gamma), fric*h('-')/gamma, gdim), Pt_g(v0, '-', '+', theta/gamma))*dS
+        return tangential_proj(u(a) - u(b) - h(a) * c * sigma(u(a)) * n(a), -n(b))
+    return 0.5 * gamma / h('+') * ufl.dot(ball_projection(Pt_g(u0, '+', '-', 1. / gamma), fric * h('+') / gamma, gdim),
+                                          Pt_g(v0, '+', '-', theta / gamma)) * dS\
+        + 0.5 * gamma / h('-') * ufl.dot(ball_projection(Pt_g(u0, '-', '+', 1. / gamma), fric * h('-') / gamma, gdim),
+                                         Pt_g(v0, '-', '+', theta / gamma)) * dS
+
 
 def DG_jac_tresca(u0, v0, w0, h, n, gamma, theta, sigma, fric, dS, gdim):
+    # This is the ufl version of the jacobian for the tresca friction term for the unbiased Nitsche formulation
     def Pt_g(u, a, b, c):
-        return tangential_proj(u(a) - u(b) - h(a)*c*sigma(u(a))*n(a), -n(b))
-    
-    J = 0.5 * gamma/h('+') * ufl.dot(d_ball_projection(Pt_g(u0, '+', '-', 1./gamma), fric*h('+')/gamma, gdim) * Pt_g(w0, '+', '-', 1./gamma), Pt_g(v0, '+', '-', theta/gamma))*dS
-    J += 0.5 * gamma/h('-') * ufl.dot(d_ball_projection(Pt_g(u0, '-', '+', 1./gamma), fric*h('-')/gamma, gdim) * Pt_g(w0, '-', '+', 1./gamma), Pt_g(v0, '-', '+', theta/gamma))*dS
+        return tangential_proj(u(a) - u(b) - h(a) * c * sigma(u(a)) * n(a), -n(b))
+
+    J = 0.5 * gamma / h('+') * ufl.dot(d_ball_projection(Pt_g(u0, '+', '-', 1. / gamma), fric * h('+') / gamma, gdim)
+                                       * Pt_g(w0, '+', '-', 1. / gamma), Pt_g(v0, '+', '-', theta / gamma)) * dS
+    J += 0.5 * gamma / h('-') * ufl.dot(d_ball_projection(Pt_g(u0, '-', '+', 1. / gamma), fric * h('-') / gamma, gdim)
+                                        * Pt_g(w0, '-', '+', 1. / gamma), Pt_g(v0, '-', '+', theta / gamma)) * dS
 
     return J
+
+
 def compute_dof_permutations(V_dg, V_cg, gap, facets_dg, facets_cg):
     '''The meshes used for the two different formulations are
        created independently of each other. Therefore we need to
@@ -332,7 +342,6 @@ def create_contact_data(V, u, quadrature_degree, lmbda, mu, facets_cg, search, t
         mu2._cpp_object, 0, entities_1),
         dolfinx_contact.cpp.pack_coefficient_quadrature(
         lmbda2._cpp_object, 0, entities_1)])
-    
     friction_0 = dolfinx_contact.cpp.pack_coefficient_quadrature(
         fric_coeff._cpp_object, 0, entities_0)
     friction_1 = dolfinx_contact.cpp.pack_coefficient_quadrature(
@@ -387,12 +396,12 @@ def create_contact_data(V, u, quadrature_degree, lmbda, mu, facets_cg, search, t
 @pytest.mark.parametrize("gap", [0.5, -0.5])
 @pytest.mark.parametrize("quadrature_degree", [1, 5])
 @pytest.mark.parametrize("theta", [1, 0, -1])
-@pytest.mark.parametrize("tied", [False, True])
+@pytest.mark.parametrize("formulation", ["meshtie", "frictionless", "tresca"])
 @pytest.mark.parametrize("search", [dolfinx_contact.cpp.ContactMode.ClosestPoint,
                                     dolfinx_contact.cpp.ContactMode.Raytracing])
-def test_contact_kernels(ct, gap, quadrature_degree, theta, tied, search):
+def test_contact_kernels(ct, gap, quadrature_degree, theta, formulation, search):
 
-    if tied and search == dolfinx_contact.cpp.ContactMode.Raytracing:
+    if formulation == "meshtie" and search == dolfinx_contact.cpp.ContactMode.Raytracing:
         pytest.xfail("Raytracing and MeshTie not supported")
 
     # Compute lame parameters
@@ -452,13 +461,18 @@ def test_contact_kernels(ct, gap, quadrature_degree, theta, tied, search):
 
     # DG formulation
 
-    if tied:
+    if formulation == "meshtie":
         F0 = tied_dg(u0, v0, h, n, gamma_scaled, theta, sigma, dS)
         J0 = tied_dg(w0, v0, h, n, gamma_scaled, theta, sigma, dS)
         kernel_type_rhs = kt.MeshTieRhs
         kernel_type_jac = kt.MeshTieJac
-    else:
+    elif formulation == "frictionless":
         # Contact terms formulated using ufl consistent with https://doi.org/10.1007/s00211-018-0950-x
+        F0 = DG_rhs_plus(u0, v0, h, n, gamma_scaled, theta, sigma, gap, dS)
+        J0 = DG_jac_plus(u0, v0, w0, h, n, gamma_scaled, theta, sigma, gap, dS)
+        kernel_type_rhs = kt.Rhs
+        kernel_type_jac = kt.Jac
+    else:
         F0 = DG_rhs_tresca(u0, v0, h, n, gamma_scaled, theta, sigma, 0.1, dS, gdim)
         J0 = DG_jac_tresca(u0, v0, w0, h, n, gamma_scaled, theta, sigma, 0.1, dS, gdim)
         kernel_type_rhs = kt.TrescaRhs
@@ -494,7 +508,8 @@ def test_contact_kernels(ct, gap, quadrature_degree, theta, tied, search):
     F_custom = ufl.inner(sigma(u1), epsilon(v1)) * dx
     J_custom = ufl.inner(sigma(w1), epsilon(v1)) * dx
 
-    contact, c_0, c_1 = create_contact_data(V_custom, u1, quadrature_degree, lmbda, mu, facets_cg, search, tied)
+    contact, c_0, c_1 = create_contact_data(V_custom, u1, quadrature_degree, lmbda,
+                                            mu, facets_cg, search, formulation == "meshtie")
 
     # Generate residual data structures
     F_custom = _fem.form(F0)
@@ -537,9 +552,9 @@ def test_contact_kernels(ct, gap, quadrature_degree, theta, tied, search):
     assert np.allclose(A_sp[ind_dg, ind_dg], B_sp[ind_cg, ind_cg])
 
     # Sanity check different formulations
-    if not tied:
+    if formulation == "frictionless":
         # Contact terms formulated using ufl consistent with nitsche_ufl.py
-        F2 = DG_rhs_tresca(u0, v0, h, n, gamma_scaled, theta, sigma, 0.1, dS, gdim)
+        F2 = DG_rhs_minus(u0, v0, h, n, gamma_scaled, theta, sigma, gap, dS)
 
         F2 = _fem.form(F2)
         b2 = _fem.petsc.create_vector(F2)
@@ -548,7 +563,7 @@ def test_contact_kernels(ct, gap, quadrature_degree, theta, tied, search):
         assert np.allclose(b1.array[ind_cg], b2.array[ind_dg])
 
         # Contact terms formulated using ufl consistent with nitsche_ufl.py
-        J2 = DG_jac_tresca(u0, v0, w0, h, n, gamma_scaled, theta, sigma, 0.1, dS, gdim)
+        J2 = DG_jac_minus(u0, v0, w0, h, n, gamma_scaled, theta, sigma, gap, dS)
         J2 = _fem.form(J2)
         A2 = _fem.petsc.create_matrix(J2)
         A2.zeroEntries()
