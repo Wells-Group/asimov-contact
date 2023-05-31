@@ -110,7 +110,9 @@ def DG_jac_minus(u0, v0, w0, h, n, gamma, theta, sigma, gap, dS):
 
 
 def DG_rhs_tresca(u0, v0, h, n, gamma, theta, sigma, fric, dS, gdim):
-    # This is the ufl version of the tresca friction term for the unbiased Nitsche formulation
+    """
+    UFL version of the Tresca friction term for the unbiased Nitsche formulation
+    """
     def Pt_g(u, a, b, c):
         return tangential_proj(u(a) - u(b) - h(a) * c * sigma(u(a)) * n(a), -n(b))
     return 0.5 * gamma / h('+') * ufl.dot(ball_projection(Pt_g(u0, '+', '-', 1. / gamma), fric * h('+') / gamma, gdim),
@@ -120,7 +122,9 @@ def DG_rhs_tresca(u0, v0, h, n, gamma, theta, sigma, fric, dS, gdim):
 
 
 def DG_jac_tresca(u0, v0, w0, h, n, gamma, theta, sigma, fric, dS, gdim):
-    # This is the ufl version of the jacobian for the tresca friction term for the unbiased Nitsche formulation
+    """
+    UFL version of the Jacobian for the Tresca friction term for the unbiased Nitsche formulation
+    """
     def Pt_g(u, a, b, c):
         return tangential_proj(u(a) - u(b) - h(a) * c * sigma(u(a)) * n(a), -n(b))
 

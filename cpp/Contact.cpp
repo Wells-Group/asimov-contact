@@ -195,7 +195,7 @@ std::size_t dolfinx_contact::Contact::coefficients_size(bool meshtie)
   {
     // Coefficient offsets
     // Expecting coefficients in the following order
-    // mu, lmbda, h, gap, normals, test_fns, u, grad(u), u_opposite,
+    // mu, lmbda, h, gap, friction_coeff, normals, test_fns, u, grad(u), u_opposite,
     std::array<std::size_t, 9> cstrides
         = {4,
            num_q_points * bs,

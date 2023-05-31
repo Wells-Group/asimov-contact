@@ -1,4 +1,4 @@
-// Copyright (C) 2021 Sarah Roggendorf
+// Copyright (C) 2023 Sarah Roggendorf
 //
 // This file is part of DOLFINx_CONTACT
 //

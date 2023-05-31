@@ -193,10 +193,7 @@ def get_problem_parameters(problem_parameters: dict[str, np.float64]):
         raise RuntimeError("Need to supply gamma for Nitsche's method")
     else:
         gamma = problem_parameters.get("gamma")
-    if problem_parameters.get("friction") is None:
-        s = np.float64(0.0)
-    else:
-        s = problem_parameters["friction"]
+    s = problem_parameters.get("friction", np.float64(0.0))
     sigma = sigma_func(mu, lmbda)
 
     return mu, lmbda, theta, gamma, sigma, s
