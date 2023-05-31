@@ -38,7 +38,9 @@ enum class Kernel
   Rhs,
   Jac,
   MeshTieRhs,
-  MeshTieJac
+  MeshTieJac,
+  TrescaRhs,
+  TrescaJac
 };
 // NOTE: this function should change signature to T * ,..... , num_links,
 // num_dofs_per_link
@@ -101,6 +103,27 @@ double dR_plus(double x);
 /// Compute the derivative of the negative restriction (i.e.) the step function.
 /// @note Evaluates to 0 at x=0
 double dR_minus(double x);
+
+/// Compute ball projection of a vector with block size bs and ball of radius
+/// alpha
+/// @param[in] x     The input vector (max bs 3)
+/// @param[in] alpha The radius of the ball
+/// @param[in] bs    The block size
+/// @return The projection vector
+/// @note Assumes that any unused entries in x are initialised to 0, e.g., if bs=2
+std::array<double, 3> ball_projection(std::array<double, 3> x, double alpha,
+                                      std::size_t bs);
+
+/// Compute derivative of ball projection of a vector with block size bs and
+/// ball
+//  of radius alpha
+/// @param[in] x     The input vector (max bs 3)
+/// @param[in] alpha The radius of the ball
+/// @param[in] bs    The block size
+/// @return The jacobi matrix for the ball projection
+/// @note Assumes that any unused entries in x are initialised to 0, e.g., if bs=2
+std::array<double, 9> d_ball_projection(std::array<double, 3> x, double alpha,
+                                        std::size_t bs);
 
 /// Get shape of in,out variable for filling basis functions in for
 /// evaluate_basis_functions

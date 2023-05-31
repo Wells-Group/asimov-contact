@@ -106,7 +106,7 @@ if __name__ == "__main__":
             mesh, facet_marker, domain_marker, [contact_bdy_1, contact_bdy_2])
 
     # Function, TestFunction, TrialFunction and measures
-    V = VectorFunctionSpace(mesh, ("CG", 1))
+    V = VectorFunctionSpace(mesh, ("Lagrange", 1))
     u = Function(V)
     v = ufl.TestFunction(V)
     w = ufl.TrialFunction(V)

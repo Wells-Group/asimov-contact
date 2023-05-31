@@ -45,7 +45,7 @@ def solve_manufactured(nx: int, ny: int, theta: float, gamma: float,
     sorted = np.argsort(left_facets)
     facet_marker = meshtags(mesh, tdim - 1, left_facets[sorted], left_values[sorted])
 
-    V = VectorFunctionSpace(mesh, ("CG", 1))
+    V = VectorFunctionSpace(mesh, ("Lagrange", 1))
     n = ufl.FacetNormal(mesh)
     E = 1500
     nu = 0.25

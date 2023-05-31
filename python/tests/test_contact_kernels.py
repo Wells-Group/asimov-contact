@@ -46,7 +46,7 @@ def test_vector_surface_kernel(dim, kernel_type, P, Q):
     ft = meshtags(mesh, mesh.topology.dim - 1, facets, values)
 
     # Define variational form
-    V = VectorFunctionSpace(mesh, ("CG", P))
+    V = VectorFunctionSpace(mesh, ("Lagrange", P))
 
     def f(x):
         values = np.zeros((mesh.geometry.dim, x.shape[1]))
@@ -149,7 +149,7 @@ def test_vector_surface_kernel(dim, kernel_type, P, Q):
     L_custom = ufl.inner(sigma(u), epsilon(v)) * dx
     L_custom = form(L_custom)
     b2 = create_vector(L_custom)
-    kernel = dolfinx_contact.cpp.generate_contact_kernel(V._cpp_object, kernel_type, q_rule)
+    kernel = dolfinx_contact.cpp.generate_rigid_surface_kernel(V._cpp_object, kernel_type, q_rule)
 
     b2.zeroEntries()
     contact.assemble_vector(b2, 0, kernel, coeffs, consts)
@@ -175,7 +175,7 @@ def test_matrix_surface_kernel(dim, kernel_type, P, Q):
     ft = meshtags(mesh, mesh.topology.dim - 1, facets, values)
 
     # Define variational form
-    V = VectorFunctionSpace(mesh, ("CG", P))
+    V = VectorFunctionSpace(mesh, ("Lagrange", P))
     du = ufl.TrialFunction(V)
     v = ufl.TestFunction(V)
     ds = ufl.Measure("ds", domain=mesh, subdomain_data=ft)
@@ -277,7 +277,7 @@ def test_matrix_surface_kernel(dim, kernel_type, P, Q):
     a_custom = ufl.inner(sigma(du), epsilon(v)) * dx
     a_custom = form(a_custom)
     B = create_matrix(a_custom)
-    kernel = dolfinx_contact.cpp.generate_contact_kernel(
+    kernel = dolfinx_contact.cpp.generate_rigid_surface_kernel(
         V._cpp_object, kernel_type, q_rule)
     B.zeroEntries()
 

@@ -72,6 +72,8 @@ if __name__ == "__main__":
                         help="Number of pseudo time steps")
     parser.add_argument("--res", default=0.1, type=np.float64, dest="res",
                         help="Mesh resolution")
+    parser.add_argument("--friction", default=0.0, type=np.float64, dest="fric",
+                        help="Friction coefficient for Tresca friction")
     parser.add_argument("--outfile", type=str, default=None, required=False,
                         help="File for appending results", dest="outfile")
     _lifting = parser.add_mutually_exclusive_group(required=False)
@@ -329,7 +331,7 @@ if __name__ == "__main__":
     surfaces = create_adjacencylist(data, offsets)
 
     # Function, TestFunction, TrialFunction and measures
-    V = VectorFunctionSpace(mesh, ("CG", 1))
+    V = VectorFunctionSpace(mesh, ("Lagrange", 1))
     u = Function(V)
     v = ufl.TestFunction(V)
     dx = ufl.Measure("dx", domain=mesh, subdomain_data=domain_marker)
@@ -363,7 +365,7 @@ if __name__ == "__main__":
     # dictionary with problem parameters
     gamma = args.gamma
     theta = args.theta
-    problem_parameters = {"mu": mu, "lambda": lmbda, "gamma": E * gamma, "theta": theta}
+    problem_parameters = {"mu": mu, "lambda": lmbda, "gamma": E * gamma, "theta": theta, "friction": args.fric}
 
     # Load geometry over multiple steps
     for j in range(nload_steps):

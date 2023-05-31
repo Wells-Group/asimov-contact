@@ -40,7 +40,7 @@ def test_pack_u():
         return vals
 
     # Compute function that is known on each side
-    V = fem.VectorFunctionSpace(mesh, ("CG", 1))
+    V = fem.VectorFunctionSpace(mesh, ("Lagrange", 1))
     u = fem.Function(V)
     u.interpolate(f)
 

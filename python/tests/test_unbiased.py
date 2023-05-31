@@ -28,7 +28,9 @@ from mpi4py import MPI
 
 import dolfinx_contact
 import dolfinx_contact.cpp
-from dolfinx_contact.helpers import (R_minus, dR_minus, R_plus, dR_plus, epsilon, lame_parameters, sigma_func)
+from dolfinx_contact.helpers import (R_minus, dR_minus, R_plus, dR_plus, epsilon,
+                                     lame_parameters, sigma_func, tangential_proj,
+                                     ball_projection, d_ball_projection)
 
 kt = dolfinx_contact.cpp.Kernel
 
@@ -103,6 +105,33 @@ def DG_jac_minus(u0, v0, w0, h, n, gamma, theta, sigma, gap, dS):
 
     J += 0.5 * (h('-') / gamma) * dR_minus(Pn_g(u0, '-', '+')) * \
         Pn_gtheta(w0, '-', '+', 1.0) * Pn_gtheta(v0, '-', '+', theta) * dS
+
+    return J
+
+
+def DG_rhs_tresca(u0, v0, h, n, gamma, theta, sigma, fric, dS, gdim):
+    """
+    UFL version of the Tresca friction term for the unbiased Nitsche formulation
+    """
+    def Pt_g(u, a, b, c):
+        return tangential_proj(u(a) - u(b) - h(a) * c * sigma(u(a)) * n(a), -n(b))
+    return 0.5 * gamma / h('+') * ufl.dot(ball_projection(Pt_g(u0, '+', '-', 1. / gamma), fric * h('+') / gamma, gdim),
+                                          Pt_g(v0, '+', '-', theta / gamma)) * dS\
+        + 0.5 * gamma / h('-') * ufl.dot(ball_projection(Pt_g(u0, '-', '+', 1. / gamma), fric * h('-') / gamma, gdim),
+                                         Pt_g(v0, '-', '+', theta / gamma)) * dS
+
+
+def DG_jac_tresca(u0, v0, w0, h, n, gamma, theta, sigma, fric, dS, gdim):
+    """
+    UFL version of the Jacobian for the Tresca friction term for the unbiased Nitsche formulation
+    """
+    def Pt_g(u, a, b, c):
+        return tangential_proj(u(a) - u(b) - h(a) * c * sigma(u(a)) * n(a), -n(b))
+
+    J = 0.5 * gamma / h('+') * ufl.dot(d_ball_projection(Pt_g(u0, '+', '-', 1. / gamma), fric * h('+') / gamma, gdim)
+                                       * Pt_g(w0, '+', '-', 1. / gamma), Pt_g(v0, '+', '-', theta / gamma)) * dS
+    J += 0.5 * gamma / h('-') * ufl.dot(d_ball_projection(Pt_g(u0, '-', '+', 1. / gamma), fric * h('-') / gamma, gdim)
+                                        * Pt_g(w0, '-', '+', 1. / gamma), Pt_g(v0, '-', '+', theta / gamma)) * dS
 
     return J
 
@@ -227,7 +256,7 @@ def create_functionspaces(ct, gap):
     cell_custom = ufl.Cell(ct, geometric_dimension=x_custom.shape[1])
     domain_custom = ufl.Mesh(ufl.VectorElement("Lagrange", cell_custom, 1))
     mesh_custom = create_mesh(MPI.COMM_WORLD, cells_custom, x_custom, domain_custom)
-    el_custom = ufl.VectorElement("CG", mesh_custom.ufl_cell(), 1)
+    el_custom = ufl.VectorElement("Lagrange", mesh_custom.ufl_cell(), 1)
     V_custom = _fem.FunctionSpace(mesh_custom, el_custom)
 
     return V_ufl, V_custom
@@ -298,6 +327,8 @@ def create_contact_data(V, u, quadrature_degree, lmbda, mu, facets_cg, search, t
     lmbda2.interpolate(lambda x: np.full((1, x.shape[1]), lmbda))
     mu2 = _fem.Function(V2)
     mu2.interpolate(lambda x: np.full((1, x.shape[1]), mu))
+    fric_coeff = _fem.Function(V2)
+    fric_coeff.interpolate(lambda x: np.full((1, x.shape[1]), 0.1))
 
     # compute active entities
     integral = _fem.IntegralType.exterior_facet
@@ -315,6 +346,10 @@ def create_contact_data(V, u, quadrature_degree, lmbda, mu, facets_cg, search, t
         mu2._cpp_object, 0, entities_1),
         dolfinx_contact.cpp.pack_coefficient_quadrature(
         lmbda2._cpp_object, 0, entities_1)])
+    friction_0 = dolfinx_contact.cpp.pack_coefficient_quadrature(
+        fric_coeff._cpp_object, 0, entities_0)
+    friction_1 = dolfinx_contact.cpp.pack_coefficient_quadrature(
+        fric_coeff._cpp_object, 0, entities_1)
 
     # Pack cell diameter on each surface
     h = ufl.CellDiameter(mesh)
@@ -355,8 +390,8 @@ def create_contact_data(V, u, quadrature_degree, lmbda, mu, facets_cg, search, t
         n_1 = contact.pack_ny(1)
 
         # Concatenate all coeffs
-        coeff_0 = np.hstack([material_0, h_0, gap_0, n_0, test_fn_0, u_0, grad_u_0, u_opp_0])
-        coeff_1 = np.hstack([material_1, h_1, gap_1, n_1, test_fn_1, u_1, grad_u_1, u_opp_1])
+        coeff_0 = np.hstack([material_0, friction_0, h_0, gap_0, n_0, test_fn_0, u_0, grad_u_0, u_opp_0])
+        coeff_1 = np.hstack([material_1, friction_1, h_1, gap_1, n_1, test_fn_1, u_1, grad_u_1, u_opp_1])
 
     return contact, coeff_0, coeff_1
 
@@ -365,12 +400,12 @@ def create_contact_data(V, u, quadrature_degree, lmbda, mu, facets_cg, search, t
 @pytest.mark.parametrize("gap", [0.5, -0.5])
 @pytest.mark.parametrize("quadrature_degree", [1, 5])
 @pytest.mark.parametrize("theta", [1, 0, -1])
-@pytest.mark.parametrize("tied", [False, True])
+@pytest.mark.parametrize("formulation", ["meshtie", "frictionless", "tresca"])
 @pytest.mark.parametrize("search", [dolfinx_contact.cpp.ContactMode.ClosestPoint,
                                     dolfinx_contact.cpp.ContactMode.Raytracing])
-def test_contact_kernels(ct, gap, quadrature_degree, theta, tied, search):
+def test_contact_kernels(ct, gap, quadrature_degree, theta, formulation, search):
 
-    if tied and search == dolfinx_contact.cpp.ContactMode.Raytracing:
+    if formulation == "meshtie" and search == dolfinx_contact.cpp.ContactMode.Raytracing:
         pytest.xfail("Raytracing and MeshTie not supported")
 
     # Compute lame parameters
@@ -430,17 +465,22 @@ def test_contact_kernels(ct, gap, quadrature_degree, theta, tied, search):
 
     # DG formulation
 
-    if tied:
+    if formulation == "meshtie":
         F0 = tied_dg(u0, v0, h, n, gamma_scaled, theta, sigma, dS)
         J0 = tied_dg(w0, v0, h, n, gamma_scaled, theta, sigma, dS)
         kernel_type_rhs = kt.MeshTieRhs
         kernel_type_jac = kt.MeshTieJac
-    else:
+    elif formulation == "frictionless":
         # Contact terms formulated using ufl consistent with https://doi.org/10.1007/s00211-018-0950-x
         F0 = DG_rhs_plus(u0, v0, h, n, gamma_scaled, theta, sigma, gap, dS)
         J0 = DG_jac_plus(u0, v0, w0, h, n, gamma_scaled, theta, sigma, gap, dS)
         kernel_type_rhs = kt.Rhs
         kernel_type_jac = kt.Jac
+    else:
+        F0 = DG_rhs_tresca(u0, v0, h, n, gamma_scaled, theta, sigma, 0.1, dS, gdim)
+        J0 = DG_jac_tresca(u0, v0, w0, h, n, gamma_scaled, theta, sigma, 0.1, dS, gdim)
+        kernel_type_rhs = kt.TrescaRhs
+        kernel_type_jac = kt.TrescaJac
 
     # rhs vector
     F0 = _fem.form(F0)
@@ -472,7 +512,8 @@ def test_contact_kernels(ct, gap, quadrature_degree, theta, tied, search):
     F_custom = ufl.inner(sigma(u1), epsilon(v1)) * dx
     J_custom = ufl.inner(sigma(w1), epsilon(v1)) * dx
 
-    contact, c_0, c_1 = create_contact_data(V_custom, u1, quadrature_degree, lmbda, mu, facets_cg, search, tied)
+    contact, c_0, c_1 = create_contact_data(V_custom, u1, quadrature_degree, lmbda,
+                                            mu, facets_cg, search, formulation == "meshtie")
 
     # Generate residual data structures
     F_custom = _fem.form(F0)
@@ -515,7 +556,7 @@ def test_contact_kernels(ct, gap, quadrature_degree, theta, tied, search):
     assert np.allclose(A_sp[ind_dg, ind_dg], B_sp[ind_cg, ind_cg])
 
     # Sanity check different formulations
-    if not tied:
+    if formulation == "frictionless":
         # Contact terms formulated using ufl consistent with nitsche_ufl.py
         F2 = DG_rhs_minus(u0, v0, h, n, gamma_scaled, theta, sigma, gap, dS)
 

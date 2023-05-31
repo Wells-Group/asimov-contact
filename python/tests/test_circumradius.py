@@ -23,7 +23,7 @@ def test_circumradius(dim):
         mesh = create_unit_square(MPI.COMM_WORLD, N, N)
 
     # Perturb geometry to get spatially varying circumradius
-    V = FunctionSpace(mesh, ufl.VectorElement("CG", mesh.ufl_cell(), 1))
+    V = FunctionSpace(mesh, ufl.VectorElement("Lagrange", mesh.ufl_cell(), 1))
     u = Function(V)
     if dim == 3:
         u.interpolate(lambda x: (0.1 * (x[1] > 0.5), 0.1 * np.sin(2 * np.pi * x[2]), np.zeros(x.shape[1])))
