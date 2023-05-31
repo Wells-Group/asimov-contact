@@ -8,6 +8,7 @@ import dolfinx
 from dolfinx.cpp.mesh import entities_to_geometry, cell_num_vertices, cell_entity_type, to_type
 import numpy as np
 from dolfinx_contact.cpp import compute_ghost_cell_destinations
+from dolfinx.io import XDMFFile
 
 __all__ = ["create_contact_mesh"]
 
@@ -78,16 +79,33 @@ def create_contact_mesh(mesh, fmarker, dmarker, tags, R=0.2):
 
     # Convert topology to global indexing, and restrict to non-ghost cells
     topo = mesh.topology.connectivity(tdim, 0).array
-    topo = mesh.topology.index_map(0).local_to_global(topo).reshape((-1, num_cell_vertices))
+    topo = mesh.geometry.dofmap.flatten()
+    topo = mesh.geometry.index_map().local_to_global(topo).reshape(mesh.geometry.dofmap.shape)
+#    topo = mesh.topology.index_map(0).local_to_global(topo).reshape((-1, num_cell_vertices))
+
+    print(mesh.geometry.index_map().ghosts, mesh.geometry.dofmap[0])
+    print(mesh.topology.index_map(0).ghosts)
+
     topo = topo[:ncells, :]
 
     # Cut off any ghost vertices
-    num_vertices = mesh.topology.index_map(0).size_local
+    num_vertices = mesh.geometry.index_map().size_local
+    print(mesh.topology.index_map(0).size_local, num_vertices)
+
     gdim = mesh.geometry.dim
     x = mesh.geometry.x[:num_vertices, :gdim]
     domain = mesh.ufl_domain()
     log.log(log.LogLevel.WARNING, "Repartition")
+
     new_mesh = create_mesh(mesh.comm, topo, x, domain, partitioner)
+
+    print(new_mesh)
+
+    out = XDMFFile(new_mesh.comm, "newmesh.xdmf", "w")
+    out.write_mesh(new_mesh)
+    del (out)
+
+    quit()
 
     log.log(log.LogLevel.WARNING, "Remap markers on new mesh")
     # Remap vertices back to input indexing
