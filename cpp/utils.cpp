@@ -1058,8 +1058,7 @@ dolfinx_contact::compute_distance_map(
     else
       throw std::runtime_error("Invalid tdim: " + std::to_string(tdim));
   }
-  default:
-    throw std::runtime_error("Unsupported contact mode");
   }
-  t.stop();
+
+  throw std::runtime_error("Unsupported contact mode");
 }
