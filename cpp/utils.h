@@ -109,7 +109,8 @@ double dR_minus(double x);
 /// @param[in] x     The input vector (max bs 3)
 /// @param[in] alpha The radius of the ball
 /// @param[in] bs    The block size
-/// @return    The projection vector
+/// @return The projection vector
+/// @note Assumes that any unused entries in x are initialised to 0, e.g., if bs=2
 std::array<double, 3> ball_projection(std::array<double, 3> x, double alpha,
                                       std::size_t bs);
 
@@ -119,7 +120,8 @@ std::array<double, 3> ball_projection(std::array<double, 3> x, double alpha,
 /// @param[in] x     The input vector (max bs 3)
 /// @param[in] alpha The radius of the ball
 /// @param[in] bs    The block size
-/// @return    The jacobi matrix for the ball projection
+/// @return The jacobi matrix for the ball projection
+/// @note Assumes that any unused entries in x are initialised to 0, e.g., if bs=2
 std::array<double, 9> d_ball_projection(std::array<double, 3> x, double alpha,
                                         std::size_t bs);
 

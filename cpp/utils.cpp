@@ -214,19 +214,18 @@ std::array<double, 3> dolfinx_contact::ball_projection(std::array<double, 3> x,
 {
   // Compute norm of vector
   double norm = 0;
-  for (std::size_t j = 0; j < bs; ++j)
-    norm += x[j] * x[j];
+  std::for_each(x.cbegin(), x.cend(),
+                [&norm](auto e) { norm += std::pow(e, 2); });
   norm = std::sqrt(norm);
   std::array<double, 3> proj = {0, 0, 0};
 
   // If x inside ball return x
   if (norm <= alpha)
-    for (std::size_t j = 0; j < bs; ++j)
-      proj[j] = x[j];
+    std::copy(x.cbegin(), x.cend(), proj.begin());
   else
     // If x outside ball return alpha*x/norm
-    for (std::size_t j = 0; j < bs; ++j)
-      proj[j] = alpha * x[j] / norm;
+    std::transform(x.cbegin(), x.cend(), proj.begin(),
+                   [alpha, norm](auto& xi) { return alpha * xi / norm; });
   return proj;
 }
 
@@ -236,14 +235,14 @@ dolfinx_contact::d_ball_projection(std::array<double, 3> x, double alpha,
 {
   std::array<double, 9> d_proj = {0, 0, 0, 0, 0, 0, 0, 0, 0};
 
-  // avoid singular dividing by 0 if radius 0
+  // avoid dividing by 0 if radius 0
   if (alpha < 1E-14)
     return d_proj;
 
   // Compute norm of vector
   double norm_squared = 0;
-  for (std::size_t j = 0; j < bs; ++j)
-    norm_squared += x[j] * x[j];
+  std::for_each(x.cbegin(), x.cend(),
+                [&norm_squared](auto e) { norm_squared += std::pow(e, 2); });
   double norm = std::sqrt(norm_squared);
 
   // If vector inside ball return identity matrix I
