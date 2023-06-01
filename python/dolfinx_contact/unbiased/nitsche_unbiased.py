@@ -18,7 +18,7 @@ from dolfinx_contact.helpers import (rigid_motions_nullspace_subdomains, sigma_f
 
 kt = dolfinx_contact.cpp.Kernel
 
-__all__ = ["nitsche_unbiased"]
+__all__ = ["setup_newton_solver", "nitsche_unbiased"]
 
 
 def setup_newton_solver(F_custom: fem.forms.FormMetaClass, J_custom: fem.forms.FormMetaClass,
