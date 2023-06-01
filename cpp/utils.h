@@ -40,7 +40,9 @@ enum class Kernel
   MeshTieRhs,
   MeshTieJac,
   TrescaRhs,
-  TrescaJac
+  TrescaJac,
+  CoulombRhs,
+  CoulombJac
 };
 // NOTE: this function should change signature to T * ,..... , num_links,
 // num_dofs_per_link
@@ -124,6 +126,9 @@ std::array<double, 3> ball_projection(std::array<double, 3> x, double alpha,
 /// @note Assumes that any unused entries in x are initialised to 0, e.g., if bs=2
 std::array<double, 9> d_ball_projection(std::array<double, 3> x, double alpha,
                                         std::size_t bs);
+
+std::array<double, 3>d_alpha_ball_projection(std::array<double, 3> x, double alpha, double d_alpha, 
+                                   std::size_t bs);
 
 /// Get shape of in,out variable for filling basis functions in for
 /// evaluate_basis_functions

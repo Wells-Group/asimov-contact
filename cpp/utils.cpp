@@ -259,6 +259,25 @@ dolfinx_contact::d_ball_projection(std::array<double, 3> x, double alpha,
     }
   return d_proj;
 }
+
+std::array<double, 3>
+dolfinx_contact::d_alpha_ball_projection(std::array<double, 3> x, double alpha, double d_alpha, 
+                                   std::size_t bs)
+{
+  // Compute norm of vector
+  double norm = 0;
+  std::for_each(x.cbegin(), x.cend(),
+                [&norm](auto e) { norm += std::pow(e, 2); });
+  norm = std::sqrt(norm);
+  std::array<double, 3> d_alpha_proj = {0, 0, 0};
+
+  // If x inside ball return x
+  if (norm > alpha)
+    // If x outside ball return alpha*x/norm
+    std::transform(x.cbegin(), x.cend(), d_alpha_proj.begin(),
+                   [d_alpha, norm](auto& xi) { return d_alpha * xi / norm; });
+  return d_alpha_proj;
+}
 //-------------------------------------------------------------------------------------
 std::array<std::size_t, 4> dolfinx_contact::evaluate_basis_shape(
     const dolfinx::fem::FunctionSpace<double>& V, const std::size_t num_points,

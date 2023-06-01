@@ -13,7 +13,7 @@
 
 /// @brief Generate contact kernel
 ///
-/// @param[in] type The kernel type (`Rhs`, `Jac`, `TrescaJac` or`TrescaRhs`).
+/// @param[in] type The kernel type (`Rhs`, `Jac`, `TrescaRhs`, `TrescaJac`, CoulombRhs, CoulombJac).
 /// for the right hand side vector/jacobian for frictionless contact or tresca friction
 /// @param[in] V               The function space
 /// @param[in] quadrature_rule The quadrature rule
