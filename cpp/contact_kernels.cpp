@@ -173,7 +173,7 @@ dolfinx_contact::generate_contact_kernel(
         {
           double v_dot_nsurf = n_surf[n] * phi(q_pos, i);
           double sign_v = (lmbda * tr(i, n) * n_dot + mu * epsn(i, n));
-          double Pn_v = g v_dot_nsurf - gamma * theta * sign_v;
+          double Pn_v = v_dot_nsurf - gamma * theta * sign_v;
           b[0][n + i * bs] += 0.5 * gamma_inv * Pn_u * Pn_v;
 
           // entries corresponding to v on the other surface
