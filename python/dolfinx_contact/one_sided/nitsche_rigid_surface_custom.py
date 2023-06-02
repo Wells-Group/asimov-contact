@@ -14,7 +14,7 @@ import ufl
 from dolfinx.graph import create_adjacencylist
 
 import dolfinx_contact
-from dolfinx_contact.cpp import (Contact, ContactMode, Kernel, generate_contact_kernel,
+from dolfinx_contact.cpp import (Contact, ContactMode, Kernel, generate_rigid_surface_kernel,
                                  pack_coefficient_quadrature, pack_gradient_quadrature)
 from dolfinx_contact.helpers import (epsilon, lame_parameters,
                                      rigid_motions_nullspace, sigma_func)
@@ -196,11 +196,11 @@ def nitsche_rigid_surface_custom(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTa
 
     # Create RHS kernels
     F_custom = _fem.form(F, jit_options=jit_options, form_compiler_options=form_compiler_options)
-    kernel_rhs = generate_contact_kernel(V._cpp_object, kt.Rhs, q_rule, False)
+    kernel_rhs = generate_rigid_surface_kernel(V._cpp_object, kt.Rhs, q_rule, False)
 
     # Create Jacobian kernels
     J_custom = _fem.form(J, jit_options=jit_options, form_compiler_options=form_compiler_options)
-    kernel_J = generate_contact_kernel(V._cpp_object, kt.Jac, q_rule, False)
+    kernel_J = generate_rigid_surface_kernel(V._cpp_object, kt.Jac, q_rule, False)
 
     # NOTE: HACK to make "one-sided" contact work with assemble_matrix/assemble_vector
     contact_assembler = Contact([facet_marker._cpp_object], surfaces, [(0, 1)], V._cpp_object,

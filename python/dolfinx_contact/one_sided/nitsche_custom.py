@@ -13,7 +13,7 @@ from dolfinx import log as _log
 from dolfinx import mesh as dmesh
 from dolfinx.graph import create_adjacencylist
 import dolfinx_contact
-from dolfinx_contact.cpp import (Contact, ContactMode, generate_contact_kernel, pack_coefficient_quadrature,
+from dolfinx_contact.cpp import (Contact, ContactMode, generate_rigid_surface_kernel, pack_coefficient_quadrature,
                                  pack_gradient_quadrature)
 from dolfinx_contact.helpers import (epsilon, lame_parameters,
                                      rigid_motions_nullspace, sigma_func)
@@ -165,7 +165,7 @@ def nitsche_custom(mesh: dmesh.Mesh, mesh_data: Tuple[dmesh.MeshTags, int, int],
 
     # Create RHS kernels
     L_custom = _fem.form(F, jit_options=jit_options, form_compiler_options=form_compiler_options)
-    kernel_rhs = generate_contact_kernel(V._cpp_object, dolfinx_contact.Kernel.Rhs, q_rule)
+    kernel_rhs = generate_rigid_surface_kernel(V._cpp_object, dolfinx_contact.Kernel.Rhs, q_rule)
     # NOTE: HACK to make "one-sided" contact work with assemble_matrix/assemble_vector
     search_mode = [ContactMode.ClosestPoint]
     contact_assembler = Contact([facet_marker._cpp_object], surfaces, [(0, 1)],
@@ -184,7 +184,7 @@ def nitsche_custom(mesh: dmesh.Mesh, mesh_data: Tuple[dmesh.MeshTags, int, int],
 
     # Create Jacobian kernels
     a_custom = _fem.form(J, jit_options=jit_options, form_compiler_options=form_compiler_options)
-    kernel_J = generate_contact_kernel(V._cpp_object, dolfinx_contact.Kernel.Jac, q_rule)
+    kernel_J = generate_rigid_surface_kernel(V._cpp_object, dolfinx_contact.Kernel.Jac, q_rule)
 
     def assemble_jacobian(x, a_mat, cf):
         u.vector[:] = x.array
