@@ -112,7 +112,8 @@ double dR_minus(double x);
 /// @param[in] alpha The radius of the ball
 /// @param[in] bs    The block size
 /// @return The projection vector
-/// @note Assumes that any unused entries in x are initialised to 0, e.g., if bs=2
+/// @note Assumes that any unused entries in x are initialised to 0, e.g., if
+/// bs=2
 std::array<double, 3> ball_projection(std::array<double, 3> x, double alpha,
                                       std::size_t bs);
 
@@ -123,12 +124,23 @@ std::array<double, 3> ball_projection(std::array<double, 3> x, double alpha,
 /// @param[in] alpha The radius of the ball
 /// @param[in] bs    The block size
 /// @return The jacobi matrix for the ball projection
-/// @note Assumes that any unused entries in x are initialised to 0, e.g., if bs=2
+/// @note Assumes that any unused entries in x are initialised to 0, e.g., if
+/// bs=2
 std::array<double, 9> d_ball_projection(std::array<double, 3> x, double alpha,
                                         std::size_t bs);
 
-std::array<double, 3>d_alpha_ball_projection(std::array<double, 3> x, double alpha, double d_alpha, 
-                                   std::size_t bs);
+/// Compute term of derivative of ball projection for alpha depending on x with
+/// size bs and ball of radius alpha
+/// @param[in] x       The input vector (max bs 3)
+/// @param[in] alpha   The radius of the ball
+/// @param[in] d_alpha The derivative of the radius of the ball
+/// @param[in] bs      The block size
+/// @return The jacobi matrix for the ball projection
+/// @note Assumes that any unused entries in x are initialised to 0, e.g., if
+/// bs=2
+std::array<double, 3> d_alpha_ball_projection(std::array<double, 3> x,
+                                              double alpha, double d_alpha,
+                                              std::size_t bs);
 
 /// Get shape of in,out variable for filling basis functions in for
 /// evaluate_basis_functions

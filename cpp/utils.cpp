@@ -207,7 +207,7 @@ double dolfinx_contact::dR_minus(double x) { return double(x < 0); }
 //-------------------------------------------------------------------------------------
 
 double dolfinx_contact::dR_plus(double x) { return double(x > 0); }
-
+//-------------------------------------------------------------------------------------
 std::array<double, 3> dolfinx_contact::ball_projection(std::array<double, 3> x,
                                                        double alpha,
                                                        std::size_t bs)
@@ -228,7 +228,7 @@ std::array<double, 3> dolfinx_contact::ball_projection(std::array<double, 3> x,
                    [alpha, norm](auto& xi) { return alpha * xi / norm; });
   return proj;
 }
-
+//-------------------------------------------------------------------------------------
 std::array<double, 9>
 dolfinx_contact::d_ball_projection(std::array<double, 3> x, double alpha,
                                    std::size_t bs)
@@ -261,8 +261,8 @@ dolfinx_contact::d_ball_projection(std::array<double, 3> x, double alpha,
 }
 
 std::array<double, 3>
-dolfinx_contact::d_alpha_ball_projection(std::array<double, 3> x, double alpha, double d_alpha, 
-                                   std::size_t bs)
+dolfinx_contact::d_alpha_ball_projection(std::array<double, 3> x, double alpha,
+                                         double d_alpha, std::size_t bs)
 {
   // Compute norm of vector
   double norm = 0;
@@ -271,9 +271,9 @@ dolfinx_contact::d_alpha_ball_projection(std::array<double, 3> x, double alpha, 
   norm = std::sqrt(norm);
   std::array<double, 3> d_alpha_proj = {0, 0, 0};
 
-  // If x inside ball return x
+  // If x inside ball return 0
   if (norm > alpha)
-    // If x outside ball return alpha*x/norm
+    // If x outside ball return d_alpha*x/norm
     std::transform(x.cbegin(), x.cend(), d_alpha_proj.begin(),
                    [d_alpha, norm](auto& xi) { return d_alpha * xi / norm; });
   return d_alpha_proj;

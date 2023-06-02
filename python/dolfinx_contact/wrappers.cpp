@@ -339,6 +339,8 @@ PYBIND11_MODULE(cpp, m)
       .value("Jac", dolfinx_contact::Kernel::Jac)
       .value("TrescaRhs", dolfinx_contact::Kernel::TrescaRhs)
       .value("TrescaJac", dolfinx_contact::Kernel::TrescaJac)
+      .value("CoulombRhs", dolfinx_contact::Kernel::CoulombRhs)
+      .value("CoulombJac", dolfinx_contact::Kernel::CoulombJac)
       .value("MeshTieRhs", dolfinx_contact::Kernel::MeshTieRhs)
       .value("MeshTieJac", dolfinx_contact::Kernel::MeshTieJac);
   m.def(
