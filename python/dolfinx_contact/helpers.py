@@ -105,6 +105,14 @@ def d_ball_projection(x, s, dim):
                            (s / abs_x) * (ufl.Identity(dim) - ufl.outer(x / abs_x, x / abs_x)))
 
 
+def d_alpha_ball_projection(x, alpha, d_alpha, dim):
+    """
+    Derivative term of ball projection for x-dependent radius
+    """
+    abs_x = ufl.sqrt(sum([x[i]**2 for i in range(dim)]))
+    return ufl.conditional(ufl.le(abs_x, alpha), ufl.as_vector(tuple(0 for _ in range(dim))), d_alpha * x / abs_x)
+
+
 def tangential_proj(u, n):
     """
     See for instance:
