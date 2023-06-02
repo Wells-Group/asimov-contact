@@ -9,6 +9,7 @@
 #include "KernelData.h"
 #include "QuadratureRule.h"
 #include "SubMesh.h"
+#include "contact_kernels.h"
 #include "elasticity.h"
 #include "geometric_quantities.h"
 #include "meshtie_kernels.h"

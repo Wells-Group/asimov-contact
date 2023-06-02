@@ -52,7 +52,7 @@ def solve_euler_bernoulli(nx: int, ny: int, theta: float, gamma: float, linear_s
     sorted = np.argsort(indices)
     facet_marker = meshtags(mesh, tdim - 1, indices[sorted], values[sorted])
 
-    V = VectorFunctionSpace(mesh, ("CG", 1))
+    V = VectorFunctionSpace(mesh, ("Lagrange", 1))
     h = 2 * ufl.Circumradius(mesh)
     mu_func, lambda_func = lame_parameters(plane_strain)
     mu = mu_func(E, nu)

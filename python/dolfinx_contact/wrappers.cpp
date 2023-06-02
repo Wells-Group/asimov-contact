@@ -14,8 +14,8 @@
 #include <dolfinx_contact/RayTracing.h>
 #include <dolfinx_contact/SubMesh.h>
 #include <dolfinx_contact/coefficients.h>
-#include <dolfinx_contact/contact_kernels.h>
 #include <dolfinx_contact/elasticity.h>
+#include <dolfinx_contact/rigid_surface_kernels.h>
 #include <dolfinx_contact/parallel_mesh_ghosting.h>
 #include <dolfinx_contact/point_cloud.h>
 #include <dolfinx_contact/utils.h>
@@ -323,13 +323,13 @@ PYBIND11_MODULE(cpp, m)
       .def("update_submesh_geometry",
            &dolfinx_contact::Contact::update_submesh_geometry);
   m.def(
-      "generate_contact_kernel",
+      "generate_rigid_surface_kernel",
       [](std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V,
          dolfinx_contact::Kernel type, dolfinx_contact::QuadratureRule& q_rule,
          bool constant_normal)
       {
         return contact_wrappers::KernelWrapper(
-            dolfinx_contact::generate_contact_kernel(V, type, q_rule,
+            dolfinx_contact::generate_rigid_surface_kernel(V, type, q_rule,
                                                      constant_normal));
       },
       py::arg("V"), py::arg("kernel_type"), py::arg("quadrature_rule"),
@@ -337,6 +337,8 @@ PYBIND11_MODULE(cpp, m)
   py::enum_<dolfinx_contact::Kernel>(m, "Kernel")
       .value("Rhs", dolfinx_contact::Kernel::Rhs)
       .value("Jac", dolfinx_contact::Kernel::Jac)
+      .value("TrescaRhs", dolfinx_contact::Kernel::TrescaRhs)
+      .value("TrescaJac", dolfinx_contact::Kernel::TrescaJac)
       .value("MeshTieRhs", dolfinx_contact::Kernel::MeshTieRhs)
       .value("MeshTieJac", dolfinx_contact::Kernel::MeshTieJac);
   m.def(

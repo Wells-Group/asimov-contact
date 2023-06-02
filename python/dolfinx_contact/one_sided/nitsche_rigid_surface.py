@@ -93,7 +93,7 @@ def nitsche_rigid_surface(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTags, int
     gdim = mesh.geometry.dim
 
     # Setup function space and functions used in Jacobian and residual formulation
-    V = _fem.VectorFunctionSpace(mesh, ("CG", 1))
+    V = _fem.VectorFunctionSpace(mesh, ("Lagrange", 1))
     u = _fem.Function(V)
     v = ufl.TestFunction(V)
     du = ufl.TrialFunction(V)

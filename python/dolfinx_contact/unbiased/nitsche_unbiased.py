@@ -54,8 +54,10 @@ def setup_newton_solver(F_custom: fem.forms.FormMetaClass, J_custom: fem.forms.F
     # generate kernels
     with common.Timer("~Contact: Generate Jacobian kernel"):
         kernel_jac = contact.generate_kernel(kt.Jac)
+        kernel_tresca_jac = contact.generate_kernel(kt.TrescaJac)
     with common.Timer("~Contact: Generate residual kernel"):
         kernel_rhs = contact.generate_kernel(kt.Rhs)
+        kernel_tresca_rhs = contact.generate_kernel(kt.TrescaRhs)
 
     # create vector and matrix
     A = contact.create_matrix(J_custom)
@@ -129,6 +131,7 @@ def setup_newton_solver(F_custom: fem.forms.FormMetaClass, J_custom: fem.forms.F
         with common.Timer("~~Contact: Contact contributions (in assemble vector)"):
             for i in range(num_pairs):
                 contact.assemble_vector(b, i, kernel_rhs, coeffs[i], consts)
+                contact.assemble_vector(b, i, kernel_tresca_rhs, coeffs[i], consts)
         with common.Timer("~~Contact: Standard contributions (in assemble vector)"):
             fem.petsc.assemble_vector(b, F_custom)
 
@@ -146,6 +149,7 @@ def setup_newton_solver(F_custom: fem.forms.FormMetaClass, J_custom: fem.forms.F
         with common.Timer("~~Contact: Contact contributions (in assemble matrix)"):
             for i in range(num_pairs):
                 contact.assemble_matrix(A, [], i, kernel_jac, coeffs[i], consts)
+                contact.assemble_matrix(A, [], i, kernel_tresca_jac, coeffs[i], consts)
         with common.Timer("~~Contact: Standard contributions (in assemble matrix)"):
             fem.petsc.assemble_matrix(A, J_custom, bcs=tbcs)
         A.assemble()
@@ -181,8 +185,9 @@ def get_problem_parameters(problem_parameters: dict[str, np.float64]):
         raise RuntimeError("Need to supply gamma for Nitsche's method")
     else:
         gamma = problem_parameters.get("gamma")
+    s = problem_parameters.get("friction", np.float64(0.0))
 
-    return theta, gamma
+    return theta, gamma, s
 
 
 def copy_fns(fns: list[Union[fem.Function, fem.Constant]],
@@ -305,7 +310,7 @@ def nitsche_unbiased(steps: int, ufl_form: ufl.Form, u: fem.Function, mu: fem.Fu
     jit_options = {} if jit_options is None else jit_options
     petsc_options = {} if petsc_options is None else petsc_options
     newton_options = {} if newton_options is None else newton_options
-    theta, gamma = get_problem_parameters(problem_parameters)
+    theta, gamma, s = get_problem_parameters(problem_parameters)
     sigma = sigma_func(mu, lmbda)
 
     # Contact data
@@ -363,6 +368,10 @@ def nitsche_unbiased(steps: int, ufl_form: ufl.Form, u: fem.Function, mu: fem.Fu
     # pack constants
     consts = np.array([gamma, theta], dtype=np.float64)
 
+    # interpolate friction coefficient
+    fric_coeff = fem.Function(V2)
+    fric_coeff.interpolate(lambda x: np.full((1, x.shape[1]), s))
+
     # Retrieve active entities
     entities = []
     with common.Timer("~Contact: Compute active entities"):
@@ -376,7 +385,9 @@ def nitsche_unbiased(steps: int, ufl_form: ufl.Form, u: fem.Function, mu: fem.Fu
             material.append(np.hstack([dolfinx_contact.cpp.pack_coefficient_quadrature(
                 mu._cpp_object, 0, entities[i]),
                 dolfinx_contact.cpp.pack_coefficient_quadrature(
-                lmbda._cpp_object, 0, entities[i])]))
+                lmbda2._cpp_object, 0, entities[i]),
+                dolfinx_contact.cpp.pack_coefficient_quadrature(
+                fric_coeff._cpp_object, 0, entities[i])]))
 
     # Pack celldiameter on each surface
     h_packed = []

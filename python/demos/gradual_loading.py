@@ -171,7 +171,7 @@ if __name__ == "__main__":
     load_increment = vertical_displacement / nload_steps
 
     # Define function space for problem
-    V = VectorFunctionSpace(mesh, ("CG", 1))
+    V = VectorFunctionSpace(mesh, ("Lagrange", 1))
     u1 = None
 
     # Data to be stored on the unperturb domain at the end of the simulation

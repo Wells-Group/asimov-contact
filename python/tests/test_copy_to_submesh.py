@@ -89,7 +89,7 @@ def test_copy_to_submesh(order, res, simplex, dim):
         tdim = mesh.topology.dim
         vals = x[:tdim, :]
         return vals
-    V = VectorFunctionSpace(mesh, ("CG", order))
+    V = VectorFunctionSpace(mesh, ("Lagrange", order))
     contact_pairs = [(0, 1), (1, 0)]
     data = np.array([contact_bdy_1, contact_bdy_2], dtype=np.int32)
     offsets = np.array([0, 2], dtype=np.int32)
@@ -104,7 +104,7 @@ def test_copy_to_submesh(order, res, simplex, dim):
     submesh_cpp = contact.submesh()
     ufl_domain = mesh.ufl_domain()
     submesh = Mesh(submesh_cpp, ufl_domain)
-    V_sub = VectorFunctionSpace(submesh, ("CG", order))
+    V_sub = VectorFunctionSpace(submesh, ("Lagrange", order))
     u_sub = Function(V_sub)
     contact.copy_to_submesh(u._cpp_object, u_sub._cpp_object)
     u_exact = Function(V_sub)

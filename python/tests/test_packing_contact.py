@@ -59,7 +59,7 @@ def create_functionspaces(ct, gap, delta):
     cell = ufl.Cell(ct, geometric_dimension=x.shape[1])
     domain = ufl.Mesh(ufl.VectorElement("Lagrange", cell, 1))
     mesh = create_mesh(MPI.COMM_WORLD, cells, x, domain)
-    el = ufl.VectorElement("CG", mesh.ufl_cell(), 1)
+    el = ufl.VectorElement("Lagrange", mesh.ufl_cell(), 1)
     V = _fem.FunctionSpace(mesh, el)
     with XDMFFile(mesh.comm, "test_mesh.xdmf", "w") as xdmf:
         xdmf.write_mesh(mesh)

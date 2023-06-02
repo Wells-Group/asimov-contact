@@ -94,7 +94,7 @@ def nitsche_custom(mesh: dmesh.Mesh, mesh_data: Tuple[dmesh.MeshTags, int, int],
     n_vec[mesh.geometry.dim - 1] = 1
 
     # Setup function space and functions used in Jacobian and residual formulation
-    V = _fem.VectorFunctionSpace(mesh, ("CG", 1))
+    V = _fem.VectorFunctionSpace(mesh, ("Lagrange", 1))
     u = _fem.Function(V)
     v = ufl.TestFunction(V)
     du = ufl.TrialFunction(V)
