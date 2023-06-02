@@ -385,7 +385,7 @@ def nitsche_unbiased(steps: int, ufl_form: ufl.Form, u: fem.Function, mu: fem.Fu
             material.append(np.hstack([dolfinx_contact.cpp.pack_coefficient_quadrature(
                 mu._cpp_object, 0, entities[i]),
                 dolfinx_contact.cpp.pack_coefficient_quadrature(
-                lmbda2._cpp_object, 0, entities[i]),
+                lmbda._cpp_object, 0, entities[i]),
                 dolfinx_contact.cpp.pack_coefficient_quadrature(
                 fric_coeff._cpp_object, 0, entities[i])]))
 
