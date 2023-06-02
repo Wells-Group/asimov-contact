@@ -209,8 +209,7 @@ double dolfinx_contact::dR_minus(double x) { return double(x < 0); }
 double dolfinx_contact::dR_plus(double x) { return double(x > 0); }
 //-------------------------------------------------------------------------------------
 std::array<double, 3> dolfinx_contact::ball_projection(std::array<double, 3> x,
-                                                       double alpha,
-                                                       std::size_t bs)
+                                                       double alpha)
 {
   // Compute norm of vector
   double norm = 0;
@@ -262,7 +261,7 @@ dolfinx_contact::d_ball_projection(std::array<double, 3> x, double alpha,
 
 std::array<double, 3>
 dolfinx_contact::d_alpha_ball_projection(std::array<double, 3> x, double alpha,
-                                         double d_alpha, std::size_t bs)
+                                         double d_alpha)
 {
   // Compute norm of vector
   double norm = 0;
