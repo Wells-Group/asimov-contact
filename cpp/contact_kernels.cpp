@@ -25,6 +25,13 @@ dolfinx_contact::generate_contact_kernel(
   // Expecting coefficients in following order:
   // mu, lmbda, h, friction coefficient,
   // gap, normals, test_fn, u, grad(u), u_opposite
+  // offsets(0) - mu, lmbda, h, friction - size 4
+  // offsets(1) - gap         size num_q_points * gdim
+  // offsets(2) - normals     size num_q_points * gdim
+  // offsets(3) - test_fn     size num_q_points * ndofs * bs * max_links
+  // offsets(4) - u           size num_q_points * gdim
+  // offsets(5) - grad(u)     size num_q_points * gdim * gdim
+  // offsets(6) - u_opposite  size num_q_points * bs
   std::vector<std::size_t> cstrides
       = {4,
          num_q_points * gdim,
@@ -166,9 +173,8 @@ dolfinx_contact::generate_contact_kernel(
         {
           double v_dot_nsurf = n_surf[n] * phi(q_pos, i);
           double sign_v = (lmbda * tr(i, n) * n_dot + mu * epsn(i, n));
-          // This is (1./gamma)*Pn_v to avoid the product gamma*(1./gamma)
-          double Pn_v = gamma_inv * v_dot_nsurf - theta * sign_v;
-          b[0][n + i * bs] += 0.5 * Pn_u * Pn_v;
+          double Pn_v = g v_dot_nsurf - gamma * theta * sign_v;
+          b[0][n + i * bs] += 0.5 * gamma_inv * Pn_u * Pn_v;
 
           // entries corresponding to v on the other surface
           for (std::size_t k = 0; k < num_links; k++)
@@ -319,9 +325,9 @@ dolfinx_contact::generate_contact_kernel(
             {
               double v_dot_nsurf = n_surf[b] * phi(q_pos, i);
               double sign_v = (lmbda * tr(i, b) * n_dot + mu * epsn(i, b));
-              double Pn_v = gamma_inv * v_dot_nsurf - theta * sign_v;
+              double Pn_v = v_dot_nsurf - gamma * theta * sign_v;
               A[0][(b + i * bs) * ndofs_cell * bs + l + j * bs]
-                  += 0.5 * Pn_du * Pn_v;
+                  += 0.5 * gamma_inv * Pn_du * Pn_v;
 
               // entries corresponding to u and v on the other surface
               for (std::size_t k = 0; k < num_links; k++)
@@ -336,7 +342,7 @@ dolfinx_contact::generate_contact_kernel(
                         + i * num_points * bs + q * bs + b;
                 double v_n_opp = c[index] * n_surf[b];
                 A[3 * k + 1][(b + i * bs) * bs * ndofs_cell + l + j * bs]
-                    -= 0.5 * du_n_opp * Pn_v;
+                    -= 0.5 * gamma_inv * du_n_opp * Pn_v;
                 A[3 * k + 2][(b + i * bs) * bs * ndofs_cell + l + j * bs]
                     -= 0.5 * gamma_inv * Pn_du * v_n_opp;
                 A[3 * k + 3][(b + i * bs) * bs * ndofs_cell + l + j * bs]
@@ -349,10 +355,9 @@ dolfinx_contact::generate_contact_kernel(
     }
   };
 
-  /// @brief Assemble kernel for RHS of the friction term for unbiased contact problem
-  /// with tresca friction
-  /// Assemble of the residual of the unbiased contact problem into vector
-  /// `b`.
+  /// @brief Assemble kernel for RHS of the friction term for unbiased contact
+  /// problem with tresca friction Assemble of the residual of the unbiased
+  /// contact problem into vector `b`.
   /// @param[in,out] b The vector to assemble the residual into
   /// @param[in] c The coefficients used in kernel. Assumed to be
   /// ordered as mu, lmbda, h, gap, normals, test_fn, u, u_opposite.
@@ -529,8 +534,8 @@ dolfinx_contact::generate_contact_kernel(
     }
   };
 
-  /// @brief Assemble kernel for Jacobian (LHS) of the friction term for unbiased contact
-  /// problem with tresca friction
+  /// @brief Assemble kernel for Jacobian (LHS) of the friction term for
+  /// unbiased contact problem with tresca friction
   ///
   /// Assemble of the residual of the unbiased contact problem into matrix
   /// `A`.
