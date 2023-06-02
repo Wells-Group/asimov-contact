@@ -37,7 +37,7 @@ if __name__ == "__main__":
     parser.add_argument("--theta", default=1., type=float, dest="theta",
                         help="Theta parameter for Nitsche, 1 symmetric, -1 skew symmetric, 0 Penalty-like",
                         choices=[1., -1., 0.])
-    parser.add_argument("--gamma", default=10, type=float, dest="gamma",
+    parser.add_argument("--gamma", default=100, type=float, dest="gamma",
                         help="Coercivity/Stabilization parameter for Nitsche condition")
     parser.add_argument("--quadrature", default=5, type=int, dest="q_degree",
                         help="Quadrature degree used for contact integrals")
