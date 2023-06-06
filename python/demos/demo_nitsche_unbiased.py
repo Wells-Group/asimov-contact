@@ -86,6 +86,10 @@ if __name__ == "__main__":
     _raytracing.add_argument('--raytracing', dest='raytracing', action='store_true',
                              help="Use raytracing for contact search.",
                              default=False)
+    _coulomb = parser.add_mutually_exclusive_group(required=False)
+    _coulomb.add_argument('--coulomb', dest='coulomb', action='store_true',
+                          help="Use coulomb friction kernel. This requires --friction=[nonzero float value].",
+                          default=False)
 
     # Parse input arguments or set to defualt values
     args = parser.parse_args()
@@ -416,7 +420,8 @@ if __name__ == "__main__":
                                                                          fname=outnamej,
                                                                          search_method=search_mode,
                                                                          quadrature_degree=args.q_degree,
-                                                                         search_radius=args.radius)
+                                                                         search_radius=args.radius,
+                                                                         coulomb=args.coulomb)
         num_newton_its[j, :] = newton_its[:]
         num_krylov_its[j, :] = krylov_iterations[:]
         newton_time[j, :] = solver_time[:]

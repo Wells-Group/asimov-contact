@@ -26,7 +26,8 @@ def setup_newton_solver(F_custom: fem.forms.FormMetaClass, J_custom: fem.forms.F
                         contact: dolfinx_contact.cpp.Contact, markers: list[mesh.MeshTags],
                         entities: list[npt.NDArray[np.int32]], quadrature_degree: int,
                         const_coeffs: list[npt.NDArray[np.float64]], consts: npt.NDArray[np.float64],
-                        search_method: list[dolfinx_contact.cpp.ContactMode]):
+                        search_method: list[dolfinx_contact.cpp.ContactMode],
+                        coulomb: bool):
     """
     Set up newton solver for contact problem.
     Generate kernels and define functions for updating coefficients, stiffness matrix and residual vector.
@@ -54,10 +55,16 @@ def setup_newton_solver(F_custom: fem.forms.FormMetaClass, J_custom: fem.forms.F
     # generate kernels
     with common.Timer("~Contact: Generate Jacobian kernel"):
         kernel_jac = contact.generate_kernel(kt.Jac)
-        kernel_tresca_jac = contact.generate_kernel(kt.TrescaJac)
+        if coulomb:
+            kernel_friction_jac = contact.generate_kernel(kt.CoulombJac)
+        else:
+            kernel_friction_jac = contact.generate_kernel(kt.TrescaJac)
     with common.Timer("~Contact: Generate residual kernel"):
         kernel_rhs = contact.generate_kernel(kt.Rhs)
-        kernel_tresca_rhs = contact.generate_kernel(kt.TrescaRhs)
+        if coulomb:
+            kernel_friction_rhs = contact.generate_kernel(kt.CoulombRhs)
+        else:
+            kernel_friction_rhs = contact.generate_kernel(kt.TrescaRhs)
 
     # create vector and matrix
     A = contact.create_matrix(J_custom)
@@ -131,7 +138,7 @@ def setup_newton_solver(F_custom: fem.forms.FormMetaClass, J_custom: fem.forms.F
         with common.Timer("~~Contact: Contact contributions (in assemble vector)"):
             for i in range(num_pairs):
                 contact.assemble_vector(b, i, kernel_rhs, coeffs[i], consts)
-                contact.assemble_vector(b, i, kernel_tresca_rhs, coeffs[i], consts)
+                contact.assemble_vector(b, i, kernel_friction_rhs, coeffs[i], consts)
         with common.Timer("~~Contact: Standard contributions (in assemble vector)"):
             fem.petsc.assemble_vector(b, F_custom)
 
@@ -149,7 +156,7 @@ def setup_newton_solver(F_custom: fem.forms.FormMetaClass, J_custom: fem.forms.F
         with common.Timer("~~Contact: Contact contributions (in assemble matrix)"):
             for i in range(num_pairs):
                 contact.assemble_matrix(A, [], i, kernel_jac, coeffs[i], consts)
-                contact.assemble_matrix(A, [], i, kernel_tresca_jac, coeffs[i], consts)
+                contact.assemble_matrix(A, [], i, kernel_friction_jac, coeffs[i], consts)
         with common.Timer("~~Contact: Standard contributions (in assemble matrix)"):
             fem.petsc.assemble_matrix(A, J_custom, bcs=tbcs)
         A.assemble()
@@ -239,7 +246,8 @@ def nitsche_unbiased(steps: int, ufl_form: ufl.Form, u: fem.Function, mu: fem.Fu
                      fname: str = "pseudo_time",
                      search_radius: np.float64 = np.float64(-1.),
                      order=1, simplex=True, pressure_function=None,
-                     projection_coordinates=(0, 0)) -> Tuple[fem.Function, list[int],
+                     projection_coordinates=(0, 0),
+                     coulomb: bool = False) -> Tuple[fem.Function, list[int],
                                                              list[int], list[float]]:
     """
     Use custom kernel to compute the contact problem with two elastic bodies coming into contact.
@@ -431,7 +439,7 @@ def nitsche_unbiased(steps: int, ufl_form: ufl.Form, u: fem.Function, mu: fem.Fu
         # setup newton solver
         newton_solver = setup_newton_solver(F_custom, J_custom, bcs, u, du, contact, markers,
                                             entities, quadrature_degree, const_coeffs, consts,
-                                            search_method)
+                                            search_method, coulomb)
 
         # Set Newton solver options
         newton_solver.set_newton_options(newton_options)

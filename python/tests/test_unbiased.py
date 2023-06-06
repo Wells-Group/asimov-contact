@@ -30,7 +30,8 @@ import dolfinx_contact
 import dolfinx_contact.cpp
 from dolfinx_contact.helpers import (R_minus, dR_minus, R_plus, dR_plus, epsilon,
                                      lame_parameters, sigma_func, tangential_proj,
-                                     ball_projection, d_ball_projection)
+                                     ball_projection, d_ball_projection,
+                                     d_alpha_ball_projection)
 
 kt = dolfinx_contact.cpp.Kernel
 
@@ -133,6 +134,60 @@ def DG_jac_tresca(u0, v0, w0, h, n, gamma, theta, sigma, fric, dS, gdim):
     J += 0.5 * gamma / h('-') * ufl.dot(d_ball_projection(Pt_g(u0, '-', '+', 1. / gamma), fric * h('-') / gamma, gdim)
                                         * Pt_g(w0, '-', '+', 1. / gamma), Pt_g(v0, '-', '+', theta / gamma)) * dS
 
+    return J
+
+
+def DG_rhs_coulomb(u0, v0, h, n, gamma, theta, sigma, gap, fric, dS, gdim):
+    """
+    UFL version of the Coulomb friction term for the unbiased Nitsche formulation
+    """
+    def Pn_g(u, a, b):
+        return ufl.dot(u(a) - u(b), -n(b)) - gap - (h(a) / gamma) * ufl.dot(sigma(u(a)) * n(a), -n(b))
+
+    def Pt_g(u, a, b, c):
+        return tangential_proj(u(a) - u(b) - h(a) * c * sigma(u(a)) * n(a), -n(b))
+
+    Pn_u_plus = R_plus(Pn_g(u0, '+', '-'))
+    Pn_u_minus = R_plus(Pn_g(u0, '-', '+'))
+    return 0.5 * gamma / h('+') * ufl.dot(ball_projection(Pt_g(u0, '+', '-', 1. / gamma),
+                                                          Pn_u_plus * fric * h('+') / gamma, gdim),
+                                          Pt_g(v0, '+', '-', theta / gamma)) * dS\
+        + 0.5 * gamma / h('-') * ufl.dot(ball_projection(Pt_g(u0, '-', '+', 1. / gamma),
+                                                         Pn_u_minus * fric * h('-') / gamma, gdim),
+                                         Pt_g(v0, '-', '+', theta / gamma)) * dS
+
+
+def DG_jac_coulomb(u0, v0, w0, h, n, gamma, theta, sigma, gap, fric, dS, gdim):
+    """
+    UFL version of the Jacobian for the Coulomb friction term for the unbiased Nitsche formulation
+    """
+    def Pn_g(u, a, b):
+        return ufl.dot(u(a) - u(b), -n(b)) - gap - (h(a) / gamma) * ufl.dot(sigma(u(a)) * n(a), -n(b))
+
+    def Pn_gtheta(v, a, b, t):
+        return ufl.dot(v(a) - v(b), -n(b)) - t * (h(a) / gamma) * ufl.dot(sigma(v(a)) * n(a), -n(b))
+
+    def Pt_g(u, a, b, c):
+        return tangential_proj(u(a) - u(b) - h(a) * c * sigma(u(a)) * n(a), -n(b))
+
+    Pn_u_plus = R_plus(Pn_g(u0, '+', '-'))
+    Pn_u_minus = R_plus(Pn_g(u0, '-', '+'))
+
+    J = 0.5 * gamma / h('+') * ufl.dot(d_ball_projection(Pt_g(u0, '+', '-', 1. / gamma),
+                                                         Pn_u_plus * fric * h('+') / gamma, gdim)
+                                       * Pt_g(w0, '+', '-', 1. / gamma), Pt_g(v0, '+', '-', theta / gamma)) * dS
+    J += 0.5 * gamma / h('-') * ufl.dot(d_ball_projection(Pt_g(u0, '-', '+', 1. / gamma),
+                                                          Pn_u_minus * fric * h('-') / gamma, gdim)
+                                        * Pt_g(w0, '-', '+', 1. / gamma), Pt_g(v0, '-', '+', theta / gamma)) * dS
+
+    d_alpha_plus = d_alpha_ball_projection(Pt_g(u0, '+', '-', 1. / gamma), Pn_u_plus * fric * h('+') / gamma,
+                                           dR_plus(Pn_g(u0, '+', '-')) * fric * h('+') / gamma, gdim)
+    d_alpha_minus = d_alpha_ball_projection(Pt_g(u0, '-', '+', 1. / gamma), Pn_u_plus * fric * h('-') / gamma,
+                                            dR_plus(Pn_g(u0, '-', '+')) * fric * h('-') / gamma, gdim)
+    J += 0.5 * gamma / h('+') * Pn_gtheta(w0, '+', '-', 1.0) * \
+        ufl.dot(d_alpha_plus, Pt_g(v0, '+', '-', theta / gamma)) * dS
+    J += 0.5 * gamma / h('-') * Pn_gtheta(w0, '-', '+', 1.0) * \
+        ufl.dot(d_alpha_minus, Pt_g(v0, '-', '+', theta / gamma)) * dS
     return J
 
 
@@ -395,11 +450,11 @@ def create_contact_data(V, u, quadrature_degree, lmbda, mu, facets_cg, search, t
     return contact, coeff_0, coeff_1
 
 
-@pytest.mark.parametrize("ct", ["triangle", "tetrahedron", "hexahedron"])
+@pytest.mark.parametrize("ct", ["triangle", "quadrilateral", "tetrahedron", "hexahedron"])
 @pytest.mark.parametrize("gap", [0.5, -0.5])
 @pytest.mark.parametrize("quadrature_degree", [1, 5])
 @pytest.mark.parametrize("theta", [1, 0, -1])
-@pytest.mark.parametrize("formulation", ["meshtie", "frictionless", "tresca"])
+@pytest.mark.parametrize("formulation", ["meshtie", "frictionless", "tresca", "coulomb"])
 @pytest.mark.parametrize("search", [dolfinx_contact.cpp.ContactMode.ClosestPoint,
                                     dolfinx_contact.cpp.ContactMode.Raytracing])
 def test_contact_kernels(ct, gap, quadrature_degree, theta, formulation, search):
@@ -475,11 +530,16 @@ def test_contact_kernels(ct, gap, quadrature_degree, theta, formulation, search)
         J0 = DG_jac_plus(u0, v0, w0, h, n, gamma_scaled, theta, sigma, gap, dS)
         kernel_type_rhs = kt.Rhs
         kernel_type_jac = kt.Jac
-    else:
+    elif formulation == "tresca":
         F0 = DG_rhs_tresca(u0, v0, h, n, gamma_scaled, theta, sigma, 0.1, dS, gdim)
         J0 = DG_jac_tresca(u0, v0, w0, h, n, gamma_scaled, theta, sigma, 0.1, dS, gdim)
         kernel_type_rhs = kt.TrescaRhs
         kernel_type_jac = kt.TrescaJac
+    else:
+        F0 = DG_rhs_coulomb(u0, v0, h, n, gamma_scaled, theta, sigma, gap, 0.1, dS, gdim)
+        J0 = DG_jac_coulomb(u0, v0, w0, h, n, gamma_scaled, theta, sigma, gap, 0.1, dS, gdim)
+        kernel_type_rhs = kt.CoulombRhs
+        kernel_type_jac = kt.CoulombJac
 
     # rhs vector
     F0 = _fem.form(F0)
