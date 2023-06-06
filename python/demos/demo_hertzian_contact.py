@@ -62,20 +62,21 @@ if __name__ == "__main__":
     mesh_dir = "meshes"
 
     # Problem paramters
-    R = 0.25
-    L = 1.0
-    H = 1.0
+    R = 8 #0.25
+    L = 20 #1.0
+    H = 20 #1.0
     if threed:
         load = 4 * 0.25 * np.pi * R**3 / 3.
     else:
         load = 0.25 * np.pi * R**2
+    load = 2 * R * 0.625
     gap = 0.01
 
     # lame parameters
-    E1 = 2.5
-    E2 = 2.5
-    nu1 = 0.25
-    nu2 = 0.25
+    E1 = 1e8#2.5
+    E2 = 200#2.5
+    nu1 = 0.0 #0.25
+    nu2 = 0.3 #0.25
     mu_func, lambda_func = lame_parameters(True)
     mu1 = mu_func(E1, nu1)
     mu2 = mu_func(E2, nu2)
@@ -203,9 +204,9 @@ if __name__ == "__main__":
             return vals
 
     # Solver options
-    ksp_tol = 1e-10
+    ksp_tol = 1e-8
     newton_tol = 1e-7
-    newton_options = {"relaxation_parameter": 1,
+    newton_options = {"relaxation_parameter": 1.0,
                       "atol": newton_tol,
                       "rtol": newton_tol,
                       "convergence_criterion": "residual",
@@ -245,7 +246,7 @@ if __name__ == "__main__":
     # Set initial condition
 
     # Pack mesh data for Nitsche solver
-    contact = [(0, 1), (1, 0)]
+    contact = [(0, 1), (0, 1)]
     data = np.array([contact_bdy_1, contact_bdy_2], dtype=np.int32)
     offsets = np.array([0, 2], dtype=np.int32)
     surfaces = create_adjacencylist(data, offsets)
@@ -262,15 +263,15 @@ if __name__ == "__main__":
     # body forces
     F -= ufl.inner(f, v) * dx(1) + ufl.inner(t, v) * ds(neumann_bdy)
 
-    problem_parameters = {"gamma": np.float64(E1 * 100), "theta": np.float64(1)}
+    problem_parameters = {"gamma": np.float64(E2 * 100), "theta": np.float64(1)}
 
     # create initial guess
     def _u_initial(x):
         values = np.zeros((mesh.geometry.dim, x.shape[1]))
-        values[-1] = -H / 100 - 0.01
+        values[-1] = -H / 100 - gap
         return values
     u.interpolate(_u_initial, disk_cells)
-    search_mode = [ContactMode.ClosestPoint, ContactMode.Raytracing]
+    search_mode = [ContactMode.ClosestPoint, ContactMode.ClosestPoint]
 
     # Solve contact problem using Nitsche's method
     u, newton_its, krylov_iterations, solver_time = nitsche_unbiased(1, ufl_form=F,
@@ -297,11 +298,10 @@ if __name__ == "__main__":
     sigma_vm_h = Function(W)
     sigma_vm_h.interpolate(sigma_vm_expr)
     sigma_vm_h.name = "vonMises"
-    u.name = "u"
-    with XDMFFile(mesh.comm, "test_hertz.xdmf", "w") as xdmf:
+    with XDMFFile(mesh.comm, f"{outname}_vonMises.xdmf", "w") as xdmf:
         xdmf.write_mesh(mesh)
-        u.name = "u"
-        xdmf.write_function(u)
+        xdmf.write_function(sigma_vm_h)
+
         # xdmf.write_function(sigma_vm_h)
 
     # Create quadrature points for integration on facets

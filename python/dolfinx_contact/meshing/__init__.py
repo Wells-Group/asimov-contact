@@ -11,7 +11,8 @@ from .contact_meshes import (create_box_mesh_2D,
                              create_cylinder_cylinder_mesh,
                              create_halfdisk_plane_mesh,
                              create_2D_rectangle_split,
-                             create_halfsphere_box_mesh)
+                             create_halfsphere_box_mesh,
+                             create_quarter_disks_mesh)
 from .onesided_meshes import create_disk_mesh, create_sphere_mesh
 from .split_box import (create_split_box_2D, create_split_box_3D, create_unsplit_box_2d, create_unsplit_box_3d,
                         vertical_line, horizontal_sine)
@@ -36,4 +37,5 @@ __all__ = ["create_christmas_tree_mesh",
            "horizontal_sine",
            "create_halfdisk_plane_mesh",
            "create_2D_rectangle_split",
-           "create_halfsphere_box_mesh"]
+           "create_halfsphere_box_mesh",
+           "create_quarter_disk_mesh"]

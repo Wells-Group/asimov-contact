@@ -25,7 +25,7 @@ def write_pressure_xdmf(mesh, contact, u, du, contact_pairs, quadrature_degree,
     # Compute contact pressure on surfaces
     gdim = mesh.geometry.dim
     tdim = mesh.topology.dim
-    pn = []
+    forces = []
     for i in range(len(contact_pairs)):
         n_x = contact.pack_nx(i)
         grad_u = dolfinx_contact.cpp.pack_gradient_quadrature(
@@ -38,7 +38,7 @@ def write_pressure_xdmf(mesh, contact, u, du, contact_pairs, quadrature_degree,
         num_facets = entities[i].shape[0]
         num_q_points = n_x.shape[1] // gdim
         # this assumes mu, lmbda are constant for each body
-        pn.append(dolfinx_contact.cpp.compute_contact_pressure(
+        forces.append(dolfinx_contact.cpp.compute_contact_forces(
             grad_u, n_x, n_contact, num_q_points, num_facets, gdim, material[i][0, 0], material[i][0, 1]))
 
     c_to_f = mesh.topology.connectivity(tdim, tdim - 1)
@@ -73,25 +73,30 @@ def write_pressure_xdmf(mesh, contact, u, du, contact_pairs, quadrature_degree,
     Q = FunctionSpace(facet_mesh, Q_element)
     P = FunctionSpace(facet_mesh, ("DG", order - 1))
     P_exact = FunctionSpace(facet_mesh, ("DG", order + 1))
-    num_q_points = np.int32(len(pn[0]) / len(entities[0]))
-    p = Function(Q)
+    num_q_points = np.int32(len(forces[0][0]) / len(entities[0]))
+    pn = Function(Q)
+    pt = Function(Q)
     for j in range(len(contact_pairs)):
         dofs = np.array(np.hstack([range(msh_to_fm[facet_list[j]][i] * num_q_points,
                         num_q_points * (msh_to_fm[facet_list[j]][i] + 1)) for i in range(len(entities[j]))]))
-        p.x.array[dofs] = pn[j][:]
+        pn.x.array[dofs] = forces[j][0][:]
+        pt.x.array[dofs] = forces[j][1][:]
     u_f = ufl.TrialFunction(P)
     v_f = ufl.TestFunction(P)
 
     # Define forms for the projection
     dx_f = ufl.Measure("dx", domain=facet_mesh)
     a_form = form(ufl.inner(u_f, v_f) * dx_f)
-    L = form(ufl.inner(p, v_f) * dx_f)
+    L = form(ufl.inner(pn, v_f) * dx_f)
+    L2 = form(ufl.inner(pt, v_f) * dx_f)
 
     # Assemble matrix and vector
     A = assemble_matrix(a_form)
     A.assemble()
     b = assemble_vector(L)
     b.ghostUpdate(addv=PETSc.InsertMode.ADD, mode=PETSc.ScatterMode.REVERSE)
+    b2 = assemble_vector(L2)
+    b2.ghostUpdate(addv=PETSc.InsertMode.ADD, mode=PETSc.ScatterMode.REVERSE)
 
     # Setup solver
     ksp = PETSc.KSP().create(facet_mesh.comm)
@@ -104,6 +109,9 @@ def write_pressure_xdmf(mesh, contact, u, du, contact_pairs, quadrature_degree,
     p_f = Function(P)
     ksp.solve(b, p_f.vector)
     p_f.x.scatter_forward()
+    pt_f = Function(P)
+    ksp.solve(b2, pt_f.vector)
+    pt_f.x.scatter_forward()
 
     # interpolate exact pressure
     p_hertz = Function(P_exact)
@@ -117,6 +125,13 @@ def write_pressure_xdmf(mesh, contact, u, du, contact_pairs, quadrature_degree,
         p_f.name = "pressure"
         facet_mesh.geometry.x[:, xi] = geom_xi[:]
         xdmf.write_function(p_f)
+
+    with XDMFFile(facet_mesh.comm, f"{fname}_tangent_force.xdmf", "w") as xdmf:
+        facet_mesh.geometry.x[geom_xi > vali - 1e-5, xi] = vali
+        xdmf.write_mesh(facet_mesh)
+        pt_f.name = "tangential"
+        facet_mesh.geometry.x[:, xi] = geom_xi[:]
+        xdmf.write_function(pt_f)
 
     with XDMFFile(facet_mesh.comm, f"{fname}_hertz_pressure.xdmf", "w") as xdmf:
         facet_mesh.geometry.x[geom_xi > vali - 1e-5, xi] = vali

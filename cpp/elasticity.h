@@ -9,6 +9,7 @@
 
 #include "QuadratureRule.h"
 #include <span>
+#include <cmath>
 
 namespace dolfinx_contact
 {
@@ -90,7 +91,7 @@ void compute_sigma_n_opp(mdspan4_t sig_n_opp, std::span<const double> grad_v,
 /// @param[in] mu           The first Lame parameter
 /// @param[in] lmbda        The second Lame parameter
 /// @return vector containing surface pressure values for each quadrature point on each facet
-std::vector<double> compute_contact_pressure(
+std::array<std::vector<double>, 2> compute_contact_forces(
     std::span<const double> grad_u, std::span<const double> n_x,
     std::span<const double> n_contact, const std::size_t num_q_points,
     std::size_t num_facets, const std::size_t gdim, const double mu,

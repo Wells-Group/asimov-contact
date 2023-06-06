@@ -9,7 +9,7 @@ from mpi4py import MPI
 
 __all__ = ["create_circle_plane_mesh", "create_circle_circle_mesh", "create_box_mesh_2D",
            "create_box_mesh_3D", "create_sphere_plane_mesh", "create_sphere_sphere_mesh",
-           "create_cylinder_cylinder_mesh", "create_2D_rectangle_split"]
+           "create_cylinder_cylinder_mesh", "create_2D_rectangle_split", "create_quarter_disks_mesh"]
 
 
 def create_circle_plane_mesh(filename: str, quads: bool = False, res=0.1, order: int = 1,
@@ -122,6 +122,75 @@ def create_halfdisk_plane_mesh(filename: str, res=0.1, order: int = 1, quads=Fal
 
         gmsh.model.mesh.field.add("Distance", 1)
         gmsh.model.mesh.field.setNumbers(1, "NodesList", [pt_refine])
+
+        gmsh.model.mesh.field.add("Threshold", 2)
+        gmsh.model.mesh.field.setNumber(2, "IField", 1)
+        gmsh.model.mesh.field.setNumber(2, "LcMin", 0.5 * res)
+        gmsh.model.mesh.field.setNumber(2, "LcMax", 2 * res)
+        gmsh.model.mesh.field.setNumber(2, "DistMin", r / 2)
+        gmsh.model.mesh.field.setNumber(2, "DistMax", r)
+        gmsh.model.mesh.field.setAsBackgroundMesh(2)
+        if quads:
+            gmsh.option.setNumber("Mesh.RecombinationAlgorithm", 8)
+            gmsh.option.setNumber("Mesh.RecombineAll", 2)
+            gmsh.option.setNumber("Mesh.SubdivisionAlgorithm", 1)
+
+        gmsh.model.mesh.generate(2)
+        gmsh.model.mesh.setOrder(order)
+
+        # gmsh.option.setNumber("Mesh.SaveAll", 1)
+        gmsh.write(filename)
+    MPI.COMM_WORLD.Barrier()
+    gmsh.finalize()
+
+def create_quarter_disks_mesh(filename: str, res=0.1, order: int = 1, quads=False, r=0.25, gap=0.01):
+    """
+    Create a quarter disk, with center at (0.0,0.0,0), radius r and  y<=0.0, x>=0
+    and a a second quarter disk with center (0.0, -2r - gap, 0.0), radius r and y>= -3r-gap, x>=0
+    """
+    center = [0, 0, 0]
+    gmsh.initialize()
+    if MPI.COMM_WORLD.rank == 0:
+        # Create first quarter disk
+        c = gmsh.model.occ.addPoint(center[0], center[1], center[2])
+        bottom1 = gmsh.model.occ.addPoint(0.0, -r, 0.0)
+        top1 = gmsh.model.occ.addPoint(r, 0, 0)
+        angle = np.pi/6
+        right1 = gmsh.model.occ.addPoint(r * np.sin(angle), -r * np.cos(angle), 0)
+        arc1 = gmsh.model.occ.addCircleArc(bottom1, c, right1)
+        arc2 = gmsh.model.occ.addCircleArc(right1, c, top1)
+        line1 = gmsh.model.occ.addLine(top1, c)
+        line2 = gmsh.model.occ.addLine(c, bottom1)
+        curve = gmsh.model.occ.addCurveLoop([arc1, arc2, line1, line2])
+        gmsh.model.occ.synchronize()
+        surface = gmsh.model.occ.addPlaneSurface([curve])
+
+        # Create second quarter disk
+        c2 = gmsh.model.occ.addPoint(center[0], center[1] - 2 * r - gap, center[2])
+        bottom2 = gmsh.model.occ.addPoint(r, -2 * r - gap, 0.0)
+        top2 = gmsh.model.occ.addPoint(0, -r - gap, 0)
+        right2 = gmsh.model.occ.addPoint(r * np.sin(angle), r * np.cos(angle) - 2 *r -gap, 0)
+        arc3 = gmsh.model.occ.addCircleArc(bottom2, c2, right2)
+        arc4 = gmsh.model.occ.addCircleArc(right2, c2, top2)
+        line3 = gmsh.model.occ.addLine(top2, c2)
+        line4 = gmsh.model.occ.addLine(c2, bottom2)
+        curve2 = gmsh.model.occ.addCurveLoop([arc3, arc4, line3, line4])
+        surface2 = gmsh.model.occ.addPlaneSurface([curve2])
+
+        # Synchronize and create physical tags
+        gmsh.model.occ.synchronize()
+        gmsh.model.addPhysicalGroup(2, [surface], tag=1)
+
+        gmsh.model.addPhysicalGroup(2, [surface2], tag=2)
+
+        bndry1 = gmsh.model.getBoundary([(2, surface)], oriented=False)
+        [gmsh.model.addPhysicalGroup(b[0], [b[1]]) for b in bndry1]
+        bndry2 = gmsh.model.getBoundary([(2, surface2)], oriented=False)
+        [gmsh.model.addPhysicalGroup(b[0], [b[1]]) for b in bndry2]
+
+
+        gmsh.model.mesh.field.add("Distance", 1)
+        gmsh.model.mesh.field.setNumbers(1, "NodesList", [bottom1])
 
         gmsh.model.mesh.field.add("Threshold", 2)
         gmsh.model.mesh.field.setNumber(2, "IField", 1)
