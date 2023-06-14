@@ -43,7 +43,7 @@ class ContactProblem:
     def solve(self):
         newton_solver = setup_newton_solver(self.F, self.J, self.bcs, self.u, self.du, self.contact, self.markers,
                                             self.entities, self.q_deg, self.coeffs, self.consts,
-                                            self.raytracing)
+                                            self.raytracing, False)
         # Set Newton solver options
         newton_solver.set_newton_options(self.newton_options)
 
