@@ -1,22 +1,19 @@
 # Copyright (C) 2023 Sarah Roggendorf
 #
 # SPDX-License-Identifier:    MIT
-
-import numpy as np
-from dolfinx import log, io
 import dolfinx.fem as _fem
-from dolfinx.common import timing, Timer
+import numpy as np
+import ufl
+from dolfinx import io, log
 from dolfinx.graph import create_adjacencylist
 from dolfinx.io import XDMFFile
+from dolfinx_contact.helpers import (epsilon, lame_parameters, sigma_func,
+                                     weak_dirichlet)
+from dolfinx_contact.meshing import convert_mesh, create_christmas_tree_mesh
+from dolfinx_contact.parallel_mesh_ghosting import create_contact_mesh
+from dolfinx_contact.unbiased.contact_problem import create_contact_solver
 from mpi4py import MPI
 from petsc4py import PETSc as _PETSc
-import ufl
-
-from dolfinx_contact.meshing import convert_mesh, create_christmas_tree_mesh
-from dolfinx_contact.unbiased.contact_problem import create_contact_solver
-from dolfinx_contact.helpers import lame_parameters, sigma_func, weak_dirichlet, epsilon
-from dolfinx_contact.parallel_mesh_ghosting import create_contact_mesh
-
 
 fname = "meshes/xmas_2D"
 create_christmas_tree_mesh(filename=fname, res=0.2)
@@ -45,21 +42,21 @@ q, r = ufl.TrialFunction(Q), ufl.TestFunction(Q)
 T0 = _fem.Function(Q)
 kdt = 0.1
 tau = 1.0
-therm = (q-T0)*r*dx + kdt*ufl.inner(ufl.grad(tau*q + (1-tau)*T0), ufl.grad(r))*dx 
+therm = (q - T0) * r * dx + kdt * ufl.inner(ufl.grad(tau * q + (1 - tau) * T0), ufl.grad(r)) * dx
 
 a_therm, L_therm = ufl.lhs(therm), ufl.rhs(therm)
 
 T0.x.set(0.0)
-dofs = _fem.locate_dofs_topological(Q, entity_dim=tdim-1, entities=facet_marker.find(3))
-Tbc = _fem.dirichletbc(value=1.0, dofs=dofs, V=Q)
-dofs2 = _fem.locate_dofs_topological(Q, entity_dim=tdim-1, entities=facet_marker.find(4))
-Tbc2 = _fem.dirichletbc(value=1.0, dofs=dofs2, V=Q)
-Tproblem = _fem.petsc.LinearProblem(a_therm, L_therm, bcs=[Tbc, Tbc2], petsc_options={"ksp_type": "preonly", "pc_type": "lu"}, u=T0)
+dofs = _fem.locate_dofs_topological(Q, entity_dim=tdim - 1, entities=facet_marker.find(3))
+Tbc = _fem.dirichletbc(value=_PETSc.ScalarType((1.0)), dofs=dofs, V=Q)
+dofs2 = _fem.locate_dofs_topological(Q, entity_dim=tdim - 1, entities=facet_marker.find(4))
+Tbc2 = _fem.dirichletbc(value=_PETSc.ScalarType((0.0)), dofs=dofs2, V=Q)
+Tproblem = _fem.petsc.LinearProblem(a_therm, L_therm, bcs=[Tbc, Tbc2], petsc_options={
+                                    "ksp_type": "preonly", "pc_type": "lu"}, u=T0)
 
 
 # Elasticity problem
 V = _fem.VectorFunctionSpace(mesh, ("Lagrange", 1))
-bcs = (np.empty(shape=(2, 0), dtype=np.int32), [])
 g = _fem.Constant(mesh, _PETSc.ScalarType((0, 0)))     # zero Dirichlet
 t = _fem.Constant(mesh, _PETSc.ScalarType((0.2, 0.5)))  # traction
 f = _fem.Constant(mesh, _PETSc.ScalarType((1.0, 0.5)))  # body force
@@ -70,7 +67,6 @@ contact_pairs = [(0, 1), (1, 0)]
 data = np.array([contact_bdy_1, contact_bdy_2], dtype=np.int32)
 offsets = np.array([0, 2], dtype=np.int32)
 surfaces = create_adjacencylist(data, offsets)
-
 
 
 # Function, TestFunction, TrialFunction and measures
@@ -84,12 +80,17 @@ mu_func, lambda_func = lame_parameters(True)
 mu = mu_func(E, nu)
 lmbda = lambda_func(E, nu)
 
+
 def eps(w):
     return ufl.sym(ufl.grad(w))
 
+
 alpha = 0.1
-def sigma(w , T):
-    return (lmbda*ufl.tr(eps(w)) - alpha*(3*lmbda + 2*mu)*T)*ufl.Identity(tdim) + 2.0*mu*eps(w)
+
+
+def sigma(w, T):
+    return (lmbda * ufl.tr(eps(w)) - alpha * (3 * lmbda + 2 * mu) * T) * ufl.Identity(tdim) + 2.0 * mu * eps(w)
+
 
 # Create variational form without contact contributions
 F = ufl.inner(sigma(u, T0), epsilon(v)) * dx
@@ -107,11 +108,11 @@ F = weak_dirichlet(F, u, g, sigma_u, E * gamma, theta, ds(3))
 ksp_tol = 1e-10
 newton_tol = 1e-6
 newton_options = {"relaxation_parameter": 1.0,
-                    "atol": newton_tol,
-                    "rtol": newton_tol,
-                    "convergence_criterion": "residual",
-                    "max_it": 50,
-                    "error_on_nonconvergence": False}
+                  "atol": newton_tol,
+                  "rtol": newton_tol,
+                  "convergence_criterion": "residual",
+                  "max_it": 50,
+                  "error_on_nonconvergence": False}
 
 # In order to use an LU solver for debugging purposes on small scale problems
 # use the following PETSc options: {"ksp_type": "preonly", "pc_type": "lu"}
@@ -144,16 +145,17 @@ T0.name = 'temperature'
 
 contact_problem = create_contact_solver(ufl_form=F, u=u, markers=[domain_marker, facet_marker],
                                         contact_data=(surfaces, contact_pairs),
-                                        bcs=bcs, problem_parameters=problem_parameters,
+                                        bcs=(np.empty(shape=(2, 0), dtype=np.int32), []),
+                                        problem_parameters=problem_parameters,
                                         raytracing=False,
                                         newton_options=newton_options,
                                         petsc_options=petsc_options,
                                         quadrature_degree=5,
-                                        search_radius=0.5)
+                                        search_radius=np.float64(0.5))
 
 # initialise vtx write
 vtx_therm = io.VTXWriter(mesh.comm, "results/xmas_disp.bp", [contact_problem.u, T0])
-vtx_mech  = io.VTXWriter(mesh.comm, "results/xmas_temp.bp", [T0])
+vtx_mech = io.VTXWriter(mesh.comm, "results/xmas_temp.bp", [T0])
 vtx_therm.write(0)
 vtx_mech.write(0)
 for i in range(50):
@@ -167,13 +169,10 @@ for i in range(50):
     contact_problem.contact.update_submesh_geometry(u._cpp_object)
     # take a fraction of du as initial guess
     # this is to ensure non-singular matrices in the case of no Dirichlet boundary
-    contact_problem.du.x.array[:] = 0.1*contact_problem.du.x.array[:]
-    vtx_therm.write(i+1)
-    vtx_mech.write(i+1)
+    contact_problem.du.x.array[:] = 0.1 * contact_problem.du.x.array[:]
+    vtx_therm.write(i + 1)
+    vtx_mech.write(i + 1)
 
 
 vtx_therm.close()
 vtx_mech.close()
-
-
-
