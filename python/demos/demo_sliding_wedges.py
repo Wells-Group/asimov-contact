@@ -53,7 +53,7 @@ if __name__ == "__main__":
     mu_func, lambda_func = lame_parameters(True)
     mu = mu_func(E, nu)
     lmbda = lambda_func(E, nu)
-    fric = 0.0
+    fric = 0.1
     angle = np.arctan(0.1)
 
     # Create mesh
@@ -78,7 +78,7 @@ if __name__ == "__main__":
 
     V = VectorFunctionSpace(mesh, ("CG", args.order))
     # boundary conditions
-    t = Constant(mesh, ScalarType((0.0, 0.6)))
+    t = Constant(mesh, ScalarType((0.3, 0.0)))
 
     dirichlet_dofs_1 = locate_dofs_topological(V.sub(1), 1, facet_marker.find(dirichlet_bdy_1))
     dirichlet_dofs_2 = locate_dofs_topological(V, 1, facet_marker.find(dirichlet_bdy_2))
@@ -113,7 +113,7 @@ if __name__ == "__main__":
     # body forces
     F -= ufl.inner(t, v) * ds(neumann_bdy)
 
-    problem_parameters = {"gamma": np.float64(E * 20), "theta": np.float64(1), "friction": fric}
+    problem_parameters = {"gamma": np.float64(E * 100), "theta": np.float64(-1), "friction": fric}
 
     search_mode = [ContactMode.ClosestPoint, ContactMode.ClosestPoint]
     
@@ -169,7 +169,8 @@ if __name__ == "__main__":
                                                                      search_radius=np.float64(-1),
                                                                      order=args.order, simplex=simplex,
                                                                      pressure_function= _pressure,
-                                                                     projection_coordinates=[(tdim - 1, -R), (tdim - 1, -R - 0.1)])
+                                                                     projection_coordinates=[(tdim - 1, -R), (tdim - 1, -R - 0.1)],
+                                                                     coulomb=True)
     
     n = ufl.FacetNormal(mesh)
     ex = Constant(mesh, ScalarType((1.0, 0.0)))
