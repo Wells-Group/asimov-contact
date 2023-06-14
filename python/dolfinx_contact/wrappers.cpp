@@ -526,13 +526,20 @@ PYBIND11_MODULE(cpp, m)
   m.def("compute_contact_forces",
         [](const py::array_t<PetscScalar, py::array::c_style>& grad_u,
            const py::array_t<PetscScalar, py::array::c_style>& n_x,
-           const py::array_t<PetscScalar, py::array::c_style>& n_contact,
            int num_q_points, int num_facets, int gdim, double mu, double lmbda)
         {
           return dolfinx_contact::compute_contact_forces(
               std::span<const double>(grad_u.data(), grad_u.size()),
               std::span<const double>(n_x.data(), n_x.size()),
-              std::span<const double>(n_contact.data(), n_contact.size()),
               num_q_points, num_facets, gdim, mu, lmbda);
+        });
+
+  m.def("entities_to_geometry_dofs",
+        [](const dolfinx::mesh::Mesh<double>& mesh, int dim,
+          py::array_t<std::int32_t, py::array::c_style>&  entity_list)
+        {
+          std::span<const std::int32_t> entities_span(entity_list.data(),
+                                                  entity_list.size());
+          return dolfinx_contact::entities_to_geometry_dofs(mesh, dim, entities_span);
         });
 }

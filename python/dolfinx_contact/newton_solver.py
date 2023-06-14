@@ -196,7 +196,7 @@ class NewtonSolver():
             # https://petsc.org/main/docs/manualpages/KSP/KSPConvergedReason/
             print(f"Krylov iterations: {self.krylov_solver.getIterationNumber()}", flush=True, end=" ")
             print(f"converged: {self.krylov_solver.getConvergedReason()}")
-        return residual, relative_residual < self.rtol or residual < self.atol
+        return residual, relative_residual < self.rtol and residual < self.atol
 
     def _update_solution(self, dx: PETSc.Vec, x: PETSc.Vec):
         """

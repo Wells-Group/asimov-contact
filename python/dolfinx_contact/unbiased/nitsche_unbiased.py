@@ -3,12 +3,14 @@
 # SPDX-License-Identifier:    MIT
 
 from typing import Optional, Tuple, Union, Any
-from dolfinx import common, fem, mesh, io, log, cpp
+from dolfinx import common, fem, io, log, cpp
+from dolfinx import mesh as _mesh
 import numpy as np
 import numpy.typing as npt
 import ufl
 from dolfinx.cpp.graph import AdjacencyList_int32
 from petsc4py import PETSc as _PETSc
+from mpi4py import MPI
 
 import dolfinx_contact
 import dolfinx_contact.cpp
@@ -23,7 +25,7 @@ __all__ = ["nitsche_unbiased"]
 def setup_newton_solver(F_custom: fem.forms.FormMetaClass, J_custom: fem.forms.FormMetaClass,
                         bcs: Tuple[list[Tuple[npt.NDArray[np.int32], int]], list[Union[fem.Function, fem.Constant]]],
                         u: fem.Function, du: fem.Function,
-                        contact: dolfinx_contact.cpp.Contact, markers: list[mesh.MeshTags],
+                        contact: dolfinx_contact.cpp.Contact, markers: list[_mesh.MeshTags],
                         entities: list[npt.NDArray[np.int32]], quadrature_degree: int,
                         const_coeffs: list[npt.NDArray[np.float64]], consts: npt.NDArray[np.float64],
                         search_method: list[dolfinx_contact.cpp.ContactMode],
@@ -198,7 +200,7 @@ def get_problem_parameters(problem_parameters: dict[str, np.float64]):
 
 
 def copy_fns(fns: list[Union[fem.Function, fem.Constant]],
-             mesh: mesh.Mesh) -> list[Union[fem.Function, fem.Constant]]:
+             mesh: _mesh.Mesh) -> list[Union[fem.Function, fem.Constant]]:
     """
     Create copy of list of finite element functions/constanst
     """
@@ -232,7 +234,7 @@ def update_fns(t: float, fns: list[Union[fem.Function, fem.Constant]],
 
 
 def nitsche_unbiased(steps: int, ufl_form: ufl.Form, u: fem.Function, mu: fem.Function, lmbda: fem.Function,
-                     rhs_fns: list[Any], markers: list[mesh.MeshTags],
+                     rhs_fns: list[Any], markers: list[_mesh.MeshTags],
                      contact_data: Tuple[AdjacencyList_int32, list[Tuple[int, int]]],
                      bcs: Tuple[list[Tuple[npt.NDArray[np.int32], int]], list[Union[fem.Function, fem.Constant]]],
                      problem_parameters: dict[str, np.float64],
@@ -246,7 +248,7 @@ def nitsche_unbiased(steps: int, ufl_form: ufl.Form, u: fem.Function, mu: fem.Fu
                      fname: str = "pseudo_time",
                      search_radius: np.float64 = np.float64(-1.),
                      order=1, simplex=True, pressure_function=None,
-                     projection_coordinates=(0, 0),
+                     projection_coordinates=[(0, 0), (0, 0)],
                      coulomb: bool = False) -> Tuple[fem.Function, list[int],
                                                              list[int], list[float]]:
     """
@@ -480,6 +482,74 @@ def nitsche_unbiased(steps: int, ufl_form: ufl.Form, u: fem.Function, mu: fem.Fu
         write_pressure_xdmf(mesh, contact, u, du, contact_pairs, quadrature_degree,
                             search_method, entities, material, order, simplex, pressure_function,
                             projection_coordinates, fname)
+    gdim = mesh.geometry.dim
+
+
+    c_to_f = mesh.topology.connectivity(tdim, tdim - 1)
+    facet_list = []
+    for j in range(len(contact_pairs)):
+        facet_list.append(np.zeros(len(entities[j]), dtype=np.int32))
+        for i, e in enumerate(entities[j]):
+            facet = c_to_f.links(e[0])[e[1]]
+            facet_list[j][i] = facet
+
+    facets = np.unique(np.sort(np.hstack([facet_list[j] for j in range(len(contact_pairs))])))
+    facet_mesh, fm_to_msh = _mesh.create_submesh(mesh, tdim - 1, facets)[:2]
+
+    # Create msh to submsh entity map
+    num_facets = mesh.topology.index_map(tdim - 1).size_local + \
+        mesh.topology.index_map(tdim - 1).num_ghosts
+    msh_to_fm = np.full(num_facets, -1)
+    msh_to_fm[fm_to_msh] = np.arange(len(fm_to_msh))
+
+    # Use quadrature element
+    if tdim == 2:
+        Q_element = ufl.FiniteElement("Quadrature", ufl.Cell(
+            "interval", geometric_dimension=facet_mesh.geometry.dim), degree=quadrature_degree, quad_scheme="default")
+    else:
+        if simplex:
+            Q_element = ufl.FiniteElement("Quadrature", ufl.Cell(
+                "triangle", geometric_dimension=facet_mesh.geometry.dim), quadrature_degree, quad_scheme="default")
+        else:
+            Q_element = ufl.FiniteElement("Quadrature", ufl.Cell(
+                "quadrilateral", geometric_dimension=facet_mesh.geometry.dim), quadrature_degree, quad_scheme="default")
+
+    Q = fem.FunctionSpace(facet_mesh, Q_element)
+    sig_n = []   
+    for i in range(len(contact_pairs)):
+        n_x = contact.pack_nx(i)
+        grad_u = dolfinx_contact.cpp.pack_gradient_quadrature(
+            u._cpp_object, quadrature_degree, entities[i])
+
+        num_facets = entities[i].shape[0]
+        num_q_points = n_x.shape[1] // gdim
+        # this assumes mu, lmbda are constant for each body
+        sign = np.array(dolfinx_contact.cpp.compute_contact_forces(
+            grad_u, n_x, num_q_points, num_facets, gdim, material[i][0, 0], material[i][0, 1]))
+        sign = sign.reshape(num_facets * num_q_points, gdim)
+        sig_n.append(sign)
+
+    sig_x = fem.Function(Q)
+    sig_y = fem.Function(Q)
+    for j in range(len(contact_pairs)):
+        dofs = np.array(np.hstack([range(msh_to_fm[facet_list[j]][i] * num_q_points,
+                        num_q_points * (msh_to_fm[facet_list[j]][i] + 1)) for i in range(len(entities[j]))]))
+        if j == 0:
+            sig_x.x.array[dofs] = sig_n[j][:, 0]
+            sig_y.x.array[dofs] = sig_n[j][:, 1]
+
+
+
+    # Define forms for the projection
+    dx_f = ufl.Measure("dx", domain=facet_mesh)
+    force_x = fem.form(sig_x * dx_f)
+    force_y = fem.form(sig_y * dx_f)
+    R_x = facet_mesh.comm.allreduce(fem.assemble_scalar(force_x), op=MPI.SUM)
+    R_y = facet_mesh.comm.allreduce(fem.assemble_scalar(force_y), op=MPI.SUM)
+    print("Rx/Ry", R_x, R_y, s, R_x/R_y, (s + np.tan(np.pi/6))/(1 + s * np.tan(np.pi/6)))
+
+
+    
 
     contact.update_submesh_geometry(u._cpp_object)
     return u, newton_its, krylov_its, timings

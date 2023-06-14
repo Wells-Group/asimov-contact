@@ -9,7 +9,8 @@ from mpi4py import MPI
 
 __all__ = ["create_circle_plane_mesh", "create_circle_circle_mesh", "create_box_mesh_2D",
            "create_box_mesh_3D", "create_sphere_plane_mesh", "create_sphere_sphere_mesh",
-           "create_cylinder_cylinder_mesh", "create_2D_rectangle_split", "create_quarter_disks_mesh"]
+           "create_cylinder_cylinder_mesh", "create_2D_rectangle_split", "create_quarter_disks_mesh",
+           "sliding_wedges"]
 
 
 def create_circle_plane_mesh(filename: str, quads: bool = False, res=0.1, order: int = 1,
@@ -154,38 +155,54 @@ def create_quarter_disks_mesh(filename: str, res=0.1, order: int = 1, quads=Fals
         # Create first quarter disk
         c = gmsh.model.occ.addPoint(center[0], center[1], center[2])
         bottom1 = gmsh.model.occ.addPoint(0.0, -r, 0.0)
-        top1 = gmsh.model.occ.addPoint(r, 0, 0)
+        top_right = gmsh.model.occ.addPoint(r, 0, 0)
+        top_left = gmsh.model.occ.addPoint(-r, 0, 0)
         angle = np.pi/6
         right1 = gmsh.model.occ.addPoint(r * np.sin(angle), -r * np.cos(angle), 0)
-        arc1 = gmsh.model.occ.addCircleArc(bottom1, c, right1)
-        arc2 = gmsh.model.occ.addCircleArc(right1, c, top1)
-        line1 = gmsh.model.occ.addLine(top1, c)
+        left1 = gmsh.model.occ.addPoint(-r * np.sin(angle), -r * np.cos(angle), 0)
+        arcs1 = []
+        arcs1.append(gmsh.model.occ.addCircleArc(top_left, c, left1))
+        arcs1.append(gmsh.model.occ.addCircleArc(left1, c, bottom1))
+        arcs1.append(gmsh.model.occ.addCircleArc(bottom1, c, right1))
+        arcs1.append(gmsh.model.occ.addCircleArc(right1, c, top_right))
+        line1 = gmsh.model.occ.addLine(top_right, c)
         line2 = gmsh.model.occ.addLine(c, bottom1)
-        curve = gmsh.model.occ.addCurveLoop([arc1, arc2, line1, line2])
+        line3 = gmsh.model.occ.addLine(top_left, c)
+        curve = gmsh.model.occ.addCurveLoop([arcs1[2], arcs1[3], line1, line2])
+        curve2 = gmsh.model.occ.addCurveLoop([-line2, -line3, arcs1[0], arcs1[1]])
         gmsh.model.occ.synchronize()
         surface = gmsh.model.occ.addPlaneSurface([curve])
+        surface2 = gmsh.model.occ.addPlaneSurface([curve2])
 
         # Create second quarter disk
         c2 = gmsh.model.occ.addPoint(center[0], center[1] - 2 * r - gap, center[2])
-        bottom2 = gmsh.model.occ.addPoint(r, -2 * r - gap, 0.0)
+        bottom_right = gmsh.model.occ.addPoint(r, -2 * r - gap, 0.0)
+        bottom_left = gmsh.model.occ.addPoint(-r, -2 * r - gap, 0.0)
         top2 = gmsh.model.occ.addPoint(0, -r - gap, 0)
         right2 = gmsh.model.occ.addPoint(r * np.sin(angle), r * np.cos(angle) - 2 *r -gap, 0)
-        arc3 = gmsh.model.occ.addCircleArc(bottom2, c2, right2)
-        arc4 = gmsh.model.occ.addCircleArc(right2, c2, top2)
+        left2 = gmsh.model.occ.addPoint(-r * np.sin(angle), r * np.cos(angle) - 2 *r -gap, 0)
+        arcs2 = []
+        arcs2.append(gmsh.model.occ.addCircleArc(bottom_left, c2, left2))
+        arcs2.append(gmsh.model.occ.addCircleArc(left2, c2, top2))
+        arcs2.append(gmsh.model.occ.addCircleArc(top2, c2, right2))
+        arcs2.append(gmsh.model.occ.addCircleArc(right2, c2, bottom_right))
         line3 = gmsh.model.occ.addLine(top2, c2)
-        line4 = gmsh.model.occ.addLine(c2, bottom2)
-        curve2 = gmsh.model.occ.addCurveLoop([arc3, arc4, line3, line4])
-        surface2 = gmsh.model.occ.addPlaneSurface([curve2])
+        line4 = gmsh.model.occ.addLine(c2, bottom_right)
+        line5 = gmsh.model.occ.addLine(bottom_left, c2)
+        curve3 = gmsh.model.occ.addCurveLoop([arcs2[2], arcs2[3], -line4, -line3])
+        curve4 = gmsh.model.occ.addCurveLoop([arcs2[0], arcs2[1], line3, -line5])
+        surface3 = gmsh.model.occ.addPlaneSurface([curve3])
+        surface4 = gmsh.model.occ.addPlaneSurface([curve4])
 
         # Synchronize and create physical tags
         gmsh.model.occ.synchronize()
-        gmsh.model.addPhysicalGroup(2, [surface], tag=1)
+        gmsh.model.addPhysicalGroup(2, [surface, surface2], tag=1)
 
-        gmsh.model.addPhysicalGroup(2, [surface2], tag=2)
+        gmsh.model.addPhysicalGroup(2, [surface3, surface4], tag=2)
 
-        bndry1 = gmsh.model.getBoundary([(2, surface)], oriented=False)
+        bndry1 = gmsh.model.getBoundary([(2, surface), (2, surface2)], oriented=False)
         [gmsh.model.addPhysicalGroup(b[0], [b[1]]) for b in bndry1]
-        bndry2 = gmsh.model.getBoundary([(2, surface2)], oriented=False)
+        bndry2 = gmsh.model.getBoundary([(2, surface3), (2, surface4)], oriented=False)
         [gmsh.model.addPhysicalGroup(b[0], [b[1]]) for b in bndry2]
 
 
@@ -212,6 +229,61 @@ def create_quarter_disks_mesh(filename: str, res=0.1, order: int = 1, quads=Fals
     MPI.COMM_WORLD.Barrier()
     gmsh.finalize()
 
+def sliding_wedges(filename: str, quads: bool = False, res: float = 0.1, order: int =1, angle = np.pi/12):
+    gmsh.initialize()
+    if MPI.COMM_WORLD.rank == 0:
+        bl = gmsh.model.occ.addPoint(0, 0, 0)
+        br = gmsh.model.occ.addPoint(9, 0, 0)
+        tl = gmsh.model.occ.addPoint(3, 3 + 9 * np.tan(angle), 0)
+        tr = gmsh.model.occ.addPoint(6, 3 + 9 * np.tan(angle), 0)
+        cl = gmsh.model.occ.addPoint(0, 2, 0)
+        cr = gmsh.model.occ.addPoint(9, 2 + 9 * np.tan(angle), 0)
+        ctl = gmsh.model.occ.addPoint(3, 2 + 3 * np.tan(angle), 0)
+        ctr = gmsh.model.occ.addPoint(6, 2 + 6 * np.tan(angle), 0)
+
+        lb1 = gmsh.model.occ.addLine(bl, br)
+        lb2 = gmsh.model.occ.addLine(br, cr)
+        lb3 = gmsh.model.occ.addLine(cr, cl)
+        lb4 = gmsh.model.occ.addLine(cl, bl)
+
+        curve1 = gmsh.model.occ.addCurveLoop([lb1, lb2, lb3, lb4])
+
+        lt1 = gmsh.model.occ.addLine(ctl, ctr)
+        lt2 = gmsh.model.occ.addLine(ctr, tr)
+        lt3 = gmsh.model.occ.addLine(tr, tl)
+        lt4 = gmsh.model.occ.addLine(tl, ctl)
+
+        curve2 = gmsh.model.occ.addCurveLoop([lt1, lt2, lt3, lt4])
+
+        surface1 = gmsh.model.occ.addPlaneSurface([curve1])
+        gmsh.model.occ.synchronize()
+        surface2 = gmsh.model.occ.addPlaneSurface([curve2])
+
+        gmsh.model.occ.synchronize()
+
+        gmsh.model.addPhysicalGroup(2, [surface2], tag=1)
+        gmsh.model.addPhysicalGroup(2, [surface1], tag=2)
+
+        bndry1 = gmsh.model.getBoundary([(2, surface1)], oriented=False)
+        [gmsh.model.addPhysicalGroup(b[0], [b[1]]) for b in bndry1]
+        bndry2 = gmsh.model.getBoundary([(2, surface2)], oriented=False)
+        [gmsh.model.addPhysicalGroup(b[0], [b[1]]) for b in bndry2]
+
+
+        gmsh.option.setNumber("Mesh.CharacteristicLengthFactor", res)
+        gmsh.model.mesh.field.setAsBackgroundMesh(2)
+        if quads:
+            gmsh.option.setNumber("Mesh.RecombinationAlgorithm", 8)
+            gmsh.option.setNumber("Mesh.RecombineAll", 2)
+            gmsh.option.setNumber("Mesh.SubdivisionAlgorithm", 1)
+
+        gmsh.model.mesh.generate(2)
+        gmsh.model.mesh.setOrder(order)
+
+        # gmsh.option.setNumber("Mesh.SaveAll", 1)
+        gmsh.write(filename)
+    MPI.COMM_WORLD.Barrier()
+    gmsh.finalize()
 
 def create_circle_circle_mesh(filename: str, quads: bool = False, res: float = 0.1, order: int = 1):
     """

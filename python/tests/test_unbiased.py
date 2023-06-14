@@ -150,10 +150,10 @@ def DG_rhs_coulomb(u0, v0, h, n, gamma, theta, sigma, gap, fric, dS, gdim):
     Pn_u_plus = R_plus(Pn_g(u0, '+', '-'))
     Pn_u_minus = R_plus(Pn_g(u0, '-', '+'))
     return 0.5 * gamma / h('+') * ufl.dot(ball_projection(Pt_g(u0, '+', '-', 1. / gamma),
-                                                          Pn_u_plus * fric * h('+') / gamma, gdim),
+                                                          Pn_u_plus * fric * gamma / h('+'), gdim),
                                           Pt_g(v0, '+', '-', theta / gamma)) * dS\
         + 0.5 * gamma / h('-') * ufl.dot(ball_projection(Pt_g(u0, '-', '+', 1. / gamma),
-                                                         Pn_u_minus * fric * h('-') / gamma, gdim),
+                                                         Pn_u_minus * fric * gamma / h('-'), gdim),
                                          Pt_g(v0, '-', '+', theta / gamma)) * dS
 
 
@@ -174,16 +174,16 @@ def DG_jac_coulomb(u0, v0, w0, h, n, gamma, theta, sigma, gap, fric, dS, gdim):
     Pn_u_minus = R_plus(Pn_g(u0, '-', '+'))
 
     J = 0.5 * gamma / h('+') * ufl.dot(d_ball_projection(Pt_g(u0, '+', '-', 1. / gamma),
-                                                         Pn_u_plus * fric * h('+') / gamma, gdim)
+                                                         Pn_u_plus * fric * gamma / h('+'), gdim)
                                        * Pt_g(w0, '+', '-', 1. / gamma), Pt_g(v0, '+', '-', theta / gamma)) * dS
     J += 0.5 * gamma / h('-') * ufl.dot(d_ball_projection(Pt_g(u0, '-', '+', 1. / gamma),
-                                                          Pn_u_minus * fric * h('-') / gamma, gdim)
+                                                          Pn_u_minus * fric * gamma / h('-'), gdim)
                                         * Pt_g(w0, '-', '+', 1. / gamma), Pt_g(v0, '-', '+', theta / gamma)) * dS
 
-    d_alpha_plus = d_alpha_ball_projection(Pt_g(u0, '+', '-', 1. / gamma), Pn_u_plus * fric * h('+') / gamma,
-                                           dR_plus(Pn_g(u0, '+', '-')) * fric * h('+') / gamma, gdim)
-    d_alpha_minus = d_alpha_ball_projection(Pt_g(u0, '-', '+', 1. / gamma), Pn_u_plus * fric * h('-') / gamma,
-                                            dR_plus(Pn_g(u0, '-', '+')) * fric * h('-') / gamma, gdim)
+    d_alpha_plus = d_alpha_ball_projection(Pt_g(u0, '+', '-', 1. / gamma), Pn_u_plus * fric * gamma / h('+'),
+                                           dR_plus(Pn_g(u0, '+', '-')) * fric * gamma / h('+'), gdim)
+    d_alpha_minus = d_alpha_ball_projection(Pt_g(u0, '-', '+', 1. / gamma), Pn_u_plus * fric * gamma / h('-'),
+                                            dR_plus(Pn_g(u0, '-', '+')) * fric * gamma / h('-'), gdim)
     J += 0.5 * gamma / h('+') * Pn_gtheta(w0, '+', '-', 1.0) * \
         ufl.dot(d_alpha_plus, Pt_g(v0, '+', '-', theta / gamma)) * dS
     J += 0.5 * gamma / h('-') * Pn_gtheta(w0, '-', '+', 1.0) * \

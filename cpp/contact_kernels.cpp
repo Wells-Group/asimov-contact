@@ -898,7 +898,7 @@ dolfinx_contact::generate_contact_kernel(
       double Pn_u = R_plus((jump_un - gap) - gamma * sign_u);
       // compute ball projection
       std::array<double, 3> Pt_u_proj
-          = ball_projection(Pt_u, gamma * fric * Pn_u);
+          = ball_projection(Pt_u, gamma_inv * fric * Pn_u);
       // Fill contributions of facet with itself
       for (std::size_t i = 0; i < ndofs_cell; i++)
       {
@@ -1072,12 +1072,12 @@ dolfinx_contact::generate_contact_kernel(
       }
       double Pn_u = R_plus((jump_un - gap) - gamma * sign_u);
       std::array<double, 9> Pt_u_proj
-          = d_ball_projection(Pt_u, gamma * fric * Pn_u, bs);
+          = d_ball_projection(Pt_u, gamma_inv * fric * Pn_u, bs);
 
-      double d_alpha = dR_plus((jump_un - gap) - gamma * sign_u) * gamma * fric;
+      double d_alpha = dR_plus((jump_un - gap) - gamma * sign_u) * gamma_inv * fric;
 
       std::array<double, 3> d_alpha_ball
-          = d_alpha_ball_projection(Pt_u, gamma * fric * Pn_u, d_alpha);
+          = d_alpha_ball_projection(Pt_u, gamma_inv * fric * Pn_u, d_alpha);
       // Fill contributions of facet with itself
       const double w0 = weights[q] * detJ;
       for (std::size_t j = 0; j < ndofs_cell; j++)

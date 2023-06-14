@@ -4,13 +4,14 @@
 import dolfinx
 from matplotlib import pyplot as plt
 from dolfinx.io import XDMFFile
-from dolfinx.fem import form, Function, FunctionSpace
+from dolfinx.fem import form, Function, FunctionSpace, assemble_scalar
 from dolfinx.fem.petsc import assemble_matrix, assemble_vector
 from dolfinx.mesh import create_submesh
 import numpy as np
 import dolfinx_contact
 import petsc4py.PETSc as PETSc
 import ufl
+from mpi4py import MPI
 
 
 # write pressure on surface to file for visualisation
@@ -26,20 +27,29 @@ def write_pressure_xdmf(mesh, contact, u, du, contact_pairs, quadrature_degree,
     gdim = mesh.geometry.dim
     tdim = mesh.topology.dim
     forces = []
+    sig_n = []
     for i in range(len(contact_pairs)):
         n_x = contact.pack_nx(i)
         grad_u = dolfinx_contact.cpp.pack_gradient_quadrature(
             u._cpp_object, quadrature_degree, entities[i])
         if search_method[i] == dolfinx_contact.cpp.ContactMode.Raytracing:
-            n_contact = -contact.pack_nx(i)
+            n_contact = np.array(-contact.pack_nx(i))
         else:
-            n_contact = contact.pack_ny(i)
+            n_contact = np.array(contact.pack_ny(i))
 
         num_facets = entities[i].shape[0]
         num_q_points = n_x.shape[1] // gdim
         # this assumes mu, lmbda are constant for each body
-        forces.append(dolfinx_contact.cpp.compute_contact_forces(
-            grad_u, n_x, n_contact, num_q_points, num_facets, gdim, material[i][0, 0], material[i][0, 1]))
+        sign = np.array(dolfinx_contact.cpp.compute_contact_forces(
+            grad_u, n_x, num_q_points, num_facets, gdim, material[i][0, 0], material[i][0, 1]))
+        sign = sign.reshape(num_facets, num_q_points, gdim)
+        n_contact = n_contact.reshape(num_facets, num_q_points, gdim)
+        pn = np.sum(sign*n_contact, axis=2)
+        pt = sign - np.multiply(n_contact, pn[:, :, np.newaxis])
+        pt = np.sqrt(np.sum(pt*pt, axis=2)).reshape(-1)
+        pn = pn.reshape(-1)
+        sig_n.append(sign.reshape(-1, gdim))
+        forces.append([pn, pt])
 
     c_to_f = mesh.topology.connectivity(tdim, tdim - 1)
     facet_list = []
@@ -76,19 +86,32 @@ def write_pressure_xdmf(mesh, contact, u, du, contact_pairs, quadrature_degree,
     num_q_points = np.int32(len(forces[0][0]) / len(entities[0]))
     pn = Function(Q)
     pt = Function(Q)
+    sig_x = Function(Q)
+    sig_y = Function(Q)
     for j in range(len(contact_pairs)):
         dofs = np.array(np.hstack([range(msh_to_fm[facet_list[j]][i] * num_q_points,
                         num_q_points * (msh_to_fm[facet_list[j]][i] + 1)) for i in range(len(entities[j]))]))
         pn.x.array[dofs] = forces[j][0][:]
         pt.x.array[dofs] = forces[j][1][:]
+        if j == 0:
+            sig_x.x.array[dofs] = sig_n[j][:, 0]
+            sig_y.x.array[dofs] = sig_n[j][:, 0]
     u_f = ufl.TrialFunction(P)
     v_f = ufl.TestFunction(P)
+
+
 
     # Define forms for the projection
     dx_f = ufl.Measure("dx", domain=facet_mesh)
     a_form = form(ufl.inner(u_f, v_f) * dx_f)
     L = form(ufl.inner(pn, v_f) * dx_f)
     L2 = form(ufl.inner(pt, v_f) * dx_f)
+
+    force_x = form(sig_x * dx_f)
+    force_y = form(sig_y * dx_f)
+    R_x = facet_mesh.comm.allreduce(assemble_scalar(force_x), op=MPI.SUM)
+    R_y = facet_mesh.comm.allreduce(assemble_scalar(force_y), op=MPI.SUM)
+    print("Rx/Ry", R_x/R_y)
 
     # Assemble matrix and vector
     A = assemble_matrix(a_form)
@@ -116,28 +139,39 @@ def write_pressure_xdmf(mesh, contact, u, du, contact_pairs, quadrature_degree,
     # interpolate exact pressure
     p_hertz = Function(P_exact)
     p_hertz.interpolate(pressure_function)
-    xi = projection_coordinates[0]
-    vali = projection_coordinates[1]
-    geom_xi = facet_mesh.geometry.x[:, xi].copy()
+    geom = facet_mesh.geometry.x.copy()
+
+    def _project():
+        for i in range(len(contact_pairs)):
+            fgeom = dolfinx_contact.cpp.entities_to_geometry_dofs(facet_mesh._cpp_object, tdim - 1, 
+                         np.array(msh_to_fm[facet_list[i]], dtype=np.int32))
+            fgeom = fgeom.array
+            vali = projection_coordinates[i][1]
+            xi = projection_coordinates[i][0]
+            facet_mesh.geometry.x[fgeom, xi] = vali
+
+    def _restore():
+        facet_mesh.geometry.x[:, :] = geom[:, :]
+
     with XDMFFile(facet_mesh.comm, f"{fname}_surface_pressure.xdmf", "w") as xdmf:
-        facet_mesh.geometry.x[geom_xi > vali - 1e-5, xi] = vali
+        _project()
         xdmf.write_mesh(facet_mesh)
         p_f.name = "pressure"
-        facet_mesh.geometry.x[:, xi] = geom_xi[:]
+        _restore()
         xdmf.write_function(p_f)
 
     with XDMFFile(facet_mesh.comm, f"{fname}_tangent_force.xdmf", "w") as xdmf:
-        facet_mesh.geometry.x[geom_xi > vali - 1e-5, xi] = vali
+        _project()
         xdmf.write_mesh(facet_mesh)
         pt_f.name = "tangential"
-        facet_mesh.geometry.x[:, xi] = geom_xi[:]
+        _restore()
         xdmf.write_function(pt_f)
 
     with XDMFFile(facet_mesh.comm, f"{fname}_hertz_pressure.xdmf", "w") as xdmf:
-        facet_mesh.geometry.x[geom_xi > vali - 1e-5, xi] = vali
+        _project()
         xdmf.write_mesh(facet_mesh)
         p_hertz.name = "analytical"
-        facet_mesh.geometry.x[:, tdim - 1] = geom_xi[:]
+        _restore()
         xdmf.write_function(p_hertz)
 
 
