@@ -207,10 +207,9 @@ double dolfinx_contact::dR_minus(double x) { return double(x < 0); }
 //-------------------------------------------------------------------------------------
 
 double dolfinx_contact::dR_plus(double x) { return double(x > 0); }
-
+//-------------------------------------------------------------------------------------
 std::array<double, 3> dolfinx_contact::ball_projection(std::array<double, 3> x,
-                                                       double alpha,
-                                                       std::size_t bs)
+                                                       double alpha)
 {
   // Compute norm of vector
   double norm = 0;
@@ -228,7 +227,7 @@ std::array<double, 3> dolfinx_contact::ball_projection(std::array<double, 3> x,
                    [alpha, norm](auto& xi) { return alpha * xi / norm; });
   return proj;
 }
-
+//-------------------------------------------------------------------------------------
 std::array<double, 9>
 dolfinx_contact::d_ball_projection(std::array<double, 3> x, double alpha,
                                    std::size_t bs)
@@ -258,6 +257,25 @@ dolfinx_contact::d_ball_projection(std::array<double, 3> x, double alpha,
         d_proj[i * bs + j] -= alpha * x[i] * x[j] / (norm * norm_squared);
     }
   return d_proj;
+}
+
+std::array<double, 3>
+dolfinx_contact::d_alpha_ball_projection(std::array<double, 3> x, double alpha,
+                                         double d_alpha)
+{
+  // Compute norm of vector
+  double norm = 0;
+  std::for_each(x.cbegin(), x.cend(),
+                [&norm](auto e) { norm += std::pow(e, 2); });
+  norm = std::sqrt(norm);
+  std::array<double, 3> d_alpha_proj = {0, 0, 0};
+
+  // If x inside ball return 0
+  if (norm > alpha)
+    // If x outside ball return d_alpha*x/norm
+    std::transform(x.cbegin(), x.cend(), d_alpha_proj.begin(),
+                   [d_alpha, norm](auto& xi) { return d_alpha * xi / norm; });
+  return d_alpha_proj;
 }
 //-------------------------------------------------------------------------------------
 std::array<std::size_t, 4> dolfinx_contact::evaluate_basis_shape(
@@ -1058,8 +1076,7 @@ dolfinx_contact::compute_distance_map(
     else
       throw std::runtime_error("Invalid tdim: " + std::to_string(tdim));
   }
-  default:
-    throw std::runtime_error("Unsupported contact mode");
   }
-  t.stop();
+
+  throw std::runtime_error("Unsupported contact mode");
 }
