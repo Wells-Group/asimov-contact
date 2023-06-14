@@ -7,14 +7,24 @@ import ufl
 from dolfinx.cpp.graph import AdjacencyList_int32
 
 import dolfinx_contact
+import dolfinx_contact.cpp
 
 from .nitsche_unbiased import setup_newton_solver, get_problem_parameters
 
+
 class ContactProblem:
-    def __init__(self, F, J, bcs, u, du, contact, markers,
-                 entities, quadrature_degree, const_coeffs, consts, raytracing,
-                 newton_options, petsc_options):
-        
+    __slots__ = ["F", "J", "bcs", "u", "du", "contact", "markers", "entities",
+                 "q_deg", "coeffs", "consts", "raytracing", "newton_options",
+                 "petsc_options"]
+
+    def __init__(self, F: ufl.Form, J: ufl.Form,
+                 bcs: Tuple[npt.NDArray[np.int32], list[Union[fem.Function, fem.Constant]]],
+                 u: fem.Function, du: fem.Function, contact: dolfinx_contact.cpp.Contact,
+                 markers: list[_mesh.MeshTags], entities: list[npt.NDArray[np.int32]],
+                 quadrature_degree: int, const_coeffs: list[npt.NDArray[np.float64]],
+                 consts: npt.NDArray[np.float64], raytracing: bool,
+                 petsc_options: Optional[dict] = None, newton_options: Optional[dict] = None,):
+
         self.F = F
         self.J = J
         self.bcs = bcs
@@ -26,14 +36,14 @@ class ContactProblem:
         self.q_deg = quadrature_degree
         self.coeffs = const_coeffs
         self.consts = consts
-        self.raytracing = raytracing 
+        self.raytracing = raytracing
         self.newton_options = newton_options
         self.petsc_options = petsc_options
 
     def solve(self):
         newton_solver = setup_newton_solver(self.F, self.J, self.bcs, self.u, self.du, self.contact, self.markers,
-                                    self.entities, self.q_deg, self.coeffs, self.consts,
-                                    self.raytracing)
+                                            self.entities, self.q_deg, self.coeffs, self.consts,
+                                            self.raytracing)
         # Set Newton solver options
         newton_solver.set_newton_options(self.newton_options)
 
@@ -46,27 +56,24 @@ class ContactProblem:
 
 
 def create_contact_solver(ufl_form: ufl.Form, u: fem.Function,
-                      markers: list[_mesh.MeshTags],
-                     contact_data: Tuple[AdjacencyList_int32, list[Tuple[int, int]]],
-                     bcs: Tuple[npt.NDArray[np.int32], list[Union[fem.Function, fem.Constant]]],
-                     problem_parameters: dict[str, np.float64],
-                     raytracing: bool,
-                     quadrature_degree: int = 5,
-                     form_compiler_options: Optional[dict] = None,
-                     jit_options: Optional[dict] = None,
-                     petsc_options: Optional[dict] = None,
-                     newton_options: Optional[dict] = None,
-                     search_radius: np.float64 = np.float64(-1.)) -> Tuple[fem.Function, list[int],
-                                                                           list[int], list[float]]:
+                          markers: list[_mesh.MeshTags],
+                          contact_data: Tuple[AdjacencyList_int32, list[Tuple[int, int]]],
+                          bcs: Tuple[npt.NDArray[np.int32], list[Union[fem.Function, fem.Constant]]],
+                          problem_parameters: dict[str, np.float64],
+                          raytracing: bool,
+                          quadrature_degree: int = 5,
+                          form_compiler_options: Optional[dict] = None,
+                          jit_options: Optional[dict] = None,
+                          petsc_options: Optional[dict] = None,
+                          newton_options: Optional[dict] = None,
+                          search_radius: np.float64 = np.float64(-1.)) -> ContactProblem:
     """
     Use custom kernel to compute the contact problem with two elastic bodies coming into contact.
 
     Parameters
     ==========
-    steps:    The number of pseudo time steps
     ufl_form: The variational form without contact contribution
     u:        The function to be solved for. Also serves as initial value.
-    rhs_fns:  The functions defining forces/boundary conditions in the variational form
     markers
         A list of meshtags. The first element must mark all separate objects in order to create the correct nullspace.
         The second element must contain the mesh_tags for all puppet surfaces,
@@ -84,8 +91,6 @@ def create_contact_solver(ufl_form: ufl.Form, u: fem.Function,
         (lambda, float),
         where theta can be -1, 0 or 1 for skew-symmetric, penalty like or symmetric
         enforcement of Nitsche conditions
-    search_method
-        Way of detecting contact. Either closest point projection or raytracing
     quadrature_degree
         The quadrature degree to use for the custom contact kernels
     form_compiler_options
@@ -106,8 +111,6 @@ def create_contact_solver(ufl_form: ufl.Form, u: fem.Function,
         Dictionary with Newton-solver options. Valid (key, item) tuples are:
         ("atol", float), ("rtol", float), ("convergence_criterion", "str"),
         ("max_it", int), ("error_on_nonconvergence", bool), ("relaxation_parameter", float)
-    outfile
-        File to append solver summary
 
     """
     form_compiler_options = {} if form_compiler_options is None else form_compiler_options
@@ -149,7 +152,6 @@ def create_contact_solver(ufl_form: ufl.Form, u: fem.Function,
     # compiled forms for rhs and tangen system
     F_custom = fem.form(F, form_compiler_options=form_compiler_options, jit_options=jit_options)
     J_custom = fem.form(J, form_compiler_options=form_compiler_options, jit_options=jit_options)
-
 
     # create contact class
     markers_cpp = [marker._cpp_object for marker in markers[1:]]
@@ -213,5 +215,5 @@ def create_contact_solver(ufl_form: ufl.Form, u: fem.Function,
     problem = ContactProblem(F_custom, J_custom, bcs, u, du, contact, markers, entities,
                              quadrature_degree, const_coeffs, consts, raytracing,
                              newton_options, petsc_options)
-    
+
     return problem
