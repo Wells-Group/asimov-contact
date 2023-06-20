@@ -95,7 +95,7 @@ def write_pressure_xdmf(mesh, contact, u, du, contact_pairs, quadrature_degree,
         pt.x.array[dofs] = forces[j][1][:]
         if j == 0:
             sig_x.x.array[dofs] = sig_n[j][:, 0]
-            sig_y.x.array[dofs] = sig_n[j][:, 0]
+            sig_y.x.array[dofs] = sig_n[j][:, 1]
     u_f = ufl.TrialFunction(P)
     v_f = ufl.TestFunction(P)
 
@@ -173,6 +173,8 @@ def write_pressure_xdmf(mesh, contact, u, du, contact_pairs, quadrature_degree,
         p_hertz.name = "analytical"
         _restore()
         xdmf.write_function(p_hertz)
+
+    return sig_n
 
 
 # Visualise the gap. For debugging. Works in 2D only

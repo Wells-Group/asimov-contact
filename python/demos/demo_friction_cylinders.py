@@ -92,7 +92,7 @@ if __name__ == "__main__":
         return vals
 
     # Solver options
-    ksp_tol = 1e-7
+    ksp_tol = 1e-10
     newton_tol = 1e-7
     newton_options = {"relaxation_parameter": 1.0,
                       "atol": newton_tol,
@@ -201,10 +201,10 @@ if __name__ == "__main__":
     F = ufl.inner(sigma(u2), epsilon(v)) * dx
 
     # body forces
-    t2 = Constant(mesh, ScalarType((0.03, -p)))
+    t2 = Constant(mesh, ScalarType((0.0, -p)))
     F -= ufl.inner(t2, v) * ds(top)
 
-    problem_parameters = {"gamma": np.float64(E * 10), "theta": np.float64(1), "friction" : 0.3}
+    problem_parameters = {"gamma": np.float64(E * 1000), "theta": np.float64(1), "friction" : 0.3}
 
 
     ksp_tol = 1e-8
@@ -232,8 +232,8 @@ if __name__ == "__main__":
     dofs_symmetry = locate_dofs_topological(V.sub(0), 0, symmetry_nodes)
     dofs_bottom = locate_dofs_topological(V, 1, facet_marker.find(bottom))
 
-    bc_fns = [Constant(mesh, ScalarType((0.0, 0.0))), Constant(mesh, ScalarType((0.0)))]
-    bcs = ([(dofs_bottom, -1), (dofs_symmetry, 0)], bc_fns)
+    bc_fns = [Constant(mesh, ScalarType((0.0, 0.0)))]
+    bcs = ([(dofs_bottom, -1)], bc_fns)
     # Solve contact problem using Nitsche's method
     # update_geometry(u._cpp_object, mesh._cpp_object)
     u2, newton_its, krylov_iterations, solver_time = nitsche_unbiased(1, ufl_form=F,

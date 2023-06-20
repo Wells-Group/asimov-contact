@@ -240,13 +240,17 @@ def sliding_wedges(filename: str, quads: bool = False, res: float = 0.1, order: 
         cr = gmsh.model.occ.addPoint(9, 2 + 9 * np.tan(angle), 0)
         ctl = gmsh.model.occ.addPoint(3, 2 + 3 * np.tan(angle), 0)
         ctr = gmsh.model.occ.addPoint(6, 2 + 6 * np.tan(angle), 0)
+        cbl = gmsh.model.occ.addPoint(3 + 1.0 * res, 2 + (3 + 1.0 * res) * np.tan(angle), 0)
+        cbr = gmsh.model.occ.addPoint(6 + 0.5 * res, 2 + (6 + 0.5 * res) * np.tan(angle), 0)
 
         lb1 = gmsh.model.occ.addLine(bl, br)
         lb2 = gmsh.model.occ.addLine(br, cr)
-        lb3 = gmsh.model.occ.addLine(cr, cl)
-        lb4 = gmsh.model.occ.addLine(cl, bl)
+        lb3 = gmsh.model.occ.addLine(cr, cbr)
+        lb4 = gmsh.model.occ.addLine(cbr, cbl)
+        lb5 = gmsh.model.occ.addLine(cbl, cl)
+        lb6 = gmsh.model.occ.addLine(cl, bl)
 
-        curve1 = gmsh.model.occ.addCurveLoop([lb1, lb2, lb3, lb4])
+        curve1 = gmsh.model.occ.addCurveLoop([lb1, lb2, lb3, lb4, lb5, lb6])
 
         lt1 = gmsh.model.occ.addLine(ctl, ctr)
         lt2 = gmsh.model.occ.addLine(ctr, tr)
@@ -265,13 +269,25 @@ def sliding_wedges(filename: str, quads: bool = False, res: float = 0.1, order: 
         gmsh.model.addPhysicalGroup(2, [surface1], tag=2)
 
         bndry1 = gmsh.model.getBoundary([(2, surface1)], oriented=False)
-        [gmsh.model.addPhysicalGroup(b[0], [b[1]]) for b in bndry1]
+        gmsh.model.addPhysicalGroup(1, [bndry1[0][1]])
+        gmsh.model.addPhysicalGroup(1, [bndry1[1][1]])
+        gmsh.model.addPhysicalGroup(1, [bndry1[2][1], bndry1[3][1], bndry1[4][1]])
+        gmsh.model.addPhysicalGroup(1, [bndry1[5][1]])
         bndry2 = gmsh.model.getBoundary([(2, surface2)], oriented=False)
         [gmsh.model.addPhysicalGroup(b[0], [b[1]]) for b in bndry2]
 
 
-        gmsh.option.setNumber("Mesh.CharacteristicLengthFactor", res)
+        gmsh.model.mesh.field.add("Distance", 1)
+        gmsh.model.mesh.field.setNumbers(1, "NodesList", [ctl, ctr])
+
+        gmsh.model.mesh.field.add("Threshold", 2)
+        gmsh.model.mesh.field.setNumber(2, "IField", 1)
+        gmsh.model.mesh.field.setNumber(2, "LcMin", 0.5 * res)
+        gmsh.model.mesh.field.setNumber(2, "LcMax", res)
+        gmsh.model.mesh.field.setNumber(2, "DistMin", 0.3)
+        gmsh.model.mesh.field.setNumber(2, "DistMax", 1.0)
         gmsh.model.mesh.field.setAsBackgroundMesh(2)
+        
         if quads:
             gmsh.option.setNumber("Mesh.RecombinationAlgorithm", 8)
             gmsh.option.setNumber("Mesh.RecombineAll", 2)

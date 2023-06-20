@@ -3,7 +3,7 @@
 # SPDX-License-Identifier:    MIT
 
 import argparse
-
+import matplotlib.pyplot as plt
 import numpy as np
 import numpy.typing as npt
 import ufl
@@ -53,7 +53,7 @@ if __name__ == "__main__":
     mu_func, lambda_func = lame_parameters(True)
     mu = mu_func(E, nu)
     lmbda = lambda_func(E, nu)
-    fric = 0.1
+    fric = 0.0
     angle = np.arctan(0.1)
 
     # Create mesh
@@ -68,7 +68,6 @@ if __name__ == "__main__":
         tdim = mesh.topology.dim
         mesh.topology.create_connectivity(tdim - 1, tdim)
         facet_marker = xdmf.read_meshtags(mesh, name="facet_marker")
-
 
     contact_bdy_1 = 7
     contact_bdy_2 = 5
@@ -113,7 +112,7 @@ if __name__ == "__main__":
     # body forces
     F -= ufl.inner(t, v) * ds(neumann_bdy)
 
-    problem_parameters = {"gamma": np.float64(E * 100), "theta": np.float64(-1), "friction": fric}
+    problem_parameters = {"gamma": np.float64(E * 10), "theta": np.float64(-1), "friction": fric}
 
     search_mode = [ContactMode.ClosestPoint, ContactMode.ClosestPoint]
     
@@ -127,26 +126,26 @@ if __name__ == "__main__":
                       "convergence_criterion": "residual",
                       "max_it": 50,
                       "error_on_nonconvergence": True}
-    petsc_options = {"ksp_type": "preonly", "pc_type": "lu"}
-    # petsc_options = {
-    #     "matptap_via": "scalable",
-    #     "ksp_type": "cg",
-    #     "ksp_rtol": ksp_tol,
-    #     "ksp_atol": ksp_tol,
-    #     "pc_type": "gamg",
-    #     "pc_mg_levels": 3,
-    #     "pc_mg_cycles": 1,   # 1 is v, 2 is w
-    #     "mg_levels_ksp_type": "chebyshev",
-    #     "mg_levels_pc_type": "jacobi",
-    #     "pc_gamg_type": "agg",
-    #     "pc_gamg_coarse_eq_limit": 100,
-    #     "pc_gamg_agg_nsmooths": 1,
-    #     "pc_gamg_threshold": 1e-3,
-    #     "pc_gamg_square_graph": 2,
-    #     "pc_gamg_reuse_interpolation": False,
-    #     "ksp_initial_guess_nonzero": False,
-    #     "ksp_norm_type": "unpreconditioned"
-    # }
+    # petsc_options = {"ksp_type": "preonly", "pc_type": "lu"}
+    petsc_options = {
+        "matptap_via": "scalable",
+        "ksp_type": "gmres",
+        "ksp_rtol": ksp_tol,
+        "ksp_atol": ksp_tol,
+        "pc_type": "gamg",
+        "pc_mg_levels": 3,
+        "pc_mg_cycles": 1,   # 1 is v, 2 is w
+        "mg_levels_ksp_type": "chebyshev",
+        "mg_levels_pc_type": "jacobi",
+        "pc_gamg_type": "agg",
+        "pc_gamg_coarse_eq_limit": 100,
+        "pc_gamg_agg_nsmooths": 1,
+        "pc_gamg_threshold": 1e-3,
+        "pc_gamg_square_graph": 2,
+        "pc_gamg_reuse_interpolation": False,
+        "ksp_initial_guess_nonzero": False,
+        "ksp_norm_type": "unpreconditioned"
+    }
 
 
     def _pressure(x):
@@ -154,7 +153,7 @@ if __name__ == "__main__":
         return vals
 
     # Solve contact problem using Nitsche's method
-    u, newton_its, krylov_iterations, solver_time= nitsche_unbiased(1, ufl_form=F,
+    u, newton_its, krylov_iterations, solver_time, sig_n, contact = nitsche_unbiased(1, ufl_form=F,
                                                                      u=u, mu=mu_dg, lmbda=lmbda_dg, rhs_fns=[t],
                                                                      markers=[domain_marker, facet_marker],
                                                                      contact_data=(
@@ -173,6 +172,10 @@ if __name__ == "__main__":
                                                                      coulomb=True)
     
     n = ufl.FacetNormal(mesh)
+    metadata = {"quadrature_degree": 2}
+
+    ds = ufl.Measure("ds", domain=mesh, metadata=metadata,
+                     subdomain_data=facet_marker)
     ex = Constant(mesh, ScalarType((1.0, 0.0)))
     ey = Constant(mesh, ScalarType((0.0, 1.0)))
     Rx_1form = form(ufl.inner(sigma(u)*n, ex) * ds(contact_bdy_1))
@@ -184,7 +187,9 @@ if __name__ == "__main__":
     R_x2 = mesh.comm.allreduce(assemble_scalar(Rx_2form), op=MPI.SUM)
     R_y2 = mesh.comm.allreduce(assemble_scalar(Ry_2form), op=MPI.SUM)
 
-    print("Rx/Ry", R_x1/R_y1, R_x2/R_y2, (fric + np.tan(angle))/(1 + fric*np.tan(angle)))
+    
+
+    print("Rx/Ry", abs(R_x1)/abs(R_y1), abs(R_x2)/abs(R_y2), (fric + np.tan(angle))/(1 - fric*np.tan(angle)))
     sigma_dev = sigma(u) - (1 / 3) * ufl.tr(sigma(u)) * ufl.Identity(len(u))
     sigma_vm = ufl.sqrt((3 / 2) * ufl.inner(sigma_dev, sigma_dev))
     W = FunctionSpace(mesh, ("Discontinuous Lagrange", args.order - 1))
@@ -199,4 +204,21 @@ if __name__ == "__main__":
 
 
 
-    
+    # Create quadrature points for integration on facets
+    x = []
+    num_facets = len(facet_marker.find(contact_bdy_1))
+    for i in range(num_facets):
+        qps = contact.qp_phys(0, i)
+        for pt in qps:
+            x.append(pt[0])
+    num_pts = len(x)
+    print(len(x))
+
+    plt.figure()
+    plt.plot(x, sig_n[0][:, 0], '*')
+    plt.plot(x, sig_n[0][:, 1], 'x')
+    plt.xlim((5.97, 6.01))
+    plt.xlabel('x')
+    plt.ylabel('R')
+
+    plt.savefig("reaction_force.png")

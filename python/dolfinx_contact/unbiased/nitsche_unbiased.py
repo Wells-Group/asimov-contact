@@ -479,9 +479,11 @@ def nitsche_unbiased(steps: int, ufl_form: ufl.Form, u: fem.Function, mu: fem.Fu
 
     vtx.close()
     if pressure_function is not None:
-        write_pressure_xdmf(mesh, contact, u, du, contact_pairs, quadrature_degree,
+        sig_n = write_pressure_xdmf(mesh, contact, u, du, contact_pairs, quadrature_degree,
                             search_method, entities, material, order, simplex, pressure_function,
                             projection_coordinates, fname)
+    else: 
+        sig_n = None
     gdim = mesh.geometry.dim
 
 
