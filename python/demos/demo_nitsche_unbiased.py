@@ -104,8 +104,8 @@ if __name__ == "__main__":
     hex_ext = {1: "", 2: "27"}
     quad_ext = {1: "", 2: "9", 3: "16"}
     line_ext = {1: "", 2: "3", 3: "4"}
-    # if args.order > 1:
-    #     raise NotImplementedError("More work in DOLFINx (SubMesh) required for this to work.")
+    if args.order > 2:
+        raise NotImplementedError("More work in DOLFINx (SubMesh) required for this to work.")
     # Load mesh and create identifier functions for the top (Displacement condition)
     # and the bottom (contact condition)
 

@@ -19,7 +19,7 @@ from dolfinx_contact.output import write_pressure_xdmf
 
 kt = dolfinx_contact.cpp.Kernel
 
-__all__ = ["nitsche_unbiased"]
+__all__ = ["setup_newton_solver", "nitsche_unbiased"]
 
 
 def setup_newton_solver(F_custom: fem.forms.FormMetaClass, J_custom: fem.forms.FormMetaClass,
