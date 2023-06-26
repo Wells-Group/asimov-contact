@@ -203,6 +203,8 @@ std::size_t dolfinx_contact::Contact::coefficients_size(bool meshtie)
            num_q_points * ndofs_cell * bs * max_links,
            num_q_points * gdim,
            num_q_points * gdim * gdim,
+           num_q_points * bs,
+           num_q_points * gdim,
            num_q_points * bs};
     return std::accumulate(cstrides.cbegin(), cstrides.cend(), 0);
   };

@@ -39,6 +39,8 @@ dolfinx_contact::generate_contact_kernel(
          num_q_points * ndofs_cell * bs * max_links,
          num_q_points * gdim,
          num_q_points * gdim * gdim,
+         num_q_points * bs,
+         num_q_points * gdim, 
          num_q_points * bs};
 
   auto kd = dolfinx_contact::KernelData(V, quadrature_rule, cstrides);
@@ -915,19 +917,23 @@ dolfinx_contact::generate_contact_kernel(
       // compute inner(sig(u)*n_phys, n_surf) and inner(u, n_surf)
       double sign_u = 0;
       double jump_un = 0;
+      double jump_old = 0;
       for (std::size_t j = 0; j < gdim; ++j)
       {
         sign_u += sig_n_u[j] * n_surf[j];
         jump_un += c[kd.offsets(4) + gdim * q + j] * n_surf[j];
+        jump_old += c[kd.offsets(7) + gdim * q + j] * n_surf[j];
       }
       std::size_t offset_u_opp = kd.offsets(6) + q * bs;
       for (std::size_t j = 0; j < bs; ++j)
-        jump_un += -c[offset_u_opp + j] * n_surf[j];
+{        jump_un += -c[offset_u_opp + j] * n_surf[j];
+        jump_old+= -c[kd.offsets(8) + q * bs + j] * n_surf[j];}
 
       for (std::size_t j = 0; j < bs; ++j)
       {
         Pt_u[j] = c[kd.offsets(4) + gdim * q + j] - c[offset_u_opp + j]
-                  - jump_un * n_surf[j];
+                  +c[kd.offsets(7) + gdim * q + j] - c[kd.offsets(8) + gdim * q + j]
+                  - (jump_un + jump_old) * n_surf[j];
         Pt_u[j] -= gamma * (sig_n_u[j] - sign_u * n_surf[j]);
       }
       const double w0 = weights[q] * detJ;
@@ -1099,18 +1105,23 @@ dolfinx_contact::generate_contact_kernel(
       // compute inner(sig(u)*n_phys, n_surf) and inner(u, n_surf)
       double sign_u = 0;
       double jump_un = 0;
+      double jump_old = 0;
       for (std::size_t j = 0; j < gdim; ++j)
       {
         sign_u += sig_n_u[j] * n_surf[j];
         jump_un += c[kd.offsets(4) + gdim * q + j] * n_surf[j];
+        jump_old += c[kd.offsets(7) + gdim * q + j] * n_surf[j];
       }
       std::size_t offset_u_opp = kd.offsets(6) + q * bs;
       for (std::size_t j = 0; j < bs; ++j)
-        jump_un += -c[offset_u_opp + j] * n_surf[j];
+       { jump_un += -c[offset_u_opp + j] * n_surf[j];
+        jump_old+= -c[kd.offsets(8) + q * bs + j] * n_surf[j];}
+
       for (std::size_t j = 0; j < bs; ++j)
       {
         Pt_u[j] = c[kd.offsets(4) + gdim * q + j] - c[offset_u_opp + j]
-                  - jump_un * n_surf[j];
+                  +c[kd.offsets(7) + gdim * q + j] - c[kd.offsets(8) + gdim * q + j]
+                  - (jump_un + jump_old) * n_surf[j];
         Pt_u[j] -= gamma * (sig_n_u[j] - sign_u * n_surf[j]);
       }
       double Pn_u = R_plus((jump_un - gap) - gamma * sign_u);

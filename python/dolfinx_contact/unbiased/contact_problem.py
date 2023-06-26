@@ -10,20 +10,21 @@ import dolfinx_contact
 import dolfinx_contact.cpp
 
 from .nitsche_unbiased import setup_newton_solver, get_problem_parameters
+from dolfinx_contact.helpers import sigma_func
 
 
 class ContactProblem:
     __slots__ = ["F", "J", "bcs", "u", "du", "contact", "markers", "entities",
-                 "q_deg", "coeffs", "consts", "raytracing", "newton_options",
-                 "petsc_options"]
+                 "q_deg", "coeffs", "consts", "search_method", "newton_options",
+                 "petsc_options", "coulomb"]
 
     def __init__(self, F: ufl.Form, J: ufl.Form,
                  bcs: Tuple[npt.NDArray[np.int32], list[Union[fem.Function, fem.Constant]]],
                  u: fem.Function, du: fem.Function, contact: dolfinx_contact.cpp.Contact,
                  markers: list[_mesh.MeshTags], entities: list[npt.NDArray[np.int32]],
                  quadrature_degree: int, const_coeffs: list[npt.NDArray[np.float64]],
-                 consts: npt.NDArray[np.float64], raytracing: bool,
-                 petsc_options: Optional[dict] = None, newton_options: Optional[dict] = None,):
+                 consts: npt.NDArray[np.float64], search_method: list[dolfinx_contact.cpp.ContactMode],
+                 petsc_options: Optional[dict] = None, newton_options: Optional[dict] = None, coulomb: bool = False):
 
         self.F = F
         self.J = J
@@ -36,16 +37,18 @@ class ContactProblem:
         self.q_deg = quadrature_degree
         self.coeffs = const_coeffs
         self.consts = consts
-        self.raytracing = raytracing
+        self.search_method = search_method
         self.newton_options = newton_options
         self.petsc_options = petsc_options
+        self.coulomb = coulomb
 
     def solve(self):
         newton_solver = setup_newton_solver(self.F, self.J, self.bcs, self.u, self.du, self.contact, self.markers,
                                             self.entities, self.q_deg, self.coeffs, self.consts,
-                                            self.raytracing, False)
+                                            self.search_method, self.coulomb)
         # Set Newton solver options
         newton_solver.set_newton_options(self.newton_options)
+        print(self.newton_options)
 
         # Set Krylov solver options
         newton_solver.set_krylov_options(self.petsc_options)
@@ -56,17 +59,19 @@ class ContactProblem:
 
 
 def create_contact_solver(ufl_form: ufl.Form, u: fem.Function,
+                          mu: fem.Function, lmbda: fem.Function,
                           markers: list[_mesh.MeshTags],
                           contact_data: Tuple[AdjacencyList_int32, list[Tuple[int, int]]],
                           bcs: Tuple[npt.NDArray[np.int32], list[Union[fem.Function, fem.Constant]]],
                           problem_parameters: dict[str, np.float64],
-                          raytracing: bool,
+                          search_method: list[dolfinx_contact.cpp.ContactMode],
                           quadrature_degree: int = 5,
                           form_compiler_options: Optional[dict] = None,
                           jit_options: Optional[dict] = None,
                           petsc_options: Optional[dict] = None,
                           newton_options: Optional[dict] = None,
-                          search_radius: np.float64 = np.float64(-1.)) -> ContactProblem:
+                          search_radius: np.float64 = np.float64(-1.),
+                          coulomb: bool = False) -> ContactProblem:
     """
     Use custom kernel to compute the contact problem with two elastic bodies coming into contact.
 
@@ -117,11 +122,8 @@ def create_contact_solver(ufl_form: ufl.Form, u: fem.Function,
     jit_options = {} if jit_options is None else jit_options
     petsc_options = {} if petsc_options is None else petsc_options
     newton_options = {} if newton_options is None else newton_options
-    mu, lmbda, theta, gamma, sigma, s = get_problem_parameters(problem_parameters)
-
-    # Search mode
-    search_method = dolfinx_contact.cpp.ContactMode.Raytracing if raytracing \
-        else dolfinx_contact.cpp.ContactMode.ClosestPoint
+    theta, gamma, s = get_problem_parameters(problem_parameters)
+    sigma = sigma_func(mu, lmbda)
 
     # Contact data
     contact_pairs = contact_data[1]
@@ -130,12 +132,17 @@ def create_contact_solver(ufl_form: ufl.Form, u: fem.Function,
     # Mesh, function space and FEM functions
     V = u.function_space
     mesh = V.mesh
+    V2 = fem.FunctionSpace(mesh, ("DG", 0))
     v = ufl_form.arguments()[0]  # Test function
     w = ufl.TrialFunction(V)     # Trial function
     du = fem.Function(V)
     du.x.array[:] = u.x.array[:]
     u.x.array[:].fill(0)
-    h = ufl.CellDiameter(mesh)
+    h = fem.Function(V2)
+    tdim = mesh.topology.dim
+    ncells = mesh.topology.index_map(tdim).size_local
+    h_vals = cpp.mesh.h(mesh._cpp_object, mesh.topology.dim, np.arange(0, ncells, dtype=np.int32))
+    h.x.array[:ncells] = h_vals[:]
     n = ufl.FacetNormal(mesh)
 
     # Integration measure and ufl part of linear/bilinear form
@@ -169,30 +176,24 @@ def create_contact_solver(ufl_form: ufl.Form, u: fem.Function,
     # pack constants
     consts = np.array([gamma, theta], dtype=np.float64)
 
-    # Pack material parameters mu and lambda on each contact surface
-    with common.Timer("~Contact: Interpolate coeffs (mu, lmbda)"):
-        V2 = fem.FunctionSpace(mesh, ("DG", 0))
-        lmbda2 = fem.Function(V2)
-        lmbda2.interpolate(lambda x: np.full((1, x.shape[1]), lmbda))
-        mu2 = fem.Function(V2)
-        mu2.interpolate(lambda x: np.full((1, x.shape[1]), mu))
-        fric_coeff = fem.Function(V2)
-        fric_coeff.interpolate(lambda x: np.full((1, x.shape[1]), s))
-
     # Retrieve active entities
     entities = []
     with common.Timer("~Contact: Compute active entities"):
         for pair in contact_pairs:
             entities.append(contact.active_entities(pair[0]))
 
+    # interpolate friction coefficient
+    fric_coeff = fem.Function(V2)
+    fric_coeff.interpolate(lambda x: np.full((1, x.shape[1]), s))
+
     # Pack material parameters
     material = []
     with common.Timer("~Contact: Pack coeffs (mu, lmbda"):
         for i in range(len(contact_pairs)):
             material.append(np.hstack([dolfinx_contact.cpp.pack_coefficient_quadrature(
-                mu2._cpp_object, 0, entities[i]),
+                mu._cpp_object, 0, entities[i]),
                 dolfinx_contact.cpp.pack_coefficient_quadrature(
-                lmbda2._cpp_object, 0, entities[i]),
+                lmbda._cpp_object, 0, entities[i]),
                 dolfinx_contact.cpp.pack_coefficient_quadrature(
                 fric_coeff._cpp_object, 0, entities[i])]))
 
@@ -207,13 +208,22 @@ def create_contact_solver(ufl_form: ufl.Form, u: fem.Function,
             h_packed.append(dolfinx_contact.cpp.pack_coefficient_quadrature(
                 h_int._cpp_object, 0, entities[i]))
 
-    # Concatenate material parameters, h
+    for j in range(len(contact)):
+        contact.create_distance_map(j)
+    normals = []
+    for i in range(len(contact)):
+        if search_method[i] == dolfinx_contact.cpp.ContactMode.Raytracing:
+            normals.append(-contact.pack_nx(i))
+        else:
+            normals.append(contact.pack_ny)
+
+    # Concatenate material parameters, he4
     const_coeffs = []
     for i in range(len(contact_pairs)):
-        const_coeffs.append(np.hstack([material[i], h_packed[i]]))
+        const_coeffs.append(np.hstack([material[i], h_packed[i], normals]))
 
     problem = ContactProblem(F_custom, J_custom, bcs, u, du, contact, markers, entities,
-                             quadrature_degree, const_coeffs, consts, raytracing,
-                             newton_options, petsc_options)
+                             quadrature_degree, const_coeffs, consts, search_method,
+                             petsc_options, newton_options, coulomb)
 
     return problem

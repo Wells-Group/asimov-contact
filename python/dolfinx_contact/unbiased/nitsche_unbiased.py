@@ -104,10 +104,15 @@ def setup_newton_solver(F_custom: fem.forms.FormMetaClass, J_custom: fem.forms.F
 
     # pack grad u
     grad_u = []
+    u_old = []
+    u_old_opp = []
     with common.Timer("~~Contact: Pack grad(u)"):
         for i in range(num_pairs):
             grad_u.append(dolfinx_contact.cpp.pack_gradient_quadrature(
                 u._cpp_object, quadrature_degree, entities[i]))
+            u_old.append(dolfinx_contact.cpp.pack_coefficient_quadrature(
+                u._cpp_object, quadrature_degree, entities[i]))
+            u_old_opp.append(contact.pack_u_contact(i, u._cpp_object))
 
     # function for updating coefficients coefficients
     @common.timed("~Contact: Update coefficients")
@@ -129,7 +134,8 @@ def setup_newton_solver(F_custom: fem.forms.FormMetaClass, J_custom: fem.forms.F
                 grad_u_puppet.append(dolfinx_contact.cpp.pack_gradient_quadrature(
                     du._cpp_object, quadrature_degree, entities[i]))
         for i in range(num_pairs):
-            c_0 = np.hstack([ccfs[i], u_puppet[i], grad_u_puppet[i] + grad_u[i], u_candidate[i]])
+            c_0 = np.hstack([ccfs[i], u_puppet[i], grad_u_puppet[i]
+                            + grad_u[i], u_candidate[i], u_old[i], u_old_opp[i]])
             coeffs[i][:, :] = c_0[:, :]
 
     # function for computing residual
@@ -250,7 +256,7 @@ def nitsche_unbiased(steps: int, ufl_form: ufl.Form, u: fem.Function, mu: fem.Fu
                      order=1, simplex=True, pressure_function=None,
                      projection_coordinates=[(0, 0), (0, 0)],
                      coulomb: bool = False) -> Tuple[fem.Function, list[int],
-                                                             list[int], list[float]]:
+                                                     list[int], list[float]]:
     """
     Use custom kernel to compute the contact problem with two elastic bodies coming into contact.
 
@@ -480,12 +486,11 @@ def nitsche_unbiased(steps: int, ufl_form: ufl.Form, u: fem.Function, mu: fem.Fu
     vtx.close()
     if pressure_function is not None:
         sig_n = write_pressure_xdmf(mesh, contact, u, du, contact_pairs, quadrature_degree,
-                            search_method, entities, material, order, simplex, pressure_function,
-                            projection_coordinates, fname)
-    else: 
+                                    search_method, entities, material, order, simplex, pressure_function,
+                                    projection_coordinates, fname)
+    else:
         sig_n = None
     gdim = mesh.geometry.dim
-
 
     c_to_f = mesh.topology.connectivity(tdim, tdim - 1)
     facet_list = []
@@ -517,12 +522,11 @@ def nitsche_unbiased(steps: int, ufl_form: ufl.Form, u: fem.Function, mu: fem.Fu
                 "quadrilateral", geometric_dimension=facet_mesh.geometry.dim), quadrature_degree, quad_scheme="default")
 
     Q = fem.FunctionSpace(facet_mesh, Q_element)
-    sig_n = []   
+    sig_n = []
     for i in range(len(contact_pairs)):
         n_x = contact.pack_nx(i)
         grad_u = dolfinx_contact.cpp.pack_gradient_quadrature(
             u._cpp_object, quadrature_degree, entities[i])
-
         num_facets = entities[i].shape[0]
         num_q_points = n_x.shape[1] // gdim
         # this assumes mu, lmbda are constant for each body
@@ -540,18 +544,13 @@ def nitsche_unbiased(steps: int, ufl_form: ufl.Form, u: fem.Function, mu: fem.Fu
             sig_x.x.array[dofs] = sig_n[j][:, 0]
             sig_y.x.array[dofs] = sig_n[j][:, 1]
 
-
-
     # Define forms for the projection
     dx_f = ufl.Measure("dx", domain=facet_mesh)
     force_x = fem.form(sig_x * dx_f)
     force_y = fem.form(sig_y * dx_f)
     R_x = facet_mesh.comm.allreduce(fem.assemble_scalar(force_x), op=MPI.SUM)
     R_y = facet_mesh.comm.allreduce(fem.assemble_scalar(force_y), op=MPI.SUM)
-    print("Rx/Ry", R_x, R_y, s, R_x/R_y, (s + np.tan(np.pi/6))/(1 + s * np.tan(np.pi/6)))
-
-
-    
+    print("Rx/Ry", R_x, R_y, s, R_x / R_y, (s + np.tan(np.pi / 6)) / (1 + s * np.tan(np.pi / 6)))
 
     contact.update_submesh_geometry(u._cpp_object)
     return u, newton_its, krylov_its, timings

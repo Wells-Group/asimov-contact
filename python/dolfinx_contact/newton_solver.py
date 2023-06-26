@@ -37,8 +37,8 @@ class NewtonSolver():
         """
 
         self.max_it = 50
-        self.rtol = 1e-9
-        self.atol = 1e-10
+        self.rtol = 1e-7
+        self.atol = 1e-7
         self.iteration = 0
         self.krylov_iterations = 0
         self.initial_residual = 0
