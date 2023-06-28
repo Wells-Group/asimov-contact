@@ -158,7 +158,7 @@ if __name__ == "__main__":
     # body forces
     F -= ufl.inner(t, v) * ds(top)
 
-    problem_parameters = {"gamma": np.float64(E * 1000), "theta": np.float64(1)}
+    problem_parameters = {"gamma": np.float64(E * 1000), "theta": np.float64(1), "friction": np.float(0.3)}
 
     top_cells = domain_marker.find(1)
     # create initial guess
@@ -186,7 +186,8 @@ if __name__ == "__main__":
                                                                      search_radius=np.float64(-1),
                                                                      order=args.order, simplex=simplex,
                                                                      pressure_function=_pressure,
-                                                                     projection_coordinates=[(tdim - 1, -R), (tdim - 1, -R - 0.1)],)
+                                                                     projection_coordinates=[(tdim - 1, -R), (tdim - 1, -R - 0.1)],
+                                                                     coulomb=True)
 
     # Step 2: Frictional contact
     geometry = mesh.geometry.x[:].copy()
@@ -231,7 +232,7 @@ if __name__ == "__main__":
     # Solve contact problem using Nitsche's method
     # update_geometry(u._cpp_object, mesh._cpp_object)
     # u2.x.array[:] = u.x.array[:]
-
+    steps = 8
     contact_problem = create_contact_solver(ufl_form=F, u=u2, mu=mu_dg, lmbda=lmbda_dg,
                                             markers=[domain_marker, facet_marker],
                                             contact_data=(surfaces, contact),
@@ -242,16 +243,16 @@ if __name__ == "__main__":
                                             search_method=search_mode,
                                             quadrature_degree=args.q_degree,
                                             search_radius=np.float64(0.5),
-                                            coulomb=True)
+                                            coulomb=True, dt = 1./steps)
 
-    steps = 8
+    
 
     contact_problem.u.x.array[:] = u.x.array[:]
     contact_problem.contact.update_submesh_geometry(contact_problem.u._cpp_object)
     # initialise vtx write
     vtx = VTXWriter(mesh.comm, "results/cylinders_coulomb.bp", [contact_problem.u])
     vtx.write(0)
-    for i in range(steps + 1):
+    for i in range(1, steps + 1):
         for j in range(len(contact)):
             contact_problem.contact.create_distance_map(j)
 
@@ -261,6 +262,7 @@ if __name__ == "__main__":
         n = contact_problem.solve()
         contact_problem.du.x.scatter_forward()
         contact_problem.u.x.array[:] += contact_problem.du.x.array[:]
+        contact_problem.set_normals()
         contact_problem.contact.update_submesh_geometry(contact_problem.u._cpp_object)
         # take a fraction of du as initial guess
         # this is to ensure non-singular matrices in the case of no Dirichlet boundary

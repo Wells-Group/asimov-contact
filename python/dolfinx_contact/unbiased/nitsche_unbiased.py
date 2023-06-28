@@ -29,7 +29,7 @@ def setup_newton_solver(F_custom: fem.forms.FormMetaClass, J_custom: fem.forms.F
                         entities: list[npt.NDArray[np.int32]], quadrature_degree: int,
                         const_coeffs: list[npt.NDArray[np.float64]], consts: npt.NDArray[np.float64],
                         search_method: list[dolfinx_contact.cpp.ContactMode],
-                        coulomb: bool):
+                        coulomb: bool, normals_old = None):
     """
     Set up newton solver for contact problem.
     Generate kernels and define functions for updating coefficients, stiffness matrix and residual vector.
@@ -114,6 +114,11 @@ def setup_newton_solver(F_custom: fem.forms.FormMetaClass, J_custom: fem.forms.F
                 u._cpp_object, quadrature_degree, entities[i]))
             u_old_opp.append(contact.pack_u_contact(i, u._cpp_object))
 
+
+    # FIXME: temporary work around
+    if normals_old is None:
+        normals_old = u_old
+
     # function for updating coefficients coefficients
     @common.timed("~Contact: Update coefficients")
     def compute_coefficients(x, coeffs):
@@ -135,7 +140,7 @@ def setup_newton_solver(F_custom: fem.forms.FormMetaClass, J_custom: fem.forms.F
                     du._cpp_object, quadrature_degree, entities[i]))
         for i in range(num_pairs):
             c_0 = np.hstack([ccfs[i], u_puppet[i], grad_u_puppet[i]
-                            + grad_u[i], u_candidate[i], u_old[i], u_old_opp[i]])
+                            + grad_u[i], u_candidate[i], normals_old[i], u_old_opp[i]])
             coeffs[i][:, :] = c_0[:, :]
 
     # function for computing residual

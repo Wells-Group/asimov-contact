@@ -16,7 +16,7 @@ from dolfinx_contact.helpers import sigma_func
 class ContactProblem:
     __slots__ = ["F", "J", "bcs", "u", "du", "contact", "markers", "entities",
                  "q_deg", "coeffs", "consts", "search_method", "newton_options",
-                 "petsc_options", "coulomb"]
+                 "petsc_options", "coulomb", "normals"]
 
     def __init__(self, F: ufl.Form, J: ufl.Form,
                  bcs: Tuple[npt.NDArray[np.int32], list[Union[fem.Function, fem.Constant]]],
@@ -24,7 +24,8 @@ class ContactProblem:
                  markers: list[_mesh.MeshTags], entities: list[npt.NDArray[np.int32]],
                  quadrature_degree: int, const_coeffs: list[npt.NDArray[np.float64]],
                  consts: npt.NDArray[np.float64], search_method: list[dolfinx_contact.cpp.ContactMode],
-                 petsc_options: Optional[dict] = None, newton_options: Optional[dict] = None, coulomb: bool = False):
+                 petsc_options: Optional[dict] = None, newton_options: Optional[dict] = None, coulomb: bool = False,
+                 normals: Optional[list[npt.NDArray[np.float64]]] = None):
 
         self.F = F
         self.J = J
@@ -41,11 +42,12 @@ class ContactProblem:
         self.newton_options = newton_options
         self.petsc_options = petsc_options
         self.coulomb = coulomb
+        self.normals = normals
 
     def solve(self):
         newton_solver = setup_newton_solver(self.F, self.J, self.bcs, self.u, self.du, self.contact, self.markers,
                                             self.entities, self.q_deg, self.coeffs, self.consts,
-                                            self.search_method, self.coulomb)
+                                            self.search_method, self.coulomb, self.normals)
         # Set Newton solver options
         newton_solver.set_newton_options(self.newton_options)
         print(self.newton_options)
@@ -56,6 +58,16 @@ class ContactProblem:
         if not converged:
             print("Newton solver did not converge")
         return n
+    
+    def set_normals(self):
+        normals = []
+        for i in range(len(self.normals)):
+            if self.search_method[i] == dolfinx_contact.cpp.ContactMode.Raytracing:
+                normals.append(-self.contact.pack_nx(i))
+            else:
+                normals.append(self.contact.pack_ny(i))
+        self.normals = normals
+
 
 
 def create_contact_solver(ufl_form: ufl.Form, u: fem.Function,
@@ -71,7 +83,7 @@ def create_contact_solver(ufl_form: ufl.Form, u: fem.Function,
                           petsc_options: Optional[dict] = None,
                           newton_options: Optional[dict] = None,
                           search_radius: np.float64 = np.float64(-1.),
-                          coulomb: bool = False) -> ContactProblem:
+                          coulomb: bool = False, dt = 1.0) -> ContactProblem:
     """
     Use custom kernel to compute the contact problem with two elastic bodies coming into contact.
 
@@ -174,7 +186,7 @@ def create_contact_solver(ufl_form: ufl.Form, u: fem.Function,
     contact.set_search_radius(search_radius)
 
     # pack constants
-    consts = np.array([gamma, theta], dtype=np.float64)
+    consts = np.array([gamma, theta, dt], dtype=np.float64)
 
     # Retrieve active entities
     entities = []
@@ -208,22 +220,22 @@ def create_contact_solver(ufl_form: ufl.Form, u: fem.Function,
             h_packed.append(dolfinx_contact.cpp.pack_coefficient_quadrature(
                 h_int._cpp_object, 0, entities[i]))
 
-    for j in range(len(contact)):
+    for j in range(len(contact_pairs)):
         contact.create_distance_map(j)
     normals = []
-    for i in range(len(contact)):
+    for i in range(len(contact_pairs)):
         if search_method[i] == dolfinx_contact.cpp.ContactMode.Raytracing:
             normals.append(-contact.pack_nx(i))
         else:
-            normals.append(contact.pack_ny)
+            normals.append(contact.pack_ny(i))
 
     # Concatenate material parameters, he4
     const_coeffs = []
     for i in range(len(contact_pairs)):
-        const_coeffs.append(np.hstack([material[i], h_packed[i], normals]))
+        const_coeffs.append(np.hstack([material[i], h_packed[i]]))
 
     problem = ContactProblem(F_custom, J_custom, bcs, u, du, contact, markers, entities,
                              quadrature_degree, const_coeffs, consts, search_method,
-                             petsc_options, newton_options, coulomb)
+                             petsc_options, newton_options, coulomb, normals)
 
     return problem
