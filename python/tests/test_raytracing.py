@@ -31,8 +31,8 @@ def test_raytracing_3D(cell_type):
     if status > 0:
         # Create structures needed for closest point projections
         boundary_cells = dolfinx.mesh.compute_incident_entities(mesh.topology, facets, tdim - 1, tdim)
-        bb_tree = dolfinx.geometry.BoundingBoxTree(mesh, tdim, boundary_cells)
-        midpoint_tree = dolfinx.cpp.geometry.create_midpoint_tree(mesh._cpp_object, tdim, boundary_cells)
+        bb_tree = dolfinx.geometry.bb_tree(mesh, tdim, boundary_cells)
+        midpoint_tree = dolfinx.geometry.create_midpoint_tree(mesh, tdim, boundary_cells)
 
         # Find closest cell using closest point projection
         closest_cell = dolfinx.geometry.compute_closest_entity(
@@ -65,12 +65,12 @@ def test_raytracing_3D_corner(cell_type):
     if status > 0:
         # Create structures needed for closest point projections
         boundary_cells = dolfinx.mesh.compute_incident_entities(mesh.topology, facets, tdim - 1, tdim)
-        bb_tree = dolfinx.geometry.BoundingBoxTree(mesh, tdim, boundary_cells)
-        midpoint_tree = dolfinx.cpp.geometry.create_midpoint_tree(mesh._cpp_object, tdim, boundary_cells)
+        bbtree = dolfinx.geometry.bb_tree(mesh, tdim, boundary_cells)
+        midpoint_tree = dolfinx.geometry.create_midpoint_tree(mesh, tdim, boundary_cells)
 
         # Find closest cell using closest point projection
         closest_cell = dolfinx.geometry.compute_closest_entity(
-            bb_tree, midpoint_tree, mesh, np.reshape(origin, (1, 3)))[0]
+            bbtree, midpoint_tree, mesh, np.reshape(origin, (1, 3)))[0]
 
         # Compute actual distance between cell and point using GJK
         cell_dofs = mesh.geometry.dofmap[closest_cell, :]
@@ -99,12 +99,12 @@ def test_raytracing_2D(cell_type):
     if status > 0:
         # Create structures needed for closest point projections
         boundary_cells = dolfinx.mesh.compute_incident_entities(mesh.topology, facets, tdim - 1, tdim)
-        bb_tree = dolfinx.geometry.BoundingBoxTree(mesh, tdim, boundary_cells)
-        midpoint_tree = dolfinx.cpp.geometry.create_midpoint_tree(mesh._cpp_object, tdim, boundary_cells)
+        bbtree = dolfinx.geometry.bb_tree(mesh, tdim, boundary_cells)
+        midpoint_tree = dolfinx.geometry.create_midpoint_tree(mesh, tdim, boundary_cells)
         op = np.array([origin[0], origin[1], 0])
         # Find closest cell using closest point projection
         closest_cell = dolfinx.geometry.compute_closest_entity(
-            bb_tree, midpoint_tree, mesh, op)[0]
+            bbtree, midpoint_tree, mesh, op)[0]
         assert integral_pairs[cell_idx][0] == closest_cell
 
         # Compute actual distance between cell and point using GJK
@@ -133,13 +133,13 @@ def test_raytracing_2D_corner(cell_type):
     if status > 0:
         # Create structures needed for closest point projections
         boundary_cells = dolfinx.mesh.compute_incident_entities(mesh.topology, facets, tdim - 1, tdim)
-        bb_tree = dolfinx.geometry.BoundingBoxTree(mesh, tdim, boundary_cells)
+        bbtree = dolfinx.geometry.bb_tree(mesh, tdim, boundary_cells)
         midpoint_tree = dolfinx.cpp.geometry.create_midpoint_tree(mesh._cpp_object, tdim, boundary_cells)
 
         # Find closest cell using closest point projection
         op = np.array([origin[0], origin[1], 0])
         closest_cell = dolfinx.geometry.compute_closest_entity(
-            bb_tree, midpoint_tree, mesh, op)[0]
+            bbtree, midpoint_tree, mesh, op)[0]
 
         # Compute actual distance between cell and point using GJK
         cell_dofs = mesh.geometry.dofmap[closest_cell, :]

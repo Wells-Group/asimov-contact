@@ -214,7 +214,7 @@ def test_contact_kernel(theta, gamma, dim, gap):
         # Jacobian
         a_custom = ufl.inner(sigma(du), epsilon(v)) * dx
         a_custom = dolfinx.fem.form(a_custom)
-        B = contact_assembler.create_matrix(a_custom)
+        B = contact_assembler.create_matrix(a_custom._cpp_object)
         kernel = dolfinx_contact.cpp.generate_rigid_surface_kernel(
             V._cpp_object, kt.Jac, q_rule)
         B.zeroEntries()
