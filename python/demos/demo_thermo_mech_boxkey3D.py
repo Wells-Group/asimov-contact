@@ -163,6 +163,8 @@ outname = f"results/xmas_{tdim}D_{size}"
 u.name = 'displacement'
 T0.name = 'temperature'
 
+cffi_options = ["-Ofast", "-march=native"]
+jit_options = {"cffi_extra_compile_args": cffi_options, "cffi_libraries": ["m"]}
 contact_problem = create_contact_solver(ufl_form=F, u=u, markers=[domain_marker, facet_marker],
                                         contact_data=(surfaces, contact_pairs),
                                         bcs=(np.empty(shape=(2, 0), dtype=np.int32), []),
@@ -170,6 +172,7 @@ contact_problem = create_contact_solver(ufl_form=F, u=u, markers=[domain_marker,
                                         raytracing=False,
                                         newton_options=newton_options,
                                         petsc_options=petsc_options,
+                                        jit_options=jit_options,
                                         quadrature_degree=5,
                                         search_radius=np.float64(0.5))
 

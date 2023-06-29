@@ -394,6 +394,8 @@ if __name__ == "__main__":
             rhs_fns = bc_fns
             bcs = (np.empty(shape=(2, 0), dtype=np.int32), [])
 
+        cffi_options = ["-Ofast", "-march=native"]
+        jit_options = {"cffi_extra_compile_args": cffi_options, "cffi_libraries": ["m"]}
         # Solve contact problem using Nitsche's method
         u, newton_its, krylov_iterations, solver_time = nitsche_unbiased(args.time_steps, ufl_form=Fj,
                                                                          u=u, rhs_fns=rhs_fns,
@@ -402,6 +404,7 @@ if __name__ == "__main__":
                                                                          problem_parameters=problem_parameters,
                                                                          newton_options=newton_options,
                                                                          petsc_options=petsc_options,
+                                                                         jit_options=jit_options,
                                                                          outfile=solver_outfile,
                                                                          fname=outnamej, raytracing=args.raytracing,
                                                                          quadrature_degree=args.q_degree,

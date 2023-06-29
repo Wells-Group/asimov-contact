@@ -10,8 +10,8 @@ import ufl
 from dolfinx.fem import (Function, VectorFunctionSpace, dirichletbc,
                          locate_dofs_topological)
 from dolfinx.fem.petsc import LinearProblem, NonlinearProblem
-from dolfinx.geometry import (BoundingBoxTree, compute_colliding_cells,
-                              compute_collisions)
+from dolfinx.geometry import (bb_tree, compute_colliding_cells,
+                              compute_collisions_points)
 from dolfinx.io import XDMFFile
 from dolfinx.mesh import (CellType, GhostMode, create_rectangle,
                           locate_entities_boundary, meshtags)
@@ -30,7 +30,7 @@ def solve_euler_bernoulli(nx: int, ny: int, theta: float, gamma: float, linear_s
     (https://en.wikipedia.org/wiki/Euler%E2%80%93Bernoulli_beam_theory#Cantilever_beams)
     """
     mesh = create_rectangle(MPI.COMM_WORLD, [np.array([0, 0]), np.array([L, H])], [nx, ny],
-                            CellType.triangle, GhostMode.none)
+                            CellType.triangle, ghost_mode=GhostMode.none)
 
     def left(x):
         return np.isclose(x[0], 0)
@@ -119,8 +119,8 @@ def solve_euler_bernoulli(nx: int, ny: int, theta: float, gamma: float, linear_s
 
     # Find cell colliding with point. Use boundingbox tree to get a list of candidates,
     # then GJK for exact collision detection
-    bb_tree = BoundingBoxTree(mesh, mesh.topology.dim)
-    cell_candidates = compute_collisions(bb_tree, point)
+    bbtree = bb_tree(mesh, mesh.topology.dim)
+    cell_candidates = compute_collisions_points(bbtree, point)
     cell = compute_colliding_cells(mesh, cell_candidates, point).links(0)
     # Only use evaluate for points on current processor
     if len(cell) > 0:

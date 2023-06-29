@@ -26,7 +26,7 @@ def nitsche_meshtie(lhs: ufl.Form,
                     u: _fem.Function,
                     markers: list[MeshTags],
                     surface_data: Tuple[AdjacencyList_int32, list[Tuple[int, int]]],
-                    bcs: list[_fem.DirichletBCMetaClass],
+                    bcs: list[_fem.DirichletBC],
                     problem_parameters: dict[str, np.float64],
                     quadrature_degree: int = 5,
                     form_compiler_options: Optional[dict] = None,
@@ -172,7 +172,7 @@ def nitsche_meshtie(lhs: ufl.Form,
     with _common.Timer("~Contact " + timing_str + ": Generate Jacobian kernel"):
         kernel_jac = contact.generate_kernel(kt.MeshTieJac)
     with _common.Timer("~Contact " + timing_str + ": Create matrix"):
-        A = contact.create_matrix(J_custom)
+        A = contact.create_matrix(J_custom._cpp_object)
 
     # Generate residual data structures
     F_custom = _fem.form(rhs, form_compiler_options=form_compiler_options, jit_options=jit_options)
@@ -207,9 +207,9 @@ def nitsche_meshtie(lhs: ufl.Form,
         for i in range(len(surface_pairs)):
             contact.assemble_vector(b, i, kernel_rhs, coeffs[i], consts)
     with _common.Timer("~~Contact " + timing_str + ": Pack coefficients ufl"):
-        coeffs_ufl = _cppfem.pack_coefficients(F_custom)
+        coeffs_ufl = _cppfem.pack_coefficients(F_custom._cpp_object)
     with _common.Timer("~~Contact " + timing_str + ": Pack constants ufl"):
-        consts_ufl = _cppfem.pack_constants(F_custom)
+        consts_ufl = _cppfem.pack_constants(F_custom._cpp_object)
     with _common.Timer("~~Contact " + timing_str + ": Standard contributions (in assemble vector)"):
         _fem.petsc.assemble_vector(b, F_custom, constants=consts_ufl, coeffs=coeffs_ufl)  # type: ignore
         b.ghostUpdate(addv=_PETSc.InsertMode.ADD, mode=_PETSc.ScatterMode.REVERSE)
@@ -226,9 +226,9 @@ def nitsche_meshtie(lhs: ufl.Form,
         for i in range(len(surface_pairs)):
             contact.assemble_matrix(A, [], i, kernel_jac, coeffs[i], consts)
     with _common.Timer("~~Contact " + timing_str + ": Pack coefficients ufl"):
-        coeffs_ufl = _cppfem.pack_coefficients(J_custom)
+        coeffs_ufl = _cppfem.pack_coefficients(J_custom._cpp_object)
     with _common.Timer("~~Contact " + timing_str + ": Pack constants ufl"):
-        consts_ufl = _cppfem.pack_constants(J_custom)
+        consts_ufl = _cppfem.pack_constants(J_custom._cpp_object)
     with _common.Timer("~~Contact " + timing_str + ": Standard contributions (in assemble matrix)"):
         _fem.petsc.assemble_matrix(A, J_custom, constants=consts_ufl, coeffs=coeffs_ufl, bcs=bcs)  # type: ignore
     A.assemble()

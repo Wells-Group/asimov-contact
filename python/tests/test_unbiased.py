@@ -583,7 +583,7 @@ def test_contact_kernels(ct, gap, quadrature_degree, theta, formulation, search)
     # Generate residual data structures
     J_custom = _fem.form(J_custom)
     kernel_jac = contact.generate_kernel(kernel_type_jac)
-    A1 = contact.create_matrix(J_custom)
+    A1 = contact.create_matrix(J_custom._cpp_object)
 
     # Pack constants
     consts = np.array([gamma_scaled, theta])
