@@ -394,7 +394,6 @@ if __name__ == "__main__":
             rhs_fns = bc_fns
             bcs = (np.empty(shape=(2, 0), dtype=np.int32), [])
 
-
         cffi_options = ["-Ofast", "-march=native"]
         jit_options = {"cffi_extra_compile_args": cffi_options, "cffi_libraries": ["m"]}
         # Solve contact problem using Nitsche's method
