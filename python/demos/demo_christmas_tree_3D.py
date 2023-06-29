@@ -201,6 +201,9 @@ if __name__ == "__main__":
     rhs_fns = [g, t, f]
     size = mesh.comm.size
     outname = f"results/xmas_{tdim}D_{size}"
+
+    cffi_options = ["-Ofast", "-march=native"]
+    jit_options = {"cffi_extra_compile_args": cffi_options, "cffi_libraries": ["m"]}
     with Timer("~Contact: - all"):
         u1, num_its, krylov_iterations, solver_time = nitsche_unbiased(1, ufl_form=F, u=u,
                                                                        rhs_fns=rhs_fns, markers=[
@@ -210,6 +213,7 @@ if __name__ == "__main__":
                                                                        raytracing=False,
                                                                        newton_options=newton_options,
                                                                        petsc_options=petsc_options,
+                                                                       jit_options=jit_options,
                                                                        outfile=solver_outfile,
                                                                        fname=outname,
                                                                        quadrature_degree=args.q_degree,

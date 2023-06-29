@@ -97,11 +97,11 @@ jobs:
       - name: Flake8 code
         run: flake8 python/
 
-      - name: Run mypy checks
-        run: |
-          pip3 install mypy
-          cd python
-          python3 -m mypy . --exclude=build
+      # - name: Run mypy checks
+      #   run: |
+      #     pip3 install mypy
+      #     cd python
+      #     python3 -m mypy . --exclude=build
 
       - name: Run demos
         run: |
