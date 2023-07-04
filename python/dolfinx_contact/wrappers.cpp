@@ -14,9 +14,9 @@
 #include <dolfinx_contact/RayTracing.h>
 #include <dolfinx_contact/SubMesh.h>
 #include <dolfinx_contact/coefficients.h>
-#include <dolfinx_contact/rigid_surface_kernels.h>
 #include <dolfinx_contact/parallel_mesh_ghosting.h>
 #include <dolfinx_contact/point_cloud.h>
+#include <dolfinx_contact/rigid_surface_kernels.h>
 #include <dolfinx_contact/utils.h>
 #include <pybind11/functional.h>
 #include <pybind11/operators.h>
@@ -330,7 +330,7 @@ PYBIND11_MODULE(cpp, m)
       {
         return contact_wrappers::KernelWrapper(
             dolfinx_contact::generate_rigid_surface_kernel(V, type, q_rule,
-                                                     constant_normal));
+                                                           constant_normal));
       },
       py::arg("V"), py::arg("kernel_type"), py::arg("quadrature_rule"),
       py::arg("constant_normal") = true);
@@ -483,6 +483,8 @@ PYBIND11_MODULE(cpp, m)
         return dolfinx_contact::compute_ghost_cell_destinations(mesh,
                                                                 marker_span, r);
       });
+
+  m.def("lex_match", &dolfinx_contact::lex_match);
 
   m.def(
       "raytracing",

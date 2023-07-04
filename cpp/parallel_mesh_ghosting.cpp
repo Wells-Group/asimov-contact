@@ -146,3 +146,76 @@ dolfinx_contact::compute_ghost_cell_destinations(
 
   return dolfinx::graph::AdjacencyList<std::int32_t>(cell_dests, doffsets);
 }
+
+std::vector<std::pair<int, int>>
+dolfinx_contact::lex_match(int dim, std::vector<std::int32_t>& local_indices,
+                           std::vector<std::int32_t>& in_indices,
+                           std::vector<std::int32_t>& in_values)
+{
+  LOG(WARNING) << "Lex match";
+
+  assert(local_indices.size() % dim == 0);
+  assert(in_indices.size() % dim == 0);
+  assert(in_values.size() == in_indices.size() / dim);
+
+  LOG(WARNING) << "Sort p";
+  std::vector<int> p_local(local_indices.size() / dim);
+  std::iota(p_local.begin(), p_local.end(), 0);
+  std::sort(p_local.begin(), p_local.end(),
+            [&](int a, int b)
+            {
+              return std::lexicographical_compare(
+                  local_indices.begin() + dim * a,
+                  local_indices.begin() + dim * (a + 1),
+                  local_indices.begin() + dim * b,
+                  local_indices.begin() + dim * (b + 1));
+            });
+
+  LOG(WARNING) << "Sort q";
+  std::vector<int> p_in(in_indices.size() / dim);
+  std::iota(p_in.begin(), p_in.end(), 0);
+  std::sort(
+      p_in.begin(), p_in.end(),
+      [&](int a, int b)
+      {
+        return std::lexicographical_compare(
+            in_indices.begin() + dim * a, in_indices.begin() + dim * (a + 1),
+            in_indices.begin() + dim * b, in_indices.begin() + dim * (b + 1));
+      });
+
+  LOG(WARNING) << p_in.size() << "," << p_local.size();
+
+  std::vector<std::pair<int, int>> new_markers;
+  int i = 0;
+  int j = 0;
+
+  while (i < p_in.size() and j < p_local.size())
+  {
+    int a = p_in[i] * dim;
+    int b = p_local[j] * dim;
+    if (std::equal(in_indices.begin() + a, in_indices.begin() + a + dim,
+                   local_indices.begin() + b))
+    {
+      new_markers.push_back({p_local[j], in_values[p_in[i]]});
+      ++i;
+      ++j;
+    }
+    else
+    {
+      bool fwdi = std::lexicographical_compare(
+          in_indices.begin() + a, in_indices.begin() + a + dim,
+          local_indices.begin() + b, local_indices.begin() + b + dim);
+
+      if (fwdi)
+        ++i;
+      else
+        ++j;
+    }
+  }
+
+  std::sort(new_markers.begin(), new_markers.end());
+  auto last = std::unique(new_markers.begin(), new_markers.end());
+  new_markers.erase(last, new_markers.end());
+
+  return new_markers;
+}
