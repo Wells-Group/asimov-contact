@@ -152,7 +152,8 @@ dolfinx_contact::lex_match(int dim, std::vector<std::int32_t>& local_indices,
                            std::vector<std::int32_t>& in_indices,
                            std::vector<std::int32_t>& in_values)
 {
-  LOG(WARNING) << "Lex match";
+  LOG(WARNING) << "Lex match: [" << local_indices.size() <<", "
+               << in_indices.size() << ", " << in_values.size() << "]";
 
   assert(local_indices.size() % dim == 0);
   assert(in_indices.size() % dim == 0);

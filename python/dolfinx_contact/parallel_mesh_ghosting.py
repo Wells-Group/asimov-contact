@@ -120,8 +120,8 @@ def create_contact_mesh(mesh, fmarker, dmarker, tags, R=0.2):
     log.log(log.LogLevel.WARNING, "Lex match facet markers")
 
     timer = Timer("~Contact: Add ghosts: Lex match facet markers")
-    new_fmarkers = lex_match(tdim - 1, list(fv_indices.flatten()), list(all_indices.flatten()),
-                             list(all_values))
+    new_fmarkers = lex_match(fv_indices.shape[1], list(fv_indices.flatten()),
+                             list(all_indices.flatten()), list(all_values))
 
     # Sort new markers into order and make unique
     new_fmarkers = np.array(new_fmarkers, dtype=np.int32)
@@ -141,8 +141,8 @@ def create_contact_mesh(mesh, fmarker, dmarker, tags, R=0.2):
     # Search for marked cells in list of all cells
     log.log(log.LogLevel.WARNING, "Lex match cell markers")
     timer = Timer("~Contact: Add ghosts: Lex match cell markers")
-    new_cmarkers = lex_match(tdim, list(cv_indices.flatten()), list(all_cell_indices.flatten()),
-                             list(all_cell_values))
+    new_cmarkers = lex_match(cv_indices.shape[1], list(cv_indices.flatten()),
+                             list(all_cell_indices.flatten()), list(all_cell_values))
 
     # Sort new markers into order and make unique
     new_cmarkers = np.array(new_cmarkers, dtype=np.int32)
