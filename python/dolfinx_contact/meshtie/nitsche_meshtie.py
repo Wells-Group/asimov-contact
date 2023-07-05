@@ -11,6 +11,7 @@ import dolfinx.log as _log
 import numpy as np
 import ufl
 from dolfinx.cpp.graph import AdjacencyList_int32
+from dolfinx.fem.petsc import create_vector
 from dolfinx.mesh import MeshTags
 from petsc4py import PETSc as _PETSc
 
@@ -179,7 +180,7 @@ def nitsche_meshtie(lhs: ufl.Form,
     with _common.Timer("~Contact " + timing_str + ": Generate residual kernel"):
         kernel_rhs = contact.generate_kernel(kt.MeshTieRhs)
     with _common.Timer("~Contact " + timing_str + ": Create vector"):
-        b = _fem.petsc.create_vector(F_custom)
+        b = create_vector(F_custom)
 
     # Compute u dependent coeficcients
     u_candidate = []
