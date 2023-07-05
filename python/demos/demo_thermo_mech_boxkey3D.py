@@ -9,6 +9,7 @@ import numpy as np
 import ufl
 from dolfinx import io, log
 from dolfinx.common import Timer, TimingType, list_timings
+from dolfinx.fem.petsc import LinearProblem
 from dolfinx.graph import create_adjacencylist
 from dolfinx.io import XDMFFile
 from dolfinx.mesh import GhostMode
@@ -100,12 +101,12 @@ therm = (q - T0) * r * dx + kdt * ufl.inner(ufl.grad(tau * q + (1 - tau) * T0), 
 
 a_therm, L_therm = ufl.lhs(therm), ufl.rhs(therm)
 
-T0.x.set(0.0)
+T0.x.array[:] = 0.0
 dofs = _fem.locate_dofs_topological(Q, entity_dim=tdim - 1, entities=facet_marker.find(dirichlet_bdy1))
 Tbc = _fem.dirichletbc(value=_PETSc.ScalarType((1.0)), dofs=dofs, V=Q)
 dofs2 = _fem.locate_dofs_topological(Q, entity_dim=tdim - 1, entities=facet_marker.find(dirichlet_bdy2))
 Tbc2 = _fem.dirichletbc(value=_PETSc.ScalarType((0.0)), dofs=dofs2, V=Q)
-Tproblem = _fem.petsc.LinearProblem(a_therm, L_therm, bcs=[Tbc, Tbc2], petsc_options=petsc_options, u=T0)
+Tproblem = LinearProblem(a_therm, L_therm, bcs=[Tbc, Tbc2], petsc_options=petsc_options, u=T0)
 
 
 # Elasticity problem

@@ -6,6 +6,7 @@ from typing import Any, Optional, Tuple, Union
 
 from dolfinx import common, fem, io, log, cpp
 from dolfinx import mesh as _mesh
+from dolfinx.fem.petsc import create_vector
 import numpy as np
 import numpy.typing as npt
 import ufl
@@ -67,7 +68,7 @@ def setup_newton_solver(F_custom: fem.forms.Form, J_custom: fem.forms.Form,
 
     # create vector and matrix
     A = contact.create_matrix(J_custom._cpp_object)
-    b = fem.petsc.create_vector(F_custom)
+    b = create_vector(F_custom)
 
     # Pack gap, normals and test functions on each surface
     gaps = []
