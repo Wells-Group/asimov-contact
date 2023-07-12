@@ -5,6 +5,7 @@ import dolfinx.fem as _fem
 import numpy as np
 import ufl
 from dolfinx import io, log
+from dolfinx.fem.petsc import LinearProblem
 from dolfinx.graph import create_adjacencylist
 from dolfinx.io import XDMFFile
 from dolfinx_contact.helpers import (epsilon, lame_parameters, sigma_func,
@@ -46,13 +47,13 @@ therm = (q - T0) * r * dx + kdt * ufl.inner(ufl.grad(tau * q + (1 - tau) * T0), 
 
 a_therm, L_therm = ufl.lhs(therm), ufl.rhs(therm)
 
-T0.x.set(0.0)
+T0.x.array[:] = 0
 dofs = _fem.locate_dofs_topological(Q, entity_dim=tdim - 1, entities=facet_marker.find(3))
 Tbc = _fem.dirichletbc(value=_PETSc.ScalarType((1.0)), dofs=dofs, V=Q)
 dofs2 = _fem.locate_dofs_topological(Q, entity_dim=tdim - 1, entities=facet_marker.find(4))
 Tbc2 = _fem.dirichletbc(value=_PETSc.ScalarType((0.0)), dofs=dofs2, V=Q)
-Tproblem = _fem.petsc.LinearProblem(a_therm, L_therm, bcs=[Tbc, Tbc2], petsc_options={
-                                    "ksp_type": "preonly", "pc_type": "lu"}, u=T0)
+Tproblem = LinearProblem(a_therm, L_therm, bcs=[Tbc, Tbc2], petsc_options={
+    "ksp_type": "preonly", "pc_type": "lu"}, u=T0)
 
 
 # Elasticity problem
@@ -143,6 +144,8 @@ outname = f"results/xmas_{tdim}D_{size}"
 u.name = 'displacement'
 T0.name = 'temperature'
 
+cffi_options = ["-Ofast", "-march=native"]
+jit_options = {"cffi_extra_compile_args": cffi_options, "cffi_libraries": ["m"]}
 contact_problem = create_contact_solver(ufl_form=F, u=u, markers=[domain_marker, facet_marker],
                                         contact_data=(surfaces, contact_pairs),
                                         bcs=(np.empty(shape=(2, 0), dtype=np.int32), []),
@@ -150,6 +153,7 @@ contact_problem = create_contact_solver(ufl_form=F, u=u, markers=[domain_marker,
                                         raytracing=False,
                                         newton_options=newton_options,
                                         petsc_options=petsc_options,
+                                        jit_options=jit_options,
                                         quadrature_degree=5,
                                         search_radius=np.float64(0.5))
 

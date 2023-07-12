@@ -9,6 +9,7 @@ import numpy as np
 import ufl
 from dolfinx import common as _common
 from dolfinx import fem as _fem
+from dolfinx.fem.petsc import create_matrix, create_vector
 from dolfinx import log as _log
 from dolfinx import mesh as dmesh
 from dolfinx.graph import create_adjacencylist
@@ -199,8 +200,8 @@ def nitsche_custom(mesh: dmesh.Mesh, mesh_data: Tuple[dmesh.MeshTags, int, int],
     # Setup Newton-solver
     def update_cf(x, cf):
         pass
-    a_mat = _fem.petsc.create_matrix(a_custom)
-    b = _fem.petsc.create_vector(L_custom)
+    a_mat = create_matrix(a_custom)
+    b = create_vector(L_custom)
     solver = dolfinx_contact.NewtonSolver(mesh.comm, a_mat, b, [np.empty((0, 0))])
     solver.set_jacobian(assemble_jacobian)
     solver.set_residual(assemble_residual)

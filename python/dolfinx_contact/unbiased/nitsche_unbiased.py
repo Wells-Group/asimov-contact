@@ -5,6 +5,7 @@
 from typing import Optional, Tuple, Union, Any
 from dolfinx import common, fem, io, log, cpp
 from dolfinx import mesh as _mesh
+from dolfinx.fem.petsc import create_vector
 import numpy as np
 import numpy.typing as npt
 import ufl
@@ -22,8 +23,8 @@ kt = dolfinx_contact.cpp.Kernel
 __all__ = ["setup_newton_solver", "nitsche_unbiased"]
 
 
-def setup_newton_solver(F_custom: fem.forms.FormMetaClass, J_custom: fem.forms.FormMetaClass,
-                        bcs: Tuple[list[Tuple[npt.NDArray[np.int32], int]], list[Union[fem.Function, fem.Constant]]],
+def setup_newton_solver(F_custom: fem.forms.Form, J_custom: fem.forms.Form,
+                        bcs: Tuple[npt.NDArray[np.int32], list[Union[fem.Function, fem.function.Constant]]],
                         u: fem.Function, du: fem.Function,
                         contact: dolfinx_contact.cpp.Contact, markers: list[_mesh.MeshTags],
                         entities: list[npt.NDArray[np.int32]], quadrature_degree: int,
@@ -69,8 +70,8 @@ def setup_newton_solver(F_custom: fem.forms.FormMetaClass, J_custom: fem.forms.F
             kernel_friction_rhs = contact.generate_kernel(kt.TrescaRhs)
 
     # create vector and matrix
-    A = contact.create_matrix(J_custom)
-    b = fem.petsc.create_vector(F_custom)
+    A = contact.create_matrix(J_custom._cpp_object)
+    b = create_vector(F_custom)
 
     # Pack gap, normals and test functions on each surface
     gaps = []

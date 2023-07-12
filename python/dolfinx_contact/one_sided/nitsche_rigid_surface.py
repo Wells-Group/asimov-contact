@@ -172,7 +172,7 @@ def nitsche_rigid_surface(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTags, int
     mesh_geometry = mesh.geometry.x
     contact.create_distance_map(0)
     lookup = contact.facet_map(0)
-    master_bbox = _geometry.BoundingBoxTree(mesh, fdim, contact_facets)
+    master_bbox = _geometry.bb_tree(mesh, fdim, contact_facets)
     midpoint_tree = _geometry.create_midpoint_tree(mesh, fdim, contact_facets)
 
     # This function returns Pi(x) - x, where Pi(x) is the closest point projection

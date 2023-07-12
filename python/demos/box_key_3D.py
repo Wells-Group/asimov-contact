@@ -189,6 +189,9 @@ if __name__ == "__main__":
     size = mesh.comm.size
     outname = f"results/boxkey_{tdim}D_{size}"
     search_mode = [dolfinx_contact.cpp.ContactMode.ClosestPoint, dolfinx_contact.cpp.ContactMode.ClosestPoint]
+
+    cffi_options = ["-Ofast", "-march=native"]
+    jit_options = {"cffi_extra_compile_args": cffi_options, "cffi_libraries": ["m"]}
     u1, num_its, krylov_iterations, solver_time = nitsche_unbiased(args.time_steps, ufl_form=F, u=u,
                                                                    mu=mu0, lmbda=lmbda0,
                                                                    rhs_fns=rhs_fns,
@@ -200,6 +203,7 @@ if __name__ == "__main__":
                                                                    search_method=search_mode,
                                                                    newton_options=newton_options,
                                                                    petsc_options=petsc_options,
+                                                                   jit_options=jit_options,
                                                                    outfile=solver_outfile,
                                                                    fname=outname,
                                                                    quadrature_degree=args.q_degree,

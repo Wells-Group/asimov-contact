@@ -7,6 +7,7 @@ from typing import Optional, Dict, Tuple
 import basix
 import dolfinx.common as _common
 import dolfinx.fem as _fem
+from dolfinx.fem.petsc import create_matrix, create_vector
 import dolfinx.log as _log
 import dolfinx.mesh as _mesh
 import numpy as np
@@ -244,8 +245,8 @@ def nitsche_rigid_surface_custom(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTa
         A.assemble()
 
     # Setup non-linear problem and Newton-solver
-    A = _fem.petsc.create_matrix(J_custom)
-    b = _fem.petsc.create_vector(F_custom)
+    A = create_matrix(J_custom)
+    b = create_vector(F_custom)
 
     coefficients = [np.hstack([coeffs, h_facets, g_vec, u_packed, grad_u_packed, n_surf])]
     solver = dolfinx_contact.NewtonSolver(mesh.comm, A, b, coefficients)

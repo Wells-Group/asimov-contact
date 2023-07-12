@@ -111,7 +111,7 @@ def test_vector_surface_kernel(dim, kernel_type, P, Q):
     L += h / gamma * R_minus(sigma_n(u) + (gamma / h) * (gap - ufl.dot(u, (-n_2)))) * \
         (theta * sigma_n(v) - (gamma / h) * ufl.dot(v, (-n_2))) * ds(1)
     # Compile UFL form
-    cffi_options = ["-O2", "-march=native"]
+    cffi_options = ["-Ofast", "-march=native"]
     L = form(L, jit_options={"cffi_extra_compile_args": cffi_options, "cffi_libraries": ["m"]})
     b = create_vector(L)
 
@@ -243,7 +243,7 @@ def test_matrix_surface_kernel(dim, kernel_type, P, Q):
     a += h / gamma * 0.5 * (1 - ufl.sign(q)) * (sigma_n(du) - gamma / h * ufl.dot(du, (-n_2))) * \
         (theta * sigma_n(v) - gamma / h * ufl.dot(v, (-n_2))) * ds(1)
     # Compile UFL form
-    cffi_options = ["-O2", "-march=native"]
+    cffi_options = ["-Ofast", "-march=native"]
     a = form(a, jit_options={"cffi_extra_compile_args": cffi_options, "cffi_libraries": ["m"]})
     A = create_matrix(a)
 

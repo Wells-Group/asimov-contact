@@ -4,6 +4,7 @@
 
 from dolfinx import log
 from dolfinx.mesh import create_mesh, meshtags
+from dolfinx.common import Timer
 import dolfinx
 from dolfinx.cpp.mesh import entities_to_geometry, cell_num_vertices, cell_entity_type, to_type
 import numpy as np
@@ -35,8 +36,10 @@ def create_contact_mesh(mesh, fmarker, dmarker, tags, R=0.2):
 
     log.log(log.LogLevel.WARNING, "Compute cell destinations")
     # Find destinations for the cells attached to the tag-marked facets
-    cell_dests = compute_ghost_cell_destinations(mesh._cpp_object, marker_subset, R)
+    with Timer("~Contact: Add ghosts: Compute cell destinations"):
+        cell_dests = compute_ghost_cell_destinations(mesh._cpp_object, marker_subset, R)
     log.log(log.LogLevel.WARNING, "cells to ghost")
+    timer = Timer("~Contact: Add ghosts: cells to ghost")
     cells_to_ghost = [fc.links(f)[0] for f in marker_subset]
     cell_to_dests = {}
     for i, c in enumerate(cells_to_ghost):
@@ -48,7 +51,9 @@ def create_contact_mesh(mesh, fmarker, dmarker, tags, R=0.2):
     fv_indices = [sorted(mesh.topology.index_map(0).local_to_global(fv.links(f))) for f in fmarker.indices]
     cv_indices = [sorted(mesh.topology.index_map(0).local_to_global(cv.links(c))) for c in dmarker.indices]
 
+    timer.stop()
     log.log(log.LogLevel.WARNING, "Copy markers to other processes")
+    timer = Timer("~Contact: Add ghosts: Copy markers to other processes")
     # Copy facets and markers to all processes
     if len(fv_indices) > 0:
         global_fmarkers = np.concatenate(fv_indices)
@@ -86,10 +91,13 @@ def create_contact_mesh(mesh, fmarker, dmarker, tags, R=0.2):
     gdim = mesh.geometry.dim
     x = mesh.geometry.x[:num_vertices, :gdim]
     domain = mesh.ufl_domain()
+    timer.stop()
     log.log(log.LogLevel.WARNING, "Repartition")
-    new_mesh = create_mesh(mesh.comm, topo, x, domain, partitioner)
+    with Timer("~Contact: Add ghosts: Repartition"):
+        new_mesh = create_mesh(mesh.comm, topo, x, domain, partitioner)
 
     log.log(log.LogLevel.WARNING, "Remap markers on new mesh")
+    timer = Timer("~Contact: Add ghosts: Remap markers on new mesh")
     # Remap vertices back to input indexing
     # This is rather messy, we need to map vertices to geometric nodes
     # then back to original index
@@ -131,7 +139,9 @@ def create_contact_mesh(mesh, fmarker, dmarker, tags, R=0.2):
                     j += 1
         return new_markers
 
+    timer.stop()
     log.log(log.LogLevel.WARNING, "Lex match facet markers")
+    timer = Timer("~Contact: Add ghosts: Lex match facet markers")
     new_fmarkers = lex_match(fv_indices, all_indices, all_values)
 
     # Sort new markers into order and make unique
@@ -148,9 +158,11 @@ def create_contact_mesh(mesh, fmarker, dmarker, tags, R=0.2):
     cv = new_mesh.topology.connectivity(tdim, 0)
     cv_indices = rmap(cv.array).reshape((-1, num_cell_vertices))
     cv_indices = np.sort(cv_indices, axis=1)
+    timer.stop()
 
     # Search for marked cells in list of all cells
     log.log(log.LogLevel.WARNING, "Lex match cell markers")
+    timer = Timer("~Contact: Add ghosts: Lex match cell markers")
     new_cmarkers = lex_match(cv_indices, all_cell_indices, all_cell_values)
 
     # Sort new markers into order and make unique
@@ -160,4 +172,5 @@ def create_contact_mesh(mesh, fmarker, dmarker, tags, R=0.2):
     new_dmarker = meshtags(new_mesh, tdim, new_cmarkers[:, 0],
                            new_cmarkers[:, 1])
 
+    timer.stop()
     return new_mesh, new_fmarker, new_dmarker
