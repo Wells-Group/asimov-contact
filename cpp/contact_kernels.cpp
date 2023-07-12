@@ -866,6 +866,7 @@ dolfinx_contact::generate_contact_kernel(
     std::array<double, 3> n_surf = {0, 0, 0};
     std::array<double, 3> n_old = {0, 0, 0};
     std::array<double, 3> Pt_u = {0, 0, 0};
+    std::array<double, 3> v_rel = {0, 0, 0};
     std::vector<double> epsnb(ndofs_cell * gdim, 0);
     mdspan2_t epsn(epsnb.data(), ndofs_cell, gdim);
     std::vector<double> trb(ndofs_cell * gdim, 0);
@@ -930,12 +931,20 @@ dolfinx_contact::generate_contact_kernel(
       for (std::size_t j = 0; j < bs; ++j)
         jump_un += -c[offset_u_opp + j] * n_surf[j];
 
+      for (std::size_t j = 0; j< bs; ++j){
+        v_rel[j] = c[kd.offsets(1) + q * gdim + j] / dt; // -(phi_0(X) - phi_0(Y))/dt
+        v_rel[j] -= (gap - jump_un) * n_old[j] /dt; //  n_0 g/dt
+        v_rel[j] += (c[kd.offsets(4) + gdim * q + j] - c[offset_u_opp + j]) / dt; // (u(X) - u(Y))/dt
+        v_rel[j] -= jump_un * n_surf[j] / dt; 
+      }
+      
+      double v_rel_n = 0;
+      for (std::size_t j = 0; j < bs; ++j)
+        v_rel_n += v_rel[j] * n_surf[j];
 
       for (std::size_t j = 0; j < bs; ++j)
       {
-        Pt_u[j] = (c[kd.offsets(4) + gdim * q + j] - c[offset_u_opp + j]
-                  - jump_un * n_surf[j])/dt;
-        Pt_u[j] += (c[kd.offsets(1) + q * gdim + j] + (jump_un-gap)*n_old[j])/dt;
+        Pt_u[j] = v_rel[j] - v_rel_n * n_surf[j];
         Pt_u[j] -= gamma * (sig_n_u[j] - sign_u * n_surf[j]);
       }
       const double w0 = weights[q] * detJ;
@@ -1058,6 +1067,7 @@ dolfinx_contact::generate_contact_kernel(
     std::array<double, 3> n_surf = {0, 0, 0};
     std::array<double, 3> n_old = {0, 0, 0};
     std::array<double, 3> Pt_u = {0, 0, 0};
+        std::array<double, 3> v_rel = {0, 0, 0};
     std::vector<double> epsnb(ndofs_cell * gdim);
     mdspan2_t epsn(epsnb.data(), ndofs_cell, gdim);
     std::vector<double> trb(ndofs_cell * gdim);
@@ -1118,12 +1128,23 @@ dolfinx_contact::generate_contact_kernel(
       std::size_t offset_u_opp = kd.offsets(6) + q * bs;
       for (std::size_t j = 0; j < bs; ++j)
         jump_un += -c[offset_u_opp + j] * n_surf[j];
+      for (std::size_t j = 0; j< bs; ++j){
+        v_rel[j] = c[kd.offsets(1) + q * gdim + j] / dt; // -(phi_0(X) - phi_0(Y))/dt
+        v_rel[j] -= (gap - jump_un) * n_old[j] /dt; //  n_0 g/dt
+        v_rel[j] += (c[kd.offsets(4) + gdim * q + j] - c[offset_u_opp + j]) / dt; // (u(X) - u(Y))/dt
+        v_rel[j] -= jump_un * n_surf[j] / dt; 
+      }
+      double v_rel_n = 0;
+      double n_dot_n = 0;
+      for (std::size_t j = 0; j < bs; ++j)
+        {
+          v_rel_n += v_rel[j] * n_surf[j];
+          n_dot_n += n_surf[j] * n_old[j];
+        }
 
       for (std::size_t j = 0; j < bs; ++j)
       {
-        Pt_u[j] = (c[kd.offsets(4) + gdim * q + j] - c[offset_u_opp + j]
-                  - jump_un * n_surf[j])/dt;
-        Pt_u[j] += (c[kd.offsets(1) + q * gdim + j] + (jump_un - gap)*n_old[j])/dt;
+        Pt_u[j] = v_rel[j] - v_rel_n * n_surf[j];
         Pt_u[j] -= gamma * (sig_n_u[j] - sign_u * n_surf[j]);
       }
       double Pn_u = R_plus((jump_un - gap) - gamma * sign_u);
@@ -1152,7 +1173,7 @@ dolfinx_contact::generate_contact_kernel(
             {
               // - w_n[X] J_ball * n_surf - gamma * J_ball * sgima_t(w)
               Pt_w[m] -= Pt_u_proj[n * bs + m]
-                         * (w_dot_nsurf * n_surf[n]/dt - w_dot_nsurf * n_old[n]/dt
+                         * (w_dot_nsurf * ((1-n_dot_n)*n_surf[n] + n_old[n])/dt 
                             + gamma * (sig_n(j, l, n) - sign_w * n_surf[n]));
             }
           }
@@ -1199,7 +1220,7 @@ dolfinx_contact::generate_contact_kernel(
                 {
                   Pt_w_opp[m] += Pt_u_proj[l * bs + m] * c[index]/dt;
                   for (std::size_t n = 0; n < bs; ++n)
-                    Pt_w_opp[m] -= Pt_u_proj[n * bs + m] * (wn_opp * n_surf[n] - wn_opp*n_old[n])/dt;
+                    Pt_w_opp[m] -= Pt_u_proj[n * bs + m] * ((1-n_dot_n)*n_surf[n] + n_old[n])*wn_opp/dt;
                 }
                 index = kd.offsets(3) + k * num_points * ndofs_cell * bs
                         + i * num_points * bs + q * bs;

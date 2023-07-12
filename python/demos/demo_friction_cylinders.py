@@ -243,7 +243,7 @@ if __name__ == "__main__":
                                             search_method=search_mode,
                                             quadrature_degree=args.q_degree,
                                             search_radius=np.float64(0.5),
-                                            coulomb=True, dt = 1./steps)
+                                            coulomb=True, dt = 1./(steps + 1))
 
     
 
