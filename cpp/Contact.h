@@ -219,6 +219,7 @@ public:
   pack_grad_test_functions(int pair, const std::span<const PetscScalar>& gap,
                            const std::span<const PetscScalar>& u_packed);
 
+  void update_distance_map(std::size_t pair, std::span<const double> gap, std::span<const double>n_y);
   /// Compute function on opposite surface at quadrature points of
   /// facets
   /// @param[in] pair - index of contact pair

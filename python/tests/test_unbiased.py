@@ -444,8 +444,8 @@ def create_contact_data(V, u, quadrature_degree, lmbda, mu, facets_cg, search, t
         n_1 = contact.pack_ny(1)
 
         # Concatenate all coeffs
-        coeff_0 = np.hstack([material_0, friction_0, h_0, gap_0, n_0, test_fn_0, u_0, grad_u_0, u_opp_0])
-        coeff_1 = np.hstack([material_1, friction_1, h_1, gap_1, n_1, test_fn_1, u_1, grad_u_1, u_opp_1])
+        coeff_0 = np.hstack([material_0, friction_0, h_0, gap_0, n_0, test_fn_0, u_0, grad_u_0, u_opp_0, np.zeros(n_0.shape)])
+        coeff_1 = np.hstack([material_1, friction_1, h_1, gap_1, n_1, test_fn_1, u_1, grad_u_1, u_opp_1, np.zeros(n_1.shape)])
 
     return contact, coeff_0, coeff_1
 
@@ -585,7 +585,7 @@ def test_contact_kernels(ct, gap, quadrature_degree, theta, formulation, search)
     A1 = contact.create_matrix(J_custom._cpp_object)
 
     # Pack constants
-    consts = np.array([gamma_scaled, theta])
+    consts = np.array([gamma_scaled, theta, 1.0])
 
     # Assemble  residual
     b1.zeroEntries()

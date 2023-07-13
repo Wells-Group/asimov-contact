@@ -53,7 +53,7 @@ if __name__ == "__main__":
     mu_func, lambda_func = lame_parameters(True)
     mu = mu_func(E, nu)
     lmbda = lambda_func(E, nu)
-    fric = 0.0
+    fric = 0.5
     angle = np.arctan(0.1)
 
     # Create mesh
@@ -153,7 +153,7 @@ if __name__ == "__main__":
         return vals
 
     # Solve contact problem using Nitsche's method
-    u, newton_its, krylov_iterations, solver_time, sig_n, contact = nitsche_unbiased(1, ufl_form=F,
+    u, newton_its, krylov_iterations, solver_time = nitsche_unbiased(1, ufl_form=F,
                                                                      u=u, mu=mu_dg, lmbda=lmbda_dg, rhs_fns=[t],
                                                                      markers=[domain_marker, facet_marker],
                                                                      contact_data=(
@@ -204,21 +204,21 @@ if __name__ == "__main__":
 
 
 
-    # Create quadrature points for integration on facets
-    x = []
-    num_facets = len(facet_marker.find(contact_bdy_1))
-    for i in range(num_facets):
-        qps = contact.qp_phys(0, i)
-        for pt in qps:
-            x.append(pt[0])
-    num_pts = len(x)
-    print(len(x))
+    # # Create quadrature points for integration on facets
+    # x = []
+    # num_facets = len(facet_marker.find(contact_bdy_1))
+    # for i in range(num_facets):
+    #     qps = contact.qp_phys(0, i)
+    #     for pt in qps:
+    #         x.append(pt[0])
+    # num_pts = len(x)
+    # print(len(x))
 
-    plt.figure()
-    plt.plot(x, sig_n[0][:, 0], '*')
-    plt.plot(x, sig_n[0][:, 1], 'x')
-    plt.xlim((5.97, 6.01))
-    plt.xlabel('x')
-    plt.ylabel('R')
+    # plt.figure()
+    # plt.plot(x, sig_n[0][:, 0], '*')
+    # plt.plot(x, sig_n[0][:, 1], 'x')
+    # plt.xlim((5.97, 6.01))
+    # plt.xlabel('x')
+    # plt.ylabel('R')
 
-    plt.savefig("reaction_force.png")
+    # plt.savefig("reaction_force.png")

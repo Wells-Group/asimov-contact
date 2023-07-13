@@ -904,8 +904,6 @@ dolfinx_contact::generate_contact_kernel(
       dist -= std::pow(gap, 2);
       dist = std::sqrt(dist);
       
-      if (dist > 0.3 * c[3])
-        continue;
 
       compute_normal_strain_basis(epsn, tr, K, dphi, n_surf,
                                   std::span(n_phys.data(), gdim), q_pos);
@@ -1102,8 +1100,6 @@ dolfinx_contact::generate_contact_kernel(
       dist -= std::pow(gap, 2);
       dist = std::sqrt(dist);
       
-      if (dist > 0.3 * c[3])
-        continue;
 
       compute_normal_strain_basis(epsn, tr, K, dphi, n_surf,
                                   std::span(n_phys.data(), gdim), q_pos);

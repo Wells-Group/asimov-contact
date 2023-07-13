@@ -720,6 +720,46 @@ dolfinx_contact::Contact::pack_test_functions(int pair)
   return {std::move(cb), cstride};
 }
 //------------------------------------------------------------------------------------------------
+void dolfinx_contact::Contact::update_distance_map(std::size_t pair, std::span<const double> gap, std::span<const double>n_y)
+{
+  auto [quadrature_mt, candidate_mt] = _contact_pairs[pair];
+  const std::size_t num_facets = _local_facets[quadrature_mt];
+  const std::size_t num_q_points
+      = _quadrature_rule->offset()[1] - _quadrature_rule->offset()[0];
+  const std::size_t gdim = _V->mesh()->geometry().dim();
+  double tol = 1e-2;
+  std::shared_ptr<const dolfinx::graph::AdjacencyList<std::int32_t>>
+      candidate_map = _facet_maps[pair];
+  std::vector<std::int32_t> offsets(candidate_map->offsets());
+  std::vector<std::int32_t> data(candidate_map->array());
+  
+  for (std::size_t f = 0; f < num_facets; ++f)
+  {
+    double max_dot = 0.0;
+    for (std::size_t q = 0; q < num_q_points; ++q)
+    {
+      double dot = 0;
+      double norm = 0;
+      for (std::size_t i = 0; i < gdim; ++i)
+      {
+        std::size_t index = f * num_q_points * gdim + q * gdim + i;
+        dot += gap[index] * n_y[index];
+        norm += gap[index] * gap[index];
+      }
+      dot = std::abs(dot) / std::sqrt(norm);
+      if (dot > max_dot) max_dot = dot;
+    }
+    if (max_dot < (1 - tol))
+    {
+      for (std::size_t q = 0; q < num_q_points; ++q)
+        data[offsets[f] + q] = -1;
+    }  
+  }
+  auto new_map = dolfinx::graph::AdjacencyList<std::int32_t>(data,
+                                                            offsets);
+  _facet_maps[pair] = std::make_shared<dolfinx::graph::AdjacencyList<std::int32_t>>(new_map);
+}
+//------------------------------------------------------------------------------------------------
 std::pair<std::vector<PetscScalar>, int>
 dolfinx_contact::Contact::pack_u_contact(
     int pair, std::shared_ptr<dolfinx::fem::Function<PetscScalar>> u)

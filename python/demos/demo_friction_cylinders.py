@@ -158,7 +158,7 @@ if __name__ == "__main__":
     # body forces
     F -= ufl.inner(t, v) * ds(top)
 
-    problem_parameters = {"gamma": np.float64(E * 1000), "theta": np.float64(1), "friction": np.float(0.3)}
+    problem_parameters = {"gamma": np.float64(E * 100), "theta": np.float64(-1), "friction": np.float(0.3)}
 
     top_cells = domain_marker.find(1)
     # create initial guess
@@ -223,6 +223,12 @@ if __name__ == "__main__":
     #     "ksp_norm_type": "unpreconditioned"
     # }
     petsc_options = {"ksp_type": "preonly", "pc_type": "lu"}
+    newton_options = {"relaxation_parameter": 0.7,
+                    "atol": newton_tol,
+                    "rtol": newton_tol,
+                    "convergence_criterion": "residual",
+                    "max_it": 50,
+                    "error_on_nonconvergence": True}
     symmetry_nodes = locate_entities(mesh, 0, lambda x: np.logical_and(np.isclose(x[0], 0), np.isclose(x[1], -R)))
     dofs_symmetry = locate_dofs_topological(V.sub(0), 0, symmetry_nodes)
     dofs_bottom = locate_dofs_topological(V, 1, facet_marker.find(bottom))
@@ -243,7 +249,7 @@ if __name__ == "__main__":
                                             search_method=search_mode,
                                             quadrature_degree=args.q_degree,
                                             search_radius=np.float64(0.5),
-                                            coulomb=True, dt = 1./(steps + 1))
+                                            coulomb=True, dt = 1./(steps + 2))
 
     
 

@@ -84,6 +84,7 @@ def setup_newton_solver(F_custom: fem.forms.Form, J_custom: fem.forms.Form,
                 normals.append(-contact.pack_nx(i))
             else:
                 normals.append(contact.pack_ny(i))
+            contact.update_distance_map(i, gaps[i], normals[i])
             test_fns.append(contact.pack_test_functions(i))
 
     # Concatenate all coeffs
@@ -388,7 +389,7 @@ def nitsche_unbiased(steps: int, ufl_form: ufl.Form, u: fem.Function, mu: fem.Fu
     contact.set_search_radius(search_radius)
 
     # pack constants
-    consts = np.array([gamma, theta], dtype=np.float64)
+    consts = np.array([gamma, theta, 1.0], dtype=np.float64)
 
     # interpolate friction coefficient
     fric_coeff = fem.Function(V2)
