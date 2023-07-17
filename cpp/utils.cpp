@@ -1080,3 +1080,88 @@ dolfinx_contact::compute_distance_map(
 
   throw std::runtime_error("Unsupported contact mode");
 }
+MatNullSpace dolfinx_contact::build_nullspace_multibody (const dolfinx::fem::FunctionSpace<double>& V, 
+const dolfinx::mesh::MeshTags<std::int32_t> mt, std::vector<std::int32_t> tags)
+{
+  std::size_t gdim = V.geometry().dim();
+  std::size_t dim = (gdim == 2) ? 3 : 6;
+  const std::size_t ndofs_cell = V.dofmap()->element_dof_layout().num_dofs();
+
+  // Create vectors for nullspace basis
+  auto map = V.dofmap()->index_map;
+  int bs = V.dofmap()->index_map_bs();
+  std::vector<la::Vector<PetscScalar>> basis(dim * tags.size(), la::Vector<PetscScalar>(map, bs));
+
+  for (std::size_t j = 0; j < tags.size(); ++k)
+  {
+    std::vector<std::int32_t> cells = mt.find(tags[j]);
+    std::vector<std::int32_t> dofs(cells.size() * ndofs_cell);
+    for (std::size_t c = 0; c < cells.size(); ++c)
+      {
+        std::vector<int32_t> cell_dofs = V.dofmap().cell_dofs(cells[c]);
+        std::copy_n(cell_dofs.cbegin(), ndofs_cell, dofs.begin() + c * ndofs_cell);
+      }
+  // Remove duplicates
+  dolfinx::radix_sort(std::span<std::int32_t>(dofs));
+  linked_cells.erase(std::unique(dofs.begin(), dofs.end()),
+                     dofs.end());
+
+  // Translations
+  for (std::size_t k = 0; k < gdim; ++k)
+  {
+    std::span<PetscScalar> x = basis[j * dim + k].mutable_array();
+    for (auto dof : dofs)
+      x[gdim * dof + k] = 1.0;
+  }
+
+  // Rotations
+  auto x1 = basis[j * dim + gdim].mutable_array();
+
+  const std::vector<double> x = V.tabulate_dof_coordinates(false);
+  if (gdim == 2)
+  {
+    for (auto dof : dofs)
+    {
+      std::span<const double, 3> xd(x.data() + 3 * dof, 3);
+      x1[gdim * dof] = -xd[1];
+      x1[gdim * dof + 1] = xd[0];
+    }
+    
+  }
+  else{
+    auto x2 = basis[j * dim + 4].mutable_array();
+    auto x3 = basis[j * dim + 5].mutable_array();
+    for (auto dof : dofs)
+    {
+      std::span<const double, 3> xd(x.data() + 3 * dof, 3);
+      x1[gdim * dof] = -xd[1];
+      x1[gdim * dof + 1] = xd[0];
+
+      x2[gdim * dof] = xd[2];
+      x2[gdim * dof + 2] = -xd[0];
+
+      x3[gdim * dof + 2] = xd[1];
+      x3[gdim * dof + 1] = -xd[2];
+    }
+  }
+  }
+
+  // Orthonormalize basis
+  la::orthonormalize(std::vector<std::reference_wrapper<la::Vector<PetscScalar>>>(basis.begin(), basis.end()));
+  if (!la::is_orthonormal(std::vector<std::reference_wrapper<const la::Vector<PetscScalar>>>(basis.begin(), basis.end())))
+  {
+    throw std::runtime_error("Space not orthonormal");
+  }
+
+  // Build PETSc nullspace object
+  std::int32_t length = bs * map->size_local();
+  std::vector<std::span<const T>> basis_local;
+  std::transform(basis.cbegin(), basis.cend(), std::back_inserter(basis_local),
+                 [length](auto& x)
+                 { return std::span(x.array().data(), length); });
+  MPI_Comm comm = V.mesh()->comm();
+  std::vector<Vec> v = la::petsc::create_vectors(comm, basis_local);
+  MatNullSpace ns = la::petsc::create_nullspace(comm, v);
+  std::for_each(v.begin(), v.end(), [](auto v) { VecDestroy(&v); });
+  return ns;
+}

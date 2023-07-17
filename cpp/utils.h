@@ -811,4 +811,7 @@ compute_raytracing_map(const dolfinx::mesh::Mesh<double>& quadrature_mesh,
           std::array<std::size_t, 2>{reference_points.size() / tdim, tdim}};
 }
 
+MatNullSpace build_nullspace_multibody (const dolfinx::fem::FunctionSpace<double>& V, 
+const dolfinx::mesh::MeshTags<std::int32_t> mt, std::vector<std::int32_t> tags);
+
 } // namespace dolfinx_contact
