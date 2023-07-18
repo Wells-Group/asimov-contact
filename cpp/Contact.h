@@ -35,6 +35,8 @@ namespace dolfinx_contact
 class Contact
 {
 public:
+  // empty constructor
+  Contact() = default;
   /// Constructor
   /// @param[in] markers List of meshtags defining the contact surfaces
   /// @param[in] surfaces Adjacency list. Links of i contains meshtag values

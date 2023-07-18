@@ -1083,27 +1083,27 @@ dolfinx_contact::compute_distance_map(
 MatNullSpace dolfinx_contact::build_nullspace_multibody (const dolfinx::fem::FunctionSpace<double>& V, 
 const dolfinx::mesh::MeshTags<std::int32_t> mt, std::vector<std::int32_t> tags)
 {
-  std::size_t gdim = V.geometry().dim();
+  std::size_t gdim = V.mesh()->geometry().dim();
   std::size_t dim = (gdim == 2) ? 3 : 6;
   const std::size_t ndofs_cell = V.dofmap()->element_dof_layout().num_dofs();
 
   // Create vectors for nullspace basis
   auto map = V.dofmap()->index_map;
   int bs = V.dofmap()->index_map_bs();
-  std::vector<la::Vector<PetscScalar>> basis(dim * tags.size(), la::Vector<PetscScalar>(map, bs));
+  std::vector<dolfinx::la::Vector<PetscScalar>> basis(dim * tags.size(), la::Vector<PetscScalar>(map, bs));
 
-  for (std::size_t j = 0; j < tags.size(); ++k)
+  for (std::size_t j = 0; j < tags.size(); ++j)
   {
     std::vector<std::int32_t> cells = mt.find(tags[j]);
     std::vector<std::int32_t> dofs(cells.size() * ndofs_cell);
     for (std::size_t c = 0; c < cells.size(); ++c)
       {
-        std::vector<int32_t> cell_dofs = V.dofmap().cell_dofs(cells[c]);
-        std::copy_n(cell_dofs.cbegin(), ndofs_cell, dofs.begin() + c * ndofs_cell);
+        std::span<const int32_t> cell_dofs = V.dofmap()->cell_dofs(cells[c]);
+        std::copy_n(cell_dofs.begin(), ndofs_cell, dofs.begin() + c * ndofs_cell);
       }
   // Remove duplicates
   dolfinx::radix_sort(std::span<std::int32_t>(dofs));
-  linked_cells.erase(std::unique(dofs.begin(), dofs.end()),
+  dofs.erase(std::unique(dofs.begin(), dofs.end()),
                      dofs.end());
 
   // Translations
@@ -1147,15 +1147,15 @@ const dolfinx::mesh::MeshTags<std::int32_t> mt, std::vector<std::int32_t> tags)
   }
 
   // Orthonormalize basis
-  la::orthonormalize(std::vector<std::reference_wrapper<la::Vector<PetscScalar>>>(basis.begin(), basis.end()));
-  if (!la::is_orthonormal(std::vector<std::reference_wrapper<const la::Vector<PetscScalar>>>(basis.begin(), basis.end())))
+  dolfinx::la::orthonormalize<dolfinx::la::Vector<PetscScalar>>(std::vector<std::reference_wrapper<dolfinx::la::Vector<PetscScalar>>>(basis.begin(), basis.end()));
+  if (!dolfinx::la::is_orthonormal(std::vector<std::reference_wrapper<const dolfinx::la::Vector<PetscScalar>>>(basis.begin(), basis.end())))
   {
     throw std::runtime_error("Space not orthonormal");
   }
 
   // Build PETSc nullspace object
   std::int32_t length = bs * map->size_local();
-  std::vector<std::span<const T>> basis_local;
+  std::vector<std::span<const PetscScalar>> basis_local;
   std::transform(basis.cbegin(), basis.cend(), std::back_inserter(basis_local),
                  [length](auto& x)
                  { return std::span(x.array().data(), length); });

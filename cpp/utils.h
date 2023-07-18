@@ -23,7 +23,12 @@
 #include <dolfinx/geometry/BoundingBoxTree.h>
 #include <dolfinx/geometry/gjk.h>
 #include <dolfinx/geometry/utils.h>
+#include <dolfinx/la/Vector.h>
+#include <dolfinx/la/petsc.h>
+#include <dolfinx/la/utils.h>
 #include <dolfinx/mesh/Mesh.h>
+#include <dolfinx/mesh/MeshTags.h>
+
 namespace dolfinx_contact
 {
 
