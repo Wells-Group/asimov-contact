@@ -115,6 +115,10 @@ def nitsche_meshtie(lhs: ufl.Form,
     with _common.Timer("~Contact " + timing_str + ": Init"):
         contact = dolfinx_contact.cpp.Contact(markers_cpp, surfaces, surface_pairs,
                                               V._cpp_object, quadrature_degree=quadrature_degree)
+        meshtieclass = dolfinx_contact.cpp.MeshTie(markers_cpp, surfaces, surface_pairs,
+                                              V._cpp_object, quadrature_degree=quadrature_degree)
+    
+    print("class created")
     with _common.Timer("~Contact " + timing_str + ": Distance maps"):
         for i in range(len(surface_pairs)):
             contact.create_distance_map(i)
@@ -134,39 +138,11 @@ def nitsche_meshtie(lhs: ufl.Form,
         for pair in surface_pairs:
             entities.append(contact.active_entities(pair[0]))
 
-    material = []
-    with _common.Timer("~Contact " + timing_str + ": Pack coeffs (mu, lmbda"):
-        for i in range(len(surface_pairs)):
-            material.append(np.hstack([dolfinx_contact.cpp.pack_coefficient_quadrature(
-                mu2._cpp_object, 0, entities[i]),
-                dolfinx_contact.cpp.pack_coefficient_quadrature(
-                lmbda2._cpp_object, 0, entities[i])]))
-
-    # Pack celldiameter on each surface
-    h_packed = []
-    with _common.Timer("~Contact " + timing_str + ": Compute and pack celldiameter"):
-        surface_cells = np.unique(np.hstack([entities[i][:, 0] for i in range(len(surface_pairs))]))
-        h_int = _fem.Function(V2)
-        expr = _fem.Expression(h, V2.element.interpolation_points())
-        h_int.interpolate(expr, surface_cells)
-        for i in range(len(surface_pairs)):
-            h_packed.append(dolfinx_contact.cpp.pack_coefficient_quadrature(
-                h_int._cpp_object, 0, entities[i]))
-
-    # Pack gap, normals and test functions on each surface
-    gaps = []
-    test_fns = []
-    grad_test_fns = []
-    with _common.Timer("~Contact " + timing_str + ": Pack gap, normals, testfunction"):
-        for i in range(len(surface_pairs)):
-            gaps.append(contact.pack_gap(i))
-            test_fns.append(contact.pack_test_functions(i))
-            grad_test_fns.append(contact.pack_grad_test_functions(i, gaps[i], np.zeros(gaps[i].shape)))
-
-    # Concatenate all coeffs
-    coeffs_const = []
-    for i in range(len(surface_pairs)):
-        coeffs_const.append(np.hstack([material[i], h_packed[i], test_fns[i], grad_test_fns[i]]))
+    surface_cells = np.unique(np.hstack([entities[i][:, 0] for i in range(len(surface_pairs))]))
+    h_int = _fem.Function(V2)
+    expr = _fem.Expression(h, V2.element.interpolation_points())
+    h_int.interpolate(expr, surface_cells)
+    meshtieclass.pack_coefficients(u._cpp_object, lmbda2._cpp_object, mu2._cpp_object, h_int._cpp_object, gamma, theta)
 
     # Generate Jacobian data structures
     J_custom = _fem.form(lhs, form_compiler_options=form_compiler_options, jit_options=jit_options)
@@ -182,24 +158,10 @@ def nitsche_meshtie(lhs: ufl.Form,
     with _common.Timer("~Contact " + timing_str + ": Create vector"):
         b = create_vector(F_custom)
 
-    # Compute u dependent coeficcients
-    u_candidate = []
-    grad_u_candidate = []
     coeffs = []
-    with _common.Timer("~~Contact " + timing_str + ": Pack u contact"):
-        for i in range(len(surface_pairs)):
-            u_candidate.append(contact.pack_u_contact(i, u._cpp_object))
-            grad_u_candidate.append(contact.pack_grad_u_contact(i, u._cpp_object, gaps[i], np.zeros(gaps[i].shape)))
-    u_puppet = []
-    grad_u_puppet = []
-    with _common.Timer("~~Contact " + timing_str + ": Pack u"):
-        for i in range(len(surface_pairs)):
-            u_puppet.append(dolfinx_contact.cpp.pack_coefficient_quadrature(
-                u._cpp_object, quadrature_degree, entities[i]))
-            grad_u_puppet.append(dolfinx_contact.cpp.pack_gradient_quadrature(
-                u._cpp_object, quadrature_degree, entities[i]))
     for i in range(len(surface_pairs)):
-        coeffs.append(np.hstack([coeffs_const[i], u_puppet[i], grad_u_puppet[i], u_candidate[i], grad_u_candidate[i]]))
+        coeffs.append(meshtieclass.coeffs(i))
+
 
     # Assemble residual vector
     b.zeroEntries()
