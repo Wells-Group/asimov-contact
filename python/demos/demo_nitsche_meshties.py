@@ -8,19 +8,22 @@ import sys
 import numpy as np
 import ufl
 from dolfinx import log
-from dolfinx.common import TimingType, list_timings
-from dolfinx.fem import dirichletbc, Constant, Function, locate_dofs_topological, VectorFunctionSpace
+from dolfinx.common import TimingType, list_timings, Timer, timing
+from dolfinx.fem import dirichletbc, Constant, form, Function, FunctionSpace, locate_dofs_topological, VectorFunctionSpace
+from dolfinx.fem.petsc import apply_lifting, assemble_vector, assemble_matrix, create_vector, set_bc
 from dolfinx.graph import create_adjacencylist
 from dolfinx.io import XDMFFile
 from dolfinx.mesh import locate_entities_boundary, meshtags
 from mpi4py import MPI
 from petsc4py.PETSc import ScalarType
+from petsc4py import PETSc
 
-from dolfinx_contact.helpers import lame_parameters, epsilon, sigma_func
+from dolfinx_contact.helpers import lame_parameters, epsilon, sigma_func, rigid_motions_nullspace_subdomains
 from dolfinx_contact.meshing import (convert_mesh,
                                      create_box_mesh_3D)
-from dolfinx_contact.meshtie import nitsche_meshtie
 from dolfinx_contact.parallel_mesh_ghosting import create_contact_mesh
+
+from dolfinx_contact.cpp import MeshTie
 
 if __name__ == "__main__":
     desc = "Nitsche's method for two elastic bodies using custom assemblers"
@@ -119,14 +122,19 @@ if __name__ == "__main__":
     E = args.E
     nu = args.nu
     mu_func, lambda_func = lame_parameters(False)
-    mu = mu_func(E, nu)
-    lmbda = lambda_func(E, nu)
+    V2 = FunctionSpace(mesh, ("DG", 0))
+    lmbda = Function(V2)
+    lmbda_val = lambda_func(E, nu)
+    lmbda.interpolate(lambda x: np.full((1, x.shape[1]), lmbda_val))
+    mu = Function(V2)
+    mu_val = mu_func(E, nu)
+    mu.interpolate(lambda x: np.full((1, x.shape[1]), mu_val))
     sigma = sigma_func(mu, lmbda)
 
-    # dictionary with problem parameters
+    # Nitsche parameters
     gamma = args.gamma
     theta = args.theta
-    problem_parameters = {"mu": mu, "lambda": lmbda, "gamma": E * gamma, "theta": theta}
+
 
     J = ufl.inner(sigma(w), epsilon(v)) * dx
 
@@ -150,6 +158,13 @@ if __name__ == "__main__":
     # body forces
     f = Constant(mesh, ScalarType((0.0, 0.5, 0.0)))
     F += ufl.inner(f, v) * dx
+
+
+    # compile forms
+    cffi_options = ["-Ofast", "-march=native"]
+    jit_options = {"cffi_extra_compile_args": cffi_options, "cffi_libraries": ["m"]}
+    F = form(F, jit_options=jit_options)
+    J = form(J, jit_options=jit_options)
 
     # Solver options
     ksp_tol = 1e-10
@@ -179,11 +194,70 @@ if __name__ == "__main__":
     log.set_log_level(log.LogLevel.OFF)
     solver_outfile = args.outfile if args.ksp else None
 
-    # Solve contact problem using Nitsche's method
-    u, krylov_iterations, solver_time, _ = nitsche_meshtie(lhs=J, rhs=F, u=u, markers=[domain_marker, facet_marker],
-                                                           surface_data=(surfaces, contact),
-                                                           bcs=bcs, problem_parameters=problem_parameters,
-                                                           petsc_options=petsc_options)
+    # initialise meshties
+    meshties = MeshTie([facet_marker._cpp_object], surfaces, contact,
+                                        V._cpp_object, quadrature_degree=5)
+    meshties.generate_meshtie_data(u._cpp_object, lmbda._cpp_object, mu._cpp_object, gamma, theta)
+
+    # create matrix, vector
+    A = meshties.create_matrix(J._cpp_object)
+    b = create_vector(F)
+
+    # Assemble right hand side
+    b.zeroEntries()
+    b.ghostUpdate(addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD)
+    meshties.assemble_vector(b)
+    assemble_vector(b, F)
+
+    # Apply boundary condition and scatter reverse
+    x = u.vector
+    if len(bcs) > 0:
+        apply_lifting(b, [J], bcs=[bcs], x0=[x], scale=-1.0)
+    b.ghostUpdate(addv=PETSc.InsertMode.ADD, mode=PETSc.ScatterMode.REVERSE)
+    if len(bcs) > 0:
+        set_bc(b, bcs, x, -1.0)
+
+    # Assemble matrix
+    A.zeroEntries()
+    meshties.assemble_matrix(A, [])
+    assemble_matrix(A, J)
+    A.assemble()
+
+    # Set rigid motion nullspace
+    null_space = rigid_motions_nullspace_subdomains(V, domain_marker, np.unique(domain_marker.values),
+                                                    num_domains=1)
+    A.setNearNullSpace(null_space)
+
+    # Create PETSc Krylov solver and turn convergence monitoring on
+    opts = PETSc.Options()
+    for key in petsc_options:
+        opts[key] = petsc_options[key]
+    solver = PETSc.KSP().create(mesh.comm)
+    solver.setFromOptions()
+
+    # Set matrix operator
+    solver.setOperators(A)
+
+
+    uh = Function(V)
+
+    dofs_global = V.dofmap.index_map_bs * V.dofmap.index_map.size_global
+    log.set_log_level(log.LogLevel.OFF)
+    # Set a monitor, solve linear system, and display the solver
+    # configuration
+    solver.setMonitor(lambda _, its, rnorm: print(f"Iteration: {its}, rel. residual: {rnorm}"))
+    timing_str = "~Contact : Krylov Solver"
+    with Timer(timing_str):
+        solver.solve(b, uh.vector)
+
+    # Scatter forward the solution vector to update ghost values
+    uh.x.scatter_forward()
+
+    solver_time = timing(timing_str)[1]
+    print(f"{dofs_global}\n",
+          f"Number of Krylov iterations {solver.getIterationNumber()}\n",
+          f"Solver time {solver_time}", flush=True)
+
 
     # Reset mesh to initial state and write accumulated solution
     with XDMFFile(mesh.comm, "results/u_meshtie.xdmf", "w") as xdmf:
@@ -201,7 +275,7 @@ if __name__ == "__main__":
     print(f"num_dofs: {u.function_space.dofmap.index_map_bs*u.function_space.dofmap.index_map.size_global}"
           + f", {mesh.topology.cell_types[0]}", file=outfile)
     print(f"Krylov solver {solver_time}", file=outfile)
-    print(f"Krylov iterations {krylov_iterations}", file=outfile)
+    print(f"Krylov iterations {solver.getIterationNumber()}", file=outfile)
     print("-" * 25, file=outfile)
 
     if args.outfile is not None:
