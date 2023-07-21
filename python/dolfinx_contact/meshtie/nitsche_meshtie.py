@@ -11,6 +11,7 @@ import dolfinx.log as _log
 import numpy as np
 import ufl
 from dolfinx.cpp.graph import AdjacencyList_int32
+import dolfinx.cpp as cpp
 from dolfinx.fem.petsc import create_vector
 from dolfinx.mesh import MeshTags
 from petsc4py import PETSc as _PETSc
@@ -18,8 +19,6 @@ from petsc4py import PETSc as _PETSc
 import dolfinx_contact
 import dolfinx_contact.cpp
 from dolfinx_contact.helpers import rigid_motions_nullspace_subdomains
-
-kt = dolfinx_contact.cpp.Kernel
 
 
 def nitsche_meshtie(lhs: ufl.Form,
@@ -113,17 +112,8 @@ def nitsche_meshtie(lhs: ufl.Form,
     # create contact class
     markers_cpp = [marker._cpp_object for marker in markers[1:]]
     with _common.Timer("~Contact " + timing_str + ": Init"):
-        contact = dolfinx_contact.cpp.Contact(markers_cpp, surfaces, surface_pairs,
-                                              V._cpp_object, quadrature_degree=quadrature_degree)
         meshtieclass = dolfinx_contact.cpp.MeshTie(markers_cpp, surfaces, surface_pairs,
                                               V._cpp_object, quadrature_degree=quadrature_degree)
-    
-    print("class created")
-    with _common.Timer("~Contact " + timing_str + ": Distance maps"):
-        for i in range(len(surface_pairs)):
-            contact.create_distance_map(i)
-    # pack constants
-    consts = np.array([gamma, theta])
 
     # Pack material parameters mu and lambda on each contact surface
     with _common.Timer("~Contact " + timing_str + ": Interpolate coeffs (mu, lmbda)"):
@@ -133,48 +123,26 @@ def nitsche_meshtie(lhs: ufl.Form,
         mu2 = _fem.Function(V2)
         mu2.interpolate(lambda x: np.full((1, x.shape[1]), mu))
 
-    entities = []
-    with _common.Timer("~Contact " + timing_str + ": Compute active entities"):
-        for pair in surface_pairs:
-            entities.append(contact.active_entities(pair[0]))
-
-    surface_cells = np.unique(np.hstack([entities[i][:, 0] for i in range(len(surface_pairs))]))
-    h_int = _fem.Function(V2)
-    expr = _fem.Expression(h, V2.element.interpolation_points())
-    h_int.interpolate(expr, surface_cells)
-    meshtieclass.pack_coefficients(u._cpp_object, lmbda2._cpp_object, mu2._cpp_object, h_int._cpp_object, gamma, theta)
+    meshtieclass.generate_meshtie_data(u._cpp_object, lmbda2._cpp_object, mu2._cpp_object, gamma, theta)
 
     # Generate Jacobian data structures
     J_custom = _fem.form(lhs, form_compiler_options=form_compiler_options, jit_options=jit_options)
-    with _common.Timer("~Contact " + timing_str + ": Generate Jacobian kernel"):
-        kernel_jac = contact.generate_kernel(kt.MeshTieJac)
     with _common.Timer("~Contact " + timing_str + ": Create matrix"):
-        A = contact.create_matrix(J_custom._cpp_object)
+        A = meshtieclass.create_matrix(J_custom._cpp_object)
 
     # Generate residual data structures
     F_custom = _fem.form(rhs, form_compiler_options=form_compiler_options, jit_options=jit_options)
-    with _common.Timer("~Contact " + timing_str + ": Generate residual kernel"):
-        kernel_rhs = contact.generate_kernel(kt.MeshTieRhs)
     with _common.Timer("~Contact " + timing_str + ": Create vector"):
         b = create_vector(F_custom)
-
-    coeffs = []
-    for i in range(len(surface_pairs)):
-        coeffs.append(meshtieclass.coeffs(i))
 
 
     # Assemble residual vector
     b.zeroEntries()
     b.ghostUpdate(addv=_PETSc.InsertMode.INSERT, mode=_PETSc.ScatterMode.FORWARD)
     with _common.Timer("~~Contact " + timing_str + ": Contact contributions (in assemble vector)"):
-        for i in range(len(surface_pairs)):
-            contact.assemble_vector(b, i, kernel_rhs, coeffs[i], consts)
-    with _common.Timer("~~Contact " + timing_str + ": Pack coefficients ufl"):
-        coeffs_ufl = _cppfem.pack_coefficients(F_custom._cpp_object)
-    with _common.Timer("~~Contact " + timing_str + ": Pack constants ufl"):
-        consts_ufl = _cppfem.pack_constants(F_custom._cpp_object)
+        meshtieclass.assemble_vector(b)
     with _common.Timer("~~Contact " + timing_str + ": Standard contributions (in assemble vector)"):
-        _fem.petsc.assemble_vector(b, F_custom, constants=consts_ufl, coeffs=coeffs_ufl)  # type: ignore
+        _fem.petsc.assemble_vector(b, F_custom)  # type: ignore
         b.ghostUpdate(addv=_PETSc.InsertMode.ADD, mode=_PETSc.ScatterMode.REVERSE)
     # Apply boundary condition
     if len(bcs) > 0:
@@ -186,14 +154,10 @@ def nitsche_meshtie(lhs: ufl.Form,
     #  Compute Jacobi Matrix
     A.zeroEntries()
     with _common.Timer("~~Contact " + timing_str + ": Contact contributions (in assemble matrix)"):
-        for i in range(len(surface_pairs)):
-            contact.assemble_matrix(A, [], i, kernel_jac, coeffs[i], consts)
-    with _common.Timer("~~Contact " + timing_str + ": Pack coefficients ufl"):
-        coeffs_ufl = _cppfem.pack_coefficients(J_custom._cpp_object)
-    with _common.Timer("~~Contact " + timing_str + ": Pack constants ufl"):
-        consts_ufl = _cppfem.pack_constants(J_custom._cpp_object)
+        meshtieclass.assemble_matrix(A, [])
     with _common.Timer("~~Contact " + timing_str + ": Standard contributions (in assemble matrix)"):
-        _fem.petsc.assemble_matrix(A, J_custom, constants=consts_ufl, coeffs=coeffs_ufl, bcs=bcs)  # type: ignore
+        _fem.petsc.assemble_matrix(A, J_custom)  # type: ignore
+
     A.assemble()
 
     # Set rigid motion nullspace

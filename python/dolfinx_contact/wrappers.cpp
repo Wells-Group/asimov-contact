@@ -364,7 +364,29 @@ PYBIND11_MODULE(cpp, m)
              std::array<std::size_t, 2> shape_out = {coeffs.size()/cstride, cstride};
              return dolfinx_wrappers::as_pyarray(std::move(coeffs), shape_out);
            }, "Get packed coefficients")
-        .def("pack_coefficients", &dolfinx_contact::MeshTie::pack_coefficients);
+        .def("generate_meshtie_data", &dolfinx_contact::MeshTie::generate_meshtie_data)
+        .def("assemble_matrix",
+           [](dolfinx_contact::MeshTie& self, Mat A,
+              const std::vector<std::shared_ptr<
+                  const dolfinx::fem::DirichletBC<PetscScalar>>>& bcs)
+           {
+             self.assemble_matrix(
+                 dolfinx::la::petsc::Matrix::set_block_fn(A, ADD_VALUES), bcs);
+           })
+      .def("assemble_vector",
+           [](dolfinx_contact::MeshTie& self,
+              py::array_t<PetscScalar, py::array::c_style>& b)
+           {
+             self.assemble_vector(
+                 std::span(b.mutable_data(), b.size()));
+           })
+        .def(
+          "create_matrix",
+          [](dolfinx_contact::MeshTie& self, dolfinx::fem::Form<PetscScalar>& a,
+             std::string type) { return self.create_petsc_matrix(a, type); },
+          py::return_value_policy::take_ownership, py::arg("a"),
+          py::arg("type") = std::string(),
+          "Create a PETSc Mat for two-sided contact.");
   m.def(
       "pack_coefficient_quadrature",
       [](std::shared_ptr<const dolfinx::fem::Function<PetscScalar>> coeff,
