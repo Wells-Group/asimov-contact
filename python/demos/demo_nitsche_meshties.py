@@ -12,7 +12,6 @@ from dolfinx.common import TimingType, list_timings, Timer, timing
 from dolfinx.fem import (dirichletbc, Constant, form, Function, FunctionSpace,
                          locate_dofs_topological, VectorFunctionSpace)
 from dolfinx.fem.petsc import apply_lifting, assemble_vector, assemble_matrix, create_vector, set_bc
-from dolfinx.fem import petsc
 from dolfinx.graph import create_adjacencylist
 from dolfinx.io import XDMFFile
 from dolfinx.mesh import locate_entities_boundary, meshtags
@@ -217,7 +216,7 @@ if __name__ == "__main__":
     # Assemble matrix
     A.zeroEntries()
     meshties.assemble_matrix(A)
-    assemble_matrix(A, J, bcs=bcs) # type: ignore
+    assemble_matrix(A, J, bcs=bcs)  # type: ignore
     A.assemble()
 
     # Set rigid motion nullspace
