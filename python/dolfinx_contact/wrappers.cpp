@@ -227,15 +227,13 @@ PYBIND11_MODULE(cpp, m)
 
       .def("assemble_matrix",
            [](dolfinx_contact::Contact& self, Mat A,
-              const std::vector<std::shared_ptr<
-                  const dolfinx::fem::DirichletBC<PetscScalar>>>& bcs,
               int origin_meshtag, contact_wrappers::KernelWrapper& kernel,
               const py::array_t<PetscScalar, py::array::c_style>& coeffs,
               const py::array_t<PetscScalar, py::array::c_style>& constants)
            {
              auto ker = kernel.get();
              self.assemble_matrix(
-                 dolfinx::la::petsc::Matrix::set_block_fn(A, ADD_VALUES), bcs,
+                 dolfinx::la::petsc::Matrix::set_block_fn(A, ADD_VALUES),
                  origin_meshtag, ker,
                  std::span<const PetscScalar>(coeffs.data(), coeffs.size()),
                  coeffs.shape(1),
@@ -366,12 +364,10 @@ PYBIND11_MODULE(cpp, m)
            }, "Get packed coefficients")
         .def("generate_meshtie_data", &dolfinx_contact::MeshTie::generate_meshtie_data)
         .def("assemble_matrix",
-           [](dolfinx_contact::MeshTie& self, Mat A,
-              const std::vector<std::shared_ptr<
-                  const dolfinx::fem::DirichletBC<PetscScalar>>>& bcs)
+           [](dolfinx_contact::MeshTie& self, Mat A)
            {
              self.assemble_matrix(
-                 dolfinx::la::petsc::Matrix::set_block_fn(A, ADD_VALUES), bcs);
+                 dolfinx::la::petsc::Matrix::set_block_fn(A, ADD_VALUES));
            })
       .def("assemble_vector",
            [](dolfinx_contact::MeshTie& self,

@@ -9,8 +9,10 @@ import numpy as np
 import ufl
 from dolfinx import log
 from dolfinx.common import TimingType, list_timings, Timer, timing
-from dolfinx.fem import dirichletbc, Constant, form, Function, FunctionSpace, locate_dofs_topological, VectorFunctionSpace
+from dolfinx.fem import (dirichletbc, Constant, form, Function, FunctionSpace,
+                         locate_dofs_topological, VectorFunctionSpace)
 from dolfinx.fem.petsc import apply_lifting, assemble_vector, assemble_matrix, create_vector, set_bc
+from dolfinx.fem import petsc
 from dolfinx.graph import create_adjacencylist
 from dolfinx.io import XDMFFile
 from dolfinx.mesh import locate_entities_boundary, meshtags
@@ -22,7 +24,6 @@ from dolfinx_contact.helpers import lame_parameters, epsilon, sigma_func, rigid_
 from dolfinx_contact.meshing import (convert_mesh,
                                      create_box_mesh_3D)
 from dolfinx_contact.parallel_mesh_ghosting import create_contact_mesh
-
 from dolfinx_contact.cpp import MeshTie
 
 if __name__ == "__main__":
@@ -124,17 +125,14 @@ if __name__ == "__main__":
     mu_func, lambda_func = lame_parameters(False)
     V2 = FunctionSpace(mesh, ("DG", 0))
     lmbda = Function(V2)
-    lmbda_val = lambda_func(E, nu)
-    lmbda.interpolate(lambda x: np.full((1, x.shape[1]), lmbda_val))
+    lmbda.interpolate(lambda x: np.full((1, x.shape[1]), lambda_func(E, nu)))
     mu = Function(V2)
-    mu_val = mu_func(E, nu)
-    mu.interpolate(lambda x: np.full((1, x.shape[1]), mu_val))
+    mu.interpolate(lambda x: np.full((1, x.shape[1]), mu_func(E, nu)))
     sigma = sigma_func(mu, lmbda)
 
     # Nitsche parameters
     gamma = args.gamma
     theta = args.theta
-
 
     J = ufl.inner(sigma(w), epsilon(v)) * dx
 
@@ -158,7 +156,6 @@ if __name__ == "__main__":
     # body forces
     f = Constant(mesh, ScalarType((0.0, 0.5, 0.0)))
     F += ufl.inner(f, v) * dx
-
 
     # compile forms
     cffi_options = ["-Ofast", "-march=native"]
@@ -196,8 +193,8 @@ if __name__ == "__main__":
 
     # initialise meshties
     meshties = MeshTie([facet_marker._cpp_object], surfaces, contact,
-                                        V._cpp_object, quadrature_degree=5)
-    meshties.generate_meshtie_data(u._cpp_object, lmbda._cpp_object, mu._cpp_object, gamma, theta)
+                       V._cpp_object, quadrature_degree=5)
+    meshties.generate_meshtie_data(u._cpp_object, lmbda._cpp_object, mu._cpp_object, E * gamma, theta)
 
     # create matrix, vector
     A = meshties.create_matrix(J._cpp_object)
@@ -219,8 +216,8 @@ if __name__ == "__main__":
 
     # Assemble matrix
     A.zeroEntries()
-    meshties.assemble_matrix(A, [])
-    assemble_matrix(A, J)
+    meshties.assemble_matrix(A)
+    assemble_matrix(A, J, bcs=bcs) # type: ignore
     A.assemble()
 
     # Set rigid motion nullspace
@@ -237,7 +234,6 @@ if __name__ == "__main__":
 
     # Set matrix operator
     solver.setOperators(A)
-
 
     uh = Function(V)
 
@@ -257,7 +253,6 @@ if __name__ == "__main__":
     print(f"{dofs_global}\n",
           f"Number of Krylov iterations {solver.getIterationNumber()}\n",
           f"Solver time {solver_time}", flush=True)
-
 
     # Reset mesh to initial state and write accumulated solution
     with XDMFFile(mesh.comm, "results/u_meshtie.xdmf", "w") as xdmf:

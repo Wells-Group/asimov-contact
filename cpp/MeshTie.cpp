@@ -84,13 +84,11 @@ void dolfinx_contact::MeshTie::assemble_vector(std::span<PetscScalar> b)
 }
 
 void dolfinx_contact::MeshTie::assemble_matrix(
-    const mat_set_fn& mat_set,
-    const std::vector<
-        std::shared_ptr<const dolfinx::fem::DirichletBC<PetscScalar>>>& bcs)
+    const mat_set_fn& mat_set)
 {
   std::size_t cstride = coefficients_size(true);
   for (std::size_t i = 0; i < _num_pairs; ++i)
-    assemble_matrix(mat_set, bcs, i, _kernel_jac, _coeffs[i], cstride, _consts);
+    assemble_matrix(mat_set, i, _kernel_jac, _coeffs[i], cstride, _consts);
 }
 
 std::pair<std::vector<double>, std::size_t>

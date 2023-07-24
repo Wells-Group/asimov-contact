@@ -219,7 +219,7 @@ def test_contact_kernel(theta, gamma, dim, gap):
         kernel = dolfinx_contact.cpp.generate_rigid_surface_kernel(
             V._cpp_object, kt.Jac, q_rule)
         B.zeroEntries()
-        contact_assembler.assemble_matrix(B, [], 0, kernel, coeffs, consts)
+        contact_assembler.assemble_matrix(B, 0, kernel, coeffs, consts)
         dolfinx.fem.petsc.assemble_matrix(B, a_custom)
         B.assemble()
         assert np.allclose(b.array, b2.array)

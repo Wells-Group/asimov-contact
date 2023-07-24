@@ -3,9 +3,11 @@
 # SPDX-License-Identifier:    MIT
 
 import argparse
-import dolfinx.fem as _fem
+from dolfinx import log
 from dolfinx.common import Timer, timing, TimingType, list_timings
-from dolfinx.fem import Constant, Function, VectorFunctionSpace
+from dolfinx.fem import (assemble_scalar, Constant, dirichletbc, form, Function,
+                         FunctionSpace, locate_dofs_topological, VectorFunctionSpace)
+from dolfinx.fem.petsc import apply_lifting, assemble_matrix, assemble_vector, create_vector, set_bc
 from dolfinx.graph import create_adjacencylist
 from dolfinx.io import XDMFFile
 from dolfinx.mesh import meshtags
@@ -15,11 +17,12 @@ import ufl
 from mpi4py import MPI
 from petsc4py import PETSc
 from dolfinx_contact.helpers import (epsilon, lame_parameters,
-                                     rigid_motions_nullspace, sigma_func)
+                                     rigid_motions_nullspace,
+                                     rigid_motions_nullspace_subdomains, sigma_func)
 from dolfinx_contact.meshing import (create_split_box_2D, create_split_box_3D,
                                      horizontal_sine, create_unsplit_box_2d, create_unsplit_box_3d)
-from dolfinx_contact.meshtie import nitsche_meshtie
 from dolfinx_contact.parallel_mesh_ghosting import create_contact_mesh
+from dolfinx_contact.cpp import MeshTie
 
 
 # manufactured solution 2D
@@ -123,9 +126,9 @@ def unsplit_domain(threed: bool = False, runs: int = 1):
         sigma = sigma_func(mu, lmbda)
 
         # Functions space and FEM functions
-        V = _fem.VectorFunctionSpace(mesh, ("Lagrange", 1))
+        V = VectorFunctionSpace(mesh, ("Lagrange", 1))
         ndofs.append(V.dofmap.index_map_bs * V.dofmap.index_map.size_global)
-        f = _fem.Function(V)
+        f = Function(V)
         c = 0.01  # amplitude of solution
         f.interpolate(lambda x: fun(x, c, mu, lmbda, gdim))
         v = ufl.TestFunction(V)
@@ -133,24 +136,24 @@ def unsplit_domain(threed: bool = False, runs: int = 1):
 
         # Boundary conditions
         facets = facet_marker.find(2)
-        bc = _fem.dirichletbc(np.zeros(tdim, dtype=PETSc.ScalarType),
-                              _fem.locate_dofs_topological(V, entity_dim=tdim - 1, entities=facets), V=V)
+        bc = dirichletbc(np.zeros(tdim, dtype=PETSc.ScalarType),
+                         locate_dofs_topological(V, entity_dim=tdim - 1, entities=facets), V=V)
 
         dx = ufl.Measure("dx", domain=mesh)
-        J = _fem.form(ufl.inner(sigma(u), epsilon(v)) * dx)
-        F = _fem.form(ufl.inner(f, v) * dx)
+        J = form(ufl.inner(sigma(u), epsilon(v)) * dx)
+        F = form(ufl.inner(f, v) * dx)
 
-        A = _fem.petsc.assemble_matrix(J, bcs=[bc])
+        A = assemble_matrix(J, bcs=[bc])
         A.assemble()
 
         # Set null-space
         null_space = rigid_motions_nullspace(V)
         A.setNearNullSpace(null_space)
 
-        b = _fem.petsc.assemble_vector(F)
-        _fem.petsc.apply_lifting(b, [J], bcs=[[bc]])
+        b = assemble_vector(F)
+        apply_lifting(b, [J], bcs=[[bc]])
         b.ghostUpdate(addv=PETSc.InsertMode.ADD, mode=PETSc.ScatterMode.REVERSE)
-        _fem.petsc.set_bc(b, [bc])
+        set_bc(b, [bc])
 
         # Set solver options
         opts = PETSc.Options()
@@ -172,7 +175,7 @@ def unsplit_domain(threed: bool = False, runs: int = 1):
         # Set matrix operator
         solver.setOperators(A)
 
-        uh = _fem.Function(V)
+        uh = Function(V)
 
         # Set a monitor, solve linear system, and display the solver
         # configuration
@@ -188,12 +191,12 @@ def unsplit_domain(threed: bool = False, runs: int = 1):
         uh.x.scatter_forward()
 
         # Error computation
-        V_err = _fem.VectorFunctionSpace(mesh, ("Lagrange", 3))
-        u_ex = _fem.Function(V_err)
+        V_err = VectorFunctionSpace(mesh, ("Lagrange", 3))
+        u_ex = Function(V_err)
         u_ex.interpolate(lambda x: u_fun(x, c, gdim))
 
-        error_form = _fem.form(ufl.inner(u_ex - uh, u_ex - uh) * dx)
-        error = _fem.assemble_scalar(error_form)
+        error_form = form(ufl.inner(u_ex - uh, u_ex - uh) * dx)
+        error = assemble_scalar(error_form)
         errors.append(np.sqrt(mesh.comm.allreduce(error, op=MPI.SUM)))
         res = 0.5 * res
         num_segments = 2 * num_segments
@@ -225,18 +228,10 @@ def test_meshtie(threed: bool = False, simplex: bool = True, runs: int = 5):
     # parameter for surface approximation
     num_segments = (2 * np.ceil(5.0 / 1.2).astype(np.int32), 2 * np.ceil(5.0 / (1.2 * 0.7)).astype(np.int32))
     c = 0.01  # amplitude of manufactured solution
-    # Compute lame parameters
-    E = 1e3
-    nu = 0.1
-    mu_func, lambda_func = lame_parameters(False)
-    mu = mu_func(E, nu)
-    lmbda = lambda_func(E, nu)
-    sigma = sigma_func(mu, lmbda)
 
     # dictionary with problem parameters
     gamma = 10
     theta = 1
-    problem_parameters = {"mu": mu, "lambda": lmbda, "gamma": E * gamma, "theta": theta}
 
     # Solver options
     ksp_tol = 1e-10
@@ -281,6 +276,19 @@ def test_meshtie(threed: bool = False, simplex: bool = True, runs: int = 5):
             mesh, facet_marker, domain_marker = create_contact_mesh(
                 mesh, facet_marker, domain_marker, [4, 6])
 
+        # Compute lame parameters
+        E = 1e3
+        nu = 0.1
+        mu_func, lambda_func = lame_parameters(False)
+        V2 = FunctionSpace(mesh, ("DG", 0))
+        lmbda = Function(V2)
+        lmbda_val = lambda_func(E, nu)
+        lmbda.interpolate(lambda x: np.full((1, x.shape[1]), lmbda_val))
+        mu = Function(V2)
+        mu_val = mu_func(E, nu)
+        mu.interpolate(lambda x: np.full((1, x.shape[1]), mu_val))
+        sigma = sigma_func(mu, lmbda)
+
         # Function, TestFunction, TrialFunction and measures
         V = VectorFunctionSpace(mesh, ("Lagrange", 1))
         u = Function(V)
@@ -295,7 +303,7 @@ def test_meshtie(threed: bool = False, simplex: bool = True, runs: int = 5):
 
         # forcing
         def force_func(x):
-            return fun(x, c, mu, lmbda, gdim)
+            return fun(x, c, mu_val, lmbda_val, gdim)
         f = Function(V)
         f.interpolate(force_func)
         F = ufl.inner(f, v) * dx
@@ -312,32 +320,83 @@ def test_meshtie(threed: bool = False, simplex: bool = True, runs: int = 5):
             F += - theta * ufl.inner(sigma(v) * n, g) * \
                 ds(tag) + E * gamma / h * ufl.inner(g, v) * ds(tag)
 
+        # compile forms
+        cffi_options = ["-Ofast", "-march=native"]
+        jit_options = {"cffi_extra_compile_args": cffi_options, "cffi_libraries": ["m"]}
+        F = form(F, jit_options=jit_options)
+        J = form(J, jit_options=jit_options)
+
+        # surface data for Nitsche
         contact = [(1, 0), (0, 1)]
         data = np.array([4, 6], dtype=np.int32)
         offsets = np.array([0, 2], dtype=np.int32)
         surfaces = create_adjacencylist(data, offsets)
-        # Solve contact problem using Nitsche's method
-        u1, its, solver_time, ndofs = nitsche_meshtie(lhs=J, rhs=F, u=u, markers=[domain_marker, facet_marker],
-                                                      surface_data=(surfaces, contact),
-                                                      bcs=[], problem_parameters=problem_parameters,
-                                                      petsc_options=petsc_options,
-                                                      num_domains=2)
 
+        # initialise meshties
+        meshties = MeshTie([facet_marker._cpp_object], surfaces, contact,
+                           V._cpp_object, quadrature_degree=5)
+        meshties.generate_meshtie_data(u._cpp_object, lmbda._cpp_object, mu._cpp_object, E * gamma, theta)
+
+        # create matrix, vector
+        A = meshties.create_matrix(J._cpp_object)
+        b = create_vector(F)
+
+        # Assemble right hand side
+        b.zeroEntries()
+        b.ghostUpdate(addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD)
+        meshties.assemble_vector(b)
+        assemble_vector(b, F)
+        b.ghostUpdate(addv=PETSc.InsertMode.ADD, mode=PETSc.ScatterMode.REVERSE)
+
+        # Assemble matrix
+        A.zeroEntries()
+        meshties.assemble_matrix(A)
+        assemble_matrix(A, J)
+        A.assemble()
+
+        # Set rigid motion nullspace
+        null_space = rigid_motions_nullspace_subdomains(V, domain_marker, np.unique(domain_marker.values),
+                                                        num_domains=2)
+        A.setNearNullSpace(null_space)
+
+        # Create PETSc Krylov solver and turn convergence monitoring on
+        opts = PETSc.Options()
+        for key in petsc_options:
+            opts[key] = petsc_options[key]
+        solver = PETSc.KSP().create(mesh.comm)
+        solver.setFromOptions()
+
+        # Set matrix operator
+        solver.setOperators(A)
+
+        u1 = Function(V)
+
+        dofs_global = V.dofmap.index_map_bs * V.dofmap.index_map.size_global
+        log.set_log_level(log.LogLevel.OFF)
+        # Set a monitor, solve linear system, and display the solver
+        # configuration
+        solver.setMonitor(lambda _, its, rnorm: print(f"Iteration: {its}, rel. residual: {rnorm}"))
+        timing_str = "~Contact : Krylov Solver"
+        with Timer(timing_str):
+            solver.solve(b, u1.vector)
+
+        # Scatter forward the solution vector to update ghost values
         u1.x.scatter_forward()
+        solver_time = timing(timing_str)[1]
 
-        V_err = _fem.VectorFunctionSpace(mesh, ("Lagrange", 3))
-        u_ex = _fem.Function(V_err)
+        V_err = VectorFunctionSpace(mesh, ("Lagrange", 3))
+        u_ex = Function(V_err)
         u_ex.interpolate(lambda x: u_fun(x, c, gdim))
 
         dx = ufl.Measure("dx", domain=mesh)
-        error_form = _fem.form(ufl.inner(u_ex - u1, u_ex - u1) * dx)
-        error = _fem.assemble_scalar(error_form)
+        error_form = form(ufl.inner(u_ex - u1, u_ex - u1) * dx)
+        error = assemble_scalar(error_form)
         errors.append(np.sqrt(mesh.comm.allreduce(error, op=MPI.SUM)))
         res = 0.5 * res
         num_segments = (2 * num_segments[0], 2 * num_segments[1])
-        iterations.append(its)
+        iterations.append(solver.getIterationNumber())
         times.append(solver_time)
-        dofs.append(ndofs)
+        dofs.append(dofs_global)
 
     ncells = mesh.topology.index_map(tdim).size_local
     indices = np.array(range(ncells), dtype=np.int32)

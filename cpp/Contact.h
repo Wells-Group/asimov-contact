@@ -137,8 +137,6 @@ public:
   /// @param[in] constants used in the variational form
   void assemble_matrix(
       const mat_set_fn& mat_set,
-      const std::vector<
-          std::shared_ptr<const dolfinx::fem::DirichletBC<PetscScalar>>>& bcs,
       int pair, const kernel_fn<PetscScalar>& kernel,
       const std::span<const PetscScalar> coeffs, int cstride,
       const std::span<const PetscScalar>& constants);

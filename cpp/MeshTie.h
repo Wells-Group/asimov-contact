@@ -53,9 +53,7 @@ public:
   void assemble_vector(std::span<PetscScalar> b);
   using Contact::assemble_matrix;
   void assemble_matrix(
-      const mat_set_fn& mat_set,
-      const std::vector<
-          std::shared_ptr<const dolfinx::fem::DirichletBC<PetscScalar>>>& bcs);
+      const mat_set_fn& mat_set);
 
   std::pair<std::vector<double>, std::size_t> coeffs(int pair);
 

@@ -595,8 +595,8 @@ def test_contact_kernels(ct, gap, quadrature_degree, theta, formulation, search)
 
     # Assemble  jacobian
     A1.zeroEntries()
-    contact.assemble_matrix(A1, [], 0, kernel_jac, c_0, consts)
-    contact.assemble_matrix(A1, [], 1, kernel_jac, c_1, consts)
+    contact.assemble_matrix(A1, 0, kernel_jac, c_0, consts)
+    contact.assemble_matrix(A1, 1, kernel_jac, c_1, consts)
     A1.assemble()
 
     # Retrieve data necessary for comparison

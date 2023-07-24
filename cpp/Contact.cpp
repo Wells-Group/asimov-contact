@@ -1027,8 +1027,6 @@ dolfinx_contact::Contact::pack_ny(int pair)
 //------------------------------------------------------------------------------------------------
 void dolfinx_contact::Contact::assemble_matrix(
     mat_set_fn& mat_set,
-    [[maybe_unused]] const std::vector<
-        std::shared_ptr<const dolfinx::fem::DirichletBC<PetscScalar>>>& bcs,
     int pair, const dolfinx_contact::kernel_fn<PetscScalar>& kernel,
     const std::span<const PetscScalar> coeffs, int cstride,
     const std::span<const PetscScalar>& constants)

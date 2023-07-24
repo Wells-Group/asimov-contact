@@ -193,7 +193,7 @@ def nitsche_custom(mesh: dmesh.Mesh, mesh_data: Tuple[dmesh.MeshTags, int, int],
             u._cpp_object, quadrature_degree, integral_entities)
         c = np.hstack([coeffs, u_packed, grad_u_packed])
         a_mat.zeroEntries()
-        contact_assembler.assemble_matrix(a_mat, [], 0, kernel_J, c, consts)
+        contact_assembler.assemble_matrix(a_mat, 0, kernel_J, c, consts)
         _fem.petsc.assemble_matrix(a_mat, a_custom)
         a_mat.assemble()
 
