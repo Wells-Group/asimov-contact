@@ -23,15 +23,15 @@ void dolfinx_contact::MeshTie::generate_meshtie_data(
   {
     const std::array<int, 2>& pair = contact_pair(i);
     std::span<const std::int32_t> entities = active_entities(pair[0]);
-    std::vector<std::int32_t> cells(entities.size() / 2);
-    for (std::size_t e = 0; e < entities.size() / 2; ++e)
+    std::size_t num_facets = local_facets(pair[0]);
+    std::vector<std::int32_t> cells(num_facets);
+    for (std::size_t e = 0; e < num_facets; ++e)
       cells[e] = entities[2 * e];
 
     std::vector<double> h_p = dolfinx::mesh::h(*mesh, cells, tdim);
     std::size_t c_h = 1;
     auto [lm_p, c_lm] = pack_coefficient_quadrature(lambda, 0, entities, it);
     auto [mu_p, c_mu] = pack_coefficient_quadrature(mu, 0, entities, it);
-    // auto [h_p, c_h] = pack_coefficient_quadrature(h, 0, entities, it);
     auto [gap, cgap] = pack_gap(i);
     auto [testfn, ctest] = pack_test_functions(i);
     std::vector<double> dummy(gap.size(), 0.0);
@@ -42,8 +42,8 @@ void dolfinx_contact::MeshTie::generate_meshtie_data(
     auto [u_cd, c_uc] = pack_u_contact(i, u);
     auto [u_gc, c_ugc] = pack_grad_u_contact(i, u, gap, dummy);
 
-    std::vector<double> coeffs(coeff_size * entities.size() / 2);
-    for (std::size_t e = 0; e < entities.size() / 2; ++e)
+    std::vector<double> coeffs(coeff_size * num_facets);
+    for (std::size_t e = 0; e < num_facets; ++e)
     {
       std::copy_n(std::next(mu_p.begin(), e * c_mu), c_mu,
                   std::next(coeffs.begin(), e * coeff_size));
