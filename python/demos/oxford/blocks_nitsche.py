@@ -17,9 +17,9 @@ from dolfinx_contact.unbiased.contact_problem import create_contact_solver
 
 fname = "cont-blocks_sk24_fnx"
 with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
-    cell_type, cell_degree = xdmf.read_cell_type(name = "volume markers")
-    topo = xdmf.read_topology_data(name = "volume markers")
-    x = xdmf.read_geometry_data(name = "geometry")
+    cell_type, cell_degree = xdmf.read_cell_type(name="volume markers")
+    topo = xdmf.read_topology_data(name="volume markers")
+    x = xdmf.read_geometry_data(name="geometry")
     domain = Mesh(element("Lagrange", cell_type.name, cell_degree, rank=1))
     mesh = create_mesh(MPI.COMM_WORLD, topo, x, domain)
     tdim = mesh.topology.dim
@@ -79,7 +79,7 @@ bcs = (np.array([[dirichlet_bdy_1, -1], [dirichlet_bdy_2, -1]], dtype=np.int32),
 
 # contact surface data
 # stored in adjacency list to allow for using multiple meshtags to mark
-# contact surfaces. In this case only one meshtag is used, hence offsets has length 2 and 
+# contact surfaces. In this case only one meshtag is used, hence offsets has length 2 and
 # the second value in offsets is 2 (=2 tags in first and only meshtag).
 # The surface with tags [contact_bdy_1, contact_bdy_2] both can be found in this meshtag
 data = np.array([contact_bdy_1, contact_bdy_2], dtype=np.int32)
