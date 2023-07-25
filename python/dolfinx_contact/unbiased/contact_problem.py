@@ -1,5 +1,5 @@
 from typing import Optional, Tuple, Union
-from dolfinx import common, fem, cpp
+from dolfinx import common, fem
 from dolfinx import mesh as _mesh
 import numpy as np
 import numpy.typing as npt
@@ -159,10 +159,6 @@ def create_contact_solver(ufl_form: ufl.Form, u: fem.Function,
         contact = dolfinx_contact.cpp.Contact(markers_cpp, contact_surfaces, contact_pairs,
                                               V._cpp_object, quadrature_degree=quadrature_degree,
                                               search_method=search_method)
-
-    xdmf = cpp.io.XDMFFile(mesh.comm, "debug.xdmf", "w")
-    xdmf.write_mesh(contact.submesh(), xpath="/Xdmf/Domain")
-    del (xdmf)
 
     contact.set_search_radius(search_radius)
 
