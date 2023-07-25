@@ -122,6 +122,8 @@ jobs:
           python3 meshtie_convergence.py --simplex --3D
           python3 meshtie_convergence.py
           python3 meshtie_convergence.py --simplex --runs=4
+          cd oxford
+          python3 blocks_nitsche.py
 
       - name: Run tests
         run: |

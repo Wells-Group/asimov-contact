@@ -210,6 +210,6 @@ def create_contact_solver(ufl_form: ufl.Form, u: fem.Function,
 
     problem = ContactProblem(F_custom, J_custom, bcs, u, du, contact, markers, entities,
                              quadrature_degree, const_coeffs, consts, raytracing,
-                             newton_options, petsc_options)
+                             petsc_options, newton_options)
 
     return problem

@@ -118,7 +118,8 @@ petsc_options = {
     "pc_gamg_agg_nsmooths": 1,
     "pc_gamg_threshold": 1e-3,
     "pc_gamg_square_graph": 2,
-    "pc_gamg_reuse_interpolation": False
+    "pc_gamg_reuse_interpolation": False,
+    "ksp_norm_type": "unpreconditioned"
 }
 
 # compiler options to improve performance
