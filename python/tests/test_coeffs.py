@@ -58,7 +58,7 @@ def test_pack_coeff_at_quadrature(ct, quadrature_degree, space, degree):
 
     # Use Expression to verify packing
     expr = Expression(v, quadrature_points)
-    expr_vals = expr.eval(cells)
+    expr_vals = expr.eval(mesh, cells)
     assert np.allclose(coeffs, expr_vals)
 
     if space not in ['N1curl', 'RTCE']:
@@ -68,7 +68,7 @@ def test_pack_coeff_at_quadrature(ct, quadrature_degree, space, degree):
             assert (np.allclose(0.0, coeffs))
         else:
             expr = Expression(grad(v), quadrature_points)
-            expr_vals = expr.eval(cells)
+            expr_vals = expr.eval(mesh, cells)
             assert np.allclose(coeffs, expr_vals)
 
 
@@ -115,7 +115,7 @@ def test_pack_coeff_on_facet(quadrature_degree, space, degree):
     # Compute coefficients at quadrature points using Expression
     q_points = q_rule.points()
     expr = Expression(v, q_points)
-    expr_vals = expr.eval(integration_entities[:, 0])
+    expr_vals = expr.eval(mesh, integration_entities[:, 0])
 
     for i, entity in enumerate(integration_entities):
         local_index = entity[1]
@@ -129,7 +129,7 @@ def test_pack_coeff_on_facet(quadrature_degree, space, degree):
         else:
             gdim = mesh.geometry.dim
             expr = Expression(grad(v), q_points)
-            expr_vals = expr.eval(integration_entities[:, 0])
+            expr_vals = expr.eval(mesh, integration_entities[:, 0])
             for i, entity in enumerate(integration_entities):
                 local_index = entity[1]
                 assert np.allclose(coeffs[i],
@@ -168,7 +168,7 @@ def test_sub_coeff(quadrature_degree, degree):
 
         # Use Expression to verify packing
         expr = Expression(vi, quadrature_points)
-        expr_vals = expr.eval(cells)
+        expr_vals = expr.eval(mesh, cells)
 
         assert np.allclose(coeffs, expr_vals)
 
@@ -205,6 +205,6 @@ def test_sub_coeff_grad(quadrature_degree, degree):
 
         # Use Expression to verify packing
         expr = Expression(grad(vi), quadrature_points)
-        expr_vals = expr.eval(cells)
+        expr_vals = expr.eval(mesh, cells)
 
         assert np.allclose(coeffs, expr_vals)
