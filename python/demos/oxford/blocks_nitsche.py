@@ -4,29 +4,35 @@
 #
 import numpy as np
 
+from basix.ufl import element
 from dolfinx.fem import Constant, Function, VectorFunctionSpace
 from dolfinx.graph import create_adjacencylist
 from dolfinx.io import XDMFFile
+from dolfinx.mesh import create_mesh
 from mpi4py import MPI
 from petsc4py.PETSc import ScalarType
-from ufl import grad, Identity, inner, Measure, TestFunction, tr, sym
+from ufl import grad, Identity, inner, Mesh, Measure, TestFunction, tr, sym
 
 from dolfinx_contact.unbiased.contact_problem import create_contact_solver
 
-fname = "box_3D"
+fname = "cont-blocks_sk24_fnx"
 with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
-    mesh = xdmf.read_mesh()
+    cell_type, cell_degree = xdmf.read_cell_type(name = "volume markers")
+    topo = xdmf.read_topology_data(name = "volume markers")
+    x = xdmf.read_geometry_data(name = "geometry")
+    domain = Mesh(element("Lagrange", cell_type.name, cell_degree, rank=1))
+    mesh = create_mesh(MPI.COMM_WORLD, topo, x, domain)
     tdim = mesh.topology.dim
-    domain_marker = xdmf.read_meshtags(mesh, name="cell_marker")
+    domain_marker = xdmf.read_meshtags(mesh, name="volume markers")
     mesh.topology.create_connectivity(tdim - 1, tdim)
-    facet_marker = xdmf.read_meshtags(mesh, name="facet_marker")
+    facet_marker = xdmf.read_meshtags(mesh, name="facet markers")
 
 # tags for boundaries (see mesh file)
-dirichlet_bdy_1 = 7  # top face
-dirichlet_bdy_2 = 12  # bottom face
+dirichlet_bdy_1 = 8  # top face
+dirichlet_bdy_2 = 2  # bottom face
 
-contact_bdy_1 = 6  # top interface
-contact_bdy_2 = 13  # bottom interface
+contact_bdy_1 = 12  # top contact interface
+contact_bdy_2 = 6  # bottom contact interface
 
 # measures
 dx = Measure("dx", domain=mesh, subdomain_data=domain_marker)
@@ -73,8 +79,9 @@ bcs = (np.array([[dirichlet_bdy_1, -1], [dirichlet_bdy_2, -1]], dtype=np.int32),
 
 # contact surface data
 # stored in adjacency list to allow for using multiple meshtags to mark
-# contact surfaces. In this case only one meshtag is used, hence offsets has length 2
-# and the surface with tags [contact_bdy_1, contact_bdy_2] both can be found in this meshtag
+# contact surfaces. In this case only one meshtag is used, hence offsets has length 2 and 
+# the second value in offsets is 2 (=2 tags in first and only meshtag).
+# The surface with tags [contact_bdy_1, contact_bdy_2] both can be found in this meshtag
 data = np.array([contact_bdy_1, contact_bdy_2], dtype=np.int32)
 offsets = np.array([0, 2], dtype=np.int32)
 surfaces = create_adjacencylist(data, offsets)
