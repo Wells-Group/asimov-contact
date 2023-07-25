@@ -70,7 +70,8 @@ F = inner(sigma(u), epsilon(v)) * dx
 # Nitsche parameters
 gamma = 10
 theta = 1  # 1 - symmetric
-problem_parameters = {"gamma": np.float64(E * gamma), "theta": np.float64(theta), "mu": np.float64(mu), "lambda": np.float64(lmbda)}
+problem_parameters = {"gamma": np.float64(E * gamma), "theta": np.float64(theta),
+                      "mu": np.float64(mu), "lambda": np.float64(lmbda)}
 
 # boundary conditions
 g = Constant(mesh, ScalarType((0, 0, 0)))     # zero Dirichlet
