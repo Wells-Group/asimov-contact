@@ -15,6 +15,7 @@ from ufl import grad, Identity, inner, Mesh, Measure, TestFunction, tr, sym
 
 from dolfinx_contact.unbiased.contact_problem import create_contact_solver
 
+# read mesh from file
 fname = "cont-blocks_sk24_fnx"
 with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
     cell_type, cell_degree = xdmf.read_cell_type(name="volume markers")
