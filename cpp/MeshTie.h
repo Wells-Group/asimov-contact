@@ -32,13 +32,13 @@ public:
           const std::vector<std::array<int, 2>>& contact_pairs,
           std::shared_ptr<dolfinx::fem::FunctionSpace<double>> V,
           const int q_deg = 3)
-      : Contact(markers, surfaces, contact_pairs, V, q_deg,
+      : Contact::Contact(markers, surfaces, contact_pairs, V, q_deg,
                 ContactMode::ClosestPoint)
   {
     for (std::size_t i = 0; i < contact_pairs.size(); ++i)
-      create_distance_map(i);
-    _kernel_rhs = generate_kernel(Kernel::MeshTieRhs);
-    _kernel_jac = generate_kernel(Kernel::MeshTieJac);
+      Contact::create_distance_map(i);
+    _kernel_rhs = Contact::generate_kernel(Kernel::MeshTieRhs);
+    _kernel_jac = Contact::generate_kernel(Kernel::MeshTieJac);
     _num_pairs = contact_pairs.size();
     _coeffs.resize(_num_pairs);
     _q_deg = q_deg;

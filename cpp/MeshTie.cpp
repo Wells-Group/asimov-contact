@@ -21,9 +21,9 @@ void dolfinx_contact::MeshTie::generate_meshtie_data(
 
   for (std::size_t i = 0; i < _num_pairs; ++i)
   {
-    const std::array<int, 2>& pair = contact_pair(i);
-    std::span<const std::int32_t> entities = active_entities(pair[0]);
-    std::size_t num_facets = local_facets(pair[0]);
+    const std::array<int, 2>& pair = Contact::contact_pair(i);
+    std::span<const std::int32_t> entities = Contact::active_entities(pair[0]);
+    std::size_t num_facets = Contact::local_facets(pair[0]);
     std::vector<std::int32_t> cells(num_facets);
     for (std::size_t e = 0; e < num_facets; ++e)
       cells[e] = entities[2 * e];
@@ -32,15 +32,13 @@ void dolfinx_contact::MeshTie::generate_meshtie_data(
     std::size_t c_h = 1;
     auto [lm_p, c_lm] = pack_coefficient_quadrature(lambda, 0, entities, it);
     auto [mu_p, c_mu] = pack_coefficient_quadrature(mu, 0, entities, it);
-    auto [gap, cgap] = pack_gap(i);
-    auto [testfn, ctest] = pack_test_functions(i);
-    std::vector<double> dummy(gap.size(), 0.0);
-    auto [gradtst, cgt]
-        = pack_grad_test_functions(i, gap, std::span<double>(dummy));
+    auto [gap, cgap] = Contact::pack_gap(i);
+    auto [testfn, ctest] = Contact::pack_test_functions(i);
     auto [u_p, c_u] = pack_coefficient_quadrature(u, _q_deg, entities, it);
     auto [gradu, c_gu] = pack_gradient_quadrature(u, _q_deg, entities, it);
-    auto [u_cd, c_uc] = pack_u_contact(i, u);
-    auto [u_gc, c_ugc] = pack_grad_u_contact(i, u, gap, dummy);
+    auto [u_cd, c_uc] = Contact::pack_u_contact(i, u);
+    auto [u_gc, c_ugc] = Contact::pack_grad_u_contact(i, u, gap, u_cd);
+    auto [gradtst, cgt] = Contact::pack_grad_test_functions(i, gap, u_cd);
 
     std::vector<double> coeffs(coeff_size * num_facets);
     for (std::size_t e = 0; e < num_facets; ++e)

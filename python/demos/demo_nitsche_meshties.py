@@ -14,7 +14,7 @@ from dolfinx.fem import (dirichletbc, Constant, form, Function, FunctionSpace,
 from dolfinx.fem.petsc import apply_lifting, assemble_vector, assemble_matrix, create_vector, set_bc
 from dolfinx.graph import create_adjacencylist
 from dolfinx.io import XDMFFile
-from dolfinx.mesh import locate_entities_boundary, meshtags
+from dolfinx.mesh import meshtags
 from mpi4py import MPI
 from petsc4py.PETSc import ScalarType
 from petsc4py import PETSc
@@ -65,44 +65,31 @@ if __name__ == "__main__":
     gap = 1e-5
     H = 1.5
     fname = "box_3D"
-    create_box_mesh_3D(f"{fname}.msh", simplex, gap=gap, W=H)
+    create_box_mesh_3D(f"{fname}.msh", simplex, gap=gap, W=H, offset=0.0)
     convert_mesh(fname, fname, gdim=3)
 
     with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
         mesh = xdmf.read_mesh()
+        domain_marker = xdmf.read_meshtags(mesh, "cell_marker")
+        tdim = mesh.topology.dim
+        mesh.topology.create_connectivity(tdim - 1, tdim)
+        facet_marker = xdmf.read_meshtags(mesh, "facet_marker")
 
     tdim = mesh.topology.dim
     gdim = mesh.geometry.dim
     mesh.topology.create_connectivity(tdim - 1, 0)
     mesh.topology.create_connectivity(tdim - 1, tdim)
 
-    neumann_bdy = 1
-    contact_bdy_1 = 2
-    contact_bdy_2 = 3
-    dirichlet_bdy = 4
-    # Create meshtag for top and bottom markers
-    top_facets1 = locate_entities_boundary(mesh, tdim - 1, lambda x: np.isclose(x[2], H, atol=1e-10))
-    bottom_facets1 = locate_entities_boundary(
-        mesh, tdim - 1, lambda x: np.isclose(x[2], 0.0, atol=1e-10))
-    top_facets2 = locate_entities_boundary(mesh, tdim - 1, lambda x: np.isclose(x[2], -gap, atol=1e-10))
-    bottom_facets2 = locate_entities_boundary(
-        mesh, tdim - 1, lambda x: np.isclose(x[2], -H - gap, atol=1e-10))
-    top_values = np.full(len(top_facets1), neumann_bdy, dtype=np.int32)
-    bottom_values = np.full(
-        len(bottom_facets1), contact_bdy_1, dtype=np.int32)
-
-    surface_values = np.full(len(top_facets2), contact_bdy_2, dtype=np.int32)
-    sbottom_values = np.full(
-        len(bottom_facets2), dirichlet_bdy, dtype=np.int32)
-    indices = np.concatenate([top_facets1, bottom_facets1, top_facets2, bottom_facets2])
-    values = np.hstack([top_values, bottom_values, surface_values, sbottom_values])
-    sorted_facets = np.argsort(indices)
-    facet_marker = meshtags(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
-
-    # mark the whole domain
-    cells = np.arange(mesh.topology.index_map(tdim).size_local
-                      + mesh.topology.index_map(tdim).num_ghosts, dtype=np.int32)
-    domain_marker = meshtags(mesh, tdim, cells, np.full(cells.shape, 1, dtype=np.int32))
+    if simplex:
+        neumann_bdy = 7
+        contact_bdy_1 = 6
+        contact_bdy_2 = 13
+        dirichlet_bdy = 12
+    else:
+        neumann_bdy = 7
+        contact_bdy_1 = 2
+        contact_bdy_2 = 13
+        dirichlet_bdy = 8
 
     if mesh.comm.size > 1:
         mesh, facet_marker, domain_marker = create_contact_mesh(
@@ -135,9 +122,13 @@ if __name__ == "__main__":
 
     J = ufl.inner(sigma(w), epsilon(v)) * dx
 
+    # body forces
+    f = Constant(mesh, ScalarType((0.0, 0.5, 0.0)))
+    F = ufl.inner(f, v) * dx
+
     # traction (neumann) boundary condition on mesh boundary with tag 3
     t = Constant(mesh, ScalarType((0.0, 0.5, 0.0)))
-    F = ufl.inner(t, v) * ds(neumann_bdy)
+    F += ufl.inner(t, v) * ds(neumann_bdy)
 
     # Dirichlet bdry conditions
     g = Constant(mesh, ScalarType((0.0, 0.0, 0.0)))
@@ -151,10 +142,6 @@ if __name__ == "__main__":
             ds(dirichlet_bdy) + E * gamma / h * ufl.inner(w, v) * ds(dirichlet_bdy)
         F += - theta * ufl.inner(sigma(v) * n, g) * \
             ds(dirichlet_bdy) + E * gamma / h * ufl.inner(g, v) * ds(dirichlet_bdy)
-
-    # body forces
-    f = Constant(mesh, ScalarType((0.0, 0.5, 0.0)))
-    F += ufl.inner(f, v) * dx
 
     # compile forms
     cffi_options = ["-Ofast", "-march=native"]
@@ -219,8 +206,11 @@ if __name__ == "__main__":
     assemble_matrix(A, J, bcs=bcs)  # type: ignore
     A.assemble()
 
+    values = np.ones(len(domain_marker.values), dtype=np.int32)
+    indices = domain_marker.indices
+    mt = meshtags(mesh, tdim -1 , indices, values)
     # Set rigid motion nullspace
-    null_space = rigid_motions_nullspace_subdomains(V, domain_marker, np.unique(domain_marker.values),
+    null_space = rigid_motions_nullspace_subdomains(V, domain_marker, np.array([1], dtype=np.int32),
                                                     num_domains=1)
     A.setNearNullSpace(null_space)
 
