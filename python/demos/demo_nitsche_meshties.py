@@ -14,7 +14,6 @@ from dolfinx.fem import (dirichletbc, Constant, form, Function, FunctionSpace,
 from dolfinx.fem.petsc import apply_lifting, assemble_vector, assemble_matrix, create_vector, set_bc
 from dolfinx.graph import create_adjacencylist
 from dolfinx.io import XDMFFile
-from dolfinx.mesh import meshtags
 from mpi4py import MPI
 from petsc4py.PETSc import ScalarType
 from petsc4py import PETSc
@@ -206,12 +205,9 @@ if __name__ == "__main__":
     assemble_matrix(A, J, bcs=bcs)  # type: ignore
     A.assemble()
 
-    values = np.ones(len(domain_marker.values), dtype=np.int32)
-    indices = domain_marker.indices
-    mt = meshtags(mesh, tdim -1 , indices, values)
     # Set rigid motion nullspace
-    null_space = rigid_motions_nullspace_subdomains(V, domain_marker, np.array([1], dtype=np.int32),
-                                                    num_domains=1)
+    null_space = rigid_motions_nullspace_subdomains(V, domain_marker, np.array([1, 2], dtype=np.int32),
+                                                    num_domains=2)
     A.setNearNullSpace(null_space)
 
     # Create PETSc Krylov solver and turn convergence monitoring on
@@ -246,8 +242,8 @@ if __name__ == "__main__":
     # Reset mesh to initial state and write accumulated solution
     with XDMFFile(mesh.comm, "results/u_meshtie.xdmf", "w") as xdmf:
         xdmf.write_mesh(mesh)
-        u.name = "u"
-        xdmf.write_function(u)
+        uh.name = "u"
+        xdmf.write_function(uh)
     if args.timing:
         list_timings(mesh.comm, [TimingType.wall])
 

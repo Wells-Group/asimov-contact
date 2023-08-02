@@ -81,7 +81,7 @@ int main(int argc, char* argv[])
     double gamma = 10;
     double theta = 1;
 
-    double lmbda_val = E * nu / ((1 + nu) * (1 - 2 * nu));
+    double lmbda_val = E * nu / ((1 + nu) * (1 - nu));
     double mu_val = E / (2 * (1 + nu));
 
     auto lmbda = std::make_shared<fem::Function<double>>(V0);

@@ -30,15 +30,23 @@ void dolfinx_contact::MeshTie::generate_meshtie_data(
 
     std::vector<double> h_p = dolfinx::mesh::h(*mesh, cells, tdim);
     std::size_t c_h = 1;
-    auto [lm_p, c_lm] = pack_coefficient_quadrature(lambda, 0, entities, it);
-    auto [mu_p, c_mu] = pack_coefficient_quadrature(mu, 0, entities, it);
-    auto [gap, cgap] = Contact::pack_gap(i);
-    auto [testfn, ctest] = Contact::pack_test_functions(i);
-    auto [u_p, c_u] = pack_coefficient_quadrature(u, _q_deg, entities, it);
-    auto [gradu, c_gu] = pack_gradient_quadrature(u, _q_deg, entities, it);
+    auto [lm_p, c_lm] = pack_coefficient_quadrature(lambda, 0, entities, it); // lambda
+    auto [mu_p, c_mu] = pack_coefficient_quadrature(mu, 0, entities, it); // mu
+    auto [gap, cgap] = Contact::pack_gap(i); // gap function
+    auto [testfn, ctest] = Contact::pack_test_functions(i); //test functions
+    auto [u_p, c_u] = pack_coefficient_quadrature(u, _q_deg, entities, it); // u 
+    auto [gradu, c_gu] = pack_gradient_quadrature(u, _q_deg, entities, it); // grad(u)
     auto [u_cd, c_uc] = Contact::pack_u_contact(i, u);
-    auto [u_gc, c_ugc] = Contact::pack_grad_u_contact(i, u, gap, u_cd);
-    auto [gradtst, cgt] = Contact::pack_grad_test_functions(i, gap, u_cd);
+
+    // pack grad(v), grad(u) with respect to the integration on the other surface
+    // for general contact, if the gap is computed based on the deformed configuration
+    // we would need the deformation up to the previous load step to compute 
+    // u/grad(u) on the opposite surface. For meshties, if we assume the 
+    // gap is always computed based on the initial configuration, we can use
+    // a dummy with all zeros
+    std::vector<double> dummy(gap.size(), 0.0);
+    auto [u_gc, c_ugc] = Contact::pack_grad_u_contact(i, u, gap, dummy);
+    auto [gradtst, cgt] = Contact::pack_grad_test_functions(i, gap, dummy);
 
     std::vector<double> coeffs(coeff_size * num_facets);
     for (std::size_t e = 0; e < num_facets; ++e)
