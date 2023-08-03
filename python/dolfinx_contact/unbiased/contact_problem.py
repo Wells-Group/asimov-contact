@@ -160,10 +160,6 @@ def create_contact_solver(ufl_form: ufl.Form, u: fem.Function,
                                               V._cpp_object, quadrature_degree=quadrature_degree,
                                               search_method=search_method)
 
-    xdmf = cpp.io.XDMFFile(mesh.comm, "debug.xdmf", "w")
-    xdmf.write_mesh(contact.submesh(), xpath="/Xdmf/Domain")
-    del (xdmf)
-
     contact.set_search_radius(search_radius)
 
     # pack constants

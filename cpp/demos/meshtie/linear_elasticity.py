@@ -1,3 +1,8 @@
+# Copyright (C) 2023 Sarah Roggendorf
+#
+# This file is part of DOLFINx_Contact
+# SPDX-License-Identifier:    MIT
+#
 # UFL input for linear elasticity part of meshtie demo
 # ====================================================
 

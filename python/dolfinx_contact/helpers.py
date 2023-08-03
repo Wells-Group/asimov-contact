@@ -31,7 +31,6 @@ def compare_matrices(a: PETSc.Mat, b: PETSc.Mat, atol: float = 1e-12):
 
     # Compare matrices
     diff = numpy.abs(a_sp - b_sp)
-    print(diff.max() <= atol)
     assert diff.max() <= atol
 
 

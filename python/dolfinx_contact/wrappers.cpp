@@ -382,7 +382,7 @@ PYBIND11_MODULE(cpp, m)
              std::string type) { return self.create_petsc_matrix(a, type); },
           py::return_value_policy::take_ownership, py::arg("a"),
           py::arg("type") = std::string(),
-          "Create a PETSc Mat for two-sided contact.");
+          "Create a PETSc Mat for tying disconnected meshes.");
   m.def(
       "pack_coefficient_quadrature",
       [](std::shared_ptr<const dolfinx::fem::Function<PetscScalar>> coeff,

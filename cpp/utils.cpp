@@ -1080,75 +1080,86 @@ dolfinx_contact::compute_distance_map(
 
   throw std::runtime_error("Unsupported contact mode");
 }
-MatNullSpace dolfinx_contact::build_nullspace_multibody (const dolfinx::fem::FunctionSpace<double>& V, 
-const dolfinx::mesh::MeshTags<std::int32_t> mt, std::vector<std::int32_t> tags)
+MatNullSpace dolfinx_contact::build_nullspace_multibody(
+    const dolfinx::fem::FunctionSpace<double>& V,
+    const dolfinx::mesh::MeshTags<std::int32_t> mt,
+    std::vector<std::int32_t> tags)
 {
   std::size_t gdim = V.mesh()->geometry().dim();
   std::size_t dim = (gdim == 2) ? 3 : 6;
   const std::size_t ndofs_cell = V.dofmap()->element_dof_layout().num_dofs();
 
   // Create vectors for nullspace basis
+  // Need translations and rotations for each
+  // component. number of components = tags.size()
   auto map = V.dofmap()->index_map;
   int bs = V.dofmap()->index_map_bs();
-  std::vector<dolfinx::la::Vector<PetscScalar>> basis(dim * tags.size(), la::Vector<PetscScalar>(map, bs));
+  std::vector<dolfinx::la::Vector<PetscScalar>> basis(
+      dim * tags.size(), la::Vector<PetscScalar>(map, bs));
 
+  // loop over components
   for (std::size_t j = 0; j < tags.size(); ++j)
   {
+    // retrieve degrees of freedom
     std::vector<std::int32_t> cells = mt.find(tags[j]);
     std::vector<std::int32_t> dofs(cells.size() * ndofs_cell);
     for (std::size_t c = 0; c < cells.size(); ++c)
+    {
+      std::span<const int32_t> cell_dofs = V.dofmap()->cell_dofs(cells[c]);
+      std::copy_n(cell_dofs.begin(), ndofs_cell, dofs.begin() + c * ndofs_cell);
+    }
+    // Remove duplicates
+    dolfinx::radix_sort(std::span<std::int32_t>(dofs));
+    dofs.erase(std::unique(dofs.begin(), dofs.end()), dofs.end());
+
+    // Translations
+    for (std::size_t k = 0; k < gdim; ++k)
+    {
+      std::span<PetscScalar> x = basis[j * dim + k].mutable_array();
+      for (auto dof : dofs)
+        x[gdim * dof + k] = 1.0;
+    }
+
+    // Rotations
+    auto x1 = basis[j * dim + gdim].mutable_array();
+
+    const std::vector<double> x = V.tabulate_dof_coordinates(false);
+    if (gdim == 2)
+    {
+      for (auto dof : dofs)
       {
-        std::span<const int32_t> cell_dofs = V.dofmap()->cell_dofs(cells[c]);
-        std::copy_n(cell_dofs.begin(), ndofs_cell, dofs.begin() + c * ndofs_cell);
+        std::span<const double, 3> xd(x.data() + 3 * dof, 3);
+        x1[gdim * dof] = -xd[1];
+        x1[gdim * dof + 1] = xd[0];
       }
-  // Remove duplicates
-  dolfinx::radix_sort(std::span<std::int32_t>(dofs));
-  dofs.erase(std::unique(dofs.begin(), dofs.end()),
-                     dofs.end());
-
-  // Translations
-  for (std::size_t k = 0; k < gdim; ++k)
-  {
-    std::span<PetscScalar> x = basis[j * dim + k].mutable_array();
-    for (auto dof : dofs)
-      x[gdim * dof + k] = 1.0;
-  }
-
-  // Rotations
-  auto x1 = basis[j * dim + gdim].mutable_array();
-
-  const std::vector<double> x = V.tabulate_dof_coordinates(false);
-  if (gdim == 2)
-  {
-    for (auto dof : dofs)
-    {
-      std::span<const double, 3> xd(x.data() + 3 * dof, 3);
-      x1[gdim * dof] = -xd[1];
-      x1[gdim * dof + 1] = xd[0];
     }
-    
-  }
-  else{
-    auto x2 = basis[j * dim + 4].mutable_array();
-    auto x3 = basis[j * dim + 5].mutable_array();
-    for (auto dof : dofs)
+    else
     {
-      std::span<const double, 3> xd(x.data() + 3 * dof, 3);
-      x1[gdim * dof] = -xd[1];
-      x1[gdim * dof + 1] = xd[0];
+      auto x2 = basis[j * dim + 4].mutable_array();
+      auto x3 = basis[j * dim + 5].mutable_array();
+      for (auto dof : dofs)
+      {
+        std::span<const double, 3> xd(x.data() + 3 * dof, 3);
+        x1[gdim * dof] = -xd[1];
+        x1[gdim * dof + 1] = xd[0];
 
-      x2[gdim * dof] = xd[2];
-      x2[gdim * dof + 2] = -xd[0];
+        x2[gdim * dof] = xd[2];
+        x2[gdim * dof + 2] = -xd[0];
 
-      x3[gdim * dof + 2] = xd[1];
-      x3[gdim * dof + 1] = -xd[2];
+        x3[gdim * dof + 2] = xd[1];
+        x3[gdim * dof + 1] = -xd[2];
+      }
     }
-  }
   }
 
   // Orthonormalize basis
-  dolfinx::la::orthonormalize<dolfinx::la::Vector<PetscScalar>>(std::vector<std::reference_wrapper<dolfinx::la::Vector<PetscScalar>>>(basis.begin(), basis.end()));
-  if (!dolfinx::la::is_orthonormal(std::vector<std::reference_wrapper<const dolfinx::la::Vector<PetscScalar>>>(basis.begin(), basis.end())))
+  dolfinx::la::orthonormalize<dolfinx::la::Vector<PetscScalar>>(
+      std::vector<std::reference_wrapper<dolfinx::la::Vector<PetscScalar>>>(
+          basis.begin(), basis.end()));
+  if (!dolfinx::la::is_orthonormal(
+          std::vector<
+              std::reference_wrapper<const dolfinx::la::Vector<PetscScalar>>>(
+              basis.begin(), basis.end())))
   {
     throw std::runtime_error("Space not orthonormal");
   }

@@ -7,7 +7,8 @@ from dolfinx import log
 from dolfinx.common import Timer, timing, TimingType, list_timings
 from dolfinx.fem import (assemble_scalar, Constant, dirichletbc, form, Function,
                          FunctionSpace, locate_dofs_topological, VectorFunctionSpace)
-from dolfinx.fem.petsc import apply_lifting, assemble_matrix, assemble_vector, create_vector, set_bc
+from dolfinx.fem.petsc import (apply_lifting, assemble_matrix, assemble_vector,
+                               create_vector, set_bc)
 from dolfinx.graph import create_adjacencylist
 from dolfinx.io import XDMFFile
 from dolfinx.mesh import meshtags
@@ -229,7 +230,7 @@ def test_meshtie(threed: bool = False, simplex: bool = True, runs: int = 5):
     num_segments = (2 * np.ceil(5.0 / 1.2).astype(np.int32), 2 * np.ceil(5.0 / (1.2 * 0.7)).astype(np.int32))
     c = 0.01  # amplitude of manufactured solution
 
-    # dictionary with problem parameters
+    # Nitsche parameters
     gamma = 10
     theta = 1
 
