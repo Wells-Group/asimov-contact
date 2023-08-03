@@ -1,5 +1,5 @@
 from typing import Optional, Tuple, Union
-from dolfinx import common, fem, cpp
+from dolfinx import common, fem
 from dolfinx import mesh as _mesh
 import numpy as np
 import numpy.typing as npt
@@ -210,6 +210,6 @@ def create_contact_solver(ufl_form: ufl.Form, u: fem.Function,
 
     problem = ContactProblem(F_custom, J_custom, bcs, u, du, contact, markers, entities,
                              quadrature_degree, const_coeffs, consts, raytracing,
-                             newton_options, petsc_options)
+                             petsc_options, newton_options)
 
     return problem
