@@ -16,12 +16,12 @@ void dolfinx_contact::MeshTie::generate_meshtie_data(
   _consts = {gamma, theta};
   std::shared_ptr<const dolfinx::mesh::Mesh<double>> mesh
       = u->function_space()->mesh();          // mesh
-  std::size_t tdim = mesh->topology()->dim(); // topological dimension
+  int tdim = mesh->topology()->dim(); // topological dimension
   auto it = dolfinx::fem::IntegralType::exterior_facet;
   std::size_t coeff_size = coefficients_size(true); // data size
 
   // loop over connected pairs
-  for (std::size_t i = 0; i < _num_pairs; ++i)
+  for (int i = 0; i < _num_pairs; ++i)
   {
     // retrieve indices of connected surfaces
     const std::array<int, 2>& pair = Contact::contact_pair(i);
@@ -96,15 +96,15 @@ void dolfinx_contact::MeshTie::generate_meshtie_data(
 void dolfinx_contact::MeshTie::assemble_vector(std::span<PetscScalar> b)
 {
   std::size_t cstride = coefficients_size(true);
-  for (std::size_t i = 0; i < _num_pairs; ++i)
-    assemble_vector(b, i, _kernel_rhs, _coeffs[i], cstride, _consts);
+  for (int i = 0; i < _num_pairs; ++i)
+    assemble_vector(b, i, _kernel_rhs, _coeffs[i], (int)cstride, _consts);
 }
 
 void dolfinx_contact::MeshTie::assemble_matrix(const mat_set_fn& mat_set)
 {
   std::size_t cstride = coefficients_size(true);
-  for (std::size_t i = 0; i < _num_pairs; ++i)
-    assemble_matrix(mat_set, i, _kernel_jac, _coeffs[i], cstride, _consts);
+  for (int i = 0; i < _num_pairs; ++i)
+    assemble_matrix(mat_set, i, _kernel_jac, _coeffs[i], (int)cstride, _consts);
 }
 
 std::pair<std::vector<double>, std::size_t>

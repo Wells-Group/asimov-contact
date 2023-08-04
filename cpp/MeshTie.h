@@ -32,11 +32,11 @@ public:
           const std::vector<std::array<int, 2>>& connected_pairs,
           std::shared_ptr<dolfinx::fem::FunctionSpace<double>> V,
           const int q_deg = 3)
-      : Contact::Contact(markers, surfaces, contact_pairs, V, q_deg,
+      : Contact::Contact(markers, surfaces, connected_pairs, V, q_deg,
                 ContactMode::ClosestPoint)
   {
     // Finde closest pointes
-    for (std::size_t i = 0; i < connected_pairs.size(); ++i)
+    for (int i = 0; i < (int)connected_pairs.size(); ++i)
       Contact::create_distance_map(i);
     
     // Genearte integration kernels
@@ -44,7 +44,7 @@ public:
     _kernel_jac = Contact::generate_kernel(Kernel::MeshTieJac);
 
     // initialise internal variables
-    _num_pairs = contact_pairs.size();
+    _num_pairs = (int)connected_pairs.size();
     _coeffs.resize(_num_pairs);
     _q_deg = q_deg;
   };
@@ -81,7 +81,7 @@ private:
   // kernel functionf or matrix
   kernel_fn<PetscScalar> _kernel_jac;
   // number of pairs of connected surfaces
-  std::size_t _num_pairs;
+  int _num_pairs;
   // storage for generated data
   std::vector<std::vector<double>> _coeffs;
   // constant input parameters for kernels

@@ -1082,8 +1082,8 @@ dolfinx_contact::compute_distance_map(
 }
 MatNullSpace dolfinx_contact::build_nullspace_multibody(
     const dolfinx::fem::FunctionSpace<double>& V,
-    const dolfinx::mesh::MeshTags<std::int32_t> mt,
-    std::vector<std::int32_t> tags)
+    const dolfinx::mesh::MeshTags<std::int32_t>& mt,
+    std::vector<std::int32_t>& tags)
 {
   std::size_t gdim = V.mesh()->geometry().dim();
   std::size_t dim = (gdim == 2) ? 3 : 6;
@@ -1173,6 +1173,6 @@ MatNullSpace dolfinx_contact::build_nullspace_multibody(
   MPI_Comm comm = V.mesh()->comm();
   std::vector<Vec> v = la::petsc::create_vectors(comm, basis_local);
   MatNullSpace ns = la::petsc::create_nullspace(comm, v);
-  std::for_each(v.begin(), v.end(), [](auto v) { VecDestroy(&v); });
+  std::for_each(v.begin(), v.end(), [](auto v0) { VecDestroy(&v0); });
   return ns;
 }
