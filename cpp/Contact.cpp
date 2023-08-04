@@ -1472,7 +1472,7 @@ void dolfinx_contact::Contact::update_submesh_geometry(
 }
 
 //-----------------------------------------------------------------------------------------------
-std::size_t dolfinx_contact::Contact::num_q_points()
+std::size_t dolfinx_contact::Contact::num_q_points() const
 {
   return _quadrature_rule->offset()[1] - _quadrature_rule->offset()[0];
 }

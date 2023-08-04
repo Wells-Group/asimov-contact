@@ -258,7 +258,7 @@ public:
 
   /// Return number of quadrature points per facet
   /// Assumes all facets are identical
-  std::size_t num_q_points();
+  std::size_t num_q_points() const;
 
 private:
   std::shared_ptr<QuadratureRule> _quadrature_rule; // quadrature rule
