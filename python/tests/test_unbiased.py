@@ -432,10 +432,10 @@ def create_contact_data(V, u, quadrature_degree, lmbda, mu, facets_cg, search, t
     grad_u_0 = dolfinx_contact.cpp.pack_gradient_quadrature(u._cpp_object, quadrature_degree, entities_0)
     grad_u_1 = dolfinx_contact.cpp.pack_gradient_quadrature(u._cpp_object, quadrature_degree, entities_1)
     if tied:
-        grad_test_fn_0 = contact.pack_grad_test_functions(0, gap_0, np.zeros(gap_0.shape))
-        grad_test_fn_1 = contact.pack_grad_test_functions(1, gap_1, np.zeros(gap_1.shape))
-        grad_u_opp_0 = contact.pack_grad_u_contact(0, u._cpp_object, gap_0, np.zeros(gap_0.shape))
-        grad_u_opp_1 = contact.pack_grad_u_contact(1, u._cpp_object, gap_1, np.zeros(gap_1.shape))
+        grad_test_fn_0 = contact.pack_grad_test_functions(0)
+        grad_test_fn_1 = contact.pack_grad_test_functions(1)
+        grad_u_opp_0 = contact.pack_grad_u_contact(0, u._cpp_object)
+        grad_u_opp_1 = contact.pack_grad_u_contact(1, u._cpp_object)
 
         # Concatenate all coeffs
         coeff_0 = np.hstack([material_0, h_0, test_fn_0, grad_test_fn_0, u_0, grad_u_0, u_opp_0, grad_u_opp_0])

@@ -211,12 +211,9 @@ public:
   /// Compute gradient of test functions on opposite surface (initial
   /// configuration) at quadrature points of facets
   /// @param[in] pair - index of contact pair
-  /// @param[in] gap - gap packed on facets per quadrature point
-  /// @param[in] u_packed -u packed on opposite surface per quadrature point
   /// @param[out] c - test functions packed on facets.
   std::pair<std::vector<PetscScalar>, int>
-  pack_grad_test_functions(int pair, const std::span<const PetscScalar>& gap,
-                           const std::span<const PetscScalar>& u_packed);
+  pack_grad_test_functions(int pair);
 
   /// Compute function on opposite surface at quadrature points of
   /// facets
@@ -230,14 +227,10 @@ public:
   /// Compute gradient of function on opposite surface at quadrature points of
   /// facets
   /// @param[in] pair - index of contact pair
-  /// @param[in] gap - gap packed on facets per quadrature point
-  /// @param[in] u_packed -u packed on opposite surface per quadrature point
   /// @param[out] c - test functions packed on facets.
   std::pair<std::vector<PetscScalar>, int>
   pack_grad_u_contact(int pair,
-                      std::shared_ptr<dolfinx::fem::Function<PetscScalar>> u,
-                      const std::span<const PetscScalar> gap,
-                      const std::span<const PetscScalar> u_packed);
+                      std::shared_ptr<dolfinx::fem::Function<PetscScalar>> u);
 
   /// Compute outward surface normal at x
   /// @param[in] pair - index of contact pair

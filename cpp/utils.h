@@ -153,8 +153,8 @@ evaluate_basis_shape(const dolfinx::fem::FunctionSpace<double>& V,
 /// Get basis values (not unrolled for block size) for a set of points and
 /// corresponding cells.
 /// @param[in] V The function space
-/// @param[in] x The coordinates of the points. It has shape
-/// (num_points, gdim). Flattened row major
+/// @param[in] x The coordinates of the points in the reference elements. It has shape
+/// (num_points, tdim). Flattened row major
 /// @param[in] cells An array of cell indices. cells[i] is the index
 /// of the cell that contains the point x(i). Negative cell indices
 /// can be passed, and the corresponding point will be ignored.

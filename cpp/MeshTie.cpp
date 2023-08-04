@@ -15,7 +15,7 @@ void dolfinx_contact::MeshTie::generate_meshtie_data(
   // save nitsche parameters as constants
   _consts = {gamma, theta};
   std::shared_ptr<const dolfinx::mesh::Mesh<double>> mesh
-      = u->function_space()->mesh();          // mesh
+      = u->function_space()->mesh();  // mesh
   int tdim = mesh->topology()->dim(); // topological dimension
   auto it = dolfinx::fem::IntegralType::exterior_facet;
   std::size_t coeff_size = coefficients_size(true); // data size
@@ -45,17 +45,11 @@ void dolfinx_contact::MeshTie::generate_meshtie_data(
     auto [u_p, c_u] = pack_coefficient_quadrature(u, _q_deg, entities, it); // u
     auto [gradu, c_gu]
         = pack_gradient_quadrature(u, _q_deg, entities, it); // grad(u)
-    auto [u_cd, c_uc] = Contact::pack_u_contact(i, u);
-
-    // pack grad(v), grad(u) with respect to the integration on the other
-    // surface for general contact, if the gap is computed based on the deformed
-    // configuration we would need the deformation up to the previous load step
-    // to compute u/grad(u) on the opposite surface. For meshties, if we assume
-    // the gap is always computed based on the initial configuration, we can use
-    // a dummy with all zeros
-    std::vector<double> dummy(gap.size(), 0.0);
-    auto [u_gc, c_ugc] = Contact::pack_grad_u_contact(i, u, gap, dummy);
-    auto [gradtst, cgt] = Contact::pack_grad_test_functions(i, gap, dummy);
+    auto [u_cd, c_uc] = Contact::pack_u_contact(i, u); // u on connected surface
+    auto [u_gc, c_ugc]
+        = Contact::pack_grad_u_contact(i, u); // grad(u) on connected surface
+    auto [gradtst, cgt]
+        = Contact::pack_grad_test_functions(i); // test fns on connected surface
 
     // copy data into one common data vector in the order expected by the
     // integration kernel
