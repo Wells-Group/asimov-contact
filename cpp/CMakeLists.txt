@@ -53,7 +53,7 @@ target_link_libraries(dolfinx_contact PUBLIC Basix::basix)
 target_link_libraries(dolfinx_contact PUBLIC dolfinx)
 
 include(GNUInstallDirs)
-install(FILES Contact.h contact_kernels.h rigid_surface_kernels.h error_handling.h utils.h coefficients.h elasticity.h geometric_quantities.h meshtie_kernels.h parallel_mesh_ghosting.h point_cloud.h SubMesh.h QuadratureRule.h RayTracing.h KernelData.h DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/dolfinx_contact COMPONENT Development)
+install(FILES Contact.h MeshTie.h contact_kernels.h rigid_surface_kernels.h error_handling.h utils.h coefficients.h elasticity.h geometric_quantities.h meshtie_kernels.h parallel_mesh_ghosting.h point_cloud.h SubMesh.h QuadratureRule.h RayTracing.h KernelData.h DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/dolfinx_contact COMPONENT Development)
 
 target_sources(dolfinx_contact PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/utils.cpp
@@ -65,6 +65,7 @@ target_sources(dolfinx_contact PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/SubMesh.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/QuadratureRule.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/Contact.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/MeshTie.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/RayTracing.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/KernelData.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/error_handling.cpp

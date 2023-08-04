@@ -23,7 +23,12 @@
 #include <dolfinx/geometry/BoundingBoxTree.h>
 #include <dolfinx/geometry/gjk.h>
 #include <dolfinx/geometry/utils.h>
+#include <dolfinx/la/Vector.h>
+#include <dolfinx/la/petsc.h>
+#include <dolfinx/la/utils.h>
 #include <dolfinx/mesh/Mesh.h>
+#include <dolfinx/mesh/MeshTags.h>
+
 namespace dolfinx_contact
 {
 
@@ -810,5 +815,18 @@ compute_raytracing_map(const dolfinx::mesh::Mesh<double>& quadrature_mesh,
           reference_points,
           std::array<std::size_t, 2>{reference_points.size() / tdim, tdim}};
 }
+
+/// Create near nullspace that contains transations
+/// and rotations of each of the disconnected components in
+/// the mesh
+/// @param[in] V The functionspace
+/// @param[in] mt Meshtag marking the cells of the individual components
+/// @param[in] tags List of meshtag values for the individual components
+/// @returns A PETSC MatNullSpace containing rotations and translations of
+/// each component
+MatNullSpace
+build_nullspace_multibody(const dolfinx::fem::FunctionSpace<double>& V,
+                          const dolfinx::mesh::MeshTags<std::int32_t>& mt,
+                          std::vector<std::int32_t>& tags);
 
 } // namespace dolfinx_contact

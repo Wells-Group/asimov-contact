@@ -155,8 +155,8 @@ def setup_newton_solver(F_custom: fem.forms.Form, J_custom: fem.forms.Form,
         A.zeroEntries()
         with common.Timer("~~Contact: Contact contributions (in assemble matrix)"):
             for i in range(num_pairs):
-                contact.assemble_matrix(A, [], i, kernel_jac, coeffs[i], consts)
-                contact.assemble_matrix(A, [], i, kernel_friction_jac, coeffs[i], consts)
+                contact.assemble_matrix(A, i, kernel_jac, coeffs[i], consts)
+                contact.assemble_matrix(A, i, kernel_friction_jac, coeffs[i], consts)
         with common.Timer("~~Contact: Standard contributions (in assemble matrix)"):
             fem.petsc.assemble_matrix(A, J_custom, bcs=tbcs)
         A.assemble()

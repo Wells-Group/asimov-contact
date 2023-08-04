@@ -72,7 +72,7 @@ setup(name='dolfinx_contact',
 
       author='Sarah Roggendorf',
       python_requires='>3.7.0',
-      packages=['dolfinx_contact', "dolfinx_contact.one_sided", "dolfinx_contact.meshing", "dolfinx_contact.meshtie",
+      packages=['dolfinx_contact', "dolfinx_contact.one_sided", "dolfinx_contact.meshing",
                 "dolfinx_contact.unbiased"],
       package_data={'dolfinx_contact.wrappers': ['*.h'], 'dolfinx_contact': ["py.typed"],
                     "dolfinx_contact.one_sided": ["py.typed"], "dolfinx_contact.meshing": ["py.typed"],

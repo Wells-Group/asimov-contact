@@ -10,6 +10,7 @@
 #include <dolfinx/la/petsc.h>
 #include <dolfinx/mesh/MeshTags.h>
 #include <dolfinx_contact/Contact.h>
+#include <dolfinx_contact/MeshTie.h>
 #include <dolfinx_contact/QuadratureRule.h>
 #include <dolfinx_contact/RayTracing.h>
 #include <dolfinx_contact/SubMesh.h>
@@ -226,15 +227,13 @@ PYBIND11_MODULE(cpp, m)
 
       .def("assemble_matrix",
            [](dolfinx_contact::Contact& self, Mat A,
-              const std::vector<std::shared_ptr<
-                  const dolfinx::fem::DirichletBC<PetscScalar>>>& bcs,
               int origin_meshtag, contact_wrappers::KernelWrapper& kernel,
               const py::array_t<PetscScalar, py::array::c_style>& coeffs,
               const py::array_t<PetscScalar, py::array::c_style>& constants)
            {
              auto ker = kernel.get();
              self.assemble_matrix(
-                 dolfinx::la::petsc::Matrix::set_block_fn(A, ADD_VALUES), bcs,
+                 dolfinx::la::petsc::Matrix::set_block_fn(A, ADD_VALUES),
                  origin_meshtag, ker,
                  std::span<const PetscScalar>(coeffs.data(), coeffs.size()),
                  coeffs.shape(1),
@@ -335,6 +334,48 @@ PYBIND11_MODULE(cpp, m)
       .value("CoulombJac", dolfinx_contact::Kernel::CoulombJac)
       .value("MeshTieRhs", dolfinx_contact::Kernel::MeshTieRhs)
       .value("MeshTieJac", dolfinx_contact::Kernel::MeshTieJac);
+
+  // Contact
+  py::class_<dolfinx_contact::MeshTie,
+             std::shared_ptr<dolfinx_contact::MeshTie>>(m, "MeshTie",
+                                                        "meshtie object")
+      .def(py::init<std::vector<
+                        std::shared_ptr<dolfinx::mesh::MeshTags<std::int32_t>>>,
+                    std::shared_ptr<
+                        const dolfinx::graph::AdjacencyList<std::int32_t>>,
+                    std::vector<std::array<int, 2>>,
+           std::shared_ptr<dolfinx::fem::FunctionSpace<double>>, const int>(),
+           py::arg("markers"), py::arg("surfaces"), py::arg("contact_pairs"),
+           py::arg("V"), py::arg("quadrature_degree") = 3)
+        .def("coeffs",
+           [](dolfinx_contact::MeshTie& self, int pair)
+           {
+             auto [coeffs, cstride] = self.coeffs(pair);
+             std::array<std::size_t, 2> shape_out = {coeffs.size()/cstride, cstride};
+             return dolfinx_wrappers::as_pyarray(std::move(coeffs), shape_out);
+           }, "Get packed coefficients")
+        .def("generate_meshtie_data", &dolfinx_contact::MeshTie::generate_meshtie_data)
+        .def("generate_meshtie_data_matrix_only", &dolfinx_contact::MeshTie::generate_meshtie_data_matrix_only)
+        .def("assemble_matrix",
+           [](dolfinx_contact::MeshTie& self, Mat A)
+           {
+             self.assemble_matrix(
+                 dolfinx::la::petsc::Matrix::set_block_fn(A, ADD_VALUES));
+           })
+      .def("assemble_vector",
+           [](dolfinx_contact::MeshTie& self,
+              py::array_t<PetscScalar, py::array::c_style>& b)
+           {
+             self.assemble_vector(
+                 std::span(b.mutable_data(), b.size()));
+           })
+        .def(
+          "create_matrix",
+          [](dolfinx_contact::MeshTie& self, dolfinx::fem::Form<PetscScalar>& a,
+             std::string type) { return self.create_petsc_matrix(a, type); },
+          py::return_value_policy::take_ownership, py::arg("a"),
+          py::arg("type") = std::string(),
+          "Create a PETSc Mat for tying disconnected meshes.");
   m.def(
       "pack_coefficient_quadrature",
       [](std::shared_ptr<const dolfinx::fem::Function<PetscScalar>> coeff,

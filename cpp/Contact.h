@@ -35,6 +35,8 @@ namespace dolfinx_contact
 class Contact
 {
 public:
+  // empty constructor
+  Contact() = default;
   /// Constructor
   /// @param[in] markers List of meshtags defining the contact surfaces
   /// @param[in] surfaces Adjacency list. Links of i contains meshtag values
@@ -135,8 +137,6 @@ public:
   /// @param[in] constants used in the variational form
   void assemble_matrix(
       const mat_set_fn& mat_set,
-      const std::vector<
-          std::shared_ptr<const dolfinx::fem::DirichletBC<PetscScalar>>>& bcs,
       int pair, const kernel_fn<PetscScalar>& kernel,
       const std::span<const PetscScalar> coeffs, int cstride,
       const std::span<const PetscScalar>& constants);
@@ -255,6 +255,10 @@ public:
   /// a function given on the parent mesh
   /// @param[in] u - displacement
   void update_submesh_geometry(dolfinx::fem::Function<PetscScalar>& u);
+
+  /// Return number of quadrature points per facet
+  /// Assumes all facets are identical
+  std::size_t num_q_points() const;
 
 private:
   std::shared_ptr<QuadratureRule> _quadrature_rule; // quadrature rule
