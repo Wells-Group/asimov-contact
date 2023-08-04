@@ -1027,8 +1027,8 @@ dolfinx_contact::Contact::pack_ny(int pair)
 
 //------------------------------------------------------------------------------------------------
 void dolfinx_contact::Contact::assemble_matrix(
-    mat_set_fn& mat_set,
-    int pair, const dolfinx_contact::kernel_fn<PetscScalar>& kernel,
+    mat_set_fn& mat_set, int pair,
+    const dolfinx_contact::kernel_fn<PetscScalar>& kernel,
     const std::span<const PetscScalar> coeffs, int cstride,
     const std::span<const PetscScalar>& constants)
 {
@@ -1469,4 +1469,10 @@ void dolfinx_contact::Contact::update_submesh_geometry(
     dolfinx::fem::Function<PetscScalar>& u)
 {
   _submesh.update_geometry(u);
+}
+
+//-----------------------------------------------------------------------------------------------
+std::size_t dolfinx_contact::Contact::num_q_points()
+{
+  return _quadrature_rule->offset()[1] - _quadrature_rule->offset()[0];
 }

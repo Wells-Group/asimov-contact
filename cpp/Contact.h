@@ -256,6 +256,10 @@ public:
   /// @param[in] u - displacement
   void update_submesh_geometry(dolfinx::fem::Function<PetscScalar>& u);
 
+  /// Return number of quadrature points per facet
+  /// Assumes all facets are identical
+  std::size_t num_q_points();
+
 private:
   std::shared_ptr<QuadratureRule> _quadrature_rule; // quadrature rule
   std::vector<int> _surfaces; // meshtag values for surfaces
