@@ -124,19 +124,10 @@ int main(int argc, char* argv[])
           return {_f, {_f.size()}};
         });
 
-    // displacement function
-    auto u = std::make_shared<fem::Function<double>>(V);
-    std::size_t bs = V->dofmap()->bs();
-    u->interpolate(
-        [bs](auto x) -> std::pair<std::vector<double>, std::vector<std::size_t>>
-        {
-          std::vector<double> fdata(bs * x.extent(1), 0.0);
-          return {std::move(fdata), {bs, x.extent(1)}};
-        });
 
     // Function for body force
     auto f = std::make_shared<fem::Function<double>>(V);
-
+    std::size_t bs = V->dofmap()->bs();
     f->interpolate(
         [bs](auto x) -> std::pair<std::vector<double>, std::vector<std::size_t>>
         {
@@ -203,7 +194,7 @@ int main(int argc, char* argv[])
     auto meshties
         = dolfinx_contact::MeshTie(markers, contact_markers, pairs, V, 5);
 
-    meshties.generate_meshtie_data(u, lmbda, mu, E * gamma, theta);
+    meshties.generate_meshtie_data_matrix_only(lmbda, mu, E * gamma, theta);
 
     // Create matrix and vector
     auto A = dolfinx::la::petsc::Matrix(
@@ -239,8 +230,9 @@ int main(int argc, char* argv[])
     MatAssemblyEnd(A.mat(), MAT_FINAL_ASSEMBLY);
 
     // Build near-nullspace and attach to matrix
+    std::vector<std::int32_t>tags = {1, 2};
     MatNullSpace ns = dolfinx_contact::build_nullspace_multibody(
-        *V, domain1, std::vector<std::int32_t>({1, 2}));
+        *V, domain1, tags);
     MatSetNearNullSpace(A.mat(), ns);
     MatNullSpaceDestroy(&ns);
 
@@ -261,8 +253,10 @@ int main(int argc, char* argv[])
     dolfinx::la::petsc::options::set("ksp_monitor");
 
     lu.set_from_options();
-
     lu.set_operator(A.mat());
+
+    // displacement function
+    auto u = std::make_shared<fem::Function<double>>(V);
     dolfinx::la::petsc::Vector _u(
         dolfinx::la::petsc::create_vector_wrap(*u->x()), false);
     dolfinx::la::petsc::Vector _b(dolfinx::la::petsc::create_vector_wrap(b),

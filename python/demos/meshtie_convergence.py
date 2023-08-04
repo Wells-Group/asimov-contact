@@ -292,7 +292,6 @@ def test_meshtie(threed: bool = False, simplex: bool = True, runs: int = 5):
 
         # Function, TestFunction, TrialFunction and measures
         V = VectorFunctionSpace(mesh, ("Lagrange", 1))
-        u = Function(V)
         v = ufl.TestFunction(V)
         w = ufl.TrialFunction(V)
         dx = ufl.Measure("dx", domain=mesh, subdomain_data=domain_marker)
@@ -336,7 +335,7 @@ def test_meshtie(threed: bool = False, simplex: bool = True, runs: int = 5):
         # initialise meshties
         meshties = MeshTie([facet_marker._cpp_object], surfaces, contact,
                            V._cpp_object, quadrature_degree=5)
-        meshties.generate_meshtie_data(u._cpp_object, lmbda._cpp_object, mu._cpp_object, E * gamma, theta)
+        meshties.generate_meshtie_data_matrix_only(lmbda._cpp_object, mu._cpp_object, E * gamma, theta)
 
         # create matrix, vector
         A = meshties.create_matrix(J._cpp_object)
@@ -345,7 +344,6 @@ def test_meshtie(threed: bool = False, simplex: bool = True, runs: int = 5):
         # Assemble right hand side
         b.zeroEntries()
         b.ghostUpdate(addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD)
-        meshties.assemble_vector(b)
         assemble_vector(b, F)
         b.ghostUpdate(addv=PETSc.InsertMode.ADD, mode=PETSc.ScatterMode.REVERSE)
 

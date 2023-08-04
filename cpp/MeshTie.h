@@ -33,12 +33,12 @@ public:
           std::shared_ptr<dolfinx::fem::FunctionSpace<double>> V,
           const int q_deg = 3)
       : Contact::Contact(markers, surfaces, connected_pairs, V, q_deg,
-                ContactMode::ClosestPoint)
+                         ContactMode::ClosestPoint)
   {
     // Finde closest pointes
     for (int i = 0; i < (int)connected_pairs.size(); ++i)
       Contact::create_distance_map(i);
-    
+
     // Genearte integration kernels
     _kernel_rhs = Contact::generate_kernel(Kernel::MeshTieRhs);
     _kernel_jac = Contact::generate_kernel(Kernel::MeshTieJac);
@@ -49,27 +49,36 @@ public:
     _q_deg = q_deg;
   };
 
-  /// Generate data for matrix assembly
+  /// Generate data for matrix/vector assembly
   /// @param[in] u - the displacement function
   /// @param[in] lambda - lame parameter lambda as DG0 function
   /// @param[in] mu - lame parameter mu as DG0 function
   /// @param[in] gamma - Nitsche penalty parameter
   /// @param[in] theta - Nitsche parameter
-  void generate_meshtie_data(std::shared_ptr<dolfinx::fem::Function<double>> u,
-                         std::shared_ptr<dolfinx::fem::Function<double>> lambda,
-                         std::shared_ptr<dolfinx::fem::Function<double>> mu,
-                         double gamma, double theta);
+  void
+  generate_meshtie_data(std::shared_ptr<dolfinx::fem::Function<double>> u,
+                        std::shared_ptr<dolfinx::fem::Function<double>> lambda,
+                        std::shared_ptr<dolfinx::fem::Function<double>> mu,
+                        double gamma, double theta);
 
+  /// Generate data for matrix assembly
+  /// @param[in] lambda - lame parameter lambda as DG0 function
+  /// @param[in] mu - lame parameter mu as DG0 function
+  /// @param[in] gamma - Nitsche penalty parameter
+  /// @param[in] theta - Nitsche parameter
+  void generate_meshtie_data_matrix_only(
+      std::shared_ptr<dolfinx::fem::Function<double>> lambda,
+      std::shared_ptr<dolfinx::fem::Function<double>> mu, double gamma,
+      double theta);
   using Contact::assemble_vector;
   /// Assemble right hand side
   /// @param[in] b - the vector to assemble into
   void assemble_vector(std::span<PetscScalar> b);
-  
+
   using Contact::assemble_matrix;
   /// Assemble matrix
   /// @param[in] mat_set function for setting matrix entries
-  void assemble_matrix(
-      const mat_set_fn& mat_set);
+  void assemble_matrix(const mat_set_fn& mat_set);
 
   /// Return data generated with generate_meshtie_data
   /// @param[in] pair - the index of the pair of connected surfaces

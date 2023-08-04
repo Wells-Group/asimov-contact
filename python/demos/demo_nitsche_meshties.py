@@ -97,7 +97,6 @@ if __name__ == "__main__":
 
     # Function, TestFunction, TrialFunction and measures
     V = VectorFunctionSpace(mesh, ("Lagrange", 1))
-    u = Function(V)
     v = ufl.TestFunction(V)
     w = ufl.TrialFunction(V)
     dx = ufl.Measure("dx", domain=mesh, subdomain_data=domain_marker)
@@ -180,7 +179,7 @@ if __name__ == "__main__":
     # initialise meshties
     meshties = MeshTie([facet_marker._cpp_object], surfaces, contact,
                        V._cpp_object, quadrature_degree=5)
-    meshties.generate_meshtie_data(u._cpp_object, lmbda._cpp_object, mu._cpp_object, E * gamma, theta)
+    meshties.generate_meshtie_data_matrix_only(lmbda._cpp_object, mu._cpp_object, E * gamma, theta)
 
     # create matrix, vector
     A = meshties.create_matrix(J._cpp_object)
@@ -189,16 +188,14 @@ if __name__ == "__main__":
     # Assemble right hand side
     b.zeroEntries()
     b.ghostUpdate(addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD)
-    meshties.assemble_vector(b)
     assemble_vector(b, F)
 
     # Apply boundary condition and scatter reverse
-    x = u.vector
     if len(bcs) > 0:
-        apply_lifting(b, [J], bcs=[bcs], x0=[x], scale=-1.0)
+        apply_lifting(b, [J], bcs=[bcs], scale=-1.0)
     b.ghostUpdate(addv=PETSc.InsertMode.ADD, mode=PETSc.ScatterMode.REVERSE)
     if len(bcs) > 0:
-        set_bc(b, bcs, x, -1.0)
+        set_bc(b, bcs)
 
     # Assemble matrix
     A.zeroEntries()
@@ -207,7 +204,7 @@ if __name__ == "__main__":
     A.assemble()
 
     # Set rigid motion nullspace
-    null_space = rigid_motions_nullspace_subdomains(V, domain_marker, np.array([1, 2], dtype=np.int32),
+    null_space = rigid_motions_nullspace_subdomains(V, domain_marker, np.unique(domain_marker.values),
                                                     num_domains=2)
     A.setNearNullSpace(null_space)
 
@@ -253,7 +250,7 @@ if __name__ == "__main__":
     else:
         outfile = open(args.outfile, "a")
     print("-" * 25, file=outfile)
-    print(f"num_dofs: {u.function_space.dofmap.index_map_bs*u.function_space.dofmap.index_map.size_global}"
+    print(f"num_dofs: {uh.function_space.dofmap.index_map_bs*uh.function_space.dofmap.index_map.size_global}"
           + f", {mesh.topology.cell_types[0]}", file=outfile)
     print(f"Krylov solver {solver_time}", file=outfile)
     print(f"Krylov iterations {solver.getIterationNumber()}", file=outfile)

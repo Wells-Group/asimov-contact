@@ -355,6 +355,7 @@ PYBIND11_MODULE(cpp, m)
              return dolfinx_wrappers::as_pyarray(std::move(coeffs), shape_out);
            }, "Get packed coefficients")
         .def("generate_meshtie_data", &dolfinx_contact::MeshTie::generate_meshtie_data)
+        .def("generate_meshtie_data_matrix_only", &dolfinx_contact::MeshTie::generate_meshtie_data_matrix_only)
         .def("assemble_matrix",
            [](dolfinx_contact::MeshTie& self, Mat A)
            {

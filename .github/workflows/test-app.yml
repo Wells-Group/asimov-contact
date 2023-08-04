@@ -91,6 +91,13 @@ jobs:
           cmake -G Ninja -DCMAKE_BUILD_TYPE=${{ matrix.run_mode }} -DCMAKE_CXX_FLAGS="${CONTACT_CMAKE_CXX_FLAGS}" -B build-contact -S cpp/
           ninja -C build-contact install
 
+      - name: Run demos (C++)
+        run: |
+          cd cpp/demos/meshtie
+          cmake -G Ninja -B build-dir
+          ninja -C build-dir
+          ./build-dir/demo_meshtie
+
       - name: Install contact
         run: BUILD_TYPE="Debug" python3 -m pip -v install python/
 
