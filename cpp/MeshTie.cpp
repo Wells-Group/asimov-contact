@@ -1,10 +1,11 @@
-// Copyright (C) 2021-2022 Sarah Roggendorf
+// Copyright (C) 2023 Sarah Roggendorf
 //
 // This file is part of DOLFINx_Contact
 //
 // SPDX-License-Identifier:    MIT
 
 #include "MeshTie.h"
+
 
 void dolfinx_contact::MeshTie::generate_meshtie_data(
     std::shared_ptr<dolfinx::fem::Function<double>> u,
@@ -13,8 +14,7 @@ void dolfinx_contact::MeshTie::generate_meshtie_data(
     double theta)
 {
   // generate the data used for the matrix
-  generate_meshtie_data_matrix_only(lambda, mu, theta, gamma);
-
+  generate_meshtie_data_matrix_only(lambda, mu, gamma, theta);
   std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V
       = u->function_space();  // mesh
   std::shared_ptr<const dolfinx::mesh::Mesh<double>> mesh
@@ -46,7 +46,7 @@ void dolfinx_contact::MeshTie::generate_meshtie_data(
         = Contact::pack_grad_u_contact(i, u); // grad(u) on connected surface
 
 
-    // copy data into one _coeffs in the order expected by the
+    // copy data into _coeffs in the order expected by the
     // integration kernel
     for (std::size_t e = 0; e < num_facets; ++e)
     {
