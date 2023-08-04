@@ -161,7 +161,7 @@ def nitsche_meshtie(lhs: ufl.Form,
         for i in range(len(surface_pairs)):
             gaps.append(contact.pack_gap(i))
             test_fns.append(contact.pack_test_functions(i))
-            grad_test_fns.append(contact.pack_grad_test_functions(i, gaps[i], np.zeros(gaps[i].shape)))
+            grad_test_fns.append(contact.pack_grad_test_functions(i))
 
     # Concatenate all coeffs
     coeffs_const = []
@@ -189,7 +189,7 @@ def nitsche_meshtie(lhs: ufl.Form,
     with _common.Timer("~~Contact " + timing_str + ": Pack u contact"):
         for i in range(len(surface_pairs)):
             u_candidate.append(contact.pack_u_contact(i, u._cpp_object))
-            grad_u_candidate.append(contact.pack_grad_u_contact(i, u._cpp_object, gaps[i], np.zeros(gaps[i].shape)))
+            grad_u_candidate.append(contact.pack_grad_u_contact(i, u._cpp_object))
     u_puppet = []
     grad_u_puppet = []
     with _common.Timer("~~Contact " + timing_str + ": Pack u"):

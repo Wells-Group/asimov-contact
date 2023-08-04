@@ -265,14 +265,10 @@ PYBIND11_MODULE(cpp, m)
            })
       .def(
           "pack_grad_test_functions",
-          [](dolfinx_contact::Contact& self, int origin_meshtag,
-             const py::array_t<PetscScalar, py::array::c_style>& gap,
-             const py::array_t<PetscScalar, py::array::c_style>& u_packed)
+          [](dolfinx_contact::Contact& self, int origin_meshtag)
           {
             auto [coeffs, cstride] = self.pack_grad_test_functions(
-                origin_meshtag,
-                std::span<const PetscScalar>(gap.data(), gap.size()),
-                std::span<const PetscScalar>(u_packed.data(), u_packed.size()));
+                origin_meshtag);
             int shape0 = cstride == 0 ? 0 : coeffs.size() / cstride;
             return dolfinx_wrappers::as_pyarray(std::move(coeffs),
                                                 std::array{shape0, cstride});
@@ -308,14 +304,10 @@ PYBIND11_MODULE(cpp, m)
       .def(
           "pack_grad_u_contact",
           [](dolfinx_contact::Contact& self, int origin_meshtag,
-             std::shared_ptr<dolfinx::fem::Function<PetscScalar>> u,
-             const py::array_t<PetscScalar, py::array::c_style>& gap,
-             const py::array_t<PetscScalar, py::array::c_style>& u_packed)
+             std::shared_ptr<dolfinx::fem::Function<PetscScalar>> u)
           {
             auto [coeffs, cstride] = self.pack_grad_u_contact(
-                origin_meshtag, u,
-                std::span<const PetscScalar>(gap.data(), gap.size()),
-                std::span<const PetscScalar>(u_packed.data(), u_packed.size()));
+                origin_meshtag, u);
             int shape0 = cstride == 0 ? 0 : coeffs.size() / cstride;
             return dolfinx_wrappers::as_pyarray(std::move(coeffs),
                                                 std::array{shape0, cstride});
