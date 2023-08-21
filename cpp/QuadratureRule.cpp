@@ -7,11 +7,11 @@
 
 #include "QuadratureRule.h"
 #include <basix/finite-element.h>
+#include <basix/polyset.h>
 #include <basix/quadrature.h>
 #include <dolfinx/common/math.h>
 #include <dolfinx/mesh/cell_types.h>
 #include <dolfinx/mesh/utils.h>
-
 using namespace dolfinx_contact;
 
 dolfinx_contact::QuadratureRule::QuadratureRule(dolfinx::mesh::CellType ct,
@@ -28,7 +28,8 @@ dolfinx_contact::QuadratureRule::QuadratureRule(dolfinx::mesh::CellType ct,
   if (_tdim == std::size_t(dim))
   {
     std::array<std::vector<double>, 2> quadrature
-        = basix::quadrature::make_quadrature<double>(type, b_ct, degree);
+        = basix::quadrature::make_quadrature<double>(
+            type, b_ct, basix::polyset::type::standard, degree);
     std::vector<double>& q_weights = quadrature.back();
     std::size_t num_points = q_weights.size();
     std::size_t pt_shape = quadrature.front().size() / num_points;
@@ -66,7 +67,8 @@ dolfinx_contact::QuadratureRule::QuadratureRule(dolfinx::mesh::CellType ct,
           basix::element::dpc_variant::unset, false);
       // Create quadrature and tabulate on entity
       std::array<std::vector<double>, 2> quadrature
-          = basix::quadrature::make_quadrature<double>(type, et, degree);
+          = basix::quadrature::make_quadrature<double>(
+              type, et, basix::polyset::type::standard, degree);
       const std::vector<double>& q_weights = quadrature.back();
       const std::vector<double>& q_points = quadrature.front();
       const std::size_t num_points = q_weights.size();

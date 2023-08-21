@@ -53,8 +53,8 @@ def test_pack_coeff_at_quadrature(ct, quadrature_degree, space, degree):
         v._cpp_object, quadrature_degree, integration_entities)
 
     # Use prepare quadrature points and geometry for eval
-    quadrature_points, _ = basix.make_quadrature(
-        basix.QuadratureType.Default, basix.cell.string_to_type(to_string(ct)), quadrature_degree)
+    quadrature_points, _ = basix.make_quadrature(basix.cell.string_to_type(to_string(ct)),
+                                                 quadrature_degree, basix.QuadratureType.Default)
 
     # Use Expression to verify packing
     expr = Expression(v, quadrature_points)
@@ -159,7 +159,7 @@ def test_sub_coeff(quadrature_degree, degree):
 
     # Use prepare quadrature points and geometry for eval
     quadrature_points, wts = basix.make_quadrature(
-        basix.QuadratureType.Default, basix.CellType.tetrahedron, quadrature_degree)
+        basix.CellType.tetrahedron, quadrature_degree, basix.QuadratureType.Default)
     num_sub_spaces = V.num_sub_spaces
     for i in range(num_sub_spaces):
         vi = v.sub(i)
@@ -196,7 +196,7 @@ def test_sub_coeff_grad(quadrature_degree, degree):
 
     # Use prepare quadrature points and geometry for eval
     quadrature_points, wts = basix.make_quadrature(
-        basix.QuadratureType.Default, basix.CellType.tetrahedron, quadrature_degree)
+        basix.CellType.tetrahedron, quadrature_degree, basix.QuadratureType.Default)
     num_sub_spaces = V.num_sub_spaces
     for i in range(num_sub_spaces):
         vi = v.sub(i)
