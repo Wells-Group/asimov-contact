@@ -144,6 +144,7 @@ def create_halfdisk_plane_mesh(filename: str, res=0.1, order: int = 1, quads=Fal
     MPI.COMM_WORLD.Barrier()
     gmsh.finalize()
 
+
 def create_quarter_disks_mesh(filename: str, res=0.1, order: int = 1, quads=False, r=0.25, gap=0.01):
     """
     Create a quarter disk, with center at (0.0,0.0,0), radius r and  y<=0.0, x>=0
@@ -157,7 +158,7 @@ def create_quarter_disks_mesh(filename: str, res=0.1, order: int = 1, quads=Fals
         bottom1 = gmsh.model.occ.addPoint(0.0, -r, 0.0)
         top_right = gmsh.model.occ.addPoint(r, 0, 0)
         top_left = gmsh.model.occ.addPoint(-r, 0, 0)
-        angle = np.pi/6
+        angle = np.pi / 6
         right1 = gmsh.model.occ.addPoint(r * np.sin(angle), -r * np.cos(angle), 0)
         left1 = gmsh.model.occ.addPoint(-r * np.sin(angle), -r * np.cos(angle), 0)
         arcs1 = []
@@ -179,8 +180,8 @@ def create_quarter_disks_mesh(filename: str, res=0.1, order: int = 1, quads=Fals
         bottom_right = gmsh.model.occ.addPoint(r, -2 * r - gap, 0.0)
         bottom_left = gmsh.model.occ.addPoint(-r, -2 * r - gap, 0.0)
         top2 = gmsh.model.occ.addPoint(0, -r - gap, 0)
-        right2 = gmsh.model.occ.addPoint(r * np.sin(angle), r * np.cos(angle) - 2 *r -gap, 0)
-        left2 = gmsh.model.occ.addPoint(-r * np.sin(angle), r * np.cos(angle) - 2 *r -gap, 0)
+        right2 = gmsh.model.occ.addPoint(r * np.sin(angle), r * np.cos(angle) - 2 * r - gap, 0)
+        left2 = gmsh.model.occ.addPoint(-r * np.sin(angle), r * np.cos(angle) - 2 * r - gap, 0)
         arcs2 = []
         arcs2.append(gmsh.model.occ.addCircleArc(bottom_left, c2, left2))
         arcs2.append(gmsh.model.occ.addCircleArc(left2, c2, top2))
@@ -205,7 +206,6 @@ def create_quarter_disks_mesh(filename: str, res=0.1, order: int = 1, quads=Fals
         bndry2 = gmsh.model.getBoundary([(2, surface3), (2, surface4)], oriented=False)
         [gmsh.model.addPhysicalGroup(b[0], [b[1]]) for b in bndry2]
 
-
         gmsh.model.mesh.field.add("Distance", 1)
         gmsh.model.mesh.field.setNumbers(1, "NodesList", [bottom1])
 
@@ -229,7 +229,8 @@ def create_quarter_disks_mesh(filename: str, res=0.1, order: int = 1, quads=Fals
     MPI.COMM_WORLD.Barrier()
     gmsh.finalize()
 
-def sliding_wedges(filename: str, quads: bool = False, res: float = 0.1, order: int =1, angle = np.pi/12):
+
+def sliding_wedges(filename: str, quads: bool = False, res: float = 0.1, order: int = 1, angle=np.pi / 12):
     gmsh.initialize()
     if MPI.COMM_WORLD.rank == 0:
         bl = gmsh.model.occ.addPoint(0, 0, 0)
@@ -276,7 +277,6 @@ def sliding_wedges(filename: str, quads: bool = False, res: float = 0.1, order: 
         bndry2 = gmsh.model.getBoundary([(2, surface2)], oriented=False)
         [gmsh.model.addPhysicalGroup(b[0], [b[1]]) for b in bndry2]
 
-
         gmsh.model.mesh.field.add("Distance", 1)
         gmsh.model.mesh.field.setNumbers(1, "NodesList", [ctl, ctr])
 
@@ -287,7 +287,7 @@ def sliding_wedges(filename: str, quads: bool = False, res: float = 0.1, order: 
         gmsh.model.mesh.field.setNumber(2, "DistMin", 0.3)
         gmsh.model.mesh.field.setNumber(2, "DistMax", 1.0)
         gmsh.model.mesh.field.setAsBackgroundMesh(2)
-        
+
         if quads:
             gmsh.option.setNumber("Mesh.RecombinationAlgorithm", 8)
             gmsh.option.setNumber("Mesh.RecombineAll", 2)
@@ -300,6 +300,7 @@ def sliding_wedges(filename: str, quads: bool = False, res: float = 0.1, order: 
         gmsh.write(filename)
     MPI.COMM_WORLD.Barrier()
     gmsh.finalize()
+
 
 def create_circle_circle_mesh(filename: str, quads: bool = False, res: float = 0.1, order: int = 1):
     """
@@ -434,7 +435,7 @@ def create_box_mesh_2D(filename: str, quads: bool = False, res=0.1, order: int =
 
 
 def create_box_mesh_3D(filename: str, simplex: bool = True, order: int = 1,
-                       res: float = 0.1, gap: float = 0.1, W: float = 0.5):
+                       res: float = 0.1, gap: float = 0.1, W: float = 0.5, offset: float = 0.2):
     """
     Create two boxes lying directly over eachother with a gap in between"""
     L = 0.5
@@ -446,11 +447,11 @@ def create_box_mesh_3D(filename: str, simplex: bool = True, order: int = 1,
     if MPI.COMM_WORLD.rank == 0:
         # Create box
         if simplex:
-            model.occ.add_box(0, 0, 0, L, H, W)
+            model.occ.add_box(0, 0, 0 + offset, L, H, W)
             model.occ.add_box(0, 0, disp, L, H, W)
             model.occ.synchronize()
         else:
-            square1 = model.occ.add_rectangle(0, 0 + 0.2, 0, L, H)
+            square1 = model.occ.add_rectangle(0, 0 + offset, 0, L, H)
             square2 = model.occ.add_rectangle(0, 0, disp, L, H)
             model.occ.extrude([(2, square1)], 0, 0, W, numElements=[20], recombine=True)
             model.occ.extrude([(2, square2)], 0, 0, W, numElements=[15], recombine=True)

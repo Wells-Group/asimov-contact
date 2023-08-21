@@ -44,9 +44,9 @@ def write_pressure_xdmf(mesh, contact, u, du, contact_pairs, quadrature_degree,
             grad_u, n_x, num_q_points, num_facets, gdim, material[i][0, 0], material[i][0, 1]))
         sign = sign.reshape(num_facets, num_q_points, gdim)
         n_contact = n_contact.reshape(num_facets, num_q_points, gdim)
-        pn = np.sum(sign*n_contact, axis=2)
+        pn = np.sum(sign * n_contact, axis=2)
         pt = sign - np.multiply(n_contact, pn[:, :, np.newaxis])
-        pt = np.sqrt(np.sum(pt*pt, axis=2)).reshape(-1)
+        pt = np.sqrt(np.sum(pt * pt, axis=2)).reshape(-1)
         pn = pn.reshape(-1)
         sig_n.append(sign.reshape(-1, gdim))
         forces.append([pn, pt])
@@ -99,8 +99,6 @@ def write_pressure_xdmf(mesh, contact, u, du, contact_pairs, quadrature_degree,
     u_f = ufl.TrialFunction(P)
     v_f = ufl.TestFunction(P)
 
-
-
     # Define forms for the projection
     dx_f = ufl.Measure("dx", domain=facet_mesh)
     a_form = form(ufl.inner(u_f, v_f) * dx_f)
@@ -111,7 +109,7 @@ def write_pressure_xdmf(mesh, contact, u, du, contact_pairs, quadrature_degree,
     force_y = form(sig_y * dx_f)
     R_x = facet_mesh.comm.allreduce(assemble_scalar(force_x), op=MPI.SUM)
     R_y = facet_mesh.comm.allreduce(assemble_scalar(force_y), op=MPI.SUM)
-    print("Rx/Ry", R_x/R_y)
+    print("Rx/Ry", R_x / R_y)
 
     # Assemble matrix and vector
     A = assemble_matrix(a_form)
@@ -143,8 +141,8 @@ def write_pressure_xdmf(mesh, contact, u, du, contact_pairs, quadrature_degree,
 
     def _project():
         for i in range(len(contact_pairs)):
-            fgeom = dolfinx_contact.cpp.entities_to_geometry_dofs(facet_mesh._cpp_object, tdim - 1, 
-                         np.array(msh_to_fm[facet_list[i]], dtype=np.int32))
+            fgeom = dolfinx_contact.cpp.entities_to_geometry_dofs(facet_mesh._cpp_object, tdim - 1,
+                                                                  np.array(msh_to_fm[facet_list[i]], dtype=np.int32))
             fgeom = fgeom.array
             vali = projection_coordinates[i][1]
             xi = projection_coordinates[i][0]

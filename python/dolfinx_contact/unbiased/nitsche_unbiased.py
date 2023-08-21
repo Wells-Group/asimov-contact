@@ -30,7 +30,7 @@ def setup_newton_solver(F_custom: fem.forms.Form, J_custom: fem.forms.Form,
                         entities: list[npt.NDArray[np.int32]], quadrature_degree: int,
                         const_coeffs: list[npt.NDArray[np.float64]], consts: npt.NDArray[np.float64],
                         search_method: list[dolfinx_contact.cpp.ContactMode],
-                        coulomb: bool, normals_old = None):
+                        coulomb: bool, normals_old=None):
     """
     Set up newton solver for contact problem.
     Generate kernels and define functions for updating coefficients, stiffness matrix and residual vector.
@@ -116,7 +116,6 @@ def setup_newton_solver(F_custom: fem.forms.Form, J_custom: fem.forms.Form,
                 u._cpp_object, quadrature_degree, entities[i]))
             u_old_opp.append(contact.pack_u_contact(i, u._cpp_object))
 
-
     # FIXME: temporary work around
     if normals_old is None:
         normals_old = u_old
@@ -170,8 +169,8 @@ def setup_newton_solver(F_custom: fem.forms.Form, J_custom: fem.forms.Form,
         A.zeroEntries()
         with common.Timer("~~Contact: Contact contributions (in assemble matrix)"):
             for i in range(num_pairs):
-                contact.assemble_matrix(A, [], i, kernel_jac, coeffs[i], consts)
-                contact.assemble_matrix(A, [], i, kernel_friction_jac, coeffs[i], consts)
+                contact.assemble_matrix(A, i, kernel_jac, coeffs[i], consts)
+                contact.assemble_matrix(A, i, kernel_friction_jac, coeffs[i], consts)
         with common.Timer("~~Contact: Standard contributions (in assemble matrix)"):
             fem.petsc.assemble_matrix(A, J_custom, bcs=tbcs)
         A.assemble()
@@ -452,7 +451,8 @@ def nitsche_unbiased(steps: int, ufl_form: ufl.Form, u: fem.Function, mu: fem.Fu
         update_fns(1. / steps, bcs[1], old_bc_fns)
 
         # setup newton solver
-        newton_solver = setup_newton_solver(F_custom, J_custom, bcs, u, du, contact, markers,
+        bcs_n = (np.array([[bc[0], bc[1]] for bc in bcs[0]], dtype=np.int32), bcs[1])
+        newton_solver = setup_newton_solver(F_custom, J_custom, bcs_n, u, du, contact, markers,
                                             entities, quadrature_degree, const_coeffs, consts,
                                             search_method, coulomb)
 

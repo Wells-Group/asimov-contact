@@ -5,17 +5,15 @@
 import argparse
 
 import numpy as np
-import numpy.typing as npt
 import ufl
 from dolfinx.io import XDMFFile, VTXWriter
-from dolfinx.fem import (Constant, Expression, Function, FunctionSpace,
+from dolfinx.fem import (Constant, Function, FunctionSpace,
                          VectorFunctionSpace, locate_dofs_topological)
 from dolfinx.graph import create_adjacencylist
 from dolfinx.mesh import locate_entities
 from mpi4py import MPI
 from petsc4py.PETSc import ScalarType
 
-from dolfinx_contact import update_geometry
 from dolfinx_contact.helpers import (epsilon, sigma_func, lame_parameters)
 from dolfinx_contact.meshing import (convert_mesh,
                                      create_quarter_disks_mesh)
@@ -158,7 +156,7 @@ if __name__ == "__main__":
     # body forces
     F -= ufl.inner(t, v) * ds(top)
 
-    problem_parameters = {"gamma": np.float64(E * 100), "theta": np.float64(-1), "friction": np.float(0.3)}
+    problem_parameters = {"gamma": np.float64(E * 100), "theta": np.float64(-1), "friction": np.float64(0.3)}
 
     top_cells = domain_marker.find(1)
     # create initial guess
@@ -186,7 +184,8 @@ if __name__ == "__main__":
                                                                      search_radius=np.float64(-1),
                                                                      order=args.order, simplex=simplex,
                                                                      pressure_function=_pressure,
-                                                                     projection_coordinates=[(tdim - 1, -R), (tdim - 1, -R - 0.1)],
+                                                                     projection_coordinates=[
+                                                                         (tdim - 1, -R), (tdim - 1, -R - 0.1)],
                                                                      coulomb=True)
 
     # Step 2: Frictional contact
@@ -200,7 +199,7 @@ if __name__ == "__main__":
     t2 = Constant(mesh, ScalarType((0.0, -p)))
     F -= ufl.inner(t2, v) * ds(top)
 
-    problem_parameters = {"gamma": np.float64(E * 1000), "theta": np.float64(1), "friction": 0.3}
+    problem_parameters = {"gamma": np.float64(E * 1000), "theta": np.float64(1), "friction": np.float64(0.3)}
 
     ksp_tol = 1e-8
     # petsc_options = {
@@ -224,17 +223,17 @@ if __name__ == "__main__":
     # }
     petsc_options = {"ksp_type": "preonly", "pc_type": "lu"}
     newton_options = {"relaxation_parameter": 0.7,
-                    "atol": newton_tol,
-                    "rtol": newton_tol,
-                    "convergence_criterion": "residual",
-                    "max_it": 50,
-                    "error_on_nonconvergence": True}
+                      "atol": newton_tol,
+                      "rtol": newton_tol,
+                      "convergence_criterion": "residual",
+                      "max_it": 50,
+                      "error_on_nonconvergence": True}
     symmetry_nodes = locate_entities(mesh, 0, lambda x: np.logical_and(np.isclose(x[0], 0), np.isclose(x[1], -R)))
     dofs_symmetry = locate_dofs_topological(V.sub(0), 0, symmetry_nodes)
     dofs_bottom = locate_dofs_topological(V, 1, facet_marker.find(bottom))
 
     bc_fns = [Constant(mesh, ScalarType((0.0, 0.0)))]
-    bcs = ([(dofs_bottom, -1)], bc_fns)
+    bcs2 = (np.array([[dofs_bottom, -1]], dtype=np.int32), bc_fns)
     # Solve contact problem using Nitsche's method
     # update_geometry(u._cpp_object, mesh._cpp_object)
     # u2.x.array[:] = u.x.array[:]
@@ -242,16 +241,14 @@ if __name__ == "__main__":
     contact_problem = create_contact_solver(ufl_form=F, u=u2, mu=mu_dg, lmbda=lmbda_dg,
                                             markers=[domain_marker, facet_marker],
                                             contact_data=(surfaces, contact),
-                                            bcs=bcs,
+                                            bcs=bcs2,
                                             problem_parameters=problem_parameters,
                                             newton_options=newton_options,
                                             petsc_options=petsc_options,
                                             search_method=search_mode,
                                             quadrature_degree=args.q_degree,
                                             search_radius=np.float64(0.5),
-                                            coulomb=True, dt = 1./(steps + 2))
-
-    
+                                            coulomb=True, dt=1. / (steps + 2))
 
     contact_problem.u.x.array[:] = u.x.array[:]
     contact_problem.contact.update_submesh_geometry(contact_problem.u._cpp_object)

@@ -34,7 +34,7 @@ def test_projection(q_deg, surf, dim):
 
     else:
         fname = "meshes/box_3D"
-        create_box_mesh_3D(filename=f"{fname}.msh", res=1.0)
+        create_box_mesh_3D(filename=f"{fname}.msh", res=1.0, offset=0.0)
 
     convert_mesh(fname, fname, gdim=dim)
 

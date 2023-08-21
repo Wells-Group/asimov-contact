@@ -8,19 +8,22 @@ import sys
 import numpy as np
 import ufl
 from dolfinx import log
-from dolfinx.common import TimingType, list_timings
-from dolfinx.fem import dirichletbc, Constant, Function, locate_dofs_topological, VectorFunctionSpace
+from dolfinx.common import TimingType, list_timings, Timer, timing
+from dolfinx.fem import (dirichletbc, Constant, form, Function, FunctionSpace,
+                         locate_dofs_topological, VectorFunctionSpace)
+from dolfinx.fem.petsc import (apply_lifting, assemble_vector, assemble_matrix,
+                               create_vector, set_bc)
 from dolfinx.graph import create_adjacencylist
 from dolfinx.io import XDMFFile
-from dolfinx.mesh import locate_entities_boundary, meshtags
 from mpi4py import MPI
 from petsc4py.PETSc import ScalarType
+from petsc4py import PETSc
 
-from dolfinx_contact.helpers import lame_parameters, epsilon, sigma_func
+from dolfinx_contact.helpers import lame_parameters, epsilon, sigma_func, rigid_motions_nullspace_subdomains
 from dolfinx_contact.meshing import (convert_mesh,
                                      create_box_mesh_3D)
-from dolfinx_contact.meshtie import nitsche_meshtie
 from dolfinx_contact.parallel_mesh_ghosting import create_contact_mesh
+from dolfinx_contact.cpp import MeshTie
 
 if __name__ == "__main__":
     desc = "Nitsche's method for two elastic bodies using custom assemblers"
@@ -62,44 +65,31 @@ if __name__ == "__main__":
     gap = 1e-5
     H = 1.5
     fname = "box_3D"
-    create_box_mesh_3D(f"{fname}.msh", simplex, gap=gap, W=H)
+    create_box_mesh_3D(f"{fname}.msh", simplex, gap=gap, W=H, offset=0.0)
     convert_mesh(fname, fname, gdim=3)
 
     with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
         mesh = xdmf.read_mesh()
+        domain_marker = xdmf.read_meshtags(mesh, "cell_marker")
+        tdim = mesh.topology.dim
+        mesh.topology.create_connectivity(tdim - 1, tdim)
+        facet_marker = xdmf.read_meshtags(mesh, "facet_marker")
 
     tdim = mesh.topology.dim
     gdim = mesh.geometry.dim
     mesh.topology.create_connectivity(tdim - 1, 0)
     mesh.topology.create_connectivity(tdim - 1, tdim)
 
-    neumann_bdy = 1
-    contact_bdy_1 = 2
-    contact_bdy_2 = 3
-    dirichlet_bdy = 4
-    # Create meshtag for top and bottom markers
-    top_facets1 = locate_entities_boundary(mesh, tdim - 1, lambda x: np.isclose(x[2], H, atol=1e-10))
-    bottom_facets1 = locate_entities_boundary(
-        mesh, tdim - 1, lambda x: np.isclose(x[2], 0.0, atol=1e-10))
-    top_facets2 = locate_entities_boundary(mesh, tdim - 1, lambda x: np.isclose(x[2], -gap, atol=1e-10))
-    bottom_facets2 = locate_entities_boundary(
-        mesh, tdim - 1, lambda x: np.isclose(x[2], -H - gap, atol=1e-10))
-    top_values = np.full(len(top_facets1), neumann_bdy, dtype=np.int32)
-    bottom_values = np.full(
-        len(bottom_facets1), contact_bdy_1, dtype=np.int32)
-
-    surface_values = np.full(len(top_facets2), contact_bdy_2, dtype=np.int32)
-    sbottom_values = np.full(
-        len(bottom_facets2), dirichlet_bdy, dtype=np.int32)
-    indices = np.concatenate([top_facets1, bottom_facets1, top_facets2, bottom_facets2])
-    values = np.hstack([top_values, bottom_values, surface_values, sbottom_values])
-    sorted_facets = np.argsort(indices)
-    facet_marker = meshtags(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
-
-    # mark the whole domain
-    cells = np.arange(mesh.topology.index_map(tdim).size_local
-                      + mesh.topology.index_map(tdim).num_ghosts, dtype=np.int32)
-    domain_marker = meshtags(mesh, tdim, cells, np.full(cells.shape, 1, dtype=np.int32))
+    if simplex:
+        neumann_bdy = 7
+        contact_bdy_1 = 6
+        contact_bdy_2 = 13
+        dirichlet_bdy = 12
+    else:
+        neumann_bdy = 7
+        contact_bdy_1 = 2
+        contact_bdy_2 = 13
+        dirichlet_bdy = 8
 
     if mesh.comm.size > 1:
         mesh, facet_marker, domain_marker = create_contact_mesh(
@@ -107,7 +97,6 @@ if __name__ == "__main__":
 
     # Function, TestFunction, TrialFunction and measures
     V = VectorFunctionSpace(mesh, ("Lagrange", 1))
-    u = Function(V)
     v = ufl.TestFunction(V)
     w = ufl.TrialFunction(V)
     dx = ufl.Measure("dx", domain=mesh, subdomain_data=domain_marker)
@@ -119,20 +108,26 @@ if __name__ == "__main__":
     E = args.E
     nu = args.nu
     mu_func, lambda_func = lame_parameters(False)
-    mu = mu_func(E, nu)
-    lmbda = lambda_func(E, nu)
+    V2 = FunctionSpace(mesh, ("DG", 0))
+    lmbda = Function(V2)
+    lmbda.interpolate(lambda x: np.full((1, x.shape[1]), lambda_func(E, nu)))
+    mu = Function(V2)
+    mu.interpolate(lambda x: np.full((1, x.shape[1]), mu_func(E, nu)))
     sigma = sigma_func(mu, lmbda)
 
-    # dictionary with problem parameters
+    # Nitsche parameters
     gamma = args.gamma
     theta = args.theta
-    problem_parameters = {"mu": mu, "lambda": lmbda, "gamma": E * gamma, "theta": theta}
 
     J = ufl.inner(sigma(w), epsilon(v)) * dx
 
+    # body forces
+    f = Constant(mesh, ScalarType((0.0, 0.5, 0.0)))
+    F = ufl.inner(f, v) * dx
+
     # traction (neumann) boundary condition on mesh boundary with tag 3
     t = Constant(mesh, ScalarType((0.0, 0.5, 0.0)))
-    F = ufl.inner(t, v) * ds(neumann_bdy)
+    F += ufl.inner(t, v) * ds(neumann_bdy)
 
     # Dirichlet bdry conditions
     g = Constant(mesh, ScalarType((0.0, 0.0, 0.0)))
@@ -147,9 +142,11 @@ if __name__ == "__main__":
         F += - theta * ufl.inner(sigma(v) * n, g) * \
             ds(dirichlet_bdy) + E * gamma / h * ufl.inner(g, v) * ds(dirichlet_bdy)
 
-    # body forces
-    f = Constant(mesh, ScalarType((0.0, 0.5, 0.0)))
-    F += ufl.inner(f, v) * dx
+    # compile forms
+    cffi_options = ["-Ofast", "-march=native"]
+    jit_options = {"cffi_extra_compile_args": cffi_options, "cffi_libraries": ["m"]}
+    F = form(F, jit_options=jit_options)
+    J = form(J, jit_options=jit_options)
 
     # Solver options
     ksp_tol = 1e-10
@@ -179,17 +176,72 @@ if __name__ == "__main__":
     log.set_log_level(log.LogLevel.OFF)
     solver_outfile = args.outfile if args.ksp else None
 
-    # Solve contact problem using Nitsche's method
-    u, krylov_iterations, solver_time, _ = nitsche_meshtie(lhs=J, rhs=F, u=u, markers=[domain_marker, facet_marker],
-                                                           surface_data=(surfaces, contact),
-                                                           bcs=bcs, problem_parameters=problem_parameters,
-                                                           petsc_options=petsc_options)
+    # initialise meshties
+    meshties = MeshTie([facet_marker._cpp_object], surfaces, contact,
+                       V._cpp_object, quadrature_degree=5)
+    meshties.generate_meshtie_data_matrix_only(lmbda._cpp_object, mu._cpp_object, E * gamma, theta)
+
+    # create matrix, vector
+    A = meshties.create_matrix(J._cpp_object)
+    b = create_vector(F)
+
+    # Assemble right hand side
+    b.zeroEntries()
+    b.ghostUpdate(addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD)
+    assemble_vector(b, F)
+
+    # Apply boundary condition and scatter reverse
+    if len(bcs) > 0:
+        apply_lifting(b, [J], bcs=[bcs], scale=-1.0)
+    b.ghostUpdate(addv=PETSc.InsertMode.ADD, mode=PETSc.ScatterMode.REVERSE)
+    if len(bcs) > 0:
+        set_bc(b, bcs)
+
+    # Assemble matrix
+    A.zeroEntries()
+    meshties.assemble_matrix(A)
+    assemble_matrix(A, J, bcs=bcs)  # type: ignore
+    A.assemble()
+
+    # Set rigid motion nullspace
+    null_space = rigid_motions_nullspace_subdomains(V, domain_marker, np.unique(domain_marker.values),
+                                                    num_domains=2)
+    A.setNearNullSpace(null_space)
+
+    # Create PETSc Krylov solver and turn convergence monitoring on
+    opts = PETSc.Options()
+    for key in petsc_options:
+        opts[key] = petsc_options[key]
+    solver = PETSc.KSP().create(mesh.comm)
+    solver.setFromOptions()
+
+    # Set matrix operator
+    solver.setOperators(A)
+
+    uh = Function(V)
+
+    dofs_global = V.dofmap.index_map_bs * V.dofmap.index_map.size_global
+    log.set_log_level(log.LogLevel.OFF)
+    # Set a monitor, solve linear system, and display the solver
+    # configuration
+    solver.setMonitor(lambda _, its, rnorm: print(f"Iteration: {its}, rel. residual: {rnorm}"))
+    timing_str = "~Contact : Krylov Solver"
+    with Timer(timing_str):
+        solver.solve(b, uh.vector)
+
+    # Scatter forward the solution vector to update ghost values
+    uh.x.scatter_forward()
+
+    solver_time = timing(timing_str)[1]
+    print(f"{dofs_global}\n",
+          f"Number of Krylov iterations {solver.getIterationNumber()}\n",
+          f"Solver time {solver_time}", flush=True)
 
     # Reset mesh to initial state and write accumulated solution
     with XDMFFile(mesh.comm, "results/u_meshtie.xdmf", "w") as xdmf:
         xdmf.write_mesh(mesh)
-        u.name = "u"
-        xdmf.write_function(u)
+        uh.name = "u"
+        xdmf.write_function(uh)
     if args.timing:
         list_timings(mesh.comm, [TimingType.wall])
 
@@ -198,10 +250,10 @@ if __name__ == "__main__":
     else:
         outfile = open(args.outfile, "a")
     print("-" * 25, file=outfile)
-    print(f"num_dofs: {u.function_space.dofmap.index_map_bs*u.function_space.dofmap.index_map.size_global}"
+    print(f"num_dofs: {uh.function_space.dofmap.index_map_bs*uh.function_space.dofmap.index_map.size_global}"
           + f", {mesh.topology.cell_types[0]}", file=outfile)
     print(f"Krylov solver {solver_time}", file=outfile)
-    print(f"Krylov iterations {krylov_iterations}", file=outfile)
+    print(f"Krylov iterations {solver.getIterationNumber()}", file=outfile)
     print("-" * 25, file=outfile)
 
     if args.outfile is not None:

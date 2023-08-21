@@ -283,7 +283,7 @@ def test_matrix_surface_kernel(dim, kernel_type, P, Q):
         V._cpp_object, kernel_type, q_rule)
     B.zeroEntries()
 
-    contact.assemble_matrix(B, [], 0, kernel, coeffs, consts)
+    contact.assemble_matrix(B, 0, kernel, coeffs, consts)
     assemble_matrix(B, a_custom)
     B.assemble()
 

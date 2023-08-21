@@ -153,7 +153,7 @@ def DG_rhs_coulomb(u0, v0, h, n, gamma, theta, sigma, gap, fric, dS, gdim):
                                                           Pn_u_plus * fric, gdim),
                                           Pt_g(v0, '+', '-', theta / gamma)) * dS\
         + 0.5 * gamma / h('-') * ufl.dot(ball_projection(Pt_g(u0, '-', '+', 1. / gamma),
-                                                         Pn_u_minus * fric , gdim),
+                                                         Pn_u_minus * fric, gdim),
                                          Pt_g(v0, '-', '+', theta / gamma)) * dS
 
 
@@ -431,10 +431,10 @@ def create_contact_data(V, u, quadrature_degree, lmbda, mu, facets_cg, search, t
     grad_u_0 = dolfinx_contact.cpp.pack_gradient_quadrature(u._cpp_object, quadrature_degree, entities_0)
     grad_u_1 = dolfinx_contact.cpp.pack_gradient_quadrature(u._cpp_object, quadrature_degree, entities_1)
     if tied:
-        grad_test_fn_0 = contact.pack_grad_test_functions(0, gap_0, np.zeros(gap_0.shape))
-        grad_test_fn_1 = contact.pack_grad_test_functions(1, gap_1, np.zeros(gap_1.shape))
-        grad_u_opp_0 = contact.pack_grad_u_contact(0, u._cpp_object, gap_0, np.zeros(gap_0.shape))
-        grad_u_opp_1 = contact.pack_grad_u_contact(1, u._cpp_object, gap_1, np.zeros(gap_1.shape))
+        grad_test_fn_0 = contact.pack_grad_test_functions(0)
+        grad_test_fn_1 = contact.pack_grad_test_functions(1)
+        grad_u_opp_0 = contact.pack_grad_u_contact(0, u._cpp_object)
+        grad_u_opp_1 = contact.pack_grad_u_contact(1, u._cpp_object)
 
         # Concatenate all coeffs
         coeff_0 = np.hstack([material_0, h_0, test_fn_0, grad_test_fn_0, u_0, grad_u_0, u_opp_0, grad_u_opp_0])
@@ -444,8 +444,10 @@ def create_contact_data(V, u, quadrature_degree, lmbda, mu, facets_cg, search, t
         n_1 = contact.pack_ny(1)
 
         # Concatenate all coeffs
-        coeff_0 = np.hstack([material_0, friction_0, h_0, gap_0, n_0, test_fn_0, u_0, grad_u_0, u_opp_0, np.zeros(n_0.shape)])
-        coeff_1 = np.hstack([material_1, friction_1, h_1, gap_1, n_1, test_fn_1, u_1, grad_u_1, u_opp_1, np.zeros(n_1.shape)])
+        coeff_0 = np.hstack([material_0, friction_0, h_0, gap_0, n_0, test_fn_0,
+                            u_0, grad_u_0, u_opp_0, np.zeros(n_0.shape)])
+        coeff_1 = np.hstack([material_1, friction_1, h_1, gap_1, n_1, test_fn_1,
+                            u_1, grad_u_1, u_opp_1, np.zeros(n_1.shape)])
 
     return contact, coeff_0, coeff_1
 
@@ -594,8 +596,8 @@ def test_contact_kernels(ct, gap, quadrature_degree, theta, formulation, search)
 
     # Assemble  jacobian
     A1.zeroEntries()
-    contact.assemble_matrix(A1, [], 0, kernel_jac, c_0, consts)
-    contact.assemble_matrix(A1, [], 1, kernel_jac, c_1, consts)
+    contact.assemble_matrix(A1, 0, kernel_jac, c_0, consts)
+    contact.assemble_matrix(A1, 1, kernel_jac, c_1, consts)
     A1.assemble()
 
     # Retrieve data necessary for comparison

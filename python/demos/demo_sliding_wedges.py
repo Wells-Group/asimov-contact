@@ -3,20 +3,16 @@
 # SPDX-License-Identifier:    MIT
 
 import argparse
-import matplotlib.pyplot as plt
 import numpy as np
-import numpy.typing as npt
 import ufl
 from dolfinx.io import XDMFFile
 from dolfinx.fem import (Constant, Expression, Function, FunctionSpace,
                          VectorFunctionSpace, locate_dofs_topological,
                          form, assemble_scalar)
 from dolfinx.graph import create_adjacencylist
-from dolfinx.mesh import locate_entities
 from mpi4py import MPI
 from petsc4py.PETSc import ScalarType
 
-from dolfinx_contact import update_geometry
 from dolfinx_contact.helpers import (epsilon, sigma_func, lame_parameters)
 from dolfinx_contact.meshing import (convert_mesh,
                                      sliding_wedges)
@@ -38,7 +34,7 @@ if __name__ == "__main__":
                           help="Use triangle/tet mesh", default=False)
     parser.add_argument("--res", default=0.1, type=np.float64, dest="res",
                         help="Mesh resolution")
-    
+
     # Parse input arguments or set to defualt values
     args = parser.parse_args()
     simplex = args.simplex
@@ -59,7 +55,7 @@ if __name__ == "__main__":
     # Create mesh
     outname = "results/sliding_wedges_simplex" if simplex else "results/sliding_wedges_quads"
     fname = f"{mesh_dir}/sliding_wedges_simplex" if simplex else f"{mesh_dir}/sliding_wedges_quads"
-    sliding_wedges(f"{fname}.msh", not simplex, args.res, args.order, angle = angle)
+    sliding_wedges(f"{fname}.msh", not simplex, args.res, args.order, angle=angle)
 
     convert_mesh(fname, f"{fname}.xdmf", gdim=2)
     with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
@@ -85,7 +81,7 @@ if __name__ == "__main__":
     bc_fns = [Constant(mesh, ScalarType((0.0))), Constant(mesh, ScalarType((0.0, 0.0)))]
     bcs = ([(dirichlet_dofs_1, 1), (dirichlet_dofs_2, -1)], bc_fns)
 
-        # DG-0 funciton for material
+    # DG-0 funciton for material
     V0 = FunctionSpace(mesh, ("DG", 0))
     mu_dg = Function(V0)
     lmbda_dg = Function(V0)
@@ -99,7 +95,6 @@ if __name__ == "__main__":
     offsets = np.array([0, 2], dtype=np.int32)
     surfaces = create_adjacencylist(data, offsets)
 
-
     # Function, TestFunction, TrialFunction and measures
     u = Function(V)
     v = ufl.TestFunction(V)
@@ -112,12 +107,11 @@ if __name__ == "__main__":
     # body forces
     F -= ufl.inner(t, v) * ds(neumann_bdy)
 
-    problem_parameters = {"gamma": np.float64(E * 10), "theta": np.float64(-1), "friction": fric}
+    problem_parameters = {"gamma": np.float64(E * 10), "theta": np.float64(-1), "friction": np.float64(fric)}
 
     search_mode = [ContactMode.ClosestPoint, ContactMode.ClosestPoint]
-    
 
-        # Solver options
+    # Solver options
     ksp_tol = 1e-10
     newton_tol = 1e-7
     newton_options = {"relaxation_parameter": 1.0,
@@ -147,7 +141,6 @@ if __name__ == "__main__":
         "ksp_norm_type": "unpreconditioned"
     }
 
-
     def _pressure(x):
         vals = np.zeros(x.shape[1])
         return vals
@@ -167,10 +160,11 @@ if __name__ == "__main__":
                                                                      quadrature_degree=args.q_degree,
                                                                      search_radius=np.float64(-1),
                                                                      order=args.order, simplex=simplex,
-                                                                     pressure_function= _pressure,
-                                                                     projection_coordinates=[(tdim - 1, -R), (tdim - 1, -R - 0.1)],
+                                                                     pressure_function=_pressure,
+                                                                     projection_coordinates=[
+                                                                         (tdim - 1, -R), (tdim - 1, -R - 0.1)],
                                                                      coulomb=True)
-    
+
     n = ufl.FacetNormal(mesh)
     metadata = {"quadrature_degree": 2}
 
@@ -178,18 +172,16 @@ if __name__ == "__main__":
                      subdomain_data=facet_marker)
     ex = Constant(mesh, ScalarType((1.0, 0.0)))
     ey = Constant(mesh, ScalarType((0.0, 1.0)))
-    Rx_1form = form(ufl.inner(sigma(u)*n, ex) * ds(contact_bdy_1))
-    Ry_1form = form(ufl.inner(sigma(u)*n, ey) * ds(contact_bdy_1))
-    Rx_2form = form(ufl.inner(sigma(u)*n, ex) * ds(contact_bdy_2))
-    Ry_2form = form(ufl.inner(sigma(u)*n, ey) * ds(contact_bdy_2))
+    Rx_1form = form(ufl.inner(sigma(u) * n, ex) * ds(contact_bdy_1))
+    Ry_1form = form(ufl.inner(sigma(u) * n, ey) * ds(contact_bdy_1))
+    Rx_2form = form(ufl.inner(sigma(u) * n, ex) * ds(contact_bdy_2))
+    Ry_2form = form(ufl.inner(sigma(u) * n, ey) * ds(contact_bdy_2))
     R_x1 = mesh.comm.allreduce(assemble_scalar(Rx_1form), op=MPI.SUM)
     R_y1 = mesh.comm.allreduce(assemble_scalar(Ry_1form), op=MPI.SUM)
     R_x2 = mesh.comm.allreduce(assemble_scalar(Rx_2form), op=MPI.SUM)
     R_y2 = mesh.comm.allreduce(assemble_scalar(Ry_2form), op=MPI.SUM)
 
-    
-
-    print("Rx/Ry", abs(R_x1)/abs(R_y1), abs(R_x2)/abs(R_y2), (fric + np.tan(angle))/(1 - fric*np.tan(angle)))
+    print("Rx/Ry", abs(R_x1) / abs(R_y1), abs(R_x2) / abs(R_y2), (fric + np.tan(angle)) / (1 - fric * np.tan(angle)))
     sigma_dev = sigma(u) - (1 / 3) * ufl.tr(sigma(u)) * ufl.Identity(len(u))
     sigma_vm = ufl.sqrt((3 / 2) * ufl.inner(sigma_dev, sigma_dev))
     W = FunctionSpace(mesh, ("Discontinuous Lagrange", args.order - 1))
@@ -200,9 +192,6 @@ if __name__ == "__main__":
     with XDMFFile(mesh.comm, f"{outname}_vonMises.xdmf", "w") as xdmf:
         xdmf.write_mesh(mesh)
         xdmf.write_function(sigma_vm_h)
-
-
-
 
     # # Create quadrature points for integration on facets
     # x = []

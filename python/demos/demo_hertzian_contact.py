@@ -11,7 +11,7 @@ from dolfinx.io import XDMFFile
 from dolfinx.fem import (Constant, Expression, Function, FunctionSpace,
                          VectorFunctionSpace, locate_dofs_topological)
 from dolfinx.graph import create_adjacencylist
-from dolfinx.geometry import BoundingBoxTree, compute_closest_entity
+from dolfinx.geometry import bb_tree, compute_closest_entity
 from dolfinx.mesh import Mesh
 
 from mpi4py import MPI
@@ -30,7 +30,7 @@ from dolfinx_contact.unbiased.nitsche_unbiased import nitsche_unbiased
 
 def closest_node_in_mesh(mesh: Mesh, point: npt.NDArray[np.float64]) -> npt.NDArray[np.int32]:
     points = np.reshape(point, (1, 3))
-    bounding_box = BoundingBoxTree(mesh, 0)
+    bounding_box = bb_tree(mesh, 0)
     node = compute_closest_entity(bounding_box, bounding_box, mesh, points[0])
     return node
 
@@ -62,9 +62,9 @@ if __name__ == "__main__":
     mesh_dir = "meshes"
 
     # Problem paramters
-    R = 8 #0.25
-    L = 20 #1.0
-    H = 20 #1.0
+    R = 8  # 0.25
+    L = 20  # 1.0
+    H = 20  # 1.0
     if threed:
         load = 4 * 0.25 * np.pi * R**3 / 3.
     else:
@@ -73,10 +73,10 @@ if __name__ == "__main__":
     gap = 0.01
 
     # lame parameters
-    E1 = 1e8#2.5
-    E2 = 200#2.5
-    nu1 = 0.0 #0.25
-    nu2 = 0.3 #0.25
+    E1 = 1e8  # 2.5
+    E2 = 200  # 2.5
+    nu1 = 0.0  # 0.25
+    nu2 = 0.3  # 0.25
     mu_func, lambda_func = lame_parameters(True)
     mu1 = mu_func(E1, nu1)
     mu2 = mu_func(E2, nu2)

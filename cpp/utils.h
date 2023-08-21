@@ -23,7 +23,12 @@
 #include <dolfinx/geometry/BoundingBoxTree.h>
 #include <dolfinx/geometry/gjk.h>
 #include <dolfinx/geometry/utils.h>
+#include <dolfinx/la/Vector.h>
+#include <dolfinx/la/petsc.h>
+#include <dolfinx/la/utils.h>
 #include <dolfinx/mesh/Mesh.h>
+#include <dolfinx/mesh/MeshTags.h>
+
 namespace dolfinx_contact
 {
 
@@ -148,8 +153,8 @@ evaluate_basis_shape(const dolfinx::fem::FunctionSpace<double>& V,
 /// Get basis values (not unrolled for block size) for a set of points and
 /// corresponding cells.
 /// @param[in] V The function space
-/// @param[in] x The coordinates of the points. It has shape
-/// (num_points, gdim). Flattened row major
+/// @param[in] x The coordinates of the points in the reference elements. It has shape
+/// (num_points, tdim). Flattened row major
 /// @param[in] cells An array of cell indices. cells[i] is the index
 /// of the cell that contains the point x(i). Negative cell indices
 /// can be passed, and the corresponding point will be ignored.
@@ -810,5 +815,18 @@ compute_raytracing_map(const dolfinx::mesh::Mesh<double>& quadrature_mesh,
           reference_points,
           std::array<std::size_t, 2>{reference_points.size() / tdim, tdim}};
 }
+
+/// Create near nullspace that contains transations
+/// and rotations of each of the disconnected components in
+/// the mesh
+/// @param[in] V The functionspace
+/// @param[in] mt Meshtag marking the cells of the individual components
+/// @param[in] tags List of meshtag values for the individual components
+/// @returns A PETSC MatNullSpace containing rotations and translations of
+/// each component
+MatNullSpace
+build_nullspace_multibody(const dolfinx::fem::FunctionSpace<double>& V,
+                          const dolfinx::mesh::MeshTags<std::int32_t>& mt,
+                          std::vector<std::int32_t>& tags);
 
 } // namespace dolfinx_contact

@@ -240,7 +240,7 @@ def nitsche_rigid_surface_custom(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTa
         Compute Jacobian for Newton solver LHS, given precomputed coefficients
         """
         A.zeroEntries()
-        contact_assembler.assemble_matrix(A, [], 0, kernel_J, coeffs[0], consts)
+        contact_assembler.assemble_matrix(A, 0, kernel_J, coeffs[0], consts)
         _fem.petsc.assemble_matrix(A, J_custom)
         A.assemble()
 
