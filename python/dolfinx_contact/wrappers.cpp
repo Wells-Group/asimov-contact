@@ -15,9 +15,9 @@
 #include <dolfinx_contact/RayTracing.h>
 #include <dolfinx_contact/SubMesh.h>
 #include <dolfinx_contact/coefficients.h>
-#include <dolfinx_contact/rigid_surface_kernels.h>
 #include <dolfinx_contact/parallel_mesh_ghosting.h>
 #include <dolfinx_contact/point_cloud.h>
+#include <dolfinx_contact/rigid_surface_kernels.h>
 #include <dolfinx_contact/utils.h>
 #include <pybind11/functional.h>
 #include <pybind11/operators.h>
@@ -169,7 +169,7 @@ PYBIND11_MODULE(cpp, m)
              // the parent mesh This is only exposed for testing (in
              // particular
              // nitsche_rigid_surface.py/demo_nitsche_rigid_surface_ufl.py)
-             auto contact_pair = self.contact_pair(pair);
+            //  auto contact_pair = self.contact_pair(pair);
              std::shared_ptr<const dolfinx::mesh::Mesh<double>> mesh = self.mesh();
              const int tdim = mesh->topology()->dim(); // topological dimension
 
@@ -321,7 +321,7 @@ PYBIND11_MODULE(cpp, m)
       {
         return contact_wrappers::KernelWrapper(
             dolfinx_contact::generate_rigid_surface_kernel(V, type, q_rule,
-                                                     constant_normal));
+                                                           constant_normal));
       },
       py::arg("V"), py::arg("kernel_type"), py::arg("quadrature_rule"),
       py::arg("constant_normal") = true);
@@ -344,19 +344,25 @@ PYBIND11_MODULE(cpp, m)
                     std::shared_ptr<
                         const dolfinx::graph::AdjacencyList<std::int32_t>>,
                     std::vector<std::array<int, 2>>,
-           std::shared_ptr<dolfinx::fem::FunctionSpace<double>>, const int>(),
+                    std::shared_ptr<dolfinx::fem::FunctionSpace<double>>,
+                    const int>(),
            py::arg("markers"), py::arg("surfaces"), py::arg("contact_pairs"),
            py::arg("V"), py::arg("quadrature_degree") = 3)
-        .def("coeffs",
-           [](dolfinx_contact::MeshTie& self, int pair)
-           {
-             auto [coeffs, cstride] = self.coeffs(pair);
-             std::array<std::size_t, 2> shape_out = {coeffs.size()/cstride, cstride};
-             return dolfinx_wrappers::as_pyarray(std::move(coeffs), shape_out);
-           }, "Get packed coefficients")
-        .def("generate_meshtie_data", &dolfinx_contact::MeshTie::generate_meshtie_data)
-        .def("generate_meshtie_data_matrix_only", &dolfinx_contact::MeshTie::generate_meshtie_data_matrix_only)
-        .def("assemble_matrix",
+      .def(
+          "coeffs",
+          [](dolfinx_contact::MeshTie& self, int pair)
+          {
+            auto [coeffs, cstride] = self.coeffs(pair);
+            std::array<std::size_t, 2> shape_out
+                = {coeffs.size() / cstride, cstride};
+            return dolfinx_wrappers::as_pyarray(std::move(coeffs), shape_out);
+          },
+          "Get packed coefficients")
+      .def("generate_meshtie_data",
+           &dolfinx_contact::MeshTie::generate_meshtie_data)
+      .def("generate_meshtie_data_matrix_only",
+           &dolfinx_contact::MeshTie::generate_meshtie_data_matrix_only)
+      .def("assemble_matrix",
            [](dolfinx_contact::MeshTie& self, Mat A)
            {
              self.assemble_matrix(
@@ -365,11 +371,8 @@ PYBIND11_MODULE(cpp, m)
       .def("assemble_vector",
            [](dolfinx_contact::MeshTie& self,
               py::array_t<PetscScalar, py::array::c_style>& b)
-           {
-             self.assemble_vector(
-                 std::span(b.mutable_data(), b.size()));
-           })
-        .def(
+           { self.assemble_vector(std::span(b.mutable_data(), b.size())); })
+      .def(
           "create_matrix",
           [](dolfinx_contact::MeshTie& self, dolfinx::fem::Form<PetscScalar>& a,
              std::string type) { return self.create_petsc_matrix(a, type); },
