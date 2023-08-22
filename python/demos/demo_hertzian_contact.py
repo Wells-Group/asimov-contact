@@ -8,7 +8,7 @@ import numpy as np
 import numpy.typing as npt
 import ufl
 from dolfinx.io import XDMFFile
-from dolfinx.fem import (Constant, Expression, Function, FunctionSpace,
+from dolfinx.fem import (Constant, dirichletbc, Expression, Function, FunctionSpace,
                          VectorFunctionSpace, locate_dofs_topological)
 from dolfinx.graph import create_adjacencylist
 from dolfinx.geometry import bb_tree, compute_closest_entity
@@ -120,11 +120,11 @@ if __name__ == "__main__":
         dirichlet_nodes = np.array([node1, node2, node3], dtype=np.int32)
         dirichlet_dofs1 = locate_dofs_topological(V.sub(0), 0, dirichlet_nodes)
         dirichlet_dofs2 = locate_dofs_topological(V.sub(1), 0, dirichlet_nodes)
-        bc_fns = [Constant(mesh, ScalarType((0.0))), Constant(mesh, ScalarType((0.0))),
-                  Constant(mesh, ScalarType((0.0, 0.0, 0.0)))]
         dirichlet_dofs3 = locate_dofs_topological(V, mesh.topology.dim - 1, facet_marker.find(dirichlet_bdy))
 
-        bcs = ([(dirichlet_dofs1, 0), (dirichlet_dofs2, 1), (dirichlet_dofs3, -1)], bc_fns)
+        bcs = [dirichletbc(Constant(mesh, ScalarType(0.0)), dirichlet_dofs1, V.sub(0)),
+               dirichletbc(Constant(mesh, ScalarType(0.0)), dirichlet_dofs2, V.sub(1)),
+               dirichletbc(Constant(mesh, ScalarType((0.0, 0.0, 0.0))), dirichlet_dofs3, V)]
 
         if problem == 1:
             distributed_load = 3 * load / (4 * np.pi * R**3)
@@ -179,10 +179,10 @@ if __name__ == "__main__":
         node2 = closest_node_in_mesh(mesh, np.array([0.0, -R / 5.0, 0.0], dtype=np.float64))
         dirichlet_nodes = np.hstack([node1, node2])
         dirichlet_dofs1 = locate_dofs_topological(V.sub(0), 0, dirichlet_nodes)
-        bc_fns = [Constant(mesh, ScalarType((0.0))), Constant(mesh, ScalarType((0.0, 0.0)))]
         dirichlet_dofs2 = locate_dofs_topological(V, mesh.topology.dim - 1, facet_marker.find(dirichlet_bdy))
 
-        bcs = ([(dirichlet_dofs1, 0), (dirichlet_dofs2, -1)], bc_fns)
+        bcs = [dirichletbc(Constant(mesh, ScalarType(0.0)), dirichlet_dofs1, V.sub(0)),
+               dirichletbc(Constant(mesh, ScalarType((0, 0))), dirichlet_dofs2, V)]
 
         if problem == 1:
             distributed_load = load / (np.pi * R**2)

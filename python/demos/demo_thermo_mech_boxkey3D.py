@@ -177,7 +177,7 @@ search_mode = [ContactMode.ClosestPoint for i in range(len(contact_pairs))]
 contact_problem = create_contact_solver(ufl_form=F, u=u, mu=mu_dg, lmbda=lmbda_dg,
                                         markers=[domain_marker, facet_marker],
                                         contact_data=(surfaces, contact_pairs),
-                                        bcs=(np.empty(shape=(2, 0), dtype=np.int32), []),
+                                        bcs=[],
                                         problem_parameters=problem_parameters,
                                         search_method=search_mode,
                                         newton_options=newton_options,

@@ -24,7 +24,7 @@ __all__ = ["setup_newton_solver", "nitsche_unbiased"]
 
 
 def setup_newton_solver(F_custom: fem.forms.Form, J_custom: fem.forms.Form,
-                        bcs: Tuple[npt.NDArray[np.int32], list[Union[fem.Function, fem.function.Constant]]],
+                        bcs: list[fem.DirichletBC],
                         u: fem.Function, du: fem.Function,
                         contact: dolfinx_contact.cpp.Contact, markers: list[_mesh.MeshTags],
                         entities: list[npt.NDArray[np.int32]], quadrature_degree: int,
@@ -92,18 +92,6 @@ def setup_newton_solver(F_custom: fem.forms.Form, J_custom: fem.forms.Form,
     for i in range(num_pairs):
         ccfs.append(np.hstack([const_coeffs[i], gaps[i], normals[i], test_fns[i]]))
 
-    # retrieve boundary conditions for time step
-    tbcs = []
-    for k, g in enumerate(bcs[1]):
-        bdy_dofs = bcs[0][k][0]
-        sub = bcs[0][k][1]
-        if sub == -1:
-            fn_space = V
-        else:
-            fn_space = V.sub(sub)
-        # bdy_dofs = fem.locate_dofs_topological(fn_space, mesh.topology.dim - 1, markers[1].find(tag))
-        tbcs.append(fem.dirichletbc(g, bdy_dofs, fn_space))
-
     # pack grad u
     grad_u = []
     u_old = []
@@ -158,10 +146,10 @@ def setup_newton_solver(F_custom: fem.forms.Form, J_custom: fem.forms.Form,
 
         # Apply boundary condition
         if len(bcs) > 0:
-            fem.petsc.apply_lifting(b, [J_custom], bcs=[tbcs], x0=[x], scale=-1.0)
+            fem.petsc.apply_lifting(b, [J_custom], bcs=[bcs], x0=[x], scale=-1.0)
         b.ghostUpdate(addv=_PETSc.InsertMode.ADD, mode=_PETSc.ScatterMode.REVERSE)
         if len(bcs) > 0:
-            fem.petsc.set_bc(b, tbcs, x, -1.0)
+            fem.petsc.set_bc(b, bcs, x, -1.0)
 
     # function for computing jacobian
     @common.timed("~Contact: Assemble matrix")
@@ -172,7 +160,7 @@ def setup_newton_solver(F_custom: fem.forms.Form, J_custom: fem.forms.Form,
                 contact.assemble_matrix(A, i, kernel_jac, coeffs[i], consts)
                 contact.assemble_matrix(A, i, kernel_friction_jac, coeffs[i], consts)
         with common.Timer("~~Contact: Standard contributions (in assemble matrix)"):
-            fem.petsc.assemble_matrix(A, J_custom, bcs=tbcs)
+            fem.petsc.assemble_matrix(A, J_custom, bcs=bcs)
         A.assemble()
 
     # coefficient arrays
@@ -211,44 +199,54 @@ def get_problem_parameters(problem_parameters: dict[str, np.float64]):
     return theta, gamma, s
 
 
-def copy_fns(fns: list[Union[fem.Function, fem.Constant]],
-             mesh: _mesh.Mesh) -> list[Union[fem.Function, fem.Constant]]:
+def copy_fns(fns: list[Union[fem.Function, fem.Constant, npt.NDArray[Any]]],
+             mesh: _mesh.Mesh) -> list[Union[fem.Function, fem.Constant, npt.NDArray[Any]]]:
     """
     Create copy of list of finite element functions/constanst
     """
-    old_fns = []
+    old_fns: list[Union[fem.Function, fem.Constant, npt.NDArray[Any]]] = []
     for fn in fns:
         if type(fn) is fem.Function:
             new_fn = fem.Function(fn.function_space)
             new_fn.x.array[:] = fn.x.array[:]
             new_fn.x.scatter_forward()
-        else:
+            old_fns.append(new_fn)
+        elif type(fn) is fem.Constant:
             shape = fn.value.shape
             temp = np.zeros(shape, dtype=_PETSc.ScalarType)
-            new_fn = fem.Constant(mesh, temp)
-            new_fn.value = fn.value
-        old_fns.append(new_fn)
+            new_const = fem.Constant(mesh, temp)
+            new_const.value = fn.value
+            old_fns.append(new_const)
+        elif type(fn) is npt.NDArray[Any]:
+            new_arr = np.zeros(fn.shape)
+            new_arr[:] = fn[:]
+            old_fns.append(new_arr)
+
     return old_fns
 
 
-def update_fns(t: float, fns: list[Union[fem.Function, fem.Constant]],
-               old_fns: list[Union[fem.Function, fem.Constant]]) -> None:
+def update_fns(t: float, fns: list[Union[fem.Function, fem.Constant, npt.NDArray[Any]]],
+               old_fns: list[Union[fem.Function, fem.Constant, npt.NDArray[Any]]]) -> None:
     """
     Replace function values of function in fns with
     t* function value of function in old_fns
     """
     for k, fn in enumerate(fns):
         if type(fn) is fem.Function:
-            fn.x.array[:] = t * old_fns[k].x.array[:]
+            fn.x.array[:] = t * old_fns[k].x.array[:]  # type: ignore
             fn.x.scatter_forward()
+        elif type(fn) is fem.Constant:
+            fn.value[:] = t * old_fns[k].value[:]  # type: ignore
+        elif type(fn) is npt.NDArray[Any]:
+            fn[:] = t * old_fns[k][:]
         else:
-            fn.value = t * old_fns[k].value
+            raise RuntimeError("Cannot copy data from object of different type.")
 
 
 def nitsche_unbiased(steps: int, ufl_form: ufl.Form, u: fem.Function, mu: fem.Function, lmbda: fem.Function,
                      rhs_fns: list[Any], markers: list[_mesh.MeshTags],
                      contact_data: Tuple[AdjacencyList_int32, list[Tuple[int, int]]],
-                     bcs: Tuple[list[Tuple[npt.NDArray[np.int32], int]], list[Union[fem.Function, fem.Constant]]],
+                     bcs: list[fem.DirichletBC],
                      problem_parameters: dict[str, np.float64],
                      search_method: list[dolfinx_contact.cpp.ContactMode],
                      quadrature_degree: int = 5,
@@ -372,7 +370,8 @@ def nitsche_unbiased(steps: int, ufl_form: ufl.Form, u: fem.Function, mu: fem.Fu
 
     # store original rhs information and bcs
     old_rhs_fns = copy_fns(rhs_fns, mesh)
-    old_bc_fns = copy_fns(bcs[1], mesh)
+    bc_fns = [bc.g for bc in bcs]
+    old_bc_fns = copy_fns(bc_fns, mesh)
 
     # create contact class
     markers_cpp = [marker._cpp_object for marker in markers[1:]]
@@ -448,11 +447,10 @@ def nitsche_unbiased(steps: int, ufl_form: ufl.Form, u: fem.Function, mu: fem.Fu
 
         # update forces and bcs
         update_fns(t, rhs_fns, old_rhs_fns)
-        update_fns(1. / steps, bcs[1], old_bc_fns)
+        update_fns(1. / steps, bc_fns, old_bc_fns)
 
         # setup newton solver
-        bcs_n = (np.array([[bc[0], bc[1]] for bc in bcs[0]], dtype=np.int32), bcs[1])
-        newton_solver = setup_newton_solver(F_custom, J_custom, bcs_n, u, du, contact, markers,
+        newton_solver = setup_newton_solver(F_custom, J_custom, bcs, u, du, contact, markers,
                                             entities, quadrature_degree, const_coeffs, consts,
                                             search_method, coulomb)
 

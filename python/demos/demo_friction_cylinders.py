@@ -7,7 +7,7 @@ import argparse
 import numpy as np
 import ufl
 from dolfinx.io import XDMFFile, VTXWriter
-from dolfinx.fem import (Constant, Function, FunctionSpace,
+from dolfinx.fem import (Constant, dirichletbc, Function, FunctionSpace,
                          VectorFunctionSpace, locate_dofs_topological)
 from dolfinx.graph import create_adjacencylist
 from dolfinx.mesh import locate_entities
@@ -128,7 +128,8 @@ if __name__ == "__main__":
     dofs_bottom = locate_dofs_topological(V.sub(1), 1, facet_marker.find(bottom))
 
     bc_fns = [g, g]
-    bcs = ([(dofs_symmetry, 0), (dofs_bottom, 1)], bc_fns)
+    bcs = [dirichletbc(g, dofs_symmetry, V.sub(0)),
+           dirichletbc(g, dofs_bottom, V.sub(1))]
 
     # DG-0 funciton for material
     V0 = FunctionSpace(mesh, ("DG", 0))
@@ -231,9 +232,7 @@ if __name__ == "__main__":
     symmetry_nodes = locate_entities(mesh, 0, lambda x: np.logical_and(np.isclose(x[0], 0), np.isclose(x[1], -R)))
     dofs_symmetry = locate_dofs_topological(V.sub(0), 0, symmetry_nodes)
     dofs_bottom = locate_dofs_topological(V, 1, facet_marker.find(bottom))
-
-    bc_fns = [Constant(mesh, ScalarType((0.0, 0.0)))]
-    bcs2 = (np.array([[dofs_bottom, -1]], dtype=np.int32), bc_fns)
+    bcs2 = [dirichletbc(Constant(mesh, ScalarType((0, 0))), dofs_bottom, V)]
     # Solve contact problem using Nitsche's method
     # update_geometry(u._cpp_object, mesh._cpp_object)
     # u2.x.array[:] = u.x.array[:]

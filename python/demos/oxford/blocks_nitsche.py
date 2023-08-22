@@ -5,7 +5,8 @@
 import numpy as np
 
 from basix.ufl import element
-from dolfinx.fem import Constant, Function, FunctionSpace, VectorFunctionSpace
+from dolfinx.fem import (Constant, dirichletbc, Function, FunctionSpace,
+                         locate_dofs_topological, VectorFunctionSpace)
 from dolfinx.graph import create_adjacencylist
 from dolfinx.io import XDMFFile
 from dolfinx.mesh import create_mesh
@@ -81,8 +82,10 @@ problem_parameters = {"gamma": np.float64(E * gamma), "theta": np.float64(theta)
 
 # boundary conditions
 g = Constant(mesh, ScalarType((0, 0, 0)))     # zero Dirichlet
+dofs_g = locate_dofs_topological(V, tdim - 1, facet_marker.find(dirichlet_bdy_2))
 d = Constant(mesh, ScalarType((0, 0, -0.2)))  # vertical displacement
-bcs = (np.array([[dirichlet_bdy_1, -1], [dirichlet_bdy_2, -1]], dtype=np.int32), [d, g])
+dofs_d = locate_dofs_topological(V, tdim - 1, facet_marker.find(dirichlet_bdy_1))
+bcs = [dirichletbc(d, dofs_d, V), dirichletbc(g, dofs_g, V)]
 
 # contact surface data
 # stored in adjacency list to allow for using multiple meshtags to mark

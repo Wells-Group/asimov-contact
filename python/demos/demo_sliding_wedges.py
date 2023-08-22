@@ -6,7 +6,7 @@ import argparse
 import numpy as np
 import ufl
 from dolfinx.io import XDMFFile
-from dolfinx.fem import (Constant, Expression, Function, FunctionSpace,
+from dolfinx.fem import (Constant, dirichletbc, Expression, Function, FunctionSpace,
                          VectorFunctionSpace, locate_dofs_topological,
                          form, assemble_scalar)
 from dolfinx.graph import create_adjacencylist
@@ -78,8 +78,8 @@ if __name__ == "__main__":
     dirichlet_dofs_1 = locate_dofs_topological(V.sub(1), 1, facet_marker.find(dirichlet_bdy_1))
     dirichlet_dofs_2 = locate_dofs_topological(V, 1, facet_marker.find(dirichlet_bdy_2))
 
-    bc_fns = [Constant(mesh, ScalarType((0.0))), Constant(mesh, ScalarType((0.0, 0.0)))]
-    bcs = ([(dirichlet_dofs_1, 1), (dirichlet_dofs_2, -1)], bc_fns)
+    bcs = [dirichletbc(Constant(mesh, ScalarType(0.0)), dirichlet_dofs_1, V.sub(1)),
+           dirichletbc(Constant(mesh, ScalarType((0, 0))), dirichlet_dofs_2, V)]
 
     # DG-0 funciton for material
     V0 = FunctionSpace(mesh, ("DG", 0))

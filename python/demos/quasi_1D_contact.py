@@ -7,7 +7,7 @@ import argparse
 import numpy as np
 import ufl
 from dolfinx.io import XDMFFile
-from dolfinx.fem import (Constant, Function, FunctionSpace, VectorFunctionSpace,
+from dolfinx.fem import (Constant, dirichletbc, Function, FunctionSpace, VectorFunctionSpace,
                          locate_dofs_topological, form, assemble_scalar)
 from dolfinx.graph import create_adjacencylist
 from dolfinx.mesh import locate_entities
@@ -72,9 +72,9 @@ if __name__ == "__main__":
                                                  np.isclose(x[0], 2 * L + gap - args.res / 10))))
     print(dirichlet_nodes)
     dirichlet_dofs2 = locate_dofs_topological(V.sub(1), 0, dirichlet_nodes)
-    bc_fns = [Constant(mesh, ScalarType((0, 0))), Constant(mesh, ScalarType(0.0))]
 
-    bcs = ([(dirichlet_dofs1, -1), (dirichlet_dofs2, 1)], bc_fns)
+    bcs = [dirichletbc(Constant(mesh, ScalarType((0, 0))), dirichlet_dofs1, V),
+           dirichletbc(Constant(mesh, ScalarType(0.0)), dirichlet_dofs2, V.sub(1))]
 
     # Solver options
     ksp_tol = 1e-10

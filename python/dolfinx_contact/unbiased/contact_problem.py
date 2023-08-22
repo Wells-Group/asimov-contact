@@ -1,4 +1,4 @@
-from typing import Optional, Tuple, Union
+from typing import Optional, Tuple
 from dolfinx import common, cpp, fem
 from dolfinx import mesh as _mesh
 import numpy as np
@@ -19,7 +19,7 @@ class ContactProblem:
                  "petsc_options", "coulomb", "normals"]
 
     def __init__(self, F: ufl.Form, J: ufl.Form,
-                 bcs: Tuple[npt.NDArray[np.int32], list[Union[fem.Function, fem.Constant]]],
+                 bcs: list[fem.DirichletBC],
                  u: fem.Function, du: fem.Function, contact: dolfinx_contact.cpp.Contact,
                  markers: list[_mesh.MeshTags], entities: list[npt.NDArray[np.int32]],
                  quadrature_degree: int, const_coeffs: list[npt.NDArray[np.float64]],
@@ -73,7 +73,7 @@ def create_contact_solver(ufl_form: ufl.Form, u: fem.Function,
                           mu: fem.Function, lmbda: fem.Function,
                           markers: list[_mesh.MeshTags],
                           contact_data: Tuple[AdjacencyList_int32, list[Tuple[int, int]]],
-                          bcs: Tuple[npt.NDArray[np.int32], list[Union[fem.Function, fem.Constant]]],
+                          bcs: list[fem.DirichletBC],
                           problem_parameters: dict[str, np.float64],
                           search_method: list[dolfinx_contact.cpp.ContactMode],
                           quadrature_degree: int = 5,

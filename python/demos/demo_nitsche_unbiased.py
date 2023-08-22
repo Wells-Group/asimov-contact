@@ -9,7 +9,7 @@ import numpy as np
 import ufl
 from dolfinx import log
 from dolfinx.common import TimingType, list_timings, timing
-from dolfinx.fem import (Constant, Function, Expression, FunctionSpace,
+from dolfinx.fem import (Constant, dirichletbc, Function, Expression, FunctionSpace,
                          VectorFunctionSpace, locate_dofs_topological)
 from dolfinx.graph import create_adjacencylist
 from dolfinx.io import XDMFFile
@@ -383,29 +383,23 @@ if __name__ == "__main__":
         search_mode = [ContactMode.Raytracing for i in range(len(contact))]
     else:
         search_mode = [ContactMode.ClosestPoint for i in range(len(contact))]
+
     # Load geometry over multiple steps
+    gdim = mesh.geometry.dim
     for j in range(nload_steps):
         outnamej = f"{outname}_{j}"
-        bc_fns = []
+        rhs_fns = []
+        bcs = []
         Fj = F
-        dirichlet_bcs = []
         for k, d in enumerate(load_increment):
             tag = dirichlet_vals[k]
-            if mesh.geometry.dim == 3:
-                bc_fns.append(Constant(mesh, ScalarType((d[0], d[1], d[2]))))
-            else:
-                bc_fns.append(Constant(mesh, ScalarType((d[0], d[1]))))
+            g = Constant(mesh, ScalarType(tuple(d[i] for i in range(gdim))))
             if args.lifting:
-                dirichlet_dofs = locate_dofs_topological(V, mesh.topology.dim - 1, facet_marker.find(tag))
-                dirichlet_bcs.append((dirichlet_dofs, -1))
+                dofs = locate_dofs_topological(V, tdim - 1, facet_marker.find(tag))
+                bcs.append(dirichletbc(g, dofs, V))
             else:
-                Fj = weak_dirichlet(Fj, u, bc_fns[k], sigma, E * gamma, theta, ds(tag))
-        if args.lifting:
-            bcs = (dirichlet_bcs, bc_fns)
-            rhs_fns = []
-        else:
-            rhs_fns = bc_fns
-            bcs = ([(np.empty(shape=(2, 0), dtype=np.int32), -1)], [])
+                rhs_fns.append(g)
+                Fj = weak_dirichlet(Fj, u, rhs_fns[k], sigma, E * gamma, theta, ds(tag))
 
         cffi_options = ["-Ofast", "-march=native"]
         jit_options = {"cffi_extra_compile_args": cffi_options, "cffi_libraries": ["m"]}
