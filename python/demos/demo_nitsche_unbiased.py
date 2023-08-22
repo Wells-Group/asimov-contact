@@ -9,7 +9,7 @@ import numpy as np
 import ufl
 from dolfinx import log
 from dolfinx.common import TimingType, list_timings, timing
-from dolfinx.fem import (Constant, Function, VectorFunctionSpace)
+from dolfinx.fem import (Constant, dirichletbc, Function, locate_dofs_topological, VectorFunctionSpace)
 from dolfinx.graph import create_adjacencylist
 from dolfinx.io import XDMFFile
 from dolfinx.mesh import locate_entities_boundary, GhostMode, meshtags
@@ -370,29 +370,23 @@ if __name__ == "__main__":
     gamma = args.gamma
     theta = args.theta
     problem_parameters = {"mu": mu, "lambda": lmbda, "gamma": E * gamma, "theta": theta, "friction": args.fric}
+    gdim = mesh.geometry.dim
 
     # Load geometry over multiple steps
     for j in range(nload_steps):
         outnamej = f"{outname}_{j}"
-        bc_fns = []
-        bc_tags = []
+        rhs_fns = []
+        bcs = []
         Fj = F
         for k, d in enumerate(load_increment):
             tag = dirichlet_vals[k]
-            if mesh.geometry.dim == 3:
-                bc_fns.append(Constant(mesh, ScalarType((d[0], d[1], d[2]))))
-            else:
-                bc_fns.append(Constant(mesh, ScalarType((d[0], d[1]))))
+            g = Constant(mesh, ScalarType(tuple(d[i] for i in range(gdim))))
             if args.lifting:
-                bc_tags.append([tag, -1])
+                dofs = locate_dofs_topological(V, tdim - 1, facet_marker.find(tag))
+                bcs.append(dirichletbc(g, dofs, V))
             else:
-                Fj = weak_dirichlet(Fj, u, bc_fns[k], sigma, E * gamma, theta, ds(tag))
-        if args.lifting:
-            bcs = (np.array(bc_tags, dtype=np.int32), bc_fns)
-            rhs_fns = []
-        else:
-            rhs_fns = bc_fns
-            bcs = (np.empty(shape=(2, 0), dtype=np.int32), [])
+                rhs_fns.append(g)
+                Fj = weak_dirichlet(Fj, u, rhs_fns[k], sigma, E * gamma, theta, ds(tag))
 
         cffi_options = ["-Ofast", "-march=native"]
         jit_options = {"cffi_extra_compile_args": cffi_options, "cffi_libraries": ["m"]}

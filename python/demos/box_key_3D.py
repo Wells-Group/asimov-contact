@@ -189,7 +189,7 @@ if __name__ == "__main__":
                                                                    rhs_fns=rhs_fns,
                                                                    markers=[domain_marker, facet_marker],
                                                                    contact_data=(surfaces, contact_pairs),
-                                                                   bcs=(np.empty(shape=(2, 0), dtype=np.int32), []),
+                                                                   bcs=[],
                                                                    problem_parameters=problem_parameters,
                                                                    raytracing=False,
                                                                    newton_options=newton_options,
