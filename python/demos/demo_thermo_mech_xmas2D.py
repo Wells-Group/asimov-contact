@@ -148,7 +148,7 @@ cffi_options = ["-Ofast", "-march=native"]
 jit_options = {"cffi_extra_compile_args": cffi_options, "cffi_libraries": ["m"]}
 contact_problem = create_contact_solver(ufl_form=F, u=u, markers=[domain_marker, facet_marker],
                                         contact_data=(surfaces, contact_pairs),
-                                        bcs=(np.empty(shape=(2, 0), dtype=np.int32), []),
+                                        bcs=[],
                                         problem_parameters=problem_parameters,
                                         raytracing=False,
                                         newton_options=newton_options,
