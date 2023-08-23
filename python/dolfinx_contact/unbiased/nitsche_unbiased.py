@@ -11,12 +11,11 @@ import numpy.typing as npt
 import ufl
 from dolfinx.cpp.graph import AdjacencyList_int32
 from petsc4py import PETSc as _PETSc
-from mpi4py import MPI
 
 import dolfinx_contact
 import dolfinx_contact.cpp
 from dolfinx_contact.helpers import (rigid_motions_nullspace_subdomains, sigma_func)
-from dolfinx_contact.output import write_pressure_xdmf
+# from dolfinx_contact.output import write_pressure_xdmf
 
 kt = dolfinx_contact.cpp.Kernel
 
@@ -84,7 +83,7 @@ def setup_newton_solver(F_custom: fem.forms.Form, J_custom: fem.forms.Form,
                 normals.append(-contact.pack_nx(i))
             else:
                 normals.append(contact.pack_ny(i))
-            contact.update_distance_map(i, gaps[i], normals[i])
+            # contact.update_distance_map(i, gaps[i], normals[i])
             test_fns.append(contact.pack_test_functions(i))
 
     # Concatenate all coeffs
@@ -489,73 +488,74 @@ def nitsche_unbiased(steps: int, ufl_form: ufl.Form, u: fem.Function, mu: fem.Fu
         vtx.write(t)
 
     vtx.close()
-    if pressure_function is not None:
-        sig_n = write_pressure_xdmf(mesh, contact, u, du, contact_pairs, quadrature_degree,
-                                    search_method, entities, material, order, simplex, pressure_function,
-                                    projection_coordinates, fname)
-    else:
-        sig_n = None
-    gdim = mesh.geometry.dim
+    # if pressure_function is not None:
+    #     sig_n = write_pressure_xdmf(mesh, contact, u, du, contact_pairs, quadrature_degree,
+    #                                 search_method, entities, material, order, simplex, pressure_function,
+    #                                 projection_coordinates, fname)
+    # else:
+    #     sig_n = None
+    # gdim = mesh.geometry.dim
 
-    c_to_f = mesh.topology.connectivity(tdim, tdim - 1)
-    facet_list = []
-    for j in range(len(contact_pairs)):
-        facet_list.append(np.zeros(len(entities[j]), dtype=np.int32))
-        for i, e in enumerate(entities[j]):
-            facet = c_to_f.links(e[0])[e[1]]
-            facet_list[j][i] = facet
+    # c_to_f = mesh.topology.connectivity(tdim, tdim - 1)
+    # facet_list = []
+    # for j in range(len(contact_pairs)):
+    #     facet_list.append(np.zeros(len(entities[j]), dtype=np.int32))
+    #     for i, e in enumerate(entities[j]):
+    #         facet = c_to_f.links(e[0])[e[1]]
+    #         facet_list[j][i] = facet
 
-    facets = np.unique(np.sort(np.hstack([facet_list[j] for j in range(len(contact_pairs))])))
-    facet_mesh, fm_to_msh = _mesh.create_submesh(mesh, tdim - 1, facets)[:2]
+    # facets = np.unique(np.sort(np.hstack([facet_list[j] for j in range(len(contact_pairs))])))
+    # facet_mesh, fm_to_msh = _mesh.create_submesh(mesh, tdim - 1, facets)[:2]
 
-    # Create msh to submsh entity map
-    num_facets = mesh.topology.index_map(tdim - 1).size_local + \
-        mesh.topology.index_map(tdim - 1).num_ghosts
-    msh_to_fm = np.full(num_facets, -1)
-    msh_to_fm[fm_to_msh] = np.arange(len(fm_to_msh))
+    # # Create msh to submsh entity map
+    # num_facets = mesh.topology.index_map(tdim - 1).size_local + \
+    #     mesh.topology.index_map(tdim - 1).num_ghosts
+    # msh_to_fm = np.full(num_facets, -1)
+    # msh_to_fm[fm_to_msh] = np.arange(len(fm_to_msh))
 
-    # Use quadrature element
-    if tdim == 2:
-        Q_element = ufl.FiniteElement("Quadrature", ufl.Cell(
-            "interval", geometric_dimension=facet_mesh.geometry.dim), degree=quadrature_degree, quad_scheme="default")
-    else:
-        if simplex:
-            Q_element = ufl.FiniteElement("Quadrature", ufl.Cell(
-                "triangle", geometric_dimension=facet_mesh.geometry.dim), quadrature_degree, quad_scheme="default")
-        else:
-            Q_element = ufl.FiniteElement("Quadrature", ufl.Cell(
-                "quadrilateral", geometric_dimension=facet_mesh.geometry.dim), quadrature_degree, quad_scheme="default")
+    # # Use quadrature element
+    # if tdim == 2:
+    #     Q_element = ufl.FiniteElement("Quadrature", ufl.Cell(
+    #         "interval", geometric_dimension=facet_mesh.geometry.dim), degree=quadrature_degree, quad_scheme="default")
+    # else:
+    #     if simplex:
+    #         Q_element = ufl.FiniteElement("Quadrature", ufl.Cell(
+    #             "triangle", geometric_dimension=facet_mesh.geometry.dim), quadrature_degree, quad_scheme="default")
+    #     else:
+    #         Q_element = ufl.FiniteElement("Quadrature", ufl.Cell(
+    #             "quadrilateral", geometric_dimension=facet_mesh.geometry.dim),
+    # quadrature_degree, quad_scheme="default")
 
-    Q = fem.FunctionSpace(facet_mesh, Q_element)
-    sig_n = []
-    for i in range(len(contact_pairs)):
-        n_x = contact.pack_nx(i)
-        grad_u = dolfinx_contact.cpp.pack_gradient_quadrature(
-            u._cpp_object, quadrature_degree, entities[i])
-        num_facets = entities[i].shape[0]
-        num_q_points = n_x.shape[1] // gdim
-        # this assumes mu, lmbda are constant for each body
-        sign = np.array(dolfinx_contact.cpp.compute_contact_forces(
-            grad_u, n_x, num_q_points, num_facets, gdim, material[i][0, 0], material[i][0, 1]))
-        sign = sign.reshape(num_facets * num_q_points, gdim)
-        sig_n.append(sign)
+    # Q = fem.FunctionSpace(facet_mesh, Q_element)
+    # sig_n = []
+    # for i in range(len(contact_pairs)):
+    #     n_x = contact.pack_nx(i)
+    #     grad_u = dolfinx_contact.cpp.pack_gradient_quadrature(
+    #         u._cpp_object, quadrature_degree, entities[i])
+    #     num_facets = entities[i].shape[0]
+    #     num_q_points = n_x.shape[1] // gdim
+    #     # this assumes mu, lmbda are constant for each body
+    #     sign = np.array(dolfinx_contact.cpp.compute_contact_forces(
+    #         grad_u, n_x, num_q_points, num_facets, gdim, material[i][0, 0], material[i][0, 1]))
+    #     sign = sign.reshape(num_facets * num_q_points, gdim)
+    #     sig_n.append(sign)
 
-    sig_x = fem.Function(Q)
-    sig_y = fem.Function(Q)
-    for j in range(len(contact_pairs)):
-        dofs = np.array(np.hstack([range(msh_to_fm[facet_list[j]][i] * num_q_points,
-                        num_q_points * (msh_to_fm[facet_list[j]][i] + 1)) for i in range(len(entities[j]))]))
-        if j == 0:
-            sig_x.x.array[dofs] = sig_n[j][:, 0]
-            sig_y.x.array[dofs] = sig_n[j][:, 1]
+    # sig_x = fem.Function(Q)
+    # sig_y = fem.Function(Q)
+    # for j in range(len(contact_pairs)):
+    #     dofs = np.array(np.hstack([range(msh_to_fm[facet_list[j]][i] * num_q_points,
+    #                     num_q_points * (msh_to_fm[facet_list[j]][i] + 1)) for i in range(len(entities[j]))]))
+    #     if j == 0:
+    #         sig_x.x.array[dofs] = sig_n[j][:, 0]
+    #         sig_y.x.array[dofs] = sig_n[j][:, 1]
 
-    # Define forms for the projection
-    dx_f = ufl.Measure("dx", domain=facet_mesh)
-    force_x = fem.form(sig_x * dx_f)
-    force_y = fem.form(sig_y * dx_f)
-    R_x = facet_mesh.comm.allreduce(fem.assemble_scalar(force_x), op=MPI.SUM)
-    R_y = facet_mesh.comm.allreduce(fem.assemble_scalar(force_y), op=MPI.SUM)
-    print("Rx/Ry", R_x, R_y, s, R_x / R_y, (s + np.tan(np.pi / 6)) / (1 + s * np.tan(np.pi / 6)))
+    # # Define forms for the projection
+    # dx_f = ufl.Measure("dx", domain=facet_mesh)
+    # force_x = fem.form(sig_x * dx_f)
+    # force_y = fem.form(sig_y * dx_f)
+    # R_x = facet_mesh.comm.allreduce(fem.assemble_scalar(force_x), op=MPI.SUM)
+    # R_y = facet_mesh.comm.allreduce(fem.assemble_scalar(force_y), op=MPI.SUM)
+    # print("Rx/Ry", R_x, R_y, s, R_x / R_y, (s + np.tan(np.pi / 6)) / (1 + s * np.tan(np.pi / 6)))
 
     contact.update_submesh_geometry(u._cpp_object)
     return u, newton_its, krylov_its, timings

@@ -40,7 +40,7 @@ dolfinx_contact::generate_contact_kernel(
          num_q_points * gdim,
          num_q_points * gdim * gdim,
          num_q_points * bs,
-         num_q_points * gdim, 
+         num_q_points * gdim,
          num_q_points * bs};
 
   auto kd = dolfinx_contact::KernelData(V, quadrature_rule, cstrides);
@@ -137,20 +137,20 @@ dolfinx_contact::generate_contact_kernel(
       // For ray tracing the gap is given by n * (Pi(x) -x)
       // where n = n_x
       // For closest point n = -n_y
-      double dist = 0;
+      // double dist = 0;
       for (std::size_t i = 0; i < gdim; i++)
       {
         n_surf[i] = -c[kd.offsets(2) + q * gdim + i];
         n_dot += n_phys[i] * n_surf[i];
         gap += c[kd.offsets(1) + q * gdim + i] * n_surf[i];
-        dist += c[kd.offsets(1) + q * gdim + i] * c[kd.offsets(1) + q * gdim + i];
+        // dist += c[kd.offsets(1) + q * gdim + i]
+        //         * c[kd.offsets(1) + q * gdim + i];
       }
-      dist -= std::pow(gap, 2);
-      dist = std::sqrt(dist);
-      
-      if (dist > 0.3 * c[3])
-        continue;
+      // dist -= std::pow(gap, 2);
+      // dist = std::sqrt(dist);
 
+      // if (dist > 0.3 * c[3])
+      //   continue;
 
       compute_normal_strain_basis(epsn, tr, K, dphi, n_surf,
                                   std::span(n_phys.data(), gdim), q_pos);
@@ -288,19 +288,20 @@ dolfinx_contact::generate_contact_kernel(
       // The gap is given by n * (Pi(x) -x)
       // For raytracing n = n_x
       // For closest point n = -n_y
-      double dist = 0;
+      // double dist = 0;
       for (std::size_t i = 0; i < gdim; i++)
       {
         n_surf[i] = -c[kd.offsets(2) + q * gdim + i];
         n_dot += n_phys[i] * n_surf[i];
         gap += c[kd.offsets(1) + q * gdim + i] * n_surf[i];
-        dist += c[kd.offsets(1) + q * gdim + i] * c[kd.offsets(1) + q * gdim + i];
+        // dist += c[kd.offsets(1) + q * gdim + i]
+        //         * c[kd.offsets(1) + q * gdim + i];
       }
-      dist -= std::pow(gap, 2);
-      dist = std::sqrt(dist);
-      
-      if (dist > 0.3 * c[3])
-        continue;
+      // dist -= std::pow(gap, 2);
+      // dist = std::sqrt(dist);
+
+      // if (dist > 0.3 * c[3])
+      //   continue;
 
       compute_normal_strain_basis(epsn, tr, K, dphi, n_surf,
                                   std::span(n_phys.data(), gdim), q_pos);
@@ -467,19 +468,20 @@ dolfinx_contact::generate_contact_kernel(
       // For ray tracing the gap is given by n * (Pi(x) -x)
       // where n = n_x
       // For closest point n = -n_y
-      double dist = 0;
+      // double dist = 0;
       for (std::size_t i = 0; i < gdim; i++)
       {
         n_surf[i] = -c[kd.offsets(2) + q * gdim + i];
         n_dot += n_phys[i] * n_surf[i];
         gap += c[kd.offsets(1) + q * gdim + i] * n_surf[i];
-        dist += c[kd.offsets(1) + q * gdim + i] * c[kd.offsets(1) + q * gdim + i];
+        // dist += c[kd.offsets(1) + q * gdim + i]
+        //         * c[kd.offsets(1) + q * gdim + i];
       }
-      dist -= std::pow(gap, 2);
-      dist = std::sqrt(dist);
-      
-      if (dist > 0.3 * c[3])
-        continue;
+      // dist -= std::pow(gap, 2);
+      // dist = std::sqrt(dist);
+
+      // if (dist > 0.3 * c[3])
+      //   continue;
 
       compute_normal_strain_basis(epsn, tr, K, dphi, n_surf,
                                   std::span(n_phys.data(), gdim), q_pos);
@@ -650,19 +652,20 @@ dolfinx_contact::generate_contact_kernel(
       // The gap is given by n * (Pi(x) -x)
       // For raytracing n = n_x
       // For closest point n = -n_y
-      double dist = 0;
+      // double dist = 0;
       for (std::size_t i = 0; i < gdim; i++)
       {
         n_surf[i] = -c[kd.offsets(2) + q * gdim + i];
         n_dot += n_phys[i] * n_surf[i];
         gap += c[kd.offsets(1) + q * gdim + i] * n_surf[i];
-        dist += c[kd.offsets(1) + q * gdim + i] * c[kd.offsets(1) + q * gdim + i];
+        // dist += c[kd.offsets(1) + q * gdim + i]
+        //         * c[kd.offsets(1) + q * gdim + i];
       }
-      dist -= std::pow(gap, 2);
-      dist = std::sqrt(dist);
-      
-      if (dist > 0.3 * c[3])
-        continue;
+      // dist -= std::pow(gap, 2);
+      // dist = std::sqrt(dist);
+
+      // if (dist > 0.3 * c[3])
+      //   continue;
 
       compute_normal_strain_basis(epsn, tr, K, dphi, n_surf,
                                   std::span(n_phys.data(), gdim), q_pos);
@@ -852,7 +855,6 @@ dolfinx_contact::generate_contact_kernel(
     double mu = c[0];
     double lmbda = c[1];
     double fric = c[2];
-    double dt = w[2];
 
     // Extract reference to the tabulated basis function
     s_cmdspan2_t phi = kd.phi();
@@ -899,11 +901,11 @@ dolfinx_contact::generate_contact_kernel(
         n_old[i] = -c[kd.offsets(7) + q * gdim + i];
         n_dot += n_phys[i] * n_surf[i];
         gap += c[kd.offsets(1) + q * gdim + i] * n_surf[i];
-        dist += c[kd.offsets(1) + q * gdim + i] * c[kd.offsets(1) + q * gdim + i];
+        dist += c[kd.offsets(1) + q * gdim + i]
+                * c[kd.offsets(1) + q * gdim + i];
       }
       dist -= std::pow(gap, 2);
       dist = std::sqrt(dist);
-      
 
       compute_normal_strain_basis(epsn, tr, K, dphi, n_surf,
                                   std::span(n_phys.data(), gdim), q_pos);
@@ -920,36 +922,32 @@ dolfinx_contact::generate_contact_kernel(
       // compute inner(sig(u)*n_phys, n_surf) and inner(u, n_surf)
       double sign_u = 0;
       double jump_un = 0;
+      double ndotn = 0;
       for (std::size_t j = 0; j < gdim; ++j)
       {
         sign_u += sig_n_u[j] * n_surf[j];
         jump_un += c[kd.offsets(4) + gdim * q + j] * n_surf[j];
+        ndotn = n_surf[j] * n_old[j];
       }
       std::size_t offset_u_opp = kd.offsets(6) + q * bs;
       for (std::size_t j = 0; j < bs; ++j)
         jump_un += -c[offset_u_opp + j] * n_surf[j];
 
-      for (std::size_t j = 0; j< bs; ++j){
-        v_rel[j] = c[kd.offsets(1) + q * gdim + j] / dt; // -(phi_0(X) - phi_0(Y))/dt
-        v_rel[j] -= (gap - jump_un) * n_old[j] /dt; //  n_0 g/dt
-        v_rel[j] += (c[kd.offsets(4) + gdim * q + j] - c[offset_u_opp + j]) / dt; // (u(X) - u(Y))/dt
-        v_rel[j] -= jump_un * n_surf[j] / dt; 
-      }
-      
-      double v_rel_n = 0;
       for (std::size_t j = 0; j < bs; ++j)
-        v_rel_n += v_rel[j] * n_surf[j];
+      {
+        v_rel[j] = c[kd.offsets(4) + gdim * q + j] - c[offset_u_opp + j]
+                   - jump_un * n_surf[j]
+                   - (gap - jump_un) * (n_old[j] - ndotn * n_surf[j]);
+      }
 
       for (std::size_t j = 0; j < bs; ++j)
       {
-        Pt_u[j] = v_rel[j] - v_rel_n * n_surf[j];
-        Pt_u[j] -= gamma * (sig_n_u[j] - sign_u * n_surf[j]);
+        Pt_u[j] = v_rel[j] - gamma * (sig_n_u[j] - sign_u * n_surf[j]);
       }
       const double w0 = weights[q] * detJ;
       double Pn_u = R_plus((jump_un - gap) - gamma * sign_u);
       // compute ball projection
-      std::array<double, 3> Pt_u_proj
-          = ball_projection(Pt_u, fric * Pn_u);
+      std::array<double, 3> Pt_u_proj = ball_projection(Pt_u, fric * Pn_u);
       // Fill contributions of facet with itself
       for (std::size_t i = 0; i < ndofs_cell; i++)
       {
@@ -1054,7 +1052,6 @@ dolfinx_contact::generate_contact_kernel(
     double mu = c[0];
     double lmbda = c[1];
     double fric = c[2];
-    double dt = w[2];
 
     cmdspan3_t dphi = kd.dphi();
     cmdspan2_t phi = kd.phi();
@@ -1065,7 +1062,7 @@ dolfinx_contact::generate_contact_kernel(
     std::array<double, 3> n_surf = {0, 0, 0};
     std::array<double, 3> n_old = {0, 0, 0};
     std::array<double, 3> Pt_u = {0, 0, 0};
-        std::array<double, 3> v_rel = {0, 0, 0};
+    std::array<double, 3> v_rel = {0, 0, 0};
     std::vector<double> epsnb(ndofs_cell * gdim);
     mdspan2_t epsn(epsnb.data(), ndofs_cell, gdim);
     std::vector<double> trb(ndofs_cell * gdim);
@@ -1095,11 +1092,11 @@ dolfinx_contact::generate_contact_kernel(
         n_old[i] = -c[kd.offsets(7) + q * gdim + i];
         n_dot += n_phys[i] * n_surf[i];
         gap += c[kd.offsets(1) + q * gdim + i] * n_surf[i];
-        dist += c[kd.offsets(1) + q * gdim + i] * c[kd.offsets(1) + q * gdim + i];
+        dist += c[kd.offsets(1) + q * gdim + i]
+                * c[kd.offsets(1) + q * gdim + i];
       }
       dist -= std::pow(gap, 2);
       dist = std::sqrt(dist);
-      
 
       compute_normal_strain_basis(epsn, tr, K, dphi, n_surf,
                                   std::span(n_phys.data(), gdim), q_pos);
@@ -1116,32 +1113,25 @@ dolfinx_contact::generate_contact_kernel(
       // compute inner(sig(u)*n_phys, n_surf) and inner(u, n_surf)
       double sign_u = 0;
       double jump_un = 0;
+      double ndotn = 0;
       for (std::size_t j = 0; j < gdim; ++j)
       {
         sign_u += sig_n_u[j] * n_surf[j];
         jump_un += c[kd.offsets(4) + gdim * q + j] * n_surf[j];
+        ndotn = n_surf[j] * n_old[j];
       }
       std::size_t offset_u_opp = kd.offsets(6) + q * bs;
       for (std::size_t j = 0; j < bs; ++j)
         jump_un += -c[offset_u_opp + j] * n_surf[j];
-      for (std::size_t j = 0; j< bs; ++j){
-        v_rel[j] = c[kd.offsets(1) + q * gdim + j] / dt; // -(phi_0(X) - phi_0(Y))/dt
-        v_rel[j] -= (gap - jump_un) * n_old[j] /dt; //  n_0 g/dt
-        v_rel[j] += (c[kd.offsets(4) + gdim * q + j] - c[offset_u_opp + j]) / dt; // (u(X) - u(Y))/dt
-        v_rel[j] -= jump_un * n_surf[j] / dt; 
-      }
-      double v_rel_n = 0;
-      double n_dot_n = 0;
-      for (std::size_t j = 0; j < bs; ++j)
-        {
-          v_rel_n += v_rel[j] * n_surf[j];
-          n_dot_n += n_surf[j] * n_old[j];
-        }
-
       for (std::size_t j = 0; j < bs; ++j)
       {
-        Pt_u[j] = v_rel[j] - v_rel_n * n_surf[j];
-        Pt_u[j] -= gamma * (sig_n_u[j] - sign_u * n_surf[j]);
+        v_rel[j] = c[kd.offsets(4) + gdim * q + j] - c[offset_u_opp + j]
+                   - jump_un * n_surf[j]
+                   - (gap - jump_un) * (n_old[j] - ndotn * n_surf[j]);
+      }
+      for (std::size_t j = 0; j < bs; ++j)
+      {
+        Pt_u[j] = v_rel[j] - gamma * (sig_n_u[j] - sign_u * n_surf[j]);
       }
       double Pn_u = R_plus((jump_un - gap) - gamma * sign_u);
       std::array<double, 9> Pt_u_proj
@@ -1164,13 +1154,14 @@ dolfinx_contact::generate_contact_kernel(
           std::array<double, 3> Pt_w = {0, 0, 0};
           for (std::size_t m = 0; m < bs; ++m)
           { // J_ball * w[X]
-            Pt_w[m] += Pt_u_proj[l * bs + m] * phi(q_pos, j)/dt;
+            Pt_w[m] += Pt_u_proj[l * bs + m] * phi(q_pos, j);
             for (std::size_t n = 0; n < bs; n++)
             {
               // - w_n[X] J_ball * n_surf - gamma * J_ball * sgima_t(w)
-              Pt_w[m] -= Pt_u_proj[n * bs + m]
-                         * (w_dot_nsurf * ((1-n_dot_n)*n_surf[n] + n_old[n])/dt 
-                            + gamma * (sig_n(j, l, n) - sign_w * n_surf[n]));
+              Pt_w[m]
+                  -= Pt_u_proj[n * bs + m]
+                     * (w_dot_nsurf * (n_surf[n] - n_old[n] + ndotn * n_surf[n])
+                        + gamma * (sig_n(j, l, n) - sign_w * n_surf[n]));
             }
           }
           double Pn_w = (phi(q_pos, j) * n_surf[l] - gamma * sign_w);
@@ -1214,9 +1205,11 @@ dolfinx_contact::generate_contact_kernel(
 
                 for (std::size_t m = 0; m < bs; ++m)
                 {
-                  Pt_w_opp[m] += Pt_u_proj[l * bs + m] * c[index]/dt;
+                  Pt_w_opp[m] += Pt_u_proj[l * bs + m] * c[index];
                   for (std::size_t n = 0; n < bs; ++n)
-                    Pt_w_opp[m] -= Pt_u_proj[n * bs + m] * ((1-n_dot_n)*n_surf[n] + n_old[n])*wn_opp/dt;
+                    Pt_w_opp[m] -= Pt_u_proj[n * bs + m]
+                                   * (n_surf[n] - n_old[n] + ndotn * n_surf[n])
+                                   * wn_opp;
                 }
                 index = kd.offsets(3) + k * num_points * ndofs_cell * bs
                         + i * num_points * bs + q * bs;
