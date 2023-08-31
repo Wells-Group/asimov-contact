@@ -190,15 +190,15 @@ dolfinx_contact::lex_match(int dim,
   LOG(WARNING) << p_in.size() << "," << p_local.size();
 
   std::vector<std::pair<int, int>> new_markers;
-  int i = 0;
-  int j = 0;
+  std::size_t i = 0;
+  std::size_t j = 0;
 
   // Go through both sets of indices in the same order
   while (i < p_in.size() and j < p_local.size())
   {
     int a = p_in[i] * dim;
     int b = p_local[j] * dim;
-    // Found the same entity in both lists
+    // Matching: found the same entity in both lists; save marker
     if (std::equal(in_indices.begin() + a, in_indices.begin() + a + dim,
                    local_indices.begin() + b))
     {

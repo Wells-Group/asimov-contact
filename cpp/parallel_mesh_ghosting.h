@@ -15,7 +15,8 @@ namespace dolfinx_contact
     compute_ghost_cell_destinations(const dolfinx::mesh::Mesh<double>& mesh,
                                     std::span<const std::int32_t> marker_subset, double R);
 
-  /// @brief Lexical matching of input markers with local entities
+  /// @brief Lexical matching of input markers with local entities.
+  ///
   /// From the input markers in (in_indices, in_values) find any matching
   /// entities in local_indices, and copy the values across. Entities are
   /// represented by their vertex indices (dim vertices per entity).
