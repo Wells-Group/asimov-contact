@@ -3,7 +3,7 @@
 # SPDX-License-Identifier:    MIT
 import dolfinx
 from matplotlib import pyplot as plt
-from dolfinx.io import XDMFFile
+from dolfinx.io import VTXWriter
 from dolfinx.fem import form, Function, FunctionSpace, assemble_scalar
 from dolfinx.fem.petsc import assemble_matrix, assemble_vector
 from dolfinx.mesh import create_submesh
@@ -81,8 +81,8 @@ def write_pressure_xdmf(mesh, contact, u, du, contact_pairs, quadrature_degree,
                 "quadrilateral", geometric_dimension=facet_mesh.geometry.dim), quadrature_degree, quad_scheme="default")
 
     Q = FunctionSpace(facet_mesh, Q_element)
-    P = FunctionSpace(facet_mesh, ("DG", order - 1))
-    P_exact = FunctionSpace(facet_mesh, ("DG", order + 1))
+    P = FunctionSpace(facet_mesh, ("DG", max(order - 1, 1)))
+    P_exact = FunctionSpace(facet_mesh, ("DG", max(order - 1, 1)))
     num_q_points = np.int32(len(forces[0][0]) / len(entities[0]))
     pn = Function(Q)
     pt = Function(Q)
@@ -151,26 +151,34 @@ def write_pressure_xdmf(mesh, contact, u, du, contact_pairs, quadrature_degree,
     def _restore():
         facet_mesh.geometry.x[:, :] = geom[:, :]
 
-    with XDMFFile(facet_mesh.comm, f"{fname}_surface_pressure.xdmf", "w") as xdmf:
-        _project()
-        xdmf.write_mesh(facet_mesh)
-        p_f.name = "pressure"
-        _restore()
-        xdmf.write_function(p_f)
+    p_f.name = "pressure"
+    pt_f.name = "tangential"
+    p_hertz.name = "analytical"
+    _project()
+    with VTXWriter(mesh.comm, f"{fname}_surface_pressure.bp", [p_f, pt_f, p_hertz]) as vtx:
+        vtx.write(0.0)
 
-    with XDMFFile(facet_mesh.comm, f"{fname}_tangent_force.xdmf", "w") as xdmf:
-        _project()
-        xdmf.write_mesh(facet_mesh)
-        pt_f.name = "tangential"
-        _restore()
-        xdmf.write_function(pt_f)
 
-    with XDMFFile(facet_mesh.comm, f"{fname}_hertz_pressure.xdmf", "w") as xdmf:
-        _project()
-        xdmf.write_mesh(facet_mesh)
-        p_hertz.name = "analytical"
-        _restore()
-        xdmf.write_function(p_hertz)
+    # with XDMFFile(facet_mesh.comm, f"{fname}_surface_pressure.xdmf", "w") as xdmf:
+    #     _project()
+    #     xdmf.write_mesh(facet_mesh)
+    #     p_f.name = "pressure"
+    #     _restore()
+    #     xdmf.write_function(p_f)
+
+    # with XDMFFile(facet_mesh.comm, f"{fname}_tangent_force.xdmf", "w") as xdmf:
+    #     _project()
+    #     xdmf.write_mesh(facet_mesh)
+    #     pt_f.name = "tangential"
+    #     _restore()
+    #     xdmf.write_function(pt_f)
+
+    # with XDMFFile(facet_mesh.comm, f"{fname}_hertz_pressure.xdmf", "w") as xdmf:
+    #     _project()
+    #     xdmf.write_mesh(facet_mesh)
+    #     p_hertz.name = "analytical"
+    #     _restore()
+    #     xdmf.write_function(p_hertz)
 
     return sig_n
 

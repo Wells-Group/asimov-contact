@@ -22,6 +22,7 @@ from dolfinx_contact.cpp import ContactMode
 
 from dolfinx_contact.unbiased.nitsche_unbiased import nitsche_unbiased
 from dolfinx_contact.unbiased.contact_problem import create_contact_solver
+from dolfinx_contact.output import write_pressure_xdmf
 
 if __name__ == "__main__":
     desc = "Friction example with two elastic cylinders for verifying correctness of code"
@@ -94,7 +95,7 @@ if __name__ == "__main__":
                       "atol": newton_tol,
                       "rtol": newton_tol,
                       "convergence_criterion": "residual",
-                      "max_it": 50,
+                      "max_it" : 100,
                       "error_on_nonconvergence": True}
     # petsc_options = {"ksp_type": "preonly", "pc_type": "lu"}
     petsc_options = {
@@ -125,11 +126,13 @@ if __name__ == "__main__":
 
     symmetry_nodes = locate_entities(mesh, 0, lambda x: np.isclose(x[0], 0))
     dofs_symmetry = locate_dofs_topological(V.sub(0), 0, symmetry_nodes)
-    dofs_bottom = locate_dofs_topological(V.sub(1), 1, facet_marker.find(bottom))
+    dofs_bottom = locate_dofs_topological(V, 1, facet_marker.find(bottom))
+    dofs_top = locate_dofs_topological(V, 1, facet_marker.find(top))
 
-    bc_fns = [g, g]
+    g_top = Constant(mesh, ScalarType((0.0, -0.1)))
     bcs = [dirichletbc(g, dofs_symmetry, V.sub(0)),
-           dirichletbc(g, dofs_bottom, V.sub(1))]
+           dirichletbc(Constant(mesh, ScalarType((0.0, 0.0))), dofs_bottom, V),
+           dirichletbc(g_top, dofs_top, V)]
 
     # DG-0 funciton for material
     V0 = FunctionSpace(mesh, ("DG", 0))
@@ -155,120 +158,158 @@ if __name__ == "__main__":
     F = ufl.inner(sigma(u), epsilon(v)) * dx
 
     # body forces
-    F -= ufl.inner(t, v) * ds(top)
+    #F -= ufl.inner(t, v) * ds(top)
 
-    problem_parameters = {"gamma": np.float64(E * 100), "theta": np.float64(-1), "friction": np.float64(0.3)}
+    problem_parameters = {"gamma": np.float64(E * 100 * args.order**2), "theta": np.float64(1), "friction": np.float64(0.0)}
 
     top_cells = domain_marker.find(1)
-    # create initial guess
 
-    def _u_initial(x):
-        values = np.zeros((mesh.geometry.dim, x.shape[1]))
-        values[-1] = -R / 100 - gap
-        return values
-    u.interpolate(_u_initial, top_cells)
+    # u.interpolate(_u_initial, top_cells)
     search_mode = [ContactMode.ClosestPoint, ContactMode.ClosestPoint]
 
     # Solve contact problem using Nitsche's method
-    u, newton_its, krylov_iterations, solver_time = nitsche_unbiased(1, ufl_form=F,
-                                                                     u=u, mu=mu_dg, lmbda=lmbda_dg, rhs_fns=[t],
-                                                                     markers=[domain_marker, facet_marker],
-                                                                     contact_data=(
-                                                                         surfaces, contact), bcs=bcs,
-                                                                     problem_parameters=problem_parameters,
-                                                                     newton_options=newton_options,
-                                                                     petsc_options=petsc_options,
-                                                                     search_method=search_mode,
-                                                                     outfile=None,
-                                                                     fname=outname,
-                                                                     quadrature_degree=args.q_degree,
-                                                                     search_radius=np.float64(-1),
-                                                                     order=args.order, simplex=simplex,
-                                                                     pressure_function=_pressure,
-                                                                     projection_coordinates=[
-                                                                         (tdim - 1, -R), (tdim - 1, -R - 0.1)],
-                                                                     coulomb=True)
+    steps1 = 4
+    problem1 = create_contact_solver(ufl_form=F, u=u, mu=mu_dg, lmbda=lmbda_dg,
+                                     markers=[domain_marker, facet_marker],
+                                     contact_data=(surfaces, contact),
+                                     bcs=bcs, problem_parameters=problem_parameters,
+                                     newton_options=newton_options, 
+                                     petsc_options=petsc_options,
+                                     search_method=search_mode,
+                                     quadrature_degree=args.q_degree,
+                                     search_radius=np.float64(1.0))
 
-    # Step 2: Frictional contact
-    geometry = mesh.geometry.x[:].copy()
 
-    u2 = Function(V)
-    # Create variational form without contact contributions
-    F = ufl.inner(sigma(u2), epsilon(v)) * dx
+    problem1.update_friction_coefficient(0.0)
+    h = problem1.h_surfaces()[1]
+    # create initial guess
+    def _u_initial(x):
+        values = np.zeros((mesh.geometry.dim, x.shape[1]))
+        values[-1] = -0.01 * h - gap
+        return values
+    
+    problem1.du.interpolate(_u_initial, top_cells)
+    # initialise vtx writer
+    vtx = VTXWriter(mesh.comm, "results/cylinders_frictonless.bp", [problem1.u])
+    vtx.write(0)
+    for i in range(steps1):
+        for j in range(len(contact)):
+            problem1.contact.create_distance_map(j)
+        val = -0.1/steps1 #-p * (i+1) / steps1
+        # t.value[1] =  val
+        print(val)
+        g_top.value[1] = val
+        n = problem1.solve()
+        problem1.du.x.scatter_forward()
+        problem1.u.x.array[:] += problem1.du.x.array[:]
+        problem1.contact.update_submesh_geometry(problem1.u._cpp_object)
+        problem1.du.x.array[:] = 0# 0.01 * h * problem1.du.x.array[:]/np.linalg.norm(problem1.du.x.array[:])
+        problem1.set_normals()
+        vtx.write(i+1)
 
-    # body forces
-    t2 = Constant(mesh, ScalarType((0.0, -p)))
-    F -= ufl.inner(t2, v) * ds(top)
 
-    problem_parameters = {"gamma": np.float64(E * 1000), "theta": np.float64(1), "friction": np.float64(0.3)}
+    # # Step 2: Frictional contact
+    # geometry = mesh.geometry.x[:].copy()
+
+    # u2 = Function(V)
+    # # Create variational form without contact contributions
+    # F = ufl.inner(sigma(u2), epsilon(v)) * dx
+
+    # # body forces
+    # t2 = Constant(mesh, ScalarType((0.0, -p)))
+    # F -= ufl.inner(t2, v) * ds(top)
+
+    # problem_parameters = {"gamma": np.float64(E * 1000), "theta": np.float64(1), "friction": np.float64(0.3)}
 
     ksp_tol = 1e-8
-    # petsc_options = {
-    #     "matptap_via": "scalable",
-    #     "ksp_type": "cg",
-    #     "ksp_rtol": ksp_tol,
-    #     "ksp_atol": ksp_tol,
-    #     "pc_type": "gamg",
-    #     "pc_mg_levels": 3,
-    #     "pc_mg_cycles": 1,   # 1 is v, 2 is w
-    #     "mg_levels_ksp_type": "chebyshev",
-    #     "mg_levels_pc_type": "jacobi",
-    #     "pc_gamg_type": "agg",
-    #     "pc_gamg_coarse_eq_limit": 100,
-    #     "pc_gamg_agg_nsmooths": 1,
-    #     "pc_gamg_threshold": 1e-3,
-    #     "pc_gamg_square_graph": 2,
-    #     "pc_gamg_reuse_interpolation": False,
-    #     "ksp_initial_guess_nonzero": False,
-    #     "ksp_norm_type": "unpreconditioned"
-    # }
-    petsc_options = {"ksp_type": "preonly", "pc_type": "lu"}
-    newton_options = {"relaxation_parameter": 0.7,
+    petsc_options = {
+        "matptap_via": "scalable",
+        "ksp_type": "gmres",
+        "ksp_rtol": ksp_tol,
+        "ksp_atol": ksp_tol,
+        "pc_type": "gamg",
+        "pc_mg_levels": 3,
+        "pc_mg_cycles": 1,   # 1 is v, 2 is w
+        "mg_levels_ksp_type": "chebyshev",
+        "mg_levels_pc_type": "jacobi",
+        "pc_gamg_type": "agg",
+        "pc_gamg_coarse_eq_limit": 100,
+        "pc_gamg_agg_nsmooths": 1,
+        "pc_gamg_threshold": 1e-3,
+        "pc_gamg_square_graph": 2,
+        "pc_gamg_reuse_interpolation": False,
+        "ksp_initial_guess_nonzero": False,
+        "ksp_norm_type": "unpreconditioned"
+    }
+    # petsc_options = {"ksp_type": "preonly", "pc_type": "lu"}
+    newton_options = {"relaxation_parameter": 1.0,
                       "atol": newton_tol,
                       "rtol": newton_tol,
                       "convergence_criterion": "residual",
-                      "max_it": 50,
+                      "max_it": 100,
                       "error_on_nonconvergence": True}
-    symmetry_nodes = locate_entities(mesh, 0, lambda x: np.logical_and(np.isclose(x[0], 0), np.isclose(x[1], -R)))
-    dofs_symmetry = locate_dofs_topological(V.sub(0), 0, symmetry_nodes)
-    dofs_bottom = locate_dofs_topological(V, 1, facet_marker.find(bottom))
-    bcs2 = [dirichletbc(Constant(mesh, ScalarType((0, 0))), dofs_bottom, V)]
-    # Solve contact problem using Nitsche's method
-    # update_geometry(u._cpp_object, mesh._cpp_object)
-    # u2.x.array[:] = u.x.array[:]
-    steps = 8
-    contact_problem = create_contact_solver(ufl_form=F, u=u2, mu=mu_dg, lmbda=lmbda_dg,
-                                            markers=[domain_marker, facet_marker],
-                                            contact_data=(surfaces, contact),
-                                            bcs=bcs2,
-                                            problem_parameters=problem_parameters,
-                                            newton_options=newton_options,
-                                            petsc_options=petsc_options,
-                                            search_method=search_mode,
-                                            quadrature_degree=args.q_degree,
-                                            search_radius=np.float64(0.5),
-                                            coulomb=True, dt=1. / (steps + 2))
-
-    contact_problem.u.x.array[:] = u.x.array[:]
-    contact_problem.contact.update_submesh_geometry(contact_problem.u._cpp_object)
+    # symmetry_nodes = locate_entities(mesh, 0, lambda x: np.logical_and(np.isclose(x[0], 0), np.isclose(x[1], -R)))
+    # dofs_symmetry = locate_dofs_topological(V.sub(0), 0, symmetry_nodes)
+    # dofs_bottom = locate_dofs_topological(V, 1, facet_marker.find(bottom))
+    # bcs2 = [dirichletbc(Constant(mesh, ScalarType((0, 0))), dofs_bottom, V)]
+    # # Solve contact problem using Nitsche's method
+    # # update_geometry(u._cpp_object, mesh._cpp_object)
+    # # u2.x.array[:] = u.x.array[:]
+    g_top = Constant(mesh, ScalarType((0.0, 0.0)))
+    bcs = [dirichletbc(Constant(mesh, ScalarType((0.0, 0.0))), dofs_bottom, V),
+           dirichletbc(g_top, dofs_top, V)]
+    
+    problem1.bcs = bcs
+    problem1.update_friction_coefficient(0.3)
+    problem1.update_nitsche_parameters(E * 10 * args.order**2, 0)
+    problem1.coulomb = True
+    problem1.petsc_options = petsc_options
+    problem1.newton_options = newton_options
+    steps2 = 8
+    def _du_initial(x):
+        values = np.zeros((mesh.geometry.dim, x.shape[1]))
+        values[0] = 0.01 * h
+        values[1] = 0
+        return values
+    problem1.du.interpolate(_du_initial, top_cells)
     # initialise vtx write
-    vtx = VTXWriter(mesh.comm, "results/cylinders_coulomb.bp", [contact_problem.u])
-    vtx.write(0)
-    for i in range(1, steps + 1):
+    # vtx = VTXWriter(mesh.comm, "results/cylinders_coulomb.bp", [problem1.u])
+    # vtx.write(0)
+    for i in range(steps2):
         for j in range(len(contact)):
-            contact_problem.contact.create_distance_map(j)
+            problem1.contact.create_distance_map(j)
+        g_top.value[0] = 0.1/steps2
+        # print(problem1.du.x.array[:])
 
-        print(contact_problem.du.x.array[:])
-
-        t2.value = ScalarType(((i) * 0.03 / steps, -p))
-        n = contact_problem.solve()
-        contact_problem.du.x.scatter_forward()
-        contact_problem.u.x.array[:] += contact_problem.du.x.array[:]
-        contact_problem.set_normals()
-        contact_problem.contact.update_submesh_geometry(contact_problem.u._cpp_object)
+        # t.value[0] = 0.03*(i+1)/steps2
+        n = problem1.solve()
+        problem1.du.x.scatter_forward()
+        problem1.u.x.array[:] += problem1.du.x.array[:]
+        problem1.set_normals()
+        problem1.contact.update_submesh_geometry(problem1.u._cpp_object)
         # take a fraction of du as initial guess
         # this is to ensure non-singular matrices in the case of no Dirichlet boundary
-        contact_problem.du.x.array[:] = 0.1 * contact_problem.du.x.array[:]
-        vtx.write((i + 1) / steps)
+        problem1.du.x.array[:] = 0.1 * problem1.du.x.array[:]
+        vtx.write(steps1 + 1 + i)
 
     vtx.close()
+
+    Estar = E / (2 * (1 - nu**2))
+    load = 2 * R * 0.625
+    gap = 0.01
+    a = 2 * np.sqrt(R * load / (np.pi * Estar))
+    p0 = 2 * load / (np.pi * a)
+
+    
+
+    def _pressure(x):
+        vals = np.zeros(x.shape[1])
+        for i in range(x.shape[1]):
+            if abs(x[0][i]) < a:
+                vals[i] = p0 * np.sqrt(1 - x[0][i]**2 / a**2)
+        return vals
+    write_pressure_xdmf(mesh, problem1.contact, problem1.u, problem1.du, contact,
+                        args.q_degree, search_mode, problem1.entities,
+                         problem1.coeffs, args.order, simplex, 
+                        _pressure, [(tdim-1, 0), (tdim - 1, -R)],
+                        'results/cylinder_friction')

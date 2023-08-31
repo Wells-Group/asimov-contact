@@ -2,12 +2,14 @@
 #
 # SPDX-License-Identifier:    MIT
 
+from contextlib import ExitStack
 from enum import Enum
 from typing import Callable, List, Tuple, Union
 
 import numpy
 import numpy.typing as npt
 from dolfinx import common, fem
+from dolfinx.io import VTXWriter
 from mpi4py import MPI
 from petsc4py import PETSc
 
@@ -86,15 +88,16 @@ class NewtonSolver():
         self._b.setOptionsPrefix(self.krylov_solver.getOptionsPrefix())
         self._b.setFromOptions()
 
-    def solve(self, u: Union[fem.Function, PETSc.Vec]):
+    def solve(self, u: Union[fem.Function, PETSc.Vec], write_solution: bool = False, offset_fun: fem.Function = None):
         """
         Solve non-linear problem into function u.
         Returns the number of iterations and if the solver converged
         """
         try:
-            n, converged = self._solve(u.vector)
+            n, converged = self._solve(u, write_solution, offset_fun)
             u.x.scatter_forward()
         except AttributeError:
+            write_solution = False
             n, converged = self._solve(u)
             u.ghostUpdate(addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD)
         return n, converged
@@ -195,7 +198,8 @@ class NewtonSolver():
             # Petsc KSP converged reason:
             # https://petsc.org/main/docs/manualpages/KSP/KSPConvergedReason/
             print(f"Krylov iterations: {self.krylov_solver.getIterationNumber()}", flush=True, end=" ")
-            print(f"converged: {self.krylov_solver.getConvergedReason()}")
+            print(f"converged: {self.krylov_solver.getConvergedReason()}", flush=True, end=" ")
+            print(f"relaxation: {self.relaxation_parameter}")
         return residual, relative_residual < self.rtol and residual < self.atol
 
     def _update_solution(self, dx: PETSc.Vec, x: PETSc.Vec):
@@ -204,18 +208,32 @@ class NewtonSolver():
         """
         x.axpy(-self.relaxation_parameter, dx)
 
-    def _solve(self, x: Union[PETSc.Vec, fem.Function]) -> Tuple[int, int]:
+    def _solve(self, x: Union[PETSc.Vec, fem.Function], write_solution: bool = False, u: fem.Function = None) -> Tuple[int, int]:
         t = common.Timer("~Contact: Newton (Newton solver)")
         try:
             x_vec = x.vector
         except AttributeError:
             x_vec = x
+            write_solution = False
 
+        if write_solution:
+            V = x.function_space
+            mesh = x.function_space.mesh
+            if u is not None:
+                out = fem.Function(V)
+                out.x.array[:] = x.x.array[:] + u.x.array[:]
+            else:
+                out = x
+            vtx = VTXWriter(mesh.comm, "newton.bp", [out])
+        vtx.write(0)
         # Reset iteration counts
         self.iteration = 0
         self.krylov_iterations = 0
         self.residual = -1
-
+        rel_min = 1e-10
+        success = 0
+        res_old = numpy.inf
+        
         try:
             self._compute_coefficients(x_vec, self._coeffs)
         except AttributeError:
@@ -232,7 +250,7 @@ class NewtonSolver():
             raise RuntimeError("Function for computing residual vector has not been provided")
 
         newton_converged = False
-
+        res_old = self._b.norm(PETSc.NormType.NORM_2)
         if self.convergence_criterion == ConvergenceCriterion.residual:
             self.residual, newton_converged = self._check_convergence(self.b)
         elif (self.convergence_criterion == ConvergenceCriterion.incremental):
@@ -249,8 +267,15 @@ class NewtonSolver():
         if self._dx is None:
             self._dx = self._A.createVecRight()
 
+        x_copy = self._A.createVecRight()
+
         # Start iterations
         while not newton_converged and self.iteration < self.max_it:
+
+            x_copy.array_w[:] = x_vec.array_r[:]
+            if success>2:
+                self.relaxation_parameter = min(2 * self.relaxation_parameter, 1)
+                success = 0
             try:
                 self._compute_jacobian(x_vec, self._A, self._coeffs)
             except AttributeError:
@@ -269,6 +294,7 @@ class NewtonSolver():
 
             # Update solution
             self._update_solution(self._dx, x_vec)
+   
             self._compute_coefficients(x_vec, self._coeffs)
 
             # Increment iteration count
@@ -282,6 +308,43 @@ class NewtonSolver():
 
             # Compute residual (F)
             self._compute_residual(x_vec, self._b, self._coeffs)
+
+            res_new = self._b.norm(PETSc.NormType.NORM_2)
+
+            success +=1
+            while res_old < res_new:
+                success = 0
+                self.relaxation_parameter = 0.5 * self.relaxation_parameter
+                if self.relaxation_parameter < rel_min:
+                    self.relaxation_parameter = 2 * self.relaxation_parameter 
+                    break
+                x_vec.array_w[:] = x_copy.array_r[:]
+
+                # Update solution
+                self._update_solution(self._dx, x_vec)
+
+                self._compute_coefficients(x_vec, self._coeffs)
+                # Update internal variables prior to computing residual
+                try:
+                    self._post_solve(x_vec)
+                except AttributeError:
+                    pass
+
+                # Compute residual (F)
+                self._compute_residual(x_vec, self._b, self._coeffs)
+                res_new = self._b.norm(PETSc.NormType.NORM_2)
+                print(res_new)
+
+
+            res_old = res_new
+            if write_solution:
+                if u is not None:
+                    out.x.array[:] = x.x.array[:] + u.x.array[:]
+                else:
+                    out.x.array[:] = x.x.array[:]
+                
+                vtx.write(self.iteration)
+
 
             # Initialize initial residual
             if self.iteration == 1:
@@ -299,7 +362,8 @@ class NewtonSolver():
                     self.residual, newton_converged = self._check_convergence(self._dx)
             else:
                 raise RuntimeError("Unknown convergence criterion")
-
+        if write_solution:
+            vtx.close()
         if newton_converged:
             if self.comm.rank == 0:
                 print(f"Newton solver finished in {self.iteration} iterations and ",

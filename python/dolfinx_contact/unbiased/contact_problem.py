@@ -54,7 +54,7 @@ class ContactProblem:
 
         # Set Krylov solver options
         newton_solver.set_krylov_options(self.petsc_options)
-        n, converged = newton_solver.solve(self.du)
+        n, converged = newton_solver.solve(self.du, write_solution=True, offset_fun=self.u)
         if not converged:
             print("Newton solver did not converge")
         return n
@@ -68,6 +68,26 @@ class ContactProblem:
                 normals.append(self.contact.pack_ny(i))
         self.normals = normals
 
+    def update_friction_coefficient(self, s):
+        mesh = self.u.function_space.mesh
+        V2 = fem.FunctionSpace(mesh, ("DG", 0))
+        # interpolate friction coefficient
+        fric_coeff = fem.Function(V2)
+        fric_coeff.interpolate(lambda x: np.full((1, x.shape[1]), s))
+        for i in range(len(self.coeffs)):
+            fric = dolfinx_contact.cpp.pack_coefficient_quadrature(
+                fric_coeff._cpp_object, 0, self.entities[i])
+            self.coeffs[i][: , 2] = fric[:, 0]
+
+    def update_nitsche_parameters(self, gamma, theta):
+        self.consts[0] = gamma
+        self.consts[1] = theta
+
+    def h_surfaces(self):
+        h = []
+        for i in range(len(self.coeffs)):
+            h.append(np.sum(self.coeffs[i][:, 3])/self.coeffs[i].shape[0])
+        return h
 
 def create_contact_solver(ufl_form: ufl.Form, u: fem.Function,
                           mu: fem.Function, lmbda: fem.Function,

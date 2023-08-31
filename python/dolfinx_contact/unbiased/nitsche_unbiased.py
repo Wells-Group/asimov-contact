@@ -462,7 +462,7 @@ def nitsche_unbiased(steps: int, ufl_form: ufl.Form, u: fem.Function, mu: fem.Fu
         # Solve non-linear problem
         timing_str = f"~Contact: {tt+1} Solve Nitsche"
         with common.Timer(timing_str):
-            n, converged = newton_solver.solve(du)
+            n, converged = newton_solver.solve(du, write_solution=True)
         if outfile is not None:
             viewer = _PETSc.Viewer().createASCII(outfile, "a")
             newton_solver.krylov_solver.view(viewer)

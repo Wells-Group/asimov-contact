@@ -372,7 +372,7 @@ if __name__ == "__main__":
     # dictionary with problem parameters
     gamma = args.gamma
     theta = args.theta
-    problem_parameters = {"gamma": np.float64(E * gamma), "theta": np.float64(theta), "friction": np.float64(args.fric)}
+    problem_parameters = {"gamma": np.float64(E * gamma* args.order**2), "theta": np.float64(theta), "friction": np.float64(args.fric)}
     V0 = FunctionSpace(mesh, ("DG", 0))
     mu0 = Function(V0)
     lmbda0 = Function(V0)
@@ -399,7 +399,7 @@ if __name__ == "__main__":
                 bcs.append(dirichletbc(g, dofs, V))
             else:
                 rhs_fns.append(g)
-                Fj = weak_dirichlet(Fj, u, rhs_fns[k], sigma, E * gamma, theta, ds(tag))
+                Fj = weak_dirichlet(Fj, u, rhs_fns[k], sigma, E * gamma * args.order**2, theta, ds(tag))
 
         cffi_options = ["-Ofast", "-march=native"]
         jit_options = {"cffi_extra_compile_args": cffi_options, "cffi_libraries": ["m"]}
