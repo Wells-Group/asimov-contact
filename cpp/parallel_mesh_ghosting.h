@@ -17,8 +17,7 @@ namespace dolfinx_contact
 
   /// Lexical matching of input markers with local entities
   std::vector<std::pair<int, int>>
-    lex_match(int dim, std::vector<std::int32_t>& local_indices,
-              std::vector<std::int32_t>& in_indices,
-              std::vector<std::int32_t>& in_values);
-
+  lex_match(int dim, const std::vector<std::int32_t>& local_indices,
+            const std::vector<std::int32_t>& in_indices,
+            const std::vector<std::int32_t>& in_values);
 }

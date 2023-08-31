@@ -148,9 +148,10 @@ dolfinx_contact::compute_ghost_cell_destinations(
 }
 
 std::vector<std::pair<int, int>>
-dolfinx_contact::lex_match(int dim, std::vector<std::int32_t>& local_indices,
-                           std::vector<std::int32_t>& in_indices,
-                           std::vector<std::int32_t>& in_values)
+dolfinx_contact::lex_match(int dim,
+                           const std::vector<std::int32_t>& local_indices,
+                           const std::vector<std::int32_t>& in_indices,
+                           const std::vector<std::int32_t>& in_values)
 {
   LOG(WARNING) << "Lex match: [" << local_indices.size() <<", "
                << in_indices.size() << ", " << in_values.size() << "]";
