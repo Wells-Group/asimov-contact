@@ -84,11 +84,11 @@ def compare_test_fn(fn_space, test_fn, grad_test_fn, q_indices, link, x_ref, cel
 
             # Create expression vor evaluating test function and evaluate
             expr = _fem.Expression(v, x_ref)
-            expr_vals = expr.eval([cell])
+            expr_vals = expr.eval(mesh, [cell])
 
             # Create expression vor evaluating derivative of test function and evaluate
             expr2 = _fem.Expression(ufl.grad(v.sub(k)), x_ref)
-            expr_vals2 = expr2.eval([cell])
+            expr_vals2 = expr2.eval(mesh, [cell])
             # compare values of test functions
             offset = link * num_q_points * len(dofs) * bs + i * num_q_points * bs
             assert np.allclose(expr_vals[0][q_indices * bs + k], test_fn[offset + q_indices * bs + k])
@@ -125,10 +125,11 @@ def assert_zero_test_fn(fn_space, test_fn, grad_test_fn, num_q_points, zero_ind,
 def compare_u(fn_space, u, u_opposite, grad_u_opposite, q_indices, x_ref, cell):
     bs = fn_space.dofmap.index_map_bs
     gdim = fn_space.mesh.geometry.dim
+    mesh = fn_space.mesh
 
     # use expression to evaluate u
     expr = _fem.Expression(u, x_ref[q_indices, :])
-    expr_vals = expr.eval([cell]).reshape(-1)
+    expr_vals = expr.eval(mesh, [cell]).reshape(-1)
 
     # extract values from u_opposite
     vals = np.zeros(len(q_indices) * bs)
@@ -143,7 +144,7 @@ def compare_u(fn_space, u, u_opposite, grad_u_opposite, q_indices, x_ref, cell):
 
         # use expression to evaluate gradient
         expr = _fem.Expression(ufl.grad(u.sub(k)), x_ref)
-        expr_vals = expr.eval([cell]).reshape(-1)
+        expr_vals = expr.eval(mesh, [cell]).reshape(-1)
 
         # extract jacobian from surf_der and gradient from u_opposite and expr_vals
         for i, q in enumerate(q_indices):
@@ -217,8 +218,8 @@ def test_packing(ct, gap, q_deg, delta, surface):
     gap = contact.pack_gap(0)
     test_fn = contact.pack_test_functions(0)
     u_packed = contact.pack_u_contact(0, u._cpp_object)
-    grad_test_fn = contact.pack_grad_test_functions(0, gap, u_packed)
-    grad_u = contact.pack_grad_u_contact(0, u._cpp_object, gap, u_packed)
+    grad_test_fn = contact.pack_grad_test_functions(0)
+    grad_u = contact.pack_grad_u_contact(0, u._cpp_object)
 
     # Retrieve surface facets
     s_facets = np.sort(facets[s])

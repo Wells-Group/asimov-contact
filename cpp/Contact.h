@@ -35,6 +35,8 @@ namespace dolfinx_contact
 class Contact
 {
 public:
+  // empty constructor
+  Contact() = default;
   /// Constructor
   /// @param[in] markers List of meshtags defining the contact surfaces
   /// @param[in] surfaces Adjacency list. Links of i contains meshtag values
@@ -135,8 +137,6 @@ public:
   /// @param[in] constants used in the variational form
   void assemble_matrix(
       const mat_set_fn& mat_set,
-      const std::vector<
-          std::shared_ptr<const dolfinx::fem::DirichletBC<PetscScalar>>>& bcs,
       int pair, const kernel_fn<PetscScalar>& kernel,
       const std::span<const PetscScalar> coeffs, int cstride,
       const std::span<const PetscScalar>& constants);
@@ -211,12 +211,9 @@ public:
   /// Compute gradient of test functions on opposite surface (initial
   /// configuration) at quadrature points of facets
   /// @param[in] pair - index of contact pair
-  /// @param[in] gap - gap packed on facets per quadrature point
-  /// @param[in] u_packed -u packed on opposite surface per quadrature point
   /// @param[out] c - test functions packed on facets.
   std::pair<std::vector<PetscScalar>, int>
-  pack_grad_test_functions(int pair, const std::span<const PetscScalar>& gap,
-                           const std::span<const PetscScalar>& u_packed);
+  pack_grad_test_functions(int pair);
 
   /// Compute function on opposite surface at quadrature points of
   /// facets
@@ -230,14 +227,10 @@ public:
   /// Compute gradient of function on opposite surface at quadrature points of
   /// facets
   /// @param[in] pair - index of contact pair
-  /// @param[in] gap - gap packed on facets per quadrature point
-  /// @param[in] u_packed -u packed on opposite surface per quadrature point
   /// @param[out] c - test functions packed on facets.
   std::pair<std::vector<PetscScalar>, int>
   pack_grad_u_contact(int pair,
-                      std::shared_ptr<dolfinx::fem::Function<PetscScalar>> u,
-                      const std::span<const PetscScalar> gap,
-                      const std::span<const PetscScalar> u_packed);
+                      std::shared_ptr<dolfinx::fem::Function<PetscScalar>> u);
 
   /// Compute outward surface normal at x
   /// @param[in] pair - index of contact pair
@@ -262,6 +255,10 @@ public:
   /// a function given on the parent mesh
   /// @param[in] u - displacement
   void update_submesh_geometry(dolfinx::fem::Function<PetscScalar>& u);
+
+  /// Return number of quadrature points per facet
+  /// Assumes all facets are identical
+  std::size_t num_q_points() const;
 
 private:
   std::shared_ptr<QuadratureRule> _quadrature_rule; // quadrature rule

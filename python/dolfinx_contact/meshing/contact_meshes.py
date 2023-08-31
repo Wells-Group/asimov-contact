@@ -211,7 +211,7 @@ def create_box_mesh_2D(filename: str, quads: bool = False, res=0.1, order: int =
 
 
 def create_box_mesh_3D(filename: str, simplex: bool = True, order: int = 1,
-                       res: float = 0.1, gap: float = 0.1, W: float = 0.5):
+                       res: float = 0.1, gap: float = 0.1, W: float = 0.5, offset: float = 0.2):
     """
     Create two boxes lying directly over eachother with a gap in between"""
     L = 0.5
@@ -223,11 +223,11 @@ def create_box_mesh_3D(filename: str, simplex: bool = True, order: int = 1,
     if MPI.COMM_WORLD.rank == 0:
         # Create box
         if simplex:
-            model.occ.add_box(0, 0, 0, L, H, W)
+            model.occ.add_box(0, 0, 0 + offset, L, H, W)
             model.occ.add_box(0, 0, disp, L, H, W)
             model.occ.synchronize()
         else:
-            square1 = model.occ.add_rectangle(0, 0 + 0.2, 0, L, H)
+            square1 = model.occ.add_rectangle(0, 0 + offset, 0, L, H)
             square2 = model.occ.add_rectangle(0, 0, disp, L, H)
             model.occ.extrude([(2, square1)], 0, 0, W, numElements=[20], recombine=True)
             model.occ.extrude([(2, square2)], 0, 0, W, numElements=[15], recombine=True)

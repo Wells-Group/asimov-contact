@@ -1,5 +1,5 @@
-from typing import Optional, Tuple, Union
-from dolfinx import common, fem, cpp
+from typing import Optional, Tuple
+from dolfinx import common, fem
 from dolfinx import mesh as _mesh
 import numpy as np
 import numpy.typing as npt
@@ -18,7 +18,7 @@ class ContactProblem:
                  "petsc_options"]
 
     def __init__(self, F: ufl.Form, J: ufl.Form,
-                 bcs: Tuple[npt.NDArray[np.int32], list[Union[fem.Function, fem.Constant]]],
+                 bcs: list[fem.DirichletBC],
                  u: fem.Function, du: fem.Function, contact: dolfinx_contact.cpp.Contact,
                  markers: list[_mesh.MeshTags], entities: list[npt.NDArray[np.int32]],
                  quadrature_degree: int, const_coeffs: list[npt.NDArray[np.float64]],
@@ -58,7 +58,7 @@ class ContactProblem:
 def create_contact_solver(ufl_form: ufl.Form, u: fem.Function,
                           markers: list[_mesh.MeshTags],
                           contact_data: Tuple[AdjacencyList_int32, list[Tuple[int, int]]],
-                          bcs: Tuple[npt.NDArray[np.int32], list[Union[fem.Function, fem.Constant]]],
+                          bcs: list[fem.DirichletBC],
                           problem_parameters: dict[str, np.float64],
                           raytracing: bool,
                           quadrature_degree: int = 5,
@@ -160,10 +160,6 @@ def create_contact_solver(ufl_form: ufl.Form, u: fem.Function,
                                               V._cpp_object, quadrature_degree=quadrature_degree,
                                               search_method=search_method)
 
-    xdmf = cpp.io.XDMFFile(mesh.comm, "debug.xdmf", "w")
-    xdmf.write_mesh(contact.submesh(), xpath="/Xdmf/Domain")
-    del (xdmf)
-
     contact.set_search_radius(search_radius)
 
     # pack constants
@@ -214,6 +210,6 @@ def create_contact_solver(ufl_form: ufl.Form, u: fem.Function,
 
     problem = ContactProblem(F_custom, J_custom, bcs, u, du, contact, markers, entities,
                              quadrature_degree, const_coeffs, consts, raytracing,
-                             newton_options, petsc_options)
+                             petsc_options, newton_options)
 
     return problem

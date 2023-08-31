@@ -11,6 +11,7 @@ import pytest
 import ufl
 from mpi4py import MPI
 from dolfinx.graph import create_adjacencylist
+from dolfinx.fem.petsc import create_matrix
 import os
 import dolfinx_contact
 import dolfinx_contact.cpp
@@ -149,7 +150,7 @@ def test_contact_kernel(theta, gamma, dim, gap):
         J += 1 / gammah * 0.5 * (1 - ufl.sign(q)) * (sigma_n(du) - gammah * ufl.dot(du, (-n_2))) * \
             (theta * sigma_n(v) - gammah * ufl.dot(v, (-n_2))) * ds(bottom_value)
         a = dolfinx.fem.form(J)
-        A = dolfinx.fem.petsc.create_matrix(a)
+        A = create_matrix(a)
 
         # Normal assembly
         A.zeroEntries()
@@ -218,7 +219,7 @@ def test_contact_kernel(theta, gamma, dim, gap):
         kernel = dolfinx_contact.cpp.generate_rigid_surface_kernel(
             V._cpp_object, kt.Jac, q_rule)
         B.zeroEntries()
-        contact_assembler.assemble_matrix(B, [], 0, kernel, coeffs, consts)
+        contact_assembler.assemble_matrix(B, 0, kernel, coeffs, consts)
         dolfinx.fem.petsc.assemble_matrix(B, a_custom)
         B.assemble()
         assert np.allclose(b.array, b2.array)

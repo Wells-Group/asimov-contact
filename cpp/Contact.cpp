@@ -195,7 +195,8 @@ std::size_t dolfinx_contact::Contact::coefficients_size(bool meshtie)
   {
     // Coefficient offsets
     // Expecting coefficients in the following order
-    // mu, lmbda, h, gap, friction_coeff, normals, test_fns, u, grad(u), u_opposite,
+    // mu, lmbda, h, gap, friction_coeff, normals, test_fns, u, grad(u),
+    // u_opposite,
     std::array<std::size_t, 9> cstrides
         = {4,
            num_q_points * bs,
@@ -1026,10 +1027,8 @@ dolfinx_contact::Contact::pack_ny(int pair)
 
 //------------------------------------------------------------------------------------------------
 void dolfinx_contact::Contact::assemble_matrix(
-    mat_set_fn& mat_set,
-    [[maybe_unused]] const std::vector<
-        std::shared_ptr<const dolfinx::fem::DirichletBC<PetscScalar>>>& bcs,
-    int pair, const dolfinx_contact::kernel_fn<PetscScalar>& kernel,
+    mat_set_fn& mat_set, int pair,
+    const dolfinx_contact::kernel_fn<PetscScalar>& kernel,
     const std::span<const PetscScalar> coeffs, int cstride,
     const std::span<const PetscScalar>& constants)
 {
@@ -1256,15 +1255,14 @@ void dolfinx_contact::Contact::assemble_vector(
 }
 //-----------------------------------------------------------------------------------------------
 std::pair<std::vector<PetscScalar>, int>
-dolfinx_contact::Contact::pack_grad_test_functions(
-    int pair, const std::span<const PetscScalar>& gap,
-    const std::span<const PetscScalar>& u_packed)
+dolfinx_contact::Contact::pack_grad_test_functions(int pair)
 {
   auto [quadrature_mt, candidate_mt] = _contact_pairs[pair];
   // Mesh info
   std::shared_ptr<const dolfinx::mesh::Mesh<double>> mesh = _V->mesh(); // mesh
   assert(mesh);
   const std::size_t gdim = mesh->geometry().dim();
+  const std::size_t tdim = mesh->topology()->dim();
   std::span<const std::int32_t> parent_cells = _submesh.parent_cells();
   std::shared_ptr<const fem::FiniteElement<double>> element = _V->element();
   assert(element);
@@ -1303,6 +1301,7 @@ dolfinx_contact::Contact::pack_grad_test_functions(
   // temporary data structure used inside loop
   std::vector<std::int32_t> cells(max_links, -1);
   // Loop over all facets
+  const std::vector<double>& reference_x = _reference_contact_points[pair];
   for (std::size_t i = 0; i < num_facets; i++)
   {
     const std::span<const int> links = map->links((int)i);
@@ -1329,16 +1328,13 @@ dolfinx_contact::Contact::pack_grad_test_functions(
           = std::span(perm.data() + offsets[j], offsets[j + 1] - offsets[j]);
       // Extract local dofs
       assert(std::size_t(linked_cell) < mesh->geometry().dofmap().extent(0));
-      auto qp = std::span(q_points.data(), indices.size() * gdim);
-      mdspan2_t qp_j(qp.data(), indices.size(), gdim);
-      // Compute Pi(x) form points x and gap funtion Pi(x) - x
+      std::vector<double> x_c(indices.size() * tdim);
       for (std::size_t l = 0; l < indices.size(); l++)
       {
         std::int32_t ind = indices[l];
-        const std::size_t row = i * num_q_points;
-        for (std::size_t k = 0; k < gdim; k++)
-          qp_j(l, k) = qp_span(i, ind, k) + gap[row * gdim + ind * gdim + k]
-                       - u_packed[row * gdim + ind * gdim + k];
+        std::copy_n(std::next(reference_x.begin(),
+                              num_q_points * tdim * i + ind * tdim),
+                    tdim, std::next(x_c.begin(), l * tdim));
       }
 
       // Compute values of basis functions for all y = Pi(x) in qp
@@ -1351,7 +1347,7 @@ dolfinx_contact::Contact::pack_grad_test_functions(
           std::reduce(b_shape.cbegin(), b_shape.cend(), 1, std::multiplies{}));
       cells.resize(indices.size());
       std::fill(cells.begin(), cells.end(), linked_cell);
-      evaluate_basis_functions(*_V, qp, cells, basis_valuesb, 1);
+      evaluate_basis_functions(*_V, x_c, cells, basis_valuesb, 1);
       cmdspan4_t basis_values(basis_valuesb.data(), b_shape);
       // Insert basis function values into c
       for (std::size_t k = 0; k < ndofs; k++)
@@ -1370,9 +1366,7 @@ dolfinx_contact::Contact::pack_grad_test_functions(
 //-----------------------------------------------------------------------------------------------
 std::pair<std::vector<PetscScalar>, int>
 dolfinx_contact::Contact::pack_grad_u_contact(
-    int pair, std::shared_ptr<dolfinx::fem::Function<PetscScalar>> u,
-    const std::span<const PetscScalar> gap,
-    const std::span<const PetscScalar> u_packed)
+    int pair, std::shared_ptr<dolfinx::fem::Function<PetscScalar>> u)
 {
   auto [quadrature_mt, candidate_mt] = _contact_pairs[pair];
 
@@ -1399,8 +1393,6 @@ dolfinx_contact::Contact::pack_grad_u_contact(
   if (num_facets == 0)
     return {std::move(c), cstride};
 
-  mdspan3_t qp_span(_qp_phys[quadrature_mt].data(), num_facets, num_q_points,
-                    gdim);
   std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> facet_map
       = _submesh.facet_map();
   assert(facet_map);
@@ -1421,20 +1413,17 @@ dolfinx_contact::Contact::pack_grad_u_contact(
       const std::size_t row = i * num_q_points;
       auto linked_pair = facet_map->links(links[q]);
       cells[row + q] = parent_cells[linked_pair.front()];
-      for (std::size_t j = 0; j < gdim; ++j)
-      {
-        pts(i, q, j) = qp_span(i, q, j) + gap[row * gdim + q * gdim + j]
-                       - u_packed[row * gdim + q * gdim + j];
-      }
     }
   }
+  const std::vector<double>& reference_x = _reference_contact_points[pair];
+
   std::array<std::size_t, 4> b_shape
       = evaluate_basis_shape(*_V, num_facets * num_q_points, 1);
   std::vector<double> basis_values(
       std::reduce(b_shape.begin(), b_shape.end(), 1, std::multiplies{}));
   std::fill(basis_values.begin(), basis_values.end(), 0);
-  evaluate_basis_functions(*u->function_space(), points, cells, basis_values,
-                           1);
+  evaluate_basis_functions(*u->function_space(), reference_x, cells,
+                           basis_values, 1);
 
   const std::span<const PetscScalar>& u_coeffs = u->x()->array();
 
@@ -1480,4 +1469,10 @@ void dolfinx_contact::Contact::update_submesh_geometry(
     dolfinx::fem::Function<PetscScalar>& u)
 {
   _submesh.update_geometry(u);
+}
+
+//-----------------------------------------------------------------------------------------------
+std::size_t dolfinx_contact::Contact::num_q_points() const
+{
+  return _quadrature_rule->offset()[1] - _quadrature_rule->offset()[0];
 }

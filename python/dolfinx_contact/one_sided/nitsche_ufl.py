@@ -8,7 +8,7 @@ import dolfinx.common as _common
 import dolfinx.fem as _fem
 import dolfinx.log as _log
 import dolfinx.mesh as dmesh
-import dolfinx.nls as _nls
+from dolfinx.nls.petsc import NewtonSolver
 import numpy as np
 import ufl
 from petsc4py import PETSc as _PETSc
@@ -179,7 +179,7 @@ def nitsche_ufl(mesh: dmesh.Mesh, mesh_data: Tuple[dmesh.MeshTags, int, int],
     # xdmf = _io.XDMFFile(mesh.comm, "results/tmp_sol.xdmf", "w")
     # xdmf.write_mesh(mesh)
 
-    solver = _nls.petsc.NewtonSolver(mesh.comm, problem)
+    solver = NewtonSolver(mesh.comm, problem)
     null_space = rigid_motions_nullspace(V)
     solver.A.setNearNullSpace(null_space)
 

@@ -100,7 +100,8 @@ if __name__ == "__main__":
         sorted_facets = np.argsort(indices)
         facet_marker = meshtags(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
         # Create Dirichlet bdy conditions
-        bcs = (np.array([[tag, 2]], dtype=np.int32), [_fem.Constant(mesh, _PETSc.ScalarType(0))])
+        dofs = _fem.locate_dofs_topological(V, mesh.topology.dim - 1, facet_marker.find(tag))
+        bcs = [_fem.dirichletbc(_fem.Constant(mesh, _PETSc.ScalarType(0)), dofs)]
         g = _fem.Constant(mesh, _PETSc.ScalarType((0, 0, 0)))      # zero dirichlet
         t = _fem.Constant(mesh, _PETSc.ScalarType((0.2, 0.5, 0)))  # traction
         f = _fem.Constant(mesh, _PETSc.ScalarType((1.0, 0.5, 0)))  # body force
@@ -121,7 +122,7 @@ if __name__ == "__main__":
                 mesh, facet_marker, domain_marker, [marker_offset + i for i in range(2 * split)])
 
         V = _fem.VectorFunctionSpace(mesh, ("Lagrange", 1))
-        bcs = (np.empty(shape=(2, 0), dtype=np.int32), [])
+        bcs = []
         g = _fem.Constant(mesh, _PETSc.ScalarType((0, 0)))     # zero Dirichlet
         t = _fem.Constant(mesh, _PETSc.ScalarType((0.2, 0.5)))  # traction
         f = _fem.Constant(mesh, _PETSc.ScalarType((1.0, 0.5)))  # body force
