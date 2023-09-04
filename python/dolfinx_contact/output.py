@@ -17,7 +17,7 @@ from mpi4py import MPI
 # write pressure on surface to file for visualisation
 def write_pressure_xdmf(mesh, contact, u, du, contact_pairs, quadrature_degree,
                         search_method, entities, material, order, simplex,
-                        pressure_function, projection_coordinates, fname):
+                        pressure_function, tangent_force, projection_coordinates, fname):
 
     # Recover original geometry for pressure computation
     du.x.array[:] = 0
@@ -137,6 +137,8 @@ def write_pressure_xdmf(mesh, contact, u, du, contact_pairs, quadrature_degree,
     # interpolate exact pressure
     p_hertz = Function(P_exact)
     p_hertz.interpolate(pressure_function)
+    pt = Function(P_exact)
+    pt.interpolate(tangent_force)
     geom = facet_mesh.geometry.x.copy()
 
     def _project():
@@ -154,8 +156,9 @@ def write_pressure_xdmf(mesh, contact, u, du, contact_pairs, quadrature_degree,
     p_f.name = "pressure"
     pt_f.name = "tangential"
     p_hertz.name = "analytical"
+    pt.name = "analytical (tangent force)"
     _project()
-    with VTXWriter(mesh.comm, f"{fname}_surface_pressure.bp", [p_f, pt_f, p_hertz]) as vtx:
+    with VTXWriter(mesh.comm, f"{fname}_surface_pressure.bp", [p_f, pt_f, p_hertz, pt]) as vtx:
         vtx.write(0.0)
 
 

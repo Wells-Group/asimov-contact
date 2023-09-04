@@ -5,10 +5,13 @@
 import argparse
 
 import numpy as np
+from basix.ufl import element
 import ufl
 from dolfinx.io import XDMFFile, VTXWriter
-from dolfinx.fem import (Constant, dirichletbc, Function, FunctionSpace,
+from dolfinx.fem import (assemble_scalar, Constant, dirichletbc, form,
+                         Function, FunctionSpace,
                          VectorFunctionSpace, locate_dofs_topological)
+from dolfinx.fem.petsc import set_bc
 from dolfinx.graph import create_adjacencylist
 from dolfinx.mesh import locate_entities
 from mpi4py import MPI
@@ -95,7 +98,7 @@ if __name__ == "__main__":
                       "atol": newton_tol,
                       "rtol": newton_tol,
                       "convergence_criterion": "residual",
-                      "max_it" : 100,
+                      "max_it": 100,
                       "error_on_nonconvergence": True}
     # petsc_options = {"ksp_type": "preonly", "pc_type": "lu"}
     petsc_options = {
@@ -158,9 +161,10 @@ if __name__ == "__main__":
     F = ufl.inner(sigma(u), epsilon(v)) * dx
 
     # body forces
-    #F -= ufl.inner(t, v) * ds(top)
+    # F -= ufl.inner(t, v) * ds(top)
 
-    problem_parameters = {"gamma": np.float64(E * 100 * args.order**2), "theta": np.float64(1), "friction": np.float64(0.0)}
+    problem_parameters = {"gamma": np.float64(E * 100 * args.order**2),
+                          "theta": np.float64(1), "friction": np.float64(0.0)}
 
     top_cells = domain_marker.find(1)
 
@@ -173,40 +177,43 @@ if __name__ == "__main__":
                                      markers=[domain_marker, facet_marker],
                                      contact_data=(surfaces, contact),
                                      bcs=bcs, problem_parameters=problem_parameters,
-                                     newton_options=newton_options, 
+                                     newton_options=newton_options,
                                      petsc_options=petsc_options,
                                      search_method=search_mode,
                                      quadrature_degree=args.q_degree,
                                      search_radius=np.float64(1.0))
 
-
     problem1.update_friction_coefficient(0.0)
     h = problem1.h_surfaces()[1]
     # create initial guess
+
     def _u_initial(x):
         values = np.zeros((mesh.geometry.dim, x.shape[1]))
         values[-1] = -0.01 * h - gap
         return values
-    
+
     problem1.du.interpolate(_u_initial, top_cells)
     # initialise vtx writer
     vtx = VTXWriter(mesh.comm, "results/cylinders_frictonless.bp", [problem1.u])
     vtx.write(0)
+    newton_steps1 = []
     for i in range(steps1):
+
         for j in range(len(contact)):
             problem1.contact.create_distance_map(j)
-        val = -0.1/steps1 #-p * (i+1) / steps1
-        # t.value[1] =  val
-        print(val)
+        val = -0.2 / steps1  # -p * (i + 1) / steps1
         g_top.value[1] = val
+        print(f"Fricitionless part: Step {i+1} of {steps1}----------------------------------------------")
+        # g_top.value[1] = val
+        set_bc(problem1.du.vector, bcs)
         n = problem1.solve()
+        newton_steps1.append(n)
         problem1.du.x.scatter_forward()
         problem1.u.x.array[:] += problem1.du.x.array[:]
         problem1.contact.update_submesh_geometry(problem1.u._cpp_object)
-        problem1.du.x.array[:] = 0# 0.01 * h * problem1.du.x.array[:]/np.linalg.norm(problem1.du.x.array[:])
+        problem1.du.x.array[:] = 0.1 * h * problem1.du.x.array[:]
         problem1.set_normals()
-        vtx.write(i+1)
-
+        vtx.write(i + 1)
 
     # # Step 2: Frictional contact
     # geometry = mesh.geometry.x[:].copy()
@@ -242,6 +249,7 @@ if __name__ == "__main__":
         "ksp_norm_type": "unpreconditioned"
     }
     # petsc_options = {"ksp_type": "preonly", "pc_type": "lu"}
+
     newton_options = {"relaxation_parameter": 1.0,
                       "atol": newton_tol,
                       "rtol": newton_tol,
@@ -258,7 +266,7 @@ if __name__ == "__main__":
     g_top = Constant(mesh, ScalarType((0.0, 0.0)))
     bcs = [dirichletbc(Constant(mesh, ScalarType((0.0, 0.0))), dofs_bottom, V),
            dirichletbc(g_top, dofs_top, V)]
-    
+
     problem1.bcs = bcs
     problem1.update_friction_coefficient(0.3)
     problem1.update_nitsche_parameters(E * 10 * args.order**2, 0)
@@ -266,41 +274,58 @@ if __name__ == "__main__":
     problem1.petsc_options = petsc_options
     problem1.newton_options = newton_options
     steps2 = 8
+
     def _du_initial(x):
         values = np.zeros((mesh.geometry.dim, x.shape[1]))
-        values[0] = 0.01 * h
+        values[0] = 0.001 * h
         values[1] = 0
         return values
-    problem1.du.interpolate(_du_initial, top_cells)
+    problem1.du.x.array[:] = 0.1 * problem1.du.x.array[:]
+    # problem1.du.interpolate(_du_initial, top_cells)
     # initialise vtx write
     # vtx = VTXWriter(mesh.comm, "results/cylinders_coulomb.bp", [problem1.u])
     # vtx.write(0)
+    newton_steps2 = []
+    # problem1.newton_options['rtol'] = 3e-2
+    # problem1.newton_options['atol'] = 3e-2
     for i in range(steps2):
         for j in range(len(contact)):
             problem1.contact.create_distance_map(j)
-        g_top.value[0] = 0.1/steps2
+        # g_top.value[0] = 0.1 / steps2
+        print(f"Fricitional part: Step {i+1} of {steps2}----------------------------------------------")
         # print(problem1.du.x.array[:])
+        set_bc(problem1.du.vector, bcs)
 
-        # t.value[0] = 0.03*(i+1)/steps2
+        # t.value[0] = 0.03 * (i + 1) / steps2
+        g_top.value[0] = 0.025 / steps2
         n = problem1.solve()
+        newton_steps2.append(n)
         problem1.du.x.scatter_forward()
         problem1.u.x.array[:] += problem1.du.x.array[:]
         problem1.set_normals()
         problem1.contact.update_submesh_geometry(problem1.u._cpp_object)
         # take a fraction of du as initial guess
         # this is to ensure non-singular matrices in the case of no Dirichlet boundary
-        problem1.du.x.array[:] = 0.1 * problem1.du.x.array[:]
+        problem1.du.x.array[:] = 0.1 * h * problem1.du.x.array[:]
         vtx.write(steps1 + 1 + i)
 
     vtx.close()
 
+    n = ufl.FacetNormal(mesh)
+    ex = Constant(mesh, ScalarType((1.0, 0.0)))
+    ey = Constant(mesh, ScalarType((0.0, 1.0)))
+    Rx_form = form(ufl.inner(sigma(u) * n, ex) * ds(top))
+    Ry_form = form(ufl.inner(sigma(u) * n, ey) * ds(top))
+    R_x = mesh.comm.allreduce(assemble_scalar(Rx_form), op=MPI.SUM)
+    R_y = mesh.comm.allreduce(assemble_scalar(Ry_form), op=MPI.SUM)
     Estar = E / (2 * (1 - nu**2))
-    load = 2 * R * 0.625
+    load = abs(R_y)
     gap = 0.01
-    a = 2 * np.sqrt(R * load / (np.pi * Estar))
+    a = 2 * np.sqrt(R * load / (2 * np.pi * Estar))
     p0 = 2 * load / (np.pi * a)
-
-    
+    print("Newton iterations: ")
+    print(newton_steps1)
+    print(newton_steps2)
 
     def _pressure(x):
         vals = np.zeros(x.shape[1])
@@ -308,8 +333,24 @@ if __name__ == "__main__":
             if abs(x[0][i]) < a:
                 vals[i] = p0 * np.sqrt(1 - x[0][i]**2 / a**2)
         return vals
+
+    p = abs(R_y / (2 * R))
+    q = abs(R_x / (2 * R))
+    print(p, q)
+    fric = 0.3
+    c = a * np.sqrt(1 - q / (fric * p))
+
+    def _tangent(x):
+        vals = np.zeros(x.shape[1])
+        for i in range(x.shape[1]):
+            if abs(x[0][i]) <= c:
+                vals[i] = fric * 4 * R * p / (np.pi * a**2) * (np.sqrt(a**2 - x[0][i]**2) - np.sqrt(c**2 - x[0][i]**2))
+            elif abs(x[0][i] < a):
+                vals[i] = fric * 4 * R * p / (np.pi * a**2) * (np.sqrt(a**2 - x[0][i]**2))
+        return vals
+
     write_pressure_xdmf(mesh, problem1.contact, problem1.u, problem1.du, contact,
                         args.q_degree, search_mode, problem1.entities,
-                         problem1.coeffs, args.order, simplex, 
-                        _pressure, [(tdim-1, 0), (tdim - 1, -R)],
+                        problem1.coeffs, args.order, simplex,
+                        _pressure, _tangent, [(tdim - 1, 0), (tdim - 1, -R)],
                         'results/cylinder_friction')
