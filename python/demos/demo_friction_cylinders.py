@@ -13,7 +13,7 @@ from dolfinx.fem import (assemble_scalar, Constant, dirichletbc, form,
                          VectorFunctionSpace, locate_dofs_topological)
 from dolfinx.fem.petsc import set_bc
 from dolfinx.graph import create_adjacencylist
-from dolfinx.mesh import locate_entities
+from dolfinx.mesh import locate_entities, create_submesh
 from mpi4py import MPI
 from petsc4py.PETSc import ScalarType
 
@@ -25,7 +25,7 @@ from dolfinx_contact.cpp import ContactMode
 
 from dolfinx_contact.unbiased.nitsche_unbiased import nitsche_unbiased
 from dolfinx_contact.unbiased.contact_problem import create_contact_solver
-from dolfinx_contact.output import write_pressure_xdmf
+from dolfinx_contact.output import ContactWriter
 
 if __name__ == "__main__":
     desc = "Friction example with two elastic cylinders for verifying correctness of code"
@@ -52,6 +52,7 @@ if __name__ == "__main__":
     p = 0.625
     E = 200
     nu = 0.3
+    Estar = E / (2 * (1 - nu**2))
     mu_func, lambda_func = lame_parameters(True)
     mu = mu_func(E, nu)
     lmbda = lambda_func(E, nu)
@@ -80,17 +81,6 @@ if __name__ == "__main__":
     top = 7
     bottom = 13
 
-    # theoretical solution
-    a = 2 * np.sqrt(2 * R**2 * p * (1 - nu**2) / (np.pi * E))
-    p0 = 4 * R * p / (np.pi * a)
-
-    def _pressure(x):
-        vals = np.zeros(x.shape[1])
-        for i in range(x.shape[1]):
-            if abs(x[0][i]) < a:
-                vals[i] = p0 * np.sqrt(1 - x[0][i]**2 / a**2)
-        return vals
-
     # Solver options
     ksp_tol = 1e-10
     newton_tol = 1e-7
@@ -98,7 +88,7 @@ if __name__ == "__main__":
                       "atol": newton_tol,
                       "rtol": newton_tol,
                       "convergence_criterion": "residual",
-                      "max_it": 100,
+                      "max_it": 200,
                       "error_on_nonconvergence": True}
     # petsc_options = {"ksp_type": "preonly", "pc_type": "lu"}
     petsc_options = {
@@ -134,8 +124,8 @@ if __name__ == "__main__":
 
     g_top = Constant(mesh, ScalarType((0.0, -0.1)))
     bcs = [dirichletbc(g, dofs_symmetry, V.sub(0)),
-           dirichletbc(Constant(mesh, ScalarType((0.0, 0.0))), dofs_bottom, V),
-           dirichletbc(g_top, dofs_top, V)]
+           dirichletbc(Constant(mesh, ScalarType((0.0, 0.0))), dofs_bottom, V)]
+    #    dirichletbc(g_top, dofs_top, V)]
 
     # DG-0 funciton for material
     V0 = FunctionSpace(mesh, ("DG", 0))
@@ -161,7 +151,30 @@ if __name__ == "__main__":
     F = ufl.inner(sigma(u), epsilon(v)) * dx
 
     # body forces
-    # F -= ufl.inner(t, v) * ds(top)
+    F -= ufl.inner(t, v) * ds(top)
+
+    # Set up force postprocessing
+    n = ufl.FacetNormal(mesh)
+    ex = Constant(mesh, ScalarType((1.0, 0.0)))
+    ey = Constant(mesh, ScalarType((0.0, 1.0)))
+    Rx_form = form(ufl.inner(sigma(u) * n, ex) * ds(top))
+    Ry_form = form(ufl.inner(sigma(u) * n, ey) * ds(top))
+
+    def _tangent(x, p, a, c):
+        vals = np.zeros(x.shape[1])
+        for i in range(x.shape[1]):
+            if abs(x[0][i]) <= c:
+                vals[i] = fric * 4 * R * p / (np.pi * a**2) * (np.sqrt(a**2 - x[0][i]**2) - np.sqrt(c**2 - x[0][i]**2))
+            elif abs(x[0][i] < a):
+                vals[i] = fric * 4 * R * p / (np.pi * a**2) * (np.sqrt(a**2 - x[0][i]**2))
+        return vals
+
+    def _pressure(x, p0, a):
+        vals = np.zeros(x.shape[1])
+        for i in range(x.shape[1]):
+            if abs(x[0][i]) < a:
+                vals[i] = p0 * np.sqrt(1 - x[0][i]**2 / a**2)
+        return vals
 
     problem_parameters = {"gamma": np.float64(E * 100 * args.order**2),
                           "theta": np.float64(1), "friction": np.float64(0.0)}
@@ -193,16 +206,23 @@ if __name__ == "__main__":
         return values
 
     problem1.du.interpolate(_u_initial, top_cells)
+
+    writer = ContactWriter(mesh, problem1.contact, problem1.u, contact,
+                           args.q_degree, search_mode, problem1.entities,
+                           problem1.coeffs, args.order, simplex,
+                           [(tdim - 1, 0), (tdim - 1, -R)],
+                           'results/surface_forces_force_driven')
     # initialise vtx writer
-    vtx = VTXWriter(mesh.comm, "results/cylinders_frictonless.bp", [problem1.u])
+    vtx = VTXWriter(mesh.comm, "results/cylinders_force_driven.bp", [problem1.u])
     vtx.write(0)
     newton_steps1 = []
     for i in range(steps1):
 
         for j in range(len(contact)):
             problem1.contact.create_distance_map(j)
-        val = -0.2 / steps1  # -p * (i + 1) / steps1
-        g_top.value[1] = val
+        val = -p * (i + 1) / steps1  # -0.2 / steps1  #
+        # g_top.value[1] = val
+        t.value[1] = val
         print(f"Fricitionless part: Step {i+1} of {steps1}----------------------------------------------")
         # g_top.value[1] = val
         set_bc(problem1.du.vector, bcs)
@@ -210,9 +230,23 @@ if __name__ == "__main__":
         newton_steps1.append(n)
         problem1.du.x.scatter_forward()
         problem1.u.x.array[:] += problem1.du.x.array[:]
+
+        problem1.set_normals()
+        # Compute forces
+        # R_x = mesh.comm.allreduce(assemble_scalar(Rx_form), op=MPI.SUM)
+        # R_y = mesh.comm.allreduce(assemble_scalar(Ry_form), op=MPI.SUM)
+        # p = abs(R_y / (2 * R))
+        # q = abs(R_x / (2 * R))
+        load = abs(val) * 2 * R  # abs(R_y)
+        a = 2 * np.sqrt(R * load / (2 * np.pi * Estar))
+        p0 = 2 * load / (np.pi * a)
+        # print(p, q)
+        print(val, 0)
+        fric = 0.3
+        c = a * np.sqrt(1 - 0 / (fric * abs(val)))
+        writer.write(i + 1, lambda x: _pressure(x, p0, a), lambda x: _tangent(x, abs(val), a, c))
         problem1.contact.update_submesh_geometry(problem1.u._cpp_object)
         problem1.du.x.array[:] = 0.1 * h * problem1.du.x.array[:]
-        problem1.set_normals()
         vtx.write(i + 1)
 
     # # Step 2: Frictional contact
@@ -254,7 +288,7 @@ if __name__ == "__main__":
                       "atol": newton_tol,
                       "rtol": newton_tol,
                       "convergence_criterion": "residual",
-                      "max_it": 100,
+                      "max_it": 200,
                       "error_on_nonconvergence": True}
     # symmetry_nodes = locate_entities(mesh, 0, lambda x: np.logical_and(np.isclose(x[0], 0), np.isclose(x[1], -R)))
     # dofs_symmetry = locate_dofs_topological(V.sub(0), 0, symmetry_nodes)
@@ -264,12 +298,12 @@ if __name__ == "__main__":
     # # update_geometry(u._cpp_object, mesh._cpp_object)
     # # u2.x.array[:] = u.x.array[:]
     g_top = Constant(mesh, ScalarType((0.0, 0.0)))
-    bcs = [dirichletbc(Constant(mesh, ScalarType((0.0, 0.0))), dofs_bottom, V),
-           dirichletbc(g_top, dofs_top, V)]
+    bcs = [dirichletbc(Constant(mesh, ScalarType((0.0, 0.0))), dofs_bottom, V)]  # ,
+    #    dirichletbc(g_top, dofs_top, V)]
 
     problem1.bcs = bcs
     problem1.update_friction_coefficient(0.3)
-    problem1.update_nitsche_parameters(E * 10 * args.order**2, 0)
+    problem1.update_nitsche_parameters(E * 10 * args.order**2, 1)
     problem1.coulomb = True
     problem1.petsc_options = petsc_options
     problem1.newton_options = newton_options
@@ -296,13 +330,25 @@ if __name__ == "__main__":
         # print(problem1.du.x.array[:])
         set_bc(problem1.du.vector, bcs)
 
-        # t.value[0] = 0.03 * (i + 1) / steps2
-        g_top.value[0] = 0.025 / steps2
+        t.value[0] = 0.03 * (i + 1) / steps2
+        # g_top.value[0] = 0.025 / steps2
         n = problem1.solve()
         newton_steps2.append(n)
         problem1.du.x.scatter_forward()
         problem1.u.x.array[:] += problem1.du.x.array[:]
         problem1.set_normals()
+        # Compute forces
+        # R_x = mesh.comm.allreduce(assemble_scalar(Rx_form), op=MPI.SUM)
+        # R_y = mesh.comm.allreduce(assemble_scalar(Ry_form), op=MPI.SUM)
+        # p = abs(R_y / (2 * R))
+        q = 0.03 * (i + 1) / steps2  # abs(R_x / (2 * R))
+        load = 2 * R * abs(p)  # abs(R_y)
+        a = 2 * np.sqrt(R * load / (2 * np.pi * Estar))
+        p0 = 2 * load / (np.pi * a)
+        print(p, q)
+        fric = 0.3
+        c = a * np.sqrt(1 - q / (fric * abs(p)))
+        writer.write(steps1 + i + 1, lambda x: _pressure(x, p0, a), lambda x: _tangent(x, abs(p), a, c))
         problem1.contact.update_submesh_geometry(problem1.u._cpp_object)
         # take a fraction of du as initial guess
         # this is to ensure non-singular matrices in the case of no Dirichlet boundary
@@ -311,46 +357,6 @@ if __name__ == "__main__":
 
     vtx.close()
 
-    n = ufl.FacetNormal(mesh)
-    ex = Constant(mesh, ScalarType((1.0, 0.0)))
-    ey = Constant(mesh, ScalarType((0.0, 1.0)))
-    Rx_form = form(ufl.inner(sigma(u) * n, ex) * ds(top))
-    Ry_form = form(ufl.inner(sigma(u) * n, ey) * ds(top))
-    R_x = mesh.comm.allreduce(assemble_scalar(Rx_form), op=MPI.SUM)
-    R_y = mesh.comm.allreduce(assemble_scalar(Ry_form), op=MPI.SUM)
-    Estar = E / (2 * (1 - nu**2))
-    load = abs(R_y)
-    gap = 0.01
-    a = 2 * np.sqrt(R * load / (2 * np.pi * Estar))
-    p0 = 2 * load / (np.pi * a)
     print("Newton iterations: ")
     print(newton_steps1)
     print(newton_steps2)
-
-    def _pressure(x):
-        vals = np.zeros(x.shape[1])
-        for i in range(x.shape[1]):
-            if abs(x[0][i]) < a:
-                vals[i] = p0 * np.sqrt(1 - x[0][i]**2 / a**2)
-        return vals
-
-    p = abs(R_y / (2 * R))
-    q = abs(R_x / (2 * R))
-    print(p, q)
-    fric = 0.3
-    c = a * np.sqrt(1 - q / (fric * p))
-
-    def _tangent(x):
-        vals = np.zeros(x.shape[1])
-        for i in range(x.shape[1]):
-            if abs(x[0][i]) <= c:
-                vals[i] = fric * 4 * R * p / (np.pi * a**2) * (np.sqrt(a**2 - x[0][i]**2) - np.sqrt(c**2 - x[0][i]**2))
-            elif abs(x[0][i] < a):
-                vals[i] = fric * 4 * R * p / (np.pi * a**2) * (np.sqrt(a**2 - x[0][i]**2))
-        return vals
-
-    write_pressure_xdmf(mesh, problem1.contact, problem1.u, problem1.du, contact,
-                        args.q_degree, search_mode, problem1.entities,
-                        problem1.coeffs, args.order, simplex,
-                        _pressure, _tangent, [(tdim - 1, 0), (tdim - 1, -R)],
-                        'results/cylinder_friction')

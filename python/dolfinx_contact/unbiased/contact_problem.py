@@ -180,10 +180,10 @@ def create_contact_solver(ufl_form: ufl.Form, u: fem.Function,
     ds = ufl.Measure("ds", domain=mesh, subdomain_data=markers[1])
 
     # ufl part of contact
-    for contact_pair in contact_pairs:
-        surface_value = int(contact_surfaces.links(0)[contact_pair[0]])
-        ufl_form += - 0.5 * theta * h / gamma * ufl.inner(sigma(u) * n, sigma(v) * n) * \
-            ds(surface_value)
+    # for contact_pair in contact_pairs:
+    #     surface_value = int(contact_surfaces.links(0)[contact_pair[0]])
+    #     ufl_form += - 0.5 * theta * h / gamma * ufl.inner(sigma(u) * n, sigma(v) * n) * \
+    #         ds(surface_value)
     F = ufl.replace(ufl_form, {u: u + du})
     J = ufl.derivative(F, du, w)
 
