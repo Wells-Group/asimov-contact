@@ -13,7 +13,7 @@ from dolfinx.fem import (dirichletbc, Constant, form, Function, FunctionSpace,
                          locate_dofs_topological, VectorFunctionSpace)
 from dolfinx.fem.petsc import (apply_lifting, assemble_vector, assemble_matrix,
                                create_vector, set_bc)
-from dolfinx.graph import create_adjacencylist
+from dolfinx.graph import adjacencylist
 from dolfinx.io import XDMFFile
 from mpi4py import MPI
 from petsc4py.PETSc import ScalarType
@@ -171,7 +171,7 @@ if __name__ == "__main__":
     contact = [(1, 0), (0, 1)]
     data = np.array([contact_bdy_1, contact_bdy_2], dtype=np.int32)
     offsets = np.array([0, 2], dtype=np.int32)
-    surfaces = create_adjacencylist(data, offsets)
+    surfaces = adjacencylist(data, offsets)
 
     log.set_log_level(log.LogLevel.OFF)
     solver_outfile = args.outfile if args.ksp else None

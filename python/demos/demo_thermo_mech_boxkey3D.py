@@ -10,7 +10,7 @@ import ufl
 from dolfinx import io, log
 from dolfinx.common import Timer, TimingType, list_timings
 from dolfinx.fem.petsc import LinearProblem
-from dolfinx.graph import create_adjacencylist
+from dolfinx.graph import adjacencylist
 from dolfinx.io import XDMFFile
 from dolfinx.mesh import GhostMode
 from dolfinx_contact.helpers import (epsilon, lame_parameters, sigma_func,
@@ -118,7 +118,7 @@ g = _fem.Constant(mesh, _PETSc.ScalarType((0, 0, 0)))     # zero Dirichlet
 contact_pairs = [(0, 1), (1, 0)]
 data = np.array([contact_bdy_1, contact_bdy_2], dtype=np.int32)
 offsets = np.array([0, 2], dtype=np.int32)
-surfaces = create_adjacencylist(data, offsets)
+surfaces = adjacencylist(data, offsets)
 
 
 # Function, TestFunction, TrialFunction and measures

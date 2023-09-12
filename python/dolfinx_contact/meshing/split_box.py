@@ -8,7 +8,7 @@ import gmsh
 from mpi4py import MPI
 from typing import Callable, Tuple
 
-from dolfinx.graph import create_adjacencylist
+from dolfinx.graph import adjacencylist
 from dolfinx.io.gmshio import (cell_perm_array,
                                extract_geometry,
                                extract_topology_and_markers, ufl_mesh)
@@ -88,11 +88,11 @@ def create_dolfinx_mesh(filename: str, x: npt.NDArray[np.float64], cells: npt.ND
     msh.name = "Grid"
     entities, values = distribute_entity_data(msh, tdim - 1, marked_facets, facet_values)
     msh.topology.create_connectivity(tdim - 1, 0)
-    mt = meshtags_from_entities(msh, tdim - 1, create_adjacencylist(entities), values)
+    mt = meshtags_from_entities(msh, tdim - 1, adjacencylist(entities), values)
     mt.name = "contact_facets"
     msh.topology.create_connectivity(tdim, 0)
     entities, values = distribute_entity_data(msh, tdim, cells.astype(np.int64), cell_data.astype(np.int32))
-    mt_domain = meshtags_from_entities(msh, tdim, create_adjacencylist(entities), values)
+    mt_domain = meshtags_from_entities(msh, tdim, adjacencylist(entities), values)
     mt_domain.name = "domain_marker"
     gmsh.finalize()
     with XDMFFile(MPI.COMM_WORLD, f"{filename}.xdmf", "w") as file:

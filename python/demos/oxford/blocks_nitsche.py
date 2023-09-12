@@ -8,7 +8,7 @@ from basix.ufl import element
 from dolfinx.fem import (Constant, dirichletbc, Function,
                          locate_dofs_topological,
                          VectorFunctionSpace)
-from dolfinx.graph import create_adjacencylist
+from dolfinx.graph import adjacencylist
 from dolfinx.io import XDMFFile
 from dolfinx.mesh import create_mesh
 from mpi4py import MPI
@@ -90,7 +90,7 @@ bcs = [dirichletbc(d, dofs_d, V), dirichletbc(g, dofs_g, V)]
 # The surface with tags [contact_bdy_1, contact_bdy_2] both can be found in this meshtag
 data = np.array([contact_bdy_1, contact_bdy_2], dtype=np.int32)
 offsets = np.array([0, 2], dtype=np.int32)
-surfaces = create_adjacencylist(data, offsets)
+surfaces = adjacencylist(data, offsets)
 # For unbiased computation the contact detection is performed in both directions
 contact_pairs = [(0, 1), (1, 0)]
 

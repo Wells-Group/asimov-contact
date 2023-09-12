@@ -7,7 +7,7 @@ import dolfinx.mesh
 import numpy as np
 import pytest
 import ufl
-from dolfinx.graph import create_adjacencylist
+from dolfinx.graph import adjacencylist
 from dolfinx.fem import (Function, FunctionSpace, IntegralType,
                          VectorFunctionSpace, form)
 from dolfinx.fem.petsc import (assemble_matrix, assemble_vector, create_matrix,
@@ -136,7 +136,7 @@ def test_vector_surface_kernel(dim, kernel_type, P, Q):
     h_facets = dolfinx_contact.pack_circumradius(mesh._cpp_object, integral_entities)
     data = np.array([1], dtype=np.int32)
     offsets = np.array([0, 1], dtype=np.int32)
-    surfaces = create_adjacencylist(data, offsets)
+    surfaces = adjacencylist(data, offsets)
     contact = dolfinx_contact.cpp.Contact([ft._cpp_object], surfaces, [(0, 0)],
                                           V._cpp_object, quadrature_degree=2 * P + Q + 1)
     contact.create_distance_map(0)
@@ -268,7 +268,7 @@ def test_matrix_surface_kernel(dim, kernel_type, P, Q):
     h_facets = dolfinx_contact.pack_circumradius(mesh._cpp_object, integral_entities)
     data = np.array([1], dtype=np.int32)
     offsets = np.array([0, 1], dtype=np.int32)
-    surfaces = create_adjacencylist(data, offsets)
+    surfaces = adjacencylist(data, offsets)
     contact = dolfinx_contact.cpp.Contact([ft._cpp_object], surfaces, [(0, 0)],
                                           V._cpp_object, quadrature_degree=2 * P + Q + 1)
     contact.create_distance_map(0)

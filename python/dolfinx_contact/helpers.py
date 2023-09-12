@@ -6,7 +6,8 @@
 from contextlib import ExitStack
 from typing import Union
 
-import dolfinx.fem as _fem
+from dolfinx.fem import Constant, form, Function, FunctionSpaceBase
+from dolfinx.fem.petsc import apply_lifting, assemble_matrix, assemble_vector, set_bc
 import dolfinx.la as _la
 from dolfinx.mesh import MeshTags
 import numpy
@@ -126,9 +127,9 @@ class NonlinearPDE_SNESProblem:
         V = u.function_space
         du = ufl.TrialFunction(V)
 
-        self.L = _fem.form(F, form_compiler_options=form_compiler_options,
+        self.L = form(F, form_compiler_options=form_compiler_options,
                            jit_options=jit_options)
-        self.a = _fem.form(ufl.derivative(F, u, du),
+        self.a = form(ufl.derivative(F, u, du),
                            form_compiler_options=form_compiler_options,
                            jit_options=jit_options)
         self.bc = bc
@@ -143,19 +144,19 @@ class NonlinearPDE_SNESProblem:
             addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD)
         with F.localForm() as f_local:
             f_local.set(0.0)
-        _fem.petsc.assemble_vector(F, self.L)
-        _fem.petsc.apply_lifting(F, [self.a], bcs=[[self.bc]], x0=[x], scale=-1.0)
+        assemble_vector(F, self.L)
+        apply_lifting(F, [self.a], bcs=[[self.bc]], x0=[x], scale=-1.0)
         F.ghostUpdate(addv=PETSc.InsertMode.ADD, mode=PETSc.ScatterMode.REVERSE)
-        _fem.petsc.set_bc(F, [self.bc], x, -1.0)
+        set_bc(F, [self.bc], x, -1.0)
 
     def J(self, snes, x, J, P):
         """Assemble Jacobian matrix."""
         J.zeroEntries()
-        _fem.petsc.assemble_matrix(J, self.a, [self.bc])
+        assemble_matrix(J, self.a, [self.bc])
         J.assemble()
 
 
-def rigid_motions_nullspace(V: _fem.FunctionSpace):
+def rigid_motions_nullspace(V: FunctionSpaceBase):
     """
     Function to build nullspace for 2D/3D elasticity.
 
@@ -164,7 +165,7 @@ def rigid_motions_nullspace(V: _fem.FunctionSpace):
     V
         The function space
     """
-    _x = _fem.Function(V)
+    _x = Function(V)
     # Get geometric dim
     gdim = V.mesh.geometry.dim
     assert gdim == 2 or gdim == 3
@@ -206,7 +207,7 @@ def rigid_motions_nullspace(V: _fem.FunctionSpace):
     return PETSc.NullSpace().create(vectors=nullspace_basis)
 
 
-def rigid_motions_nullspace_subdomains(V: _fem.FunctionSpace, mt: MeshTags,
+def rigid_motions_nullspace_subdomains(V: FunctionSpaceBase, mt: MeshTags,
                                        tags: numpy.typing.NDArray[numpy.int32],
                                        num_domains=2):
     """
@@ -222,7 +223,7 @@ def rigid_motions_nullspace_subdomains(V: _fem.FunctionSpace, mt: MeshTags,
     tags
         The values of the meshtags for the objects
     """
-    _x = _fem.Function(V)
+    _x = Function(V)
     # Get geometric dim
     gdim = V.mesh.geometry.dim
     assert gdim == 2 or gdim == 3
@@ -265,8 +266,8 @@ def rigid_motions_nullspace_subdomains(V: _fem.FunctionSpace, mt: MeshTags,
     return PETSc.NullSpace().create(vectors=nullspace_basis)
 
 
-def weak_dirichlet(F: ufl.Form, u: _fem.Function,
-                   f: Union[_fem.Function, _fem.Constant], sigma, gamma, theta, ds):
+def weak_dirichlet(F: ufl.Form, u: Function,
+                   f: Union[Function, Constant], sigma, gamma, theta, ds):
     V = u.function_space
     v = F.arguments()[0]
     mesh = V.mesh

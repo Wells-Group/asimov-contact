@@ -5,7 +5,7 @@ import numpy as np
 import pytest
 
 from dolfinx.fem import Function, VectorFunctionSpace
-from dolfinx.graph import create_adjacencylist
+from dolfinx.graph import adjacencylist
 from dolfinx.io import XDMFFile
 from dolfinx.mesh import locate_entities_boundary, meshtags, Mesh
 from dolfinx_contact.meshing import (convert_mesh,
@@ -93,7 +93,7 @@ def test_copy_to_submesh(order, res, simplex, dim):
     contact_pairs = [(0, 1), (1, 0)]
     data = np.array([contact_bdy_1, contact_bdy_2], dtype=np.int32)
     offsets = np.array([0, 2], dtype=np.int32)
-    contact_surfaces = create_adjacencylist(data, offsets)
+    contact_surfaces = adjacencylist(data, offsets)
     contact = Contact([facet_marker._cpp_object], contact_surfaces, contact_pairs,
                       V._cpp_object, quadrature_degree=3)
 

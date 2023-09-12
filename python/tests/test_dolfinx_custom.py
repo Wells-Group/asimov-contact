@@ -10,7 +10,7 @@ import numpy as np
 import pytest
 import ufl
 from mpi4py import MPI
-from dolfinx.graph import create_adjacencylist
+from dolfinx.graph import adjacencylist
 from dolfinx.fem.petsc import create_matrix
 import os
 import dolfinx_contact
@@ -194,7 +194,7 @@ def test_contact_kernel(theta, gamma, dim, gap):
         h_facets = dolfinx_contact.pack_circumradius(mesh._cpp_object, integral_entities)
         data = np.array([bottom_value, top_value], dtype=np.int32)
         offsets = np.array([0, 2], dtype=np.int32)
-        surfaces = create_adjacencylist(data, offsets)
+        surfaces = adjacencylist(data, offsets)
         contact = dolfinx_contact.cpp.Contact([facet_marker._cpp_object], surfaces, [(0, 1)],
                                               V._cpp_object, quadrature_degree=q_deg)
         g_vec = contact.pack_gap_plane(0, g)
