@@ -128,10 +128,10 @@ class NonlinearPDE_SNESProblem:
         du = ufl.TrialFunction(V)
 
         self.L = form(F, form_compiler_options=form_compiler_options,
-                           jit_options=jit_options)
+                      jit_options=jit_options)
         self.a = form(ufl.derivative(F, u, du),
-                           form_compiler_options=form_compiler_options,
-                           jit_options=jit_options)
+                      form_compiler_options=form_compiler_options,
+                      jit_options=jit_options)
         self.bc = bc
         self._F, self._J = None, None
         self.u = u
