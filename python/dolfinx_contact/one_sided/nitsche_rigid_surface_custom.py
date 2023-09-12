@@ -12,7 +12,7 @@ import dolfinx.log as _log
 import dolfinx.mesh as _mesh
 import numpy as np
 import ufl
-from dolfinx.graph import create_adjacencylist
+from dolfinx.graph import adjacencylist
 
 import dolfinx_contact
 import dolfinx_contact.cpp
@@ -186,7 +186,7 @@ def nitsche_rigid_surface_custom(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTa
     # Create contact class
     data = np.array([contact_value_elastic, contact_value_rigid], dtype=np.int32)
     offsets = np.array([0, 2], dtype=np.int32)
-    surfaces = create_adjacencylist(data, offsets)
+    surfaces = adjacencylist(data, offsets)
     contact = dolfinx_contact.cpp.Contact([facet_marker._cpp_object], surfaces, [(0, 1)],
                                           V._cpp_object, quadrature_degree=quadrature_degree)
 

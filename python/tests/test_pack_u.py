@@ -6,7 +6,7 @@
 import numpy as np
 import pytest
 import ufl
-from dolfinx.graph import create_adjacencylist
+from dolfinx.graph import adjacencylist
 from dolfinx import fem, graph
 from dolfinx import mesh as msh
 from mpi4py import MPI
@@ -29,7 +29,7 @@ def test_pack_u():
 
     cell_type = msh.CellType.triangle
     domain = ufl.Mesh(ufl.VectorElement("Lagrange", ufl.Cell(cell_type.name), 1))
-    cells = graph.create_adjacencylist(cells)
+    cells = graph.adjacencylist(cells)
     part = msh.create_cell_partitioner(msh.GhostMode.none)
     mesh = msh.create_mesh(MPI.COMM_WORLD, cells, points, domain, part)
 
@@ -59,7 +59,7 @@ def test_pack_u():
 
     data = np.array([1, 2], dtype=np.int32)
     offsets = np.array([0, 2], dtype=np.int32)
-    surfaces = create_adjacencylist(data, offsets)
+    surfaces = adjacencylist(data, offsets)
 
     # Compute contact class
     quadrature_degree = 2

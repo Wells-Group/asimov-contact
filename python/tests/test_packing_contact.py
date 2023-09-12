@@ -8,7 +8,7 @@ import ufl
 from dolfinx.cpp.mesh import to_type
 from dolfinx.io import XDMFFile
 import dolfinx.fem as _fem
-from dolfinx.graph import create_adjacencylist
+from dolfinx.graph import adjacencylist
 from dolfinx.mesh import (CellType, create_mesh, locate_entities_boundary, meshtags)
 from mpi4py import MPI
 
@@ -208,7 +208,7 @@ def test_packing(ct, gap, q_deg, delta, surface):
     o = opposites[surface]
     data = np.array([0, 1], dtype=np.int32)
     offsets = np.array([0, 2], dtype=np.int32)
-    surfaces = create_adjacencylist(data, offsets)
+    surfaces = adjacencylist(data, offsets)
     contact = dolfinx_contact.cpp.Contact([facet_marker._cpp_object], surfaces, [
                                           (s, o)], V._cpp_object, quadrature_degree=q_deg)
     contact.update_submesh_geometry(u._cpp_object)

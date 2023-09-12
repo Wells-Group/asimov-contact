@@ -21,7 +21,7 @@ import pytest
 import ufl
 from dolfinx.cpp.mesh import to_type
 import dolfinx.fem as _fem
-from dolfinx.graph import create_adjacencylist
+from dolfinx.graph import adjacencylist
 from dolfinx.mesh import (CellType, locate_entities_boundary, locate_entities, create_mesh,
                           compute_midpoints, meshtags)
 from mpi4py import MPI
@@ -368,7 +368,7 @@ def create_contact_data(V, u, quadrature_degree, lmbda, mu, facets_cg, search, t
 
     data = np.array([0, 1], dtype=np.int32)
     offsets = np.array([0, 2], dtype=np.int32)
-    surfaces = create_adjacencylist(data, offsets)
+    surfaces = adjacencylist(data, offsets)
     # create contact class
     contact = dolfinx_contact.cpp.Contact([facet_marker._cpp_object], surfaces, [(0, 1), (1, 0)],
                                           V._cpp_object, quadrature_degree=quadrature_degree,

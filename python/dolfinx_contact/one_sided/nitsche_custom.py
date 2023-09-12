@@ -12,7 +12,7 @@ from dolfinx import fem as _fem
 from dolfinx.fem.petsc import create_matrix, create_vector
 from dolfinx import log as _log
 from dolfinx import mesh as dmesh
-from dolfinx.graph import create_adjacencylist
+from dolfinx.graph import adjacencylist
 import dolfinx_contact
 import dolfinx_contact.cpp
 from dolfinx_contact.helpers import (epsilon, lame_parameters,
@@ -153,7 +153,7 @@ def nitsche_custom(mesh: dmesh.Mesh, mesh_data: Tuple[dmesh.MeshTags, int, int],
     # Create contact class
     data = np.array([contact_value, dirichlet_value], dtype=np.int32)
     offsets = np.array([0, 2], dtype=np.int32)
-    surfaces = create_adjacencylist(data, offsets)
+    surfaces = adjacencylist(data, offsets)
     contact = dolfinx_contact.cpp.Contact([facet_marker._cpp_object], surfaces, [(0, 1)],
                                           V._cpp_object, quadrature_degree=quadrature_degree)
     contact.create_distance_map(0)

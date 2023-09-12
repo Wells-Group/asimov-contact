@@ -9,7 +9,7 @@ from dolfinx.fem import (assemble_scalar, Constant, dirichletbc, form, Function,
                          FunctionSpace, locate_dofs_topological, VectorFunctionSpace)
 from dolfinx.fem.petsc import (apply_lifting, assemble_matrix, assemble_vector,
                                create_vector, set_bc)
-from dolfinx.graph import create_adjacencylist
+from dolfinx.graph import adjacencylist
 from dolfinx.io import XDMFFile
 from dolfinx.mesh import meshtags
 import numpy as np
@@ -330,7 +330,7 @@ def test_meshtie(threed: bool = False, simplex: bool = True, runs: int = 5):
         contact = [(1, 0), (0, 1)]
         data = np.array([4, 6], dtype=np.int32)
         offsets = np.array([0, 2], dtype=np.int32)
-        surfaces = create_adjacencylist(data, offsets)
+        surfaces = adjacencylist(data, offsets)
 
         # initialise meshties
         meshties = MeshTie([facet_marker._cpp_object], surfaces, contact,

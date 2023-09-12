@@ -10,7 +10,7 @@ from dolfinx import log
 import dolfinx.fem as _fem
 from dolfinx.common import timing, Timer
 from dolfinx.cpp.mesh import MeshTags_int32
-from dolfinx.graph import create_adjacencylist
+from dolfinx.graph import adjacencylist
 from dolfinx.io import XDMFFile
 from dolfinx.mesh import locate_entities_boundary, GhostMode
 from mpi4py import MPI
@@ -121,7 +121,7 @@ if __name__ == "__main__":
     contact_pairs = [(0, 1), (1, 0)]
     data = np.array([surface_1, surface_2], dtype=np.int32)
     offsets = np.array([0, 2], dtype=np.int32)
-    surfaces = create_adjacencylist(data, offsets)
+    surfaces = adjacencylist(data, offsets)
 
     # zero dirichlet boundary condition on mesh boundary with tag 5
 
