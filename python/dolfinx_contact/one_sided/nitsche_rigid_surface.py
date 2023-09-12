@@ -6,7 +6,7 @@ from typing import Tuple, Dict
 
 import dolfinx.common as _common
 import dolfinx.cpp as _cpp
-from dolfinx.graph import create_adjacencylist
+from dolfinx.graph import adjacencylist
 import dolfinx.fem as _fem
 import dolfinx.geometry as _geometry
 import dolfinx.log as _log
@@ -160,7 +160,7 @@ def nitsche_rigid_surface(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTags, int
     contact_facets = facet_marker.find(contact_value_elastic)
     data = np.array([contact_value_elastic, contact_value_rigid], dtype=np.int32)
     offsets = np.array([0, 2], dtype=np.int32)
-    surfaces = create_adjacencylist(data, offsets)
+    surfaces = adjacencylist(data, offsets)
     # Ensures that we find closest facet to midpoint of facet by setting quadrature degree to 1
     search_mode = [dolfinx_contact.cpp.ContactMode.ClosestPoint]
     contact = dolfinx_contact.cpp.Contact([facet_marker._cpp_object], surfaces, [(0, 1)],

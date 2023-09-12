@@ -9,7 +9,7 @@ from dolfinx.io import XDMFFile
 from dolfinx.fem import (Constant, dirichletbc, Expression, Function, FunctionSpace,
                          VectorFunctionSpace, locate_dofs_topological,
                          form, assemble_scalar)
-from dolfinx.graph import create_adjacencylist
+from dolfinx.graph import adjacencylist
 from mpi4py import MPI
 from petsc4py.PETSc import ScalarType
 
@@ -93,7 +93,7 @@ if __name__ == "__main__":
     contact = [(0, 1), (1, 0)]
     data = np.array([contact_bdy_1, contact_bdy_2], dtype=np.int32)
     offsets = np.array([0, 2], dtype=np.int32)
-    surfaces = create_adjacencylist(data, offsets)
+    surfaces = adjacencylist(data, offsets)
 
     # Function, TestFunction, TrialFunction and measures
     u = Function(V)

@@ -10,7 +10,7 @@ import dolfinx_contact
 import dolfinx_contact.cpp
 
 from .nitsche_unbiased import setup_newton_solver, get_problem_parameters
-from dolfinx_contact.helpers import sigma_func
+# from dolfinx_contact.helpers import sigma_func
 
 
 class ContactProblem:
@@ -77,7 +77,7 @@ class ContactProblem:
         for i in range(len(self.coeffs)):
             fric = dolfinx_contact.cpp.pack_coefficient_quadrature(
                 fric_coeff._cpp_object, 0, self.entities[i])
-            self.coeffs[i][: , 2] = fric[:, 0]
+            self.coeffs[i][:, 2] = fric[:, 0]
 
     def update_nitsche_parameters(self, gamma, theta):
         self.consts[0] = gamma
@@ -86,8 +86,9 @@ class ContactProblem:
     def h_surfaces(self):
         h = []
         for i in range(len(self.coeffs)):
-            h.append(np.sum(self.coeffs[i][:, 3])/self.coeffs[i].shape[0])
+            h.append(np.sum(self.coeffs[i][:, 3]) / self.coeffs[i].shape[0])
         return h
+
 
 def create_contact_solver(ufl_form: ufl.Form, u: fem.Function,
                           mu: fem.Function, lmbda: fem.Function,
@@ -154,7 +155,7 @@ def create_contact_solver(ufl_form: ufl.Form, u: fem.Function,
     petsc_options = {} if petsc_options is None else petsc_options
     newton_options = {} if newton_options is None else newton_options
     theta, gamma, s = get_problem_parameters(problem_parameters)
-    sigma = sigma_func(mu, lmbda)
+    # sigma = sigma_func(mu, lmbda)
 
     # Contact data
     contact_pairs = contact_data[1]
@@ -164,7 +165,7 @@ def create_contact_solver(ufl_form: ufl.Form, u: fem.Function,
     V = u.function_space
     mesh = V.mesh
     V2 = fem.FunctionSpace(mesh, ("DG", 0))
-    v = ufl_form.arguments()[0]  # Test function
+    # v = ufl_form.arguments()[0]  # Test function
     w = ufl.TrialFunction(V)     # Trial function
     du = fem.Function(V)
     du.x.array[:] = u.x.array[:]
@@ -174,10 +175,10 @@ def create_contact_solver(ufl_form: ufl.Form, u: fem.Function,
     ncells = mesh.topology.index_map(tdim).size_local
     h_vals = cpp.mesh.h(mesh._cpp_object, mesh.topology.dim, np.arange(0, ncells, dtype=np.int32))
     h.x.array[:ncells] = h_vals[:]
-    n = ufl.FacetNormal(mesh)
+    # n = ufl.FacetNormal(mesh)
 
     # Integration measure and ufl part of linear/bilinear form
-    ds = ufl.Measure("ds", domain=mesh, subdomain_data=markers[1])
+    # ds = ufl.Measure("ds", domain=mesh, subdomain_data=markers[1])
 
     # ufl part of contact
     # for contact_pair in contact_pairs:

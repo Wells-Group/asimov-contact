@@ -13,18 +13,20 @@ import petsc4py.PETSc as PETSc
 import ufl
 from mpi4py import MPI
 
+
 class ContactWriter:
     __slots__ = ["vtx", "contact", "u", "contact_pairs", "search_method", "material",
                  "projection_coordinates", "mesh", "entities", "facet_list", "facet_mesh",
                  "msh_to_fm", "pn", "pt", "a_form", "L", "L2", "p_f", "pt_f", "p_hertz",
                  "t_hertz", "quadrature_degree"]
-    def __init__(self, mesh, contact, u,  contact_pairs, quadrature_degree,
-                        search_method, entities, material, order, simplex,
-                        projection_coordinates, fname):
+
+    def __init__(self, mesh, contact, u, contact_pairs, quadrature_degree,
+                 search_method, entities, material, order, simplex,
+                 projection_coordinates, fname):
         self.contact = contact
         self.u = u
-        self.contact_pairs = contact_pairs 
-        self.search_method = search_method 
+        self.contact_pairs = contact_pairs
+        self.search_method = search_method
         self.material = material
         self.projection_coordinates = projection_coordinates
         self.mesh = mesh
@@ -54,19 +56,22 @@ class ContactWriter:
         # Use quadrature element
         if tdim == 2:
             Q_element = ufl.FiniteElement("Quadrature", ufl.Cell(
-                "interval", geometric_dimension=facet_mesh.geometry.dim), degree=quadrature_degree, quad_scheme="default")
+                "interval", geometric_dimension=facet_mesh.geometry.dim),
+                degree=quadrature_degree, quad_scheme="default")
         else:
             if simplex:
                 Q_element = ufl.FiniteElement("Quadrature", ufl.Cell(
-                    "triangle", geometric_dimension=facet_mesh.geometry.dim), quadrature_degree, quad_scheme="default")
+                    "triangle", geometric_dimension=facet_mesh.geometry.dim),
+                    quadrature_degree, quad_scheme="default")
             else:
                 Q_element = ufl.FiniteElement("Quadrature", ufl.Cell(
-                    "quadrilateral", geometric_dimension=facet_mesh.geometry.dim), quadrature_degree, quad_scheme="default")
+                    "quadrilateral", geometric_dimension=facet_mesh.geometry.dim),
+                    quadrature_degree, quad_scheme="default")
 
         Q = FunctionSpace(facet_mesh, Q_element)
         P = FunctionSpace(facet_mesh, ("DG", max(order - 1, 1)))
         P_exact = FunctionSpace(facet_mesh, ("DG", max(order - 1, 1)))
-        
+
         self.pn = Function(Q)
         self.pt = Function(Q)
         u_f = ufl.TrialFunction(P)
@@ -86,12 +91,15 @@ class ContactWriter:
         self.p_hertz.name = "analytical"
         self.t_hertz.name = "analytical (tangent force)"
 
-        self.vtx = VTXWriter(self.facet_mesh.comm, f"{fname}_surface_forces.bp", [self.p_f, self.pt_f, self.p_hertz, self.t_hertz])
+        self.vtx = VTXWriter(self.facet_mesh.comm, f"{fname}_surface_forces.bp", [
+                             self.p_f, self.pt_f, self.p_hertz, self.t_hertz])
+
     def project(self):
         tdim = self.mesh.topology.dim
         for i in range(len(self.contact_pairs)):
             fgeom = dolfinx_contact.cpp.entities_to_geometry_dofs(self.facet_mesh._cpp_object, tdim - 1,
-                                                                  np.array(self.msh_to_fm[self.facet_list[i]], dtype=np.int32))
+                                                                  np.array(self.msh_to_fm[self.facet_list[i]],
+                                                                           dtype=np.int32))
             fgeom = fgeom.array
             vali = self.projection_coordinates[i][1]
             xi = self.projection_coordinates[i][0]
@@ -118,7 +126,8 @@ class ContactWriter:
         for i in range(len(self.contact_pairs)):
             n_contact = normals[i]
             n_x = self.contact.pack_nx(i)
-            grad_u = dolfinx_contact.cpp.pack_gradient_quadrature(self.u._cpp_object, self.quadrature_degree, self.entities[i])
+            grad_u = dolfinx_contact.cpp.pack_gradient_quadrature(
+                self.u._cpp_object, self.quadrature_degree, self.entities[i])
             num_facets = self.entities[i].shape[0]
             num_q_points = n_x.shape[1] // gdim
             # this assumes mu, lmbda are constant for each body
@@ -136,10 +145,10 @@ class ContactWriter:
         num_q_points = np.int32(len(forces[0][0]) / len(self.entities[0]))
         for j in range(len(self.contact_pairs)):
             dofs = np.array(np.hstack([range(self.msh_to_fm[self.facet_list[j]][i] * num_q_points,
-                            num_q_points * (self.msh_to_fm[self.facet_list[j]][i] + 1)) for i in range(len(self.entities[j]))]))
+                            num_q_points * (self.msh_to_fm[self.facet_list[j]][i] + 1))
+                for i in range(len(self.entities[j]))]))
             self.pn.x.array[dofs] = forces[j][0][:]
             self.pt.x.array[dofs] = forces[j][1][:]
-
 
         # Assemble matrix and vector
         A = assemble_matrix(self.a_form)
@@ -159,23 +168,21 @@ class ContactWriter:
         # Compute projection
         ksp.solve(b, self.p_f.vector)
         self.p_f.x.scatter_forward()
-        
+
         ksp.solve(b2, self.pt_f.vector)
         self.pt_f.x.scatter_forward()
 
         # interpolate exact pressure
-        
+
         self.p_hertz.interpolate(pressure_function)
         self.t_hertz.interpolate(tangent_force)
-        
+
         geom = self.facet_mesh.geometry.x.copy()
         self.project()
         self.vtx.write(t)
         self.restore(geom)
 
 
-
-    
 # write pressure on surface to file for visualisation
 def write_pressure_xdmf(mesh, contact, u, du, contact_pairs, quadrature_degree,
                         search_method, entities, material, order, simplex,
@@ -183,7 +190,7 @@ def write_pressure_xdmf(mesh, contact, u, du, contact_pairs, quadrature_degree,
 
     # Recover original geometry for pressure computation
     du.x.array[:] = 0
-    # 
+    #
 
     # Compute contact pressure on surfaces
     gdim = mesh.geometry.dim
@@ -198,7 +205,6 @@ def write_pressure_xdmf(mesh, contact, u, du, contact_pairs, quadrature_degree,
             n_contact = np.array(contact.pack_ny(i))
         normals.append(n_contact)
 
-    
     contact.update_submesh_geometry(du._cpp_object)
     for i in range(len(contact_pairs)):
         n_contact = normals[i]
@@ -327,7 +333,6 @@ def write_pressure_xdmf(mesh, contact, u, du, contact_pairs, quadrature_degree,
     _project()
     with VTXWriter(mesh.comm, f"{fname}_surface_pressure.bp", [p_f, pt_f, p_hertz, pt]) as vtx:
         vtx.write(0.0)
-
 
     # with XDMFFile(facet_mesh.comm, f"{fname}_surface_pressure.xdmf", "w") as xdmf:
     #     _project()

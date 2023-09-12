@@ -2,7 +2,6 @@
 #
 # SPDX-License-Identifier:    MIT
 
-from contextlib import ExitStack
 from enum import Enum
 from typing import Callable, List, Tuple, Union
 
@@ -88,7 +87,8 @@ class NewtonSolver():
         self._b.setOptionsPrefix(self.krylov_solver.getOptionsPrefix())
         self._b.setFromOptions()
 
-    def solve(self, u: Union[fem.Function, PETSc.Vec], write_solution: bool = False, offset_fun: fem.Function = None):
+    def solve(self, u: Union[fem.Function, PETSc.Vec], write_solution: bool = False,
+              offset_fun: Union[fem.Function, None] = None):
         """
         Solve non-linear problem into function u.
         Returns the number of iterations and if the solver converged
@@ -208,7 +208,8 @@ class NewtonSolver():
         """
         x.axpy(-self.relaxation_parameter, dx)
 
-    def _solve(self, x: Union[PETSc.Vec, fem.Function], write_solution: bool = False, u: fem.Function = None) -> Tuple[int, int]:
+    def _solve(self, x: Union[PETSc.Vec, fem.Function], write_solution: bool = False,
+               u: Union[fem.Function, None] = None) -> Tuple[int, int]:
         t = common.Timer("~Contact: Newton (Newton solver)")
         try:
             x_vec = x.vector
@@ -233,7 +234,7 @@ class NewtonSolver():
         rel_min = 1e-10
         success = 0
         res_old = numpy.inf
-        
+
         try:
             self._compute_coefficients(x_vec, self._coeffs)
         except AttributeError:
@@ -273,7 +274,7 @@ class NewtonSolver():
         while not newton_converged and self.iteration < self.max_it:
 
             x_copy.array_w[:] = x_vec.array_r[:]
-            if success>2:
+            if success > 2:
                 self.relaxation_parameter = min(2 * self.relaxation_parameter, 1)
                 success = 0
             try:
@@ -294,7 +295,7 @@ class NewtonSolver():
 
             # Update solution
             self._update_solution(self._dx, x_vec)
-   
+
             self._compute_coefficients(x_vec, self._coeffs)
 
             # Increment iteration count
@@ -311,12 +312,12 @@ class NewtonSolver():
 
             res_new = self._b.norm(PETSc.NormType.NORM_2)
 
-            success +=1
+            success += 1
             while res_old < res_new:
                 success = 0
                 self.relaxation_parameter = 0.5 * self.relaxation_parameter
                 if self.relaxation_parameter < rel_min:
-                    self.relaxation_parameter = 2 * self.relaxation_parameter 
+                    self.relaxation_parameter = 2 * self.relaxation_parameter
                     break
                 x_vec.array_w[:] = x_copy.array_r[:]
 
@@ -335,16 +336,14 @@ class NewtonSolver():
                 res_new = self._b.norm(PETSc.NormType.NORM_2)
                 print(res_new)
 
-
             res_old = res_new
             if write_solution:
                 if u is not None:
                     out.x.array[:] = x.x.array[:] + u.x.array[:]
                 else:
                     out.x.array[:] = x.x.array[:]
-                
-                vtx.write(self.iteration)
 
+                vtx.write(self.iteration)
 
             # Initialize initial residual
             if self.iteration == 1:
