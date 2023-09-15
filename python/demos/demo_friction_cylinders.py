@@ -115,7 +115,7 @@ if __name__ == "__main__":
     t = Constant(mesh, ScalarType((0.0, -p)))
     g = Constant(mesh, ScalarType((0.0)))
 
-    symmetry_nodes = locate_entities(mesh, 0, lambda x: np.isclose(x[0], 0))
+    symmetry_nodes = locate_entities(mesh, 0, lambda x: np.logical_and(np.isclose(x[0], 0), x[1]>= -8))
     dofs_symmetry = locate_dofs_topological(V.sub(0), 0, symmetry_nodes)
     dofs_bottom = locate_dofs_topological(V, 1, facet_marker.find(bottom))
     dofs_top = locate_dofs_topological(V, 1, facet_marker.find(top))
@@ -260,7 +260,7 @@ if __name__ == "__main__":
 
     # problem_parameters = {"gamma": np.float64(E * 1000), "theta": np.float64(1), "friction": np.float64(0.3)}
 
-    ksp_tol = 1e-8
+    ksp_tol = 1e-12
     petsc_options = {
         "matptap_via": "scalable",
         "ksp_type": "gmres",
@@ -280,7 +280,7 @@ if __name__ == "__main__":
         "ksp_initial_guess_nonzero": False,
         "ksp_norm_type": "unpreconditioned"
     }
-    # petsc_options = {"ksp_type": "preonly", "pc_type": "lu"}
+    petsc_options = {"ksp_type": "preonly", "pc_type": "lu"}
 
     newton_options = {"relaxation_parameter": 1.0,
                       "atol": newton_tol,
@@ -295,13 +295,18 @@ if __name__ == "__main__":
     # # Solve contact problem using Nitsche's method
     # # update_geometry(u._cpp_object, mesh._cpp_object)
     # # u2.x.array[:] = u.x.array[:]
+    def identifier(x):
+        return np.logical_and(np.logical_and(x[0]<-0.5, x[0]>-1), np.logical_and(x[1]>-0.5, x[1]<0.5))
+    constraint_nodes = locate_entities(mesh, 0, identifier)
+    dofs_constraint = locate_dofs_topological(V.sub(1), 0, constraint_nodes)
     g_top = Constant(mesh, ScalarType((0.0, 0.0)))
-    bcs = [dirichletbc(Constant(mesh, ScalarType((0.0, 0.0))), dofs_bottom, V)]  # ,
+    bcs = [dirichletbc(Constant(mesh, ScalarType((0.0, 0.0))), dofs_bottom, V), 
+           dirichletbc(g, dofs_constraint, V.sub(1))]  # ,
     #    dirichletbc(g_top, dofs_top, V)]
 
     problem1.bcs = bcs
     problem1.update_friction_coefficient(0.3)
-    problem1.update_nitsche_parameters(E * 10 * args.order**2, 1)
+    problem1.update_nitsche_parameters(E * 10 * args.order**2, 0)
     problem1.coulomb = True
     problem1.petsc_options = petsc_options
     problem1.newton_options = newton_options

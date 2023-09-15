@@ -334,7 +334,7 @@ class NewtonSolver():
                 # Compute residual (F)
                 self._compute_residual(x_vec, self._b, self._coeffs)
                 res_new = self._b.norm(PETSc.NormType.NORM_2)
-                print(res_new)
+                # print(res_new)
 
             res_old = res_new
             if write_solution:
