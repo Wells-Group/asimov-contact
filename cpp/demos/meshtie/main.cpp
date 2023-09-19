@@ -133,7 +133,7 @@ int main(int argc, char* argv[])
         {
           std::vector<double> fdata(bs * x.extent(1), 0.0);
           namespace stdex = std::experimental;
-          stdex::mdspan<double, stdex::dextents<std::size_t, 2>> _f(
+          stdex::mdspan<double, MDSPAN_IMPL_STANDARD_NAMESPACE::dextents<std::size_t, 2>> _f(
               fdata.data(), bs, x.extent(1));
           for (std::size_t p = 0; p < x.extent(1); ++p)
           {
@@ -150,7 +150,7 @@ int main(int argc, char* argv[])
         {
           std::vector<double> fdata(bs * x.extent(1), 0.0);
           namespace stdex = std::experimental;
-          stdex::mdspan<double, stdex::dextents<std::size_t, 2>> _f(
+          stdex::mdspan<double, MDSPAN_IMPL_STANDARD_NAMESPACE::dextents<std::size_t, 2>> _f(
               fdata.data(), bs, x.extent(1));
           for (std::size_t p = 0; p < x.extent(1); ++p)
           {
