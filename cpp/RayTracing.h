@@ -269,7 +269,7 @@ int raytracing_cell(
          == basis_values.size());
   cmdspan4_t basis(basis_values.data(), basis_shape);
   auto dphi = stdex::submdspan(basis, std::pair{1, tdim + 1}, 0,
-                               stdex::full_extent, 0);
+                               MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent, 0);
   cmdspan2_t coords(coordinate_dofs.data(), cmap.dim(), gdim);
   mdspan2_t _xk(x_k.data(), 1, gdim);
   for (int k = 0; k < max_iter; ++k)
@@ -283,7 +283,7 @@ int raytracing_cell(
     // Push forward reference coordinate
     dolfinx::fem::CoordinateElement<double>::push_forward(
         _xk, coords,
-        stdex::submdspan(basis, 0, stdex::full_extent, stdex::full_extent, 0));
+        stdex::submdspan(basis, 0, MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent, MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent, 0));
 
     // Compute residual at current iteration
     std::fill(Gk.begin(), Gk.end(), 0);
@@ -435,7 +435,7 @@ compute_ray(const dolfinx::mesh::Mesh<double>& mesh,
 
   // Get cell coordinates/geometry
   const dolfinx::mesh::Geometry<double>& geometry = mesh.geometry();
-  stdex::mdspan<const std::int32_t, stdex::dextents<std::size_t, 2>> x_dofmap
+  stdex::mdspan<const std::int32_t, MDSPAN_IMPL_STANDARD_NAMESPACE::dextents<std::size_t, 2>> x_dofmap
       = geometry.dofmap();
   std::span<const double> x_g = geometry.x();
   const std::size_t num_dofs_g = cmap.dim();
@@ -478,7 +478,7 @@ compute_ray(const dolfinx::mesh::Mesh<double>& mesh,
   {
 
     // Get cell geometry
-    auto x_dofs = stdex::submdspan(x_dofmap, cells[c], stdex::full_extent);
+    auto x_dofs = stdex::submdspan(x_dofmap, cells[c], MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent);
     for (std::size_t j = 0; j < x_dofs.size(); ++j)
     {
       std::copy_n(std::next(x_g.begin(), 3 * x_dofs[j]), gdim,

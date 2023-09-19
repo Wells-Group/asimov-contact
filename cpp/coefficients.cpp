@@ -39,8 +39,8 @@ void dolfinx_contact::transformed_push_forward(
   transformation(element_basisb, cell_info, cell, (int)basis_values.extent(2));
 
   // Push basis forward to physical element
-  auto _u = stdex::submdspan(basis_values, q, stdex::full_extent,
-                             stdex::full_extent);
+  auto _u = stdex::submdspan(basis_values, q, MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent,
+                             MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent);
   push_forward_fn(_u, element_basis, J, detJ, K);
 }
 std::pair<std::vector<PetscScalar>, int>
@@ -143,7 +143,7 @@ dolfinx_contact::pack_coefficient_quadrature(
     // Get geometry data
     const dolfinx::mesh::Geometry<double>& geometry = mesh->geometry();
     const int gdim = geometry.dim();
-    stdex::mdspan<const std::int32_t, stdex::dextents<std::size_t, 2>> x_dofmap
+    stdex::mdspan<const std::int32_t, MDSPAN_IMPL_STANDARD_NAMESPACE::dextents<std::size_t, 2>> x_dofmap
         = mesh->geometry().dofmap();
     const dolfinx::fem::CoordinateElement<double>& cmap = geometry.cmaps()[0];
     const std::size_t num_dofs_g = cmap.dim();
@@ -192,7 +192,7 @@ dolfinx_contact::pack_coefficient_quadrature(
       }
 
       // Get cell geometry (coordinate dofs)
-      auto x_dofs = stdex::submdspan(x_dofmap, cell, stdex::full_extent);
+      auto x_dofs = stdex::submdspan(x_dofmap, cell, MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent);
       assert(x_dofs.size() == num_dofs_g);
       for (std::size_t j = 0; j < num_dofs_g; ++j)
       {
@@ -206,7 +206,7 @@ dolfinx_contact::pack_coefficient_quadrature(
         std::fill(Jb.begin(), Jb.end(), 0);
         auto dphi_q
             = stdex::submdspan(c_basis, std::pair{1, std::size_t(tdim + 1)},
-                               q_offsets[entity_index], stdex::full_extent, 0);
+                               q_offsets[entity_index], MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent, 0);
         dolfinx::fem::CoordinateElement<double>::compute_jacobian(
             dphi_q, coordinate_dofs, J);
         dolfinx::fem::CoordinateElement<double>::compute_jacobian_inverse(J, K);
@@ -227,7 +227,7 @@ dolfinx_contact::pack_coefficient_quadrature(
           std::fill(Jb.begin(), Jb.end(), 0);
           auto dphi_q = stdex::submdspan(
               c_basis, std::pair{1, std::size_t(tdim + 1)},
-              q_offsets[entity_index] + q, stdex::full_extent, 0);
+              q_offsets[entity_index] + q, MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent, 0);
           dolfinx::fem::CoordinateElement<double>::compute_jacobian(
               dphi_q, coordinate_dofs, J);
           dolfinx::fem::CoordinateElement<double>::compute_jacobian_inverse(J,
@@ -368,7 +368,7 @@ dolfinx_contact::pack_gradient_quadrature(
   // Get geometry data
   const dolfinx::mesh::Geometry<double>& geometry = mesh->geometry();
   const std::size_t gdim = geometry.dim();
-  stdex::mdspan<const std::int32_t, stdex::dextents<std::size_t, 2>> x_dofmap
+  stdex::mdspan<const std::int32_t, MDSPAN_IMPL_STANDARD_NAMESPACE::dextents<std::size_t, 2>> x_dofmap
       = geometry.dofmap();
   const dolfinx::fem::CoordinateElement<double>& cmap = geometry.cmaps()[0];
 
@@ -444,7 +444,7 @@ dolfinx_contact::pack_gradient_quadrature(
     }
 
     // Get cell geometry (coordinate dofs)
-    auto x_dofs = stdex::submdspan(x_dofmap, cell, stdex::full_extent);
+    auto x_dofs = stdex::submdspan(x_dofmap, cell, MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent);
     assert(x_dofs.size() == num_dofs_g);
     for (std::size_t j = 0; j < num_dofs_g; ++j)
     {
@@ -472,7 +472,7 @@ dolfinx_contact::pack_gradient_quadrature(
           std::fill(Jb.begin(), Jb.end(), 0);
           auto dphi_q = stdex::submdspan(
               c_basis, std::pair{1, std::size_t(tdim + 1)},
-              q_offsets[entity_index], stdex::full_extent, 0);
+              q_offsets[entity_index], MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent, 0);
           dolfinx::fem::CoordinateElement<double>::compute_jacobian(
               dphi_q, coordinate_dofs, J);
           dolfinx::fem::CoordinateElement<double>::compute_jacobian_inverse(J,
@@ -504,7 +504,7 @@ dolfinx_contact::pack_gradient_quadrature(
             std::fill(Jb.begin(), Jb.end(), 0);
             auto dphi_q = stdex::submdspan(
                 c_basis, std::pair{1, std::size_t(tdim + 1)},
-                q_offsets[entity_index] + q, stdex::full_extent, 0);
+                q_offsets[entity_index] + q, MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent, 0);
             dolfinx::fem::CoordinateElement<double>::compute_jacobian(
                 dphi_q, coordinate_dofs, J);
             dolfinx::fem::CoordinateElement<double>::compute_jacobian_inverse(
@@ -573,7 +573,7 @@ std::vector<PetscScalar> dolfinx_contact::pack_circumradius(
   circumradius.reserve(active_facets.size() / 2);
 
   // Get geometry data
-  stdex::mdspan<const std::int32_t, stdex::dextents<std::size_t, 2>> x_dofmap
+  stdex::mdspan<const std::int32_t, MDSPAN_IMPL_STANDARD_NAMESPACE::dextents<std::size_t, 2>> x_dofmap
       = geometry.dofmap();
   std::span<const double> x_g = geometry.x();
 
@@ -595,7 +595,7 @@ std::vector<PetscScalar> dolfinx_contact::pack_circumradius(
     std::int32_t cell = active_facets[i];
     std::int32_t local_index = active_facets[i + 1];
     // Get cell geometry (coordinate dofs)
-    auto x_dofs = stdex::submdspan(x_dofmap, cell, stdex::full_extent);
+    auto x_dofs = stdex::submdspan(x_dofmap, cell, MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent);
     for (std::size_t j = 0; j < x_dofs.size(); ++j)
     {
       std::copy_n(std::next(x_g.begin(), 3 * x_dofs[j]), gdim,
@@ -608,7 +608,7 @@ std::vector<PetscScalar> dolfinx_contact::pack_circumradius(
     assert(q_offset[local_index + 1] - q_offset[local_index] == 1);
     auto dphi_q = stdex::submdspan(
         coordinate_basis, std::pair{1, (std::size_t)tdim + 1},
-        q_offset[local_index], stdex::full_extent, 0);
+        q_offset[local_index], MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent, 0);
     dolfinx::fem::CoordinateElement<double>::compute_jacobian(
         dphi_q, coordinate_dofs, J);
     double detJ

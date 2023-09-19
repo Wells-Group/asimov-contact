@@ -86,7 +86,7 @@ dolfinx_contact::generate_meshtie_kernel(
       dolfinx_contact::physical_facet_normal(
           std::span(n_phys.data(), gdim), K,
           stdex::submdspan(kd.facet_normals(), facet_index,
-                           stdex::full_extent));
+                           MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent));
     }
 
     // Extract constants used inside quadrature loop
@@ -226,7 +226,7 @@ dolfinx_contact::generate_meshtie_kernel(
       dolfinx_contact::physical_facet_normal(
           std::span(n_phys.data(), gdim), K,
           stdex::submdspan(kd.facet_normals(), facet_index,
-                           stdex::full_extent));
+                           MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent));
     }
 
     // Extract constants used inside quadrature loop

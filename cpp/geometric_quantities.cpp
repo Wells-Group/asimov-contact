@@ -50,7 +50,7 @@ void dolfinx_contact::pull_back_nonaffine(
     cmap.tabulate(1, Xk.subspan(0, tdim), {1, tdim}, basis_span);
 
     // x = cell_geometry * phi
-    auto phi = stdex::submdspan(basis_values, 0, 0, stdex::full_extent, 0);
+    auto phi = stdex::submdspan(basis_values, 0, 0, MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent, 0);
     std::fill(xk.begin(), xk.end(), 0.0);
     for (std::size_t i = 0; i < cell_geometry.extent(1); ++i)
       for (std::size_t j = 0; j < cell_geometry.extent(0); ++j)
@@ -60,7 +60,7 @@ void dolfinx_contact::pull_back_nonaffine(
     std::fill(work_array.begin(), std::next(work_array.begin(), gdim * tdim),
               0.0);
     auto dphi = stdex::submdspan(basis_values, std::pair{1, tdim + 1}, 0,
-                                 stdex::full_extent, 0);
+                                 MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent, 0);
     dolfinx::fem::CoordinateElement<double>::compute_jacobian(dphi,
                                                               cell_geometry, J);
     dolfinx::fem::CoordinateElement<double>::compute_jacobian_inverse(J, K);
@@ -119,7 +119,7 @@ std::array<double, 3> dolfinx_contact::push_forward_facet_normal(
     cmap.tabulate(1, X.subspan(0, tdim), {1, tdim}, basis_span);
 
     auto dphi = stdex::submdspan(basis_values, std::pair{1, tdim + 1}, 0,
-                                 stdex::full_extent, 0);
+                                 MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent, 0);
     dolfinx::fem::CoordinateElement<double>::compute_jacobian(
         dphi, coordinate_dofs, J);
     dolfinx::fem::CoordinateElement<double>::compute_jacobian_inverse(J, K);
@@ -136,7 +136,7 @@ std::array<double, 3> dolfinx_contact::push_forward_facet_normal(
     std::fill(work_array.begin(), std::next(work_array.begin(), gdim * tdim),
               0.0);
     auto dphi = stdex::submdspan(basis_values, std::pair{1, tdim + 1}, 0,
-                                 stdex::full_extent, 0);
+                                 MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent, 0);
     dolfinx::fem::CoordinateElement<double>::compute_jacobian(
         dphi, coordinate_dofs, J);
     dolfinx::fem::CoordinateElement<double>::compute_jacobian_inverse(J, K);
@@ -144,7 +144,7 @@ std::array<double, 3> dolfinx_contact::push_forward_facet_normal(
   // Push forward reference facet normal
   std::array<double, 3> normal = {0, 0, 0};
   auto facet_normal
-      = stdex::submdspan(reference_normals, facet_index, stdex::full_extent);
+      = stdex::submdspan(reference_normals, facet_index, MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent);
   physical_facet_normal(std::span(normal.data(), gdim), K, facet_normal);
   return normal;
 }
