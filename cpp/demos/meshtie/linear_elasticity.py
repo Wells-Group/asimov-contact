@@ -16,9 +16,9 @@ neumann_bdy = 7
 contact_bdy_1 = 6  # top contact interface
 contact_bdy_2 = 13  # bottom contact interface
 
-e = element("Lagrange", "tetrahedron", 1, rank=1)
+e = element("Lagrange", "tetrahedron", 1, shape=(3,))
 e0 = element("DG", "tetrahedron", 0)
-coord_element = element("Lagrange", "tetrahedron", 1, rank=1)
+coord_element = element("Lagrange", "tetrahedron", 1, shape=(3,))
 mesh = Mesh(coord_element)
 V = FunctionSpace(mesh, e)
 V0 = FunctionSpace(mesh, e0)
