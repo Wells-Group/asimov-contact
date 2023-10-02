@@ -92,7 +92,7 @@ class ContactWriter:
         self.t_hertz.name = "analytical (tangent force)"
 
         self.vtx = VTXWriter(self.facet_mesh.comm, f"{fname}_surface_forces.bp", [
-                             self.p_f, self.pt_f, self.p_hertz, self.t_hertz])
+                             self.p_f, self.pt_f, self.p_hertz, self.t_hertz], "bp4")
 
     def project(self):
         tdim = self.mesh.topology.dim

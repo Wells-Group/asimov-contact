@@ -198,12 +198,12 @@ def get_problem_parameters(problem_parameters: dict[str, np.float64]):
     return theta, gamma, s
 
 
-def copy_fns(fns: list[Union[fem.Function, fem.Constant, npt.NDArray[Any]]],
-             mesh: _mesh.Mesh) -> list[Union[fem.Function, fem.Constant, npt.NDArray[Any]]]:
+def copy_fns(fns: list[Union[fem.Function, fem.Constant]],
+             mesh: _mesh.Mesh) -> list[Union[fem.Function, fem.Constant]]:
     """
     Create copy of list of finite element functions/constanst
     """
-    old_fns: list[Union[fem.Function, fem.Constant, npt.NDArray[Any]]] = []
+    old_fns: list[Union[fem.Function, fem.Constant]] = []
     for fn in fns:
         if type(fn) is fem.Function:
             new_fn = fem.Function(fn.function_space)
@@ -216,16 +216,12 @@ def copy_fns(fns: list[Union[fem.Function, fem.Constant, npt.NDArray[Any]]],
             new_const = fem.Constant(mesh, temp)
             new_const.value = fn.value
             old_fns.append(new_const)
-        elif type(fn) is npt.NDArray[Any]:
-            new_arr = np.zeros(fn.shape)
-            new_arr[:] = fn[:]
-            old_fns.append(new_arr)
 
     return old_fns
 
 
-def update_fns(t: float, fns: list[Union[fem.Function, fem.Constant, npt.NDArray[Any]]],
-               old_fns: list[Union[fem.Function, fem.Constant, npt.NDArray[Any]]]) -> None:
+def update_fns(t: float, fns: list[Union[fem.Function, fem.Constant]],
+               old_fns: list[Union[fem.Function, fem.Constant]]) -> None:
     """
     Replace function values of function in fns with
     t* function value of function in old_fns
@@ -235,17 +231,12 @@ def update_fns(t: float, fns: list[Union[fem.Function, fem.Constant, npt.NDArray
             fn.x.array[:] = t * old_fns[k].x.array[:]  # type: ignore
             fn.x.scatter_forward()
         elif type(fn) is fem.Constant:
-            fn.value[:] = t * old_fns[k].value[:]  # type: ignore
-        elif type(fn) is npt.NDArray[Any]:
-            fn[:] = t * old_fns[k][:]
-        else:
-            raise RuntimeError("Cannot copy data from object of different type.")
-
+            fn.value = t * old_fns[k].value  # type: ignore
 
 def nitsche_unbiased(steps: int, ufl_form: ufl.Form, u: fem.Function, mu: fem.Function, lmbda: fem.Function,
                      rhs_fns: list[Any], markers: list[_mesh.MeshTags],
                      contact_data: Tuple[AdjacencyList_int32, list[Tuple[int, int]]],
-                     bcs: list[fem.DirichletBC],
+                     bcs: list[fem.DirichletBC], bc_fns: list[Union[fem.Function, fem.Constant]],
                      problem_parameters: dict[str, np.float64],
                      search_method: list[dolfinx_contact.cpp.ContactMode],
                      quadrature_degree: int = 5,
@@ -369,7 +360,6 @@ def nitsche_unbiased(steps: int, ufl_form: ufl.Form, u: fem.Function, mu: fem.Fu
 
     # store original rhs information and bcs
     old_rhs_fns = copy_fns(rhs_fns, mesh)
-    bc_fns = [bc.g for bc in bcs]
     old_bc_fns = copy_fns(bc_fns, mesh)
 
     # create contact class

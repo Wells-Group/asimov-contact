@@ -104,8 +104,10 @@ if __name__ == "__main__":
 
     dirichlet_dofs = _fem.locate_dofs_topological(V.sub(2), tdim - 1, indices[sorted_facets])
     # Create Dirichlet bdy conditions for preventing rigid body motion in z-direction
-    dofs = _fem.locate_dofs_topological(V, mesh.topology.dim - 1, facet_marker.find(z_Dirichlet))
-    bcs = [_fem.dirichletbc(_fem.Constant(mesh, _PETSc.ScalarType(0)), dofs)]
+    dofs = _fem.locate_dofs_topological(V.sub(2), mesh.topology.dim - 1, facet_marker.find(z_Dirichlet))
+    g0 = _fem.Constant(mesh, _PETSc.ScalarType(0))
+    bcs = [_fem.dirichletbc(g0, dofs, V.sub(2))]
+    bc_fns = [g0]
     # Functions for Dirichlet and Neuman boundaries, body force
     g = _fem.Constant(mesh, _PETSc.ScalarType((0, 0, 0)))      # zero dirichlet
     t = _fem.Constant(mesh, _PETSc.ScalarType((0.2, 0.5, 0)))  # traction
@@ -144,7 +146,7 @@ if __name__ == "__main__":
     F = ufl.inner(sigma(u), epsilon(v)) * dx
 
     # Apply weak Dirichlet boundary conditions using Nitsche's method
-    gamma = 10
+    gamma = 20
     theta = 1
     F = weak_dirichlet(F, u, g, sigma, E * gamma, theta, ds(4))
 
@@ -217,7 +219,7 @@ if __name__ == "__main__":
                                                                        rhs_fns=rhs_fns, markers=[
                                                                            domain_marker, facet_marker],
                                                                        contact_data=(surfaces, contact_pairs),
-                                                                       bcs=bcs, problem_parameters=problem_parameters,
+                                                                       bcs=bcs, bc_fns = bc_fns, problem_parameters=problem_parameters,
                                                                        search_method=search_mode,
                                                                        newton_options=newton_options,
                                                                        petsc_options=petsc_options,

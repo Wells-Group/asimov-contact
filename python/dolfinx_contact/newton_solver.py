@@ -274,9 +274,10 @@ class NewtonSolver():
         while not newton_converged and self.iteration < self.max_it:
 
             x_copy.array_w[:] = x_vec.array_r[:]
-            if success > 2:
-                self.relaxation_parameter = min(2 * self.relaxation_parameter, 1)
-                success = 0
+            self.relaxation_parameter = 1.0
+            # if success > 2:
+            #     self.relaxation_parameter = min(2 * self.relaxation_parameter, 1)
+            #     success = 0
             try:
                 self._compute_jacobian(x_vec, self._A, self._coeffs)
             except AttributeError:

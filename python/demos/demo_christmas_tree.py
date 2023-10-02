@@ -101,7 +101,9 @@ if __name__ == "__main__":
         facet_marker = meshtags(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
         # Create Dirichlet bdy conditions
         dofs = _fem.locate_dofs_topological(V, mesh.topology.dim - 1, facet_marker.find(tag))
-        bcs = [_fem.dirichletbc(_fem.Constant(mesh, _PETSc.ScalarType(0)), dofs)]
+        g0 = _fem.Constant(mesh, _PETSc.ScalarType(0))
+        bcs = [_fem.dirichletbc(g0, dofs)]
+        bc_fns = [g0]
         g = _fem.Constant(mesh, _PETSc.ScalarType((0, 0, 0)))      # zero dirichlet
         t = _fem.Constant(mesh, _PETSc.ScalarType((0.2, 0.5, 0)))  # traction
         f = _fem.Constant(mesh, _PETSc.ScalarType((1.0, 0.5, 0)))  # body force
@@ -123,6 +125,7 @@ if __name__ == "__main__":
 
         V = _fem.VectorFunctionSpace(mesh, ("Lagrange", 1))
         bcs = []
+        bc_fns = []
         g = _fem.Constant(mesh, _PETSc.ScalarType((0, 0)))     # zero Dirichlet
         t = _fem.Constant(mesh, _PETSc.ScalarType((0.2, 0.5)))  # traction
         f = _fem.Constant(mesh, _PETSc.ScalarType((1.0, 0.5)))  # body force
@@ -257,7 +260,7 @@ if __name__ == "__main__":
                                                                        mu=mu0, lmbda=lmbda0,
                                                                        rhs_fns=rhs_fns, markers=mts,
                                                                        contact_data=(surfaces, contact_pairs),
-                                                                       bcs=bcs, problem_parameters=problem_parameters,
+                                                                       bcs=bcs, bc_fns=bc_fns, problem_parameters=problem_parameters,
                                                                        search_method=search_mode,
                                                                        newton_options=newton_options,
                                                                        petsc_options=petsc_options,

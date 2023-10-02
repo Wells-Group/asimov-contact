@@ -7,7 +7,7 @@ import argparse
 import numpy as np
 import numpy.typing as npt
 import ufl
-from dolfinx.io import XDMFFile
+from dolfinx.io import XDMFFile, VTXWriter
 from dolfinx.fem import (Constant, dirichletbc, Expression, Function, FunctionSpace,
                          VectorFunctionSpace, locate_dofs_topological)
 from dolfinx.graph import adjacencylist
@@ -23,9 +23,10 @@ from dolfinx_contact.meshing import (convert_mesh,
                                      create_halfdisk_plane_mesh,
                                      create_halfsphere_box_mesh)
 from dolfinx_contact.cpp import ContactMode
+from dolfinx_contact.output import ContactWriter
 
 
-from dolfinx_contact.unbiased.nitsche_unbiased import nitsche_unbiased
+from dolfinx_contact.unbiased.contact_problem import create_contact_solver
 
 
 def closest_node_in_mesh(mesh: Mesh, point: npt.NDArray[np.float64]) -> npt.NDArray[np.int32]:
@@ -65,11 +66,15 @@ if __name__ == "__main__":
     R = 8  # 0.25
     L = 20  # 1.0
     H = 20  # 1.0
+    R = 0.25
+    L = 1.0
+    H = 1.0
     if threed:
         load = 4 * 0.25 * np.pi * R**3 / 3.
     else:
         load = 0.25 * np.pi * R**2
-    load = 2 * R * 0.625
+    # load = 2 * R * 0.625
+    distributed_load = load
     gap = 0.01
 
     # lame parameters
@@ -77,6 +82,10 @@ if __name__ == "__main__":
     E2 = 200  # 2.5
     nu1 = 0.0  # 0.25
     nu2 = 0.3  # 0.25
+    E1 = 2.5
+    E2 = 2.5
+    nu1 = 0.25
+    nu2 = 0.25
     mu_func, lambda_func = lame_parameters(True)
     mu1 = mu_func(E1, nu1)
     mu2 = mu_func(E2, nu2)
@@ -122,9 +131,12 @@ if __name__ == "__main__":
         dirichlet_dofs2 = locate_dofs_topological(V.sub(1), 0, dirichlet_nodes)
         dirichlet_dofs3 = locate_dofs_topological(V, mesh.topology.dim - 1, facet_marker.find(dirichlet_bdy))
 
-        bcs = [dirichletbc(Constant(mesh, ScalarType(0.0)), dirichlet_dofs1, V.sub(0)),
-               dirichletbc(Constant(mesh, ScalarType(0.0)), dirichlet_dofs2, V.sub(1)),
-               dirichletbc(Constant(mesh, ScalarType((0.0, 0.0, 0.0))), dirichlet_dofs3, V)]
+        g0 = Constant(mesh, ScalarType(0.0))
+        g = Constant(mesh, ScalarType((0.0, 0.0, 0.0)))
+        bcs = [dirichletbc(g0, dirichlet_dofs1, V.sub(0)),
+               dirichletbc(g0, dirichlet_dofs2, V.sub(1)),
+               dirichletbc(g, dirichlet_dofs3, V)]
+        bc_fns = [g0, g]
 
         if problem == 1:
             distributed_load = 3 * load / (4 * np.pi * R**3)
@@ -181,8 +193,11 @@ if __name__ == "__main__":
         dirichlet_dofs1 = locate_dofs_topological(V.sub(0), 0, dirichlet_nodes)
         dirichlet_dofs2 = locate_dofs_topological(V, mesh.topology.dim - 1, facet_marker.find(dirichlet_bdy))
 
-        bcs = [dirichletbc(Constant(mesh, ScalarType(0.0)), dirichlet_dofs1, V.sub(0)),
-               dirichletbc(Constant(mesh, ScalarType((0, 0))), dirichlet_dofs2, V)]
+        g0 = Constant(mesh, ScalarType(0.0))
+        g = Constant(mesh, ScalarType((0, 0)))
+        bcs = [dirichletbc(g0, dirichlet_dofs1, V.sub(0)),
+               dirichletbc(g, dirichlet_dofs2, V)]
+        bc_fns = [g0, g]
 
         if problem == 1:
             distributed_load = load / (np.pi * R**2)
@@ -196,7 +211,7 @@ if __name__ == "__main__":
         a = 2 * np.sqrt(R * load / (np.pi * Estar))
         p0 = 2 * load / (np.pi * a)
 
-        def _pressure(x):
+        def _pressure(x, p0, a):
             vals = np.zeros(x.shape[1])
             for i in range(x.shape[1]):
                 if abs(x[0][i]) < a:
@@ -210,12 +225,12 @@ if __name__ == "__main__":
                       "atol": newton_tol,
                       "rtol": newton_tol,
                       "convergence_criterion": "residual",
-                      "max_it": 50,
+                      "max_it": 200,
                       "error_on_nonconvergence": True}
     # petsc_options = {"ksp_type": "preonly", "pc_type": "lu"}
     petsc_options = {
         "matptap_via": "scalable",
-        "ksp_type": "cg",
+        "ksp_type": "gmres",
         "ksp_rtol": ksp_tol,
         "ksp_atol": ksp_tol,
         "pc_type": "gamg",
@@ -228,7 +243,9 @@ if __name__ == "__main__":
         "pc_gamg_agg_nsmooths": 1,
         "pc_gamg_threshold": 1e-3,
         "pc_gamg_square_graph": 2,
-        "pc_gamg_reuse_interpolation": False
+        "pc_gamg_reuse_interpolation": False,
+        "ksp_initial_guess_nonzero": False,
+        "ksp_norm_type": "unpreconditioned"
     }
 
     # DG-0 funciton for material
@@ -246,7 +263,7 @@ if __name__ == "__main__":
     # Set initial condition
 
     # Pack mesh data for Nitsche solver
-    contact = [(0, 1), (0, 1)]
+    contact = [(0, 1), (1, 0)]
     data = np.array([contact_bdy_1, contact_bdy_2], dtype=np.int32)
     offsets = np.array([0, 2], dtype=np.int32)
     surfaces = adjacencylist(data, offsets)
@@ -263,44 +280,82 @@ if __name__ == "__main__":
     # body forces
     F -= ufl.inner(f, v) * dx(1) + ufl.inner(t, v) * ds(neumann_bdy)
 
-    problem_parameters = {"gamma": np.float64(E2 * 100), "theta": np.float64(1)}
+    problem_parameters = {"gamma": np.float64(E2 * 1000), "theta": np.float64(-1)}
 
     # create initial guess
     def _u_initial(x):
         values = np.zeros((mesh.geometry.dim, x.shape[1]))
         values[-1] = -H / 100 - gap
         return values
-    u.interpolate(_u_initial, disk_cells)
     search_mode = [ContactMode.ClosestPoint, ContactMode.ClosestPoint]
 
-    # Solve contact problem using Nitsche's method
-    u, newton_its, krylov_iterations, solver_time = nitsche_unbiased(1, ufl_form=F,
-                                                                     u=u, mu=mu, lmbda=lmbda, rhs_fns=[f, t],
-                                                                     markers=[domain_marker, facet_marker],
-                                                                     contact_data=(
-                                                                         surfaces, contact), bcs=bcs,
-                                                                     problem_parameters=problem_parameters,
-                                                                     newton_options=newton_options,
-                                                                     petsc_options=petsc_options,
-                                                                     search_method=search_mode,
-                                                                     outfile=None,
-                                                                     fname=outname,
-                                                                     quadrature_degree=args.q_degree,
-                                                                     search_radius=np.float64(-1),
-                                                                     order=args.order, simplex=simplex,
-                                                                     pressure_function=_pressure,
-                                                                     projection_coordinates=(tdim - 1, -R))
+    problem1 = create_contact_solver(ufl_form=F, u=u, mu=mu, lmbda=lmbda,
+                                    markers=[domain_marker, facet_marker],
+                                    contact_data=(surfaces, contact),
+                                    bcs=bcs, problem_parameters=problem_parameters,
+                                    newton_options=newton_options,
+                                    petsc_options=petsc_options,
+                                    search_method=search_mode,
+                                    quadrature_degree=args.q_degree,
+                                    search_radius=np.float64(1.0))
 
-    sigma_dev = sigma(u) - (1 / 3) * ufl.tr(sigma(u)) * ufl.Identity(len(u))
-    sigma_vm = ufl.sqrt((3 / 2) * ufl.inner(sigma_dev, sigma_dev))
-    W = FunctionSpace(mesh, ("Discontinuous Lagrange", args.order - 1))
-    sigma_vm_expr = Expression(sigma_vm, W.element.interpolation_points())
-    sigma_vm_h = Function(W)
-    sigma_vm_h.interpolate(sigma_vm_expr)
-    sigma_vm_h.name = "vonMises"
-    with XDMFFile(mesh.comm, f"{outname}_vonMises.xdmf", "w") as xdmf:
-        xdmf.write_mesh(mesh)
-        xdmf.write_function(sigma_vm_h)
+    problem1.du.interpolate(_u_initial, disk_cells)
+    writer = ContactWriter(mesh, problem1.contact, problem1.u, contact,
+                           args.q_degree, search_mode, problem1.entities,
+                           problem1.coeffs, args.order, simplex,
+                           [(tdim - 1, 0), (tdim - 1, -R)],
+                           f'{outname}_surface_forces')
+    # initialise vtx writer
+    vtx = VTXWriter(mesh.comm, f"{outname}.bp", [problem1.u], "bp4")
+    vtx.write(0)
+    steps = 4
+    for i in range(steps):
+        for j in range(len(contact)):
+            problem1.contact.create_distance_map(j)
+        if problem == 1:
+            f.value[-1] = -distributed_load * (i + 1)/steps
+        else:
+            t.value[-1] = -distributed_load * (i + 1)/steps
+        n = problem1.solve()
+        problem1.du.x.scatter_forward()
+        problem1.u.x.array[:] += problem1.du.x.array[:]
+        a = 2 * np.sqrt(R * load * (i + 1)/ (steps * np.pi * Estar))
+        p0 = 2 * load * (i + 1) / (steps * np.pi * a)
+        writer.write(i + 1, lambda x: _pressure(x, p0, a), lambda x: np.zeros(x.shape[1]))
+        problem1.contact.update_submesh_geometry(problem1.u._cpp_object)
+        problem1.du.x.array[:] = 0.1 * problem1.du.x.array[:]
+        vtx.write(i + 1)
+
+    vtx.close()
+
+    # # Solve contact problem using Nitsche's method
+    # u, newton_its, krylov_iterations, solver_time = nitsche_unbiased(1, ufl_form=F,
+    #                                                                  u=u, mu=mu, lmbda=lmbda, rhs_fns=[f, t],
+    #                                                                  markers=[domain_marker, facet_marker],
+    #                                                                  contact_data=(
+    #                                                                      surfaces, contact), bcs=bcs, bc_fns = bc_fns,
+    #                                                                  problem_parameters=problem_parameters,
+    #                                                                  newton_options=newton_options,
+    #                                                                  petsc_options=petsc_options,
+    #                                                                  search_method=search_mode,
+    #                                                                  outfile=None,
+    #                                                                  fname=outname,
+    #                                                                  quadrature_degree=args.q_degree,
+    #                                                                  search_radius=np.float64(-1),
+    #                                                                  order=args.order, simplex=simplex,
+    #                                                                  pressure_function=_pressure,
+    #                                                                  projection_coordinates=(tdim - 1, -R))
+
+    # sigma_dev = sigma(u) - (1 / 3) * ufl.tr(sigma(u)) * ufl.Identity(len(u))
+    # sigma_vm = ufl.sqrt((3 / 2) * ufl.inner(sigma_dev, sigma_dev))
+    # W = FunctionSpace(mesh, ("Discontinuous Lagrange", args.order - 1))
+    # sigma_vm_expr = Expression(sigma_vm, W.element.interpolation_points())
+    # sigma_vm_h = Function(W)
+    # sigma_vm_h.interpolate(sigma_vm_expr)
+    # sigma_vm_h.name = "vonMises"
+    # with XDMFFile(mesh.comm, f"{outname}_vonMises.xdmf", "w") as xdmf:
+    #     xdmf.write_mesh(mesh)
+    #     xdmf.write_function(sigma_vm_h)
 
         # xdmf.write_function(sigma_vm_h)
 
