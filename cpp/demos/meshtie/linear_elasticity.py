@@ -8,7 +8,7 @@
 
 from basix.ufl import element
 from ufl import (Coefficient, ds, dx, FunctionSpace, grad, Identity,
-                  inner, Mesh, sym, TestFunction, tr, TrialFunction)
+                 inner, Mesh, sym, TestFunction, tr, TrialFunction)
 
 
 # tags for boundaries (see mesh file)
@@ -23,10 +23,11 @@ mesh = Mesh(coord_element)
 V = FunctionSpace(mesh, e)
 V0 = FunctionSpace(mesh, e0)
 v = TestFunction(V)
-w = TrialFunction(V) 
+w = TrialFunction(V)
 
 lmbda = Coefficient(V0)
 mu = Coefficient(V0)
+
 
 def epsilon(z):
     return sym(grad(z))
@@ -35,13 +36,14 @@ def epsilon(z):
 def sigma(z):
     return (2.0 * mu * epsilon(z) + lmbda * tr(epsilon(z)) * Identity(len(z)))
 
+
 # Bilinear form
 J = inner(sigma(w), epsilon(v)) * dx
 
 f = Coefficient(V)
 t = Coefficient(V)
 
-# Linear form 
+# Linear form
 F = inner(f, v) * dx
 F += inner(t, v) * ds(neumann_bdy)
 
