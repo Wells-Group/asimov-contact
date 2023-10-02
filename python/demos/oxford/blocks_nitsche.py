@@ -6,8 +6,7 @@ import numpy as np
 
 from basix.ufl import element
 from dolfinx.fem import (Constant, dirichletbc, Function,
-                         locate_dofs_topological,
-                         VectorFunctionSpace)
+                         functionspace, locate_dofs_topological)
 from dolfinx.graph import adjacencylist
 from dolfinx.io import XDMFFile
 from dolfinx.mesh import create_mesh
@@ -23,7 +22,8 @@ with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
     cell_type, cell_degree = xdmf.read_cell_type(name="volume markers")
     topo = xdmf.read_topology_data(name="volume markers")
     x = xdmf.read_geometry_data(name="geometry")
-    domain = Mesh(element("Lagrange", cell_type.name, cell_degree, rank=1))
+    domain = Mesh(element("Lagrange", cell_type.name,
+                  cell_degree, shape=(x.shape[1],)))
     mesh = create_mesh(MPI.COMM_WORLD, topo, x, domain)
     tdim = mesh.topology.dim
     domain_marker = xdmf.read_meshtags(mesh, name="volume markers")
@@ -45,7 +45,8 @@ ds = Measure("ds", domain=mesh, subdomain_data=facet_marker)
 # Elasticity problem
 
 # Function space
-V = VectorFunctionSpace(mesh, ("Lagrange", 1))
+gdim = mesh.topology.dim
+V = functionspace(mesh, ("Lagrange", 1, (gdim,)))
 
 # Function, TestFunction
 u = Function(V)
@@ -78,9 +79,11 @@ problem_parameters = {"gamma": np.float64(E * gamma), "theta": np.float64(theta)
 
 # boundary conditions
 g = Constant(mesh, ScalarType((0, 0, 0)))     # zero Dirichlet
-dofs_g = locate_dofs_topological(V, tdim - 1, facet_marker.find(dirichlet_bdy_2))
+dofs_g = locate_dofs_topological(
+    V, tdim - 1, facet_marker.find(dirichlet_bdy_2))
 d = Constant(mesh, ScalarType((0, 0, -0.2)))  # vertical displacement
-dofs_d = locate_dofs_topological(V, tdim - 1, facet_marker.find(dirichlet_bdy_1))
+dofs_d = locate_dofs_topological(
+    V, tdim - 1, facet_marker.find(dirichlet_bdy_1))
 bcs = [dirichletbc(d, dofs_d, V), dirichletbc(g, dofs_g, V)]
 
 # contact surface data
@@ -129,7 +132,8 @@ petsc_options = {
 
 # compiler options to improve performance
 cffi_options = ["-Ofast", "-march=native"]
-jit_options = {"cffi_extra_compile_args": cffi_options, "cffi_libraries": ["m"]}
+jit_options = {"cffi_extra_compile_args": cffi_options,
+               "cffi_libraries": ["m"]}
 
 
 # create contact solver
