@@ -5,8 +5,8 @@
 import numpy as np
 
 from basix.ufl import element
-from dolfinx.fem import (Constant, dirichletbc, Function, FunctionSpace,
-                         locate_dofs_topological, VectorFunctionSpace)
+from dolfinx.fem import (Constant, dirichletbc, Function,
+                         functionspace, locate_dofs_topological)
 from dolfinx.graph import adjacencylist
 from dolfinx.io import XDMFFile
 from dolfinx.mesh import create_mesh
@@ -23,7 +23,8 @@ with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
     cell_type, cell_degree = xdmf.read_cell_type(name="volume markers")
     topo = xdmf.read_topology_data(name="volume markers")
     x = xdmf.read_geometry_data(name="geometry")
-    domain = Mesh(element("Lagrange", cell_type.name, cell_degree, rank=1))
+    domain = Mesh(element("Lagrange", cell_type.name,
+                  cell_degree, shape=(x.shape[1],)))
     mesh = create_mesh(MPI.COMM_WORLD, topo, x, domain)
     tdim = mesh.topology.dim
     domain_marker = xdmf.read_meshtags(mesh, name="volume markers")
@@ -45,7 +46,8 @@ ds = Measure("ds", domain=mesh, subdomain_data=facet_marker)
 # Elasticity problem
 
 # Function space
-V = VectorFunctionSpace(mesh, ("Lagrange", 1))
+gdim = mesh.topology.dim
+V = functionspace(mesh, ("Lagrange", 1, (gdim,)))
 
 # Function, TestFunction
 u = Function(V)
@@ -56,7 +58,7 @@ E = 1e4
 nu = 0.2
 mu = E / (2 * (1 + nu))
 lmbda = E * nu / ((1 + nu) * (1 - 2 * nu))
-V0 = FunctionSpace(mesh, ("DG", 0))
+V0 = functionspace(mesh, ("DG", 0))
 mu_dg = Function(V0)
 lmbda_dg = Function(V0)
 mu_dg.interpolate(lambda x: np.full((1, x.shape[1]), mu))
@@ -82,9 +84,11 @@ problem_parameters = {"gamma": np.float64(E * gamma), "theta": np.float64(theta)
 
 # boundary conditions
 g = Constant(mesh, ScalarType((0, 0, 0)))     # zero Dirichlet
-dofs_g = locate_dofs_topological(V, tdim - 1, facet_marker.find(dirichlet_bdy_2))
+dofs_g = locate_dofs_topological(
+    V, tdim - 1, facet_marker.find(dirichlet_bdy_2))
 d = Constant(mesh, ScalarType((0, 0, -0.2)))  # vertical displacement
-dofs_d = locate_dofs_topological(V, tdim - 1, facet_marker.find(dirichlet_bdy_1))
+dofs_d = locate_dofs_topological(
+    V, tdim - 1, facet_marker.find(dirichlet_bdy_1))
 bcs = [dirichletbc(d, dofs_d, V), dirichletbc(g, dofs_g, V)]
 
 # contact surface data
@@ -133,7 +137,8 @@ petsc_options = {
 
 # compiler options to improve performance
 cffi_options = ["-Ofast", "-march=native"]
-jit_options = {"cffi_extra_compile_args": cffi_options, "cffi_libraries": ["m"]}
+jit_options = {"cffi_extra_compile_args": cffi_options,
+               "cffi_libraries": ["m"]}
 search_mode = [ContactMode.ClosestPoint for i in range(len(contact_pairs))]
 
 # create contact solver
