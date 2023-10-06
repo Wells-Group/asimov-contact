@@ -63,9 +63,9 @@ if __name__ == "__main__":
     mesh_dir = "meshes"
 
     # Problem paramters
-    R = 8  # 0.25
-    L = 20  # 1.0
-    H = 20  # 1.0
+    # R = 8  
+    # L = 20 
+    # H = 20  
     R = 0.25
     L = 1.0
     H = 1.0
@@ -78,10 +78,10 @@ if __name__ == "__main__":
     gap = 0.01
 
     # lame parameters
-    E1 = 1e8  # 2.5
-    E2 = 200  # 2.5
-    nu1 = 0.0  # 0.25
-    nu2 = 0.3  # 0.25
+    # E1 = 1e8
+    # E2 = 200
+    # nu1 = 0.0
+    # nu2 = 0.3s
     E1 = 2.5
     E2 = 2.5
     nu1 = 0.25
@@ -160,7 +160,7 @@ if __name__ == "__main__":
             return vals
     else:
         if problem == 1:
-            outname = "results/hertz1_2D_simplex" if simplex else "results/hertz1_2D_quads"
+            outname = "results/hertz1_2D_simplex_RR" if simplex else "results/hertz1_2D_quads_RR"
             fname = f"{mesh_dir}/hertz1_2D_simplex" if simplex else f"{mesh_dir}/hertz1_2D_quads"
             create_circle_plane_mesh(f"{fname}.msh", not simplex, args.res, args.order, R, H, L, gap)
             contact_bdy_1 = 10
@@ -168,7 +168,7 @@ if __name__ == "__main__":
             dirichlet_bdy = 4
             neumann_bdy = 8
         else:
-            outname = "results/hertz2_2D_simplex" if simplex else "results/hertz2_2D_quads"
+            outname = "results/hertz2_2D_simplex_RR" if simplex else "results/hertz2_2D_quads_RR"
             fname = f"{mesh_dir}/hertz2_2D_simplex" if simplex else f"{mesh_dir}/hertz2_2D_quads"
             create_halfdisk_plane_mesh(filename=f"{fname}.msh", res=args.res,
                                        order=args.order, quads=not simplex, r=R, H=H, L=L, gap=gap)
@@ -219,7 +219,7 @@ if __name__ == "__main__":
             return vals
 
     # Solver options
-    ksp_tol = 1e-8
+    ksp_tol = 1e-12
     newton_tol = 1e-7
     newton_options = {"relaxation_parameter": 1.0,
                       "atol": newton_tol,
@@ -280,14 +280,14 @@ if __name__ == "__main__":
     # body forces
     F -= ufl.inner(f, v) * dx(1) + ufl.inner(t, v) * ds(neumann_bdy)
 
-    problem_parameters = {"gamma": np.float64(E2 * 1000), "theta": np.float64(-1)}
+    problem_parameters = {"gamma": np.float64(E2 * 100 * args.order**2), "theta": np.float64(1)}
 
     # create initial guess
     def _u_initial(x):
         values = np.zeros((mesh.geometry.dim, x.shape[1]))
         values[-1] = -H / 100 - gap
         return values
-    search_mode = [ContactMode.ClosestPoint, ContactMode.ClosestPoint]
+    search_mode = [ContactMode.ClosestPoint, ContactMode.Raytracing]
 
     problem1 = create_contact_solver(ufl_form=F, u=u, mu=mu, lmbda=lmbda,
                                     markers=[domain_marker, facet_marker],
@@ -304,9 +304,9 @@ if __name__ == "__main__":
                            args.q_degree, search_mode, problem1.entities,
                            problem1.coeffs, args.order, simplex,
                            [(tdim - 1, 0), (tdim - 1, -R)],
-                           f'{outname}_surface_forces')
+                           f'{outname}_1_step')
     # initialise vtx writer
-    vtx = VTXWriter(mesh.comm, f"{outname}.bp", [problem1.u], "bp4")
+    vtx = VTXWriter(mesh.comm, f"{outname}_1_step.bp", [problem1.u], "bp4")
     vtx.write(0)
     steps = 4
     for i in range(steps):

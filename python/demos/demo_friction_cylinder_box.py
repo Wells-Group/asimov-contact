@@ -5,25 +5,33 @@
 import argparse
 
 import numpy as np
+import numpy.typing as npt
 import ufl
 from dolfinx.io import XDMFFile, VTXWriter
 from dolfinx.fem import (assemble_scalar, Constant, dirichletbc, form,
                          Function, FunctionSpace,
                          VectorFunctionSpace, locate_dofs_topological)
 from dolfinx.fem.petsc import set_bc
+from dolfinx.geometry import bb_tree, compute_closest_entity
 from dolfinx.graph import adjacencylist
-from dolfinx.mesh import locate_entities
+from dolfinx.mesh import locate_entities, Mesh
 from mpi4py import MPI
 from petsc4py.PETSc import ScalarType
 
 from dolfinx_contact.helpers import (epsilon, sigma_func, lame_parameters)
 from dolfinx_contact.meshing import (convert_mesh,
-                                     create_quarter_disks_mesh)
+                                     create_halfdisk_plane_mesh)
 from dolfinx_contact.cpp import ContactMode
 
 
 from dolfinx_contact.unbiased.contact_problem import create_contact_solver
 from dolfinx_contact.output import ContactWriter
+
+def closest_node_in_mesh(mesh: Mesh, point: npt.NDArray[np.float64]) -> npt.NDArray[np.int32]:
+    points = np.reshape(point, (1, 3))
+    bounding_box = bb_tree(mesh, 0)
+    node = compute_closest_entity(bounding_box, bounding_box, mesh, points[0])
+    return node
 
 if __name__ == "__main__":
     desc = "Friction example with two elastic cylinders for verifying correctness of code"
@@ -46,6 +54,8 @@ if __name__ == "__main__":
 
     # Problem parameters
     R = 8
+    L = 20
+    H = 20
     gap = 0.01
     p = 0.625
     E = 200
@@ -56,10 +66,10 @@ if __name__ == "__main__":
     lmbda = lambda_func(E, nu)
 
     # Create mesh
-    outname = "results/friction_cyl_2D_simplex" if simplex else "results/friction_cyl_2D_quads"
-    fname = f"{mesh_dir}/friction_cyl_2D_simplex" if simplex else f"{mesh_dir}/friction_cyl_2D_quads"
-    create_quarter_disks_mesh(f"{fname}.msh", args.res, args.order, not simplex, R, gap)
-
+    outname = "results/friction_2D_simplex" if simplex else "results/friction_2D_quads"
+    fname = f"{mesh_dir}/friction_2D_simplex" if simplex else f"{mesh_dir}/friction_2D_quads"
+    create_halfdisk_plane_mesh(filename=f"{fname}.msh", res=args.res,
+                                       order=args.order, quads=not simplex, r=R, H=H, L=L, gap=gap)
     convert_mesh(fname, f"{fname}.xdmf", gdim=2)
     with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
         mesh = xdmf.read_mesh()
@@ -68,16 +78,10 @@ if __name__ == "__main__":
         mesh.topology.create_connectivity(tdim - 1, tdim)
         facet_marker = xdmf.read_meshtags(mesh, name="facet_marker")
 
-    vals = facet_marker.values
-    facet_marker.values[vals == 5] = 4
-    facet_marker.values[vals == 8] = 7
-    facet_marker.values[vals == 11] = 10
-    facet_marker.values[vals == 14] = 13
-
-    contact_bdy_1 = 4
-    contact_bdy_2 = 10
-    top = 7
-    bottom = 13
+    contact_bdy_1 = 7
+    contact_bdy_2 = 6
+    top = 8
+    bottom = 4
 
     # Solver options
     ksp_tol = 1e-10
@@ -115,8 +119,10 @@ if __name__ == "__main__":
     t = Constant(mesh, ScalarType((0.0, -p)))
     g = Constant(mesh, ScalarType((0.0)))
 
-    symmetry_nodes = locate_entities(mesh, 0, lambda x: np.logical_and(np.isclose(x[0], 0), x[1]>= -8))
-    dofs_symmetry = locate_dofs_topological(V.sub(0), 0, symmetry_nodes)
+    node1 = closest_node_in_mesh(mesh, np.array([0.0, -R / 2.5, 0.0], dtype=np.float64))
+    node2 = closest_node_in_mesh(mesh, np.array([0.0, -R / 5.0, 0.0], dtype=np.float64))
+    dirichlet_nodes = np.hstack([node1, node2])
+    dofs_symmetry = locate_dofs_topological(V.sub(0), 0, dirichlet_nodes)
     dofs_bottom = locate_dofs_topological(V, 1, facet_marker.find(bottom))
     dofs_top = locate_dofs_topological(V, 1, facet_marker.find(top))
 
@@ -209,9 +215,9 @@ if __name__ == "__main__":
                            args.q_degree, search_mode, problem1.entities,
                            problem1.coeffs, args.order, simplex,
                            [(tdim - 1, 0), (tdim - 1, -R)],
-                           'results/cylinders_displacement_driven')
+                           f'{outname}')
     # initialise vtx writer
-    vtx = VTXWriter(mesh.comm, "results/cylinders_displacement_driven.bp", [problem1.u])
+    vtx = VTXWriter(mesh.comm, f"{outname}.bp", [problem1.u], "bp4")
     vtx.write(0)
     newton_steps1 = []
     for i in range(steps1):
@@ -219,7 +225,7 @@ if __name__ == "__main__":
         for j in range(len(contact)):
             problem1.contact.create_distance_map(j)
         #val = -p * (i + 1) / steps1  # -0.2 / steps1  #
-        g_top.value[1] = -0.2 / steps1
+        g_top.value[1] = -0.3 / steps1
         t.value[1] = 0 #val
         print(f"Fricitionless part: Step {i+1} of {steps1}----------------------------------------------")
         # g_top.value[1] = val
@@ -238,7 +244,7 @@ if __name__ == "__main__":
         pr = abs(R_y / (2 * R))
         q = abs(R_x / (2 * R))
         load = pr * 2 * R  
-        a = 2 * np.sqrt(R * load / (2 * np.pi * Estar))
+        a = 2 * np.sqrt(R * load / (np.pi * Estar))
         p0 = 2 * load / (np.pi * a)
         print(pr, q)
         # print(val, 0)
@@ -308,7 +314,7 @@ if __name__ == "__main__":
 
     problem1.bcs = bcs
     problem1.update_friction_coefficient(0.3)
-    problem1.update_nitsche_parameters(E * 10 * args.order**2, 1)
+    problem1.update_nitsche_parameters(E * 100 * args.order**2, 1)
     problem1.coulomb = True
     problem1.petsc_options = petsc_options
     problem1.newton_options = newton_options
@@ -350,7 +356,7 @@ if __name__ == "__main__":
         # q = 0.03 * (i + 1) / steps2  # 
         q = abs(R_x / (2 * R))
         load = 2 * R * abs(pr) 
-        a = 2 * np.sqrt(R * load / (2 * np.pi * Estar))
+        a = 2 * np.sqrt(R * load / (np.pi * Estar))
         p0 = 2 * load / (np.pi * a)
         print(pr, q)
         fric = 0.3
