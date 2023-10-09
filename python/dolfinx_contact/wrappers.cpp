@@ -58,7 +58,7 @@ PYBIND11_MODULE(cpp, m)
       .def(py::init<dolfinx::mesh::CellType, int, int,
                     basix::quadrature::type>(),
            py::arg("cell_type"), py::arg("degree"), py::arg("dim"),
-           py::arg("type") = basix::quadrature::type::Default)
+           py::arg("type"))
       .def("points",
            [](dolfinx_contact::QuadratureRule& self)
            {
