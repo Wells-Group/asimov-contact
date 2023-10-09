@@ -55,7 +55,7 @@ jobs:
         with:
           path: ./basix
           repository: FEniCS/basix
-          ref: releases/tag/v0.7.0
+          ref: v0.7.0
 
       - name: Install FEniCS Python components (dolfinx)
         run: |
@@ -63,15 +63,15 @@ jobs:
           cmake --build build-basix
           cmake --install build-basix
           python3 -m pip install ./basix/python
-          python3 -m pip install git+https://github.com/FEniCS/ufl.git@releases/tag/v0.7.0
-          python3 -m pip install git+https://github.com/FEniCS/ffcx.git@releases/tag/v0.7.0
+          python3 -m pip install git+https://github.com/FEniCS/ufl.git@v0.7.0
+          python3 -m pip install git+https://github.com/FEniCS/ffcx.git@v0.7.0
       
       - name: Install dolfinx
         uses: actions/checkout@v3
         with:
           path: ./dolfinx
           repository: FEniCS/dolfinx
-          ref: releases/tag/v0.7.0
+          ref: v0.7.0
    
 
       - name: Configure C++ (dolfinx)
