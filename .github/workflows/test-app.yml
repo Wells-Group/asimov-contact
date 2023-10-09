@@ -21,7 +21,6 @@ jobs:
         # Complex mode not working
         run_mode: ["Release", "Debug"]
         petsc_mode: [real]
-        petsc_int_type: [32, 64]
         CXX: [c++]
         CC: [cc]
         # exclude:
@@ -32,7 +31,7 @@ jobs:
     env:
       CC: ${{ matrix.CC }}
       CXX: ${{ matrix.CXX }}
-      PETSC_ARCH: linux-gnu-${{ matrix.petsc_mode }}-${{ matrix.petsc_int_type }}
+      PETSC_ARCH: linux-gnu-real64-32
       OMPI_ALLOW_RUN_AS_ROOT: 1
       OMPI_ALLOW_RUN_AS_ROOT_CONFIRM: 1
       OMPI_MCA_rmaps_base_oversubscribe: 1
