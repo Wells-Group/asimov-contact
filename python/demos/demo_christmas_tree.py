@@ -5,22 +5,22 @@
 import argparse
 import sys
 
-import numpy as np
-from dolfinx import log
 import dolfinx.fem as _fem
-from dolfinx.common import TimingType, list_timings, timing, Timer
+import numpy as np
+import ufl
+from dolfinx import default_scalar_type, log
+from dolfinx.common import Timer, TimingType, list_timings, timing
 from dolfinx.graph import adjacencylist
 from dolfinx.io import XDMFFile
-from dolfinx.mesh import meshtags, locate_entities_boundary, GhostMode
-from mpi4py import MPI
-from petsc4py import PETSc as _PETSc
-import ufl
-
-from dolfinx_contact.meshing import convert_mesh, create_christmas_tree_mesh, create_christmas_tree_mesh_3D
-from dolfinx_contact.unbiased.nitsche_unbiased import nitsche_unbiased
-from dolfinx_contact.helpers import lame_parameters, sigma_func, weak_dirichlet, epsilon
+from dolfinx.mesh import GhostMode, locate_entities_boundary, meshtags
 from dolfinx_contact.cpp import find_candidate_surface_segment
+from dolfinx_contact.helpers import (epsilon, lame_parameters, sigma_func,
+                                     weak_dirichlet)
+from dolfinx_contact.meshing import (convert_mesh, create_christmas_tree_mesh,
+                                     create_christmas_tree_mesh_3D)
 from dolfinx_contact.parallel_mesh_ghosting import create_contact_mesh
+from dolfinx_contact.unbiased.nitsche_unbiased import nitsche_unbiased
+from mpi4py import MPI
 
 if __name__ == "__main__":
     desc = "Nitsche's method for two elastic bodies using custom assemblers"
@@ -101,10 +101,10 @@ if __name__ == "__main__":
         facet_marker = meshtags(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
         # Create Dirichlet bdy conditions
         dofs = _fem.locate_dofs_topological(V, mesh.topology.dim - 1, facet_marker.find(tag))
-        bcs = [_fem.dirichletbc(_fem.Constant(mesh, _PETSc.ScalarType(0)), dofs)]
-        g = _fem.Constant(mesh, _PETSc.ScalarType((0, 0, 0)))      # zero dirichlet
-        t = _fem.Constant(mesh, _PETSc.ScalarType((0.2, 0.5, 0)))  # traction
-        f = _fem.Constant(mesh, _PETSc.ScalarType((1.0, 0.5, 0)))  # body force
+        bcs = [_fem.dirichletbc(_fem.Constant(mesh, default_scalar_type(0)), dofs)]
+        g = _fem.Constant(mesh, default_scalar_type((0, 0, 0)))      # zero dirichlet
+        t = _fem.Constant(mesh, default_scalar_type((0.2, 0.5, 0)))  # traction
+        f = _fem.Constant(mesh, default_scalar_type((1.0, 0.5, 0)))  # body force
 
     else:
         create_christmas_tree_mesh(filename=fname, res=args.res, split=split)
@@ -123,9 +123,9 @@ if __name__ == "__main__":
 
         V = _fem.VectorFunctionSpace(mesh, ("Lagrange", 1))
         bcs = []
-        g = _fem.Constant(mesh, _PETSc.ScalarType((0, 0)))     # zero Dirichlet
-        t = _fem.Constant(mesh, _PETSc.ScalarType((0.2, 0.5)))  # traction
-        f = _fem.Constant(mesh, _PETSc.ScalarType((1.0, 0.5)))  # body force
+        g = _fem.Constant(mesh, default_scalar_type((0, 0)))     # zero Dirichlet
+        t = _fem.Constant(mesh, default_scalar_type((0.2, 0.5)))  # traction
+        f = _fem.Constant(mesh, default_scalar_type((1.0, 0.5)))  # body force
 
     ncells = mesh.topology.index_map(tdim).size_local
     indices = np.array(range(ncells), dtype=np.int32)

@@ -20,7 +20,7 @@ __all__ = ["compare_matrices", "lame_parameters", "epsilon", "sigma_func", "R_mi
            "rigid_motions_nullspace", "rigid_motions_nullspace_subdomains", "weak_dirichlet"]
 
 
-def compare_matrices(a: PETSc.Mat, b: PETSc.Mat, atol: float = 1e-12):
+def compare_matrices(a: PETSc.Mat, b: PETSc.Mat, atol: float = 1e-12):  # type: ignore
     """
     Helper for comparing two PETSc matrices
     """
@@ -204,7 +204,7 @@ def rigid_motions_nullspace(V: FunctionSpaceBase):
 
     _la.orthonormalize(nullspace_basis)
     assert _la.is_orthonormal(nullspace_basis)
-    return PETSc.NullSpace().create(vectors=nullspace_basis)
+    return PETSc.NullSpace().create(vectors=nullspace_basis)  # type: ignore
 
 
 def rigid_motions_nullspace_subdomains(V: FunctionSpaceBase, mt: MeshTags,
@@ -263,7 +263,7 @@ def rigid_motions_nullspace_subdomains(V: FunctionSpaceBase, mt: MeshTags,
 
         _la.orthonormalize(nullspace_basis)
         assert _la.is_orthonormal(nullspace_basis)
-    return PETSc.NullSpace().create(vectors=nullspace_basis)
+    return PETSc.NullSpace().create(vectors=nullspace_basis)  # type: ignore
 
 
 def weak_dirichlet(F: ufl.Form, u: Function,

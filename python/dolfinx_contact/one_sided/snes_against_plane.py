@@ -151,10 +151,10 @@ def snes_solver(mesh: dmesh.Mesh, mesh_data: Tuple[dmesh.MeshTags, int, int],
     J = create_matrix(problem.a)
 
     # Create semismooth Newton solver (SNES)
-    snes = _PETSc.SNES().create()
+    snes = _PETSc.SNES().create()  # type: ignore
 
     # Set SNES options
-    opts = _PETSc.Options()
+    opts = _PETSc.Options()  # type: ignore
     snes.setOptionsPrefix(f"snes_solve_{id(snes)}")
     option_prefix = snes.getOptionsPrefix()
     opts.prefixPush(option_prefix)
@@ -173,7 +173,7 @@ def snes_solver(mesh: dmesh.Mesh, mesh_data: Tuple[dmesh.MeshTags, int, int],
     # Set ksp options
     ksp = snes.ksp
     ksp.setOptionsPrefix(f"snes_ksp_{id(ksp)}")
-    opts = _PETSc.Options()
+    opts = _PETSc.Options()  # type: ignore
     option_prefix = ksp.getOptionsPrefix()
     opts.prefixPush(option_prefix)
     for k, v in petsc_options.items():

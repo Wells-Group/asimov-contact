@@ -7,7 +7,7 @@ import sys
 
 import numpy as np
 import ufl
-from dolfinx import log
+from dolfinx import log, default_scalar_type
 from dolfinx.common import TimingType, list_timings, Timer, timing
 from dolfinx.fem import (dirichletbc, Constant, form, Function, FunctionSpace,
                          locate_dofs_topological, VectorFunctionSpace)
@@ -16,7 +16,6 @@ from dolfinx.fem.petsc import (apply_lifting, assemble_vector, assemble_matrix,
 from dolfinx.graph import adjacencylist
 from dolfinx.io import XDMFFile
 from mpi4py import MPI
-from petsc4py.PETSc import ScalarType
 from petsc4py import PETSc
 
 from dolfinx_contact.helpers import lame_parameters, epsilon, sigma_func, rigid_motions_nullspace_subdomains
@@ -122,15 +121,15 @@ if __name__ == "__main__":
     J = ufl.inner(sigma(w), epsilon(v)) * dx
 
     # body forces
-    f = Constant(mesh, ScalarType((0.0, 0.5, 0.0)))
+    f = Constant(mesh, default_scalar_type((0.0, 0.5, 0.0)))
     F = ufl.inner(f, v) * dx
 
     # traction (neumann) boundary condition on mesh boundary with tag 3
-    t = Constant(mesh, ScalarType((0.0, 0.5, 0.0)))
+    t = Constant(mesh, default_scalar_type((0.0, 0.5, 0.0)))
     F += ufl.inner(t, v) * ds(neumann_bdy)
 
     # Dirichlet bdry conditions
-    g = Constant(mesh, ScalarType((0.0, 0.0, 0.0)))
+    g = Constant(mesh, default_scalar_type((0.0, 0.0, 0.0)))
     if args.lifting:
         bdy_dofs = locate_dofs_topological(V, tdim - 1, facet_marker.find(dirichlet_bdy))  # type: ignore
         bcs = [dirichletbc(g, bdy_dofs, V)]
@@ -187,13 +186,13 @@ if __name__ == "__main__":
 
     # Assemble right hand side
     b.zeroEntries()
-    b.ghostUpdate(addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD)
+    b.ghostUpdate(addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD)  # type: ignore
     assemble_vector(b, F)
 
     # Apply boundary condition and scatter reverse
     if len(bcs) > 0:
         apply_lifting(b, [J], bcs=[bcs], scale=-1.0)
-    b.ghostUpdate(addv=PETSc.InsertMode.ADD, mode=PETSc.ScatterMode.REVERSE)
+    b.ghostUpdate(addv=PETSc.InsertMode.ADD, mode=PETSc.ScatterMode.REVERSE)  # type: ignore
     if len(bcs) > 0:
         set_bc(b, bcs)
 
@@ -209,10 +208,10 @@ if __name__ == "__main__":
     A.setNearNullSpace(null_space)
 
     # Create PETSc Krylov solver and turn convergence monitoring on
-    opts = PETSc.Options()
+    opts = PETSc.Options()  # type: ignore
     for key in petsc_options:
         opts[key] = petsc_options[key]
-    solver = PETSc.KSP().create(mesh.comm)
+    solver = PETSc.KSP().create(mesh.comm)  # type: ignore
     solver.setFromOptions()
 
     # Set matrix operator

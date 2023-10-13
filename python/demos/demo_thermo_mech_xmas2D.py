@@ -4,7 +4,7 @@
 import dolfinx.fem as _fem
 import numpy as np
 import ufl
-from dolfinx import io, log
+from dolfinx import default_scalar_type, io, log
 from dolfinx.fem.petsc import LinearProblem
 from dolfinx.graph import adjacencylist
 from dolfinx.io import XDMFFile
@@ -14,7 +14,6 @@ from dolfinx_contact.meshing import convert_mesh, create_christmas_tree_mesh
 from dolfinx_contact.parallel_mesh_ghosting import create_contact_mesh
 from dolfinx_contact.unbiased.contact_problem import create_contact_solver
 from mpi4py import MPI
-from petsc4py import PETSc as _PETSc
 
 fname = "meshes/xmas_2D"
 create_christmas_tree_mesh(filename=fname, res=0.2)
@@ -49,18 +48,18 @@ a_therm, L_therm = ufl.lhs(therm), ufl.rhs(therm)
 
 T0.x.array[:] = 0
 dofs = _fem.locate_dofs_topological(Q, entity_dim=tdim - 1, entities=facet_marker.find(3))
-Tbc = _fem.dirichletbc(value=_PETSc.ScalarType((1.0)), dofs=dofs, V=Q)
+Tbc = _fem.dirichletbc(value=default_scalar_type((1.0)), dofs=dofs, V=Q)
 dofs2 = _fem.locate_dofs_topological(Q, entity_dim=tdim - 1, entities=facet_marker.find(4))
-Tbc2 = _fem.dirichletbc(value=_PETSc.ScalarType((0.0)), dofs=dofs2, V=Q)
+Tbc2 = _fem.dirichletbc(value=default_scalar_type((0.0)), dofs=dofs2, V=Q)
 Tproblem = LinearProblem(a_therm, L_therm, bcs=[Tbc, Tbc2], petsc_options={
     "ksp_type": "preonly", "pc_type": "lu"}, u=T0)
 
 
 # Elasticity problem
 V = _fem.VectorFunctionSpace(mesh, ("Lagrange", 1))
-g = _fem.Constant(mesh, _PETSc.ScalarType((0, 0)))     # zero Dirichlet
-t = _fem.Constant(mesh, _PETSc.ScalarType((0.2, 0.5)))  # traction
-f = _fem.Constant(mesh, _PETSc.ScalarType((1.0, 0.5)))  # body force
+g = _fem.Constant(mesh, default_scalar_type((0, 0)))     # zero Dirichlet
+t = _fem.Constant(mesh, default_scalar_type((0.2, 0.5)))  # traction
+f = _fem.Constant(mesh, default_scalar_type((1.0, 0.5)))  # body force
 
 
 # contact surface data
