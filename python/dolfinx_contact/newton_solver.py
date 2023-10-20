@@ -231,7 +231,7 @@ class NewtonSolver():
         self.iteration = 0
         self.krylov_iterations = 0
         self.residual = -1
-        rel_min = 1e-10
+        rel_min = 1e-2
         success = 0
         res_old = numpy.inf
 

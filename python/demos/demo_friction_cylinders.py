@@ -8,7 +8,7 @@ import numpy as np
 import ufl
 from dolfinx.io import XDMFFile, VTXWriter
 from dolfinx.fem import (assemble_scalar, Constant, dirichletbc, form,
-                         Function, FunctionSpace,
+                         Function, FunctionSpace, Expression,
                          VectorFunctionSpace, locate_dofs_topological)
 from dolfinx.fem.petsc import set_bc
 from dolfinx.graph import adjacencylist
@@ -88,7 +88,11 @@ if __name__ == "__main__":
                       "convergence_criterion": "residual",
                       "max_it": 200,
                       "error_on_nonconvergence": True}
-    # petsc_options = {"ksp_type": "preonly", "pc_type": "lu"}
+    # newton_options = {"snes_monitor": None, "snes_max_it": 50,
+    #                 "snes_max_fail": 20, "snes_type": "newtonls",
+    #                 "snes_linesearch_type": "basic",
+    #                 "snes_rtol": 1e-10, "snes_atol": 1e-10, "snes_view": None}
+    # # petsc_options = {"ksp_type": "preonly", "pc_type": "lu"}
     petsc_options = {
         "matptap_via": "scalable",
         "ksp_type": "cg",
@@ -209,11 +213,19 @@ if __name__ == "__main__":
                            args.q_degree, search_mode, problem1.entities,
                            problem1.coeffs, args.order, simplex,
                            [(tdim - 1, 0), (tdim - 1, -R)],
-                           'results/cylinders_displacement_driven')
+                           'results/cylinders3_displacement_driven')
     # initialise vtx writer
-    vtx = VTXWriter(mesh.comm, "results/cylinders_displacement_driven.bp", [problem1.u])
+    W = FunctionSpace(mesh, ("Discontinuous Lagrange", args.order - 1))
+    sigma_vm_h = Function(W)
+    sigma_dev = sigma(problem1.u) - (1 / 3) * ufl.tr(sigma(problem1.u)) * ufl.Identity(len(problem1.u))
+    sigma_vm = ufl.sqrt((3 / 2) * ufl.inner(sigma_dev, sigma_dev))
+    sigma_vm_h.name = "vonMises"
+    vtx = VTXWriter(mesh.comm, "results/cylinders3_displacement_driven.bp", [problem1.u], "bp4")
+    vtx2 = VTXWriter(mesh.comm, "results/cylinders3_displacement_driven_von_mises.bp", [sigma_vm_h], "bp4")
     vtx.write(0)
+    vtx2.write(0)
     newton_steps1 = []
+    
     for i in range(steps1):
 
         for j in range(len(contact)):
@@ -247,7 +259,10 @@ if __name__ == "__main__":
         writer.write(i + 1, lambda x: _pressure(x, p0, a), lambda x: _tangent(x, pr, a, c))
         problem1.contact.update_submesh_geometry(problem1.u._cpp_object)
         problem1.du.x.array[:] = 0.1 * h * problem1.du.x.array[:]
+        sigma_vm_expr = Expression(sigma_vm, W.element.interpolation_points())
+        sigma_vm_h.interpolate(sigma_vm_expr)
         vtx.write(i + 1)
+        vtx2.write(i + 1)
 
     # # Step 2: Frictional contact
     # geometry = mesh.geometry.x[:].copy()
@@ -284,12 +299,12 @@ if __name__ == "__main__":
     }
     # petsc_options = {"ksp_type": "preonly", "pc_type": "lu"}
 
-    newton_options = {"relaxation_parameter": 1.0,
-                      "atol": newton_tol,
-                      "rtol": newton_tol,
-                      "convergence_criterion": "residual",
-                      "max_it": 200,
-                      "error_on_nonconvergence": True}
+    # newton_options = {"relaxation_parameter": 1.0,
+    #                   "atol": newton_tol,
+    #                   "rtol": newton_tol,
+    #                   "convergence_criterion": "residual",
+    #                   "max_it": 200,
+    #                   "error_on_nonconvergence": True}
     # symmetry_nodes = locate_entities(mesh, 0, lambda x: np.logical_and(np.isclose(x[0], 0), np.isclose(x[1], -R)))
     # dofs_symmetry = locate_dofs_topological(V.sub(0), 0, symmetry_nodes)
     # dofs_bottom = locate_dofs_topological(V, 1, facet_marker.find(bottom))
@@ -312,7 +327,7 @@ if __name__ == "__main__":
     problem1.coulomb = True
     problem1.petsc_options = petsc_options
     problem1.newton_options = newton_options
-    steps2 = 8
+    steps2 = 6 * 16
 
     def _du_initial(x):
         values = np.zeros((mesh.geometry.dim, x.shape[1]))
@@ -336,7 +351,7 @@ if __name__ == "__main__":
         set_bc(problem1.du.vector, bcs)
 
         #t.value[0] = 0.03 * (i + 1) / steps2
-        g_top.value[0] = 0.025 / steps2
+        g_top.value[0] = 6 * 0.05 / steps2
         n = problem1.solve()
         newton_steps2.append(n)
         problem1.du.x.scatter_forward()
@@ -359,10 +374,14 @@ if __name__ == "__main__":
         problem1.contact.update_submesh_geometry(problem1.u._cpp_object)
         # take a fraction of du as initial guess
         # this is to ensure non-singular matrices in the case of no Dirichlet boundary
-        problem1.du.x.array[:] = 0.1 * h * problem1.du.x.array[:]
+        problem1.du.x.array[:] = 0.1/3 * h * problem1.du.x.array[:]
+        sigma_vm_expr = Expression(sigma_vm, W.element.interpolation_points())
+        sigma_vm_h.interpolate(sigma_vm_expr)
         vtx.write(steps1 + 1 + i)
+        vtx2.write(steps1 + 1 + i)
 
     vtx.close()
+    vtx2.close()
 
     print("Newton iterations: ")
     print(newton_steps1)

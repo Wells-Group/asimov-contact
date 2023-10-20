@@ -1,16 +1,197 @@
 from typing import Optional, Tuple
 from dolfinx import common, cpp, fem
 from dolfinx import mesh as _mesh
+from dolfinx.fem.petsc import create_vector
 import numpy as np
 import numpy.typing as npt
 import ufl
 from dolfinx.cpp.graph import AdjacencyList_int32
+from petsc4py import PETSc as _PETSc
 
 import dolfinx_contact
 import dolfinx_contact.cpp
 
 from .nitsche_unbiased import setup_newton_solver, get_problem_parameters
-# from dolfinx_contact.helpers import sigma_func
+kt = dolfinx_contact.cpp.Kernel
+from dolfinx_contact.helpers import rigid_motions_nullspace_subdomains
+
+
+def setup_snes_solver(F_custom: fem.forms.Form, J_custom: fem.forms.Form,
+                        bcs: list[fem.DirichletBC],
+                        u: fem.Function, du: fem.Function,
+                        contact: dolfinx_contact.cpp.Contact, markers: list[_mesh.MeshTags],
+                        entities: list[npt.NDArray[np.int32]], quadrature_degree: int,
+                        const_coeffs: list[npt.NDArray[np.float64]], consts: npt.NDArray[np.float64],
+                        search_method: list[dolfinx_contact.cpp.ContactMode],
+                        petsc_options, snes_options,
+                        coulomb: bool, normals_old=None):
+    """
+    Set up newton solver for contact problem.
+    Generate kernels and define functions for updating coefficients, stiffness matrix and residual vector.
+
+    Parameters
+    ==========
+    F_custom           The compiled form for the residual vector
+    J_custom           The compiled form for the jacobian
+    bcs                The boundary conditions
+    u                  The displacement from previous step
+    du                 The change in displacement to be computed
+    contact            The contact class
+    markers            The meshtags marking surfaces and domains
+    entities           The contact surface entities for integration
+    quadrature_degree  The quadrature degree
+    const_coeffs       The coefficients for material parameters and h
+    consts             The constants in the forms
+    search_method      The contact detection algorithms used for each pair
+    """
+
+    num_pairs = len(const_coeffs)
+    V = u.function_space
+    mesh = V.mesh
+
+    # generate kernels
+    with common.Timer("~Contact: Generate Jacobian kernel"):
+        kernel_jac = contact.generate_kernel(kt.Jac)
+        if coulomb:
+            kernel_friction_jac = contact.generate_kernel(kt.CoulombJac)
+        else:
+            kernel_friction_jac = contact.generate_kernel(kt.TrescaJac)
+    with common.Timer("~Contact: Generate residual kernel"):
+        kernel_rhs = contact.generate_kernel(kt.Rhs)
+        if coulomb:
+            kernel_friction_rhs = contact.generate_kernel(kt.CoulombRhs)
+        else:
+            kernel_friction_rhs = contact.generate_kernel(kt.TrescaRhs)
+
+    # create vector and matrix
+    A = contact.create_matrix(J_custom._cpp_object)
+    b = create_vector(F_custom)
+
+    # Pack gap, normals and test functions on each surface
+    gaps = []
+    normals = []
+    test_fns = []
+    with common.Timer("~Contact: Pack gap, normals, testfunction"):
+        for i in range(num_pairs):
+            gaps.append(contact.pack_gap(i))
+            if search_method[i] == dolfinx_contact.cpp.ContactMode.Raytracing:
+                normals.append(-contact.pack_nx(i))
+            else:
+                normals.append(contact.pack_ny(i))
+            # contact.update_distance_map(i, gaps[i], normals[i])
+            test_fns.append(contact.pack_test_functions(i))
+
+    # Concatenate all coeffs
+    ccfs = []
+    for i in range(num_pairs):
+        ccfs.append(np.hstack([const_coeffs[i], gaps[i], normals[i], test_fns[i]]))
+
+    # pack grad u
+    grad_u = []
+    u_old = []
+    u_old_opp = []
+    with common.Timer("~~Contact: Pack grad(u)"):
+        for i in range(num_pairs):
+            grad_u.append(dolfinx_contact.cpp.pack_gradient_quadrature(
+                u._cpp_object, quadrature_degree, entities[i]))
+            u_old.append(dolfinx_contact.cpp.pack_coefficient_quadrature(
+                u._cpp_object, quadrature_degree, entities[i]))
+            u_old_opp.append(contact.pack_u_contact(i, u._cpp_object))
+
+    # FIXME: temporary work around
+    if normals_old is None:
+        normals_old = u_old
+
+    # function for updating coefficients coefficients
+    @common.timed("~Contact: Update coefficients")
+    def compute_coefficients(x):
+        size_local = V.dofmap.index_map.size_local
+        bs = V.dofmap.index_map_bs
+        du.x.array[:size_local * bs] = x.array_r[:size_local * bs]
+        du.x.scatter_forward()
+        u_candidate = []
+        with common.Timer("~~Contact: Pack u contact"):
+            for i in range(num_pairs):
+                u_candidate.append(contact.pack_u_contact(i, du._cpp_object))
+        u_puppet = []
+        grad_u_puppet = []
+        with common.Timer("~~Contact: Pack u"):
+            for i in range(num_pairs):
+                u_puppet.append(dolfinx_contact.cpp.pack_coefficient_quadrature(
+                    du._cpp_object, quadrature_degree, entities[i]))
+                grad_u_puppet.append(dolfinx_contact.cpp.pack_gradient_quadrature(
+                    du._cpp_object, quadrature_degree, entities[i]))
+        coeffs = []
+        for i in range(num_pairs):
+            coeffs.append(np.hstack([ccfs[i], u_puppet[i], grad_u_puppet[i]
+                            + grad_u[i], u_candidate[i], normals_old[i], u_old_opp[i]]))
+        return coeffs
+            
+
+    # function for computing residual
+    @common.timed("~Contact: Assemble residual")
+    def compute_residual(snes, x, b):
+        coeffs = compute_coefficients(x)
+        b.zeroEntries()
+        b.ghostUpdate(addv=_PETSc.InsertMode.INSERT, mode=_PETSc.ScatterMode.FORWARD)
+        with common.Timer("~~Contact: Contact contributions (in assemble vector)"):
+            for i in range(num_pairs):
+                contact.assemble_vector(b, i, kernel_rhs, coeffs[i], consts)
+                contact.assemble_vector(b, i, kernel_friction_rhs, coeffs[i], consts)
+        with common.Timer("~~Contact: Standard contributions (in assemble vector)"):
+            fem.petsc.assemble_vector(b, F_custom)
+
+        # Apply boundary condition
+        if len(bcs) > 0:
+            fem.petsc.apply_lifting(b, [J_custom], bcs=[bcs], x0=[x], scale=-1.0)
+        b.ghostUpdate(addv=_PETSc.InsertMode.ADD, mode=_PETSc.ScatterMode.REVERSE)
+        if len(bcs) > 0:
+            fem.petsc.set_bc(b, bcs, x, -1.0)
+
+    # function for computing jacobian
+    @common.timed("~Contact: Assemble matrix")
+    def compute_jacobian_matrix(snes, x, A, P):
+        coeffs = compute_coefficients(x)
+        A.zeroEntries()
+        with common.Timer("~~Contact: Contact contributions (in assemble matrix)"):
+            for i in range(num_pairs):
+                contact.assemble_matrix(A, i, kernel_jac, coeffs[i], consts)
+                contact.assemble_matrix(A, i, kernel_friction_jac, coeffs[i], consts)
+        with common.Timer("~~Contact: Standard contributions (in assemble matrix)"):
+            fem.petsc.assemble_matrix(A, J_custom, bcs=bcs)
+        A.assemble()
+
+    # Create semismooth Newton solver (SNES)
+    snes = _PETSc.SNES().create()
+    # Set SNES options
+    opts = _PETSc.Options()
+    snes.setOptionsPrefix(f"snes_solve_{id(snes)}")
+    option_prefix = snes.getOptionsPrefix()
+    opts.prefixPush(option_prefix)
+    for k, v in snes_options.items():
+        opts[k] = v
+    opts.prefixPop()
+    snes.setFromOptions()
+
+    # Set solve functions and variable bounds
+    snes.setFunction(compute_residual, b)
+    snes.setJacobian(compute_jacobian_matrix, A)
+    null_space = rigid_motions_nullspace_subdomains(V, markers[0], np.unique(
+        markers[0].values), num_domains=len(np.unique(markers[0].values)))
+    A.setNearNullSpace(null_space)
+
+    # Set ksp options
+    ksp = snes.ksp
+    ksp.setOptionsPrefix(f"snes_ksp_{id(ksp)}")
+    opts = _PETSc.Options()
+    option_prefix = ksp.getOptionsPrefix()
+    opts.prefixPush(option_prefix)
+    for k, v in petsc_options.items():
+        opts[k] = v
+    opts.prefixPop()
+    ksp.setFromOptions()
+
+    return snes
 
 
 class ContactProblem:
@@ -58,7 +239,35 @@ class ContactProblem:
         if not converged:
             print("Newton solver did not converge")
         return n
-
+    
+        # newton_solver = setup_snes_solver(self.F, self.J, self.bcs, self.u, self.du, self.contact, self.markers,
+        #                                     self.entities, self.q_deg, self.coeffs, self.consts,
+        #                                      self.search_method, self.petsc_options, self.newton_options, 
+        #                                      self.coulomb, self.normals)
+        # newton_solver.solve(None, self.du.vector)
+        # if (newton_solver.getConvergedReason() <= 1) or (newton_solver.getConvergedReason() >= 4):
+        #     print(f"Snes solver did not converge. Converged Reason {newton_solver.getConvergedReason()}")
+        
+        # return newton_solver.getIterationNumber()
+    # def generate_integration_kernels(self):
+    #         # generate kernels
+    #     with common.Timer("~Contact: Generate Jacobian kernel"):
+    #         self.kernel_jac = self.generate_kernel(kt.Jac)
+    #         if self.coulomb:
+    #             self.kernel_friction_jac = self.generate_kernel(kt.CoulombJac)
+    #         else:
+    #             self.kernel_friction_jac = self.generate_kernel(kt.TrescaJac)
+    #     with common.Timer("~Contact: Generate residual kernel"):
+    #         self.kernel_rhs = self.generate_kernel(kt.Rhs)
+    #         if self.coulomb:
+    #             self.kernel_friction_rhs = self.generate_kernel(kt.CoulombRhs)
+    #         else:
+    #             self.kernel_friction_rhs = self.generate_kernel(kt.TrescaRhs)
+                
+    # def compute_coefficients(self, x, coeffs):
+    #     num_pairs = len(self.const_coeffs)
+    #     V = self.u.function_space
+    
     def set_normals(self):
         normals = []
         for i in range(len(self.normals)):

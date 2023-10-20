@@ -139,12 +139,13 @@ petsc_options = {
     "pc_gamg_agg_nsmooths": 1,
     "pc_gamg_threshold": 1e-3,
     "pc_gamg_square_graph": 2,
-    "pc_gamg_reuse_interpolation": False
+    "pc_gamg_reuse_interpolation": False,
+    "ksp_norm_type": "unpreconditioned"
 }
 
 
 # Solve contact problem using Nitsche's method
-problem_parameters = {"gamma": np.float64(E * gamma), "theta": np.float64(theta)}
+problem_parameters = {"gamma": np.float64((1-alpha) * E * gamma), "theta": np.float64(theta), "fric": np.float64(0.4)}
 log.set_log_level(log.LogLevel.WARNING)
 size = mesh.comm.size
 outname = f"results/xmas_{tdim}D_{size}"
@@ -164,11 +165,17 @@ contact_problem = create_contact_solver(ufl_form=F, u=u, mu=mu_dg, lmbda=lmbda_d
                                         petsc_options=petsc_options,
                                         jit_options=jit_options,
                                         quadrature_degree=5,
-                                        search_radius=np.float64(0.5))
+                                        search_radius=np.float64(0.5),
+                                        coulomb=True)
 
 # initialise vtx write
-vtx_therm = io.VTXWriter(mesh.comm, "results/xmas_disp.bp", [contact_problem.u, T0])
-vtx_mech = io.VTXWriter(mesh.comm, "results/xmas_temp.bp", [T0])
+W = FunctionSpace(mesh, ("CG", 1))
+sigma_vm_h = Function(W)
+sigma_dev = sigma(contact_problem.u, T0) - (1 / 3) * ufl.tr(sigma(contact_problem.u, T0)) * ufl.Identity(len(contact_problem.u))
+sigma_vm = ufl.sqrt((3 / 2) * ufl.inner(sigma_dev, sigma_dev))
+sigma_vm_h.name = "vonMises"
+vtx_therm = io.VTXWriter(mesh.comm, "results/xmas_disp.bp", [contact_problem.u, T0, sigma_vm_h], "bp4")
+vtx_mech = io.VTXWriter(mesh.comm, "results/xmas_temp.bp", [T0], "bp4")
 vtx_therm.write(0)
 vtx_mech.write(0)
 for i in range(50):
@@ -183,6 +190,8 @@ for i in range(50):
     # take a fraction of du as initial guess
     # this is to ensure non-singular matrices in the case of no Dirichlet boundary
     contact_problem.du.x.array[:] = 0.1 * contact_problem.du.x.array[:]
+    sigma_vm_expr = _fem.Expression(sigma_vm, W.element.interpolation_points())
+    sigma_vm_h.interpolate(sigma_vm_expr)
     vtx_therm.write(i + 1)
     vtx_mech.write(i + 1)
 

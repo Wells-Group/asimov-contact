@@ -10,7 +10,7 @@ from dolfinx import log
 import dolfinx.fem as _fem
 from dolfinx.common import timing, Timer
 from dolfinx.graph import adjacencylist
-from dolfinx.io import XDMFFile
+from dolfinx.io import XDMFFile, VTXWriter
 from dolfinx.mesh import locate_entities_boundary, GhostMode, meshtags
 from mpi4py import MPI
 from petsc4py import PETSc as _PETSc
@@ -198,7 +198,7 @@ if __name__ == "__main__":
     }
 
     # Solve contact problem using Nitsche's method
-    problem_parameters = {"gamma": np.float64(E * gamma), "theta": np.float64(theta)}
+    problem_parameters = {"gamma": np.float64(E * gamma), "theta": np.float64(theta), "fric": np.float64(0.3)}
     V0 = _fem.FunctionSpace(mesh, ("DG", 0))
     mu0 = _fem.Function(V0)
     lmbda0 = _fem.Function(V0)
@@ -214,7 +214,7 @@ if __name__ == "__main__":
     cffi_options = ["-Ofast", "-march=native"]
     jit_options = {"cffi_extra_compile_args": cffi_options, "cffi_libraries": ["m"]}
     with Timer("~Contact: - all"):
-        u1, num_its, krylov_iterations, solver_time = nitsche_unbiased(1, ufl_form=F, u=u,
+        u1, num_its, krylov_iterations, solver_time = nitsche_unbiased(10, ufl_form=F, u=u,
                                                                        mu=mu0, lmbda=lmbda0,
                                                                        rhs_fns=rhs_fns, markers=[
                                                                            domain_marker, facet_marker],
@@ -227,7 +227,8 @@ if __name__ == "__main__":
                                                                        outfile=solver_outfile,
                                                                        fname=outname,
                                                                        quadrature_degree=args.q_degree,
-                                                                       search_radius=np.float64(-1))
+                                                                       search_radius=np.float64(-1),
+                                                                       coulomb=True)
 
     # write solution to file
     size = mesh.comm.size
@@ -238,6 +239,17 @@ if __name__ == "__main__":
     with XDMFFile(mesh.comm, f"results/xmas_partitioning_{size}.xdmf", "w") as xdmf:
         xdmf.write_mesh(mesh)
         xdmf.write_meshtags(process_marker, mesh.geometry)
+
+    W = _fem.FunctionSpace(mesh, ("CG", 1))
+    sigma_vm_h = _fem.Function(W)
+    sigma_dev = sigma(u1) - (1 / 3) * ufl.tr(sigma(u1)) * ufl.Identity(len(u1))
+    sigma_vm = ufl.sqrt((3 / 2) * ufl.inner(sigma_dev, sigma_dev))
+    sigma_vm_h.name = "vonMises"
+    sigma_vm_expr = _fem.Expression(sigma_vm, W.element.interpolation_points())
+    sigma_vm_h.interpolate(sigma_vm_expr)
+    vtx = VTXWriter(mesh.comm, f"results/xmas_{size}.bp", [u1, sigma_vm_h], "bp4")
+    vtx.write(0)
+    vtx.close()
 
     outfile = sys.stdout
 

@@ -8,8 +8,9 @@ import numpy as np
 import numpy.typing as npt
 import ufl
 from dolfinx.io import XDMFFile, VTXWriter
-from dolfinx.fem import (Constant, dirichletbc, Expression, Function, FunctionSpace,
+from dolfinx.fem import (Constant, dirichletbc, form, Function, FunctionSpace,
                          VectorFunctionSpace, locate_dofs_topological)
+from dolfinx.fem.petsc import create_vector
 from dolfinx.graph import adjacencylist
 from dolfinx.geometry import bb_tree, compute_closest_entity
 from dolfinx.mesh import Mesh
@@ -26,7 +27,9 @@ from dolfinx_contact.cpp import ContactMode
 from dolfinx_contact.output import ContactWriter
 
 
-from dolfinx_contact.unbiased.contact_problem import create_contact_solver
+from dolfinx_contact.unbiased.contact_problem_new import ContactProblem
+from dolfinx_contact.newton_solver import NewtonSolver
+from dolfinx_contact.helpers import rigid_motions_nullspace_subdomains
 
 
 def closest_node_in_mesh(mesh: Mesh, point: npt.NDArray[np.float64]) -> npt.NDArray[np.int32]:
@@ -55,6 +58,9 @@ if __name__ == "__main__":
     parser.add_argument("--problem", default=1, type=int, dest="problem",
                         help="Which problem to solve: 1. Volume force, 2. Surface force",
                         choices=[1, 2])
+    _chouly = parser.add_mutually_exclusive_group(required=False)
+    _chouly.add_argument('--chouly', dest='chouly', action='store_true',
+                          help="Use parameters from Chouly paper", default=False)
     # Parse input arguments or set to defualt values
     args = parser.parse_args()
     threed = args.threed
@@ -63,29 +69,32 @@ if __name__ == "__main__":
     mesh_dir = "meshes"
 
     # Problem paramters
-    # R = 8  
-    # L = 20 
-    # H = 20  
-    R = 0.25
-    L = 1.0
-    H = 1.0
-    if threed:
-        load = 4 * 0.25 * np.pi * R**3 / 3.
+    if args.chouly:
+        R = 0.25
+        L = 1.0
+        H = 1.0
+        if threed:
+            load = 4 * 0.25 * np.pi * R**3 / 3.
+        else:
+            load = 0.25 * np.pi * R**2
+        E1 = 2.5
+        E2 = 2.5
+        nu1 = 0.25
+        nu2 = 0.25
     else:
-        load = 0.25 * np.pi * R**2
-    # load = 2 * R * 0.625
+        R = 8  
+        L = 20 
+        H = 20  
+        load = 2 * R * 0.625
+        E1 = 200
+        E2 = 200
+        nu1 = 0.3
+        nu2 = 0.3
+
     distributed_load = load
-    gap = 0.01
+    gap = 0.0
 
     # lame parameters
-    # E1 = 1e8
-    # E2 = 200
-    # nu1 = 0.0
-    # nu2 = 0.3s
-    E1 = 2.5
-    E2 = 2.5
-    nu1 = 0.25
-    nu2 = 0.25
     mu_func, lambda_func = lame_parameters(True)
     mu1 = mu_func(E1, nu1)
     mu2 = mu_func(E2, nu2)
@@ -140,8 +149,8 @@ if __name__ == "__main__":
 
         if problem == 1:
             distributed_load = 3 * load / (4 * np.pi * R**3)
-            f = Constant(mesh, ScalarType((0.0, -distributed_load)))
-            t = Constant(mesh, ScalarType((0.0, 0.0)))
+            f = Constant(mesh, ScalarType((0.0, 0.0, -distributed_load)))
+            t = Constant(mesh, ScalarType((0.0, 0.0, 0.0)))
         else:
             distributed_load = load / (np.pi * R**2)
             f = Constant(mesh, ScalarType((0.0, 0.0, 0.0)))
@@ -227,6 +236,7 @@ if __name__ == "__main__":
                       "convergence_criterion": "residual",
                       "max_it": 200,
                       "error_on_nonconvergence": True}
+
     # petsc_options = {"ksp_type": "preonly", "pc_type": "lu"}
     petsc_options = {
         "matptap_via": "scalable",
@@ -254,6 +264,7 @@ if __name__ == "__main__":
     lmbda = Function(V0)
     disk_cells = domain_marker.find(1)
     block_cells = domain_marker.find(2)
+    fric = Function(V0)
     mu.interpolate(lambda x: np.full((1, x.shape[1]), mu2), disk_cells)
     mu.interpolate(lambda x: np.full((1, x.shape[1]), mu1), block_cells)
     lmbda.interpolate(lambda x: np.full((1, x.shape[1]), lmbda2), disk_cells)
@@ -270,7 +281,9 @@ if __name__ == "__main__":
 
     # Function, TestFunction, TrialFunction and measures
     u = Function(V)
+    du = Function(V)
     v = ufl.TestFunction(V)
+    w = ufl.TrialFunction(V)
     dx = ufl.Measure("dx", domain=mesh, subdomain_data=domain_marker)
     ds = ufl.Measure("ds", domain=mesh, subdomain_data=facet_marker)
 
@@ -280,109 +293,96 @@ if __name__ == "__main__":
     # body forces
     F -= ufl.inner(f, v) * dx(1) + ufl.inner(t, v) * ds(neumann_bdy)
 
-    problem_parameters = {"gamma": np.float64(E2 * 100 * args.order**2), "theta": np.float64(1)}
+    F = ufl.replace(F, {u: u + du})
+    J = ufl.derivative(F, du, w)
+
+    # compiler options to improve performance
+    cffi_options = ["-Ofast", "-march=native"]
+    jit_options = {"cffi_extra_compile_args": cffi_options,
+                "cffi_libraries": ["m"]}
+    # compiled forms for rhs and tangen system
+    F_compiled = form(F, jit_options=jit_options)
+    J_compiled = form(J, jit_options=jit_options)
+
+
+    # Nitsche parameters
+    gamma = E2 * 100 * args.order**2
+    theta = 1
 
     # create initial guess
     def _u_initial(x):
         values = np.zeros((mesh.geometry.dim, x.shape[1]))
         values[-1] = -H / 100 - gap
         return values
-    search_mode = [ContactMode.ClosestPoint, ContactMode.Raytracing]
+    search_mode = [ContactMode.ClosestPoint, ContactMode.ClosestPoint]
 
-    problem1 = create_contact_solver(ufl_form=F, u=u, mu=mu, lmbda=lmbda,
-                                    markers=[domain_marker, facet_marker],
-                                    contact_data=(surfaces, contact),
-                                    bcs=bcs, problem_parameters=problem_parameters,
-                                    newton_options=newton_options,
-                                    petsc_options=petsc_options,
-                                    search_method=search_mode,
-                                    quadrature_degree=args.q_degree,
-                                    search_radius=np.float64(1.0))
+    # create contact solver
+    contact_problem = ContactProblem([facet_marker], surfaces, contact, V, search_mode, args.q_degree)
+    contact_problem.generate_kernel_data(u, du, mu, lmbda, fric, gamma, theta)
+    contact_problem.set_forms(F_compiled, J_compiled, bcs)
+    du.interpolate(_u_initial, disk_cells)
 
-    problem1.du.interpolate(_u_initial, disk_cells)
-    writer = ContactWriter(mesh, problem1.contact, problem1.u, contact,
-                           args.q_degree, search_mode, problem1.entities,
-                           problem1.coeffs, args.order, simplex,
-                           [(tdim - 1, 0), (tdim - 1, -R)],
-                           f'{outname}_1_step')
+
+    # create vector and matrix
+    A = contact_problem.create_matrix()
+    b = create_vector(F_compiled)
+
+    # define functions for newton solver
+    def compute_coefficients(x, coeffs):
+            size_local = V.dofmap.index_map.size_local
+            bs = V.dofmap.index_map_bs
+            du.x.array[:size_local * bs] = x.array_r[:size_local * bs]
+            du.x.scatter_forward()
+            contact_problem.update_kernel_data(du)
+
+    def compute_residual(x, b, coeffs):
+        contact_problem.compute_residual(x, b)
+
+    def compute_jacobian_matrix(x, A, coeffs):
+        contact_problem.compute_jacobian_matrix(x, A)
+
+    # Set up snes solver for nonlinear solver
+    newton_solver = NewtonSolver(mesh.comm, A, b, contact_problem.coeffs)
+    # Set matrix-vector computations
+    newton_solver.set_residual(compute_residual)
+    newton_solver.set_jacobian(compute_jacobian_matrix)
+    newton_solver.set_coefficients(compute_coefficients)
+
+    # Set rigid motion nullspace
+    null_space = rigid_motions_nullspace_subdomains(V, domain_marker, np.unique(
+        domain_marker.values), num_domains=len(np.unique(domain_marker.values)))
+    newton_solver.A.setNearNullSpace(null_space)
+
+    # Set Newton solver options
+    newton_solver.set_newton_options(newton_options)
+
+    # Set Krylov solver options
+    newton_solver.set_krylov_options(petsc_options)
+
+    if not threed:
+        writer = ContactWriter(mesh, contact_problem.contact, u, contact,
+                            args.q_degree, search_mode, contact_problem.entities,
+                            contact_problem.coeffs, args.order, simplex,
+                            [(tdim - 1, 0), (tdim - 1, -R)],
+                            f'{outname}_1_step')
     # initialise vtx writer
-    vtx = VTXWriter(mesh.comm, f"{outname}_1_step.bp", [problem1.u], "bp4")
+    vtx = VTXWriter(mesh.comm, f"{outname}_1_step.bp", [u], "bp4")
     vtx.write(0)
     steps = 4
     for i in range(steps):
-        for j in range(len(contact)):
-            problem1.contact.create_distance_map(j)
         if problem == 1:
             f.value[-1] = -distributed_load * (i + 1)/steps
         else:
             t.value[-1] = -distributed_load * (i + 1)/steps
-        n = problem1.solve()
-        problem1.du.x.scatter_forward()
-        problem1.u.x.array[:] += problem1.du.x.array[:]
+        n, converged = newton_solver.solve(du, write_solution=True)
+        du.x.scatter_forward()
+        u.x.array[:] += du.x.array[:]
         a = 2 * np.sqrt(R * load * (i + 1)/ (steps * np.pi * Estar))
         p0 = 2 * load * (i + 1) / (steps * np.pi * a)
-        writer.write(i + 1, lambda x: _pressure(x, p0, a), lambda x: np.zeros(x.shape[1]))
-        problem1.contact.update_submesh_geometry(problem1.u._cpp_object)
-        problem1.du.x.array[:] = 0.1 * problem1.du.x.array[:]
+        if not threed:
+            writer.write(i + 1, lambda x: _pressure(x, p0, a), lambda x: np.zeros(x.shape[1]))
+        contact_problem.update_contact_detection(u)
+        du.x.array[:] = 0.1 * du.x.array[:]
         vtx.write(i + 1)
 
     vtx.close()
-
-    # # Solve contact problem using Nitsche's method
-    # u, newton_its, krylov_iterations, solver_time = nitsche_unbiased(1, ufl_form=F,
-    #                                                                  u=u, mu=mu, lmbda=lmbda, rhs_fns=[f, t],
-    #                                                                  markers=[domain_marker, facet_marker],
-    #                                                                  contact_data=(
-    #                                                                      surfaces, contact), bcs=bcs, bc_fns = bc_fns,
-    #                                                                  problem_parameters=problem_parameters,
-    #                                                                  newton_options=newton_options,
-    #                                                                  petsc_options=petsc_options,
-    #                                                                  search_method=search_mode,
-    #                                                                  outfile=None,
-    #                                                                  fname=outname,
-    #                                                                  quadrature_degree=args.q_degree,
-    #                                                                  search_radius=np.float64(-1),
-    #                                                                  order=args.order, simplex=simplex,
-    #                                                                  pressure_function=_pressure,
-    #                                                                  projection_coordinates=(tdim - 1, -R))
-
-    # sigma_dev = sigma(u) - (1 / 3) * ufl.tr(sigma(u)) * ufl.Identity(len(u))
-    # sigma_vm = ufl.sqrt((3 / 2) * ufl.inner(sigma_dev, sigma_dev))
-    # W = FunctionSpace(mesh, ("Discontinuous Lagrange", args.order - 1))
-    # sigma_vm_expr = Expression(sigma_vm, W.element.interpolation_points())
-    # sigma_vm_h = Function(W)
-    # sigma_vm_h.interpolate(sigma_vm_expr)
-    # sigma_vm_h.name = "vonMises"
-    # with XDMFFile(mesh.comm, f"{outname}_vonMises.xdmf", "w") as xdmf:
-    #     xdmf.write_mesh(mesh)
-    #     xdmf.write_function(sigma_vm_h)
-
-        # xdmf.write_function(sigma_vm_h)
-
-    # Create quadrature points for integration on facets
-    # ct = mesh.topology.cell_type
-    # x = []
-    # for i in range(num_local):
-    #     qps = contact.qp_phys(1, i)
-    #     for pt in qps:
-    #         x.append(pt[0])
-    # print(len(x))
-
-    # plt.figure()
-    # plt.plot(x, pn[1], '*')
-    # plt.xlabel('x')
-    # plt.ylabel('p')
-
-    # a = np.sqrt(8*load*R/(np.pi*Estar))
-    # plt.xlim(-a-0.1, a+0.1)
-    # r = np.linspace(-a, a, 100)
-    # p0 = np.sqrt(load*Estar/(2*np.pi*R))
-    # print(a, p0)
-    # plt.grid()
-
-    # p = p0 * np.sqrt(1 - r**2 / a**2)
-    # plt.plot(r, p)
-    # p_max = np.max(pn[1])
-    # rel_err = np.abs(p_max - p0)/(max(p_max, p0))*100
-    # print(p0, p_max, rel_err)
-    # plt.savefig("contact_pressure.png")

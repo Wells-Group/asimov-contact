@@ -111,7 +111,7 @@ std::array<double, 3> dolfinx_contact::push_forward_facet_normal(
   cmdspan4_t basis_values(work_array.data() + 3 + 2 * gdim * tdim, c_shape);
   std::span<double> basis_span(work_array.data() + 3 + 2 * gdim * tdim,
                                basis_size);
-  if (cmap.is_affine())
+  if (false)
   {
     // Affine Jacobian can be computed at any point in the cell (0,0,0) in
     // the reference cell

@@ -66,8 +66,9 @@ if __name__ == "__main__":
     lmbda = lambda_func(E, nu)
 
     # Create mesh
-    outname = "results/friction_2D_simplex" if simplex else "results/friction_2D_quads"
-    fname = f"{mesh_dir}/friction_2D_simplex" if simplex else f"{mesh_dir}/friction_2D_quads"
+    name = "cylinder_box"
+    outname = f"results/{name}_simplex" if simplex else f"results/{name}_quads"
+    fname = f"{mesh_dir}/{name}_simplex" if simplex else f"{mesh_dir}/{name}_quads"
     create_halfdisk_plane_mesh(filename=f"{fname}.msh", res=args.res,
                                        order=args.order, quads=not simplex, r=R, H=H, L=L, gap=gap)
     convert_mesh(fname, f"{fname}.xdmf", gdim=2)
@@ -86,12 +87,11 @@ if __name__ == "__main__":
     # Solver options
     ksp_tol = 1e-10
     newton_tol = 1e-7
-    newton_options = {"relaxation_parameter": 1.0,
-                      "atol": newton_tol,
-                      "rtol": newton_tol,
-                      "convergence_criterion": "residual",
-                      "max_it": 200,
-                      "error_on_nonconvergence": True}
+    newton_options = {"snes_monitor": None, "snes_max_it": 50,
+                    "snes_max_fail": 20, "snes_type": "newtonls",
+                    "snes_linesearch_type": "basic",
+                    "snes_linesearch_order": 1,
+                    "snes_rtol": 1e-10, "snes_atol": 1e-10, "snes_view": None}
     # petsc_options = {"ksp_type": "preonly", "pc_type": "lu"}
     petsc_options = {
         "matptap_via": "scalable",
@@ -288,14 +288,14 @@ if __name__ == "__main__":
         "ksp_initial_guess_nonzero": False,
         "ksp_norm_type": "unpreconditioned"
     }
-    # petsc_options = {"ksp_type": "preonly", "pc_type": "lu"}
+    petsc_options = {"ksp_type": "preonly", "pc_type": "lu"}
 
-    newton_options = {"relaxation_parameter": 1.0,
-                      "atol": newton_tol,
-                      "rtol": newton_tol,
-                      "convergence_criterion": "residual",
-                      "max_it": 200,
-                      "error_on_nonconvergence": True}
+    # newton_options = {"relaxation_parameter": 1.0,
+    #                   "atol": newton_tol,
+    #                   "rtol": newton_tol,
+    #                   "convergence_criterion": "residual",
+    #                   "max_it": 200,
+    #                   "error_on_nonconvergence": True}
     # symmetry_nodes = locate_entities(mesh, 0, lambda x: np.logical_and(np.isclose(x[0], 0), np.isclose(x[1], -R)))
     # dofs_symmetry = locate_dofs_topological(V.sub(0), 0, symmetry_nodes)
     # dofs_bottom = locate_dofs_topological(V, 1, facet_marker.find(bottom))

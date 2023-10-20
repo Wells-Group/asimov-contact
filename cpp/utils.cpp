@@ -28,7 +28,7 @@ void dolfinx_contact::pull_back(
 
   // Create working memory for determinant computation
   std::vector<double> detJ_scratch(2 * gdim * tdim);
-  if (cmap.is_affine())
+  if (false)
   {
     // Tabulate at reference coordinate origin
     std::array<std::size_t, 4> c_shape = cmap.tabulate_shape(1, 1);
@@ -515,7 +515,7 @@ std::function<double(
 dolfinx_contact::get_update_jacobian_dependencies(
     const dolfinx::fem::CoordinateElement<double>& cmap)
 {
-  if (cmap.is_affine())
+  if (false)
   {
     // Return function that returns the input determinant
     return [](double detJ, [[maybe_unused]] dolfinx_contact::mdspan2_t J,
@@ -550,7 +550,7 @@ std::function<void(std::span<double>, dolfinx_contact::cmdspan2_t,
 dolfinx_contact::get_update_normal(
     const dolfinx::fem::CoordinateElement<double>& cmap)
 {
-  if (cmap.is_affine())
+  if (false)
   {
     // Return function that returns the input determinant
     return []([[maybe_unused]] std::span<double> n,
