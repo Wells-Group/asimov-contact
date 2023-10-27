@@ -70,7 +70,7 @@ jobs:
         with:
           path: ./dolfinx
           repository: FEniCS/dolfinx
-          ref: v0.7.0
+          ref: v0.7.0.post0
    
 
       - name: Configure C++ (dolfinx)
