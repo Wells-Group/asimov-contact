@@ -219,7 +219,7 @@ def nitsche_rigid_surface_custom(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTa
         Function for updating pack coefficients inside the Newton solver.
         As only u is varying withing the Newton solver, we only update it.
         """
-        u.vector[:] = x.array
+        x.copy(u.vector)
         u_packed = dolfinx_contact.cpp.pack_coefficient_quadrature(u._cpp_object, quadrature_degree, integral_entities)
         grad_u_packed = dolfinx_contact.cpp.pack_gradient_quadrature(
             u._cpp_object, quadrature_degree, integral_entities)
