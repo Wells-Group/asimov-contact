@@ -3,11 +3,11 @@
 # SPDX-License-Identifier:    MIT
 
 from enum import Enum
-from typing import Callable, List, Tuple, Union
+from typing import Callable, List, Tuple, Union, Optional
 
 import numpy
 import numpy.typing as npt
-from dolfinx import common, fem
+from dolfinx import common, default_scalar_type, fem
 from mpi4py import MPI
 from petsc4py import PETSc
 
@@ -26,7 +26,12 @@ class NewtonSolver():
                  "iteration", "residual", "initial_residual", "krylov_solver", "_dx", "comm",
                  "_A", "_b", "_coeffs", "_P"]
 
-    def __init__(self, comm: MPI.Comm, J: PETSc.Mat, b: PETSc.Vec, coeffs: List[npt.NDArray[PETSc.ScalarType]]):
+    def __init__(
+            self, comm: MPI.Comm,
+            J: PETSc.Mat,  # type: ignore
+            b: PETSc.Vec,  # type: ignore
+            coeffs:
+            List[npt.NDArray[default_scalar_type]]):
         """
         Create a Newton solver
 
@@ -48,8 +53,8 @@ class NewtonSolver():
         self._A = J
         self._b = b
         self._coeffs = coeffs
-        self._dx: PETSc.Vec = None
-        self.krylov_solver = PETSc.KSP()
+        self._dx: Optional[PETSc.Vec] = None  # type: ignore
+        self.krylov_solver = PETSc.KSP()  # type: ignore
         self.krylov_solver.create(self.comm)
         self.krylov_solver.setOptionsPrefix("Newton_solver_")
         self.error_on_nonconvergence = False
@@ -63,7 +68,7 @@ class NewtonSolver():
         g_opts = {}
         pc_keys = ["pc_mg_levels", "pc_mg_cycles"]
         pc_opts = {}
-        opts = PETSc.Options()
+        opts = PETSc.Options()  # type: ignore
         opts.prefixPush(self.krylov_solver.getOptionsPrefix())
         for k, v in options.items():
             if k in keys:
@@ -86,7 +91,7 @@ class NewtonSolver():
         self._b.setOptionsPrefix(self.krylov_solver.getOptionsPrefix())
         self._b.setFromOptions()
 
-    def solve(self, u: Union[fem.Function, PETSc.Vec]):
+    def solve(self, u: Union[fem.Function, PETSc.Vec]):  # type: ignore
         """
         Solve non-linear problem into function u.
         Returns the number of iterations and if the solver converged
@@ -96,20 +101,23 @@ class NewtonSolver():
             u.x.scatter_forward()
         except AttributeError:
             n, converged = self._solve(u)
-            u.ghostUpdate(addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD)
+            u.ghostUpdate(addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD)  # type: ignore
         return n, converged
 
     @property
-    def A(self) -> PETSc.Mat:
+    def A(self) -> PETSc.Mat:  # type: ignore
         """Get the Jacobian matrix"""
         return self._A
 
     @property
-    def b(self) -> PETSc.Vec:
+    def b(self) -> PETSc.Vec:  # type: ignore
         """Get the residual vector"""
         return self._b
 
-    def set_jacobian(self, func: Callable[[PETSc.Vec, PETSc.Mat, List[npt.NDArray[PETSc.ScalarType]]], None]):
+    def set_jacobian(self,
+                     func: Callable[  # type: ignore
+                         [PETSc.Vec, PETSc.Mat, List[npt.NDArray[default_scalar_type]]],
+                         None]):
         """
         Set the function for computing the Jacobian
         Args:
@@ -117,7 +125,10 @@ class NewtonSolver():
         """
         self._compute_jacobian = func
 
-    def set_residual(self, func: Callable[[PETSc.Vec, PETSc.Vec, List[npt.NDArray[PETSc.ScalarType]]], None]):
+    def set_residual(self,
+                     func: Callable[  # type: ignore
+                         [PETSc.Vec, PETSc.Vec, List[npt.NDArray[default_scalar_type]]],
+                         None]):
         """
         Set the function for computing the residual
         Args:
@@ -125,8 +136,10 @@ class NewtonSolver():
         """
         self._compute_residual = func
 
-    def set_preconditioner(self, func: Callable[[PETSc.Vec, PETSc.Mat, List[npt.NDArray[PETSc.ScalarType]]], None],
-                           P: PETSc.Mat):
+    def set_preconditioner(self,
+                           func: Callable[  # type: ignore
+                               [PETSc.Vec, PETSc.Mat, List[npt.NDArray[default_scalar_type]]], None],
+                           P: PETSc.Mat):  # type: ignore
         """
         Set the function for computing the preconditioner matrix
         Args:
@@ -136,7 +149,8 @@ class NewtonSolver():
         self._compute_preconditioner = func
         self._P = P
 
-    def set_coefficients(self, func: Callable[[PETSc.Vec, List[npt.NDArray[PETSc.ScalarType]]], None]):
+    def set_coefficients(self,
+                         func: Callable[[PETSc.Vec, List[npt.NDArray[default_scalar_type]]], None]):  # type: ignore
         """
         Set the function for computing the coefficients needed for assembly
         Args:
@@ -176,14 +190,14 @@ class NewtonSolver():
         else:
             self.relaxation_parameter = 1.0
 
-    def _pre_computation(self, x: PETSc.Vec):
-        x.ghostUpdate(addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD)
+    def _pre_computation(self, x: PETSc.Vec):  # type: ignore
+        x.ghostUpdate(addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD)  # type: ignore
 
-    def _post_solve(self, x: PETSc.Vec):
-        x.ghostUpdate(addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD)
+    def _post_solve(self, x: PETSc.Vec):  # type: ignore
+        x.ghostUpdate(addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD)  # type: ignore
 
-    def _check_convergence(self, r: PETSc.Vec):
-        residual = r.norm(PETSc.NormType.NORM_2)
+    def _check_convergence(self, r: PETSc.Vec):  # type: ignore
+        residual = r.norm(PETSc.NormType.NORM_2)  # type: ignore
         try:
             relative_residual = residual / self.initial_residual
         except ZeroDivisionError:
@@ -198,13 +212,13 @@ class NewtonSolver():
             print(f"converged: {self.krylov_solver.getConvergedReason()}")
         return residual, relative_residual < self.rtol or residual < self.atol
 
-    def _update_solution(self, dx: PETSc.Vec, x: PETSc.Vec):
+    def _update_solution(self, dx: PETSc.Vec, x: PETSc.Vec):  # type: ignore
         """
         Compute x-= relaxation_patameter*dx
         """
         x.axpy(-self.relaxation_parameter, dx)
 
-    def _solve(self, x: Union[PETSc.Vec, fem.Function]) -> Tuple[int, int]:
+    def _solve(self, x: Union[PETSc.Vec, fem.Function]) -> Tuple[int, int]:  # type: ignore
         t = common.Timer("~Contact: Newton (Newton solver)")
         try:
             x_vec = x.vector
@@ -285,7 +299,7 @@ class NewtonSolver():
 
             # Initialize initial residual
             if self.iteration == 1:
-                self.initial_residual = self._dx.norm(PETSc.NormType.NORM_2)
+                self.initial_residual = self._dx.norm(PETSc.NormType.NORM_2)  # type: ignore
 
             # Test for convergence
             if self.convergence_criterion == ConvergenceCriterion.residual:

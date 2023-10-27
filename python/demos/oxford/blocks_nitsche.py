@@ -5,13 +5,13 @@
 import numpy as np
 
 from basix.ufl import element
+from dolfinx import default_scalar_type
 from dolfinx.fem import (Constant, dirichletbc, Function,
                          functionspace, locate_dofs_topological)
 from dolfinx.graph import adjacencylist
 from dolfinx.io import XDMFFile
 from dolfinx.mesh import create_mesh
 from mpi4py import MPI
-from petsc4py.PETSc import ScalarType
 from ufl import grad, Identity, inner, Mesh, Measure, TestFunction, tr, sym
 
 from dolfinx_contact.unbiased.contact_problem import create_contact_solver
@@ -78,10 +78,10 @@ problem_parameters = {"gamma": np.float64(E * gamma), "theta": np.float64(theta)
                       "mu": np.float64(mu), "lambda": np.float64(lmbda)}
 
 # boundary conditions
-g = Constant(mesh, ScalarType((0, 0, 0)))     # zero Dirichlet
+g = Constant(mesh, default_scalar_type((0, 0, 0)))     # zero Dirichlet
 dofs_g = locate_dofs_topological(
     V, tdim - 1, facet_marker.find(dirichlet_bdy_2))
-d = Constant(mesh, ScalarType((0, 0, -0.2)))  # vertical displacement
+d = Constant(mesh, default_scalar_type((0, 0, -0.2)))  # vertical displacement
 dofs_d = locate_dofs_topological(
     V, tdim - 1, facet_marker.find(dirichlet_bdy_1))
 bcs = [dirichletbc(d, dofs_d, V), dirichletbc(g, dofs_g, V)]

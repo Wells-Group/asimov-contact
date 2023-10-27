@@ -3,27 +3,31 @@
 # SPDX-License-Identifier:    MIT
 
 import argparse
-from dolfinx import log
-from dolfinx.common import Timer, timing, TimingType, list_timings
-from dolfinx.fem import (assemble_scalar, Constant, dirichletbc, form, Function,
-                         FunctionSpace, locate_dofs_topological, VectorFunctionSpace)
+
+import numpy as np
+import numpy.typing as npt
+import ufl
+from dolfinx import default_scalar_type, log
+from dolfinx.common import Timer, TimingType, list_timings, timing
+from dolfinx.fem import (Constant, Function, FunctionSpace,
+                         VectorFunctionSpace, assemble_scalar, dirichletbc,
+                         form, locate_dofs_topological)
 from dolfinx.fem.petsc import (apply_lifting, assemble_matrix, assemble_vector,
                                create_vector, set_bc)
 from dolfinx.graph import adjacencylist
 from dolfinx.io import XDMFFile
 from dolfinx.mesh import meshtags
-import numpy as np
-import numpy.typing as npt
-import ufl
-from mpi4py import MPI
-from petsc4py import PETSc
+from dolfinx_contact.cpp import MeshTie
 from dolfinx_contact.helpers import (epsilon, lame_parameters,
                                      rigid_motions_nullspace,
-                                     rigid_motions_nullspace_subdomains, sigma_func)
+                                     rigid_motions_nullspace_subdomains,
+                                     sigma_func)
 from dolfinx_contact.meshing import (create_split_box_2D, create_split_box_3D,
-                                     horizontal_sine, create_unsplit_box_2d, create_unsplit_box_3d)
+                                     create_unsplit_box_2d,
+                                     create_unsplit_box_3d, horizontal_sine)
 from dolfinx_contact.parallel_mesh_ghosting import create_contact_mesh
-from dolfinx_contact.cpp import MeshTie
+from mpi4py import MPI
+from petsc4py import PETSc
 
 
 # manufactured solution 2D
@@ -137,7 +141,7 @@ def unsplit_domain(threed: bool = False, runs: int = 1):
 
         # Boundary conditions
         facets = facet_marker.find(2)
-        bc = dirichletbc(np.zeros(tdim, dtype=PETSc.ScalarType),
+        bc = dirichletbc(np.zeros(tdim, dtype=default_scalar_type),
                          locate_dofs_topological(V, entity_dim=tdim - 1, entities=facets), V=V)
 
         dx = ufl.Measure("dx", domain=mesh)
@@ -153,11 +157,11 @@ def unsplit_domain(threed: bool = False, runs: int = 1):
 
         b = assemble_vector(F)
         apply_lifting(b, [J], bcs=[[bc]])
-        b.ghostUpdate(addv=PETSc.InsertMode.ADD, mode=PETSc.ScatterMode.REVERSE)
+        b.ghostUpdate(addv=PETSc.InsertMode.ADD, mode=PETSc.ScatterMode.REVERSE)  # type: ignore
         set_bc(b, [bc])
 
         # Set solver options
-        opts = PETSc.Options()
+        opts = PETSc.Options()  # type: ignore
         opts["ksp_type"] = "cg"
         opts["ksp_rtol"] = 1.0e-10
         opts["pc_type"] = "gamg"
@@ -170,7 +174,7 @@ def unsplit_domain(threed: bool = False, runs: int = 1):
         opts["mg_levels_ksp_chebyshev_esteig_steps"] = 20
 
         # Create PETSc Krylov solver and turn convergence monitoring on
-        solver = PETSc.KSP().create(mesh.comm)
+        solver = PETSc.KSP().create(mesh.comm)  # type: ignore
         solver.setFromOptions()
 
         # Set matrix operator
@@ -310,9 +314,9 @@ def test_meshtie(threed: bool = False, simplex: bool = True, runs: int = 5):
 
         # 0 dirichlet
         if gdim == 3:
-            g = Constant(mesh, PETSc.ScalarType((0.0, 0.0, 0.0)))
+            g = Constant(mesh, default_scalar_type((0.0, 0.0, 0.0)))
         else:
-            g = Constant(mesh, PETSc.ScalarType((0.0, 0.0)))
+            g = Constant(mesh, default_scalar_type((0.0, 0.0)))
         for tag in [3, 5]:
             J += - ufl.inner(sigma(w) * n, v) * ds(tag)\
                 - theta * ufl.inner(sigma(v) * n, w) * \
@@ -343,9 +347,9 @@ def test_meshtie(threed: bool = False, simplex: bool = True, runs: int = 5):
 
         # Assemble right hand side
         b.zeroEntries()
-        b.ghostUpdate(addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD)
+        b.ghostUpdate(addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD)  # type: ignore
         assemble_vector(b, F)
-        b.ghostUpdate(addv=PETSc.InsertMode.ADD, mode=PETSc.ScatterMode.REVERSE)
+        b.ghostUpdate(addv=PETSc.InsertMode.ADD, mode=PETSc.ScatterMode.REVERSE)  # type: ignore
 
         # Assemble matrix
         A.zeroEntries()
@@ -359,10 +363,10 @@ def test_meshtie(threed: bool = False, simplex: bool = True, runs: int = 5):
         A.setNearNullSpace(null_space)
 
         # Create PETSc Krylov solver and turn convergence monitoring on
-        opts = PETSc.Options()
+        opts = PETSc.Options()  # type: ignore
         for key in petsc_options:
             opts[key] = petsc_options[key]
-        solver = PETSc.KSP().create(mesh.comm)
+        solver = PETSc.KSP().create(mesh.comm)  # type: ignore
         solver.setFromOptions()
 
         # Set matrix operator
