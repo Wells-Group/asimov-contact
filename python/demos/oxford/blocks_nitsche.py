@@ -81,7 +81,7 @@ problem_parameters = {"gamma": np.float64(E * gamma), "theta": np.float64(theta)
 g = Constant(mesh, default_scalar_type((0, 0, 0)))     # zero Dirichlet
 dofs_g = locate_dofs_topological(
     V, tdim - 1, facet_marker.find(dirichlet_bdy_2))
-d = Constant(mesh, default_scalar_type((0, 0, -0.2)))  # vertical displacement
+d = Constant(mesh, default_scalar_type((0, -0.2, 0)))  # vertical displacement
 dofs_d = locate_dofs_topological(
     V, tdim - 1, facet_marker.find(dirichlet_bdy_1))
 bcs = [dirichletbc(d, dofs_d, V), dirichletbc(g, dofs_g, V)]
