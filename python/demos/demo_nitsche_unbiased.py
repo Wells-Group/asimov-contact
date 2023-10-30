@@ -7,15 +7,13 @@ import sys
 
 import numpy as np
 import ufl
-from dolfinx import log
+from dolfinx import default_scalar_type, log
 from dolfinx.common import TimingType, list_timings, timing
-from dolfinx.fem import (Constant, dirichletbc, Function, locate_dofs_topological, VectorFunctionSpace)
+from dolfinx.fem import (Constant, Function, VectorFunctionSpace, dirichletbc,
+                         locate_dofs_topological)
 from dolfinx.graph import adjacencylist
 from dolfinx.io import XDMFFile
-from dolfinx.mesh import locate_entities_boundary, GhostMode, meshtags
-from mpi4py import MPI
-from petsc4py.PETSc import ScalarType
-
+from dolfinx.mesh import GhostMode, locate_entities_boundary, meshtags
 from dolfinx_contact import update_geometry
 from dolfinx_contact.helpers import (epsilon, lame_parameters, sigma_func,
                                      weak_dirichlet)
@@ -25,8 +23,9 @@ from dolfinx_contact.meshing import (convert_mesh, create_box_mesh_2D,
                                      create_circle_plane_mesh,
                                      create_cylinder_cylinder_mesh,
                                      create_sphere_plane_mesh)
-from dolfinx_contact.unbiased.nitsche_unbiased import nitsche_unbiased
 from dolfinx_contact.parallel_mesh_ghosting import create_contact_mesh
+from dolfinx_contact.unbiased.nitsche_unbiased import nitsche_unbiased
+from mpi4py import MPI
 
 if __name__ == "__main__":
     desc = "Nitsche's method for two elastic bodies using custom assemblers"
@@ -380,7 +379,7 @@ if __name__ == "__main__":
         Fj = F
         for k, d in enumerate(load_increment):
             tag = dirichlet_vals[k]
-            g = Constant(mesh, ScalarType(tuple(d[i] for i in range(gdim))))
+            g = Constant(mesh, default_scalar_type(tuple(d[i] for i in range(gdim))))
             if args.lifting:
                 dofs = locate_dofs_topological(V, tdim - 1, facet_marker.find(tag))
                 bcs.append(dirichletbc(g, dofs, V))

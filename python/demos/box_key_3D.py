@@ -5,20 +5,19 @@
 import argparse
 import sys
 
-import numpy as np
-from dolfinx import log
 import dolfinx.fem as _fem
-from dolfinx.common import timing, Timer, list_timings, TimingType
+import numpy as np
+import ufl
+from dolfinx import default_scalar_type, log
+from dolfinx.common import Timer, TimingType, list_timings, timing
 from dolfinx.graph import adjacencylist
 from dolfinx.io import XDMFFile
 from dolfinx.mesh import GhostMode, meshtags
-from mpi4py import MPI
-from petsc4py import PETSc as _PETSc
-import ufl
-
-from dolfinx_contact.unbiased.nitsche_unbiased import nitsche_unbiased
-from dolfinx_contact.helpers import lame_parameters, sigma_func, weak_dirichlet, epsilon
+from dolfinx_contact.helpers import (epsilon, lame_parameters, sigma_func,
+                                     weak_dirichlet)
 from dolfinx_contact.parallel_mesh_ghosting import create_contact_mesh
+from dolfinx_contact.unbiased.nitsche_unbiased import nitsche_unbiased
+from mpi4py import MPI
 
 if __name__ == "__main__":
     desc = "Nitsche's method for two elastic bodies using custom assemblers"
@@ -89,10 +88,10 @@ if __name__ == "__main__":
         return values
 
     # Functions for Dirichlet and Neuman boundaries, body force
-    g = _fem.Constant(mesh, _PETSc.ScalarType((0, 0, 0)))      # zero dirichlet
+    g = _fem.Constant(mesh, default_scalar_type((0, 0, 0)))      # zero dirichlet
     t = _fem.Function(V)
     t.interpolate(_torque)  # traction
-    f = _fem.Constant(mesh, _PETSc.ScalarType((2.0, 0.0, 0)))  # body force
+    f = _fem.Constant(mesh, default_scalar_type((2.0, 0.0, 0)))  # body force
 
     ncells = mesh.topology.index_map(tdim).size_local
     indices = np.array(range(ncells), dtype=np.int32)

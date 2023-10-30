@@ -4,18 +4,18 @@
 
 from typing import Any, Optional, Tuple, Union
 
-from dolfinx import common, fem, io, log, cpp
-from dolfinx import mesh as _mesh
-from dolfinx.fem.petsc import create_vector
+import dolfinx_contact
+import dolfinx_contact.cpp
 import numpy as np
 import numpy.typing as npt
 import ufl
+from dolfinx import common, cpp, default_scalar_type, fem, io, log
+from dolfinx import mesh as _mesh
 from dolfinx.cpp.graph import AdjacencyList_int32
+from dolfinx.fem.petsc import create_vector
+from dolfinx_contact.helpers import (rigid_motions_nullspace_subdomains,
+                                     sigma_func)
 from petsc4py import PETSc as _PETSc
-
-import dolfinx_contact
-import dolfinx_contact.cpp
-from dolfinx_contact.helpers import (rigid_motions_nullspace_subdomains, sigma_func)
 
 kt = dolfinx_contact.cpp.Kernel
 
@@ -208,7 +208,7 @@ def copy_fns(fns: list[Union[fem.Function, fem.Constant, npt.NDArray[Any]]],
             old_fns.append(new_fn)
         elif type(fn) is fem.Constant:
             shape = fn.value.shape
-            temp = np.zeros(shape, dtype=_PETSc.ScalarType)
+            temp = np.zeros(shape, dtype=default_scalar_type)
             new_const = fem.Constant(mesh, temp)
             new_const.value = fn.value
             old_fns.append(new_const)
@@ -449,7 +449,7 @@ def nitsche_unbiased(steps: int, ufl_form: ufl.Form, u: fem.Function,
         with common.Timer(timing_str):
             n, converged = newton_solver.solve(du)
         if outfile is not None:
-            viewer = _PETSc.Viewer().createASCII(outfile, "a")
+            viewer = _PETSc.Viewer().createASCII(outfile, "a")  # type: ignore
             newton_solver.krylov_solver.view(viewer)
 
         # collect solver stats
