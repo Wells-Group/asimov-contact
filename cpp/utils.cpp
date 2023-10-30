@@ -1034,7 +1034,7 @@ dolfinx_contact::compute_distance_map(
 MatNullSpace dolfinx_contact::build_nullspace_multibody(
     const dolfinx::fem::FunctionSpace<double>& V,
     const dolfinx::mesh::MeshTags<std::int32_t>& mt,
-    std::vector<std::int32_t>& tags)
+    std::span<const std::int32_t> tags)
 {
   std::size_t gdim = V.mesh()->geometry().dim();
   std::size_t dim = (gdim == 2) ? 3 : 6;
