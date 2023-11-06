@@ -20,8 +20,7 @@ from dolfinx.cpp.nls.petsc import NewtonSolver
 from mpi4py import MPI
 from petsc4py import PETSc
 from ufl import (derivative, grad, Identity, inner, Mesh,
-                 Measure, TestFunction, TrialFunction, tr, sym,
-                 CellDiameter, FacetNormal)
+                 Measure, TestFunction, TrialFunction, tr, sym)
 
 from dolfinx_contact.cpp import ContactMode, MeshTie
 from dolfinx_contact.helpers import rigid_motions_nullspace_subdomains
@@ -60,7 +59,7 @@ class MeshTieProblem:
         self._mu = mu
         self._gamma = gamma
         self._theta = theta
-        
+
         # Create PETSc rhs vector
         self._b = vector(L.function_spaces[0].dofmap.index_map, L.function_spaces[0].dofmap.index_map_bs)
         self._b_petsc = create_petsc_vector_wrap(self._b)
@@ -74,21 +73,42 @@ class MeshTieProblem:
         self._matA.setNearNullSpace(ns)
 
     def F(self, x, b):
+        """Function for computing the residual vector.
+
+        Args:
+           x: The vector containing the latest solution.
+           b: The residual vector.
+
+        """
+        # Avoid long log output coming from the custom kernel
         log.set_log_level(log.LogLevel.OFF)
+
+        # Generate input data for custom kernel.
         self._meshties.generate_meshtie_data(
             self._u._cpp_object, self._lmbda._cpp_object, self._mu._cpp_object, gamma, theta)
+
+        # Assemble residual vector
         self._b_petsc.zeroEntries()
         self._b_petsc.ghostUpdate(addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD)
-        self._meshties.assemble_vector(self._b_petsc)
-        assemble_vector(self._b_petsc, self._l)
+        self._meshties.assemble_vector(self._b_petsc)  # custom kernel
+        assemble_vector(self._b_petsc, self._l)  # standard kernels
 
         # Apply boundary condition
         apply_lifting(self._b_petsc, [self._j], bcs=[self._bcs], x0=[x], scale=-1.0)
         self._b_petsc.ghostUpdate(addv=PETSc.InsertMode.ADD, mode=PETSc.ScatterMode.REVERSE)
         set_bc(self._b_petsc, self._bcs, x, -1.0)
+
+        # Restore log level info for monitoring Newton solver
         log.set_log_level(log.LogLevel.INFO)
 
     def J(self, x, A):
+        """Function for computing the Jacobian matrix.
+
+        Args:
+           x: The vector containing the latest solution.
+           A: The matrix to assemble into.
+
+        """
         log.set_log_level(log.LogLevel.OFF)
         self._matA.zeroEntries()
         self._meshties.assemble_matrix(self._matA)
@@ -124,11 +144,11 @@ with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
     facet_marker = xdmf.read_meshtags(mesh, name="facet markers")
 
 # tags for boundaries (see mesh file)
-dirichlet_bdy_1 = 8  # top face
-dirichlet_bdy_2 = 2  # bottom face
+dirichlet_bdry_1 = 8  # top face
+dirichlet_bdry_2 = 2  # bottom face
 
-contact_bdy_1 = 12  # top contact interface
-contact_bdy_2 = 6  # bottom contact interface
+contact_bdry_1 = 12  # top contact interface
+contact_bdry_2 = 6  # bottom contact interface
 
 # measures
 dx = Measure("dx", domain=mesh, subdomain_data=domain_marker)
@@ -141,9 +161,8 @@ ds = Measure("ds", domain=mesh, subdomain_data=facet_marker)
 gdim = mesh.topology.dim
 V = functionspace(mesh, ("Lagrange", 1, (gdim,)))
 
-# Function, TestFunction
+# Function, test and trial functions
 u = Function(V)
-# du = Function(V)
 v = TestFunction(V)
 w = TrialFunction(V)
 
@@ -153,12 +172,13 @@ nu = 0.2
 mu_val = E / (2 * (1 + nu))
 lmbda_val = E * nu / ((1 + nu) * (1 - 2 * nu))
 
+# DG functions for material parameters
 V0 = FunctionSpace(mesh, ("DG", 0))
 mu = Function(V0)
 lmbda = Function(V0)
-fric = Function(V0)
 mu.interpolate(lambda x: np.full((1, x.shape[1]), mu_val))
 lmbda.interpolate(lambda x: np.full((1, x.shape[1]), lmbda_val))
+
 # Create variational form without contact contributions
 
 
@@ -180,37 +200,57 @@ theta = 1  # 1 - symmetric
 # boundary conditions
 g = Constant(mesh, default_scalar_type((0, 0, 0)))     # zero Dirichlet
 dofs_g = locate_dofs_topological(
-    V, tdim - 1, facet_marker.find(dirichlet_bdy_2))
+    V, tdim - 1, facet_marker.find(dirichlet_bdry_2))
 d = Constant(mesh, default_scalar_type((0, -0.2, 0)))  # vertical displacement
 dofs_d = locate_dofs_topological(
-    V, tdim - 1, facet_marker.find(dirichlet_bdy_1))
+    V, tdim - 1, facet_marker.find(dirichlet_bdry_1))
 bcs = [dirichletbc(d, dofs_d, V), dirichletbc(g, dofs_g, V)]
 
 # contact surface data
 # stored in adjacency list to allow for using multiple meshtags to mark
 # contact surfaces. In this case only one meshtag is used, hence offsets has length 2 and
 # the second value in offsets is 2 (=2 tags in first and only meshtag).
-# The surface with tags [contact_bdy_1, contact_bdy_2] both can be found in this meshtag
-data = np.array([contact_bdy_1, contact_bdy_2], dtype=np.int32)
+# The surface with tags [contact_bdry_1, contact_bdry_2] both can be found in this meshtag
+data = np.array([contact_bdry_1, contact_bdry_2], dtype=np.int32)
 offsets = np.array([0, 2], dtype=np.int32)
 surfaces = adjacencylist(data, offsets)
 # For unbiased computation the contact detection is performed in both directions
 contact_pairs = [(0, 1), (1, 0)]
 
+# compiler options to improve performance
+cffi_options = ["-Ofast", "-march=native"]
+jit_options = {"cffi_extra_compile_args": cffi_options,
+               "cffi_libraries": ["m"]}
 
-# Solver options
+# Derive form for ufl part of Jacobian
+J = derivative(F, u, w)
+
+# compiled forms for rhs and tangent system
+F_compiled = form(F, jit_options=jit_options)
+J_compiled = form(J, jit_options=jit_options)
+
+search_mode = [ContactMode.ClosestPoint, ContactMode.ClosestPoint]
+
+# Initialise MeshTie class and generate MeshTie problem
+meshties = MeshTie([facet_marker._cpp_object], surfaces, contact_pairs, V._cpp_object, quadrature_degree=5)
+problem = MeshTieProblem(F_compiled, J_compiled, bcs, meshties, domain_marker,
+                         u, lmbda, mu, np.float64(gamma), np.float64(theta))
+
+# Set up Newton sovler
+newton_solver = NewtonSolver(mesh.comm)
+
+# Set matrix-vector computations
+newton_solver.setF(problem.F, problem._b_petsc)
+newton_solver.setJ(problem.J, problem._matA)
+newton_solver.set_form(problem.form)
+
+# Set Newton options
+newton_solver.rtol = 1e-7
+newton_solver.atol = 1e-7
+
+
+# Linear solver options
 ksp_tol = 1e-10
-newton_tol = 1e-7
-
-# non-linear solver options
-newton_options = {"relaxation_parameter": 1,
-                  "atol": newton_tol,
-                  "rtol": newton_tol,
-                  "convergence_criterion": "residual",
-                  "max_it": 50,
-                  "error_on_nonconvergence": True}
-
-# linear solver options
 petsc_options = {
     "ksp_type": "cg",
     "ksp_rtol": ksp_tol,
@@ -226,37 +266,8 @@ petsc_options = {
     "ksp_norm_type": "unpreconditioned"
 }
 
-# compiler options to improve performance
-cffi_options = ["-Ofast", "-march=native"]
-jit_options = {"cffi_extra_compile_args": cffi_options,
-               "cffi_libraries": ["m"]}
-h = CellDiameter(mesh)
-n = FacetNormal(mesh)
-# ufl part of contact
-# F = replace(F, {u: u + du})
-J = derivative(F, u, w)
 
-# compiled forms for rhs and tangen system
-F_compiled = form(F, jit_options=jit_options)
-J_compiled = form(J, jit_options=jit_options)
-
-search_mode = [ContactMode.ClosestPoint, ContactMode.ClosestPoint]
-
-
-meshties = MeshTie([facet_marker._cpp_object], surfaces, contact_pairs, V._cpp_object, quadrature_degree=5)
-problem = MeshTieProblem(F_compiled, J_compiled, bcs, meshties, domain_marker, u, lmbda, mu, np.float64(gamma), np.float64(theta))
-
-# Set up snes solver for nonlinear solver
-# newton_solver = NewtonSolver(mesh.comm, problem._matA, problem._b_petsc, [])
-newton_solver = NewtonSolver(mesh.comm)
-# Set matrix-vector computations
-# newton_solver.set_residual(problem.F)
-newton_solver.setF(problem.F, problem._b_petsc)
-newton_solver.setJ(problem.J, problem._matA)
-newton_solver.set_form(problem.form)
-newton_solver.rtol = 1e-7
-newton_solver.atol = 1e-7
-
+# Set Krylov solver options
 ksp = newton_solver.krylov_solver
 opts = PETSc.Options()  # type: ignore
 option_prefix = ksp.getOptionsPrefix()
@@ -266,11 +277,8 @@ for k, v in petsc_options.items():
 opts.prefixPop()
 ksp.setFromOptions()
 
-
-# n, converged = newton_solver.solve(u)
-print("start Newton solver")
+# Start Newton solver with loglevel info for monitoring
 newton_solver.report = True
 log.set_log_level(log.LogLevel.INFO)
 newton_solver.solve(u.vector)
 u.x.scatter_forward()
-print("solver finished")

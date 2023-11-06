@@ -133,7 +133,7 @@ public:
       VecGhostUpdateEnd(_b_petsc, ADD_VALUES, SCATTER_REVERSE);
 
       // Set bc
-      fem::set_bc<T>(b, _bcs, std::span<const T>(array, n), -1.0);
+      fem::set_bc<T, U>(b, _bcs, std::span<const T>(array, n), -1.0);
       VecRestoreArrayRead(x, &array);
 
       // log level INFO ensures Newton steps are logged
@@ -165,7 +165,7 @@ public:
       MatAssemblyEnd(A, MAT_FLUSH_ASSEMBLY);
 
       // set diagonal for bcs
-      dolfinx::fem::set_diagonal<double>(
+      dolfinx::fem::set_diagonal<T>(
           dolfinx::la::petsc::Matrix::set_fn(A, INSERT_VALUES),
           *_u->function_space(), _bcs);
       MatAssemblyBegin(A, MAT_FINAL_ASSEMBLY);
