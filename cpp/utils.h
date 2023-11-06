@@ -722,12 +722,11 @@ compute_raytracing_map(const dolfinx::mesh::Mesh<double>& quadrature_mesh,
         // Get parameterization map
         std::function<void(std::span<const double, tdim - 1>,
                            std::span<double, tdim>)>
-            reference_map
-            = [&xb, &x_shape, &bfacets, facet_index = facet_index_c](
-                  std::span<const double, tdim - 1> xi,
-                  std::span<double, tdim> X)
+            reference_map = [&xb, &x_shape, &bfacets, facet_index_c](
+                                std::span<const double, tdim - 1> xi,
+                                std::span<double, tdim> X)
         {
-          const std::vector<int>& facet = bfacets[facet_index];
+          const std::vector<int>& facet = bfacets[facet_index_c];
           dolfinx_contact::cmdspan2_t x(xb.data(), x_shape);
           const int f0 = facet.front();
           for (std::size_t i = 0; i < tdim; ++i)

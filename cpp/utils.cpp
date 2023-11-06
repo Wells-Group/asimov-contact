@@ -26,15 +26,14 @@ dolfinx_contact::read_mesh(const std::string& filename,
   dolfinx::io::XDMFFile file(MPI_COMM_WORLD, filename, "r");
   auto [ct, cdegree]
       = file.read_cell_type(volume_markers); // retrieve cell type
-  dolfinx::fem::CoordinateElement<U> cmap
-      = dolfinx::fem::CoordinateElement<U>(ct, cdegree);
+  auto cmap = dolfinx::fem::CoordinateElement<U>(ct, cdegree);
 
   // Read geometry and topology
   auto [x, xshape] = file.read_geometry_data(geo_name);
   auto [cells, cshape] = file.read_topology_data(topo_name);
   std::vector<std::int32_t> offset(cshape[0] + 1, 0);
   for (std::size_t i = 0; i < cshape[0]; ++i)
-    offset[i + 1] = offset[i] + cshape[1];
+    offset[i + 1] = offset[i] + (std::int32_t)cshape[1];
 
   // Create mesh from geometry and topology data
   dolfinx::graph::AdjacencyList<std::int64_t> cells_adj(std::move(cells),

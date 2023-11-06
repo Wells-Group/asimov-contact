@@ -27,17 +27,17 @@ from dolfinx_contact.helpers import rigid_motions_nullspace_subdomains
 
 
 class MeshTieProblem:
-    __slots__ = ["_l", "_j", "_bcs", "_meshties", "_b", "_b_petsc", "_matA", "_u",
+    __slots__ = ["_l", "_j", "_bcs", "_meshties", "_b", "_b_petsc", "_mat_a", "_u",
                  "_lmbda", "_mu", "_gamma", "_theta"]
 
-    def __init__(self, L: Form, J: Form, bcs: list[DirichletBC], meshties: MeshTie, subdomains,
+    def __init__(self, l: Form, j: Form, bcs: list[DirichletBC], meshties: MeshTie, subdomains,
                  u: Function, lmbda: Function, mu: Function, gamma: np.float64, theta: np.float64):
         """
         Create a MeshTie problem
 
         Args:
-            L:          The form describing the residual
-            J:          The form describing the jacobian
+            l:          The form describing the residual
+            j:          The form describing the jacobian
             bcs:        The boundary conditions
             meshties:   The MeshTie class describing the tied surfaces
             subdomains: The domain marker labelling the individual components
@@ -49,11 +49,11 @@ class MeshTieProblem:
                         anti-symmetric, 0 - penalty-like)
         """
         # Initialise class from input
-        self._l = L
-        self._j = J
+        self._l = l
+        self._j = j
         self._bcs = bcs
         self._meshties = meshties
-        self._matA = self._meshties.create_matrix(self._j._cpp_object)
+        self._mat_a = self._meshties.create_matrix(self._j._cpp_object)
         self._u = u
         self._lmbda = lmbda
         self._mu = mu
@@ -61,7 +61,7 @@ class MeshTieProblem:
         self._theta = theta
 
         # Create PETSc rhs vector
-        self._b = vector(L.function_spaces[0].dofmap.index_map, L.function_spaces[0].dofmap.index_map_bs)
+        self._b = vector(l.function_spaces[0].dofmap.index_map, l.function_spaces[0].dofmap.index_map_bs)
         self._b_petsc = create_petsc_vector_wrap(self._b)
 
         # Initialise the input data for integration kernels
@@ -70,9 +70,9 @@ class MeshTieProblem:
         # Build near null space preventing rigid body motion of individual components
         tags = np.unique(subdomains.values)
         ns = rigid_motions_nullspace_subdomains(u.function_space, subdomains, tags, len(tags))
-        self._matA.setNearNullSpace(ns)
+        self._mat_a.setNearNullSpace(ns)
 
-    def F(self, x, b):
+    def f(self, x, _b):
         """Function for computing the residual vector.
 
         Args:
@@ -101,7 +101,7 @@ class MeshTieProblem:
         # Restore log level info for monitoring Newton solver
         log.set_log_level(log.LogLevel.INFO)
 
-    def J(self, x, A):
+    def j(self, _x, _matrix):
         """Function for computing the Jacobian matrix.
 
         Args:
@@ -110,10 +110,10 @@ class MeshTieProblem:
 
         """
         log.set_log_level(log.LogLevel.OFF)
-        self._matA.zeroEntries()
-        self._meshties.assemble_matrix(self._matA)
-        assemble_matrix(self._matA, self._j, self._bcs)
-        self._matA.assemble()
+        self._mat_a.zeroEntries()
+        self._meshties.assemble_matrix(self._mat_a)
+        assemble_matrix(self._mat_a, self._j, self._bcs)
+        self._mat_a.assemble()
         log.set_log_level(log.LogLevel.INFO)
 
     def form(self,
@@ -190,7 +190,7 @@ def sigma(v):
     return (2.0 * mu * epsilon(v) + lmbda * tr(epsilon(v)) * Identity(len(v)))
 
 
-F = inner(sigma(u), epsilon(v)) * dx
+l = inner(sigma(u), epsilon(v)) * dx
 
 # Nitsche parameters
 gamma = 10 * E
@@ -223,25 +223,25 @@ jit_options = {"cffi_extra_compile_args": cffi_options,
                "cffi_libraries": ["m"]}
 
 # Derive form for ufl part of Jacobian
-J = derivative(F, u, w)
+j = derivative(l, u, w)
 
 # compiled forms for rhs and tangent system
-F_compiled = form(F, jit_options=jit_options)
-J_compiled = form(J, jit_options=jit_options)
+l_compiled = form(l, jit_options=jit_options)
+j_compiled = form(j, jit_options=jit_options)
 
 search_mode = [ContactMode.ClosestPoint, ContactMode.ClosestPoint]
 
 # Initialise MeshTie class and generate MeshTie problem
 meshties = MeshTie([facet_marker._cpp_object], surfaces, contact_pairs, V._cpp_object, quadrature_degree=5)
-problem = MeshTieProblem(F_compiled, J_compiled, bcs, meshties, domain_marker,
+problem = MeshTieProblem(l_compiled, j_compiled, bcs, meshties, domain_marker,
                          u, lmbda, mu, np.float64(gamma), np.float64(theta))
 
 # Set up Newton sovler
 newton_solver = NewtonSolver(mesh.comm)
 
 # Set matrix-vector computations
-newton_solver.setF(problem.F, problem._b_petsc)
-newton_solver.setJ(problem.J, problem._matA)
+newton_solver.setF(problem.f, problem._b_petsc)
+newton_solver.setJ(problem.j, problem._mat_a)
 newton_solver.set_form(problem.form)
 
 # Set Newton options
