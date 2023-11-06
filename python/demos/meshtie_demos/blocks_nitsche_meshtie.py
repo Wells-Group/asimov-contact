@@ -30,7 +30,7 @@ class MeshTieProblem:
     __slots__ = ["_l", "_j", "_bcs", "_meshties", "_b", "_b_petsc", "_mat_a", "_u",
                  "_lmbda", "_mu", "_gamma", "_theta"]
 
-    def __init__(self, l: Form, j: Form, bcs: list[DirichletBC], meshties: MeshTie, subdomains,
+    def __init__(self, a: Form, j: Form, bcs: list[DirichletBC], meshties: MeshTie, subdomains,
                  u: Function, lmbda: Function, mu: Function, gamma: np.float64, theta: np.float64):
         """
         Create a MeshTie problem
@@ -49,7 +49,7 @@ class MeshTieProblem:
                         anti-symmetric, 0 - penalty-like)
         """
         # Initialise class from input
-        self._l = l
+        self._l = a
         self._j = j
         self._bcs = bcs
         self._meshties = meshties
@@ -61,7 +61,7 @@ class MeshTieProblem:
         self._theta = theta
 
         # Create PETSc rhs vector
-        self._b = vector(l.function_spaces[0].dofmap.index_map, l.function_spaces[0].dofmap.index_map_bs)
+        self._b = vector(a.function_spaces[0].dofmap.index_map, a.function_spaces[0].dofmap.index_map_bs)
         self._b_petsc = create_petsc_vector_wrap(self._b)
 
         # Initialise the input data for integration kernels
@@ -190,7 +190,7 @@ def sigma(v):
     return (2.0 * mu * epsilon(v) + lmbda * tr(epsilon(v)) * Identity(len(v)))
 
 
-l = inner(sigma(u), epsilon(v)) * dx
+a = inner(sigma(u), epsilon(v)) * dx
 
 # Nitsche parameters
 gamma = 10 * E
@@ -223,10 +223,10 @@ jit_options = {"cffi_extra_compile_args": cffi_options,
                "cffi_libraries": ["m"]}
 
 # Derive form for ufl part of Jacobian
-j = derivative(l, u, w)
+j = derivative(a, u, w)
 
 # compiled forms for rhs and tangent system
-l_compiled = form(l, jit_options=jit_options)
+l_compiled = form(a, jit_options=jit_options)
 j_compiled = form(j, jit_options=jit_options)
 
 search_mode = [ContactMode.ClosestPoint, ContactMode.ClosestPoint]
