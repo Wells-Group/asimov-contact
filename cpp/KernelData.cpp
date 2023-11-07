@@ -51,13 +51,6 @@ dolfinx_contact::KernelData::KernelData(
         "Contact kernel not supported for spaces with value size!=1");
   }
 
-  if (_bs != _gdim)
-  {
-    throw std::invalid_argument(
-        "The geometric dimension of the mesh is not equal to the block size "
-        "of the function space.");
-  }
-
   /// Pack test and trial functions
   const basix::FiniteElement<double>& basix_element = element->basix_element();
   _basis_shape = basix_element.tabulate_shape(1, num_quadrature_pts);
