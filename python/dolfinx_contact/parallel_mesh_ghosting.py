@@ -8,7 +8,7 @@ from dolfinx.common import Timer
 import dolfinx
 from dolfinx.cpp.mesh import entities_to_geometry, cell_num_vertices, cell_entity_type, to_type
 import numpy as np
-from dolfinx_contact.cpp import compute_ghost_cell_destinations
+from dolfinx_contact.cpp import compute_ghost_cell_destinations, lex_match
 
 __all__ = ["create_contact_mesh"]
 
@@ -116,37 +116,15 @@ def create_contact_mesh(mesh, fmarker, dmarker, tags, R=0.2):
     fv_indices = rmap(fv.array).reshape((-1, num_facet_vertices))
     fv_indices = np.sort(fv_indices, axis=1)
 
-    def lex_match(local_indices, in_indices, in_values):
-        lx_loc = np.lexsort(np.flip(local_indices, axis=1).T)
-        lx_in = np.lexsort(np.flip(in_indices, axis=1).T)
-
-        new_markers = []
-        i = 0
-        j = 0
-        while i < len(lx_in) and j < len(lx_loc):
-            a = in_indices[lx_in[i]]
-            b = local_indices[lx_loc[j]]
-            idx = np.where((a > b) != (a < b))[0]
-            if len(idx) == 0:
-                new_markers += [[lx_loc[j], in_values[lx_in[i]]]]
-                i += 1
-                j += 1
-            else:
-                idx = idx[0]
-                if b[idx] > a[idx]:
-                    i += 1
-                elif a[idx] > b[idx]:
-                    j += 1
-        return new_markers
-
     timer.stop()
     log.log(log.LogLevel.WARNING, "Lex match facet markers")
+
     timer = Timer("~Contact: Add ghosts: Lex match facet markers")
-    new_fmarkers = lex_match(fv_indices, all_indices, all_values)
+    new_fmarkers = lex_match(fv_indices.shape[1], list(fv_indices.flatten()),
+                             list(all_indices.flatten()), list(all_values))
 
     # Sort new markers into order and make unique
-    new_fmarkers = np.array(sorted(new_fmarkers), dtype=np.int32)
-    new_fmarkers = np.unique(new_fmarkers, axis=0)
+    new_fmarkers = np.array(new_fmarkers, dtype=np.int32)
 
     if new_fmarkers.shape[0] == 0:
         new_fmarkers = np.zeros((0, 2), dtype=np.int32)
@@ -163,11 +141,11 @@ def create_contact_mesh(mesh, fmarker, dmarker, tags, R=0.2):
     # Search for marked cells in list of all cells
     log.log(log.LogLevel.WARNING, "Lex match cell markers")
     timer = Timer("~Contact: Add ghosts: Lex match cell markers")
-    new_cmarkers = lex_match(cv_indices, all_cell_indices, all_cell_values)
+    new_cmarkers = lex_match(cv_indices.shape[1], list(cv_indices.flatten()),
+                             list(all_cell_indices.flatten()), list(all_cell_values))
 
     # Sort new markers into order and make unique
-    new_cmarkers = np.array(sorted(new_cmarkers), dtype=np.int32)
-    new_cmarkers = np.unique(new_cmarkers, axis=0)
+    new_cmarkers = np.array(new_cmarkers, dtype=np.int32)
 
     new_dmarker = meshtags(new_mesh, tdim, new_cmarkers[:, 0],
                            new_cmarkers[:, 1])

@@ -146,3 +146,84 @@ dolfinx_contact::compute_ghost_cell_destinations(
 
   return dolfinx::graph::AdjacencyList<std::int32_t>(cell_dests, doffsets);
 }
+
+std::vector<std::pair<int, int>>
+dolfinx_contact::lex_match(int dim,
+                           const std::vector<std::int32_t>& local_indices,
+                           const std::vector<std::int32_t>& in_indices,
+                           const std::vector<std::int32_t>& in_values)
+{
+  LOG(WARNING) << "Lex match: [" << local_indices.size() <<", "
+               << in_indices.size() << ", " << in_values.size() << "]";
+
+  assert(local_indices.size() % dim == 0);
+  assert(in_indices.size() % dim == 0);
+  assert(in_values.size() == in_indices.size() / dim);
+
+  // Get the permutation that sorts local_indices into order
+  LOG(WARNING) << "Sort p";
+  std::vector<int> p_local(local_indices.size() / dim);
+  std::iota(p_local.begin(), p_local.end(), 0);
+  std::sort(p_local.begin(), p_local.end(),
+            [&](int a, int b)
+            {
+              return std::lexicographical_compare(
+                  local_indices.begin() + dim * a,
+                  local_indices.begin() + dim * (a + 1),
+                  local_indices.begin() + dim * b,
+                  local_indices.begin() + dim * (b + 1));
+            });
+
+  // Get the permutation that sorts in_indices into order
+  LOG(WARNING) << "Sort q";
+  std::vector<int> p_in(in_indices.size() / dim);
+  std::iota(p_in.begin(), p_in.end(), 0);
+  std::sort(
+      p_in.begin(), p_in.end(),
+      [&](int a, int b)
+      {
+        return std::lexicographical_compare(
+            in_indices.begin() + dim * a, in_indices.begin() + dim * (a + 1),
+            in_indices.begin() + dim * b, in_indices.begin() + dim * (b + 1));
+      });
+
+  LOG(WARNING) << p_in.size() << "," << p_local.size();
+
+  std::vector<std::pair<int, int>> new_markers;
+  std::size_t i = 0;
+  std::size_t j = 0;
+
+  // Go through both sets of indices in the same order
+  while (i < p_in.size() and j < p_local.size())
+  {
+    int a = p_in[i] * dim;
+    int b = p_local[j] * dim;
+    // Matching: found the same entity in both lists; save marker
+    if (std::equal(in_indices.begin() + a, in_indices.begin() + a + dim,
+                   local_indices.begin() + b))
+    {
+      new_markers.push_back({p_local[j], in_values[p_in[i]]});
+      ++i;
+      ++j;
+    }
+    else
+    {
+      // Not matching: increment pointer in the list with the "lower" entity
+      bool fwdi = std::lexicographical_compare(
+          in_indices.begin() + a, in_indices.begin() + a + dim,
+          local_indices.begin() + b, local_indices.begin() + b + dim);
+
+      if (fwdi)
+        ++i;
+      else
+        ++j;
+    }
+  }
+
+  // Clean up new markers
+  std::sort(new_markers.begin(), new_markers.end());
+  auto last = std::unique(new_markers.begin(), new_markers.end());
+  new_markers.erase(last, new_markers.end());
+
+  return new_markers;
+}
