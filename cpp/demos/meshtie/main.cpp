@@ -157,7 +157,7 @@ int main(int argc, char* argv[])
 
     // Assemble vector
     b.set(0.0);
-    meshties.assemble_vector(b.mutable_array());
+    meshties.assemble_vector(b.mutable_array(), V);
     dolfinx::fem::assemble_vector(b.mutable_array(), *F);
     dolfinx::fem::apply_lifting<T, U>(b.mutable_array(), {J}, {{bc}}, {},
                                       double(1.0));
@@ -167,7 +167,7 @@ int main(int argc, char* argv[])
     // Assemble matrix
     MatZeroEntries(A.mat());
     meshties.assemble_matrix(
-        la::petsc::Matrix::set_block_fn(A.mat(), ADD_VALUES));
+        la::petsc::Matrix::set_block_fn(A.mat(), ADD_VALUES), J->function_spaces()[0]);
     MatAssemblyBegin(A.mat(), MAT_FLUSH_ASSEMBLY);
     MatAssemblyEnd(A.mat(), MAT_FLUSH_ASSEMBLY);
     dolfinx::fem::assemble_matrix(

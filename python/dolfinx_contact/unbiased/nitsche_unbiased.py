@@ -54,17 +54,17 @@ def setup_newton_solver(F_custom: fem.forms.Form, J_custom: fem.forms.Form,
 
     # generate kernels
     with common.Timer("~Contact: Generate Jacobian kernel"):
-        kernel_jac = contact.generate_kernel(kt.Jac)
+        kernel_jac = contact.generate_kernel(kt.Jac, V._cpp_object)
         if coulomb:
-            kernel_friction_jac = contact.generate_kernel(kt.CoulombJac)
+            kernel_friction_jac = contact.generate_kernel(kt.CoulombJac, V._cpp_object)
         else:
-            kernel_friction_jac = contact.generate_kernel(kt.TrescaJac)
+            kernel_friction_jac = contact.generate_kernel(kt.TrescaJac, V._cpp_object)
     with common.Timer("~Contact: Generate residual kernel"):
-        kernel_rhs = contact.generate_kernel(kt.Rhs)
+        kernel_rhs = contact.generate_kernel(kt.Rhs, V._cpp_object)
         if coulomb:
-            kernel_friction_rhs = contact.generate_kernel(kt.CoulombRhs)
+            kernel_friction_rhs = contact.generate_kernel(kt.CoulombRhs, V._cpp_object)
         else:
-            kernel_friction_rhs = contact.generate_kernel(kt.TrescaRhs)
+            kernel_friction_rhs = contact.generate_kernel(kt.TrescaRhs, V._cpp_object)
 
     # create vector and matrix
     A = contact.create_matrix(J_custom._cpp_object)
@@ -81,7 +81,7 @@ def setup_newton_solver(F_custom: fem.forms.Form, J_custom: fem.forms.Form,
                 normals.append(-contact.pack_nx(i))
             else:
                 normals.append(contact.pack_ny(i))
-            test_fns.append(contact.pack_test_functions(i))
+            test_fns.append(contact.pack_test_functions(i, V._cpp_object))
 
     # Concatenate all coeffs
     ccfs = []
@@ -125,8 +125,8 @@ def setup_newton_solver(F_custom: fem.forms.Form, J_custom: fem.forms.Form,
         b.ghostUpdate(addv=_PETSc.InsertMode.INSERT, mode=_PETSc.ScatterMode.FORWARD)
         with common.Timer("~~Contact: Contact contributions (in assemble vector)"):
             for i in range(num_pairs):
-                contact.assemble_vector(b, i, kernel_rhs, coeffs[i], consts)
-                contact.assemble_vector(b, i, kernel_friction_rhs, coeffs[i], consts)
+                contact.assemble_vector(b, i, kernel_rhs, coeffs[i], consts, V._cpp_object)
+                contact.assemble_vector(b, i, kernel_friction_rhs, coeffs[i], consts, V._cpp_object)
         with common.Timer("~~Contact: Standard contributions (in assemble vector)"):
             fem.petsc.assemble_vector(b, F_custom)
 
@@ -143,14 +143,14 @@ def setup_newton_solver(F_custom: fem.forms.Form, J_custom: fem.forms.Form,
         A.zeroEntries()
         with common.Timer("~~Contact: Contact contributions (in assemble matrix)"):
             for i in range(num_pairs):
-                contact.assemble_matrix(A, i, kernel_jac, coeffs[i], consts)
-                contact.assemble_matrix(A, i, kernel_friction_jac, coeffs[i], consts)
+                contact.assemble_matrix(A, i, kernel_jac, coeffs[i], consts, V._cpp_object)
+                contact.assemble_matrix(A, i, kernel_friction_jac, coeffs[i], consts, V._cpp_object)
         with common.Timer("~~Contact: Standard contributions (in assemble matrix)"):
             fem.petsc.assemble_matrix(A, J_custom, bcs=bcs)
         A.assemble()
 
     # coefficient arrays
-    num_coeffs = contact.coefficients_size(False)
+    num_coeffs = contact.coefficients_size(False, V._cpp_object)
 
     coeffs = [np.zeros((len(entities[i]), num_coeffs)) for i in range(num_pairs)]
     newton_solver = dolfinx_contact.NewtonSolver(mesh.comm, A, b, coeffs)
@@ -194,12 +194,12 @@ def get_problem_parameters(problem_parameters: dict[str, np.float64]):
     return mu, lmbda, theta, gamma, sigma, s
 
 
-def copy_fns(fns: list[Union[fem.Function, fem.Constant, npt.NDArray[Any]]],
-             mesh: _mesh.Mesh) -> list[Union[fem.Function, fem.Constant, npt.NDArray[Any]]]:
+def copy_fns(fns: list[Union[fem.Function, fem.Constant]],
+             mesh: _mesh.Mesh) -> list[Union[fem.Function, fem.Constant]]:
     """
     Create copy of list of finite element functions/constanst
     """
-    old_fns: list[Union[fem.Function, fem.Constant, npt.NDArray[Any]]] = []
+    old_fns: list[Union[fem.Function, fem.Constant]] = []
     for fn in fns:
         if type(fn) is fem.Function:
             new_fn = fem.Function(fn.function_space)
@@ -212,16 +212,12 @@ def copy_fns(fns: list[Union[fem.Function, fem.Constant, npt.NDArray[Any]]],
             new_const = fem.Constant(mesh, temp)
             new_const.value = fn.value
             old_fns.append(new_const)
-        elif type(fn) is npt.NDArray[Any]:
-            new_arr = np.zeros(fn.shape)
-            new_arr[:] = fn[:]
-            old_fns.append(new_arr)
 
     return old_fns
 
 
-def update_fns(t: float, fns: list[Union[fem.Function, fem.Constant, npt.NDArray[Any]]],
-               old_fns: list[Union[fem.Function, fem.Constant, npt.NDArray[Any]]]) -> None:
+def update_fns(t: float, fns: list[Union[fem.Function, fem.Constant]],
+               old_fns: list[Union[fem.Function, fem.Constant]]) -> None:
     """
     Replace function values of function in fns with
     t* function value of function in old_fns
@@ -231,17 +227,13 @@ def update_fns(t: float, fns: list[Union[fem.Function, fem.Constant, npt.NDArray
             fn.x.array[:] = t * old_fns[k].x.array[:]  # type: ignore
             fn.x.scatter_forward()
         elif type(fn) is fem.Constant:
-            fn.value[:] = t * old_fns[k].value[:]  # type: ignore
-        elif type(fn) is npt.NDArray[Any]:
-            fn[:] = t * old_fns[k][:]
-        else:
-            raise RuntimeError("Cannot copy data from object of different type.")
+            fn.value = t * old_fns[k].value  # type: ignore
 
 
 def nitsche_unbiased(steps: int, ufl_form: ufl.Form, u: fem.Function,
                      rhs_fns: list[Any], markers: list[_mesh.MeshTags],
                      contact_data: Tuple[AdjacencyList_int32, list[Tuple[int, int]]],
-                     bcs: list[fem.DirichletBC],
+                     bcs: list[fem.DirichletBC], bc_fns: list[Union[fem.Constant, fem.Function]],
                      problem_parameters: dict[str, np.float64],
                      raytracing: bool,
                      quadrature_degree: int = 5,
@@ -348,14 +340,13 @@ def nitsche_unbiased(steps: int, ufl_form: ufl.Form, u: fem.Function,
 
     # store original rhs information and bcs
     old_rhs_fns = copy_fns(rhs_fns, mesh)
-    bc_fns = [bc.g for bc in bcs]
     old_bc_fns = copy_fns(bc_fns, mesh)
 
     # create contact class
     markers_cpp = [marker._cpp_object for marker in markers[1:]]
     with common.Timer("~Contact: Init"):
         contact = dolfinx_contact.cpp.Contact(markers_cpp, contact_surfaces, contact_pairs,
-                                              V._cpp_object, quadrature_degree=quadrature_degree,
+                                              mesh._cpp_object, quadrature_degree=quadrature_degree,
                                               search_method=search_method)
 
     xdmf = cpp.io.XDMFFile(mesh.comm, "debug.xdmf", "w")

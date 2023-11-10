@@ -177,8 +177,8 @@ if __name__ == "__main__":
 
     # initialise meshties
     meshties = MeshTie([facet_marker._cpp_object], surfaces, contact,
-                       V._cpp_object, quadrature_degree=5)
-    meshties.generate_meshtie_data_matrix_only(lmbda._cpp_object, mu._cpp_object, E * gamma, theta)
+                       mesh._cpp_object, quadrature_degree=5)
+    meshties.generate_meshtie_data_matrix_only(V._cpp_object, lmbda._cpp_object, mu._cpp_object, E * gamma, theta)
 
     # create matrix, vector
     A = meshties.create_matrix(J._cpp_object)
@@ -198,7 +198,7 @@ if __name__ == "__main__":
 
     # Assemble matrix
     A.zeroEntries()
-    meshties.assemble_matrix(A)
+    meshties.assemble_matrix(A, V._cpp_object)
     assemble_matrix(A, J, bcs=bcs)  # type: ignore
     A.assemble()
 

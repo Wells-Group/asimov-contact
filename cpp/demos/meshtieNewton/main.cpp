@@ -56,7 +56,7 @@ public:
            L->function_spaces()[0]->dofmap()->index_map_bs()),
         _matA(dolfinx::la::petsc::Matrix(
             meshties->create_petsc_matrix(*J, std::string()), false)),
-        _u(u), _lmbda(lmbda), _mu(mu), _gamma(gamma), _theta(theta)
+        _u(u)
   {
     // create PETSc rhs vector
     auto map = L->function_spaces()[0]->dofmap()->index_map;
@@ -69,7 +69,7 @@ public:
                                  _b.array().data(), &_b_petsc);
 
     // initialise the input data for integration kernels
-    _meshties->generate_meshtie_data_matrix_only(lmbda, mu, gamma, theta);
+    _meshties->generate_meshtie_data(u, lmbda, mu, gamma, theta);
 
     // build near null space preventing rigid body motion of individual
     // components)
@@ -110,12 +110,12 @@ public:
       loguru::g_stderr_verbosity = loguru::Verbosity_OFF;
 
       // Generate input data for custom kernel
-      _meshties->generate_meshtie_data(_u, _lmbda, _mu, _gamma, _theta);
+      _meshties->update_meshtie_data(_u);
 
       // Assemble b
       std::span<T> b(_b.mutable_array());
       std::fill(b.begin(), b.end(), 0.0);
-      _meshties->assemble_vector(b);   // custom kernel for mesh tying
+      _meshties->assemble_vector(b, _l->function_spaces()[0]);   // custom kernel for mesh tying
       fem::assemble_vector<T>(b, *_l); // standard assembly
 
       // Apply lifting
@@ -154,7 +154,7 @@ public:
 
       // custom assembly for mesh tying
       _meshties->assemble_matrix(
-          la::petsc::Matrix::set_block_fn(A, ADD_VALUES));
+          la::petsc::Matrix::set_block_fn(A, ADD_VALUES), _j->function_spaces()[0]);
       MatAssemblyBegin(A, MAT_FLUSH_ASSEMBLY);
       MatAssemblyEnd(A, MAT_FLUSH_ASSEMBLY);
 
@@ -196,13 +196,6 @@ private:
   la::petsc::Matrix _matA;
   // displacement function
   std::shared_ptr<dolfinx::fem::Function<T>> _u;
-  // lame parameter lambda
-  std::shared_ptr<dolfinx::fem::Function<T>> _lmbda;
-  // lame parameter mu
-  std::shared_ptr<dolfinx::fem::Function<T>> _mu;
-  // Nitsche parameters
-  double _gamma;
-  double _theta; // 1 - symmetric, -1 anti-symmetric, 0 -penalty-like
 };
 
 int main(int argc, char* argv[])

@@ -90,7 +90,7 @@ class MeshTieProblem:
         # Assemble residual vector
         self._b_petsc.zeroEntries()
         self._b_petsc.ghostUpdate(addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD)
-        self._meshties.assemble_vector(self._b_petsc)  # custom kernel
+        self._meshties.assemble_vector(self._b_petsc, self._l.function_spaces[0])  # custom kernel
         assemble_vector(self._b_petsc, self._l)  # standard kernels
 
         # Apply boundary condition
@@ -111,7 +111,7 @@ class MeshTieProblem:
         """
         log.set_log_level(log.LogLevel.OFF)
         self._mat_a.zeroEntries()
-        self._meshties.assemble_matrix(self._mat_a)
+        self._meshties.assemble_matrix(self._mat_a, self._j.function_spaces[0])
         assemble_matrix(self._mat_a, self._j, self._bcs)
         self._mat_a.assemble()
         log.set_log_level(log.LogLevel.INFO)

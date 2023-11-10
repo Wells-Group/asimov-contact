@@ -357,7 +357,7 @@ dolfinx_contact::generate_heat_transfer_kernel(
     dolfinx_contact::Kernel type,
     std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V,
     std::shared_ptr<const dolfinx_contact::QuadratureRule> quadrature_rule,
-    const std::size_t max_links)
+    const std::size_t max_links, std::vector<std::size_t> cstrides)
 {
   std::shared_ptr<const dolfinx::mesh::Mesh<double>> mesh = V->mesh();
   assert(mesh);
@@ -371,22 +371,7 @@ dolfinx_contact::generate_heat_transfer_kernel(
 
   // NOTE: Assuming same number of quadrature points on each cell
   dolfinx_contact::error::check_cell_type(mesh->topology()->cell_types()[0]);
-  const std::vector<std::size_t>& qp_offsets = quadrature_rule->offset();
-  const std::size_t num_q_points = qp_offsets[1] - qp_offsets[0];
   const std::size_t ndofs_cell = V->dofmap()->element_dof_layout().num_dofs();
-
-  // Coefficient offsets
-  // Expecting coefficients in following order:
-  // h, test_fn, grad(test_fn), T, grad(T), T_opposite,
-  // grad(u_opposite)
-  std::vector<std::size_t> cstrides
-      = {1,
-         num_q_points * ndofs_cell * max_links,
-         num_q_points * ndofs_cell * gdim * max_links,
-         num_q_points,
-         num_q_points * gdim,
-         num_q_points,
-         num_q_points * gdim};
 
   auto kd = dolfinx_contact::KernelData(V, quadrature_rule, cstrides);
   /// @brief Assemble kernel for RHS gluing two objects with Nitsche

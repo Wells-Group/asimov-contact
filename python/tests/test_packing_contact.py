@@ -214,7 +214,6 @@ def test_packing(ct, gap, q_deg, delta, surface, disp):
             vals[0] = np.sin(x[0])
             return vals
 
-
     # Compute function that is known on each side
     u = _fem.Function(V)
     u.interpolate(func)
@@ -227,16 +226,16 @@ def test_packing(ct, gap, q_deg, delta, surface, disp):
     offsets = np.array([0, 2], dtype=np.int32)
     surfaces = adjacencylist(data, offsets)
     contact = dolfinx_contact.cpp.Contact([facet_marker._cpp_object], surfaces, [
-                                          (s, o)], V._cpp_object, quadrature_degree=q_deg)
+                                          (s, o)], mesh._cpp_object, quadrature_degree=q_deg)
     if disp:
         contact.update_submesh_geometry(u._cpp_object)
     contact.create_distance_map(0)
 
     # Pack gap on surface, pack test functions, u on opposite surface
     gap = contact.pack_gap(0)
-    test_fn = contact.pack_test_functions(0)
+    test_fn = contact.pack_test_functions(0, V._cpp_object)
     u_packed = contact.pack_u_contact(0, u._cpp_object)
-    grad_test_fn = contact.pack_grad_test_functions(0)
+    grad_test_fn = contact.pack_grad_test_functions(0, V._cpp_object)
     grad_u = contact.pack_grad_u_contact(0, u._cpp_object)
 
     # Retrieve surface facets
@@ -257,7 +256,7 @@ def test_packing(ct, gap, q_deg, delta, surface, disp):
         points = np.zeros((num_q_points, gdim))
 
         points[:, :gdim] = qp_phys[:, :gdim] + \
-            gap[f].reshape((num_q_points, gdim)) 
+            gap[f].reshape((num_q_points, gdim))
         if disp:
             points[:, :gdim] = points[:, :gdim] - u_packed[f].reshape((num_q_points, gdim))
 

@@ -103,7 +103,9 @@ if __name__ == "__main__":
 
     # Create Dirichlet bdy conditions for preventing rigid body motion in z-direction
     dofs = _fem.locate_dofs_topological(V, mesh.topology.dim - 1, facet_marker.find(z_Dirichlet))
-    bcs = [_fem.dirichletbc(_fem.Constant(mesh, default_scalar_type(0)), dofs)]
+    gz = _fem.Constant(mesh, default_scalar_type(0))
+    bcs = [_fem.dirichletbc(gz, dofs)]
+    bc_fns = [gz]
     # Functions for Dirichlet and Neuman boundaries, body force
     g = _fem.Constant(mesh, default_scalar_type((0, 0, 0)))      # zero dirichlet
     t = _fem.Constant(mesh, default_scalar_type((0.2, 0.5, 0)))  # traction
@@ -208,7 +210,8 @@ if __name__ == "__main__":
                                                                        rhs_fns=rhs_fns, markers=[
                                                                            domain_marker, facet_marker],
                                                                        contact_data=(surfaces, contact_pairs),
-                                                                       bcs=bcs, problem_parameters=problem_parameters,
+                                                                       bcs=bcs, bc_fns=bc_fns,
+                                                                       problem_parameters=problem_parameters,
                                                                        raytracing=False,
                                                                        newton_options=newton_options,
                                                                        petsc_options=petsc_options,

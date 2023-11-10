@@ -42,5 +42,5 @@ dolfinx_contact::kernel_fn<PetscScalar> generate_heat_transfer_kernel(
     dolfinx_contact::Kernel type,
     std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V,
     std::shared_ptr<const dolfinx_contact::QuadratureRule> quadrature_rule,
-    const std::size_t max_links);
+    const std::size_t max_links, std::vector<std::size_t> cstrides);
 } // namespace dolfinx_contact

@@ -95,7 +95,7 @@ def test_copy_to_submesh(order, res, simplex, dim):
     offsets = np.array([0, 2], dtype=np.int32)
     contact_surfaces = adjacencylist(data, offsets)
     contact = Contact([facet_marker._cpp_object], contact_surfaces, contact_pairs,
-                      V._cpp_object, quadrature_degree=3)
+                      mesh._cpp_object, quadrature_degree=3)
 
     u = Function(V)
     u.interpolate(_test_fun)

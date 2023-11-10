@@ -19,6 +19,7 @@ import numpy as np
 import scipy
 import pytest
 import ufl
+from basix.ufl import element
 from dolfinx.cpp.mesh import to_type
 import dolfinx.fem as _fem
 from dolfinx.graph import adjacencylist
@@ -303,15 +304,17 @@ def create_functionspaces(ct, gap):
         cells_custom = np.array([[0, 1, 2, 3, 4, 5, 6, 7], [8, 9, 10, 11, 12, 13, 14, 15]], dtype=np.int32)
     else:
         raise ValueError(f"Unsupported mesh type {ct}")
-    cell = ufl.Cell(ct, geometric_dimension=x_ufl.shape[1])
-    domain = ufl.Mesh(ufl.VectorElement("Lagrange", cell, 1))
+    coord_el_ufl = element("Lagrange", cell_type.name,
+                           1, shape=(x_ufl.shape[1],), gdim=x_ufl.shape[1])
+    domain = ufl.Mesh(coord_el_ufl)
     mesh_ufl = create_mesh(MPI.COMM_WORLD, cells_ufl, x_ufl, domain)
-    el_ufl = ufl.VectorElement("DG", mesh_ufl.ufl_cell(), 1)
+    el_ufl = element("DG", cell_type.name,
+                     1, shape=(x_ufl.shape[1],), gdim=x_ufl.shape[1])
     V_ufl = _fem.FunctionSpace(mesh_ufl, el_ufl)
-    cell_custom = ufl.Cell(ct, geometric_dimension=x_custom.shape[1])
-    domain_custom = ufl.Mesh(ufl.VectorElement("Lagrange", cell_custom, 1))
+    el_custom = element("Lagrange", cell_type.name,
+                        1, shape=(x_custom.shape[1],), gdim=x_custom.shape[1])
+    domain_custom = ufl.Mesh(el_custom)
     mesh_custom = create_mesh(MPI.COMM_WORLD, cells_custom, x_custom, domain_custom)
-    el_custom = ufl.VectorElement("Lagrange", mesh_custom.ufl_cell(), 1)
     V_custom = _fem.FunctionSpace(mesh_custom, el_custom)
 
     return V_ufl, V_custom
@@ -371,7 +374,7 @@ def create_contact_data(V, u, quadrature_degree, lmbda, mu, facets_cg, search, t
     surfaces = adjacencylist(data, offsets)
     # create contact class
     contact = dolfinx_contact.cpp.Contact([facet_marker._cpp_object], surfaces, [(0, 1), (1, 0)],
-                                          V._cpp_object, quadrature_degree=quadrature_degree,
+                                          mesh._cpp_object, quadrature_degree=quadrature_degree,
                                           search_method=search)
     contact.create_distance_map(0)
     contact.create_distance_map(1)
@@ -422,8 +425,8 @@ def create_contact_data(V, u, quadrature_degree, lmbda, mu, facets_cg, search, t
     gap_1 = contact.pack_gap(1)
 
     # Pack test functions
-    test_fn_0 = contact.pack_test_functions(0)
-    test_fn_1 = contact.pack_test_functions(1)
+    test_fn_0 = contact.pack_test_functions(0, V._cpp_object)
+    test_fn_1 = contact.pack_test_functions(1, V._cpp_object)
     # pack u
     u_opp_0 = contact.pack_u_contact(0, u._cpp_object)
     u_opp_1 = contact.pack_u_contact(1, u._cpp_object)
@@ -432,8 +435,8 @@ def create_contact_data(V, u, quadrature_degree, lmbda, mu, facets_cg, search, t
     grad_u_0 = dolfinx_contact.cpp.pack_gradient_quadrature(u._cpp_object, quadrature_degree, entities_0)
     grad_u_1 = dolfinx_contact.cpp.pack_gradient_quadrature(u._cpp_object, quadrature_degree, entities_1)
     if tied:
-        grad_test_fn_0 = contact.pack_grad_test_functions(0)
-        grad_test_fn_1 = contact.pack_grad_test_functions(1)
+        grad_test_fn_0 = contact.pack_grad_test_functions(0, V._cpp_object)
+        grad_test_fn_1 = contact.pack_grad_test_functions(1, V._cpp_object)
         grad_u_opp_0 = contact.pack_grad_u_contact(0, u._cpp_object)
         grad_u_opp_1 = contact.pack_grad_u_contact(1, u._cpp_object)
 
@@ -577,12 +580,12 @@ def test_contact_kernels(ct, gap, quadrature_degree, theta, formulation, search)
 
     # Generate residual data structures
     F_custom = _fem.form(F0)
-    kernel_rhs = contact.generate_kernel(kernel_type_rhs)
+    kernel_rhs = contact.generate_kernel(kernel_type_rhs, V_custom._cpp_object)
     b1 = _fem.petsc.create_vector(F_custom)
 
     # Generate residual data structures
     J_custom = _fem.form(J_custom)
-    kernel_jac = contact.generate_kernel(kernel_type_jac)
+    kernel_jac = contact.generate_kernel(kernel_type_jac, V_custom._cpp_object)
     A1 = contact.create_matrix(J_custom._cpp_object)
 
     # Pack constants
@@ -590,13 +593,13 @@ def test_contact_kernels(ct, gap, quadrature_degree, theta, formulation, search)
 
     # Assemble  residual
     b1.zeroEntries()
-    contact.assemble_vector(b1, 0, kernel_rhs, c_0, consts)
-    contact.assemble_vector(b1, 1, kernel_rhs, c_1, consts)
+    contact.assemble_vector(b1, 0, kernel_rhs, c_0, consts, V_custom._cpp_object)
+    contact.assemble_vector(b1, 1, kernel_rhs, c_1, consts, V_custom._cpp_object)
 
     # Assemble  jacobian
     A1.zeroEntries()
-    contact.assemble_matrix(A1, 0, kernel_jac, c_0, consts)
-    contact.assemble_matrix(A1, 1, kernel_jac, c_1, consts)
+    contact.assemble_matrix(A1, 0, kernel_jac, c_0, consts, V_custom._cpp_object)
+    contact.assemble_matrix(A1, 1, kernel_jac, c_1, consts, V_custom._cpp_object)
     A1.assemble()
 
     # Retrieve data necessary for comparison

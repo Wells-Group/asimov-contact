@@ -7,7 +7,7 @@ import os
 
 import numpy as np
 import ufl
-from dolfinx.fem import (Function, VectorFunctionSpace, dirichletbc,
+from dolfinx.fem import (Function, functionspace, dirichletbc,
                          locate_dofs_topological)
 from dolfinx.fem.petsc import LinearProblem, NonlinearProblem
 from dolfinx.geometry import (bb_tree, compute_colliding_cells,
@@ -52,7 +52,7 @@ def solve_euler_bernoulli(nx: int, ny: int, theta: float, gamma: float, linear_s
     sorted = np.argsort(indices)
     facet_marker = meshtags(mesh, tdim - 1, indices[sorted], values[sorted])
 
-    V = VectorFunctionSpace(mesh, ("Lagrange", 1))
+    V = functionspace(mesh, ("Lagrange", 1, (mesh.geometry.dim,)))
     h = 2 * ufl.Circumradius(mesh)
     mu_func, lambda_func = lame_parameters(plane_strain)
     mu = mu_func(E, nu)
