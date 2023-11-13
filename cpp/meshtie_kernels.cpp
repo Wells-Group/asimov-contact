@@ -426,9 +426,9 @@ dolfinx_contact::generate_heat_transfer_kernel(
     }
 
     // Extract constants used inside quadrature loop
-    double gamma = w[0] / c[0]; // gamma/h
-    double theta = w[1];
-    double kdt = w[2];
+    double gamma = w[1] / c[0]; // gamma/h
+    double theta = w[2];
+    double kdt = w[0];
 
     // Extract reference to the tabulated basis function
     cmdspan2_t phi = kd.phi();
@@ -549,11 +549,10 @@ dolfinx_contact::generate_heat_transfer_kernel(
           stdex::submdspan(kd.facet_normals(), facet_index,
                            MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent));
     }
-
     // Extract constants used inside quadrature loop
-    double gamma = w[0] / c[0]; // gamma/h
-    double theta = w[1];
-    double kdt = w[2];
+    double gamma = w[1] / c[0]; // gamma/h
+    double theta = w[2];
+    double kdt = w[0];
 
     // Extract reference to the tabulated basis function
     cmdspan2_t phi = kd.phi();

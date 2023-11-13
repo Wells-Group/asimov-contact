@@ -110,7 +110,7 @@ public:
       loguru::g_stderr_verbosity = loguru::Verbosity_OFF;
 
       // Generate input data for custom kernel
-      _meshties->update_meshtie_data(_u);
+      _meshties->update_meshtie_data(_u, _meshties->offset_elasticity(_u->function_space()));
 
       // Assemble b
       std::span<T> b(_b.mutable_array());
@@ -304,7 +304,7 @@ int main(int argc, char* argv[])
 
     // create meshties
     auto meshties = std::make_shared<dolfinx_contact::MeshTie>(
-        dolfinx_contact::MeshTie(markers, contact_markers, pairs, V, 5));
+        dolfinx_contact::MeshTie(markers, contact_markers, pairs, mesh, 5));
 
     // create "non-linear" meshtie problem (linear problem written as non-linear problem)
     auto problem = MeshTieProblem(F, J, bcs, meshties, domain1, u, lmbda, mu,

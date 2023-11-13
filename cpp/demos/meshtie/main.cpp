@@ -145,9 +145,9 @@ int main(int argc, char* argv[])
         = {std::make_shared<dolfinx::mesh::MeshTags<std::int32_t>>(facet1)};
     std::vector<std::array<int, 2>> pairs = {{0, 1}, {1, 0}};
     auto meshties
-        = dolfinx_contact::MeshTie(markers, contact_markers, pairs, V, 5);
+        = dolfinx_contact::MeshTie(markers, contact_markers, pairs, mesh, 5);
 
-    meshties.generate_meshtie_data_matrix_only(lmbda, mu, E * gamma, theta);
+    meshties.generate_meshtie_data_matrix_only(V, lmbda, mu, E * gamma, theta);
 
     // Create matrix and vector
     auto A = dolfinx::la::petsc::Matrix(

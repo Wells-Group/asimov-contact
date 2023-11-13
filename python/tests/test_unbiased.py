@@ -269,7 +269,7 @@ def compute_dof_permutations(V_dg, V_cg, gap, facets_dg, facets_cg):
         return indices_cg, indices_dg
 
 
-def create_functionspaces(ct, gap):
+def create_functionspaces(ct, gap, vector=True):
     ''' This is a helper function to create the two element function spaces
         both for custom assembly and the DG formulation for
         quads, triangles, hexes and tetrahedra'''
@@ -304,16 +304,18 @@ def create_functionspaces(ct, gap):
         cells_custom = np.array([[0, 1, 2, 3, 4, 5, 6, 7], [8, 9, 10, 11, 12, 13, 14, 15]], dtype=np.int32)
     else:
         raise ValueError(f"Unsupported mesh type {ct}")
-    coord_el_ufl = element("Lagrange", cell_type.name,
-                           1, shape=(x_ufl.shape[1],), gdim=x_ufl.shape[1])
-    domain = ufl.Mesh(coord_el_ufl)
+    gdim = x_ufl.shape[1]
+    coord_el = element("Lagrange", cell_type.name, 1, shape=(gdim,), gdim=gdim)
+    if vector:
+        el_shape = (gdim,)
+    else:
+        el_shape = ()
+    domain = ufl.Mesh(coord_el)
     mesh_ufl = create_mesh(MPI.COMM_WORLD, cells_ufl, x_ufl, domain)
-    el_ufl = element("DG", cell_type.name,
-                     1, shape=(x_ufl.shape[1],), gdim=x_ufl.shape[1])
+    el_ufl = element("DG", cell_type.name, 1, shape=el_shape, gdim=gdim)
     V_ufl = _fem.FunctionSpace(mesh_ufl, el_ufl)
-    el_custom = element("Lagrange", cell_type.name,
-                        1, shape=(x_custom.shape[1],), gdim=x_custom.shape[1])
-    domain_custom = ufl.Mesh(el_custom)
+    el_custom = element("Lagrange", cell_type.name, 1, shape=el_shape, gdim=gdim)
+    domain_custom = ufl.Mesh(coord_el)
     mesh_custom = create_mesh(MPI.COMM_WORLD, cells_custom, x_custom, domain_custom)
     V_custom = _fem.FunctionSpace(mesh_custom, el_custom)
 
@@ -353,21 +355,25 @@ def locate_contact_facets_custom(V, gap):
     return cells, [contact_facets1, contact_facets2]
 
 
+def create_facet_markers(mesh, facets_cg):
+    # create meshtags
+    tdim = mesh.topology.dim
+    val0 = np.full(len(facets_cg[0]), 0, dtype=np.int32)
+    val1 = np.full(len(facets_cg[1]), 1, dtype=np.int32)
+    values = np.hstack([val0, val1])
+    indices = np.concatenate([facets_cg[0], facets_cg[1]])
+    sorted_facets = np.argsort(indices)
+    return meshtags(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
+
+
 def create_contact_data(V, u, quadrature_degree, lmbda, mu, facets_cg, search, tied=False):
     ''' This function creates the contact class and the coefficients
         passed to the assembly for the unbiased Nitsche method'''
 
     # Retrieve mesh
     mesh = V.mesh
-    tdim = mesh.topology.dim
-
     # create meshtags
-    val0 = np.full(len(facets_cg[0]), 0, dtype=np.int32)
-    val1 = np.full(len(facets_cg[1]), 1, dtype=np.int32)
-    values = np.hstack([val0, val1])
-    indices = np.concatenate([facets_cg[0], facets_cg[1]])
-    sorted_facets = np.argsort(indices)
-    facet_marker = meshtags(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
+    facet_marker = create_facet_markers(mesh, facets_cg)
 
     data = np.array([0, 1], dtype=np.int32)
     offsets = np.array([0, 2], dtype=np.int32)
@@ -640,3 +646,134 @@ def test_contact_kernels(ct, gap, quadrature_degree, theta, formulation, search)
         ci, cj, cv = A2.getValuesCSR()
         C_sp = scipy.sparse.csr_matrix((cv, cj, ci), shape=A2.getSize()).todense()
         assert np.allclose(C_sp[ind_dg, ind_dg], B_sp[ind_cg, ind_cg])
+
+
+def poisson_dg(u0, v0, h, n, kdt, gamma, theta, dS):
+    F = gamma / h('+') * ufl.inner(ufl.jump(u0), ufl.jump(v0)) * dS + \
+        gamma / h('-') * ufl.inner(ufl.jump(u0), ufl.jump(v0)) * dS -\
+        ufl.inner(ufl.avg(ufl.grad(u0)), n('+')) * ufl.jump(v0) * dS +\
+        ufl.inner(ufl.avg(ufl.grad(u0)), n('-')) * ufl.jump(v0) * dS -\
+        theta * ufl.inner(ufl.avg(ufl.grad(v0)), n('+')) * ufl.jump(u0) * dS +\
+        theta * ufl.inner(ufl.avg(ufl.grad(v0)), n('-')) * ufl.jump(u0) * dS
+    return 0.5 * kdt * F
+
+
+@pytest.mark.parametrize("ct", ["triangle", "quadrilateral", "tetrahedron", "hexahedron"])
+@pytest.mark.parametrize("gap", [0.5, -0.5])
+@pytest.mark.parametrize("quadrature_degree", [1, 5])
+@pytest.mark.parametrize("theta", [1, 0, -1])
+def test_poisson_kernels(ct, gap, quadrature_degree, theta):
+
+    # Nitche parameter
+    gamma = 10
+
+    # create meshes and function spaces
+    V_ufl, V_custom = create_functionspaces(ct, gap, vector=False)
+    mesh_ufl = V_ufl.mesh
+    mesh_custom = V_custom.mesh
+    tdim = mesh_ufl.topology.dim
+    TOL = 1e-7
+    cells_ufl_0 = locate_entities(mesh_ufl, tdim, lambda x: x[tdim - 1] > 0 - TOL)
+    cells_ufl_1 = locate_entities(mesh_ufl, tdim, lambda x: x[tdim - 1] < 0 + TOL)
+
+    def _u0(x):
+        return np.sin(x[0]) + 1
+
+    def _u1(x):
+        return np.sin(x[tdim - 1]) + 2
+
+    def _u2(x):
+        return np.sin(x[tdim - 1] + gap) + 2
+
+    # DG ufl 'contact'
+    u0 = _fem.Function(V_ufl)
+    u0.interpolate(_u0, cells_ufl_0)
+    u0.interpolate(_u1, cells_ufl_1)
+    v0 = ufl.TestFunction(V_ufl)
+    w0 = ufl.TrialFunction(V_ufl)
+    metadata = {"quadrature_degree": quadrature_degree}
+    dS = ufl.Measure("dS", domain=mesh_ufl, metadata=metadata)
+
+    n = ufl.FacetNormal(mesh_ufl)
+
+    # Scaled Nitsche parameter
+    h = ufl.CellDiameter(mesh_ufl)
+
+    # DG formulation
+    kdt = 5
+    F0 = poisson_dg(u0, v0, h, n, kdt, gamma, theta, dS)
+    J0 = poisson_dg(w0, v0, h, n, kdt, gamma, theta, dS)
+
+    # rhs vector
+    F0 = _fem.form(F0)
+    b0 = _fem.petsc.create_vector(F0)
+    b0.zeroEntries()
+    _fem.petsc.assemble_vector(b0, F0)
+
+    # lhs matrix
+    J0 = _fem.form(J0)
+    A0 = _fem.petsc.create_matrix(J0)
+    A0.zeroEntries()
+    _fem.petsc.assemble_matrix(A0, J0)
+    A0.assemble()
+
+    # Custom assembly
+    cells, facets_cg = locate_contact_facets_custom(V_custom, gap)
+
+    # Fem functions
+    u1 = _fem.Function(V_custom)
+    v1 = ufl.TestFunction(V_custom)
+    w1 = ufl.TrialFunction(V_custom)
+
+    u1.interpolate(_u0, cells[0])
+    u1.interpolate(_u2, cells[1])
+    u1.x.scatter_forward()
+
+    # Dummy form for creating vector/matrix
+    dx = ufl.Measure("dx", domain=mesh_custom)
+    F_custom = ufl.inner(ufl.grad(u1), ufl.grad(v1)) * dx
+    J_custom = kdt * ufl.inner(ufl.grad(w1), ufl.grad(v1)) * dx
+
+    # meshtie surfaces
+    facet_marker = create_facet_markers(mesh_custom, facets_cg)
+
+    data = np.array([0, 1], dtype=np.int32)
+    offsets = np.array([0, 2], dtype=np.int32)
+    surfaces = adjacencylist(data, offsets)
+    # initialise meshties
+    meshties = dolfinx_contact.cpp.MeshTie([facet_marker._cpp_object], surfaces, [(0, 1), (1, 0)],
+                                           mesh_custom._cpp_object, quadrature_degree=quadrature_degree)
+    meshties.generate_heat_transfer_data(u1._cpp_object, kdt, gamma, theta)
+
+    # Generate residual data structures
+    F_custom = _fem.form(F0)
+    b1 = _fem.petsc.create_vector(F_custom)
+
+    # # Generate matrix
+    J_custom = _fem.form(J_custom)
+    A1 = meshties.create_matrix(J_custom._cpp_object)
+
+    # Assemble  residual
+    b1.zeroEntries()
+    meshties.assemble_vector_heat_transfer(b1, V_custom._cpp_object)
+
+    # Assemble  jacobian
+    A1.zeroEntries()
+    meshties.assemble_matrix_heat_transfer(A1, V_custom._cpp_object)
+    A1.assemble()
+
+    # Retrieve data necessary for comparison
+    tdim = mesh_ufl.topology.dim
+    facet_dg = locate_entities(mesh_ufl, tdim - 1, lambda x: np.isclose(x[tdim - 1], 0))
+    ind_cg, ind_dg = compute_dof_permutations(V_ufl, V_custom, gap, [facet_dg], facets_cg)
+
+    # Compare rhs
+    assert np.allclose(b0.array[ind_dg], b1.array[ind_cg])
+
+    # create scipy matrix
+    ai, aj, av = A0.getValuesCSR()
+    A_sp = scipy.sparse.csr_matrix((av, aj, ai), shape=A0.getSize()).todense()
+    bi, bj, bv = A1.getValuesCSR()
+    B_sp = scipy.sparse.csr_matrix((bv, bj, bi), shape=A1.getSize()).todense()
+
+    assert np.allclose(A_sp[ind_dg, ind_dg], B_sp[ind_cg, ind_cg])

@@ -366,6 +366,10 @@ PYBIND11_MODULE(cpp, m)
            &dolfinx_contact::MeshTie::generate_meshtie_data)
       .def("generate_meshtie_data_matrix_only",
            &dolfinx_contact::MeshTie::generate_meshtie_data_matrix_only)
+      .def("generate_heattransfer_data_matrix_only",
+                &dolfinx_contact::MeshTie::generate_heattransfer_data_matrix_only)
+      .def("generate_heat_transfer_data",
+                &dolfinx_contact::MeshTie::generate_heat_transfer_data)
       .def("assemble_matrix",
            [](dolfinx_contact::MeshTie& self, Mat A,
               std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V)
@@ -373,11 +377,23 @@ PYBIND11_MODULE(cpp, m)
              self.assemble_matrix(
                  dolfinx::la::petsc::Matrix::set_block_fn(A, ADD_VALUES), V);
            })
+      .def("assemble_matrix_heat_transfer",
+           [](dolfinx_contact::MeshTie& self, Mat A,
+              std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V)
+           {
+             self.assemble_matrix_heat_transfer(
+                 dolfinx::la::petsc::Matrix::set_block_fn(A, ADD_VALUES), V);
+           })
       .def("assemble_vector",
            [](dolfinx_contact::MeshTie& self,
               py::array_t<PetscScalar, py::array::c_style>& b,
               std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V)
            { self.assemble_vector(std::span(b.mutable_data(), b.size()), V); })
+      .def("assemble_vector_heat_transfer",
+           [](dolfinx_contact::MeshTie& self,
+              py::array_t<PetscScalar, py::array::c_style>& b,
+              std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V)
+           { self.assemble_vector_heat_transfer(std::span(b.mutable_data(), b.size()), V); })
       .def(
           "create_matrix",
           [](dolfinx_contact::MeshTie& self, dolfinx::fem::Form<PetscScalar>& a,
