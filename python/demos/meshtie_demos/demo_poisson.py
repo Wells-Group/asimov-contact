@@ -103,13 +103,12 @@ if __name__ == "__main__":
     h = ufl.CellDiameter(mesh)
     n = ufl.FacetNormal(mesh)
 
-    # Compute lame parameters
-    kdt = 5
-
     # Nitsche parameters
     gamma = args.gamma
     theta = args.theta
 
+    # bilinear form
+    kdt = 5
     J = kdt * ufl.inner(ufl.grad(w), ufl.grad(v)) * dx
 
     # source term

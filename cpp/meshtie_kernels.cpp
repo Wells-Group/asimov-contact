@@ -426,7 +426,7 @@ dolfinx_contact::generate_heat_transfer_kernel(
     }
 
     // Extract constants used inside quadrature loop
-    double gamma = w[1] / c[0]; // gamma/h
+    double gamma = w[1]; // gamma/h
     double theta = w[2];
     double kdt = w[0];
 
@@ -590,17 +590,15 @@ dolfinx_contact::generate_heat_transfer_kernel(
         {
           // Compute inner(grad(v), n_phys)
           grad_v_n = 0;
-          for (std::size_t j = 0; j < gdim; ++j)
+          for (std::size_t l = 0; l < gdim; ++l)
             for (std::size_t k = 0; k < tdim; ++k)
-              grad_v_n += K(k, j) * dphi(k, q_pos, i) * n_phys[j];
+              grad_v_n += K(k, l) * dphi(k, q_pos, i) * n_phys[l];
           // - 0.5 * inner(grad(w), n_phys) * v + gamma * w *v
           // -theta * 0.5 * inner(grad (v), n_phys) * w
           A[0][i * ndofs_cell + j]
               += (-0.5 * grad_w_n + gamma * phi(q_pos, j)) * phi(q_pos, i) * w0
                  - theta * 0.5 * grad_v_n * phi(q_pos, j) * w0;
 
-          // inner products of test and trial functions only non-zero if dof
-          // corresponds to same block index
           for (std::size_t k = 0; k < num_links; k++)
           {
             std::size_t index_w = kd.offsets(1) + k * num_points * ndofs_cell
@@ -615,7 +613,7 @@ dolfinx_contact::generate_heat_transfer_kernel(
                    * c[index_w] * w0;
             // + 0.5 * inner(grad(w), n_phys) * v_opp - gamma * w * v_opp
             A[3 * k + 2][i * ndofs_cell + j]
-                += (-0.5 * grad_w_n + gamma * phi(q_pos, j)) * c[index_v] * w0;
+                += (0.5 * grad_w_n - gamma * phi(q_pos, j)) * c[index_v] * w0;
             // + gamma inner(u_opp, v_opp)
             A[3 * k + 3][i * ndofs_cell + j]
                 += gamma * c[index_w] * c[index_v] * w0;

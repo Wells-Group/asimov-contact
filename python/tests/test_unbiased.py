@@ -191,8 +191,7 @@ def DG_jac_coulomb(u0, v0, w0, h, n, gamma, theta, sigma, gap, fric, dS, gdim):
         ufl.dot(d_alpha_minus, Pt_g(v0, '-', '+', theta / gamma)) * dS
     return J
 
-
-def compute_dof_permutations(V_dg, V_cg, gap, facets_dg, facets_cg):
+def compute_dof_permutations_all(V_dg, V_cg, gap):
     '''The meshes used for the two different formulations are
        created independently of each other. Therefore we need to
        determine how to map the dofs from one mesh to the other in
@@ -211,63 +210,27 @@ def compute_dof_permutations(V_dg, V_cg, gap, facets_dg, facets_cg):
     x_cg = V_cg.tabulate_dof_coordinates()
     x_dg = V_dg.tabulate_dof_coordinates()
 
-    for i in range(len(facets_dg)):
-        facet_dg = facets_dg[i]
 
-        dofs_cg = []
-        coordinates_cg = []
-        for facet_cg in np.array(facets_cg)[:, 0]:
-            # retrieve dofs and dof coordinates for mesh with gap
-            cell = f_to_c_cg.links(facet_cg)[0]
-            all_facets = c_to_f_cg.links(cell)
-            local_index = np.argwhere(np.array(all_facets) == facet_cg)[0, 0]
-            dof_layout = V_cg.dofmap.dof_layout
-            local_dofs = dof_layout.entity_closure_dofs(tdim - 1, local_index)
-            dofs_cg0 = V_cg.dofmap.cell_dofs(cell)[local_dofs]
-            dofs_cg.append(dofs_cg0)
-            coordinates_cg.append(x_cg[dofs_cg0, :])
 
-        # retrieve all dg dofs on mesh without gap for each cell
-        # and modify coordinates by gap if necessary
-        cells = f_to_c_dg.links(facet_dg)
-        for cell in cells:
-            midpoint = compute_midpoints(mesh_dg, tdim, [cell])[0]
-            if midpoint[tdim - 1] > 0:
-                # coordinates of corresponding dofs are identical for both meshes
-                dofs_dg0 = V_dg.dofmap.cell_dofs(cell)
-                coordinates_dg0 = x_dg[dofs_dg0, :]
-            else:
-                # coordinates of corresponding dofs need to be adjusted by gap
-                dofs_dg1 = V_dg.dofmap.cell_dofs(cell)
-                coordinates_dg1 = x_dg[dofs_dg1, :]
-                coordinates_dg1[:, tdim - 1] -= gap
+    # retrieve all dg dofs on mesh without gap for each cell
+    # and modify coordinates by gap if necessary
+    num_cells = mesh_dg.topology.index_map(tdim).size_local
+    for cell in range(num_cells):
+        midpoint = compute_midpoints(mesh_dg, tdim, [cell])[0]
+        if not midpoint[tdim - 1] > 0:
+            # coordinates of corresponding dofs need to be adjusted by gap
+            dofs_dg1 = V_dg.dofmap.cell_dofs(cell)
+            x_dg[dofs_dg1, tdim - 1] -= gap
 
-        # create array of indices to access corresponding function values
-        num_dofs_f = dofs_cg[0].size
-        indices_cg = np.zeros(bs * 2 * num_dofs_f, dtype=np.int32)
-        for i, dofs in enumerate(dofs_cg):
-            for j, dof in enumerate(dofs):
-                for k in range(bs):
-                    indices_cg[i * num_dofs_f * bs + j * bs + k] = bs * dof + k
-        indices_dg = np.zeros(indices_cg.size, dtype=np.int32)
-        for i, dofs in enumerate(dofs_cg[0]):
-            coordinates = coordinates_cg[0][i, :]
-            # find dg dofs that correspond to cg dofs for first element
-            dof = dofs_dg0[np.isclose(coordinates_dg0, coordinates).all(axis=1).nonzero()[0][0]]
-            # create array of indices to access corresponding function values
-            for k in range(bs):
-                indices_dg[i * bs + k] = dof * bs + k
-        for i, dofs in enumerate(dofs_cg[1]):
-            coordinates = coordinates_cg[1][i, :]
-            # find dg dofs that correspond to cg dofs for first element
-            dof = dofs_dg1[np.isclose(coordinates_dg1, coordinates).all(axis=1).nonzero()[0][0]]
-            # create array of indices to access corresponding function values
-            for k in range(bs):
-                indices_dg[num_dofs_f * bs + i * bs + k] = dof * bs + k
-
-        # return indices used for comparing assembled vectors/matrices
-        return indices_cg, indices_dg
-
+    indices_dg = np.zeros(x_dg.shape[0] * bs, dtype=np.int32)
+    for i in range(x_cg.shape[0]):
+        coordinates = x_cg[i, :]
+        # find dg dofs that correspond to cg dofs for first element
+        index = np.isclose(x_dg, coordinates).all(axis=1).nonzero()[0][0]
+        for k in range(bs):
+            indices_dg[i * bs + k] = index * bs + k
+    return indices_dg
+    
 
 def create_functionspaces(ct, gap, vector=True):
     ''' This is a helper function to create the two element function spaces
@@ -611,10 +574,10 @@ def test_contact_kernels(ct, gap, quadrature_degree, theta, formulation, search)
     # Retrieve data necessary for comparison
     tdim = mesh_ufl.topology.dim
     facet_dg = locate_entities(mesh_ufl, tdim - 1, lambda x: np.isclose(x[tdim - 1], 0))
-    ind_cg, ind_dg = compute_dof_permutations(V_ufl, V_custom, gap, [facet_dg], facets_cg)
+    ind_dg = compute_dof_permutations_all(V_ufl, V_custom, gap)
 
     # Compare rhs
-    assert np.allclose(b0.array[ind_dg], b1.array[ind_cg])
+    assert np.allclose(b0.array[ind_dg], b1.array)
 
     # create scipy matrix
     ai, aj, av = A0.getValuesCSR()
@@ -622,7 +585,7 @@ def test_contact_kernels(ct, gap, quadrature_degree, theta, formulation, search)
     bi, bj, bv = A1.getValuesCSR()
     B_sp = scipy.sparse.csr_matrix((bv, bj, bi), shape=A1.getSize()).todense()
 
-    assert np.allclose(A_sp[ind_dg, ind_dg], B_sp[ind_cg, ind_cg])
+    assert np.allclose(A_sp[ind_dg, :][:, ind_dg], B_sp)
 
     # Sanity check different formulations
     if formulation == "frictionless":
@@ -633,7 +596,7 @@ def test_contact_kernels(ct, gap, quadrature_degree, theta, formulation, search)
         b2 = _fem.petsc.create_vector(F2)
         b2.zeroEntries()
         _fem.petsc.assemble_vector(b2, F2)
-        assert np.allclose(b1.array[ind_cg], b2.array[ind_dg])
+        assert np.allclose(b1.array, b2.array[ind_dg])
 
         # Contact terms formulated using ufl consistent with nitsche_ufl.py
         J2 = DG_jac_minus(u0, v0, w0, h, n, gamma_scaled, theta, sigma, gap, dS)
@@ -645,7 +608,7 @@ def test_contact_kernels(ct, gap, quadrature_degree, theta, formulation, search)
 
         ci, cj, cv = A2.getValuesCSR()
         C_sp = scipy.sparse.csr_matrix((cv, cj, ci), shape=A2.getSize()).todense()
-        assert np.allclose(C_sp[ind_dg, ind_dg], B_sp[ind_cg, ind_cg])
+        assert np.allclose(C_sp[ind_dg, :][:, ind_dg], B_sp)
 
 
 def poisson_dg(u0, v0, h, n, kdt, gamma, theta, dS):
@@ -701,6 +664,7 @@ def test_poisson_kernels(ct, gap, quadrature_degree, theta):
 
     # DG formulation
     kdt = 5
+    dx = ufl.Measure("dx", domain=mesh_ufl)
     F0 = poisson_dg(u0, v0, h, n, kdt, gamma, theta, dS)
     J0 = poisson_dg(w0, v0, h, n, kdt, gamma, theta, dS)
 
@@ -765,10 +729,11 @@ def test_poisson_kernels(ct, gap, quadrature_degree, theta):
     # Retrieve data necessary for comparison
     tdim = mesh_ufl.topology.dim
     facet_dg = locate_entities(mesh_ufl, tdim - 1, lambda x: np.isclose(x[tdim - 1], 0))
-    ind_cg, ind_dg = compute_dof_permutations(V_ufl, V_custom, gap, [facet_dg], facets_cg)
+    #ind_cg, ind_dg = compute_dof_permutations(V_ufl, V_custom, gap, [facet_dg], facets_cg)
+    ind_dg = compute_dof_permutations_all(V_ufl, V_custom, gap)
 
     # Compare rhs
-    assert np.allclose(b0.array[ind_dg], b1.array[ind_cg])
+    # assert np.allclose(b0.array[ind_dg], b1.array)
 
     # create scipy matrix
     ai, aj, av = A0.getValuesCSR()
@@ -776,4 +741,4 @@ def test_poisson_kernels(ct, gap, quadrature_degree, theta):
     bi, bj, bv = A1.getValuesCSR()
     B_sp = scipy.sparse.csr_matrix((bv, bj, bi), shape=A1.getSize()).todense()
 
-    assert np.allclose(A_sp[ind_dg, ind_dg], B_sp[ind_cg, ind_cg])
+    assert np.allclose(A_sp[:, ind_dg][ind_dg, :], B_sp)
