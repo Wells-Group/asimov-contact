@@ -37,7 +37,12 @@ public:
   {
     // Finde closest pointes
     for (int i = 0; i < (int)connected_pairs.size(); ++i)
+    {
       Contact::create_distance_map(i);
+      auto [ny, cstride1] = Contact::pack_ny(i);
+      auto [gap, cstride] = Contact::pack_gap(i);
+      Contact::update_distance_map(i, gap, ny);
+    }
 
     // initialise internal variables
     _num_pairs = (int)connected_pairs.size();

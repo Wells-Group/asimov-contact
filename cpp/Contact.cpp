@@ -103,9 +103,9 @@ dolfinx_contact::Contact::Contact(
   // store physical quadrature points for each surface
   _qp_phys.resize(num_surfaces);
   // reference points on opposite surface
-  _reference_contact_points.resize(num_surfaces);
+  _reference_contact_points.resize(contact_pairs.size());
   // shape of reference points on opposite surface
-  _reference_contact_shape.resize(num_surfaces);
+  _reference_contact_shape.resize(contact_pairs.size());
   // store max number of links for each quadrature surface
   _max_links.resize(contact_pairs.size());
   // Create adjacency list linking facets as (cell, facet) pairs to the index of
@@ -151,8 +151,8 @@ dolfinx_contact::Contact::qp_phys(int surface)
   return {_qp_phys[surface], shape};
 }
 //------------------------------------------------------------------------------------------------
-std::size_t dolfinx_contact::Contact::coefficients_size(bool meshtie,
-    std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V)
+std::size_t dolfinx_contact::Contact::coefficients_size(
+    bool meshtie, std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V)
 {
   // mesh data
   const std::size_t gdim = _mesh->geometry().dim(); // geometrical dimension
@@ -410,8 +410,8 @@ dolfinx_contact::Contact::pack_nx(int pair)
 }
 //------------------------------------------------------------------------------------------------
 dolfinx_contact::kernel_fn<PetscScalar>
-dolfinx_contact::Contact::generate_kernel(Kernel type,
-    std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V)
+dolfinx_contact::Contact::generate_kernel(
+    Kernel type, std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V)
 {
   const std::size_t max_links
       = *std::max_element(_max_links.begin(), _max_links.end());
@@ -705,6 +705,8 @@ dolfinx_contact::Contact::pack_test_functions(
     auto [unique_cells, offsets] = sort_cells(f_cells, perm);
     for (std::size_t j = 0; j < unique_cells.size(); ++j)
     {
+      if (unique_cells[j] < 0)
+        continue;
       auto indices
           = std::span(perm.data() + offsets[j], offsets[j + 1] - offsets[j]);
 
@@ -720,6 +722,44 @@ dolfinx_contact::Contact::pack_test_functions(
   }
 
   return {std::move(cb), cstride};
+}
+//------------------------------------------------------------------------------------------------
+void dolfinx_contact::Contact::update_distance_map(std::size_t pair,
+                                                   std::span<const double> gap,
+                                                   std::span<const double> n_y)
+{
+  auto [quadrature_mt, candidate_mt] = _contact_pairs[pair];
+  const std::size_t num_facets = _local_facets[quadrature_mt];
+  const std::size_t num_q_points
+      = _quadrature_rule->offset()[1] - _quadrature_rule->offset()[0];
+  const std::size_t gdim = _mesh->geometry().dim();
+  double tol = 1e-7;
+  std::shared_ptr<const dolfinx::graph::AdjacencyList<std::int32_t>>
+      candidate_map = _facet_maps[pair];
+  std::vector<std::int32_t> offsets(candidate_map->offsets());
+  std::vector<std::int32_t> data(candidate_map->array());
+
+  for (std::size_t f = 0; f < num_facets; ++f)
+  {
+    for (std::size_t q = 0; q < num_q_points; ++q)
+    {
+      double dot = 0;
+      double norm = 0;
+      for (std::size_t i = 0; i < gdim; ++i)
+      {
+        std::size_t index = f * num_q_points * gdim + q * gdim + i;
+        dot += gap[index] * n_y[index];
+        norm += gap[index] * gap[index];
+      }
+      dot = std::abs(dot) / std::sqrt(norm);
+
+      if (dot < (1 - tol))
+        data[offsets[f] + q] = -1;
+    }
+  }
+  auto new_map = dolfinx::graph::AdjacencyList<std::int32_t>(data, offsets);
+  _facet_maps[pair]
+      = std::make_shared<dolfinx::graph::AdjacencyList<std::int32_t>>(new_map);
 }
 //------------------------------------------------------------------------------------------------
 std::pair<std::vector<PetscScalar>, int>
@@ -1317,9 +1357,14 @@ dolfinx_contact::Contact::pack_grad_test_functions(
     assert(links.size() == num_q_points);
     for (std::size_t j = 0; j < num_q_points; j++)
     {
-      const std::span<const int> linked_pair = facet_map->links(links[j]);
-      assert(!linked_pair.empty());
-      linked_cells[j] = linked_pair.front();
+      if (links[j] < 0)
+        linked_cells[j] = -1;
+      else
+      {
+        const std::span<const int> linked_pair = facet_map->links(links[j]);
+        assert(!linked_pair.empty());
+        linked_cells[j] = linked_pair.front();
+      }
     }
     // Sort linked cells
     const auto [unique_cells, offsets] = dolfinx_contact::sort_cells(
@@ -1329,7 +1374,8 @@ dolfinx_contact::Contact::pack_grad_test_functions(
     // Loop over sorted array of unique cells
     for (std::size_t j = 0; j < unique_cells.size(); ++j)
     {
-
+      if (unique_cells[j] < 0)
+        continue;
       std::int32_t linked_cell = parent_cells[unique_cells[j]];
       // Extract indices of all occurances of cell in the unsorted cell
       // array

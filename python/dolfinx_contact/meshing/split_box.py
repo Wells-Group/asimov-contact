@@ -26,14 +26,16 @@ def vertical_line(t: npt.NDArray[np.float64], x0: list[float], x1: list[float]) 
 def horizontal_line(t: npt.NDArray[np.float64], x0: list[float], x1: list[float]) -> list[list[float]]:
     points = []
     for tt in t:
-        points.append([x0[0] + tt * (x1[0] - x0[0]), x0[1] + tt * (x1[1] - x0[1])])
+        points.append([x0[0] + tt * (x1[0] - x0[0]),
+                      x0[1] + tt * (x1[1] - x0[1])])
     return points
 
 
 def horizontal_sine(t: npt.NDArray[np.float64], x0: list[float], x1: list[float]) -> list[list[float]]:
     points = []
     for tt in t:
-        points.append([x0[0] + tt * (x1[0] - x0[0]), x0[1] + tt * (x1[1] - x0[1]) + 0.1 * np.sin(8 * np.pi * tt)])
+        points.append([x0[0] + tt * (x1[0] - x0[0]), x0[1] +
+                      tt * (x1[1] - x0[1]) + 0.1 * np.sin(8 * np.pi * tt)])
     return points
 
 
@@ -86,13 +88,16 @@ def create_dolfinx_mesh(filename: str, x: npt.NDArray[np.float64], cells: npt.ND
                         facet_values: npt.NDArray[np.int32], tdim: int) -> None:
     msh = create_mesh(MPI.COMM_WORLD, cells, x, ufl_mesh(gmsh_cell_id, 3))
     msh.name = "Grid"
-    entities, values = distribute_entity_data(msh, tdim - 1, marked_facets, facet_values)
+    entities, values = distribute_entity_data(
+        msh, tdim - 1, marked_facets, facet_values)
     msh.topology.create_connectivity(tdim - 1, 0)
     mt = meshtags_from_entities(msh, tdim - 1, adjacencylist(entities), values)
     mt.name = "contact_facets"
     msh.topology.create_connectivity(tdim, 0)
-    entities, values = distribute_entity_data(msh, tdim, cells.astype(np.int64), cell_data.astype(np.int32))
-    mt_domain = meshtags_from_entities(msh, tdim, adjacencylist(entities), values)
+    entities, values = distribute_entity_data(
+        msh, tdim, cells.astype(np.int64), cell_data.astype(np.int32))
+    mt_domain = meshtags_from_entities(
+        msh, tdim, adjacencylist(entities), values)
     mt_domain.name = "domain_marker"
     gmsh.finalize()
     with XDMFFile(MPI.COMM_WORLD, f"{filename}.xdmf", "w") as file:
@@ -115,7 +120,9 @@ def create_surface_mesh(domain: list[int], points: list[list[float]], line_pts: 
     model.occ.synchronize()
     model.addPhysicalGroup(2, [surface], tag=tags[0])
     model.addPhysicalGroup(1, [lines[0]] + lines[len(line_pts):], tag=tags[1])
-    model.addPhysicalGroup(1, lines[1:len(line_pts)], tag=tags[2])
+    model.addPhysicalGroup(1, lines[1:len(line_pts)//2], tag=tags[2])
+    model.addPhysicalGroup(
+        1, lines[len(line_pts)//2:len(line_pts)], tag=tags[3])
     model.mesh.generate(2)
     gmsh.model.mesh.optimize("Netgen")
 
@@ -137,7 +144,8 @@ def create_unsplit_box_2d(H: float = 1.0, L: float = 5.0, res: float = 0.1, x0: 
         model.setCurrent("box")
         t = np.linspace(0, 1, num_segments + 1)
         line_pts = curve_fun(t, x0, x1)
-        pts = get_surface_points([2, 3, 4, 5], [[0.0, 0.0], [L, 0.0], [L, H], [0.0, H], x0, x1], line_pts)
+        pts = get_surface_points([2, 3, 4, 5], [[0.0, 0.0], [L, 0.0], [
+                                 L, H], [0.0, H], x0, x1], line_pts)
         ps1 = []
         for point in pts:
             ps1.append(gmsh.model.occ.addPoint(point[0], point[1], 0))
@@ -147,8 +155,10 @@ def create_unsplit_box_2d(H: float = 1.0, L: float = 5.0, res: float = 0.1, x0: 
         p4 = ps1[0]
         ps2 = [p3, p2, p1, p4]
 
-        lines1 = [model.occ.addLine(ps1[i - 1], ps1[i]) for i in range(len(ps1))]
-        lines2 = [model.occ.addLine(ps2[i - 1], ps2[i]) for i in range(1, len(ps2))]
+        lines1 = [model.occ.addLine(ps1[i - 1], ps1[i])
+                  for i in range(len(ps1))]
+        lines2 = [model.occ.addLine(ps2[i - 1], ps2[i])
+                  for i in range(1, len(ps2))]
         curve1 = model.occ.addCurveLoop(lines1)
         curve2 = model.occ.addCurveLoop(lines1[1:-2] + lines2)
         surface1 = model.occ.addPlaneSurface([curve1])
@@ -160,9 +170,11 @@ def create_unsplit_box_2d(H: float = 1.0, L: float = 5.0, res: float = 0.1, x0: 
         model.mesh.optimize("Netgen")
 
         if quads:
-            gmsh_cell_id = MPI.COMM_WORLD.bcast(model.mesh.getElementType("quadrangle", 1), root=0)
+            gmsh_cell_id = MPI.COMM_WORLD.bcast(
+                model.mesh.getElementType("quadrangle", 1), root=0)
         else:
-            gmsh_cell_id = MPI.COMM_WORLD.bcast(model.mesh.getElementType("triangle", 1), root=0)
+            gmsh_cell_id = MPI.COMM_WORLD.bcast(
+                model.mesh.getElementType("triangle", 1), root=0)
 
         gmsh_facet_id = model.mesh.getElementType("line", 1)
         x, cells, cell_data, marked_facets, facet_values = retrieve_mesh_data(
@@ -173,12 +185,14 @@ def create_unsplit_box_2d(H: float = 1.0, L: float = 5.0, res: float = 0.1, x0: 
         num_nodes = MPI.COMM_WORLD.bcast(None, root=0)
         cell_data = np.empty((0,), dtype=np.int32)
         cells, x = np.empty([0, num_nodes], dtype=np.int64), np.empty([0, 3])
-        marked_facets, facet_values = np.empty((0, 3), dtype=np.int64), np.empty((0,), dtype=np.int32)
+        marked_facets, facet_values = np.empty(
+            (0, 3), dtype=np.int64), np.empty((0,), dtype=np.int32)
 
     if quads:
         gmsh_quad4 = cell_perm_array(CellType.quadrilateral, 4)
         cells = cells[:, gmsh_quad4]
-    create_dolfinx_mesh(filename, x[:, :2], cells, cell_data, gmsh_cell_id, marked_facets, facet_values, 2)
+    create_dolfinx_mesh(
+        filename, x[:, :2], cells, cell_data, gmsh_cell_id, marked_facets, facet_values, 2)
 
 
 def create_unsplit_box_3d(L: float = 5.0, H: float = 1.0, W: float = 1.0, res: float = 0.1, fname: str = "box_3D",
@@ -199,7 +213,8 @@ def create_unsplit_box_3d(L: float = 5.0, H: float = 1.0, W: float = 1.0, res: f
 
         t = np.linspace(0, 1, num_segments + 1)
         line_pts = curve_fun(t, x0, x1)
-        pts = get_surface_points([2, 3, 4, 5], [[0.0, 0.0], [L, 0.0], [L, H], [0.0, H], x0, x1], line_pts)
+        pts = get_surface_points([2, 3, 4, 5], [[0.0, 0.0], [L, 0.0], [
+                                 L, H], [0.0, H], x0, x1], line_pts)
         ps1 = []
         ps3 = []
         for point in pts:
@@ -216,23 +231,29 @@ def create_unsplit_box_3d(L: float = 5.0, H: float = 1.0, W: float = 1.0, res: f
         p4 = ps3[0]
         ps4 = [p3, p2, p1, p4]
 
-        lines1 = [model.occ.addLine(ps1[i - 1], ps1[i]) for i in range(len(ps1))]
-        lines2 = [model.occ.addLine(ps2[i - 1], ps2[i]) for i in range(1, len(ps2))]
+        lines1 = [model.occ.addLine(ps1[i - 1], ps1[i])
+                  for i in range(len(ps1))]
+        lines2 = [model.occ.addLine(ps2[i - 1], ps2[i])
+                  for i in range(1, len(ps2))]
         curve1 = model.occ.addCurveLoop(lines1)
         curve2 = model.occ.addCurveLoop(lines1[1:-2] + lines2)
         surface1 = model.occ.addPlaneSurface([curve1])
         surface2 = model.occ.addPlaneSurface([curve2])
         if not hex:
-            lines3 = [model.occ.addLine(ps3[i - 1], ps3[i]) for i in range(len(ps3))]
-            lines4 = [model.occ.addLine(ps4[i - 1], ps4[i]) for i in range(1, len(ps4))]
+            lines3 = [model.occ.addLine(ps3[i - 1], ps3[i])
+                      for i in range(len(ps3))]
+            lines4 = [model.occ.addLine(ps4[i - 1], ps4[i])
+                      for i in range(1, len(ps4))]
             curve3 = model.occ.addCurveLoop(lines3)
             curve4 = model.occ.addCurveLoop(lines3[1:-2] + lines4)
             surface3 = model.occ.addPlaneSurface([curve3])
             surface4 = model.occ.addPlaneSurface([curve4])
-            lines5 = [model.occ.addLine(ps1[i], ps3[i]) for i in range(len(ps1))]
+            lines5 = [model.occ.addLine(ps1[i], ps3[i])
+                      for i in range(len(ps1))]
             curves1 = []
             for i in range(len(lines1)):
-                curves1.append(model.occ.addCurveLoop([lines1[i], lines5[i], -lines3[i], -lines5[i - 1]]))
+                curves1.append(model.occ.addCurveLoop(
+                    [lines1[i], lines5[i], -lines3[i], -lines5[i - 1]]))
 
             curves2 = []
             lines6 = [lines5[-3]]
@@ -240,11 +261,16 @@ def create_unsplit_box_3d(L: float = 5.0, H: float = 1.0, W: float = 1.0, res: f
             lines6.append(model.occ.addLine(ps2[2], ps4[2]))
             lines6.append(lines5[0])
             for i in range(len(lines2)):
-                curves2.append(model.occ.addCurveLoop([lines2[i], lines6[i + 1], -lines4[i], -lines6[i]]))
-            surfaces1 = [model.occ.addPlaneSurface([curve]) for curve in curves1]
-            surfaces2 = [model.occ.addPlaneSurface([curve]) for curve in curves2]
-            sloop1 = model.occ.addSurfaceLoop([surface1] + surfaces1 + [surface3])
-            sloop2 = model.occ.addSurfaceLoop([surface2] + surfaces1[1:-2] + surfaces2 + [surface4])
+                curves2.append(model.occ.addCurveLoop(
+                    [lines2[i], lines6[i + 1], -lines4[i], -lines6[i]]))
+            surfaces1 = [model.occ.addPlaneSurface(
+                [curve]) for curve in curves1]
+            surfaces2 = [model.occ.addPlaneSurface(
+                [curve]) for curve in curves2]
+            sloop1 = model.occ.addSurfaceLoop(
+                [surface1] + surfaces1 + [surface3])
+            sloop2 = model.occ.addSurfaceLoop(
+                [surface2] + surfaces1[1:-2] + surfaces2 + [surface4])
             vol1 = model.occ.addVolume([sloop1])
             vol2 = model.occ.addVolume([sloop2])
             model.occ.synchronize()
@@ -257,7 +283,8 @@ def create_unsplit_box_3d(L: float = 5.0, H: float = 1.0, W: float = 1.0, res: f
             model.addPhysicalGroup(2, surfaces1[1:-2], tag=3)
         else:
             square = model.occ.add_rectangle(0, 0, 0, L, H)
-            model.occ.extrude([(2, square)], 0, 0, W, numElements=[np.ceil(1. / res)], recombine=True)
+            model.occ.extrude([(2, square)], 0, 0, W, numElements=[
+                              np.ceil(1. / res)], recombine=True)
             model.occ.synchronize()
             volumes = model.getEntities(3)
             model.occ.synchronize()
@@ -267,10 +294,12 @@ def create_unsplit_box_3d(L: float = 5.0, H: float = 1.0, W: float = 1.0, res: f
         model.mesh.generate(3)
 
         if hex:
-            gmsh_cell_id = MPI.COMM_WORLD.bcast(model.mesh.getElementType("hexahedron", 1), root=0)
+            gmsh_cell_id = MPI.COMM_WORLD.bcast(
+                model.mesh.getElementType("hexahedron", 1), root=0)
             gmsh_facet_id = model.mesh.getElementType("quadrangle", 1)
         else:
-            gmsh_cell_id = MPI.COMM_WORLD.bcast(model.mesh.getElementType("tetrahedron", 1), root=0)
+            gmsh_cell_id = MPI.COMM_WORLD.bcast(
+                model.mesh.getElementType("tetrahedron", 1), root=0)
             gmsh_facet_id = model.mesh.getElementType("triangle", 1)
         x, cells, cell_data, marked_facets, facet_values = retrieve_mesh_data(
             model, "box", gmsh_cell_id, gmsh_facet_id)
@@ -280,14 +309,16 @@ def create_unsplit_box_3d(L: float = 5.0, H: float = 1.0, W: float = 1.0, res: f
         num_nodes = MPI.COMM_WORLD.bcast(None, root=0)
         cell_data = np.empty((0,), dtype=np.int32)
         cells, x = np.empty([0, num_nodes], dtype=np.int64), np.empty([0, 3])
-        marked_facets, facet_values = np.empty((0, 3), dtype=np.int64), np.empty((0,), dtype=np.int32)
+        marked_facets, facet_values = np.empty(
+            (0, 3), dtype=np.int64), np.empty((0,), dtype=np.int32)
 
     if hex:
         gmsh_hex8 = cell_perm_array(CellType.hexahedron, 8)
         cells = cells[:, gmsh_hex8]
         gmsh_quad4 = cell_perm_array(CellType.quadrilateral, 4)
         marked_facets = marked_facets[:, gmsh_quad4]
-    create_dolfinx_mesh(fname, x, cells, cell_data, gmsh_cell_id, marked_facets, facet_values, 3)
+    create_dolfinx_mesh(fname, x, cells, cell_data,
+                        gmsh_cell_id, marked_facets, facet_values, 3)
 
 
 def create_tet_mesh(domain: list[int], points: list[list[float]], line_pts: list[list[float]],
@@ -299,11 +330,13 @@ def create_tet_mesh(domain: list[int], points: list[list[float]], line_pts: list
         ps1.append(gmsh.model.occ.addPoint(point[0], point[1], 0))
         ps2.append(gmsh.model.occ.addPoint(point[0], point[1], z))
 
-    lines1 = [gmsh.model.occ.addLine(ps1[i - 1], ps1[i]) for i in range(len(ps1))]
+    lines1 = [gmsh.model.occ.addLine(ps1[i - 1], ps1[i])
+              for i in range(len(ps1))]
     curve1 = gmsh.model.occ.addCurveLoop(lines1)
     surface1 = gmsh.model.occ.addPlaneSurface([curve1])
 
-    lines2 = [gmsh.model.occ.addLine(ps2[i - 1], ps2[i]) for i in range(len(ps2))]
+    lines2 = [gmsh.model.occ.addLine(ps2[i - 1], ps2[i])
+              for i in range(len(ps2))]
     curve2 = gmsh.model.occ.addCurveLoop(lines2)
     surface2 = gmsh.model.occ.addPlaneSurface([curve2])
 
@@ -311,15 +344,18 @@ def create_tet_mesh(domain: list[int], points: list[list[float]], line_pts: list
 
     surfaces = []
     for i in range(len(pts)):
-        curve = gmsh.model.occ.addCurveLoop([lines1[i], lines_z[i], -lines2[i], -lines_z[i - 1]])
+        curve = gmsh.model.occ.addCurveLoop(
+            [lines1[i], lines_z[i], -lines2[i], -lines_z[i - 1]])
         surfaces.append(gmsh.model.occ.addPlaneSurface([curve]))
 
     sloop = gmsh.model.occ.addSurfaceLoop([surface1] + surfaces + [surface2])
     volume = gmsh.model.occ.addVolume([sloop])
     model.occ.synchronize()
 
-    model.addPhysicalGroup(2, [surfaces[i] for i in range(1, len(surfaces) - 2)], tag=tags[2])
-    model.addPhysicalGroup(2, [surface1, surface2, surfaces[0], surfaces[-2], surfaces[-1]], tag=tags[1])
+    model.addPhysicalGroup(2, [surfaces[i]
+                           for i in range(1, len(surfaces) - 2)], tag=tags[2])
+    model.addPhysicalGroup(
+        2, [surface1, surface2, surfaces[0], surfaces[-2], surfaces[-1]], tag=tags[1])
     model.addPhysicalGroup(3, [volume], tag=tags[0])
     model.mesh.generate(3)
     gmsh.model.mesh.optimize("Netgen")
@@ -336,12 +372,14 @@ def create_hex_mesh(domain: list[int], points: list[list[float]], line_pts: list
     curve = gmsh.model.occ.addCurveLoop(lines)
     surface = gmsh.model.occ.addPlaneSurface([curve])
 
-    model.occ.extrude([(2, surface)], 0, 0, z, numElements=[np.ceil(5 * z / res)], recombine=True)
+    model.occ.extrude([(2, surface)], 0, 0, z, numElements=[
+                      np.ceil(5 * z / res)], recombine=True)
     model.occ.synchronize()
     volumes = model.getEntities(3)
     surfaces = model.getEntities(2)
 
-    model.addPhysicalGroup(2, [surfaces[i][1] for i in range(2, len(surfaces) - 3)], tag=tags[2])
+    model.addPhysicalGroup(2, [surfaces[i][1]
+                           for i in range(2, len(surfaces) - 3)], tag=tags[2])
     model.addPhysicalGroup(2, [surfaces[i][1]
                            for i in [0, 1, len(surfaces) - 3, len(surfaces) - 2, len(surfaces) - 1]], tag=tags[1])
     model.addPhysicalGroup(volumes[0][0], [volumes[0][1]], tag=tags[0])
@@ -375,14 +413,16 @@ def create_split_box_2D(filename: str, res: float = 0.8, L: float = 5.0, H: floa
         # Create box
         t = np.linspace(0, 1, num_segments[0] + 1)
         line_pts = curve_fun(t, x0, x1)
-        tags = [1, 3, 4]
+        tags = [1, 2, 3, 4]
         create_surface_mesh(domain_1, points, line_pts, model, tags)
 
         # Broadcast cell type data and geometric dimension
         if quads:
-            gmsh_cell_id = MPI.COMM_WORLD.bcast(model.mesh.getElementType("quadrangle", 1), root=0)
+            gmsh_cell_id = MPI.COMM_WORLD.bcast(
+                model.mesh.getElementType("quadrangle", 1), root=0)
         else:
-            gmsh_cell_id = MPI.COMM_WORLD.bcast(model.mesh.getElementType("triangle", 1), root=0)
+            gmsh_cell_id = MPI.COMM_WORLD.bcast(
+                model.mesh.getElementType("triangle", 1), root=0)
 
         # Get mesh data for dim (0, tdim) for all physical entities
         gmsh_facet_id = model.mesh.getElementType("line", 1)
@@ -394,7 +434,7 @@ def create_split_box_2D(filename: str, res: float = 0.8, L: float = 5.0, H: floa
         # Create box
         t = np.linspace(0, 1, num_segments[1] + 1)
         line_pts = curve_fun(t, x0, x1)
-        tags = [2, 5, 6]
+        tags = [5, 6, 7, 8]
         create_surface_mesh(domain_2, points, line_pts, model, tags)
 
         # Get mesh data for dim (0, tdim) for all physical entities
@@ -413,12 +453,14 @@ def create_split_box_2D(filename: str, res: float = 0.8, L: float = 5.0, H: floa
         num_nodes = MPI.COMM_WORLD.bcast(None, root=0)
         cells, x = np.empty([0, num_nodes], dtype=np.int64), np.empty([0, 3])
         cell_data = np.empty((0,), dtype=np.int32)
-        marked_facets, facet_values = np.empty((0, 3), dtype=np.int64), np.empty((0,), dtype=np.int32)
+        marked_facets, facet_values = np.empty(
+            (0, 3), dtype=np.int64), np.empty((0,), dtype=np.int32)
 
     if quads:
         gmsh_quad4 = cell_perm_array(CellType.quadrilateral, 4)
         cells = cells[:, gmsh_quad4]
-    create_dolfinx_mesh(filename, x[:, :2], cells, cell_data, gmsh_cell_id, marked_facets, facet_values, 2)
+    create_dolfinx_mesh(
+        filename, x[:, :2], cells, cell_data, gmsh_cell_id, marked_facets, facet_values, 2)
 
 
 def create_split_box_3D(filename: str, res: float = 0.8, L: float = 5.0, H: float = 1.0, W: float = 1.0,
@@ -442,11 +484,13 @@ def create_split_box_3D(filename: str, res: float = 0.8, L: float = 5.0, H: floa
         tags = [1, 3, 4]
         if hex:
             create_hex_mesh(domain_1, points, line_pts, model, tags, W, res)
-            gmsh_cell_id = MPI.COMM_WORLD.bcast(model.mesh.getElementType("hexahedron", 1), root=0)
+            gmsh_cell_id = MPI.COMM_WORLD.bcast(
+                model.mesh.getElementType("hexahedron", 1), root=0)
             gmsh_facet_id = model.mesh.getElementType("quadrangle", 1)
         else:
             create_tet_mesh(domain_1, points, line_pts, model, tags, W)
-            gmsh_cell_id = MPI.COMM_WORLD.bcast(model.mesh.getElementType("tetrahedron", 1), root=0)
+            gmsh_cell_id = MPI.COMM_WORLD.bcast(
+                model.mesh.getElementType("tetrahedron", 1), root=0)
             gmsh_facet_id = model.mesh.getElementType("triangle", 1)
         x, cells, cell_data, marked_facets, facet_values = retrieve_mesh_data(
             model, "first", gmsh_cell_id, gmsh_facet_id)
@@ -457,7 +501,8 @@ def create_split_box_3D(filename: str, res: float = 0.8, L: float = 5.0, H: floa
         line_pts = curve_fun(t, x0, x1)
         tags = [2, 5, 6]
         if hex:
-            create_hex_mesh(domain_2, points, line_pts, model, tags, W, 0.8 * res)
+            create_hex_mesh(domain_2, points, line_pts,
+                            model, tags, W, 0.8 * res)
 
         else:
             create_tet_mesh(domain_2, points, line_pts, model, tags, W)
@@ -480,10 +525,12 @@ def create_split_box_3D(filename: str, res: float = 0.8, L: float = 5.0, H: floa
         num_nodes = MPI.COMM_WORLD.bcast(None, root=0)
         cells, x = np.empty([0, num_nodes], dtype=np.int64), np.empty([0, 3])
         cell_data = np.empty((0,), dtype=np.int32)
-        marked_facets, facet_values = np.empty((0, 3), dtype=np.int64), np.empty((0,), dtype=np.int32)
+        marked_facets, facet_values = np.empty(
+            (0, 3), dtype=np.int64), np.empty((0,), dtype=np.int32)
     if hex:
         gmsh_hex8 = cell_perm_array(CellType.hexahedron, 8)
         cells = cells[:, gmsh_hex8]
         gmsh_quad4 = cell_perm_array(CellType.quadrilateral, 4)
         marked_facets = marked_facets[:, gmsh_quad4]
-    create_dolfinx_mesh(filename, x, cells, cell_data, gmsh_cell_id, marked_facets, facet_values, 3)
+    create_dolfinx_mesh(filename, x, cells, cell_data,
+                        gmsh_cell_id, marked_facets, facet_values, 3)

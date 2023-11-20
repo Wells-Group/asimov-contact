@@ -45,13 +45,14 @@ public:
   /// surface in surfaces->array() as a contact pair
   /// @param[in] V The functions space
   /// @param[in] q_deg The quadrature degree.
-  Contact(const std::vector<
-              std::shared_ptr<dolfinx::mesh::MeshTags<std::int32_t>>>& markers,
-          std::shared_ptr<const dolfinx::graph::AdjacencyList<std::int32_t>>
-              surfaces,
-          const std::vector<std::array<int, 2>>& contact_pairs,
-          std::shared_ptr<dolfinx::mesh::Mesh<double>> mesh,
-          const int q_deg = 3, ContactMode mode = ContactMode::ClosestPoint);
+  Contact(
+      const std::vector<std::shared_ptr<dolfinx::mesh::MeshTags<std::int32_t>>>&
+          markers,
+      std::shared_ptr<const dolfinx::graph::AdjacencyList<std::int32_t>>
+          surfaces,
+      const std::vector<std::array<int, 2>>& contact_pairs,
+      std::shared_ptr<dolfinx::mesh::Mesh<double>> mesh, const int q_deg = 3,
+      ContactMode mode = ContactMode::ClosestPoint);
 
   /// Return meshtag value for surface with index surface
   /// @param[in] surface - the index of the surface
@@ -95,8 +96,9 @@ public:
   /// return size of coefficients vector per facet on s
   /// @param[in] meshtie - Type of constraint,meshtie if true, unbiased contact
   /// if false
-  std::size_t coefficients_size(bool meshtie,
-    std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V);
+  std::size_t coefficients_size(
+      bool meshtie,
+      std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V);
 
   /// return distance map (adjacency map mapping quadrature points on surface
   /// to closest facet on other surface)
@@ -184,8 +186,9 @@ public:
   /// packed at quadrature points. The coefficient `u` is packed at dofs.
   /// @note The vector valued coefficents `gap`, `test_fn`, `u`, `u_opposite`
   /// has dimension `bs == gdim`.
-  kernel_fn<PetscScalar> generate_kernel(Kernel type,
-    std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V);
+  kernel_fn<PetscScalar>
+  generate_kernel(Kernel type,
+                  std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V);
 
   /// Compute push forward of quadrature points _qp_ref_facet to the
   /// physical facet for each facet in _facet_"origin_meshtag" Creates and
@@ -231,6 +234,8 @@ public:
   std::pair<std::vector<PetscScalar>, int> pack_grad_test_functions(
       int pair, std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V);
 
+  void update_distance_map(std::size_t pair, std::span<const double> gap,
+                           std::span<const double> n_y);
   /// Compute function on opposite surface at quadrature points of
   /// facets
   /// @param[in] pair - index of contact pair

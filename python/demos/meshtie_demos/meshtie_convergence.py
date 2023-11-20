@@ -45,7 +45,6 @@ def u_fun_3d(x: npt.NDArray[np.float64], d: float, gdim: int) -> npt.NDArray[np.
     return d * np.sin(2 * np.pi * x[0] / 5) * np.sin(2 * np.pi * x[1]) * np.sin(2 * np.pi * x[2])
 
 
-
 # forcing 2D for manufactured solution
 # this is -div(sigma(u_fun_3d))
 def fun_3d(x: npt.NDArray[np.float64], d: float,  gdim: int) -> npt.NDArray[np.float64]:
@@ -53,7 +52,8 @@ def fun_3d(x: npt.NDArray[np.float64], d: float,  gdim: int) -> npt.NDArray[np.f
     b = 2 * np.pi
     c = 2 * np.pi
 
-    return (a**2 + b**2 +c**2) * d * np.sin(a * x[0]) * np.sin(b * x[1]) * np.sin(c * x[2])
+    return (a**2 + b**2 + c**2) * d * np.sin(a * x[0]) * np.sin(b * x[1]) * np.sin(c * x[2])
+
 
 def unsplit_domain(threed: bool = False, runs: int = 1):
     '''
@@ -70,19 +70,22 @@ def unsplit_domain(threed: bool = False, runs: int = 1):
     its = []
 
     res = 0.6  # mesh resolution (input to gmsh)
-    num_segments = 2 * np.ceil(5.0 / (1.2 * 0.7)).astype(np.int32)  # parameter for surface approximation
+    # parameter for surface approximation
+    num_segments = 2 * np.ceil(5.0 / (1.2 * 0.7)).astype(np.int32)
 
     for i in range(1, runs + 1):
         print(f"Run {i}")
         # create mesh
         if threed:
             fname = f"./meshes/box_3D_{i}"
-            create_unsplit_box_3d(res=res, num_segments=num_segments, fname=fname)
+            create_unsplit_box_3d(
+                res=res, num_segments=num_segments, fname=fname)
             fun = fun_3d
             u_fun = u_fun_3d
         else:
             fname = f"./meshes/box_2D_{i}"
-            create_unsplit_box_2d(res=res, num_segments=num_segments, filename=fname)
+            create_unsplit_box_2d(
+                res=res, num_segments=num_segments, filename=fname)
             fun = fun_2d
             u_fun = u_fun_2d
 
@@ -135,7 +138,8 @@ def unsplit_domain(threed: bool = False, runs: int = 1):
             0.5 * ufl.inner(ufl.avg(ufl.grad(u)), n('+')) * ufl.jump(v) * dS +\
             0.5 * ufl.inner(ufl.avg(ufl.grad(u)), n('-')) * ufl.jump(v) * dS -\
             0.5 * theta * ufl.inner(ufl.avg(ufl.grad(v)), n('+')) * ufl.jump(u) * dS +\
-            0.5 * theta * ufl.inner(ufl.avg(ufl.grad(v)), n('-')) * ufl.jump(u) * dS
+            0.5 * theta * ufl.inner(ufl.avg(ufl.grad(v)),
+                                    n('-')) * ufl.jump(u) * dS
 
         J = form(J)
         F = form(F)
@@ -148,7 +152,8 @@ def unsplit_domain(threed: bool = False, runs: int = 1):
 
         b = assemble_vector(F)
         apply_lifting(b, [J], bcs=[[]])
-        b.ghostUpdate(addv=PETSc.InsertMode.ADD, mode=PETSc.ScatterMode.REVERSE)  # type: ignore
+        b.ghostUpdate(addv=PETSc.InsertMode.ADD,
+                      mode=PETSc.ScatterMode.REVERSE)  # type: ignore
         set_bc(b, [])
 
         # Set solver options
@@ -175,7 +180,8 @@ def unsplit_domain(threed: bool = False, runs: int = 1):
 
         # Set a monitor, solve linear system, and display the solver
         # configuration
-        solver.setMonitor(lambda _, its, rnorm: print(f"Iteration: {its}, rel. residual: {rnorm}"))
+        solver.setMonitor(lambda _, its, rnorm: print(
+            f"Iteration: {its}, rel. residual: {rnorm}"))
         timing_str = "~Krylov Solver"
         with Timer(timing_str):
             solver.solve(b, uh.vector)
@@ -222,7 +228,8 @@ def test_meshtie(threed: bool = False, simplex: bool = True, runs: int = 5):
     res = 0.8 if simplex else 1.2
 
     # parameter for surface approximation
-    num_segments = (2 * np.ceil(5.0 / 1.2).astype(np.int32), 2 * np.ceil(5.0 / (1.2 * 0.7)).astype(np.int32))
+    num_segments = (2 * np.ceil(5.0 / 1.2).astype(np.int32),
+                    2 * np.ceil(5.0 / (1.2 * 0.7)).astype(np.int32))
     c = 0.01  # amplitude of manufactured solution
 
     # Nitsche parameters
@@ -268,7 +275,6 @@ def test_meshtie(threed: bool = False, simplex: bool = True, runs: int = 5):
             domain_marker = xdmf.read_meshtags(mesh, name="domain_marker")
             facet_marker = xdmf.read_meshtags(mesh, name="contact_facets")
 
-
         if mesh.comm.size > 1:
             mesh, facet_marker, domain_marker = create_contact_mesh(
                 mesh, facet_marker, domain_marker, [4, 6])
@@ -304,12 +310,14 @@ def test_meshtie(threed: bool = False, simplex: bool = True, runs: int = 5):
 
         # compile forms
         cffi_options = ["-Ofast", "-march=native"]
-        jit_options = {"cffi_extra_compile_args": cffi_options, "cffi_libraries": ["m"]}
+        jit_options = {"cffi_extra_compile_args": cffi_options,
+                       "cffi_libraries": ["m"]}
         F = form(F, jit_options=jit_options)
         J = form(J, jit_options=jit_options)
 
         # surface data for Nitsche
-        contact = [(0, 2), (0, 3), (1, 2), (1, 3), (2, 0), (2, 1), (3, 0), (3, 1)]
+        contact = [(0, 2), (0, 3), (1, 2), (1, 3),
+                   (2, 0), (2, 1), (3, 0), (3, 1)]
         data = np.array([3, 4, 7, 8], dtype=np.int32)
         offsets = np.array([0, 4], dtype=np.int32)
         surfaces = adjacencylist(data, offsets)
@@ -317,9 +325,8 @@ def test_meshtie(threed: bool = False, simplex: bool = True, runs: int = 5):
         # initialise meshties
         meshties = MeshTie([facet_marker._cpp_object], surfaces, contact,
                            mesh._cpp_object, quadrature_degree=5)
-        
-        quit()
-        meshties.generate_heattransfer_data_matrix_only(V._cpp_object, kdt, gamma, theta)
+        meshties.generate_heattransfer_data_matrix_only(
+            V._cpp_object, kdt, gamma, theta)
 
         # create matrix, vector
         A = meshties.create_matrix(J._cpp_object)
@@ -327,9 +334,11 @@ def test_meshtie(threed: bool = False, simplex: bool = True, runs: int = 5):
 
         # Assemble right hand side
         b.zeroEntries()
-        b.ghostUpdate(addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD)  # type: ignore
+        b.ghostUpdate(addv=PETSc.InsertMode.INSERT,
+                      mode=PETSc.ScatterMode.FORWARD)  # type: ignore
         assemble_vector(b, F)
-        b.ghostUpdate(addv=PETSc.InsertMode.ADD, mode=PETSc.ScatterMode.REVERSE)  # type: ignore
+        b.ghostUpdate(addv=PETSc.InsertMode.ADD,
+                      mode=PETSc.ScatterMode.REVERSE)  # type: ignore
 
         # Assemble matrix
         A.zeroEntries()
@@ -358,7 +367,8 @@ def test_meshtie(threed: bool = False, simplex: bool = True, runs: int = 5):
         log.set_log_level(log.LogLevel.OFF)
         # Set a monitor, solve linear system, and display the solver
         # configuration
-        solver.setMonitor(lambda _, its, rnorm: print(f"Iteration: {its}, rel. residual: {rnorm}"))
+        solver.setMonitor(lambda _, its, rnorm: print(
+            f"Iteration: {its}, rel. residual: {rnorm}"))
         timing_str = "~Contact : Krylov Solver"
         with Timer(timing_str):
             solver.solve(b, u1.vector)
@@ -392,7 +402,8 @@ def test_meshtie(threed: bool = False, simplex: bool = True, runs: int = 5):
     list_timings(mesh.comm, [TimingType.wall])
     print("L2 errors; ", errors)
     h = 1./(np.array(dofs)**(1/tdim))
-    rates =[(np.log(errors[i-1])-np.log(errors[i]))/(np.log(h[i-1]) - np.log(h[i])) for i in range(1, runs)]
+    rates = [(np.log(errors[i-1])-np.log(errors[i])) /
+             (np.log(h[i-1]) - np.log(h[i])) for i in range(1, runs)]
     print("Rates: ", rates)
     print("Solver time: ", times)
     print("Krylov iterations: ", iterations)
