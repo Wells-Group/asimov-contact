@@ -10,18 +10,13 @@ import ufl
 from dolfinx import default_scalar_type, log
 from dolfinx.common import Timer, TimingType, list_timings, timing
 from dolfinx.fem import (Constant, Function, FunctionSpace,
-                         VectorFunctionSpace, assemble_scalar, dirichletbc,
-                         form, locate_dofs_topological)
+                         assemble_scalar, form)
 from dolfinx.fem.petsc import (apply_lifting, assemble_matrix, assemble_vector,
                                create_vector, set_bc)
 from dolfinx.graph import adjacencylist
 from dolfinx.io import XDMFFile
 from dolfinx.mesh import meshtags
 from dolfinx_contact.cpp import MeshTie
-from dolfinx_contact.helpers import (epsilon, lame_parameters,
-                                     rigid_motions_nullspace,
-                                     near_nullspace_subdomains,
-                                     sigma_func)
 from dolfinx_contact.meshing import (create_split_box_2D, create_split_box_3D,
                                      create_unsplit_box_2d,
                                      create_unsplit_box_3d, horizontal_sine)
@@ -273,6 +268,7 @@ def test_meshtie(threed: bool = False, simplex: bool = True, runs: int = 5):
             domain_marker = xdmf.read_meshtags(mesh, name="domain_marker")
             facet_marker = xdmf.read_meshtags(mesh, name="contact_facets")
 
+
         if mesh.comm.size > 1:
             mesh, facet_marker, domain_marker = create_contact_mesh(
                 mesh, facet_marker, domain_marker, [4, 6])
@@ -299,7 +295,7 @@ def test_meshtie(threed: bool = False, simplex: bool = True, runs: int = 5):
 
         # 0 dirichlet
         g = Constant(mesh, default_scalar_type((0.0)))
-        for tag in [3, 5]:
+        for tag in [2, 6]:
             J += - ufl.inner(ufl.grad(w), n) * v * ds(tag)\
                 - theta * ufl.inner(ufl.grad(v), n) * w * \
                 ds(tag) + gamma / h * w * v * ds(tag)
@@ -313,14 +309,16 @@ def test_meshtie(threed: bool = False, simplex: bool = True, runs: int = 5):
         J = form(J, jit_options=jit_options)
 
         # surface data for Nitsche
-        contact = [(1, 0), (0, 1)]
-        data = np.array([4, 6], dtype=np.int32)
-        offsets = np.array([0, 2], dtype=np.int32)
+        contact = [(0, 2), (0, 3), (1, 2), (1, 3), (2, 0), (2, 1), (3, 0), (3, 1)]
+        data = np.array([3, 4, 7, 8], dtype=np.int32)
+        offsets = np.array([0, 4], dtype=np.int32)
         surfaces = adjacencylist(data, offsets)
 
         # initialise meshties
         meshties = MeshTie([facet_marker._cpp_object], surfaces, contact,
                            mesh._cpp_object, quadrature_degree=5)
+        
+        quit()
         meshties.generate_heattransfer_data_matrix_only(V._cpp_object, kdt, gamma, theta)
 
         # create matrix, vector
