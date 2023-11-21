@@ -5,6 +5,7 @@
 // SPDX-License-Identifier:    MIT
 
 #include <dolfinx/common/MPI.h>
+#include <dolfinx/common/Timer.h>
 #include <dolfinx/common/log.h>
 #include <dolfinx/graph/AdjacencyList.h>
 #include <dolfinx/mesh/utils.h>
@@ -14,14 +15,113 @@
 
 #include <set>
 
+std::tuple<dolfinx::mesh::Mesh<double>, dolfinx::mesh::MeshTags<std::int32_t>>
+create_contact_mesh(dolfinx::mesh::Mesh<double>& mesh,
+                    const dolfinx::mesh::MeshTags<std::int32_t>& fmarker,
+                    const dolfinx::mesh::MeshTags<std::int32_t>& dmarker,
+                    const std::vector<std::int32_t>& tags, double R = 0.2)
+{
+  LOG(WARNING) << "Create Contact Mesh";
+
+  int tdim = mesh.topology()->dim();
+  int num_cell_vertices
+      = dolfinx::mesh::num_cell_vertices(mesh.topology()->cell_types()[0]);
+  dolfinx::mesh::CellType facet_type
+      = dolfinx::mesh::cell_facet_type(mesh.topology()->cell_types()[0], 0);
+  int num_facet_vertices = dolfinx::mesh::num_cell_vertices(facet_type);
+
+  // Get cells attached to marked facets
+  mesh.topology()->create_connectivity(tdim - 1, tdim);
+  mesh.topology()->create_connectivity(tdim, 0);
+  auto fc = mesh.topology()->connectivity(tdim - 1, tdim);
+  auto fv = mesh.topology()->connectivity(tdim - 1, 0);
+  auto cv = mesh.topology()->connectivity(tdim, 0);
+
+  // Extract facet markers with given tags
+  std::vector<int> marker_subset;
+  {
+    const auto& mv = fmarker.values();
+    const auto& mi = fmarker.indices();
+    for (std::size_t i = 0; i < mi.size(); ++i)
+    {
+      for (std::int32_t k : tags)
+      {
+        if (k == mv[i])
+        {
+          marker_subset.push_back(mi[i]);
+          break;
+        }
+      }
+    }
+  }
+
+  LOG(WARNING) << "Compute cell destinations";
+
+  // Find destinations for the cells attached to the tag-marked facets
+  dolfinx::common::Timer tcd("~Contact: Add ghosts: Compute cell destinations");
+  auto cell_dests = dolfinx_contact::compute_ghost_cell_destinations(
+      mesh, marker_subset, R);
+  tcd.stop();
+
+  LOG(WARNING) << "cells to ghost";
+  dolfinx::common::Timer tcg("~Contact: Add ghosts: cells to ghost");
+
+  std::vector<int> cells_to_ghost;
+  for (std::int32_t f : marker_subset)
+    cells_to_ghost.push_back(fc->links(f)[0]);
+
+  std::map<int, std::vector<int>> cell_to_dests;
+  for (std::size_t i = 0; i < cells_to_ghost.size(); ++i)
+  {
+    int c = cells_to_ghost[i];
+    cell_to_dests[c] = std::vector<int>(cell_dests.links(i).begin(),
+                                        cell_dests.links(i).end());
+  }
+
+  int ncells = mesh.topology()->index_map(tdim)->size_local();
+
+  // Convert marked facets to list of(global) vertices for each facet
+  //     fv_indices =
+  //     [sorted(mesh.topology.index_map(0).local_to_global(fv.links(f)))
+  //     for f in fmarker.indices] cv_indices =
+  //     [sorted(mesh.topology.index_map(0).local_to_global(cv.links(c)))
+  //     for c in dmarker.indices]
+  //   }
+
+  LOG(WARNING) << "Copy markers to other processes";
+
+  //     timer = Timer("~Contact: Add ghosts: Copy markers to other
+  //     processes")
+  // #Copy facets and markers to all processes
+  //     if len(fv_indices) > 0:
+  //         global_fmarkers = np.concatenate(fv_indices)
+  //     else:
+  //         global_fmarkers = []
+  //     all_indices = [f for f in mesh.comm.allgather(global_fmarkers) if
+  //     len(f) > 0] all_indices = np.concatenate(all_indices).reshape(-1,
+  //     num_facet_vertices)
+
+  //     all_values = np.concatenate([v for v in
+  //     mesh.comm.allgather(fmarker.values) if len(v) > 0]) assert
+  //     len(all_values) == all_indices.shape[0]
+
+  //     global_dmarkers = np.concatenate(cv_indices)
+  //     all_cell_indices = mesh.comm.allgather(global_dmarkers)
+  //     all_cell_indices = np.concatenate(all_cell_indices).reshape(-1,
+  //     num_cell_vertices) all_cell_values =
+  //     np.concatenate(mesh.comm.allgather(dmarker.values))
+
+  return {mesh, fmarker};
+}
+
 dolfinx::graph::AdjacencyList<std::int32_t>
 dolfinx_contact::compute_ghost_cell_destinations(
     const dolfinx::mesh::Mesh<double>& mesh,
     std::span<const std::int32_t> marker_subset, double R)
 {
-  // For each marked facet, given by indices in "marker_subset", get the list of
-  // processes which the attached cell should be sent to, for ghosting.
-  // Neighbouring facets within distance "R".
+  // For each marked facet, given by indices in "marker_subset", get the
+  // list of processes which the attached cell should be sent to, for
+  // ghosting. Neighbouring facets within distance "R".
   LOG(WARNING) << "Compute ghost cell destinations";
 
   const int size = dolfinx::MPI::size(mesh.comm());
@@ -137,7 +237,8 @@ dolfinx_contact::compute_ghost_cell_destinations(
   MPI_Scatterv(nbr_procs.data(), dsizes.data(), nbr_offsets.data(), MPI_INT,
                my_recv_data.data(), my_recv_size, MPI_INT, 0, mesh.comm());
 
-  // Unpack received data to get additional destinations for each facet / cell
+  // Unpack received data to get additional destinations for each facet /
+  // cell
   std::vector<int> doffsets(my_recv_data.begin(),
                             std::next(my_recv_data.begin(), num_facets + 1));
 
@@ -153,7 +254,7 @@ dolfinx_contact::lex_match(int dim,
                            const std::vector<std::int32_t>& in_indices,
                            const std::vector<std::int32_t>& in_values)
 {
-  LOG(WARNING) << "Lex match: [" << local_indices.size() <<", "
+  LOG(WARNING) << "Lex match: [" << local_indices.size() << ", "
                << in_indices.size() << ", " << in_values.size() << "]";
 
   assert(local_indices.size() % dim == 0);

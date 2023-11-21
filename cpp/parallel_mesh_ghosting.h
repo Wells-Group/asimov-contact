@@ -6,6 +6,7 @@
 
 #include <dolfinx/graph/AdjacencyList.h>
 #include <dolfinx/mesh/Mesh.h>
+#include <dolfinx/mesh/MeshTags.h>
 #include <span>
 
 namespace dolfinx_contact
@@ -14,6 +15,19 @@ namespace dolfinx_contact
   dolfinx::graph::AdjacencyList<std::int32_t>
     compute_ghost_cell_destinations(const dolfinx::mesh::Mesh<double>& mesh,
                                     std::span<const std::int32_t> marker_subset, double R);
+
+  /// @brief Creates a new mesh with additional ghost cells
+  /// @param mesh input mesh
+  /// @param fmarker facet markers
+  /// @param dmarker domain markers
+  /// @param tags
+  /// @param R search radius
+  /// @return new mesh and markers
+  std::tuple<dolfinx::mesh::Mesh<double>, dolfinx::mesh::MeshTags<std::int32_t>>
+  create_contact_mesh(dolfinx::mesh::Mesh<double>& mesh,
+                      const dolfinx::mesh::MeshTags<std::int32_t>& fmarker,
+                      const dolfinx::mesh::MeshTags<std::int32_t>& dmarker,
+                      const std::vector<std::int32_t>& tags, double R = 0.2);
 
   /// @brief Lexical matching of input markers with local entities.
   ///
