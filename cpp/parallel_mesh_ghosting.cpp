@@ -9,6 +9,7 @@
 #include <dolfinx/common/log.h>
 #include <dolfinx/graph/AdjacencyList.h>
 #include <dolfinx/mesh/utils.h>
+#include <mpi.h>
 
 #include "parallel_mesh_ghosting.h"
 #include "point_cloud.h"
@@ -80,30 +81,63 @@ create_contact_mesh(dolfinx::mesh::Mesh<double>& mesh,
 
   int ncells = mesh.topology()->index_map(tdim)->size_local();
 
-  // Convert marked facets to list of(global) vertices for each facet
-  //     fv_indices =
-  //     [sorted(mesh.topology.index_map(0).local_to_global(fv.links(f)))
-  //     for f in fmarker.indices] cv_indices =
-  //     [sorted(mesh.topology.index_map(0).local_to_global(cv.links(c)))
-  //     for c in dmarker.indices]
-  //   }
+  // Convert marked facets to list of (global) vertices for each facet
+  std::vector<int> local_indices;
+  for (auto f : fmarker.indices())
+  {
+    auto fl = fv->links(f);
+    local_indices.insert(local_indices.end(), fl.begin(), fl.end());
+  }
+  std::vector<std::int64_t> fv_indices(local_indices.size());
+  mesh.topology()->index_map(0)->local_to_global(local_indices, fv_indices);
+  for (std::size_t i = 0; i < fv_indices.size(); i += num_facet_vertices)
+  {
+    std::sort(std::next(fv_indices.begin(), i),
+              std::next(fv_indices.begin(), i + num_facet_vertices));
+  }
+  local_indices.clear();
+
+  // Convert marked cells to list of (global) vertices for each cell
+  for (auto c : dmarker.indices())
+  {
+    auto cl = cv->links(c);
+    local_indices.insert(local_indices.end(), cl.begin(), cl.end());
+  }
+  std::vector<std::int64_t> cv_indices(local_indices.size());
+  mesh.topology()->index_map(0)->local_to_global(local_indices, fv_indices);
+  for (std::size_t i = 0; i < cv_indices.size(); i += num_cell_vertices)
+  {
+    std::sort(std::next(fv_indices.begin(), i),
+              std::next(fv_indices.begin(), i + num_cell_vertices));
+  }
 
   LOG(WARNING) << "Copy markers to other processes";
 
-  //     timer = Timer("~Contact: Add ghosts: Copy markers to other
-  //     processes")
-  // #Copy facets and markers to all processes
-  //     if len(fv_indices) > 0:
-  //         global_fmarkers = np.concatenate(fv_indices)
-  //     else:
-  //         global_fmarkers = []
-  //     all_indices = [f for f in mesh.comm.allgather(global_fmarkers) if
-  //     len(f) > 0] all_indices = np.concatenate(all_indices).reshape(-1,
-  //     num_facet_vertices)
+  // Copy facets and markers to all processes
 
-  //     all_values = np.concatenate([v for v in
-  //     mesh.comm.allgather(fmarker.values) if len(v) > 0]) assert
-  //     len(all_values) == all_indices.shape[0]
+  int fv_size = fv_indices.size();
+  int mpi_size = dolfinx::MPI::size(mesh.comm());
+  std::vector<int> recv_count(mpi_size), recv_offset(mpi_size + 1);
+  MPI_Allgather(&fv_size, 1, MPI_INT, recv_count.data(), 1, MPI_INT,
+                mesh.comm());
+  for (int i = 0; i < mpi_size; ++i)
+    recv_offset[i + 1] = recv_offset[i] + recv_count[i];
+
+  std::vector<std::int64_t> recvbuf(recv_offset.back());
+  MPI_Allgatherv(fv_indices.data(), fv_indices.size(), MPI_INT64_T,
+                 recvbuf.data(), recv_count.data(), recv_offset.data(),
+                 MPI_INT64_T, mesh.comm());
+
+  // Change count for data (one item per facet)
+  std::for_each(recv_count.begin(), recv_count.end(),
+                [num_facet_vertices](int& n) { n /= num_facet_vertices; });
+  std::for_each(recv_offset.begin(), recv_offset.end(),
+                [num_facet_vertices](int& n) { n /= num_facet_vertices; });
+
+  std::vector<int> all_values(recv_offset.back());
+  MPI_Allgatherv(fmarker.values().data(), fmarker.values().size(), MPI_INT,
+                 all_values.data(), recv_count.data(), recv_offset.data(),
+                 MPI_INT, mesh.comm());
 
   //     global_dmarkers = np.concatenate(cv_indices)
   //     all_cell_indices = mesh.comm.allgather(global_dmarkers)
