@@ -733,7 +733,7 @@ void dolfinx_contact::Contact::update_distance_map(std::size_t pair,
   const std::size_t num_q_points
       = _quadrature_rule->offset()[1] - _quadrature_rule->offset()[0];
   const std::size_t gdim = _mesh->geometry().dim();
-  double tol = 1e-7;
+  double tol = 1e-5;
   std::shared_ptr<const dolfinx::graph::AdjacencyList<std::int32_t>>
       candidate_map = _facet_maps[pair];
   std::vector<std::int32_t> offsets(candidate_map->offsets());
@@ -751,10 +751,14 @@ void dolfinx_contact::Contact::update_distance_map(std::size_t pair,
         dot += gap[index] * n_y[index];
         norm += gap[index] * gap[index];
       }
-      dot = std::abs(dot) / std::sqrt(norm);
+      norm = std::sqrt(norm);
+      if (norm > 1e-7)
+      {
+        dot = std::abs(dot) / norm;
 
-      if (dot < (1 - tol))
-        data[offsets[f] + q] = -1;
+        if (dot < (1 - tol))
+          data[offsets[f] + q] = -1;
+      }
     }
   }
   auto new_map = dolfinx::graph::AdjacencyList<std::int32_t>(data, offsets);
