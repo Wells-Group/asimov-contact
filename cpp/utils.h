@@ -362,11 +362,19 @@ compute_projection_map(const dolfinx::mesh::Mesh<double>& mesh,
                        std::span<const std::int32_t> facet_tuples,
                        std::span<const double> points)
 {
+
   assert(tdim == mesh.topology()->dim());
   assert(mesh.geometry().dim() == gdim);
 
   const std::size_t num_points = points.size() / 3;
+  std::vector<double> candidate_X(num_points * tdim, 0);
 
+  if (facet_tuples.size()==0)
+  {
+    std::vector<std::int32_t> closest_facets(num_points, -1);
+    return {closest_facets, candidate_X, {candidate_X.size() / tdim, tdim}};
+    
+  }
   // Convert cell,local_facet_index to facet_index (local
   // to proc)
   std::vector<std::int32_t> facets(facet_tuples.size() / 2);
@@ -449,7 +457,6 @@ compute_projection_map(const dolfinx::mesh::Mesh<double>& mesh,
   }
 
   // Pull back to reference point for each facet on the surface
-  std::vector<double> candidate_X(num_points * tdim);
   {
     // Temporary data structures used in loop over each
     // quadrature point on each facet

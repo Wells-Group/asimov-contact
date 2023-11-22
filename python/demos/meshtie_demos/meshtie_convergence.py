@@ -3,6 +3,7 @@
 # SPDX-License-Identifier:    MIT
 
 import argparse
+import sys
 
 import numpy as np
 import numpy.typing as npt
@@ -16,6 +17,7 @@ from dolfinx.fem.petsc import (apply_lifting, assemble_matrix, assemble_vector,
 from dolfinx.graph import adjacencylist
 from dolfinx.io import XDMFFile
 from dolfinx.mesh import meshtags
+from dolfinx.cpp.mesh import h as cell_diameter
 from dolfinx_contact.cpp import MeshTie
 from dolfinx_contact.meshing import (create_split_box_2D, create_split_box_3D,
                                      create_unsplit_box_2d,
@@ -55,7 +57,7 @@ def fun_3d(x: npt.NDArray[np.float64], d: float,  gdim: int) -> npt.NDArray[np.f
     return (a**2 + b**2 + c**2) * d * np.sin(a * x[0]) * np.sin(b * x[1]) * np.sin(c * x[2])
 
 
-def unsplit_domain(threed: bool = False, runs: int = 1):
+def unsplit_domain(threed: bool = False, runs: int = 1, order: int = 1):
     '''
         This function computes the finite element solution on a conforming
         mesh that aligns with the surface that is used for splitting the domain
@@ -79,13 +81,13 @@ def unsplit_domain(threed: bool = False, runs: int = 1):
         if threed:
             fname = f"./meshes/box_3D_{i}"
             create_unsplit_box_3d(
-                res=res, num_segments=num_segments, fname=fname)
+                res=res, num_segments=num_segments, fname=fname, order=order)
             fun = fun_3d
             u_fun = u_fun_3d
         else:
             fname = f"./meshes/box_2D_{i}"
             create_unsplit_box_2d(
-                res=res, num_segments=num_segments, filename=fname)
+                res=res, num_segments=num_segments, filename=fname, order=order)
             fun = fun_2d
             u_fun = u_fun_2d
 
@@ -100,7 +102,7 @@ def unsplit_domain(threed: bool = False, runs: int = 1):
             facet_marker = xdmf.read_meshtags(mesh, name="contact_facets")
 
         # Functions space and FEM functions
-        V = FunctionSpace(mesh, ("DG", 1))
+        V = FunctionSpace(mesh, ("DG", order))
         ndofs.append(V.dofmap.index_map_bs * V.dofmap.index_map.size_global)
         f = Function(V)
         c = 0.01  # amplitude of solution
@@ -120,11 +122,15 @@ def unsplit_domain(threed: bool = False, runs: int = 1):
         J = ufl.inner(ufl.grad(u), ufl.grad(v)) * dx
         F = ufl.inner(f, v) * dx
 
-        gamma = 10
+        gamma = 50 * order**2
         theta = 1
         # 0 dirichlet
         g = Constant(mesh, default_scalar_type((0.0)))
-        h = ufl.CellDiameter(mesh)
+        V0 = FunctionSpace(mesh, ("DG", 0))
+        ncells = mesh.topology.index_map(tdim).size_local
+        h = Function(V0)
+        h_vals = cell_diameter(mesh._cpp_object, mesh.topology.dim, np.arange(0, ncells, dtype=np.int32))
+        h.x.array[:ncells] = h_vals[:]
         n = ufl.FacetNormal(mesh)
         for tag in [2]:
             J += - ufl.inner(ufl.grad(u), n) * v * ds(tag)\
@@ -211,12 +217,16 @@ def unsplit_domain(threed: bool = False, runs: int = 1):
         xdmf.write_mesh(mesh)
         xdmf.write_meshtags(process_marker, mesh.geometry)
     print("L2-error: ", errors)
+    h = 1./(np.array(ndofs)**(1/tdim))
+    rates = [(np.log(errors[i-1])-np.log(errors[i])) /
+             (np.log(h[i-1]) - np.log(h[i])) for i in range(1, runs)]
+    print("Rates: ", rates)
     print("Number of dofs: ", ndofs)
     print("Linear solver time: ", times)
     print("Krylov iterations: ", its)
 
 
-def test_meshtie(threed: bool = False, simplex: bool = True, runs: int = 5):
+def test_meshtie(threed: bool = False, simplex: bool = True, runs: int = 5, order: int = 1):
     '''
         This function computes the finite element solution on mesh
         split along a surface, where the mesh and the surface discretisation
@@ -233,7 +243,7 @@ def test_meshtie(threed: bool = False, simplex: bool = True, runs: int = 5):
     c = 0.01  # amplitude of manufactured solution
 
     # Nitsche parameters
-    gamma = 10
+    gamma = 10 * order**2
     theta = 1
 
     # Solver options
@@ -257,13 +267,13 @@ def test_meshtie(threed: bool = False, simplex: bool = True, runs: int = 5):
         if threed:
             fname = fname = f"./meshes/beam3D_{i}"
             create_split_box_3D(fname, res=res, L=5.0, H=1.0, W=1.0, domain_1=[0, 1, 5, 4], domain_2=[4, 5, 2, 3], x0=[
-                0, 0.5], x1=[5.0, 0.7], curve_fun=horizontal_sine, num_segments=num_segments, hex=not simplex)
+                0, 0.5], x1=[5.0, 0.7], curve_fun=horizontal_sine, num_segments=num_segments, hex=not simplex, order=order)
             fun = fun_3d
             u_fun = u_fun_3d
         else:
             fname = fname = f"./meshes/beam_{i}"
             create_split_box_2D(fname, res=res, L=5.0, H=1.0, domain_1=[0, 1, 5, 4], domain_2=[4, 5, 2, 3], x0=[
-                0, 0.5], x1=[5.0, 0.7], curve_fun=horizontal_sine, num_segments=num_segments, quads=not simplex)
+                0, 0.5], x1=[5.0, 0.7], curve_fun=horizontal_sine, num_segments=num_segments, quads=not simplex, order=order)
             fun = fun_2d
             u_fun = u_fun_2d
         with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
@@ -277,15 +287,19 @@ def test_meshtie(threed: bool = False, simplex: bool = True, runs: int = 5):
 
         if mesh.comm.size > 1:
             mesh, facet_marker, domain_marker = create_contact_mesh(
-                mesh, facet_marker, domain_marker, [4, 6])
+                mesh, facet_marker, domain_marker, [3, 4, 7, 8])
 
         # Function, TestFunction, TrialFunction and measures
-        V = FunctionSpace(mesh, ("Lagrange", 1))
+        V = FunctionSpace(mesh, ("Lagrange", order))
         v = ufl.TestFunction(V)
         w = ufl.TrialFunction(V)
         dx = ufl.Measure("dx", domain=mesh, subdomain_data=domain_marker)
         ds = ufl.Measure("ds", domain=mesh, subdomain_data=facet_marker)
-        h = ufl.CellDiameter(mesh)
+        V0 = FunctionSpace(mesh, ("DG", 0))
+        h = Function(V0)
+        ncells = mesh.topology.index_map(tdim).size_local
+        h_vals = cell_diameter(mesh._cpp_object, mesh.topology.dim, np.arange(0, ncells, dtype=np.int32))
+        h.x.array[:ncells] = h_vals[:]
         n = ufl.FacetNormal(mesh)
 
         # Bilinear form
@@ -425,8 +439,10 @@ if __name__ == "__main__":
     _unsplit = parser.add_mutually_exclusive_group(required=False)
     _unsplit.add_argument('--unsplit', dest='unsplit', action='store_true',
                           help="Use conforming mesh", default=False)
+    parser.add_argument("--order", default=1, type=int, dest="order",
+                        help="Order of mesh geometry", choices=[1, 2, 3])
     args = parser.parse_args()
     if args.unsplit:
-        unsplit_domain(threed=args.threed, runs=args.runs)
+        unsplit_domain(threed=args.threed, runs=args.runs, order=args.order)
     else:
-        test_meshtie(simplex=args.simplex, threed=args.threed, runs=args.runs)
+        test_meshtie(simplex=args.simplex, threed=args.threed, runs=args.runs, order=args.order)
