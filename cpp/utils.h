@@ -53,6 +53,13 @@ enum class Kernel
   CoulombJac
 };
 
+enum class Problem
+{
+  Elasticity,
+  Poisson,
+  ThermoElasticity
+};
+
 //------------------------------------------------------------------------------
 /// Read a mesh
 /// @param[in] filename The file name

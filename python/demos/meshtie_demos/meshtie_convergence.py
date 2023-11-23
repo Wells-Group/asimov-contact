@@ -18,7 +18,7 @@ from dolfinx.graph import adjacencylist
 from dolfinx.io import XDMFFile
 from dolfinx.mesh import meshtags
 from dolfinx.cpp.mesh import h as cell_diameter
-from dolfinx_contact.cpp import MeshTie
+from dolfinx_contact.cpp import MeshTie, Problem
 from dolfinx_contact.meshing import (create_split_box_2D, create_split_box_3D,
                                      create_unsplit_box_2d,
                                      create_unsplit_box_3d, horizontal_sine)
@@ -356,7 +356,7 @@ def test_meshtie(threed: bool = False, simplex: bool = True, runs: int = 5, orde
 
         # Assemble matrix
         A.zeroEntries()
-        meshties.assemble_matrix_heat_transfer(A, V._cpp_object)
+        meshties.assemble_matrix(A, V._cpp_object, Problem.Poisson)
         assemble_matrix(A, J)
         A.assemble()
 

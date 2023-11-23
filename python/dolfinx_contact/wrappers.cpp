@@ -51,6 +51,11 @@ PYBIND11_MODULE(cpp, m)
       .value("ClosestPoint", dolfinx_contact::ContactMode::ClosestPoint)
       .value("Raytracing", dolfinx_contact::ContactMode::RayTracing);
 
+  py::enum_<dolfinx_contact::Problem>(m, "Problem")
+      .value("Elasticity", dolfinx_contact::Problem::Elasticity)
+      .value("Poisson", dolfinx_contact::Problem::Poisson)
+      .value("ThermoElasticity", dolfinx_contact::Problem::ThermoElasticity);
+
   // QuadratureRule
   py::class_<dolfinx_contact::QuadratureRule,
              std::shared_ptr<dolfinx_contact::QuadratureRule>>(
@@ -372,28 +377,18 @@ PYBIND11_MODULE(cpp, m)
                 &dolfinx_contact::MeshTie::generate_heat_transfer_data)
       .def("assemble_matrix",
            [](dolfinx_contact::MeshTie& self, Mat A,
-              std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V)
+              std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V,
+              dolfinx_contact::Problem problemtype)
            {
              self.assemble_matrix(
-                 dolfinx::la::petsc::Matrix::set_block_fn(A, ADD_VALUES), V);
-           })
-      .def("assemble_matrix_heat_transfer",
-           [](dolfinx_contact::MeshTie& self, Mat A,
-              std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V)
-           {
-             self.assemble_matrix_heat_transfer(
-                 dolfinx::la::petsc::Matrix::set_block_fn(A, ADD_VALUES), V);
+                 dolfinx::la::petsc::Matrix::set_block_fn(A, ADD_VALUES), V, problemtype);
            })
       .def("assemble_vector",
            [](dolfinx_contact::MeshTie& self,
               py::array_t<PetscScalar, py::array::c_style>& b,
-              std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V)
-           { self.assemble_vector(std::span(b.mutable_data(), b.size()), V); })
-      .def("assemble_vector_heat_transfer",
-           [](dolfinx_contact::MeshTie& self,
-              py::array_t<PetscScalar, py::array::c_style>& b,
-              std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V)
-           { self.assemble_vector_heat_transfer(std::span(b.mutable_data(), b.size()), V); })
+              std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V,
+              dolfinx_contact::Problem problemtype)
+           { self.assemble_vector(std::span(b.mutable_data(), b.size()), V, problemtype); })
       .def(
           "create_matrix",
           [](dolfinx_contact::MeshTie& self, dolfinx::fem::Form<PetscScalar>& a,

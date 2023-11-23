@@ -22,7 +22,7 @@ from dolfinx_contact.helpers import near_nullspace_subdomains
 from dolfinx_contact.meshing import (convert_mesh,
                                      create_box_mesh_3D)
 from dolfinx_contact.parallel_mesh_ghosting import create_contact_mesh
-from dolfinx_contact.cpp import MeshTie
+from dolfinx_contact.cpp import MeshTie, Problem
 
 if __name__ == "__main__":
     desc = "Nitsche's method for two elastic bodies using custom assemblers"
@@ -185,7 +185,7 @@ if __name__ == "__main__":
 
     # Assemble matrix
     A.zeroEntries()
-    meshties.assemble_matrix_heat_transfer(A, V._cpp_object)
+    meshties.assemble_matrix(A, V._cpp_object, Problem.Poisson)
     assemble_matrix(A, J, bcs=bcs)  # type: ignore
     A.assemble()
 

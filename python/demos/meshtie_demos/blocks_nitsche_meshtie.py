@@ -22,7 +22,7 @@ from petsc4py import PETSc
 from ufl import (derivative, grad, Identity, inner, Mesh,
                  Measure, TestFunction, TrialFunction, tr, sym)
 
-from dolfinx_contact.cpp import ContactMode, MeshTie
+from dolfinx_contact.cpp import ContactMode, MeshTie, Problem
 from dolfinx_contact.helpers import rigid_motions_nullspace_subdomains
 
 
@@ -65,7 +65,7 @@ class MeshTieProblem:
         self._b_petsc = create_petsc_vector_wrap(self._b)
 
         # Initialise the input data for integration kernels
-        self._meshties.generate_meshtie_data_matrix_only(lmbda._cpp_object, mu._cpp_object, gamma, theta)
+        self._meshties.generate_meshtie_data_matrix_only(a.function_spaces[0], lmbda._cpp_object, mu._cpp_object, gamma, theta)
 
         # Build near null space preventing rigid body motion of individual components
         tags = np.unique(subdomains.values)
@@ -90,7 +90,7 @@ class MeshTieProblem:
         # Assemble residual vector
         self._b_petsc.zeroEntries()
         self._b_petsc.ghostUpdate(addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD)
-        self._meshties.assemble_vector(self._b_petsc, self._l.function_spaces[0])  # custom kernel
+        self._meshties.assemble_vector(self._b_petsc, self._l.function_spaces[0], Problem.Elasticity)  # custom kernel
         assemble_vector(self._b_petsc, self._l)  # standard kernels
 
         # Apply boundary condition
@@ -111,7 +111,7 @@ class MeshTieProblem:
         """
         log.set_log_level(log.LogLevel.OFF)
         self._mat_a.zeroEntries()
-        self._meshties.assemble_matrix(self._mat_a, self._j.function_spaces[0])
+        self._meshties.assemble_matrix(self._mat_a, self._j.function_spaces[0], Problem.Elasticity)
         assemble_matrix(self._mat_a, self._j, self._bcs)
         self._mat_a.assemble()
         log.set_log_level(log.LogLevel.INFO)
@@ -232,7 +232,7 @@ j_compiled = form(j, jit_options=jit_options)
 search_mode = [ContactMode.ClosestPoint, ContactMode.ClosestPoint]
 
 # Initialise MeshTie class and generate MeshTie problem
-meshties = MeshTie([facet_marker._cpp_object], surfaces, contact_pairs, V._cpp_object, quadrature_degree=5)
+meshties = MeshTie([facet_marker._cpp_object], surfaces, contact_pairs, mesh._cpp_object, quadrature_degree=5)
 problem = MeshTieProblem(l_compiled, j_compiled, bcs, meshties, domain_marker,
                          u, lmbda, mu, np.float64(gamma), np.float64(theta))
 

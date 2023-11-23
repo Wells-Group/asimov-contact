@@ -55,6 +55,8 @@ public:
       std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V);
   std::size_t
   offset_poisson(std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V);
+void generate_kernel_data(Problem problem_type, const std::map<std::string, std::shared_ptr<const dolfinx::fem::Function<double>>>&
+        coefficients, double gamma, double theta);
   /// Generate data for matrix/vector assembly
   /// @param[in] u - the displacement function
   /// @param[in] lambda - lame parameter lambda as DG0 function
@@ -98,24 +100,18 @@ public:
   /// @param[in] b - the vector to assemble into
   void
   assemble_vector(std::span<PetscScalar> b,
-                  std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V);
-  /// Assemble right hand side
-  /// @param[in] b - the vector to assemble into
-  void assemble_vector_heat_transfer(
-      std::span<PetscScalar> b,
-      std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V);
+                  std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V,
+                  Problem problemtyp);
 
   using Contact::assemble_matrix;
   /// Assemble matrix
   /// @param[in] mat_set function for setting matrix entries
+  /// @param[in] V function space for Trial/Test functions
+  /// @param[in] Problem problem type 
   void
   assemble_matrix(const mat_set_fn& mat_set,
-                  std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V);
-  /// Assemble matrix
-  /// @param[in] mat_set function for setting matrix entries
-  void assemble_matrix_heat_transfer(
-      const mat_set_fn& mat_set,
-      std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V);
+                  std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V,
+                  Problem problemtype);
 
   /// Return data generated with generate_meshtie_data
   /// @param[in] pair - the index of the pair of connected surfaces
