@@ -39,7 +39,7 @@ namespace dolfinx_contact
   /// @param in_indices Input entities as vertex indices, flattened
   /// @param in_values Values at input entities
   /// @return Values at local entities
-  std::vector<std::pair<int, int>>
+  std::pair<std::vector<int>, std::vector<int>>
   lex_match(int dim, const std::vector<std::int64_t>& local_indices,
             const std::vector<std::int64_t>& in_indices,
             const std::vector<std::int32_t>& in_values);

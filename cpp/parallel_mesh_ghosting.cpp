@@ -242,17 +242,8 @@ create_contact_mesh(dolfinx::mesh::Mesh<double>& mesh,
   LOG(WARNING) << "Lex match facet markers";
   dolfinx::common::Timer tlex1("~Contact: Add ghosts: Lex match facet markers");
 
-  auto new_fmarker_data = dolfinx_contact::lex_match(
+  auto [new_fm_index, new_fm_data] = dolfinx_contact::lex_match(
       num_new_fv, fv_new_indices, all_facet_indices, all_facet_values);
-
-  // FIX: return this from lex_match instead
-  std::vector<std::int32_t> new_fm_index(new_fmarker_data.size());
-  std::vector<std::int32_t> new_fm_data(new_fmarker_data.size());
-  for (std::size_t i = 0; i < new_fmarker_data.size(); ++i)
-  {
-    new_fm_index[i] = new_fmarker_data[i].first;
-    new_fm_data[i] = new_fmarker_data[i].second;
-  }
 
   auto new_fmarker = dolfinx::mesh::MeshTags<std::int32_t>(
       new_mesh.topology(), tdim - 1, new_fm_index, new_fm_data);
@@ -281,17 +272,8 @@ create_contact_mesh(dolfinx::mesh::Mesh<double>& mesh,
   LOG(WARNING) << "Lex match cell markers";
   dolfinx::common::Timer tlex2("~Contact: Add ghosts: Lex match cell markers");
 
-  auto new_cmarker_data = dolfinx_contact::lex_match(
+  auto [new_cm_index, new_cm_data] = dolfinx_contact::lex_match(
       num_new_cv, cv_new_indices, all_cell_indices, all_cell_values);
-
-  // FIX: return this from lex_match instead
-  std::vector<std::int32_t> new_cm_index(new_cmarker_data.size());
-  std::vector<std::int32_t> new_cm_data(new_cmarker_data.size());
-  for (std::size_t i = 0; i < new_cmarker_data.size(); ++i)
-  {
-    new_cm_index[i] = new_cmarker_data[i].first;
-    new_cm_data[i] = new_cmarker_data[i].second;
-  }
 
   auto new_cmarker = dolfinx::mesh::MeshTags<std::int32_t>(
       new_mesh.topology(), tdim, new_cm_index, new_cm_data);
@@ -435,7 +417,7 @@ dolfinx_contact::compute_ghost_cell_destinations(
   return dolfinx::graph::AdjacencyList<std::int32_t>(cell_dests, doffsets);
 }
 
-std::vector<std::pair<int, int>>
+std::pair<std::vector<int>, std::vector<int>>
 dolfinx_contact::lex_match(int dim,
                            const std::vector<std::int64_t>& local_indices,
                            const std::vector<std::int64_t>& in_indices,
@@ -513,5 +495,14 @@ dolfinx_contact::lex_match(int dim,
   auto last = std::unique(new_markers.begin(), new_markers.end());
   new_markers.erase(last, new_markers.end());
 
-  return new_markers;
+  std::vector<std::int32_t> nmi, nmv;
+  nmi.reserve(new_markers.size());
+  nmv.reserve(new_markers.size());
+  for (auto p : new_markers)
+  {
+    nmi.push_back(p.first);
+    nmv.push_back(p.second);
+  }
+
+  return {std::move(nmi), std::move(nmv)};
 }
