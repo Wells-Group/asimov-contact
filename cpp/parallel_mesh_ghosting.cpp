@@ -16,13 +16,49 @@
 
 #include <set>
 
-std::tuple<dolfinx::mesh::Mesh<double>, dolfinx::mesh::MeshTags<std::int32_t>>
+namespace
+{
+std::pair<std::vector<std::int64_t>, std::vector<int>>
+copy_to_all(MPI_Comm comm, const std::vector<std::int64_t>& indices,
+            std::span<const int> values, int nv)
+{
+  int idx_size = indices.size();
+  int mpi_size = dolfinx::MPI::size(comm);
+  std::vector<int> recv_count(mpi_size), recv_offset(mpi_size + 1);
+  MPI_Allgather(&idx_size, 1, MPI_INT, recv_count.data(), 1, MPI_INT, comm);
+  for (int i = 0; i < mpi_size; ++i)
+    recv_offset[i + 1] = recv_offset[i] + recv_count[i];
+
+  std::vector<std::int64_t> all_indices(recv_offset.back());
+  MPI_Allgatherv(indices.data(), indices.size(), MPI_INT64_T,
+                 all_indices.data(), recv_count.data(), recv_offset.data(),
+                 MPI_INT64_T, comm);
+
+  // Change count for data (one item per facet)
+  std::for_each(recv_count.begin(), recv_count.end(),
+                [nv](int& n) { n /= nv; });
+  std::for_each(recv_offset.begin(), recv_offset.end(),
+                [nv](int& n) { n /= nv; });
+
+  std::vector<int> all_values(recv_offset.back());
+  MPI_Allgatherv(values.data(), values.size(), MPI_INT, all_values.data(),
+                 recv_count.data(), recv_offset.data(), MPI_INT, comm);
+
+  return {std::move(all_indices), std::move(all_values)};
+};
+
+} // namespace
+
+std::tuple<dolfinx::mesh::Mesh<double>, dolfinx::mesh::MeshTags<std::int32_t>,
+           dolfinx::mesh::MeshTags<std::int32_t>>
 create_contact_mesh(dolfinx::mesh::Mesh<double>& mesh,
                     const dolfinx::mesh::MeshTags<std::int32_t>& fmarker,
-                    const dolfinx::mesh::MeshTags<std::int32_t>& dmarker,
+                    const dolfinx::mesh::MeshTags<std::int32_t>& cmarker,
                     const std::vector<std::int32_t>& tags, double R = 0.2)
 {
   LOG(WARNING) << "Create Contact Mesh";
+
+  // FIX: function too long - break up
 
   int tdim = mesh.topology()->dim();
   int num_cell_vertices
@@ -95,7 +131,7 @@ create_contact_mesh(dolfinx::mesh::Mesh<double>& mesh,
   local_indices.clear();
 
   // Convert marked cells to list of (global) vertices for each cell
-  for (auto c : dmarker.indices())
+  for (auto c : cmarker.indices())
   {
     auto cl = cv->links(c);
     local_indices.insert(local_indices.end(), cl.begin(), cl.end());
@@ -110,43 +146,12 @@ create_contact_mesh(dolfinx::mesh::Mesh<double>& mesh,
 
   LOG(WARNING) << "Copy markers to other processes";
 
-  auto comm = mesh.comm();
-  auto copy_to_all
-      = [comm](const std::vector<std::int64_t>& indices,
-               std::span<const int> values,
-               int nv) -> std::pair<std::vector<std::int64_t>, std::vector<int>>
-  {
-    int idx_size = indices.size();
-    int mpi_size = dolfinx::MPI::size(comm);
-    std::vector<int> recv_count(mpi_size), recv_offset(mpi_size + 1);
-    MPI_Allgather(&idx_size, 1, MPI_INT, recv_count.data(), 1, MPI_INT, comm);
-    for (int i = 0; i < mpi_size; ++i)
-      recv_offset[i + 1] = recv_offset[i] + recv_count[i];
-
-    std::vector<std::int64_t> all_indices(recv_offset.back());
-    MPI_Allgatherv(indices.data(), indices.size(), MPI_INT64_T,
-                   all_indices.data(), recv_count.data(), recv_offset.data(),
-                   MPI_INT64_T, comm);
-
-    // Change count for data (one item per facet)
-    std::for_each(recv_count.begin(), recv_count.end(),
-                  [nv](int& n) { n /= nv; });
-    std::for_each(recv_offset.begin(), recv_offset.end(),
-                  [nv](int& n) { n /= nv; });
-
-    std::vector<int> all_values(recv_offset.back());
-    MPI_Allgatherv(values.data(), values.size(), MPI_INT, all_values.data(),
-                   recv_count.data(), recv_offset.data(), MPI_INT, comm);
-
-    return {std::move(all_indices), std::move(all_values)};
-  };
-
   // Copy facets and markers to all processes
-  auto [all_facet_indices, all_facet_values]
-      = copy_to_all(fv_indices, fmarker.values(), num_facet_vertices);
+  auto [all_facet_indices, all_facet_values] = copy_to_all(
+      mesh.comm(), fv_indices, fmarker.values(), num_facet_vertices);
   // Repeat for cell data
-  auto [all_cell_indices, all_cell_values]
-      = copy_to_all(cv_indices, dmarker.values(), num_cell_vertices);
+  auto [all_cell_indices, all_cell_values] = copy_to_all(
+      mesh.comm(), cv_indices, cmarker.values(), num_cell_vertices);
 
   // Convert topology to global indexing, and restrict to non-ghost cells
   std::vector<int> topo = mesh.topology()->connectivity(tdim, 0)->array();
@@ -205,7 +210,6 @@ create_contact_mesh(dolfinx::mesh::Mesh<double>& mesh,
   // This is rather messy, we need to map vertices to geometric nodes
   // then back to original index
   auto global_remap = new_mesh.geometry().input_global_indices();
-
   int nv = new_mesh.topology()->index_map(0)->size_local()
            + new_mesh.topology()->index_map(0)->num_ghosts();
   std::vector<std::int32_t> nvrange(nv);
@@ -219,67 +223,82 @@ create_contact_mesh(dolfinx::mesh::Mesh<double>& mesh,
 
   // Create a list of all facet - vertices(original global index)
   auto fv_new = new_mesh.topology()->connectivity(tdim - 1, 0);
+  int num_new_fv = fv_new->num_nodes();
   std::vector<std::int64_t> fv_new_indices(fv_new->array().begin(),
                                            fv_new->array().end());
 
-  auto rmap = [&global_remap, &vert_to_geom](std::int64_t& idx)
-  { idx = global_remap[vert_to_geom[idx]]; };
+  // Map back to original index
   std::for_each(fv_new_indices.begin(), fv_new_indices.end(),
-                [rmap](std::int64_t& x) { rmap(x); });
+                [&](std::int64_t& idx)
+                { idx = global_remap[vert_to_geom[idx]]; });
 
-  // fv_indices = rmap(fv.array).reshape((-1, num_facet_vertices));
-  // fv_indices = np.sort(fv_indices, axis = 1);
+  // Sort each facet into order for comparison
+  for (int i = 0; i < num_new_fv; ++i)
+  {
+    std::sort(std::next(fv_new_indices.begin(), i * num_facet_vertices),
+              std::next(fv_new_indices.begin(), (i + 1) * num_facet_vertices));
+  }
 
-  //   timer.stop();
+  LOG(WARNING) << "Lex match facet markers";
+  dolfinx::common::Timer tlex1("~Contact: Add ghosts: Lex match facet markers");
 
-  //   LOG(WARNING) << "Lex match facet markers";
+  auto new_fmarker_data = dolfinx_contact::lex_match(
+      num_new_fv, fv_new_indices, all_facet_indices, all_facet_values);
 
-  //   common::Timer tlex("~Contact: Add ghosts: Lex match facet markers");
+  // FIX: return this from lex_match instead
+  std::vector<std::int32_t> new_fm_index(new_fmarker_data.size());
+  std::vector<std::int32_t> new_fm_data(new_fmarker_data.size());
+  for (std::size_t i = 0; i < new_fmarker_data.size(); ++i)
+  {
+    new_fm_index[i] = new_fmarker_data[i].first;
+    new_fm_data[i] = new_fmarker_data[i].second;
+  }
 
-  //   new_fmarkers = lex_match(fv_indices.shape[1],
-  //   list(fv_indices.flatten()),
-  //                            list(all_indices.flatten()),
-  //                            list(all_values));
+  auto new_fmarker = dolfinx::mesh::MeshTags<std::int32_t>(
+      new_mesh.topology(), tdim - 1, new_fm_index, new_fm_data);
 
-  //   // Sort new markers into order and make unique
-  //   new_fmarkers = np.array(new_fmarkers, dtype = np.int32)
+  tlex1.stop();
 
-  //                      if new_fmarkers.shape[0]
-  //                  == 0 : new_fmarkers
-  //       = np.zeros((0, 2), dtype = np.int32)
+  // Create a list of all cell - vertices(original global index)
+  auto cv_new = new_mesh.topology()->connectivity(tdim, 0);
 
-  //             new_fmarker
-  //       = meshtags(new_mesh, tdim - 1, new_fmarkers[:, 0], new_fmarkers[:,
-  //       1])
+  int num_new_cv = cv_new->num_nodes();
+  std::vector<std::int64_t> cv_new_indices(cv_new->array().begin(),
+                                           cv_new->array().end());
 
-  // #Create a list of all cell - vertices(original global index)
-  //           cv
-  //       = new_mesh.topology.connectivity(tdim, 0) cv_indices
-  //       = rmap(cv.array).reshape((-1, num_cell_vertices)) cv_indices
-  //       = np.sort(cv_indices, axis = 1) timer
-  //             .stop()
+  // Map back to original index
+  std::for_each(cv_new_indices.begin(), cv_new_indices.end(),
+                [&](std::int64_t& idx)
+                { idx = global_remap[vert_to_geom[idx]]; });
 
-  // #Search for marked cells in list of all cells
-  //                 log.log(log.LogLevel.WARNING, "Lex match cell markers")
-  //                 timer
-  //       = Timer("~Contact: Add ghosts: Lex match cell markers")
-  //       new_cmarkers = lex_match(cv_indices.shape[1],
-  //       list(cv_indices.flatten()),
-  //                   list(all_cell_indices.flatten()),
-  //                   list(all_cell_values))
+  // Sort each cell into order for comparison
+  for (int i = 0; i < num_new_cv; ++i)
+  {
+    std::sort(std::next(cv_new_indices.begin(), i * num_cell_vertices),
+              std::next(cv_new_indices.begin(), (i + 1) * num_cell_vertices));
+  }
 
-  // #Sort new markers into order and make unique
-  //           new_cmarkers
-  //       = np.array(new_cmarkers, dtype = np.int32)
+  LOG(WARNING) << "Lex match cell markers";
+  dolfinx::common::Timer tlex2("~Contact: Add ghosts: Lex match cell markers");
 
-  //             new_dmarker
-  //       = meshtags(new_mesh, tdim, new_cmarkers[:, 0], new_cmarkers[:, 1])
+  auto new_cmarker_data = dolfinx_contact::lex_match(
+      num_new_cv, cv_new_indices, all_cell_indices, all_cell_values);
 
-  //             timer.stop() return new_mesh,
-  //   new_fmarker,
-  //   new_dmarker
+  // FIX: return this from lex_match instead
+  std::vector<std::int32_t> new_cm_index(new_cmarker_data.size());
+  std::vector<std::int32_t> new_cm_data(new_cmarker_data.size());
+  for (std::size_t i = 0; i < new_cmarker_data.size(); ++i)
+  {
+    new_cm_index[i] = new_cmarker_data[i].first;
+    new_cm_data[i] = new_cmarker_data[i].second;
+  }
 
-  return {mesh, fmarker};
+  auto new_cmarker = dolfinx::mesh::MeshTags<std::int32_t>(
+      new_mesh.topology(), tdim, new_cm_index, new_cm_data);
+
+  tlex2.stop();
+
+  return {new_mesh, new_fmarker, new_cmarker};
 }
 
 dolfinx::graph::AdjacencyList<std::int32_t>
@@ -418,8 +437,8 @@ dolfinx_contact::compute_ghost_cell_destinations(
 
 std::vector<std::pair<int, int>>
 dolfinx_contact::lex_match(int dim,
-                           const std::vector<std::int32_t>& local_indices,
-                           const std::vector<std::int32_t>& in_indices,
+                           const std::vector<std::int64_t>& local_indices,
+                           const std::vector<std::int64_t>& in_indices,
                            const std::vector<std::int32_t>& in_values)
 {
   LOG(WARNING) << "Lex match: [" << local_indices.size() << ", "
