@@ -32,7 +32,7 @@ dependencies = [
 [project.optional-dependencies]
 lint = ["flake8", "mypy"]
 test = ["pytest", "coverage"]
-all = ["dolfinx_mpc[lint,test]"]
+all = ["dolfinx_contact[lint,test]"]
 
 [tool.scikit-build]
 wheel.packages = ["dolfinx_contact"]
