@@ -66,7 +66,7 @@ def test_pack_coeff_at_quadrature(ct, quadrature_degree, space, degree):
         if space == 'DG' and degree == 1:
             assert (np.allclose(0.0, coeffs))
         else:
-            expr = Expression(grad(v), quadrature_points)
+            expr = Expression(grad(v), quadrature_points, comm=mesh.comm)
             expr_vals = expr.eval(mesh, cells)
             assert np.allclose(coeffs, expr_vals)
 
