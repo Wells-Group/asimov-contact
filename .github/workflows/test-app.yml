@@ -14,7 +14,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    container: ghcr.io/fenics/test-env:nightly
+    container: ghcr.io/fenics/test-env:current
 
     strategy:
       matrix:
