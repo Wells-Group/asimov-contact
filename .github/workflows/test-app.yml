@@ -41,7 +41,7 @@ jobs:
       OMPI_MCA_hwloc_base_binding_policy: none
       CONTACT_CMAKE_CXX_FLAGS: "-Wall -Werror -g -pedantic -Ofast -march=native"
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       # - name: Install clang
       #   if: ${{ matrix.CC }} == "clang"
@@ -82,7 +82,9 @@ jobs:
           cmake --install build-dolfinx
 
       - name: Build Python interface (dolfinx)
-        run: python3 -m pip -v install --no-build-isolation ./dolfinx/python/
+        run: |
+          python3 -m pip -v install -r ./dolfinx/python/build-requirements.txt
+          python3 -m pip -v install --no-build-isolation ./dolfinx/python/
 
 
       - name: Install contact (C++)
@@ -98,7 +100,9 @@ jobs:
           ./build-dir/demo_meshtie
 
       - name: Install contact
-        run:  python3 -m pip -v install --config-settings=build-dir="build-${{ matrix.run_mode }}}" --config-settings=cmake.build-type="${{ matrix.run_mode }}" --no-build-isolation -e ./python/ 
+        run: |
+          python3 -m pip -v install -r ./python/build-requirements.txt
+          python3 -m pip -v install --config-settings=build-dir="build-${{ matrix.run_mode }}}" --config-settings=cmake.build-type="${{ matrix.run_mode }}" --no-build-isolation -e ./python/ 
 
       - name: Flake8 code
         run: flake8 python/
