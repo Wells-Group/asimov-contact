@@ -14,7 +14,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    container: ghcr.io/fenics/test-env:current
+    container: ghcr.io/fenics/test-env:current-mpich
 
     strategy:
       matrix:
