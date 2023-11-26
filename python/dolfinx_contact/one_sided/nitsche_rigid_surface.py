@@ -184,7 +184,8 @@ def nitsche_rigid_surface(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTags, int
             facet = facets[i]
             # Compute distance between point and closest facet
             index = np.argwhere(np.array(contact_facets) == facet)[0, 0]
-            facet_geometry = _cpp.mesh.entities_to_geometry(mesh._cpp_object, fdim, [facet], False)
+            facet_geometry = _cpp.mesh.entities_to_geometry(mesh._cpp_object, fdim,
+                                                            np.asarray([facet], dtype=np.int32), False)
             coords0 = mesh_geometry[facet_geometry][0]
             R = np.linalg.norm(_cpp.geometry.compute_distance_gjk(coords0, xi))
             # If point on a facet in contact surface (i.e., if distance between point and closest
@@ -192,7 +193,8 @@ def nitsche_rigid_surface(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTags, int
             # compute distance vector
             if np.isclose(R, 0):
                 facet_2 = lookup.links(index)[0]
-                facet2_geometry = _cpp.mesh.entities_to_geometry(mesh._cpp_object, fdim, [facet_2], False)
+                facet2_geometry = _cpp.mesh.entities_to_geometry(mesh._cpp_object, fdim,
+                                                                 np.asarray([facet_2], dtype=np.int32), False)
                 coords = mesh_geometry[facet2_geometry][0]
                 dist_vec = _cpp.geometry.compute_distance_gjk(coords, xi)
                 dist_vec_array[: gdim, i] = dist_vec[: gdim]
