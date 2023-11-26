@@ -5,6 +5,7 @@
 import numpy as np
 import pytest
 import ufl
+import basix.ufl
 from dolfinx.cpp.mesh import to_type
 from dolfinx.io import XDMFFile
 import dolfinx.fem as _fem
@@ -57,10 +58,10 @@ def create_functionspaces(ct, gap, delta):
         raise ValueError(f"Unsupported mesh type {ct}")
 
     cell = ufl.Cell(ct, geometric_dimension=x.shape[1])
-    domain = ufl.Mesh(ufl.VectorElement("Lagrange", cell, 1))
+    el = basix.ufl.element("Lagrange", cell.name, 1, shape=(x.shape[1], ))
+    domain = ufl.Mesh(el)
     mesh = create_mesh(MPI.COMM_WORLD, cells, x, domain)
-    el = ufl.VectorElement("Lagrange", mesh.ufl_cell(), 1)
-    V = _fem.FunctionSpace(mesh, el)
+    V = _fem.functionspace(mesh, el)
     with XDMFFile(mesh.comm, "test_mesh.xdmf", "w") as xdmf:
         xdmf.write_mesh(mesh)
     return V

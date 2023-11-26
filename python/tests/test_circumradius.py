@@ -4,8 +4,9 @@
 
 import numpy as np
 import pytest
+import basix.ufl
 import ufl
-from dolfinx.fem import Function, FunctionSpace, IntegralType
+from dolfinx.fem import Function, functionspace, IntegralType
 from dolfinx.fem.petsc import LinearProblem
 from dolfinx.mesh import create_unit_cube, create_unit_square, locate_entities_boundary
 from mpi4py import MPI
@@ -23,7 +24,9 @@ def test_circumradius(dim):
         mesh = create_unit_square(MPI.COMM_WORLD, N, N)
 
     # Perturb geometry to get spatially varying circumradius
-    V = FunctionSpace(mesh, ufl.VectorElement("Lagrange", mesh.ufl_cell(), 1))
+    V = functionspace(mesh,
+                      basix.ufl.element("Lagrange", mesh.topology.cell_name(),
+                                        1, shape=(mesh.geometry.dim, )))
     u = Function(V)
     if dim == 3:
         u.interpolate(lambda x: (0.1 * (x[1] > 0.5), 0.1 * np.sin(2 * np.pi * x[2]), np.zeros(x.shape[1])))
@@ -42,7 +45,7 @@ def test_circumradius(dim):
     sorted = np.argsort(facets)
     facets = facets[sorted]
     h1 = ufl.Circumradius(mesh)
-    V = FunctionSpace(mesh, ("DG", 0))
+    V = functionspace(mesh, ("DG", 0))
     v = ufl.TestFunction(V)
     u = ufl.TrialFunction(V)
     dx = ufl.Measure("dx", domain=mesh)

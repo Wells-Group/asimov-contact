@@ -4,7 +4,7 @@
 import numpy as np
 import pytest
 
-from dolfinx.fem import Function, VectorFunctionSpace
+from dolfinx.fem import Function, functionspace
 from dolfinx.graph import adjacencylist
 from dolfinx.io import XDMFFile
 from dolfinx.mesh import locate_entities_boundary, meshtags, Mesh
@@ -89,7 +89,7 @@ def test_copy_to_submesh(order, res, simplex, dim):
         tdim = mesh.topology.dim
         vals = x[:tdim, :]
         return vals
-    V = VectorFunctionSpace(mesh, ("Lagrange", order))
+    V = functionspace(mesh, ("Lagrange", order, (mesh.geometry.dim, )))
     contact_pairs = [(0, 1), (1, 0)]
     data = np.array([contact_bdy_1, contact_bdy_2], dtype=np.int32)
     offsets = np.array([0, 2], dtype=np.int32)
@@ -102,7 +102,7 @@ def test_copy_to_submesh(order, res, simplex, dim):
     submesh_cpp = contact.submesh()
     ufl_domain = mesh.ufl_domain()
     submesh = Mesh(submesh_cpp, ufl_domain)
-    V_sub = VectorFunctionSpace(submesh, ("Lagrange", order))
+    V_sub = functionspace(submesh, ("Lagrange", order, (mesh.geometry.dim, )))
     u_sub = Function(V_sub)
     contact.copy_to_submesh(u._cpp_object, u_sub._cpp_object)
     u_exact = Function(V_sub)

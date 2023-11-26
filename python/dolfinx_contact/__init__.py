@@ -7,9 +7,8 @@
 # flake8: noqa
 
 
-from dolfinx_contact.cpp import (Kernel, QuadratureRule,
-                                 compute_active_entities, pack_circumradius,
-                                 update_geometry)
+from dolfinx_contact.cpp import (Kernel, QuadratureRule, compute_active_entities,
+                                 pack_circumradius, update_geometry)
 
 from .helpers import epsilon, lame_parameters, sigma_func, compare_matrices
 from .newton_solver import ConvergenceCriterion, NewtonSolver

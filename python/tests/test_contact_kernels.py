@@ -8,8 +8,7 @@ import numpy as np
 import pytest
 import ufl
 from dolfinx.graph import adjacencylist
-from dolfinx.fem import (Function, FunctionSpace, IntegralType,
-                         VectorFunctionSpace, form)
+from dolfinx.fem import (Function, IntegralType, form, functionspace)
 from dolfinx.fem.petsc import (assemble_matrix, assemble_vector, create_matrix,
                                create_vector)
 from dolfinx.mesh import (meshtags, create_unit_cube, create_unit_square,
@@ -46,7 +45,7 @@ def test_vector_surface_kernel(dim, kernel_type, P, Q):
     ft = meshtags(mesh, mesh.topology.dim - 1, facets, values)
 
     # Define variational form
-    V = VectorFunctionSpace(mesh, ("Lagrange", P))
+    V = functionspace(mesh, ("Lagrange", P, (mesh.geometry.dim, )))
 
     def f(x):
         values = np.zeros((mesh.geometry.dim, x.shape[1]))
@@ -75,7 +74,7 @@ def test_vector_surface_kernel(dim, kernel_type, P, Q):
     ds = ufl.Measure("ds", domain=mesh, subdomain_data=ft)
     dx = ufl.Measure("dx", domain=mesh)
 
-    V2 = FunctionSpace(mesh, ("DG", Q))
+    V2 = functionspace(mesh, ("DG", Q))
     lmbda = Function(V2)
     lmbda.interpolate(lmbda_func)
     mu = Function(V2)
@@ -175,7 +174,7 @@ def test_matrix_surface_kernel(dim, kernel_type, P, Q):
     ft = meshtags(mesh, mesh.topology.dim - 1, facets, values)
 
     # Define variational form
-    V = VectorFunctionSpace(mesh, ("Lagrange", P))
+    V = functionspace(mesh, ("Lagrange", P, (mesh.geometry.dim, )))
     du = ufl.TrialFunction(V)
     v = ufl.TestFunction(V)
     ds = ufl.Measure("ds", domain=mesh, subdomain_data=ft)
@@ -204,7 +203,7 @@ def test_matrix_surface_kernel(dim, kernel_type, P, Q):
 
     u = Function(V)
     u.interpolate(f)
-    V2 = FunctionSpace(mesh, ("DG", Q))
+    V2 = functionspace(mesh, ("DG", Q))
     lmbda = Function(V2)
     lmbda.interpolate(lmbda_func)
     mu = Function(V2)

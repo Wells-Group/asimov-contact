@@ -6,7 +6,7 @@
 from contextlib import ExitStack
 from typing import Union
 
-from dolfinx.fem import Constant, form, Function, FunctionSpaceBase
+from dolfinx.fem import Constant, form, Function, FunctionSpace
 from dolfinx.fem.petsc import apply_lifting, assemble_matrix, assemble_vector, set_bc
 import dolfinx.la as _la
 from dolfinx.mesh import MeshTags
@@ -156,7 +156,7 @@ class NonlinearPDE_SNESProblem:
         J.assemble()
 
 
-def rigid_motions_nullspace(V: FunctionSpaceBase):
+def rigid_motions_nullspace(V: FunctionSpace):
     """
     Function to build nullspace for 2D/3D elasticity.
 
@@ -207,7 +207,7 @@ def rigid_motions_nullspace(V: FunctionSpaceBase):
     return PETSc.NullSpace().create(vectors=nullspace_basis)  # type: ignore
 
 
-def rigid_motions_nullspace_subdomains(V: FunctionSpaceBase, mt: MeshTags,
+def rigid_motions_nullspace_subdomains(V: FunctionSpace, mt: MeshTags,
                                        tags: numpy.typing.NDArray[numpy.int32],
                                        num_domains=2):
     """

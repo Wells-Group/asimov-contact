@@ -5,13 +5,12 @@
 import basix
 import numpy as np
 import pytest
-from dolfinx.fem import (Expression, Function, FunctionSpace, IntegralType,
-                         VectorFunctionSpace)
+from dolfinx.fem import (Expression, Function, IntegralType, functionspace)
 from dolfinx.mesh import (CellType, create_unit_cube, create_unit_square,
                           locate_entities_boundary, to_string)
 from mpi4py import MPI
-from ufl import FiniteElement, MixedElement, VectorElement, grad
-
+from ufl import grad
+from basix.ufl import element, mixed_element
 import dolfinx_contact.cpp
 
 
@@ -23,13 +22,13 @@ def test_pack_coeff_at_quadrature(ct, quadrature_degree, space, degree):
     N = 15
     mesh = create_unit_square(MPI.COMM_WORLD, N, N, cell_type=ct)
     if space == "Lagrange":
-        V = VectorFunctionSpace(mesh, (space, degree))
+        V = functionspace(mesh, (space, degree, (mesh.geometry.dim, )))
     elif space == "N1curl":
         if ct == CellType.quadrilateral:
             space = "RTCE"
-        V = FunctionSpace(mesh, (space, degree))
+        V = functionspace(mesh, (space, degree))
     elif space == "DG":
-        V = FunctionSpace(mesh, (space, degree - 1))
+        V = functionspace(mesh, (space, degree - 1))
     else:
         raise RuntimeError("Unsupported space")
 
@@ -79,11 +78,11 @@ def test_pack_coeff_on_facet(quadrature_degree, space, degree):
     N = 15
     mesh = create_unit_square(MPI.COMM_WORLD, N, N)
     if space == "Lagrange":
-        V = VectorFunctionSpace(mesh, (space, degree))
+        V = functionspace(mesh, (space, degree, (mesh.geometry.dim, )))
     elif space == "N1curl":
-        V = FunctionSpace(mesh, (space, degree))
+        V = functionspace(mesh, (space, degree))
     elif space == "DG":
-        V = FunctionSpace(mesh, (space, degree - 1))
+        V = functionspace(mesh, (space, degree - 1))
     else:
         raise RuntimeError("Unsupported space")
 
@@ -101,7 +100,6 @@ def test_pack_coeff_on_facet(quadrature_degree, space, degree):
     integration_entities, num_local = dolfinx_contact.compute_active_entities(mesh._cpp_object, facets,
                                                                               IntegralType.exterior_facet)
     integration_entities = integration_entities[:num_local]
-
     coeffs = dolfinx_contact.cpp.pack_coefficient_quadrature(
         v._cpp_object, quadrature_degree, integration_entities)
     cstride = coeffs.shape[1]
@@ -141,9 +139,9 @@ def test_pack_coeff_on_facet(quadrature_degree, space, degree):
 def test_sub_coeff(quadrature_degree, degree):
     N = 10
     mesh = create_unit_cube(MPI.COMM_WORLD, N, N, N)
-    el = FiniteElement("N1curl", mesh.ufl_cell(), degree)
-    v_el = VectorElement("Lagrange", mesh.ufl_cell(), degree)
-    V = FunctionSpace(mesh, MixedElement([v_el, el]))
+    el = element("N1curl", mesh.topology.cell_name(), degree)
+    v_el = element("Lagrange", mesh.topology.cell_name(), degree, shape=(mesh.geometry.dim, ))
+    V = functionspace(mesh, mixed_element([v_el, el]))
 
     v = Function(V)
     v.sub(0).interpolate(lambda x: (x[1], -x[0], 3 * x[2]))
@@ -178,9 +176,9 @@ def test_sub_coeff(quadrature_degree, degree):
 def test_sub_coeff_grad(quadrature_degree, degree):
     N = 10
     mesh = create_unit_cube(MPI.COMM_WORLD, N, N, N)
-    el = FiniteElement("DG", mesh.ufl_cell(), degree)
-    v_el = VectorElement("Lagrange", mesh.ufl_cell(), degree)
-    V = FunctionSpace(mesh, MixedElement([v_el, el]))
+    el = element("DG", mesh.ufl_cell(), degree)
+    v_el = element("Lagrange", mesh.ufl_cell(), degree, shape=(mesh.geometry.dim, ))
+    V = functionspace(mesh, mixed_element([v_el, el]))
 
     v = Function(V)
     v.sub(0).interpolate(lambda x: (x[1], -x[0], 3 * x[2]))

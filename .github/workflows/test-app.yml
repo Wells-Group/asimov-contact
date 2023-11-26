@@ -14,7 +14,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    container: ghcr.io/fenics/test-env:v0.7.0-mpich
+    container: ghcr.io/fenics/test-env:nightly
 
     strategy:
       matrix:
@@ -50,11 +50,11 @@ jobs:
       #     apt-get install -y clang
 
       - name: Get Basix and install
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           path: ./basix
           repository: FEniCS/basix
-          ref: v0.7.0
+          ref: main
 
       - name: Install FEniCS Python components (dolfinx)
         run: |
@@ -62,15 +62,15 @@ jobs:
           cmake --build build-basix
           cmake --install build-basix
           python3 -m pip install ./basix/python
-          python3 -m pip install git+https://github.com/FEniCS/ufl.git@2023.2.0
-          python3 -m pip install git+https://github.com/FEniCS/ffcx.git@v0.7.0
+          python3 -m pip install git+https://github.com/FEniCS/ufl.git
+          python3 -m pip install git+https://github.com/FEniCS/ffcx.git
       
       - name: Install dolfinx
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           path: ./dolfinx
           repository: FEniCS/dolfinx
-          ref: v0.7.0.post0
+          ref: main
    
 
       - name: Configure C++ (dolfinx)
@@ -82,7 +82,7 @@ jobs:
           cmake --install build-dolfinx
 
       - name: Build Python interface (dolfinx)
-        run: python3 -m pip -v install ./dolfinx/python/
+        run: python3 -m pip -v install --no-build-isolation ./dolfinx/python/
 
 
       - name: Install contact (C++)
@@ -98,7 +98,7 @@ jobs:
           ./build-dir/demo_meshtie
 
       - name: Install contact
-        run: BUILD_TYPE="Debug" python3 -m pip -v install python/
+        run:  python3 -m pip -v install --config-settings=build-dir="build-${{ matrix.run_mode }}}" --config-settings=cmake.build-type="${{ matrix.run_mode }}" --no-build-isolation -e ./python/ 
 
       - name: Flake8 code
         run: flake8 python/
