@@ -56,9 +56,7 @@ def create_functionspaces(ct, gap, delta):
                           [9, 16, 10, 17, 13, 18, 15, 19]], dtype=np.int32)
     else:
         raise ValueError(f"Unsupported mesh type {ct}")
-
-    cell = ufl.Cell(ct, geometric_dimension=x.shape[1])
-    el = basix.ufl.element("Lagrange", cell.name, 1, shape=(x.shape[1], ))
+    el = basix.ufl.element("Lagrange", ct, 1, shape=(x.shape[1], ), gdim=x.shape[1])
     domain = ufl.Mesh(el)
     mesh = create_mesh(MPI.COMM_WORLD, cells, x, domain)
     V = _fem.functionspace(mesh, el)
@@ -75,7 +73,7 @@ def compare_test_fn(fn_space, test_fn, grad_test_fn, q_indices, link, x_ref, cel
     dofs = fn_space.dofmap.cell_dofs(cell)
 
     num_q_points = x_ref.shape[0]
-
+    cell_arr = np.array(cell, dtype=np.int32)
     for i, dof in enumerate(dofs):
         for k in range(bs):
             # Create fem function that is identical with desired test function
@@ -85,11 +83,11 @@ def compare_test_fn(fn_space, test_fn, grad_test_fn, q_indices, link, x_ref, cel
 
             # Create expression vor evaluating test function and evaluate
             expr = _fem.Expression(v, x_ref)
-            expr_vals = expr.eval(mesh, [cell])
+            expr_vals = expr.eval(mesh, cell_arr)
 
             # Create expression vor evaluating derivative of test function and evaluate
             expr2 = _fem.Expression(ufl.grad(v.sub(k)), x_ref)
-            expr_vals2 = expr2.eval(mesh, [cell])
+            expr_vals2 = expr2.eval(mesh, cell_arr)
             # compare values of test functions
             offset = link * num_q_points * len(dofs) * bs + i * num_q_points * bs
             assert np.allclose(expr_vals[0][q_indices * bs + k], test_fn[offset + q_indices * bs + k])
@@ -130,7 +128,7 @@ def compare_u(fn_space, u, u_opposite, grad_u_opposite, q_indices, x_ref, cell):
 
     # use expression to evaluate u
     expr = _fem.Expression(u, x_ref[q_indices, :])
-    expr_vals = expr.eval(mesh, [cell]).reshape(-1)
+    expr_vals = expr.eval(mesh, np.array(cell, dtype=np.int32))
 
     # extract values from u_opposite
     vals = np.zeros(len(q_indices) * bs)
@@ -139,13 +137,12 @@ def compare_u(fn_space, u, u_opposite, grad_u_opposite, q_indices, x_ref, cell):
 
     # compare expression and packed u
     assert np.allclose(expr_vals, vals)
-
+    cell_arr = np.array(cell, dtype=np.int32).reshape(-1)
     # loop over block
     for k in range(bs):
-
         # use expression to evaluate gradient
         expr = _fem.Expression(ufl.grad(u.sub(k)), x_ref)
-        expr_vals = expr.eval(mesh, [cell]).reshape(-1)
+        expr_vals = expr.eval(mesh, cell_arr).reshape(-1)
 
         # extract jacobian from surf_der and gradient from u_opposite and expr_vals
         for i, q in enumerate(q_indices):
