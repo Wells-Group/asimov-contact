@@ -231,7 +231,7 @@ def compute_dof_permutations(V_dg, V_cg, gap, facets_dg, facets_cg):
         # and modify coordinates by gap if necessary
         cells = f_to_c_dg.links(facet_dg)
         for cell in cells:
-            midpoint = compute_midpoints(mesh_dg, tdim, [cell])[0]
+            midpoint = compute_midpoints(mesh_dg, tdim, np.asarray([cell], dtype=np.int32))[0]
             if midpoint[tdim - 1] > 0:
                 # coordinates of corresponding dofs are identical for both meshes
                 dofs_dg0 = V_dg.dofmap.cell_dofs(cell)
@@ -388,9 +388,11 @@ def create_contact_data(V, u, quadrature_degree, lmbda, mu, facets_cg, search, t
 
     # compute active entities
     integral = _fem.IntegralType.exterior_facet
-    entities_0, num_local_0 = dolfinx_contact.compute_active_entities(mesh._cpp_object, facets_cg[0], integral)
+    entities_0, num_local_0 = dolfinx_contact.compute_active_entities(
+        mesh._cpp_object, np.asarray(facets_cg[0], dtype=np.int32), integral)
     entities_0 = entities_0[:num_local_0]
-    entities_1, num_local_1 = dolfinx_contact.compute_active_entities(mesh._cpp_object, facets_cg[1], integral)
+    entities_1, num_local_1 = dolfinx_contact.compute_active_entities(
+        mesh._cpp_object, np.asarray(facets_cg[1], dtype=np.int32), integral)
     entities_1 = entities_1[:num_local_1]
 
     # pack coeffs mu, lambda
