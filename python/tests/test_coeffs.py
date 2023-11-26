@@ -126,7 +126,7 @@ def test_pack_coeff_on_facet(quadrature_degree, space, degree):
             assert (np.allclose(0.0, coeffs))
         else:
             gdim = mesh.geometry.dim
-            expr = Expression(grad(v), q_points)
+            expr = Expression(grad(v), q_points, comm=mesh.comm)
             expr_vals = expr.eval(mesh, integration_entities[:, 0])
             for i, entity in enumerate(integration_entities):
                 local_index = entity[1]
