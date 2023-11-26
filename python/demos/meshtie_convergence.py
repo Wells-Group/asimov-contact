@@ -9,7 +9,7 @@ import numpy.typing as npt
 import ufl
 from dolfinx import default_scalar_type, log
 from dolfinx.common import Timer, TimingType, list_timings, timing
-from dolfinx.fem import (Constant, Function, functionspace,
+from dolfinx.fem import (Constant, Function,
                          assemble_scalar, dirichletbc,
                          form, functionspace, locate_dofs_topological)
 from dolfinx.fem.petsc import (apply_lifting, assemble_matrix, assemble_vector,

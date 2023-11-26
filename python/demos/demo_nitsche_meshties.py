@@ -10,7 +10,7 @@ import ufl
 from dolfinx import log, default_scalar_type
 from dolfinx.common import TimingType, list_timings, Timer, timing
 from dolfinx.fem import (dirichletbc, Constant, form, Function, functionspace,
-                         locate_dofs_topological, functionspace)
+                         locate_dofs_topological)
 from dolfinx.fem.petsc import (apply_lifting, assemble_vector, assemble_matrix,
                                create_vector, set_bc)
 from dolfinx.graph import adjacencylist
