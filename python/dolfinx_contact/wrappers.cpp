@@ -369,14 +369,9 @@ NB_MODULE(cpp, m)
       .def(
           "create_matrix",
           [](dolfinx_contact::MeshTie& self, dolfinx::fem::Form<PetscScalar>& a,
-             std::string type)
-          {
-            Mat A = self.create_petsc_matrix(a, type);
-            PyObject* obj = PyPetscMat_New(A);
-            PetscObjectDereference((PetscObject)A);
-            return nb::borrow(obj);
-          },
-          nb::arg("a"), nb::arg("type") = std::string(),
+             std::string type) { return self.create_petsc_matrix(a, type); },
+          nb::rv_policy::take_ownership, nb::arg("a"),
+          nb::arg("type") = std::string(),
           "Create a PETSc Mat for tying disconnected meshes.");
   m.def(
       "pack_coefficient_quadrature",
