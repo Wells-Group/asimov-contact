@@ -107,7 +107,7 @@ if __name__ == "__main__":
     E = args.E
     nu = args.nu
     mu_func, lambda_func = lame_parameters(False)
-    V2 = FunctionSpace(mesh, ("DG", 0))
+    V2 = FunctionSpace(mesh, ("Discontinuous Lagrange", 0))
     lmbda = Function(V2)
     lmbda.interpolate(lambda x: np.full((1, x.shape[1]), lambda_func(E, nu)))
     mu = Function(V2)

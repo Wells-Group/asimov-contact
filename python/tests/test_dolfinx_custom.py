@@ -177,7 +177,7 @@ def test_contact_kernel(theta, gamma, dim, gap):
                 for j in range(1):
                     values[j, i] = mu
             return values
-        V2 = dolfinx.fem.FunctionSpace(mesh, ("DG", 0))
+        V2 = dolfinx.fem.functionspace(mesh, ("Discontinuous Lagrange", 0))
         lmbda2 = dolfinx.fem.Function(V2)
         lmbda2.interpolate(lmbda_func2)
         mu2 = dolfinx.fem.Function(V2)

@@ -45,7 +45,7 @@ def test_circumradius(dim):
     sorted = np.argsort(facets)
     facets = facets[sorted]
     h1 = ufl.Circumradius(mesh)
-    V = functionspace(mesh, ("DG", 0))
+    V = functionspace(mesh, ("Discontinuous Lagrange", 0))
     v = ufl.TestFunction(V)
     u = ufl.TrialFunction(V)
     dx = ufl.Measure("dx", domain=mesh)

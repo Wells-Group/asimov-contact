@@ -37,7 +37,7 @@ ds = ufl.Measure("ds", domain=mesh, subdomain_data=facet_marker)
 
 
 # Thermal problem
-Q = _fem.FunctionSpace(mesh, ("CG", 1))
+Q = _fem.functionspace(mesh, ("Lagrange", 1))
 q, r = ufl.TrialFunction(Q), ufl.TestFunction(Q)
 T0 = _fem.Function(Q)
 kdt = 0.1

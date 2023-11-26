@@ -84,7 +84,7 @@ if __name__ == "__main__":
         mesh, facet_marker, domain_marker = create_contact_mesh(
             mesh, facet_marker, domain_marker, [6, 7])
 
-    V = _fem.VectorFunctionSpace(mesh, ("Lagrange", 1))
+    V = _fem.functionspace(mesh, ("Lagrange", 1, (mesh.geometry.dim, )))
 
     # Apply zero Dirichlet boundary conditions in z-direction on part of the xmas-tree
     # Find facets for z-Dirichlet bc

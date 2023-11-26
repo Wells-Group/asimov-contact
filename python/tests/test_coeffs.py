@@ -17,7 +17,7 @@ import dolfinx_contact.cpp
 @pytest.mark.parametrize("ct", [CellType.triangle, CellType.quadrilateral])
 @pytest.mark.parametrize("quadrature_degree", range(1, 6))
 @pytest.mark.parametrize("degree", range(1, 6))
-@pytest.mark.parametrize("space", ["Lagrange", "N1curl", "DG"])
+@pytest.mark.parametrize("space", ["Lagrange", "N1curl", "Discontinuous Lagrange"])
 def test_pack_coeff_at_quadrature(ct, quadrature_degree, space, degree):
     N = 15
     mesh = create_unit_square(MPI.COMM_WORLD, N, N, cell_type=ct)
@@ -27,13 +27,13 @@ def test_pack_coeff_at_quadrature(ct, quadrature_degree, space, degree):
         if ct == CellType.quadrilateral:
             space = "RTCE"
         V = functionspace(mesh, (space, degree))
-    elif space == "DG":
+    elif space == "Discontinuous Lagrange":
         V = functionspace(mesh, (space, degree - 1))
     else:
         raise RuntimeError("Unsupported space")
 
     v = Function(V)
-    if space == "DG":
+    if space == "Discontinuous Lagrange":
         v.interpolate(lambda x: x[0] < 0.5 + x[1])
     else:
         v.interpolate(lambda x: (x[1], -x[0]))
@@ -73,7 +73,7 @@ def test_pack_coeff_at_quadrature(ct, quadrature_degree, space, degree):
 
 @pytest.mark.parametrize("quadrature_degree", range(1, 6))
 @pytest.mark.parametrize("degree", range(1, 6))
-@pytest.mark.parametrize("space", ["Lagrange", "DG", "N1curl"])
+@pytest.mark.parametrize("space", ["Lagrange", "Discontinuous Lagrange", "N1curl"])
 def test_pack_coeff_on_facet(quadrature_degree, space, degree):
     N = 15
     mesh = create_unit_square(MPI.COMM_WORLD, N, N)
@@ -81,13 +81,13 @@ def test_pack_coeff_on_facet(quadrature_degree, space, degree):
         V = functionspace(mesh, (space, degree, (mesh.geometry.dim, )))
     elif space == "N1curl":
         V = functionspace(mesh, (space, degree))
-    elif space == "DG":
+    elif space == "Discontinuous Lagrange":
         V = functionspace(mesh, (space, degree - 1))
     else:
         raise RuntimeError("Unsupported space")
 
     v = Function(V)
-    if space == "DG":
+    if space == "Discontinuous Lagrange":
         v.interpolate(lambda x: x[0] < 0.5 + x[1])
     else:
         v.interpolate(lambda x: (x[1], -x[0]))
@@ -176,7 +176,7 @@ def test_sub_coeff(quadrature_degree, degree):
 def test_sub_coeff_grad(quadrature_degree, degree):
     N = 10
     mesh = create_unit_cube(MPI.COMM_WORLD, N, N, N)
-    el = element("DG", mesh.ufl_cell(), degree)
+    el = element("Discontinuous Lagrange", mesh.ufl_cell(), degree)
     v_el = element("Lagrange", mesh.ufl_cell(), degree, shape=(mesh.geometry.dim, ))
     V = functionspace(mesh, mixed_element([v_el, el]))
 

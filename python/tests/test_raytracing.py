@@ -6,6 +6,7 @@
 # when a solution is found (It is not guaranteed that a ray hits the mesh on all processes in parallel)
 
 import dolfinx_contact
+import basix.ufl
 from mpi4py import MPI
 import dolfinx
 import numpy as np
@@ -162,7 +163,7 @@ def test_raytracing_manifold(cell_type):
         topology = np.array([[1, 3, 2], [0, 3, 1]], dtype=np.int32)
 
     cell = ufl.Cell(cell_type.name, geometric_dimension=3)
-    domain = ufl.Mesh(ufl.VectorElement("Lagrange", cell, 1))
+    domain = ufl.Mesh(basix.ufl.element("Lagrange", cell_type.name, 1, shape=(3, ), gdim=3))
     mesh = dolfinx.mesh.create_mesh(MPI.COMM_WORLD, topology, geometry, domain)
 
     exact_point = np.array([0.23, 1, 0.5])

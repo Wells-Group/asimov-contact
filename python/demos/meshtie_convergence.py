@@ -285,7 +285,7 @@ def test_meshtie(threed: bool = False, simplex: bool = True, runs: int = 5):
         E = 1e3
         nu = 0.1
         mu_func, lambda_func = lame_parameters(False)
-        V2 = FunctionSpace(mesh, ("DG", 0))
+        V2 = FunctionSpace(mesh, ("Discontinuous Lagrange", 0))
         lmbda = Function(V2)
         lmbda_val = lambda_func(E, nu)
         lmbda.interpolate(lambda x: np.full((1, x.shape[1]), lmbda_val))

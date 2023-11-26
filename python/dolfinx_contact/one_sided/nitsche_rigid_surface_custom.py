@@ -110,7 +110,7 @@ def nitsche_rigid_surface_custom(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTa
     gdim = mesh.geometry.dim
 
     # Setup function space and functions used in Jacobian and residual formulation
-    V = _fem.VectorFunctionSpace(mesh, ("Lagrange", 1))
+    V = _fem.functionspace(mesh, ("Lagrange", 1, (mesh.geometry.dim, )))
     u = _fem.Function(V)
     du = ufl.TrialFunction(V)
     u = _fem.Function(V)
@@ -158,7 +158,7 @@ def nitsche_rigid_surface_custom(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTa
     consts = np.array([gamma * E, theta])
 
     # Compute coefficients for mu and lambda as DG-0 functions
-    V2 = _fem.FunctionSpace(mesh, ("DG", 0))
+    V2 = _fem.functionspace(mesh, ("Discontinuous Lagrange", 0))
     lmbda2 = _fem.Function(V2)
     lmbda2.interpolate(lambda x: np.full((1, x.shape[1]), lmbda))
     mu2 = _fem.Function(V2)

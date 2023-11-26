@@ -19,6 +19,7 @@ import numpy as np
 import scipy
 import pytest
 import ufl
+import basix.ufl
 from dolfinx.cpp.mesh import to_type
 import dolfinx.fem as _fem
 from dolfinx.graph import adjacencylist
@@ -304,15 +305,15 @@ def create_functionspaces(ct, gap):
     else:
         raise ValueError(f"Unsupported mesh type {ct}")
     cell = ufl.Cell(ct, geometric_dimension=x_ufl.shape[1])
-    domain = ufl.Mesh(ufl.VectorElement("Lagrange", cell, 1))
+    domain = ufl.Mesh(basix.ufl.element("Lagrange", ct, 1, shape=(x_ufl.shape[1], ), gdim=x_ufl.shape[1]))
     mesh_ufl = create_mesh(MPI.COMM_WORLD, cells_ufl, x_ufl, domain)
-    el_ufl = ufl.VectorElement("DG", mesh_ufl.ufl_cell(), 1)
-    V_ufl = _fem.FunctionSpace(mesh_ufl, el_ufl)
+    el_ufl = basix.ufl.element("Discontinuous Lagrange", ct, 1, shape=(x_ufl.shape[1], ), gdim=x_ufl.shape[1])
+    V_ufl = _fem.functionspace(mesh_ufl, el_ufl)
     cell_custom = ufl.Cell(ct, geometric_dimension=x_custom.shape[1])
-    domain_custom = ufl.Mesh(ufl.VectorElement("Lagrange", cell_custom, 1))
+    custom_el = basix.ufl.element("Lagrange", ct, 1, shape=(x_ufl.shape[1], ), gdim=x_ufl.shape[1])
+    domain_custom = ufl.Mesh(custom_el)
     mesh_custom = create_mesh(MPI.COMM_WORLD, cells_custom, x_custom, domain_custom)
-    el_custom = ufl.VectorElement("Lagrange", mesh_custom.ufl_cell(), 1)
-    V_custom = _fem.FunctionSpace(mesh_custom, el_custom)
+    V_custom = _fem.functionspace(mesh_custom, custom_el)
 
     return V_ufl, V_custom
 
@@ -335,14 +336,14 @@ def locate_contact_facets_custom(V, gap):
     contact_facets1 = []
     for facet in facets1:
         cell = f_to_c.links(facet)[0]
-        cell_midpoints = compute_midpoints(mesh, tdim, [cell])
+        cell_midpoints = compute_midpoints(mesh, tdim, np.asarray([cell], dtype=np.int32))
         if cell_midpoints[0][tdim - 1] > 0:
             contact_facets1.append(facet)
             cells[0].append(cell)
     contact_facets2 = []
     for facet in facets2:
         cell = f_to_c.links(facet)[0]
-        cell_midpoints = compute_midpoints(mesh, tdim, [cell])
+        cell_midpoints = compute_midpoints(mesh, tdim, np.asarray([cell], dtype=np.int32))
         if cell_midpoints[0][tdim - 1] < -gap:
             contact_facets2.append(facet)
             cells[1].append(cell)
@@ -377,7 +378,7 @@ def create_contact_data(V, u, quadrature_degree, lmbda, mu, facets_cg, search, t
     contact.create_distance_map(1)
 
     # Pack material parameters mu and lambda on each contact surface
-    V2 = _fem.FunctionSpace(mesh, ("DG", 0))
+    V2 = _fem.functionspace(mesh, ("Discontinuous Lagrange", 0))
     lmbda2 = _fem.Function(V2)
     lmbda2.interpolate(lambda x: np.full((1, x.shape[1]), lmbda))
     mu2 = _fem.Function(V2)
@@ -562,9 +563,8 @@ def test_contact_kernels(ct, gap, quadrature_degree, theta, formulation, search)
     u1 = _fem.Function(V_custom)
     v1 = ufl.TestFunction(V_custom)
     w1 = ufl.TrialFunction(V_custom)
-
-    u1.interpolate(_u0, cells[0])
-    u1.interpolate(_u2, cells[1])
+    u1.interpolate(_u0, np.asarray(cells[0], dtype=np.int32))
+    u1.interpolate(_u2, np.asarray(cells[1], dtype=np.int32))
     u1.x.scatter_forward()
 
     # Dummy form for creating vector/matrix

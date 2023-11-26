@@ -74,7 +74,7 @@ def test_vector_surface_kernel(dim, kernel_type, P, Q):
     ds = ufl.Measure("ds", domain=mesh, subdomain_data=ft)
     dx = ufl.Measure("dx", domain=mesh)
 
-    V2 = functionspace(mesh, ("DG", Q))
+    V2 = functionspace(mesh, ("Discontinuous Lagrange", Q))
     lmbda = Function(V2)
     lmbda.interpolate(lmbda_func)
     mu = Function(V2)
@@ -203,7 +203,7 @@ def test_matrix_surface_kernel(dim, kernel_type, P, Q):
 
     u = Function(V)
     u.interpolate(f)
-    V2 = functionspace(mesh, ("DG", Q))
+    V2 = functionspace(mesh, ("Discontinuous Lagrange", Q))
     lmbda = Function(V2)
     lmbda.interpolate(lmbda_func)
     mu = Function(V2)
