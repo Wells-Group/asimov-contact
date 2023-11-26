@@ -21,6 +21,7 @@
 #include <dolfinx_contact/utils.h>
 #include <nanobind/nanobind.h>
 #include <nanobind/ndarray.h>
+#include <nanobind/stl/array.h>
 #include <nanobind/stl/pair.h>
 #include <nanobind/stl/shared_ptr.h>
 #include <nanobind/stl/string.h>
@@ -97,11 +98,11 @@ NB_MODULE(cpp, m)
 
   // Contact
   nb::class_<dolfinx_contact::Contact>(m, "Contact","Contact object")
-        .def(nb::init<std::vector<
-                          std::shared_ptr<dolfinx::mesh::MeshTags<std::int32_t>>>,
+        .def(nb::init<const std::vector<
+                          std::shared_ptr<dolfinx::mesh::MeshTags<std::int32_t>>>&,
                       std::shared_ptr<
                           const dolfinx::graph::AdjacencyList<std::int32_t>>,
-                      std::vector<std::array<int, 2>>,
+                      const std::vector<std::array<int, 2>>&,
              std::shared_ptr<dolfinx::fem::FunctionSpace<double>>, const int,
                       dolfinx_contact::ContactMode>(),
              nb::arg("markers"), nb::arg("surfaces"),
