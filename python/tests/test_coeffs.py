@@ -176,8 +176,8 @@ def test_sub_coeff(quadrature_degree, degree):
 def test_sub_coeff_grad(quadrature_degree, degree):
     N = 10
     mesh = create_unit_cube(MPI.COMM_WORLD, N, N, N)
-    el = element("Discontinuous Lagrange", mesh.ufl_cell(), degree)
-    v_el = element("Lagrange", mesh.ufl_cell(), degree, shape=(mesh.geometry.dim, ))
+    el = element("Discontinuous Lagrange", mesh.topology.cell_name(), degree)
+    v_el = element("Lagrange", mesh.topology.cell_name(), degree, shape=(mesh.geometry.dim, ))
     V = functionspace(mesh, mixed_element([v_el, el]))
 
     v = Function(V)
