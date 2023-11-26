@@ -7,7 +7,7 @@
 # ====================================================
 
 from basix.ufl import element
-from ufl import (Coefficient, ds, dx, FunctionSpace, grad, Identity,
+from ufl import (Coefficient, ds, dx, functionspace, grad, Identity,
                  inner, Mesh, sym, TestFunction, tr, TrialFunction)
 
 
@@ -20,8 +20,8 @@ e = element("Lagrange", "tetrahedron", 1, shape=(3,))
 e0 = element("Discontinuous Lagrange", "tetrahedron", 0)
 coord_element = element("Lagrange", "tetrahedron", 1, shape=(3,))
 mesh = Mesh(coord_element)
-V = FunctionSpace(mesh, e)
-V0 = FunctionSpace(mesh, e0)
+V = functionspace(mesh, e)
+V0 = functionspace(mesh, e0)
 v = TestFunction(V)
 w = TrialFunction(V)
 

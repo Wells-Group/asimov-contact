@@ -9,7 +9,7 @@ import numpy as np
 import ufl
 from dolfinx import default_scalar_type, log
 from dolfinx.common import TimingType, list_timings, timing
-from dolfinx.fem import (Constant, Function, VectorFunctionSpace, dirichletbc,
+from dolfinx.fem import (Constant, Function, dirichletbc, functionspace,
                          locate_dofs_topological)
 from dolfinx.graph import adjacencylist
 from dolfinx.io import XDMFFile
@@ -334,7 +334,7 @@ if __name__ == "__main__":
     surfaces = adjacencylist(data, offsets)
 
     # Function, TestFunction, TrialFunction and measures
-    V = VectorFunctionSpace(mesh, ("Lagrange", 1))
+    V = functionspace(mesh, ("Lagrange", 1, (mesh.geometry.dim, )))
     u = Function(V)
     v = ufl.TestFunction(V)
     dx = ufl.Measure("dx", domain=mesh, subdomain_data=domain_marker)

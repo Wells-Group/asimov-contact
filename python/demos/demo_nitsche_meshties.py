@@ -9,8 +9,8 @@ import numpy as np
 import ufl
 from dolfinx import log, default_scalar_type
 from dolfinx.common import TimingType, list_timings, Timer, timing
-from dolfinx.fem import (dirichletbc, Constant, form, Function, FunctionSpace,
-                         locate_dofs_topological, VectorFunctionSpace)
+from dolfinx.fem import (dirichletbc, Constant, form, Function, functionspace,
+                         locate_dofs_topological, functionspace)
 from dolfinx.fem.petsc import (apply_lifting, assemble_vector, assemble_matrix,
                                create_vector, set_bc)
 from dolfinx.graph import adjacencylist
@@ -95,7 +95,7 @@ if __name__ == "__main__":
             mesh, facet_marker, domain_marker, [contact_bdy_1, contact_bdy_2])
 
     # Function, TestFunction, TrialFunction and measures
-    V = VectorFunctionSpace(mesh, ("Lagrange", 1))
+    V = functionspace(mesh, ("Lagrange", 1, (mesh.geometry.dim, )))
     v = ufl.TestFunction(V)
     w = ufl.TrialFunction(V)
     dx = ufl.Measure("dx", domain=mesh, subdomain_data=domain_marker)
@@ -107,7 +107,7 @@ if __name__ == "__main__":
     E = args.E
     nu = args.nu
     mu_func, lambda_func = lame_parameters(False)
-    V2 = FunctionSpace(mesh, ("Discontinuous Lagrange", 0))
+    V2 = functionspace(mesh, ("Discontinuous Lagrange", 0))
     lmbda = Function(V2)
     lmbda.interpolate(lambda x: np.full((1, x.shape[1]), lambda_func(E, nu)))
     mu = Function(V2)

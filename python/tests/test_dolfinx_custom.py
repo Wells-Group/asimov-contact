@@ -92,7 +92,7 @@ def test_contact_kernel(theta, gamma, dim, gap):
         facet_marker = dolfinx.mesh.meshtags(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
         bottom_facets = np.sort(bottom_facets)
 
-        V = dolfinx.fem.VectorFunctionSpace(mesh, ("Lagrange", 1))
+        V = dolfinx.fem.functionspace(mesh, ("Lagrange", 1, (mesh.geometry.dim, )))
         u = dolfinx.fem.Function(V)
         v = ufl.TestFunction(V)
         du = ufl.TrialFunction(V)

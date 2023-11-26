@@ -9,9 +9,9 @@ import numpy.typing as npt
 import ufl
 from dolfinx import default_scalar_type, log
 from dolfinx.common import Timer, TimingType, list_timings, timing
-from dolfinx.fem import (Constant, Function, FunctionSpace,
-                         VectorFunctionSpace, assemble_scalar, dirichletbc,
-                         form, locate_dofs_topological)
+from dolfinx.fem import (Constant, Function, functionspace,
+                         assemble_scalar, dirichletbc,
+                         form, functionspace, locate_dofs_topological)
 from dolfinx.fem.petsc import (apply_lifting, assemble_matrix, assemble_vector,
                                create_vector, set_bc)
 from dolfinx.graph import adjacencylist
@@ -131,7 +131,7 @@ def unsplit_domain(threed: bool = False, runs: int = 1):
         sigma = sigma_func(mu, lmbda)
 
         # Functions space and FEM functions
-        V = VectorFunctionSpace(mesh, ("Lagrange", 1))
+        V = functionspace(mesh, ("Lagrange", 1, (mesh.geometry.dim, )))
         ndofs.append(V.dofmap.index_map_bs * V.dofmap.index_map.size_global)
         f = Function(V)
         c = 0.01  # amplitude of solution
@@ -196,7 +196,7 @@ def unsplit_domain(threed: bool = False, runs: int = 1):
         uh.x.scatter_forward()
 
         # Error computation
-        V_err = VectorFunctionSpace(mesh, ("Lagrange", 3))
+        V_err = functionspace(mesh, ("Lagrange", 3, (mesh.geometry.dim, )))
         u_ex = Function(V_err)
         u_ex.interpolate(lambda x: u_fun(x, c, gdim))
 
@@ -285,7 +285,7 @@ def test_meshtie(threed: bool = False, simplex: bool = True, runs: int = 5):
         E = 1e3
         nu = 0.1
         mu_func, lambda_func = lame_parameters(False)
-        V2 = FunctionSpace(mesh, ("Discontinuous Lagrange", 0))
+        V2 = functionspace(mesh, ("Discontinuous Lagrange", 0))
         lmbda = Function(V2)
         lmbda_val = lambda_func(E, nu)
         lmbda.interpolate(lambda x: np.full((1, x.shape[1]), lmbda_val))
@@ -295,7 +295,7 @@ def test_meshtie(threed: bool = False, simplex: bool = True, runs: int = 5):
         sigma = sigma_func(mu, lmbda)
 
         # Function, TestFunction, TrialFunction and measures
-        V = VectorFunctionSpace(mesh, ("Lagrange", 1))
+        V = functionspace(mesh, ("Lagrange", 1, (mesh.geometry.dim, )))
         v = ufl.TestFunction(V)
         w = ufl.TrialFunction(V)
         dx = ufl.Measure("dx", domain=mesh, subdomain_data=domain_marker)
@@ -387,7 +387,7 @@ def test_meshtie(threed: bool = False, simplex: bool = True, runs: int = 5):
         u1.x.scatter_forward()
         solver_time = timing(timing_str)[1]
 
-        V_err = VectorFunctionSpace(mesh, ("Lagrange", 3))
+        V_err = functionspace(mesh, ("Lagrange", 3, (mesh.geometry.dim, )))
         u_ex = Function(V_err)
         u_ex.interpolate(lambda x: u_fun(x, c, gdim))
 

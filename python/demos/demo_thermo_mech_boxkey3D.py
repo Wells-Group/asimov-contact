@@ -109,7 +109,7 @@ Tproblem = LinearProblem(a_therm, L_therm, bcs=[Tbc, Tbc2], petsc_options=petsc_
 
 
 # Elasticity problem
-V = _fem.VectorFunctionSpace(mesh, ("Lagrange", 1))
+V = _fem.functionspace(mesh, ("Lagrange", 1, (mesh.geometry.dim, )))
 g = _fem.Constant(mesh, default_scalar_type((0, 0, 0)))     # zero Dirichlet
 
 
