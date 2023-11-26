@@ -451,7 +451,7 @@ NB_MODULE(cpp, m)
 
   m.def("compute_active_entities",
         [](std::shared_ptr<const dolfinx::mesh::Mesh<double>> mesh,
-           nb::ndarray<std::int32_t, nb::numpy>& entities,
+           nb::ndarray<const std::int32_t, nb::ndim<1>, nb::c_contig>& entities,
            dolfinx::fem::IntegralType integral)
         {
           auto entity_span
