@@ -84,7 +84,7 @@ def retrieve_mesh_data(model: gmsh.model, name: str, gmsh_cell_id: str,
 def create_dolfinx_mesh(filename: str, x: npt.NDArray[np.float64], cells: npt.NDArray[np.int64],
                         cell_data: npt.NDArray[np.int32], gmsh_cell_id: int, marked_facets: npt.NDArray[np.int64],
                         facet_values: npt.NDArray[np.int32], tdim: int) -> None:
-    msh = create_mesh(MPI.COMM_WORLD, cells, x, ufl_mesh(gmsh_cell_id, 3))
+    msh = create_mesh(MPI.COMM_WORLD, np.ascontiguousarray(cells, dtype=np.int64), x, ufl_mesh(gmsh_cell_id, 3))
     msh.name = "Grid"
     entities, values = distribute_entity_data(msh, tdim - 1, marked_facets, facet_values)
     msh.topology.create_connectivity(tdim - 1, 0)
