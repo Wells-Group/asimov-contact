@@ -162,7 +162,6 @@ def test_raytracing_manifold(cell_type):
     else:
         topology = np.array([[1, 3, 2], [0, 3, 1]], dtype=np.int32)
 
-    cell = ufl.Cell(cell_type.name, geometric_dimension=3)
     domain = ufl.Mesh(basix.ufl.element("Lagrange", cell_type.name, 1, shape=(3, ), gdim=3))
     mesh = dolfinx.mesh.create_mesh(MPI.COMM_WORLD, topology, geometry, domain)
 

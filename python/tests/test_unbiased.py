@@ -304,12 +304,10 @@ def create_functionspaces(ct, gap):
         cells_custom = np.array([[0, 1, 2, 3, 4, 5, 6, 7], [8, 9, 10, 11, 12, 13, 14, 15]], dtype=np.int32)
     else:
         raise ValueError(f"Unsupported mesh type {ct}")
-    cell = ufl.Cell(ct, geometric_dimension=x_ufl.shape[1])
     domain = ufl.Mesh(basix.ufl.element("Lagrange", ct, 1, shape=(x_ufl.shape[1], ), gdim=x_ufl.shape[1]))
     mesh_ufl = create_mesh(MPI.COMM_WORLD, cells_ufl, x_ufl, domain)
     el_ufl = basix.ufl.element("Discontinuous Lagrange", ct, 1, shape=(x_ufl.shape[1], ), gdim=x_ufl.shape[1])
     V_ufl = _fem.functionspace(mesh_ufl, el_ufl)
-    cell_custom = ufl.Cell(ct, geometric_dimension=x_custom.shape[1])
     custom_el = basix.ufl.element("Lagrange", ct, 1, shape=(x_ufl.shape[1], ), gdim=x_ufl.shape[1])
     domain_custom = ufl.Mesh(custom_el)
     mesh_custom = create_mesh(MPI.COMM_WORLD, cells_custom, x_custom, domain_custom)
