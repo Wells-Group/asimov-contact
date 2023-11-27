@@ -136,7 +136,7 @@ class MeshTieProblem:
            x: The vector containing the latest solution
 
         """
-        x.ghostUpdate(addv=PETSc.InsertMode.INSERT,
+        x.ghostUpdate(addv=PETSc.InsertMode.INSERT,    # type: ignore
                       mode=PETSc.ScatterMode.FORWARD)  # type: ignore
 
 

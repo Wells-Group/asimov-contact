@@ -136,8 +136,8 @@ jobs:
           python3 blocks_nitsche.py
           cd ../meshtie_demos
           python3 blocks_nitsche_meshtie.py
-          python3 meshtie_convergence.py --simplex --runs=4
-          python3 meshtie_convergence.py --3D
+          python3 poisson_convergence.py --simplex --runs=4
+          python3 poisson_convergence.py --3D
           python3 demo_poisson.py
 
       - name: Run tests
