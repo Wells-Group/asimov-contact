@@ -47,7 +47,7 @@ public:
     // initialise internal variables
     _num_pairs = (int)connected_pairs.size();
     _coeffs.resize(_num_pairs);
-    _coeffs_heat_transfer.resize(_num_pairs);
+    _coeffs_poisson.resize(_num_pairs);
     _q_deg = q_deg;
   };
 
@@ -55,8 +55,22 @@ public:
       std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V);
   std::size_t
   offset_poisson(std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V);
-void generate_kernel_data(Problem problem_type, const std::map<std::string, std::shared_ptr<const dolfinx::fem::Function<double>>>&
-        coefficients, double gamma, double theta);
+
+  /// Generate the input data for the custom integration kernel
+  /// @param[in] problem_type specifies the type of the equation, e.g,
+  /// elasticity
+  /// @param[in] coefficients maps coefficients to their names used for the
+  /// kernel
+  /// @param[in] gamma Nitsche parameter
+  /// @param[in] theta determines version of Nitsche's method
+  void generate_kernel_data(
+      Problem problem_type,
+      std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V,
+      const std::map<std::string,
+                     std::shared_ptr<dolfinx::fem::Function<double>>>&
+          coefficients,
+      double gamma, double theta);
+
   /// Generate data for matrix/vector assembly
   /// @param[in] u - the displacement function
   /// @param[in] lambda - lame parameter lambda as DG0 function
@@ -79,39 +93,58 @@ void generate_kernel_data(Problem problem_type, const std::map<std::string, std:
       std::shared_ptr<dolfinx::fem::Function<double>> lambda,
       std::shared_ptr<dolfinx::fem::Function<double>> mu, double gamma,
       double theta);
+      
+  /// Update data for vector assembly based on state
+  /// @param[in] u - the function
+  /// @param[in] problem_type - the type of equation, e.g. elasticity
+  void update_meshtie_data(std::shared_ptr<dolfinx::fem::Function<double>> u,
+                           dolfinx_contact::Problem problem_type);
 
-  /// Update data for vector assembly based on current displacements
-  /// @param[in] u - the displacement function
+  /// Update data for vector assembly based on state
+  /// @param[in] u - the function
+  /// @param[in] coeffs - the coefficient vector to be updated
+  /// @param[in] offset0 - position within coeffs where data should be added
+  /// @param[in] coeff_size - total size of the coefficient array per facet
   void update_meshtie_data(std::shared_ptr<dolfinx::fem::Function<double>> u,
                            std::vector<std::vector<double>>& coeffs,
                            std::size_t offset0, std::size_t coeff_size);
 
-  /// Generate data for matrix assembly
+  /// Generate data for matrix assembly for Poisson
+  /// @param[in] V - The FunctionSpace
+  /// @param[in] kdt - scalar in front of laplace operator
   /// @param[in] gamma - Nitsche penalty parameter
   /// @param[in] theta - Nitsche parameter
-  void generate_heattransfer_data_matrix_only(
+  void generate_poisson_data_matrix_only(
       std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V, double kdt,
       double gamma, double theta);
+
+   /// Generate data for matrix/vector assembly for Poisson
+  /// @param[in] T - The Function
+  /// @param[in] kdt - scalar in front of laplace operator
+  /// @param[in] gamma - Nitsche penalty parameter
+  /// @param[in] theta - Nitsche parameter
   void
-  generate_heat_transfer_data(std::shared_ptr<dolfinx::fem::Function<double>> T,
+  generate_poisson_data(std::shared_ptr<dolfinx::fem::Function<double>> T,
                               double kdt, double gamma, double theta);
   using Contact::assemble_vector;
   /// Assemble right hand side
   /// @param[in] b - the vector to assemble into
+  /// @param[in] V - the associated FunctionSpace
+  /// @param[in] problem_type - the type of equation, e.g. elasticity
   void
   assemble_vector(std::span<PetscScalar> b,
                   std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V,
-                  Problem problemtyp);
+                  Problem problem_type);
 
   using Contact::assemble_matrix;
   /// Assemble matrix
   /// @param[in] mat_set function for setting matrix entries
   /// @param[in] V function space for Trial/Test functions
-  /// @param[in] Problem problem type 
+  /// @param[in] problem_type - the type of equation, e.g. elasticity
   void
   assemble_matrix(const mat_set_fn& mat_set,
                   std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V,
-                  Problem problemtype);
+                  Problem problem_type);
 
   /// Return data generated with generate_meshtie_data
   /// @param[in] pair - the index of the pair of connected surfaces
@@ -123,20 +156,20 @@ private:
   // kernel function for matrix
   kernel_fn<PetscScalar> _kernel_jac;
   // kernel function for rhs
-  kernel_fn<PetscScalar> _kernel_rhs_heat_transfer;
+  kernel_fn<PetscScalar> _kernel_rhs_poisson;
   // kernel function for matrix
-  kernel_fn<PetscScalar> _kernel_jac_heat_transfer;
+  kernel_fn<PetscScalar> _kernel_jac_poisson;
   // number of pairs of connected surfaces
   int _num_pairs;
   // storage for generated data
   std::vector<std::vector<double>> _coeffs;
-  std::vector<std::vector<double>> _coeffs_heat_transfer;
+  std::vector<std::vector<double>> _coeffs_poisson;
   // constant input parameters for kernels
   std::vector<double> _consts;
-  std::vector<double> _consts_heat_transfer;
+  std::vector<double> _consts_poisson;
   // quadrature degree
   std::int32_t _q_deg;
   std::size_t _cstride = 0;
-  std::size_t _cstride_heat_transfer = 0;
+  std::size_t _cstride_poisson = 0;
 };
 } // namespace dolfinx_contact

@@ -353,7 +353,7 @@ dolfinx_contact::generate_meshtie_kernel(
 }
 
 dolfinx_contact::kernel_fn<PetscScalar>
-dolfinx_contact::generate_heat_transfer_kernel(
+dolfinx_contact::generate_poisson_kernel(
     dolfinx_contact::Kernel type,
     std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V,
     std::shared_ptr<const dolfinx_contact::QuadratureRule> quadrature_rule,
@@ -385,7 +385,7 @@ dolfinx_contact::generate_heat_transfer_kernel(
   /// `gamma`, `theta`.
   /// @param[in] coordinate_dofs The physical coordinates of cell. Assumed to
   /// be padded to 3D, (shape (num_nodes, 3)).
-  kernel_fn<PetscScalar> heat_transfer_rhs
+  kernel_fn<PetscScalar> poisson_rhs
       = [kd, gdim, bs,
          ndofs_cell](std::vector<std::vector<PetscScalar>>& b,
                      std::span<const PetscScalar> c, const PetscScalar* w,
@@ -512,7 +512,7 @@ dolfinx_contact::generate_heat_transfer_kernel(
   /// `gamma`, `theta`.
   /// @param[in] coordinate_dofs The physical coordinates of cell. Assumed
   /// to be padded to 3D, (shape (num_nodes, 3)).
-  kernel_fn<PetscScalar> heat_transfer_jac
+  kernel_fn<PetscScalar> poisson_jac
       = [kd, gdim, bs, ndofs_cell](
             std::vector<std::vector<PetscScalar>>& A, std::span<const double> c,
             const double* w, const double* coordinate_dofs,
@@ -649,9 +649,9 @@ dolfinx_contact::generate_heat_transfer_kernel(
   switch (type)
   {
   case dolfinx_contact::Kernel::MeshTieRhs:
-    return heat_transfer_rhs;
+    return poisson_rhs;
   case dolfinx_contact::Kernel::MeshTieJac:
-    return heat_transfer_jac;
+    return poisson_jac;
   default:
     throw std::invalid_argument("Unrecognized kernel");
   }

@@ -28,40 +28,51 @@ std::size_t dolfinx_contact::MeshTie::offset_poisson(
   return 1 + (1 + gdim) * (num_pts * max_links * ndofs_cell);
 }
 
-void generate_kernel_data(
+void dolfinx_contact::MeshTie::generate_kernel_data(
     dolfinx_contact::Problem problem_type,
     std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V,
     const std::map<std::string,
-                   std::shared_ptr<const dolfinx::fem::Function<double>>>&
+                   std::shared_ptr<dolfinx::fem::Function<double>>>&
         coefficients,
     double gamma, double theta)
 {
+  std::vector<std::shared_ptr<dolfinx::fem::Function<double>>> coeff_list;
   switch (problem_type)
   {
   case dolfinx_contact::Problem::Elasticity:
-    std::shared_ptr<dolfinx::fem::Function<double>> u;
-    std::shared_ptr<dolfinx::fem::Function<double>> lambda;
-    std::shared_ptr<dolfinx::fem::Function<double>> mu;
+
     if (auto it = coefficients.find("mu"); it != coefficients.end())
-      mu(it->second);
+      coeff_list.push_back(it->second);
     else
     {
       throw std::runtime_error("Lame parameter mu not provided.");
     }
     if (auto it = coefficients.find("lambda"); it != coefficients.end())
-      lambda(it->second);
+      coeff_list.push_back(it->second);
     else
     {
       throw std::runtime_error("Lame parameter lambda not provided.");
     }
     if (auto it = coefficients.find("u"); it != coefficients.end())
-      u(it->second);
-      generate_meshtie_data(u, lambda, mu, gamma, theta);
+    {
+      coeff_list.push_back(it->second);
+      dolfinx_contact::MeshTie::generate_meshtie_data(
+          coeff_list[2], coeff_list[1], coeff_list[0], gamma, theta);
+    }
     else
     {
-      generate_meshtie_data_matrix_only(V, lambda, mu, gamma, theta);
+      dolfinx_contact::MeshTie::generate_meshtie_data_matrix_only(
+          V, coeff_list[1], coeff_list[0], gamma, theta);
     }
     break;
+  case dolfinx_contact::Problem::Poisson:
+    throw std::invalid_argument("Problem type not implemented");
+    break;
+  case dolfinx_contact::Problem::ThermoElasticity:
+    throw std::invalid_argument("Problem type not implemented");
+    break;
+  default:
+    throw std::invalid_argument("Problem type not implemented");
   }
 }
 void dolfinx_contact::MeshTie::generate_meshtie_data(
@@ -147,6 +158,29 @@ void dolfinx_contact::MeshTie::generate_meshtie_data_matrix_only(
     _coeffs[i] = coeffs;
   }
 }
+void dolfinx_contact::MeshTie::update_meshtie_data(
+    std::shared_ptr<dolfinx::fem::Function<double>> u,
+    dolfinx_contact::Problem problem_type)
+{
+  switch (problem_type)
+  {
+  case dolfinx_contact::Problem::Elasticity:
+    update_meshtie_data(u, _coeffs, offset_elasticity(u->function_space()),
+                        _cstride);
+    break;
+  case dolfinx_contact::Problem::Poisson:
+    update_meshtie_data(u, _coeffs_poisson,
+                        offset_poisson(u->function_space()),
+                        _cstride_poisson);
+    break;
+  case dolfinx_contact::Problem::ThermoElasticity:
+    update_meshtie_data(u, _coeffs, offset_elasticity(u->function_space()),
+                        _cstride);
+    break;
+  default:
+    throw std::invalid_argument("Problem type not implemented");
+  }
+}
 
 void dolfinx_contact::MeshTie::update_meshtie_data(
     std::shared_ptr<dolfinx::fem::Function<double>> u,
@@ -194,7 +228,7 @@ void dolfinx_contact::MeshTie::update_meshtie_data(
   }
 }
 
-void dolfinx_contact::MeshTie::generate_heattransfer_data_matrix_only(
+void dolfinx_contact::MeshTie::generate_poisson_data_matrix_only(
     std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V, double kdt,
     double gamma, double theta)
 {
@@ -224,15 +258,15 @@ void dolfinx_contact::MeshTie::generate_heattransfer_data_matrix_only(
          num_q_points,
          num_q_points * gdim};
 
-  _cstride_heat_transfer
+  _cstride_poisson
       = std::accumulate(cstrides.cbegin(), cstrides.cend(), 0);
-  _kernel_rhs_heat_transfer = dolfinx_contact::generate_heat_transfer_kernel(
+  _kernel_rhs_poisson = dolfinx_contact::generate_poisson_kernel(
       Kernel::MeshTieRhs, V, Contact::quadrature_rule(), max_links, cstrides);
-  _kernel_jac_heat_transfer = dolfinx_contact::generate_heat_transfer_kernel(
+  _kernel_jac_poisson = dolfinx_contact::generate_poisson_kernel(
       Kernel::MeshTieJac, V, Contact::quadrature_rule(), max_links, cstrides);
 
   // save nitsche parameters as constants
-  _consts_heat_transfer = {kdt, gamma, theta};
+  _consts_poisson = {kdt, gamma, theta};
 
   // loop over connected pairs
   for (int i = 0; i < _num_pairs; ++i)
@@ -258,35 +292,35 @@ void dolfinx_contact::MeshTie::generate_heattransfer_data_matrix_only(
 
     // copy data into one common data vector in the order expected by the
     // integration kernel
-    std::vector<double> coeffs(_cstride_heat_transfer * num_facets);
+    std::vector<double> coeffs(_cstride_poisson * num_facets);
     for (std::size_t e = 0; e < num_facets; ++e)
     {
       std::copy_n(std::next(h_p.begin(), e * c_h), c_h,
-                  std::next(coeffs.begin(), e * _cstride_heat_transfer));
+                  std::next(coeffs.begin(), e * _cstride_poisson));
       std::size_t offset = c_h;
       std::copy_n(
           std::next(testfn.begin(), e * ctest), ctest,
-          std::next(coeffs.begin(), e * _cstride_heat_transfer + offset));
+          std::next(coeffs.begin(), e * _cstride_poisson + offset));
       offset += ctest;
       std::copy_n(
           std::next(gradtst.begin(), e * cgt), cgt,
-          std::next(coeffs.begin(), e * _cstride_heat_transfer + offset));
+          std::next(coeffs.begin(), e * _cstride_poisson + offset));
     }
 
-    _coeffs_heat_transfer[i] = coeffs;
+    _coeffs_poisson[i] = coeffs;
   }
 }
 
-void dolfinx_contact::MeshTie::generate_heat_transfer_data(
+void dolfinx_contact::MeshTie::generate_poisson_data(
     std::shared_ptr<dolfinx::fem::Function<double>> T, double kdt, double gamma,
     double theta)
 {
   // generate the data used for the matrix
-  generate_heattransfer_data_matrix_only(T->function_space(), kdt, gamma,
+  generate_poisson_data_matrix_only(T->function_space(), kdt, gamma,
                                          theta);
-  update_meshtie_data(T, _coeffs_heat_transfer,
+  update_meshtie_data(T, _coeffs_poisson,
                       offset_poisson(T->function_space()),
-                      _cstride_heat_transfer);
+                      _cstride_poisson);
 }
 
 void dolfinx_contact::MeshTie::assemble_vector(
@@ -302,8 +336,8 @@ void dolfinx_contact::MeshTie::assemble_vector(
     break;
   case dolfinx_contact::Problem::Poisson:
     for (int i = 0; i < _num_pairs; ++i)
-      assemble_vector(b, i, _kernel_rhs_heat_transfer, _coeffs_heat_transfer[i],
-                      (int)_cstride_heat_transfer, _consts_heat_transfer, V);
+      assemble_vector(b, i, _kernel_rhs_poisson, _coeffs_poisson[i],
+                      (int)_cstride_poisson, _consts_poisson, V);
     break;
   case dolfinx_contact::Problem::ThermoElasticity:
     for (int i = 0; i < _num_pairs; ++i)
@@ -329,9 +363,9 @@ void dolfinx_contact::MeshTie::assemble_matrix(
   case dolfinx_contact::Problem::Poisson:
     std::cout << "calling kernel poisson \n";
     for (int i = 0; i < _num_pairs; ++i)
-      assemble_matrix(mat_set, i, _kernel_jac_heat_transfer,
-                      _coeffs_heat_transfer[i], (int)_cstride_heat_transfer,
-                      _consts_heat_transfer, V);
+      assemble_matrix(mat_set, i, _kernel_jac_poisson,
+                      _coeffs_poisson[i], (int)_cstride_poisson,
+                      _consts_poisson, V);
     break;
   case dolfinx_contact::Problem::ThermoElasticity:
     for (int i = 0; i < _num_pairs; ++i)

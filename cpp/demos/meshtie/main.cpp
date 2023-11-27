@@ -147,7 +147,9 @@ int main(int argc, char* argv[])
     auto meshties
         = dolfinx_contact::MeshTie(markers, contact_markers, pairs, mesh, 5);
 
-    meshties.generate_meshtie_data_matrix_only(V, lmbda, mu, E * gamma, theta);
+    meshties.generate_kernel_data(dolfinx_contact::Problem::Elasticity, V,
+                                  {{"mu", mu}, {"lambda", lmbda}}, E * gamma,
+                                  theta);
 
     // Create matrix and vector
     auto A = dolfinx::la::petsc::Matrix(
@@ -157,7 +159,8 @@ int main(int argc, char* argv[])
 
     // Assemble vector
     b.set(0.0);
-    meshties.assemble_vector(b.mutable_array(), V);
+    meshties.assemble_vector(b.mutable_array(), V,
+                             dolfinx_contact::Problem::Elasticity);
     dolfinx::fem::assemble_vector(b.mutable_array(), *F);
     dolfinx::fem::apply_lifting<T, U>(b.mutable_array(), {J}, {{bc}}, {},
                                       double(1.0));
@@ -167,7 +170,8 @@ int main(int argc, char* argv[])
     // Assemble matrix
     MatZeroEntries(A.mat());
     meshties.assemble_matrix(
-        la::petsc::Matrix::set_block_fn(A.mat(), ADD_VALUES), J->function_spaces()[0]);
+        la::petsc::Matrix::set_block_fn(A.mat(), ADD_VALUES),
+        J->function_spaces()[0], dolfinx_contact::Problem::Elasticity);
     MatAssemblyBegin(A.mat(), MAT_FLUSH_ASSEMBLY);
     MatAssemblyEnd(A.mat(), MAT_FLUSH_ASSEMBLY);
     dolfinx::fem::assemble_matrix(

@@ -69,7 +69,9 @@ public:
                                  _b.array().data(), &_b_petsc);
 
     // initialise the input data for integration kernels
-    _meshties->generate_meshtie_data(u, lmbda, mu, gamma, theta);
+    _meshties->generate_kernel_data(
+        dolfinx_contact::Problem::Elasticity, L->function_spaces()[0],
+        {{"u", u}, {"mu", mu}, {"lambda", lmbda}}, gamma, theta);
 
     // build near null space preventing rigid body motion of individual
     // components)
@@ -110,13 +112,15 @@ public:
       loguru::g_stderr_verbosity = loguru::Verbosity_OFF;
 
       // Generate input data for custom kernel
-      _meshties->update_meshtie_data(_u, _meshties->offset_elasticity(_u->function_space()));
+      _meshties->update_meshtie_data(_u, dolfinx_contact::Problem::Elasticity);
 
       // Assemble b
       std::span<T> b(_b.mutable_array());
       std::fill(b.begin(), b.end(), 0.0);
-      _meshties->assemble_vector(b, _l->function_spaces()[0]);   // custom kernel for mesh tying
-      fem::assemble_vector<T>(b, *_l); // standard assembly
+      _meshties->assemble_vector(
+          b, _l->function_spaces()[0],
+          dolfinx_contact::Problem::Elasticity); // custom kernel for mesh tying
+      fem::assemble_vector<T>(b, *_l);           // standard assembly
 
       // Apply lifting
       Vec x_local;
@@ -153,8 +157,9 @@ public:
       MatZeroEntries(A);
 
       // custom assembly for mesh tying
-      _meshties->assemble_matrix(
-          la::petsc::Matrix::set_block_fn(A, ADD_VALUES), _j->function_spaces()[0]);
+      _meshties->assemble_matrix(la::petsc::Matrix::set_block_fn(A, ADD_VALUES),
+                                 _j->function_spaces()[0],
+                                 dolfinx_contact::Problem::Elasticity);
       MatAssemblyBegin(A, MAT_FLUSH_ASSEMBLY);
       MatAssemblyEnd(A, MAT_FLUSH_ASSEMBLY);
 
@@ -217,7 +222,6 @@ int main(int argc, char* argv[])
         functionspace_form_linear_elasticity_J, "w", mesh));
     auto V0 = std::make_shared<fem::FunctionSpace<U>>(fem::create_functionspace(
         functionspace_form_linear_elasticity_J, "mu", mesh));
-
 
     // Problem parameters (material & Nitsche)
     double E = 1E4;
@@ -306,11 +310,12 @@ int main(int argc, char* argv[])
     auto meshties = std::make_shared<dolfinx_contact::MeshTie>(
         dolfinx_contact::MeshTie(markers, contact_markers, pairs, mesh, 5));
 
-    // create "non-linear" meshtie problem (linear problem written as non-linear problem)
+    // create "non-linear" meshtie problem (linear problem written as non-linear
+    // problem)
     auto problem = MeshTieProblem(F, J, bcs, meshties, domain1, u, lmbda, mu,
                                   gamma, theta);
 
-    // loglevel INFO shows NewtonSolver output 
+    // loglevel INFO shows NewtonSolver output
     loguru::g_stderr_verbosity = loguru::Verbosity_INFO;
 
     // create Newton Solver
