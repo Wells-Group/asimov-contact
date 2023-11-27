@@ -426,9 +426,9 @@ dolfinx_contact::generate_poisson_kernel(
     }
 
     // Extract constants used inside quadrature loop
-    double gamma = w[1]; // gamma/h
-    double theta = w[2];
-    double kdt = w[0];
+    double gamma = w[0] / c[0]; // gamma/h
+    double theta = w[1];
+    double kdt = c[1];
 
     // Extract reference to the tabulated basis function
     cmdspan2_t phi = kd.phi();
@@ -550,9 +550,9 @@ dolfinx_contact::generate_poisson_kernel(
                            MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent));
     }
     // Extract constants used inside quadrature loop
-    double gamma = w[1] / c[0]; // gamma/h
-    double theta = w[2];
-    double kdt = w[0];
+    double gamma = w[0] / c[0]; // gamma/h
+    double theta = w[1];
+    double kdt = c[1];
 
     // Extract reference to the tabulated basis function
     cmdspan2_t phi = kd.phi();

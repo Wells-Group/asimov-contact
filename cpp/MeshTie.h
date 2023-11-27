@@ -93,7 +93,7 @@ public:
       std::shared_ptr<dolfinx::fem::Function<double>> lambda,
       std::shared_ptr<dolfinx::fem::Function<double>> mu, double gamma,
       double theta);
-      
+
   /// Update data for vector assembly based on state
   /// @param[in] u - the function
   /// @param[in] problem_type - the type of equation, e.g. elasticity
@@ -115,17 +115,19 @@ public:
   /// @param[in] gamma - Nitsche penalty parameter
   /// @param[in] theta - Nitsche parameter
   void generate_poisson_data_matrix_only(
-      std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V, double kdt,
-      double gamma, double theta);
+      std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V,
+      std::shared_ptr<dolfinx::fem::Function<double>> kdt, double gamma,
+      double theta);
 
-   /// Generate data for matrix/vector assembly for Poisson
+  /// Generate data for matrix/vector assembly for Poisson
   /// @param[in] T - The Function
   /// @param[in] kdt - scalar in front of laplace operator
   /// @param[in] gamma - Nitsche penalty parameter
   /// @param[in] theta - Nitsche parameter
   void
   generate_poisson_data(std::shared_ptr<dolfinx::fem::Function<double>> T,
-                              double kdt, double gamma, double theta);
+                        std::shared_ptr<dolfinx::fem::Function<double>> kdt,
+                        double gamma, double theta);
   using Contact::assemble_vector;
   /// Assemble right hand side
   /// @param[in] b - the vector to assemble into

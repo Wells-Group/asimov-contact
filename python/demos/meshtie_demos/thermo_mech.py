@@ -7,7 +7,7 @@ import numpy as np
 from dolfinx import default_scalar_type
 from dolfinx.io import VTXWriter, XDMFFile
 from dolfinx.fem import Constant, dirichletbc, form, functionspace, Function, locate_dofs_topological
-from dolfinx.fem.petsc import assemble_matrix, assemble_vector, apply_lifting, set_bc, create_matrix, create_vector
+from dolfinx.fem.petsc import assemble_matrix, assemble_vector, apply_lifting, set_bc, create_vector
 from dolfinx.mesh import locate_entities_boundary
 from dolfinx.graph import adjacencylist
 from dolfinx_contact.cpp import MeshTie
@@ -23,10 +23,11 @@ nx = 20
 ny = 20
 # parameter for surface approximation
 num_segments = (100 * np.ceil(5.0 / 1.2).astype(np.int32),
-                    100 * np.ceil(5.0 / (1.2 * 0.7)).astype(np.int32))
+                100 * np.ceil(5.0 / (1.2 * 0.7)).astype(np.int32))
 fname = "./meshes/split_box"
-create_split_box_2D(fname, res=0.05, L=1.0, H=1.0, domain_1=[0, 1, 5, 4], domain_2=[4, 5, 2, 3], x0=[
-                0, 0.5], x1=[1.0, 0.7], curve_fun=horizontal_sine, num_segments=num_segments, quads=False)
+create_split_box_2D(fname, res=0.05, L=1.0, H=1.0, domain_1=[0, 1, 5, 4], domain_2=[4, 5, 2, 3],
+                    x0=[0, 0.5], x1=[1.0, 0.7], curve_fun=horizontal_sine, num_segments=num_segments,
+                    quads=False)
 
 # read in mesh and markers
 with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
@@ -85,14 +86,14 @@ Tbc = dirichletbc(value=default_scalar_type((1.0)), dofs=dofs, V=Q)
 gamma = 10
 theta = 1
 contact = [(0, 2), (0, 3), (1, 2), (1, 3),
-            (2, 0), (2, 1), (3, 0), (3, 1)]
+           (2, 0), (2, 1), (3, 0), (3, 1)]
 data = np.array([3, 4, 7, 8], dtype=np.int32)
 offsets = np.array([0, 4], dtype=np.int32)
 surfaces = adjacencylist(data, offsets)
 
 # initialise meshties
 meshties = MeshTie([facet_marker._cpp_object], surfaces, contact,
-                    mesh._cpp_object, quadrature_degree=3)
+                   mesh._cpp_object, quadrature_degree=3)
 meshties.generate_heattransfer_data_matrix_only(
     Q._cpp_object, kdt, gamma, theta)
 
@@ -101,6 +102,7 @@ a_therm = form(a_therm, jit_options=jit_options)
 L_therm = form(L_therm, jit_options=jit_options)
 mat_therm = meshties.create_matrix(a_therm._cpp_object)
 vec_therm = create_vector(L_therm)
+
 
 # Thermal problem: functions for updating matrix and vector
 def assemble_mat_therm(A):
@@ -119,6 +121,7 @@ def assemble_vec_therm(b):
     apply_lifting(b, [a_therm], bcs=[[Tbc]], scale=1.0)
     b.ghostUpdate(addv=PETSc.InsertMode.ADD, mode=PETSc.ScatterMode.REVERSE)  # type: ignore
     set_bc(b, [Tbc])
+
 
 # Thermal problem: create linear solver
 ksp_therm = PETSc.KSP().create(mesh.comm)
@@ -181,7 +184,7 @@ b = create_vector(F)
 
 # Set rigid motion nullspace
 null_space = rigid_motions_nullspace_subdomains(V, domain_marker, np.unique(domain_marker.values),
-                                                        num_domains=2)
+                                                num_domains=2)
 A.setNearNullSpace(null_space)
 
 
@@ -202,6 +205,7 @@ def assemble_vec_el(b):
     apply_lifting(b, [J], bcs=[bcs], scale=1.0)
     b.ghostUpdate(addv=PETSc.InsertMode.ADD, mode=PETSc.ScatterMode.REVERSE)  # type: ignore
     set_bc(b, bcs)
+
 
 # Elasticity problem: create linear solver
 ksp_el = PETSc.KSP().create(mesh.comm)
@@ -231,4 +235,3 @@ for i in range(time_steps):
     ksp_el.solve(b, u.vector)
     vtx.write(i + 1)
 vtx.close()
-

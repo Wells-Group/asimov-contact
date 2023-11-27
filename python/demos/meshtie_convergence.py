@@ -71,14 +71,12 @@ def fun_3d(x: npt.NDArray[np.float64], d: float, mu: float, lmbda: float, gdim: 
     a = 2 * np.pi / 5
     b = 2 * np.pi
     c = 2 * np.pi
-    f1 = -(lmbda + mu) * a * b * np.cos(a *
-                                        x[0]) * np.cos(b * x[1]) * np.sin(c * x[2])
+    f1 = -(lmbda + mu) * a * b * np.cos(a * x[0]) * np.cos(b * x[1]) * np.sin(c * x[2])
 
     f2 = (mu * (a**2 + c**2) + (2 * mu + lmbda) * b**2) * \
         np.sin(a * x[0]) * np.sin(b * x[1]) * np.sin(c * x[2])
 
-    f3 = -(lmbda + mu) * b * c * np.sin(a *
-                                        x[0]) * np.cos(b * x[1]) * np.cos(c * x[2])
+    f3 = -(lmbda + mu) * b * c * np.sin(a * x[0]) * np.cos(b * x[1]) * np.cos(c * x[2])
     vals = np.zeros((gdim, x.shape[1]))
     vals[0, :] = d * f1[:]
     vals[1, :] = d * f2[:]

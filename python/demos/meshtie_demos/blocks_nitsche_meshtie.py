@@ -61,17 +61,20 @@ class MeshTieProblem:
         self._theta = theta
 
         # Create PETSc rhs vector
-        self._b = vector(a.function_spaces[0].dofmap.index_map, a.function_spaces[0].dofmap.index_map_bs)
+        self._b = vector(
+            a.function_spaces[0].dofmap.index_map, a.function_spaces[0].dofmap.index_map_bs)
         self._b_petsc = create_petsc_vector_wrap(self._b)
 
         # Initialise the input data for integration kernels
-        self._meshties.generate_kernel_data(Problem.Elasticity, a.function_spaces[0], 
-                                            {"lambda" : lmbda._cpp_object, "mu" : mu._cpp_object},
+        self._meshties.generate_kernel_data(Problem.Elasticity, a.function_spaces[0],
+                                            {"lambda": lmbda._cpp_object,
+                                                "mu": mu._cpp_object},
                                             gamma, theta)
 
         # Build near null space preventing rigid body motion of individual components
         tags = np.unique(subdomains.values)
-        ns = rigid_motions_nullspace_subdomains(u.function_space, subdomains, tags, len(tags))
+        ns = rigid_motions_nullspace_subdomains(
+            u.function_space, subdomains, tags, len(tags))
         self._mat_a.setNearNullSpace(ns)
 
     def f(self, x, _b):
@@ -91,13 +94,17 @@ class MeshTieProblem:
 
         # Assemble residual vector
         self._b_petsc.zeroEntries()
-        self._b_petsc.ghostUpdate(addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD)
-        self._meshties.assemble_vector(self._b_petsc, self._l.function_spaces[0], Problem.Elasticity)  # custom kernel
+        self._b_petsc.ghostUpdate(
+            addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD)
+        self._meshties.assemble_vector(
+            self._b_petsc, self._l.function_spaces[0], Problem.Elasticity)  # custom kernel
         assemble_vector(self._b_petsc, self._l)  # standard kernels
 
         # Apply boundary condition
-        apply_lifting(self._b_petsc, [self._j], bcs=[self._bcs], x0=[x], scale=-1.0)
-        self._b_petsc.ghostUpdate(addv=PETSc.InsertMode.ADD, mode=PETSc.ScatterMode.REVERSE)
+        apply_lifting(self._b_petsc, [self._j], bcs=[
+                      self._bcs], x0=[x], scale=-1.0)
+        self._b_petsc.ghostUpdate(
+            addv=PETSc.InsertMode.ADD, mode=PETSc.ScatterMode.REVERSE)
         set_bc(self._b_petsc, self._bcs, x, -1.0)
 
         # Restore log level info for monitoring Newton solver
@@ -113,7 +120,8 @@ class MeshTieProblem:
         """
         log.set_log_level(log.LogLevel.OFF)
         self._mat_a.zeroEntries()
-        self._meshties.assemble_matrix(self._mat_a, self._j.function_spaces[0], Problem.Elasticity)
+        self._meshties.assemble_matrix(
+            self._mat_a, self._j.function_spaces[0], Problem.Elasticity)
         assemble_matrix(self._mat_a, self._j, self._bcs)
         self._mat_a.assemble()
         log.set_log_level(log.LogLevel.INFO)
@@ -128,7 +136,8 @@ class MeshTieProblem:
            x: The vector containing the latest solution
 
         """
-        x.ghostUpdate(addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD)  # type: ignore
+        x.ghostUpdate(addv=PETSc.InsertMode.INSERT,
+                      mode=PETSc.ScatterMode.FORWARD)  # type: ignore
 
 
 # read mesh from file
@@ -234,7 +243,8 @@ j_compiled = form(j, jit_options=jit_options)
 search_mode = [ContactMode.ClosestPoint, ContactMode.ClosestPoint]
 
 # Initialise MeshTie class and generate MeshTie problem
-meshties = MeshTie([facet_marker._cpp_object], surfaces, contact_pairs, mesh._cpp_object, quadrature_degree=5)
+meshties = MeshTie([facet_marker._cpp_object], surfaces,
+                   contact_pairs, mesh._cpp_object, quadrature_degree=5)
 problem = MeshTieProblem(l_compiled, j_compiled, bcs, meshties, domain_marker,
                          u, lmbda, mu, np.float64(gamma), np.float64(theta))
 

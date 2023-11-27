@@ -108,7 +108,10 @@ if __name__ == "__main__":
     theta = args.theta
 
     # bilinear form
-    kdt = 5
+    kdt_val = 5
+    V0 = FunctionSpace(mesh, ("DG", 0))
+    kdt = Function(V0)
+    kdt.interpolate(lambda x: np.full((1, x.shape[1]), kdt_val))
     J = kdt * ufl.inner(ufl.grad(w), ufl.grad(v)) * dx
 
     # source term
@@ -165,7 +168,7 @@ if __name__ == "__main__":
     # initialise meshties
     meshties = MeshTie([facet_marker._cpp_object], surfaces, contact,
                        mesh._cpp_object, quadrature_degree=5)
-    meshties.generate_heattransfer_data_matrix_only(V._cpp_object, kdt, gamma, theta)
+    meshties.generate_kernel_data(Problem.Poisson, V._cpp_object, {"kdt": kdt._cpp_object}, gamma, theta)
 
     # create matrix, vector
     A = meshties.create_matrix(J._cpp_object)
@@ -214,7 +217,6 @@ if __name__ == "__main__":
     timing_str = "~Contact : Krylov Solver"
     with Timer(timing_str):
         solver.solve(b, uh.vector)
-    print(solver.getConvergedReason())
 
     # Scatter forward the solution vector to update ghost values
     uh.x.scatter_forward()

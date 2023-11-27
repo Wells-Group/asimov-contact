@@ -55,9 +55,11 @@ def DG_rhs_plus(u0, v0, h, n, gamma, theta, sigma, gap, dS):
     def Pn_gtheta(v, a, b):
         return ufl.dot(v(a) - v(b), -n(b)) - theta * (h(a) / gamma) * ufl.dot(sigma(v(a)) * n(a), -n(b))
 
-    F = 0.5 * (gamma / h('+')) * R_plus(Pn_g(u0, '+', '-')) * Pn_gtheta(v0, '+', '-') * dS
+    F = 0.5 * (gamma / h('+')) * R_plus(Pn_g(u0, '+', '-')) * \
+        Pn_gtheta(v0, '+', '-') * dS
 
-    F += 0.5 * (gamma / h('-')) * R_plus(Pn_g(u0, '-', '+')) * Pn_gtheta(v0, '-', '+') * dS
+    F += 0.5 * (gamma / h('-')) * R_plus(Pn_g(u0, '-', '+')) * \
+        Pn_gtheta(v0, '-', '+') * dS
 
     return F
 
@@ -70,9 +72,11 @@ def DG_rhs_minus(u0, v0, h, n, gamma, theta, sigma, gap, dS):
     def Pn_gtheta(v, a, b):
         return theta * ufl.dot(sigma(v(a)) * n(a), -n(b)) - (gamma / h(a)) * ufl.dot(v(a) - v(b), -n(b))
 
-    F = 0.5 * (h('+') / gamma) * R_minus(Pn_g(u0, '+', '-')) * Pn_gtheta(v0, '+', '-') * dS
+    F = 0.5 * (h('+') / gamma) * R_minus(Pn_g(u0, '+', '-')) * \
+        Pn_gtheta(v0, '+', '-') * dS
 
-    F += 0.5 * (h('-') / gamma) * R_minus(Pn_g(u0, '-', '+')) * Pn_gtheta(v0, '-', '+') * dS
+    F += 0.5 * (h('-') / gamma) * R_minus(Pn_g(u0, '-', '+')) * \
+        Pn_gtheta(v0, '-', '+') * dS
 
     return F
 
@@ -191,6 +195,7 @@ def DG_jac_coulomb(u0, v0, w0, h, n, gamma, theta, sigma, gap, fric, dS, gdim):
         ufl.dot(d_alpha_minus, Pt_g(v0, '-', '+', theta / gamma)) * dS
     return J
 
+
 def compute_dof_permutations_all(V_dg, V_cg, gap):
     '''The meshes used for the two different formulations are
        created independently of each other. Therefore we need to
@@ -201,16 +206,11 @@ def compute_dof_permutations_all(V_dg, V_cg, gap):
     bs = V_cg.dofmap.index_map_bs
     tdim = mesh_dg.topology.dim
     mesh_dg.topology.create_connectivity(tdim - 1, tdim)
-    f_to_c_dg = mesh_dg.topology.connectivity(tdim - 1, tdim)
 
     mesh_cg.topology.create_connectivity(tdim - 1, tdim)
     mesh_cg.topology.create_connectivity(tdim, tdim - 1)
-    f_to_c_cg = mesh_cg.topology.connectivity(tdim - 1, tdim)
-    c_to_f_cg = mesh_cg.topology.connectivity(tdim, tdim - 1)
     x_cg = V_cg.tabulate_dof_coordinates()
     x_dg = V_dg.tabulate_dof_coordinates()
-
-
 
     # retrieve all dg dofs on mesh without gap for each cell
     # and modify coordinates by gap if necessary
@@ -230,7 +230,7 @@ def compute_dof_permutations_all(V_dg, V_cg, gap):
         for k in range(bs):
             indices_dg[i * bs + k] = index * bs + k
     return indices_dg
-    
+
 
 def create_functionspaces(ct, gap, vector=True):
     ''' This is a helper function to create the two element function spaces
@@ -238,19 +238,22 @@ def create_functionspaces(ct, gap, vector=True):
         quads, triangles, hexes and tetrahedra'''
     cell_type = to_type(ct)
     if cell_type == CellType.quadrilateral:
-        x_ufl = np.array([[0, 0], [0.8, 0], [0.1, 1.3], [0.7, 1.2], [-0.1, -1.2], [0.8, -1.1]])
+        x_ufl = np.array([[0, 0], [0.8, 0], [0.1, 1.3], [
+                         0.7, 1.2], [-0.1, -1.2], [0.8, -1.1]])
         x_custom = np.array([[0, 0], [0.8, 0], [0.1, 1.3], [0.7, 1.2], [0, -gap],
                              [0.8, -gap], [-0.1, -1.2 - gap], [0.8, -1.1 - gap]])
         cells_ufl = np.array([[0, 1, 2, 3], [4, 5, 0, 1]], dtype=np.int32)
         cells_custom = np.array([[0, 1, 2, 3], [4, 5, 6, 7]], dtype=np.int32)
     elif cell_type == CellType.triangle:
-        x_ufl = np.array([[0, 0, 0], [0.8, 0, 0], [0.3, 1.3, 0.0], [0.4, -1.2, 0.0]])
+        x_ufl = np.array(
+            [[0, 0, 0], [0.8, 0, 0], [0.3, 1.3, 0.0], [0.4, -1.2, 0.0]])
         x_custom = np.array([[0, 0, 0], [0.8, 0, 0], [0.3, 1.3, 0.0], [
             0, -gap, 0], [0.8, -gap, 0], [0.4, -1.2 - gap, 0.0]])
         cells_ufl = np.array([[0, 1, 2], [0, 1, 3]], dtype=np.int32)
         cells_custom = np.array([[0, 1, 2], [3, 4, 5]], dtype=np.int32)
     elif cell_type == CellType.tetrahedron:
-        x_ufl = np.array([[0, 0, 0], [1.1, 0, 0], [0.3, 1.0, 0], [1, 1.2, 1.5], [0.8, 1.2, -1.6]])
+        x_ufl = np.array([[0, 0, 0], [1.1, 0, 0], [0.3, 1.0, 0], [
+                         1, 1.2, 1.5], [0.8, 1.2, -1.6]])
         x_custom = np.array([[0, 0, 0], [1.1, 0, 0], [0.3, 1.0, 0], [1, 1.2, 1.5], [
             0, 0, -gap], [1.1, 0, -gap], [0.3, 1.0, -gap], [0.8, 1.2, -1.6 - gap]])
         cells_ufl = np.array([[0, 1, 2, 3], [0, 1, 2, 4]], dtype=np.int32)
@@ -261,10 +264,13 @@ def create_functionspaces(ct, gap, vector=True):
                           [0, 0, -1.2], [1.0, 0, -1.3], [0, 1, -1], [1, 1, -1]])
         x_custom = np.array([[0, 0, 0], [1.1, 0, 0], [0.1, 1, 0], [1, 1.2, 0],
                              [0, 0, 1.2], [1.0, 0, 1], [0, 1, 1], [1, 1, 1],
-                             [0, 0, -1.2 - gap], [1.0, 0, -1.3 - gap], [0, 1, -1 - gap], [1, 1, -1 - gap],
+                             [0, 0, -1.2 - gap], [1.0, 0, -1.3 - gap],
+                             [0, 1, -1 - gap], [1, 1, -1 - gap],
                              [0, 0, -gap], [1.1, 0, -gap], [0.1, 1, -gap], [1, 1.2, -gap]])
-        cells_ufl = np.array([[0, 1, 2, 3, 4, 5, 6, 7], [8, 9, 10, 11, 0, 1, 2, 3]], dtype=np.int32)
-        cells_custom = np.array([[0, 1, 2, 3, 4, 5, 6, 7], [8, 9, 10, 11, 12, 13, 14, 15]], dtype=np.int32)
+        cells_ufl = np.array(
+            [[0, 1, 2, 3, 4, 5, 6, 7], [8, 9, 10, 11, 0, 1, 2, 3]], dtype=np.int32)
+        cells_custom = np.array(
+            [[0, 1, 2, 3, 4, 5, 6, 7], [8, 9, 10, 11, 12, 13, 14, 15]], dtype=np.int32)
     else:
         raise ValueError(f"Unsupported mesh type {ct}")
     gdim = x_ufl.shape[1]
@@ -277,9 +283,11 @@ def create_functionspaces(ct, gap, vector=True):
     mesh_ufl = create_mesh(MPI.COMM_WORLD, cells_ufl, x_ufl, domain)
     el_ufl = element("DG", cell_type.name, 1, shape=el_shape, gdim=gdim)
     V_ufl = _fem.FunctionSpace(mesh_ufl, el_ufl)
-    el_custom = element("Lagrange", cell_type.name, 1, shape=el_shape, gdim=gdim)
+    el_custom = element("Lagrange", cell_type.name,
+                        1, shape=el_shape, gdim=gdim)
     domain_custom = ufl.Mesh(coord_el)
-    mesh_custom = create_mesh(MPI.COMM_WORLD, cells_custom, x_custom, domain_custom)
+    mesh_custom = create_mesh(
+        MPI.COMM_WORLD, cells_custom, x_custom, domain_custom)
     V_custom = _fem.FunctionSpace(mesh_custom, el_custom)
 
     return V_ufl, V_custom
@@ -293,8 +301,10 @@ def locate_contact_facets_custom(V, gap):
 
     # locate facets
     tdim = mesh.topology.dim
-    facets1 = locate_entities_boundary(mesh, tdim - 1, lambda x: np.isclose(x[tdim - 1], 0))
-    facets2 = locate_entities_boundary(mesh, tdim - 1, lambda x: np.isclose(x[tdim - 1], -gap))
+    facets1 = locate_entities_boundary(
+        mesh, tdim - 1, lambda x: np.isclose(x[tdim - 1], 0))
+    facets2 = locate_entities_boundary(
+        mesh, tdim - 1, lambda x: np.isclose(x[tdim - 1], -gap))
 
     # choose correct facet if gap is zero
     mesh.topology.create_connectivity(tdim - 1, tdim)
@@ -359,9 +369,11 @@ def create_contact_data(V, u, quadrature_degree, lmbda, mu, facets_cg, search, t
 
     # compute active entities
     integral = _fem.IntegralType.exterior_facet
-    entities_0, num_local_0 = dolfinx_contact.compute_active_entities(mesh._cpp_object, facets_cg[0], integral)
+    entities_0, num_local_0 = dolfinx_contact.compute_active_entities(
+        mesh._cpp_object, facets_cg[0], integral)
     entities_0 = entities_0[:num_local_0]
-    entities_1, num_local_1 = dolfinx_contact.compute_active_entities(mesh._cpp_object, facets_cg[1], integral)
+    entities_1, num_local_1 = dolfinx_contact.compute_active_entities(
+        mesh._cpp_object, facets_cg[1], integral)
     entities_1 = entities_1[:num_local_1]
 
     # pack coeffs mu, lambda
@@ -399,10 +411,14 @@ def create_contact_data(V, u, quadrature_degree, lmbda, mu, facets_cg, search, t
     # pack u
     u_opp_0 = contact.pack_u_contact(0, u._cpp_object)
     u_opp_1 = contact.pack_u_contact(1, u._cpp_object)
-    u_0 = dolfinx_contact.cpp.pack_coefficient_quadrature(u._cpp_object, quadrature_degree, entities_0)
-    u_1 = dolfinx_contact.cpp.pack_coefficient_quadrature(u._cpp_object, quadrature_degree, entities_1)
-    grad_u_0 = dolfinx_contact.cpp.pack_gradient_quadrature(u._cpp_object, quadrature_degree, entities_0)
-    grad_u_1 = dolfinx_contact.cpp.pack_gradient_quadrature(u._cpp_object, quadrature_degree, entities_1)
+    u_0 = dolfinx_contact.cpp.pack_coefficient_quadrature(
+        u._cpp_object, quadrature_degree, entities_0)
+    u_1 = dolfinx_contact.cpp.pack_coefficient_quadrature(
+        u._cpp_object, quadrature_degree, entities_1)
+    grad_u_0 = dolfinx_contact.cpp.pack_gradient_quadrature(
+        u._cpp_object, quadrature_degree, entities_0)
+    grad_u_1 = dolfinx_contact.cpp.pack_gradient_quadrature(
+        u._cpp_object, quadrature_degree, entities_1)
     if tied:
         grad_test_fn_0 = contact.pack_grad_test_functions(0, V._cpp_object)
         grad_test_fn_1 = contact.pack_grad_test_functions(1, V._cpp_object)
@@ -410,15 +426,19 @@ def create_contact_data(V, u, quadrature_degree, lmbda, mu, facets_cg, search, t
         grad_u_opp_1 = contact.pack_grad_u_contact(1, u._cpp_object)
 
         # Concatenate all coeffs
-        coeff_0 = np.hstack([material_0, h_0, test_fn_0, grad_test_fn_0, u_0, grad_u_0, u_opp_0, grad_u_opp_0])
-        coeff_1 = np.hstack([material_1, h_1, test_fn_1, grad_test_fn_1, u_1, grad_u_1, u_opp_1, grad_u_opp_1])
+        coeff_0 = np.hstack([material_0, h_0, test_fn_0,
+                            grad_test_fn_0, u_0, grad_u_0, u_opp_0, grad_u_opp_0])
+        coeff_1 = np.hstack([material_1, h_1, test_fn_1,
+                            grad_test_fn_1, u_1, grad_u_1, u_opp_1, grad_u_opp_1])
     else:
         n_0 = contact.pack_ny(0)
         n_1 = contact.pack_ny(1)
 
         # Concatenate all coeffs
-        coeff_0 = np.hstack([material_0, friction_0, h_0, gap_0, n_0, test_fn_0, u_0, grad_u_0, u_opp_0])
-        coeff_1 = np.hstack([material_1, friction_1, h_1, gap_1, n_1, test_fn_1, u_1, grad_u_1, u_opp_1])
+        coeff_0 = np.hstack([material_0, friction_0, h_0,
+                            gap_0, n_0, test_fn_0, u_0, grad_u_0, u_opp_0])
+        coeff_1 = np.hstack([material_1, friction_1, h_1,
+                            gap_1, n_1, test_fn_1, u_1, grad_u_1, u_opp_1])
 
     return contact, coeff_0, coeff_1
 
@@ -454,8 +474,10 @@ def test_contact_kernels(ct, gap, quadrature_degree, theta, formulation, search)
     tdim = mesh_ufl.topology.dim
     gdim = mesh_ufl.geometry.dim
     TOL = 1e-7
-    cells_ufl_0 = locate_entities(mesh_ufl, tdim, lambda x: x[tdim - 1] > 0 - TOL)
-    cells_ufl_1 = locate_entities(mesh_ufl, tdim, lambda x: x[tdim - 1] < 0 + TOL)
+    cells_ufl_0 = locate_entities(
+        mesh_ufl, tdim, lambda x: x[tdim - 1] > 0 - TOL)
+    cells_ufl_1 = locate_entities(
+        mesh_ufl, tdim, lambda x: x[tdim - 1] < 0 + TOL)
 
     def _u0(x):
         values = np.zeros((gdim, x.shape[1]))
@@ -472,7 +494,8 @@ def test_contact_kernels(ct, gap, quadrature_degree, theta, formulation, search)
     def _u2(x):
         values = np.zeros((gdim, x.shape[1]))
         for i in range(tdim):
-            values[i] = np.sin(x[i] + gap) + 2 if i == tdim - 1 else np.sin(x[i]) + 2
+            values[i] = np.sin(x[i] + gap) + 2 if i == tdim - \
+                1 else np.sin(x[i]) + 2
         return values
 
     # DG ufl 'contact'
@@ -504,13 +527,17 @@ def test_contact_kernels(ct, gap, quadrature_degree, theta, formulation, search)
         kernel_type_rhs = kt.Rhs
         kernel_type_jac = kt.Jac
     elif formulation == "tresca":
-        F0 = DG_rhs_tresca(u0, v0, h, n, gamma_scaled, theta, sigma, 0.1, dS, gdim)
-        J0 = DG_jac_tresca(u0, v0, w0, h, n, gamma_scaled, theta, sigma, 0.1, dS, gdim)
+        F0 = DG_rhs_tresca(u0, v0, h, n, gamma_scaled,
+                           theta, sigma, 0.1, dS, gdim)
+        J0 = DG_jac_tresca(u0, v0, w0, h, n, gamma_scaled,
+                           theta, sigma, 0.1, dS, gdim)
         kernel_type_rhs = kt.TrescaRhs
         kernel_type_jac = kt.TrescaJac
     else:
-        F0 = DG_rhs_coulomb(u0, v0, h, n, gamma_scaled, theta, sigma, gap, 0.1, dS, gdim)
-        J0 = DG_jac_coulomb(u0, v0, w0, h, n, gamma_scaled, theta, sigma, gap, 0.1, dS, gdim)
+        F0 = DG_rhs_coulomb(u0, v0, h, n, gamma_scaled,
+                            theta, sigma, gap, 0.1, dS, gdim)
+        J0 = DG_jac_coulomb(u0, v0, w0, h, n, gamma_scaled,
+                            theta, sigma, gap, 0.1, dS, gdim)
         kernel_type_rhs = kt.CoulombRhs
         kernel_type_jac = kt.CoulombJac
 
@@ -562,18 +589,21 @@ def test_contact_kernels(ct, gap, quadrature_degree, theta, formulation, search)
 
     # Assemble  residual
     b1.zeroEntries()
-    contact.assemble_vector(b1, 0, kernel_rhs, c_0, consts, V_custom._cpp_object)
-    contact.assemble_vector(b1, 1, kernel_rhs, c_1, consts, V_custom._cpp_object)
+    contact.assemble_vector(b1, 0, kernel_rhs, c_0,
+                            consts, V_custom._cpp_object)
+    contact.assemble_vector(b1, 1, kernel_rhs, c_1,
+                            consts, V_custom._cpp_object)
 
     # Assemble  jacobian
     A1.zeroEntries()
-    contact.assemble_matrix(A1, 0, kernel_jac, c_0, consts, V_custom._cpp_object)
-    contact.assemble_matrix(A1, 1, kernel_jac, c_1, consts, V_custom._cpp_object)
+    contact.assemble_matrix(A1, 0, kernel_jac, c_0,
+                            consts, V_custom._cpp_object)
+    contact.assemble_matrix(A1, 1, kernel_jac, c_1,
+                            consts, V_custom._cpp_object)
     A1.assemble()
 
     # Retrieve data necessary for comparison
     tdim = mesh_ufl.topology.dim
-    facet_dg = locate_entities(mesh_ufl, tdim - 1, lambda x: np.isclose(x[tdim - 1], 0))
     ind_dg = compute_dof_permutations_all(V_ufl, V_custom, gap)
 
     # Compare rhs
@@ -599,7 +629,8 @@ def test_contact_kernels(ct, gap, quadrature_degree, theta, formulation, search)
         assert np.allclose(b1.array, b2.array[ind_dg])
 
         # Contact terms formulated using ufl consistent with nitsche_ufl.py
-        J2 = DG_jac_minus(u0, v0, w0, h, n, gamma_scaled, theta, sigma, gap, dS)
+        J2 = DG_jac_minus(u0, v0, w0, h, n, gamma_scaled,
+                          theta, sigma, gap, dS)
         J2 = _fem.form(J2)
         A2 = _fem.petsc.create_matrix(J2)
         A2.zeroEntries()
@@ -607,7 +638,8 @@ def test_contact_kernels(ct, gap, quadrature_degree, theta, formulation, search)
         A2.assemble()
 
         ci, cj, cv = A2.getValuesCSR()
-        C_sp = scipy.sparse.csr_matrix((cv, cj, ci), shape=A2.getSize()).todense()
+        C_sp = scipy.sparse.csr_matrix(
+            (cv, cj, ci), shape=A2.getSize()).todense()
         assert np.allclose(C_sp[ind_dg, :][:, ind_dg], B_sp)
 
 
@@ -636,8 +668,10 @@ def test_poisson_kernels(ct, gap, quadrature_degree, theta):
     mesh_custom = V_custom.mesh
     tdim = mesh_ufl.topology.dim
     TOL = 1e-7
-    cells_ufl_0 = locate_entities(mesh_ufl, tdim, lambda x: x[tdim - 1] > 0 - TOL)
-    cells_ufl_1 = locate_entities(mesh_ufl, tdim, lambda x: x[tdim - 1] < 0 + TOL)
+    cells_ufl_0 = locate_entities(
+        mesh_ufl, tdim, lambda x: x[tdim - 1] > 0 - TOL)
+    cells_ufl_1 = locate_entities(
+        mesh_ufl, tdim, lambda x: x[tdim - 1] < 0 + TOL)
 
     def _u0(x):
         return np.sin(x[0]) + 1
@@ -693,6 +727,10 @@ def test_poisson_kernels(ct, gap, quadrature_degree, theta):
     u1.interpolate(_u2, cells[1])
     u1.x.scatter_forward()
 
+    V0 = _fem.FunctionSpace(mesh_custom, ("DG", 0))
+    kdt_custom = _fem.Function(V0)
+    kdt_custom.interpolate(lambda x: np.full((1, x.shape[1]), kdt))
+
     # Dummy form for creating vector/matrix
     dx = ufl.Measure("dx", domain=mesh_custom)
     F_custom = ufl.inner(ufl.grad(u1), ufl.grad(v1)) * dx
@@ -707,7 +745,8 @@ def test_poisson_kernels(ct, gap, quadrature_degree, theta):
     # initialise meshties
     meshties = dolfinx_contact.cpp.MeshTie([facet_marker._cpp_object], surfaces, [(0, 1), (1, 0)],
                                            mesh_custom._cpp_object, quadrature_degree=quadrature_degree)
-    meshties.generate_poisson_data(u1._cpp_object, kdt, gamma, theta)
+    meshties.generate_kernel_data(dolfinx_contact.cpp.Problem.Poisson, V_custom._cpp_object, {
+                                  "T": u1._cpp_object, "kdt": kdt_custom._cpp_object}, gamma, theta)
 
     # Generate residual data structures
     F_custom = _fem.form(F0)
@@ -719,21 +758,21 @@ def test_poisson_kernels(ct, gap, quadrature_degree, theta):
 
     # Assemble  residual
     b1.zeroEntries()
-    meshties.assemble_vector(b1, V_custom._cpp_object, dolfinx_contact.cpp.Problem.Poisson)
+    meshties.assemble_vector(b1, V_custom._cpp_object,
+                             dolfinx_contact.cpp.Problem.Poisson)
 
     # Assemble  jacobian
     A1.zeroEntries()
-    meshties.assemble_matrix(A1, V_custom._cpp_object, dolfinx_contact.cpp.Problem.Poisson)
+    meshties.assemble_matrix(A1, V_custom._cpp_object,
+                             dolfinx_contact.cpp.Problem.Poisson)
     A1.assemble()
 
     # Retrieve data necessary for comparison
     tdim = mesh_ufl.topology.dim
-    facet_dg = locate_entities(mesh_ufl, tdim - 1, lambda x: np.isclose(x[tdim - 1], 0))
-    #ind_cg, ind_dg = compute_dof_permutations(V_ufl, V_custom, gap, [facet_dg], facets_cg)
     ind_dg = compute_dof_permutations_all(V_ufl, V_custom, gap)
 
     # Compare rhs
-    # assert np.allclose(b0.array[ind_dg], b1.array)
+    assert np.allclose(b0.array[ind_dg], b1.array)
 
     # create scipy matrix
     ai, aj, av = A0.getValuesCSR()

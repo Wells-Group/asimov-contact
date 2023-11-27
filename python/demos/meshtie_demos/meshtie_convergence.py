@@ -3,7 +3,6 @@
 # SPDX-License-Identifier:    MIT
 
 import argparse
-import sys
 
 import numpy as np
 import numpy.typing as npt
@@ -49,7 +48,7 @@ def u_fun_3d(x: npt.NDArray[np.float64], d: float, gdim: int) -> npt.NDArray[np.
 
 # forcing 2D for manufactured solution
 # this is -div(sigma(u_fun_3d))
-def fun_3d(x: npt.NDArray[np.float64], d: float,  gdim: int) -> npt.NDArray[np.float64]:
+def fun_3d(x: npt.NDArray[np.float64], d: float, gdim: int) -> npt.NDArray[np.float64]:
     a = 2 * np.pi / 5
     b = 2 * np.pi
     c = 2 * np.pi
@@ -129,7 +128,8 @@ def unsplit_domain(threed: bool = False, runs: int = 1, order: int = 1):
         V0 = FunctionSpace(mesh, ("DG", 0))
         ncells = mesh.topology.index_map(tdim).size_local
         h = Function(V0)
-        h_vals = cell_diameter(mesh._cpp_object, mesh.topology.dim, np.arange(0, ncells, dtype=np.int32))
+        h_vals = cell_diameter(
+            mesh._cpp_object, mesh.topology.dim, np.arange(0, ncells, dtype=np.int32))
         h.x.array[:ncells] = h_vals[:]
         n = ufl.FacetNormal(mesh)
         for tag in [2]:
@@ -217,9 +217,8 @@ def unsplit_domain(threed: bool = False, runs: int = 1, order: int = 1):
         xdmf.write_mesh(mesh)
         xdmf.write_meshtags(process_marker, mesh.geometry)
     print("L2-error: ", errors)
-    h = 1./(np.array(ndofs)**(1/tdim))
-    rates = [(np.log(errors[i-1])-np.log(errors[i])) /
-             (np.log(h[i-1]) - np.log(h[i])) for i in range(1, runs)]
+    h = 1. / (np.array(ndofs)**(1 / tdim))
+    rates = [(np.log(errors[i - 1]) - np.log(errors[i])) / (np.log(h[i - 1]) - np.log(h[i])) for i in range(1, runs)]
     print("Rates: ", rates)
     print("Number of dofs: ", ndofs)
     print("Linear solver time: ", times)
@@ -266,14 +265,16 @@ def test_meshtie(threed: bool = False, simplex: bool = True, runs: int = 5, orde
         print(f"Run {i}")
         if threed:
             fname = fname = f"./meshes/beam3D_{i}"
-            create_split_box_3D(fname, res=res, L=5.0, H=1.0, W=1.0, domain_1=[0, 1, 5, 4], domain_2=[4, 5, 2, 3], x0=[
-                0, 0.5], x1=[5.0, 0.7], curve_fun=horizontal_sine, num_segments=num_segments, hex=not simplex, order=order)
+            create_split_box_3D(fname, res=res, L=5.0, H=1.0, W=1.0, domain_1=[0, 1, 5, 4], domain_2=[4, 5, 2, 3],
+                                x0=[0, 0.5], x1=[5.0, 0.7], curve_fun=horizontal_sine, num_segments=num_segments,
+                                hex=not simplex, order=order)
             fun = fun_3d
             u_fun = u_fun_3d
         else:
             fname = fname = f"./meshes/beam_{i}"
-            create_split_box_2D(fname, res=res, L=5.0, H=1.0, domain_1=[0, 1, 5, 4], domain_2=[4, 5, 2, 3], x0=[
-                0, 0.5], x1=[5.0, 0.7], curve_fun=horizontal_sine, num_segments=num_segments, quads=not simplex, order=order)
+            create_split_box_2D(fname, res=res, L=5.0, H=1.0, domain_1=[0, 1, 5, 4], domain_2=[4, 5, 2, 3],
+                                x0=[0, 0.5], x1=[5.0, 0.7], curve_fun=horizontal_sine, num_segments=num_segments,
+                                quads=not simplex, order=order)
             fun = fun_2d
             u_fun = u_fun_2d
         with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
@@ -298,17 +299,21 @@ def test_meshtie(threed: bool = False, simplex: bool = True, runs: int = 5, orde
         V0 = FunctionSpace(mesh, ("DG", 0))
         h = Function(V0)
         ncells = mesh.topology.index_map(tdim).size_local
-        h_vals = cell_diameter(mesh._cpp_object, mesh.topology.dim, np.arange(0, ncells, dtype=np.int32))
+        h_vals = cell_diameter(
+            mesh._cpp_object, mesh.topology.dim, np.arange(0, ncells, dtype=np.int32))
         h.x.array[:ncells] = h_vals[:]
         n = ufl.FacetNormal(mesh)
 
         # Bilinear form
-        kdt = 1
+        kdt_val = 1
+        V0 = FunctionSpace(mesh, ("DG", 0))
+        kdt = Function(V0)
+        kdt.interpolate(lambda x: np.full((1, x.shape[1]), kdt_val))
         J = kdt * ufl.inner(ufl.grad(w), ufl.grad(v)) * dx
 
         # forcing
         def force_func(x):
-            return fun(x, c, gdim)
+            return fun(x, kdt_val * c, gdim)
         f = Function(V)
         f.interpolate(force_func)
         F = ufl.inner(f, v) * dx
@@ -316,11 +321,11 @@ def test_meshtie(threed: bool = False, simplex: bool = True, runs: int = 5, orde
         # 0 dirichlet
         g = Constant(mesh, default_scalar_type((0.0)))
         for tag in [2, 6]:
-            J += - ufl.inner(ufl.grad(w), n) * v * ds(tag)\
-                - theta * ufl.inner(ufl.grad(v), n) * w * \
-                ds(tag) + gamma / h * w * v * ds(tag)
-            F += - theta * ufl.inner(ufl.grad(v), n) * g * \
-                ds(tag) + gamma / h * g * v * ds(tag)
+            J += - kdt * ufl.inner(ufl.grad(w), n) * v * ds(tag)\
+                - theta * kdt * ufl.inner(ufl.grad(v), n) * w * \
+                ds(tag) + kdt * gamma / h * w * v * ds(tag)
+            F += - kdt * theta * ufl.inner(ufl.grad(v), n) * g * \
+                ds(tag) + kdt * gamma / h * g * v * ds(tag)
 
         # compile forms
         cffi_options = ["-Ofast", "-march=native"]
@@ -339,8 +344,8 @@ def test_meshtie(threed: bool = False, simplex: bool = True, runs: int = 5, orde
         # initialise meshties
         meshties = MeshTie([facet_marker._cpp_object], surfaces, contact,
                            mesh._cpp_object, quadrature_degree=5)
-        meshties.generate_heattransfer_data_matrix_only(
-            V._cpp_object, kdt, gamma, theta)
+        meshties.generate_kernel_data(Problem.Poisson,
+                                      V._cpp_object, {"kdt": kdt._cpp_object}, gamma, theta)
 
         # create matrix, vector
         A = meshties.create_matrix(J._cpp_object)
@@ -415,9 +420,10 @@ def test_meshtie(threed: bool = False, simplex: bool = True, runs: int = 5, orde
         xdmf.write_meshtags(process_marker, mesh.geometry)
     list_timings(mesh.comm, [TimingType.wall])
     print("L2 errors; ", errors)
-    h = 1./(np.array(dofs)**(1/tdim))
-    rates = [(np.log(errors[i-1])-np.log(errors[i])) /
-             (np.log(h[i-1]) - np.log(h[i])) for i in range(1, runs)]
+    h = 1. / (np.array(dofs)**(1 / tdim))
+    h_diff = [(np.log(h[i - 1]) - np.log(h[i])) for i in range(1, runs)]
+    err_diff = [(np.log(errors[i - 1]) - np.log(errors[i])) for i in range(1, runs)]
+    rates = [err_diff[i] / h_diff[i] for i in range(runs - 1)]
     print("Rates: ", rates)
     print("Solver time: ", times)
     print("Krylov iterations: ", iterations)
@@ -445,4 +451,5 @@ if __name__ == "__main__":
     if args.unsplit:
         unsplit_domain(threed=args.threed, runs=args.runs, order=args.order)
     else:
-        test_meshtie(simplex=args.simplex, threed=args.threed, runs=args.runs, order=args.order)
+        test_meshtie(simplex=args.simplex, threed=args.threed,
+                     runs=args.runs, order=args.order)
