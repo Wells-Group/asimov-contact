@@ -83,7 +83,9 @@ def create_contact_mesh(mesh, fmarker, dmarker, tags, R=0.2):
 
     # Convert topology to global indexing, and restrict to non-ghost cells
     topo = mesh.topology.connectivity(tdim, 0).array
-    topo = mesh.topology.index_map(0).local_to_global(topo).reshape((-1, num_cell_vertices))
+    topo = np.asarray(
+        mesh.topology.index_map(0).local_to_global(topo), dtype=np.int64).reshape(
+            (-1, num_cell_vertices))
     topo = topo[:ncells, :]
 
     # Cut off any ghost vertices
