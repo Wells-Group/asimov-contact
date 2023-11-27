@@ -287,5 +287,6 @@ def nitsche_rigid_surface_custom(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTa
     if solver.error_on_nonconvergence:
         assert converged
     print(f"{dofs_global}, Number of interations: {n:d}")
-
+    A.destroy()
+    b.destroy()
     return u
