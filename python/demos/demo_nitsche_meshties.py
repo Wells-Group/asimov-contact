@@ -22,7 +22,7 @@ from dolfinx_contact.helpers import lame_parameters, epsilon, sigma_func, rigid_
 from dolfinx_contact.meshing import (convert_mesh,
                                      create_box_mesh_3D)
 from dolfinx_contact.parallel_mesh_ghosting import create_contact_mesh
-from dolfinx_contact.cpp import MeshTie
+from dolfinx_contact.cpp import MeshTie, Problem
 
 if __name__ == "__main__":
     desc = "Nitsche's method for two elastic bodies using custom assemblers"
@@ -178,7 +178,8 @@ if __name__ == "__main__":
     # initialise meshties
     meshties = MeshTie([facet_marker._cpp_object], surfaces, contact,
                        mesh._cpp_object, quadrature_degree=5)
-    meshties.generate_meshtie_data_matrix_only(V._cpp_object, lmbda._cpp_object, mu._cpp_object, E * gamma, theta)
+    meshties.generate_kernel_data(Problem.Elasticity, V._cpp_object, {
+                                      "lambda": lmbda._cpp_object, "mu": mu._cpp_object}, E * gamma, theta)
 
     # create matrix, vector
     A = meshties.create_matrix(J._cpp_object)
@@ -198,7 +199,7 @@ if __name__ == "__main__":
 
     # Assemble matrix
     A.zeroEntries()
-    meshties.assemble_matrix(A, V._cpp_object)
+    meshties.assemble_matrix(A, V._cpp_object, Problem.Elasticity)
     assemble_matrix(A, J, bcs=bcs)  # type: ignore
     A.assemble()
 

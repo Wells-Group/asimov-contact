@@ -707,7 +707,7 @@ def test_poisson_kernels(ct, gap, quadrature_degree, theta):
     # initialise meshties
     meshties = dolfinx_contact.cpp.MeshTie([facet_marker._cpp_object], surfaces, [(0, 1), (1, 0)],
                                            mesh_custom._cpp_object, quadrature_degree=quadrature_degree)
-    meshties.generate_heat_transfer_data(u1._cpp_object, kdt, gamma, theta)
+    meshties.generate_poisson_data(u1._cpp_object, kdt, gamma, theta)
 
     # Generate residual data structures
     F_custom = _fem.form(F0)
@@ -719,11 +719,11 @@ def test_poisson_kernels(ct, gap, quadrature_degree, theta):
 
     # Assemble  residual
     b1.zeroEntries()
-    meshties.assemble_vector_heat_transfer(b1, V_custom._cpp_object)
+    meshties.assemble_vector(b1, V_custom._cpp_object, dolfinx_contact.cpp.Problem.Poisson)
 
     # Assemble  jacobian
     A1.zeroEntries()
-    meshties.assemble_matrix_heat_transfer(A1, V_custom._cpp_object)
+    meshties.assemble_matrix(A1, V_custom._cpp_object, dolfinx_contact.cpp.Problem.Poisson)
     A1.assemble()
 
     # Retrieve data necessary for comparison

@@ -65,7 +65,9 @@ class MeshTieProblem:
         self._b_petsc = create_petsc_vector_wrap(self._b)
 
         # Initialise the input data for integration kernels
-        self._meshties.generate_meshtie_data_matrix_only(a.function_spaces[0], lmbda._cpp_object, mu._cpp_object, gamma, theta)
+        self._meshties.generate_kernel_data(Problem.Elasticity, a.function_spaces[0], 
+                                            {"lambda" : lmbda._cpp_object, "mu" : mu._cpp_object},
+                                            gamma, theta)
 
         # Build near null space preventing rigid body motion of individual components
         tags = np.unique(subdomains.values)

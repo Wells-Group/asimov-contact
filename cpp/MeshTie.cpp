@@ -361,7 +361,6 @@ void dolfinx_contact::MeshTie::assemble_matrix(
                       _consts, V);
     break;
   case dolfinx_contact::Problem::Poisson:
-    std::cout << "calling kernel poisson \n";
     for (int i = 0; i < _num_pairs; ++i)
       assemble_matrix(mat_set, i, _kernel_jac_poisson,
                       _coeffs_poisson[i], (int)_cstride_poisson,
