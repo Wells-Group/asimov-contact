@@ -169,9 +169,9 @@ create_contact_mesh(dolfinx::mesh::Mesh<double>& mesh,
   std::vector<double> x;
   x.reserve(num_vertices * gdim);
   std::span<const double> xg = mesh.geometry().x();
-  for (int i = 0; i < num_vertices; ++i)
+  for (std::size_t i = 0; i < num_vertices; ++i)
   {
-    for (int j = 0; j < gdim; ++j)
+    for (std::size_t j = 0; j < gdim; ++j)
       x.push_back(xg[i * 3 + j]);
   }
 

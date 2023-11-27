@@ -121,7 +121,7 @@ def create_contact_mesh(mesh, fmarker, dmarker, tags, R=0.2):
 
     timer = Timer("~Contact: Add ghosts: Lex match facet markers")
     new_fm_idx, new_fm_val = lex_match(fv_indices.shape[1], list(fv_indices.flatten()),
-                             list(all_indices.flatten()), list(all_values))
+                                       list(all_indices.flatten()), list(all_values))
 
     # Sort new markers into order and make unique
     # new_fmarkers = np.array(new_fmarkers, dtype=np.int32)
@@ -129,7 +129,7 @@ def create_contact_mesh(mesh, fmarker, dmarker, tags, R=0.2):
     # if new_fmarkers.shape[0] == 0:
     #     new_fmarkers = np.zeros((0, 2), dtype=np.int32)
 
-    new_fmarker = meshtags(new_mesh, tdim - 1, new_fm_idx, new_fm_val)
+    new_fmarker = meshtags(new_mesh, tdim - 1, new_fm_idx, np.array(new_fm_val, dtype=np.int32))
 
     # Create a list of all cell-vertices (original global index)
     cv = new_mesh.topology.connectivity(tdim, 0)
@@ -141,9 +141,9 @@ def create_contact_mesh(mesh, fmarker, dmarker, tags, R=0.2):
     log.log(log.LogLevel.WARNING, "Lex match cell markers")
     timer = Timer("~Contact: Add ghosts: Lex match cell markers")
     new_cm_idx, new_cm_val = lex_match(cv_indices.shape[1], list(cv_indices.flatten()),
-                             list(all_cell_indices.flatten()), list(all_cell_values))
+                                       list(all_cell_indices.flatten()), list(all_cell_values))
 
-    new_dmarker = meshtags(new_mesh, tdim, new_cm_idx, new_cm_val)
+    new_dmarker = meshtags(new_mesh, tdim, new_cm_idx, np.array(new_cm_val, dtype=np.int32))
 
     timer.stop()
     return new_mesh, new_fmarker, new_dmarker
