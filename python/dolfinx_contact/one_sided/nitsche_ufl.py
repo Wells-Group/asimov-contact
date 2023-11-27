@@ -220,4 +220,5 @@ def nitsche_ufl(mesh: dmesh.Mesh, mesh_data: Tuple[dmesh.MeshTags, int, int],
     if solver.error_on_nonconvergence:
         assert converged
     print(f"{num_dofs_global}, Number of interations: {n:d}")
+    ksp.destroy()
     return u
