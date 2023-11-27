@@ -94,7 +94,7 @@ def nitsche_custom(mesh: dmesh.Mesh, mesh_data: Tuple[dmesh.MeshTags, int, int],
     n_vec[mesh.geometry.dim - 1] = 1
 
     # Setup function space and functions used in Jacobian and residual formulation
-    V = _fem.VectorFunctionSpace(mesh, ("Lagrange", 1))
+    V = _fem.functionspace(mesh, ("Lagrange", 1, (mesh.geometry.dim, )))
     u = _fem.Function(V)
     v = ufl.TestFunction(V)
     du = ufl.TrialFunction(V)
@@ -131,7 +131,7 @@ def nitsche_custom(mesh: dmesh.Mesh, mesh_data: Tuple[dmesh.MeshTags, int, int],
     consts = np.hstack((consts, n_vec))
 
     # Compute coefficients for mu and lambda as DG-0 functions
-    V2 = _fem.FunctionSpace(mesh, ("DG", 0))
+    V2 = _fem.functionspace(mesh, ("Discontinuous Lagrange", 0))
     lmbda2 = _fem.Function(V2)
     lmbda2.interpolate(lambda x: np.full((1, x.shape[1]), lmbda))
     mu2 = _fem.Function(V2)

@@ -379,8 +379,8 @@ dolfinx_contact::Contact::pack_nx(int pair)
 
     // Copy coordinate dofs of candidate cell
     // Get cell geometry (coordinate dofs)
-    auto x_dofs
-        = stdex::submdspan(x_dofmap, quadrature_facets[i], MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent);
+    auto x_dofs = stdex::submdspan(x_dofmap, quadrature_facets[i],
+                                   MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent);
     assert(x_dofs.size() == num_dofs_g);
     for (std::size_t j = 0; j < num_dofs_g; ++j)
     {
@@ -389,9 +389,10 @@ dolfinx_contact::Contact::pack_nx(int pair)
     }
     for (std::size_t q = 0; q < num_q_points; ++q)
     {
-      auto dphi = stdex::submdspan(full_basis, std::pair{1, tdim + 1},
-                                   quadrature_facets[i + 1] * num_q_points + q,
-                                   MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent, 0);
+      auto dphi
+          = stdex::submdspan(full_basis, std::pair{1, tdim + 1},
+                             quadrature_facets[i + 1] * num_q_points + q,
+                             MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent, 0);
 
       // Compute Jacobian and Jacobian inverse for Piola mapping of normal
       std::fill(Jb.begin(), Jb.end(), 0);
@@ -576,8 +577,9 @@ dolfinx_contact::Contact::pack_gap(int pair)
 
       // Copy coordinate dofs of candidate cell
       // Get cell geometry (coordinate dofs)
-      auto x_dofs = stdex::submdspan(x_dofmap, candidate_cells.front(),
-                                     MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent);
+      auto x_dofs
+          = stdex::submdspan(x_dofmap, candidate_cells.front(),
+                             MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent);
       assert(x_dofs.size() == num_dofs_g);
       for (std::size_t j = 0; j < num_dofs_g; ++j)
       {
@@ -650,8 +652,9 @@ dolfinx_contact::Contact::pack_test_functions(int pair)
   const auto cstride = int(num_q_points * max_links * b_shape[2] * bs);
   std::vector<PetscScalar> cb(
       num_facets * max_links * num_q_points * b_shape[2] * bs, 0.0);
-  stdex::mdspan<PetscScalar, MDSPAN_IMPL_STANDARD_NAMESPACE::dextents<std::size_t, 5>> c(
-      cb.data(), num_facets, max_links, b_shape[2], num_q_points, bs);
+  stdex::mdspan<PetscScalar,
+                MDSPAN_IMPL_STANDARD_NAMESPACE::dextents<std::size_t, 5>>
+      c(cb.data(), num_facets, max_links, b_shape[2], num_q_points, bs);
 
   // return if no facets on process
   if (num_facets == 0)
@@ -999,16 +1002,18 @@ dolfinx_contact::Contact::pack_ny(int pair)
 
       // Copy coordinate dofs of candidate cell
       // Get cell geometry (coordinate dofs)
-      auto x_dofs = stdex::submdspan(x_dofmap, candidate_cells.front(),
-                                     MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent);
+      auto x_dofs
+          = stdex::submdspan(x_dofmap, candidate_cells.front(),
+                             MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent);
       assert(x_dofs.size() == num_dofs_g);
       for (std::size_t j = 0; j < num_dofs_g; ++j)
       {
         std::copy_n(std::next(x_g.begin(), 3 * x_dofs[j]), gdim,
                     std::next(coordinate_dofsb.begin(), j * gdim));
       }
-      auto dphi = stdex::submdspan(full_basis, std::pair{1, tdim + 1},
-                                   i * num_q_points + q, MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent, 0);
+      auto dphi = stdex::submdspan(
+          full_basis, std::pair{1, tdim + 1}, i * num_q_points + q,
+          MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent, 0);
       // Compute Jacobian and Jacobian inverse for Piola mapping of normal
       std::fill(Jb.begin(), Jb.end(), 0);
       dolfinx::fem::CoordinateElement<double>::compute_jacobian(
@@ -1019,7 +1024,8 @@ dolfinx_contact::Contact::pack_ny(int pair)
       // Push forward normal using covariant Piola
       physical_facet_normal(
           std::span(normals.data() + i * cstride + q * gdim, gdim), K,
-          stdex::submdspan(facet_normals, local_idx, MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent));
+          stdex::submdspan(facet_normals, local_idx,
+                           MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent));
     }
   }
   return {std::move(normals), cstride};
@@ -1038,8 +1044,9 @@ void dolfinx_contact::Contact::assemble_matrix(
   // Extract geometry data
   const dolfinx::mesh::Geometry<double>& geometry = mesh->geometry();
   const int gdim = geometry.dim();
-  stdex::mdspan<const std::int32_t, MDSPAN_IMPL_STANDARD_NAMESPACE::dextents<std::size_t, 2>> x_dofmap
-      = geometry.dofmap();
+  stdex::mdspan<const std::int32_t,
+                MDSPAN_IMPL_STANDARD_NAMESPACE::dextents<std::size_t, 2>>
+      x_dofmap = geometry.dofmap();
   std::span<const double> x_g = geometry.x();
   const dolfinx::fem::CoordinateElement<double>& cmap = geometry.cmaps()[0];
   const std::size_t num_dofs_g = cmap.dim();
@@ -1082,8 +1089,8 @@ void dolfinx_contact::Contact::assemble_matrix(
   {
     // Get cell coordinates/geometry
     assert(std::size_t(active_facets[i]) < x_dofmap.extent(0));
-    auto x_dofs
-        = stdex::submdspan(x_dofmap, active_facets[i], MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent);
+    auto x_dofs = stdex::submdspan(x_dofmap, active_facets[i],
+                                   MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent);
     for (std::size_t j = 0; j < x_dofs.size(); ++j)
     {
       std::copy_n(std::next(x_g.begin(), 3 * x_dofs[j]), gdim,
@@ -1160,8 +1167,9 @@ void dolfinx_contact::Contact::assemble_vector(
   const int gdim = geometry.dim(); // geometrical dimension
 
   // Prepare cell geometry
-  stdex::mdspan<const std::int32_t, MDSPAN_IMPL_STANDARD_NAMESPACE::dextents<std::size_t, 2>> x_dofmap
-      = geometry.dofmap();
+  stdex::mdspan<const std::int32_t,
+                MDSPAN_IMPL_STANDARD_NAMESPACE::dextents<std::size_t, 2>>
+      x_dofmap = geometry.dofmap();
   std::span<const double> x_g = geometry.x();
 
   const dolfinx::fem::CoordinateElement<double>& cmap = geometry.cmaps()[0];
@@ -1200,8 +1208,8 @@ void dolfinx_contact::Contact::assemble_vector(
   for (std::size_t i = 0; i < local_size; i += 2)
   {
     // Get cell coordinates/geometry
-    auto x_dofs
-        = stdex::submdspan(x_dofmap, active_facets[i], MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent);
+    auto x_dofs = stdex::submdspan(x_dofmap, active_facets[i],
+                                   MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent);
     for (std::size_t j = 0; j < x_dofs.size(); ++j)
     {
       std::copy_n(std::next(x_g.begin(), 3 * x_dofs[j]), gdim,

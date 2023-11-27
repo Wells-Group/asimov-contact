@@ -7,7 +7,7 @@ import os
 import numpy as np
 import pytest
 import ufl
-from dolfinx.fem import (DirichletBC, Function, VectorFunctionSpace,
+from dolfinx.fem import (DirichletBC, Function, functionspace,
                          assemble_scalar, form)
 from dolfinx.fem.petsc import LinearProblem, NonlinearProblem
 from dolfinx.io import XDMFFile
@@ -45,7 +45,7 @@ def solve_manufactured(nx: int, ny: int, theta: float, gamma: float,
     sorted = np.argsort(left_facets)
     facet_marker = meshtags(mesh, tdim - 1, left_facets[sorted], left_values[sorted])
 
-    V = VectorFunctionSpace(mesh, ("Lagrange", 1))
+    V = functionspace(mesh, ("Lagrange", 1, (mesh.geometry.dim, )))
     n = ufl.FacetNormal(mesh)
     E = 1500
     nu = 0.25

@@ -135,11 +135,10 @@ public:
   /// facets
   /// @param[in] cstride Number of coefficients per facet
   /// @param[in] constants used in the variational form
-  void assemble_matrix(
-      const mat_set_fn& mat_set,
-      int pair, const kernel_fn<PetscScalar>& kernel,
-      const std::span<const PetscScalar> coeffs, int cstride,
-      const std::span<const PetscScalar>& constants);
+  void assemble_matrix(const mat_set_fn& mat_set, int pair,
+                       const kernel_fn<PetscScalar>& kernel,
+                       const std::span<const PetscScalar> coeffs, int cstride,
+                       const std::span<const PetscScalar>& constants);
 
   /// Assemble vector over exterior facet (for contact facets)
   /// @param[in] b The vector
@@ -212,8 +211,7 @@ public:
   /// configuration) at quadrature points of facets
   /// @param[in] pair - index of contact pair
   /// @param[out] c - test functions packed on facets.
-  std::pair<std::vector<PetscScalar>, int>
-  pack_grad_test_functions(int pair);
+  std::pair<std::vector<PetscScalar>, int> pack_grad_test_functions(int pair);
 
   /// Compute function on opposite surface at quadrature points of
   /// facets

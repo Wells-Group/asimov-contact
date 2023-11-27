@@ -167,7 +167,7 @@ def create_contact_solver(ufl_form: ufl.Form, u: fem.Function,
 
     # Pack material parameters mu and lambda on each contact surface
     with common.Timer("~Contact: Interpolate coeffs (mu, lmbda)"):
-        V2 = fem.FunctionSpace(mesh, ("DG", 0))
+        V2 = fem.functionspace(mesh, ("Discontinuous Lagrange", 0))
         lmbda2 = fem.Function(V2)
         lmbda2.interpolate(lambda x: np.full((1, x.shape[1]), lmbda))
         mu2 = fem.Function(V2)

@@ -78,7 +78,7 @@ if __name__ == "__main__":
             mesh, facet_marker, domain_marker = create_contact_mesh(
                 mesh, facet_marker, domain_marker, [6, 7])
 
-    V = _fem.VectorFunctionSpace(mesh, ("Lagrange", 1))
+    V = _fem.functionspace(mesh, ("Lagrange", 1, (mesh.geometry.dim, )))
 
     def _torque(x):
         values = np.zeros((mesh.geometry.dim, x.shape[1]))

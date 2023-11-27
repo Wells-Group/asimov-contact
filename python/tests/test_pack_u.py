@@ -5,6 +5,7 @@
 
 import numpy as np
 import pytest
+import basix.ufl
 import ufl
 from dolfinx.graph import adjacencylist
 from dolfinx import fem, graph
@@ -27,8 +28,7 @@ def test_pack_u():
                        [0, 1], [0.3, 1], [2, 2], [1, 1]], dtype=np.float64)
     cells = np.array([[0, 1, 2], [4, 5, 6], [1, 3, 2], [5, 6, 7]], dtype=np.int64)
 
-    cell_type = msh.CellType.triangle
-    domain = ufl.Mesh(ufl.VectorElement("Lagrange", ufl.Cell(cell_type.name), 1))
+    domain = ufl.Mesh(basix.ufl.element("Lagrange", "triangle", 1, shape=(points.shape[1], )))
     cells = graph.adjacencylist(cells)
     part = msh.create_cell_partitioner(msh.GhostMode.none)
     mesh = msh.create_mesh(MPI.COMM_WORLD, cells, points, domain, part)
@@ -40,7 +40,7 @@ def test_pack_u():
         return vals
 
     # Compute function that is known on each side
-    V = fem.VectorFunctionSpace(mesh, ("Lagrange", 1))
+    V = fem.functionspace(mesh, ("Lagrange", 1, (mesh.geometry.dim, )))
     u = fem.Function(V)
     u.interpolate(f)
 

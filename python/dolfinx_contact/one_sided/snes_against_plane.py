@@ -74,7 +74,7 @@ def snes_solver(mesh: dmesh.Mesh, mesh_data: Tuple[dmesh.MeshTags, int, int],
     assert facet_marker.dim == mesh.topology.dim - 1
 
     # function space and problem parameters
-    V = _fem.VectorFunctionSpace(mesh, ("Lagrange", 1))  # function space
+    V = _fem.functionspace(mesh, ("Lagrange", 1, (mesh.geometry.dim, )))  # function space
 
     # Functions for penalty term. Not used at the moment.
     # def gap(u): # Definition of gap function
