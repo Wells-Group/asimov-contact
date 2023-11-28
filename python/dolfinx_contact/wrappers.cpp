@@ -522,6 +522,8 @@ PYBIND11_MODULE(cpp, m)
 
   m.def("lex_match", &dolfinx_contact::lex_match);
 
+  m.def("create_contact_mesh_cpp", &dolfinx_contact::create_contact_mesh);
+
   m.def(
       "raytracing",
       [](const dolfinx::mesh::Mesh<double>& mesh,

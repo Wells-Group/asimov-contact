@@ -51,7 +51,7 @@ copy_to_all(MPI_Comm comm, const std::vector<std::int64_t>& indices,
 
 std::tuple<dolfinx::mesh::Mesh<double>, dolfinx::mesh::MeshTags<std::int32_t>,
            dolfinx::mesh::MeshTags<std::int32_t>>
-create_contact_mesh(dolfinx::mesh::Mesh<double>& mesh,
+dolfinx_contact::create_contact_mesh(dolfinx::mesh::Mesh<double>& mesh,
                     const dolfinx::mesh::MeshTags<std::int32_t>& fmarker,
                     const dolfinx::mesh::MeshTags<std::int32_t>& cmarker,
                     const std::vector<std::int32_t>& tags, double R = 0.2)

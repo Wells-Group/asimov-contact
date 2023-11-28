@@ -23,11 +23,12 @@ namespace dolfinx_contact
   /// @param tags
   /// @param R search radius
   /// @return new mesh and markers
-  std::tuple<dolfinx::mesh::Mesh<double>, dolfinx::mesh::MeshTags<std::int32_t>>
+std::tuple<dolfinx::mesh::Mesh<double>, dolfinx::mesh::MeshTags<std::int32_t>,
+           dolfinx::mesh::MeshTags<std::int32_t>>
   create_contact_mesh(dolfinx::mesh::Mesh<double>& mesh,
                       const dolfinx::mesh::MeshTags<std::int32_t>& fmarker,
                       const dolfinx::mesh::MeshTags<std::int32_t>& cmarker,
-                      const std::vector<std::int32_t>& tags, double R = 0.2);
+                      const std::vector<std::int32_t>& tags, double R);
 
   /// @brief Lexical matching of input markers with local entities.
   ///
