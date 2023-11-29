@@ -243,7 +243,7 @@ dolfinx_contact::create_contact_mesh(dolfinx::mesh::Mesh<double>& mesh,
   dolfinx::common::Timer tlex1("~Contact: Add ghosts: Lex match facet markers");
 
   auto [new_fm_index, new_fm_data] = dolfinx_contact::lex_match(
-      num_new_fv, fv_new_indices, all_facet_indices, all_facet_values);
+      num_facet_vertices, fv_new_indices, all_facet_indices, all_facet_values);
 
   auto new_fmarker = dolfinx::mesh::MeshTags<std::int32_t>(
       new_mesh.topology(), tdim - 1, new_fm_index, new_fm_data);
@@ -273,7 +273,7 @@ dolfinx_contact::create_contact_mesh(dolfinx::mesh::Mesh<double>& mesh,
   dolfinx::common::Timer tlex2("~Contact: Add ghosts: Lex match cell markers");
 
   auto [new_cm_index, new_cm_data] = dolfinx_contact::lex_match(
-      num_new_cv, cv_new_indices, all_cell_indices, all_cell_values);
+      num_cell_vertices, cv_new_indices, all_cell_indices, all_cell_values);
 
   auto new_cmarker = dolfinx::mesh::MeshTags<std::int32_t>(
       new_mesh.topology(), tdim, new_cm_index, new_cm_data);
@@ -423,6 +423,7 @@ dolfinx_contact::lex_match(int dim,
                            const std::vector<std::int64_t>& in_indices,
                            const std::vector<std::int32_t>& in_values)
 {
+  LOG(WARNING) << "Lex match: dim=" << dim;
   LOG(WARNING) << "Lex match: [" << local_indices.size() << ", "
                << in_indices.size() << ", " << in_values.size() << "]";
 
