@@ -10,9 +10,10 @@ from dolfinx.fem import Constant, dirichletbc, form, functionspace, Function, lo
 from dolfinx.fem.petsc import assemble_matrix, assemble_vector, apply_lifting, set_bc, create_vector
 from dolfinx.mesh import locate_entities_boundary
 from dolfinx.graph import adjacencylist
-from dolfinx_contact.cpp import MeshTie
+from dolfinx_contact.cpp import MeshTie, Problem
 from dolfinx_contact.helpers import epsilon, lame_parameters, rigid_motions_nullspace_subdomains
 from dolfinx_contact.meshing import create_split_box_2D, horizontal_sine
+from dolfinx_contact.parallel_mesh_ghosting import create_contact_mesh
 from mpi4py import MPI
 from petsc4py import PETSc
 from ufl import (grad, inner, sym, tr, Identity, lhs, rhs, Measure, TrialFunction, TestFunction)
@@ -22,10 +23,10 @@ H = 2.0
 nx = 20
 ny = 20
 # parameter for surface approximation
-num_segments = (100 * np.ceil(5.0 / 1.2).astype(np.int32),
-                100 * np.ceil(5.0 / (1.2 * 0.7)).astype(np.int32))
+num_segments = (8 * np.ceil(5.0 / 1.2).astype(np.int32),
+                8 * np.ceil(5.0 / (1.2 * 0.7)).astype(np.int32))
 fname = "./meshes/split_box"
-create_split_box_2D(fname, res=0.05, L=1.0, H=1.0, domain_1=[0, 1, 5, 4], domain_2=[4, 5, 2, 3],
+create_split_box_2D(fname, res=0.1, L=1.0, H=1.0, domain_1=[0, 1, 5, 4], domain_2=[4, 5, 2, 3],
                     x0=[0, 0.5], x1=[1.0, 0.7], curve_fun=horizontal_sine, num_segments=num_segments,
                     quads=False)
 
@@ -40,6 +41,9 @@ with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
     domain_marker = xdmf.read_meshtags(mesh, name="domain_marker")
     facet_marker = xdmf.read_meshtags(mesh, name="contact_facets")
 
+if mesh.comm.size > 1:
+    mesh, facet_marker, domain_marker = create_contact_mesh(
+        mesh, facet_marker, domain_marker, [3, 4, 7, 8])
 
 # compiler options to improve performance
 cffi_options = ["-Ofast", "-march=native"]
@@ -73,6 +77,9 @@ Q = functionspace(mesh, ("CG", 1))
 q, r = TrialFunction(Q), TestFunction(Q)
 T0 = Function(Q)
 kdt = 0.01
+Q0 = functionspace(mesh, ("DG", 0))
+kdt_custom = Function(Q0)
+kdt_custom.interpolate(lambda x: np.full((1, x.shape[1]), kdt))
 
 therm = (q - T0) * r * dx + kdt * inner(grad(q), grad(r)) * dx
 a_therm, L_therm = lhs(therm), rhs(therm)
@@ -94,8 +101,8 @@ surfaces = adjacencylist(data, offsets)
 # initialise meshties
 meshties = MeshTie([facet_marker._cpp_object], surfaces, contact,
                    mesh._cpp_object, quadrature_degree=3)
-meshties.generate_heattransfer_data_matrix_only(
-    Q._cpp_object, kdt, gamma, theta)
+meshties.generate_kernel_data(Problem.Poisson, Q._cpp_object, {
+                                  "T": T0._cpp_object, "kdt": kdt_custom._cpp_object}, gamma, theta)
 
 # Create matrix and vector
 a_therm = form(a_therm, jit_options=jit_options)
@@ -107,7 +114,7 @@ vec_therm = create_vector(L_therm)
 # Thermal problem: functions for updating matrix and vector
 def assemble_mat_therm(A):
     A.zeroEntries()
-    meshties.assemble_matrix_heat_transfer(A, Q._cpp_object)
+    meshties.assemble_matrix(A, Q._cpp_object, Problem.Poisson)
     assemble_matrix(A, a_therm, bcs=[Tbc])
     A.assemble()
 
@@ -158,7 +165,7 @@ def eps(w):
     return sym(grad(w))
 
 
-alpha = 0.1
+alpha = 1.0
 
 
 def sigma(w, T):
@@ -174,7 +181,7 @@ dirichlet_facets2 = locate_entities_boundary(mesh, tdim - 1, lambda x: np.isclos
 g = Constant(mesh, default_scalar_type((0.0, 0.0)))
 dofs_e = locate_dofs_topological(V, tdim - 1, dirichlet_facets)
 dofs_e2 = locate_dofs_topological(V, tdim - 1, dirichlet_facets2)
-bcs = [dirichletbc(g, dofs_e, V)]
+bcs = [dirichletbc(g, dofs_e2, V)]
 
 # matrix and vector
 F = form(F, jit_options=jit_options)
@@ -191,7 +198,7 @@ A.setNearNullSpace(null_space)
 # Elasticity problem: functions for updating matrix and vector
 def assemble_mat_el(A):
     A.zeroEntries()
-    meshties.assemble_matrix(A, V._cpp_object)
+    meshties.assemble_matrix(A, V._cpp_object, Problem.Elasticity)
     assemble_matrix(A, J, bcs=bcs)
     A.assemble()
 
@@ -230,8 +237,10 @@ for i in range(time_steps):
     assemble_mat_therm(mat_therm)
     assemble_vec_therm(vec_therm)
     ksp_therm.solve(vec_therm, T0.vector)
+    T0.x.scatter_forward()
     assemble_mat_el(A)
     assemble_vec_el(b)
     ksp_el.solve(b, u.vector)
+    u.x.scatter_forward()
     vtx.write(i + 1)
 vtx.close()

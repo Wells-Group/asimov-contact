@@ -724,16 +724,16 @@ dolfinx_contact::Contact::pack_test_functions(
   return {std::move(cb), cstride};
 }
 //------------------------------------------------------------------------------------------------
-void dolfinx_contact::Contact::update_distance_map(std::size_t pair,
+void dolfinx_contact::Contact::crop_invalid_points(std::size_t pair,
                                                    std::span<const double> gap,
-                                                   std::span<const double> n_y)
+                                                   std::span<const double> n_y,
+                                                   double tol)
 {
   auto [quadrature_mt, candidate_mt] = _contact_pairs[pair];
   const std::size_t num_facets = _local_facets[quadrature_mt];
   const std::size_t num_q_points
       = _quadrature_rule->offset()[1] - _quadrature_rule->offset()[0];
   const std::size_t gdim = _mesh->geometry().dim();
-  double tol = 1e-5;
   std::shared_ptr<const dolfinx::graph::AdjacencyList<std::int32_t>>
       candidate_map = _facet_maps[pair];
   std::vector<std::int32_t> offsets(candidate_map->offsets());
@@ -752,11 +752,13 @@ void dolfinx_contact::Contact::update_distance_map(std::size_t pair,
         norm += gap[index] * gap[index];
       }
       norm = std::sqrt(norm);
-      if (norm > 1e-7)
+      if (norm > tol)
+      data[offsets[f] + q] = -1;
+      else if (norm > 1e-7)
       {
         dot = std::abs(dot) / norm;
 
-        if (dot < (1 - tol))
+        if (dot < (0.7))
           data[offsets[f] + q] = -1;
       }
     }
@@ -1496,8 +1498,12 @@ dolfinx_contact::Contact::pack_grad_u_contact(
   std::vector<PetscScalar> coefficients(num_basis_functions * bs_element);
   for (std::size_t i = 0; i < num_facets; ++i)
   {
+    auto links = map->links((int)i);
     for (std::size_t q = 0; q < num_q_points; ++q)
     {
+            
+    if (links[q] < 0)
+        continue;
       // Get degrees of freedom for current cell
       auto dofs = dofmap->cell_dofs(cells[i * num_q_points + q]);
       for (std::size_t j = 0; j < dofs.size(); ++j)

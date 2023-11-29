@@ -39,9 +39,25 @@ public:
     for (int i = 0; i < (int)connected_pairs.size(); ++i)
     {
       Contact::create_distance_map(i);
-      auto [ny, cstride1] = Contact::pack_ny(i);
-      auto [gap, cstride] = Contact::pack_gap(i);
-      Contact::update_distance_map(i, gap, ny);
+      const std::array<int, 2>& pair = Contact::contact_pair(i);
+      std::size_t num_facets = Contact::local_facets(pair[0]);
+      if (num_facets > 0)
+      {
+        auto [ny, cstride1] = Contact::pack_ny(i);
+        auto [gap, cstride] = Contact::pack_gap(i);
+        
+        std::span<const std::int32_t> entities
+            = Contact::active_entities(pair[0]);
+        
+        // Retrieve cells connected to integration facets
+        std::vector<std::int32_t> cells(num_facets);
+        for (std::size_t e = 0; e < num_facets; ++e)
+          cells[e] = entities[2 * e];
+        std::vector<double> h_p
+            = dolfinx::mesh::h(*mesh, cells, mesh->topology()->dim());
+        Contact::crop_invalid_points(i, gap, ny,
+                                     *std::max_element(h_p.begin(), h_p.end()));
+      }
     }
 
     // initialise internal variables

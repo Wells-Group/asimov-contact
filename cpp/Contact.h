@@ -234,8 +234,10 @@ public:
   std::pair<std::vector<PetscScalar>, int> pack_grad_test_functions(
       int pair, std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V);
 
-  void update_distance_map(std::size_t pair, std::span<const double> gap,
-                           std::span<const double> n_y);
+
+  /// Remove points from facet map   
+  void crop_invalid_points(std::size_t pair, std::span<const double> gap,
+                           std::span<const double> n_y, double tol);
   /// Compute function on opposite surface at quadrature points of
   /// facets
   /// @param[in] pair - index of contact pair
