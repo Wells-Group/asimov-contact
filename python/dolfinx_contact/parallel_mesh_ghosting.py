@@ -3,12 +3,12 @@
 # SPDX-License-Identifier:    MIT
 
 from dolfinx import log
-from dolfinx.mesh import Mesh, MeshTags
+from dolfinx.mesh import Mesh, MeshTags, meshtags, create_mesh
 from dolfinx.common import Timer
-# import dolfinx
-# from dolfinx.cpp.mesh import entities_to_geometry, cell_num_vertices, cell_entity_type, to_type
-# import numpy as np
-# from dolfinx_contact.cpp import compute_ghost_cell_destinations, lex_match
+import dolfinx
+from dolfinx.cpp.mesh import entities_to_geometry, cell_num_vertices, cell_entity_type, to_type
+import numpy as np
+from dolfinx_contact.cpp import compute_ghost_cell_destinations, lex_match
 from dolfinx_contact.cpp import create_contact_mesh_cpp
 
 __all__ = ["create_contact_mesh"]
