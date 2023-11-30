@@ -14,7 +14,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    container: ghcr.io/fenics/test-env:v0.7.0-mpich
+    container: ghcr.io/fenics/test-env:v0.7.2-mpich
 
     strategy:
       matrix:
@@ -70,7 +70,7 @@ jobs:
         with:
           path: ./dolfinx
           repository: FEniCS/dolfinx
-          ref: v0.7.0.post0
+          ref: v0.7.2
    
 
       - name: Configure C++ (dolfinx)
