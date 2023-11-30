@@ -96,10 +96,12 @@ jobs:
           cmake -G Ninja -B build-dir
           ninja -C build-dir
           ./build-dir/demo_meshtie
+          mpirun -np 2 ./build-dir/demo_meshtie
           cd ../meshtieNewton
           cmake -G Ninja -B build-dir
           ninja -C build-dir
           ./build-dir/demo_meshtie
+          mpirun -np 2 ./build-dir/demo_meshtie
 
       - name: Install contact
         run: BUILD_TYPE="Debug" python3 -m pip -v install python/

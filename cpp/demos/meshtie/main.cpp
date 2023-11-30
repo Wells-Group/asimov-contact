@@ -17,6 +17,7 @@
 #include <dolfinx/mesh/utils.h>
 #include <dolfinx_contact/Contact.h>
 #include <dolfinx_contact/MeshTie.h>
+#include <dolfinx_contact/parallel_mesh_ghosting.h>
 #include <dolfinx_contact/utils.h>
 
 using T = PetscScalar;
@@ -33,8 +34,18 @@ int main(int argc, char* argv[])
   std::string thread_name = "RANK " + std::to_string(mpi_rank);
   loguru::set_thread_name(thread_name.c_str());
   {
-    auto [mesh, domain1, facet1] = dolfinx_contact::read_mesh(
+    auto [mesh_init, domain1_init, facet1_init] = dolfinx_contact::read_mesh(
         "box_3D.xdmf", "mesh", "mesh", "cell_marker", "facet_marker");
+
+
+    const std::int32_t contact_bdry_1 = 6; // top contact interface
+    const std::int32_t contact_bdry_2 = 13;  // bottom contact interface
+    loguru::g_stderr_verbosity = loguru::Verbosity_OFF;
+    auto [mesh_new, facet1, domain1] = dolfinx_contact::create_contact_mesh(
+        *mesh_init, facet1_init, domain1_init,
+        {contact_bdry_1, contact_bdry_2}, 10.0);
+    auto mesh = std::make_shared<dolfinx::mesh::Mesh<U>>(mesh_new);
+
     // Create function spaces
     auto V = std::make_shared<fem::FunctionSpace<U>>(fem::create_functionspace(
         functionspace_form_linear_elasticity_J, "w", mesh));
@@ -134,8 +145,6 @@ int main(int argc, char* argv[])
         std::vector<T>({0.0, 0.0, 0.0}), bdofs, V);
 
     // Create meshties
-    const std::int32_t contact_bdry_1 = 6;  // top contact interface
-    const std::int32_t contact_bdry_2 = 13; // bottom contact interface
     std::vector<std::int32_t> data = {contact_bdry_1, contact_bdry_2};
     std::vector<std::int32_t> offsets = {0, 2};
     auto contact_markers
@@ -224,6 +233,7 @@ int main(int argc, char* argv[])
 
     // Update ghost values before output
     u->x()->scatter_fwd();
+    loguru::g_stderr_verbosity = loguru::Verbosity_OFF;
     dolfinx::io::XDMFFile file2(mesh->comm(), "result.xdmf", "w");
     file2.write_mesh(*mesh);
     file2.write_function(*u, 0.0);

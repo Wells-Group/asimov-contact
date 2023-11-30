@@ -18,6 +18,7 @@
 #include <dolfinx/mesh/utils.h>
 #include <dolfinx_contact/Contact.h>
 #include <dolfinx_contact/MeshTie.h>
+#include <dolfinx_contact/parallel_mesh_ghosting.h>
 #include <dolfinx_contact/utils.h>
 
 using T = PetscScalar;
@@ -75,9 +76,7 @@ public:
 
     // build near null space preventing rigid body motion of individual
     // components)
-    std::vector<std::int32_t> tags;
-    tags.assign(subdomains.values().begin(), subdomains.values().end());
-    tags.erase(std::unique(tags.begin(), tags.end()), tags.end());
+    std::vector<std::int32_t> tags = {1, 2};
     MatNullSpace ns = dolfinx_contact::build_nullspace_multibody(
         *L->function_spaces()[0], subdomains, tags);
     MatSetNearNullSpace(_matA.mat(), ns);
@@ -215,8 +214,17 @@ int main(int argc, char* argv[])
   std::string thread_name = "RANK " + std::to_string(mpi_rank);
   loguru::set_thread_name(thread_name.c_str());
   {
-    auto [mesh, domain1, facet1]
+    auto [mesh_init, domain1_init, facet1_init]
         = dolfinx_contact::read_mesh("cont-blocks_sk24_fnx.xdmf");
+
+    const std::int32_t contact_bdry_1 = 12; // top contact interface
+    const std::int32_t contact_bdry_2 = 6;  // bottom contact interface
+    loguru::g_stderr_verbosity = loguru::Verbosity_OFF;
+    auto [mesh_new, facet1, domain1] = dolfinx_contact::create_contact_mesh(
+        *mesh_init, facet1_init, domain1_init,
+        {contact_bdry_1, contact_bdry_2}, 10.0);
+
+    auto mesh = std::make_shared<dolfinx::mesh::Mesh<U>>(mesh_new);
     // Create function spaces
     auto V = std::make_shared<fem::FunctionSpace<U>>(fem::create_functionspace(
         functionspace_form_linear_elasticity_J, "w", mesh));
@@ -292,8 +300,6 @@ int main(int argc, char* argv[])
                     std::vector<T>({0.0, 0.0, 0.0}), bdofs_2, V)};
 
     // Define meshtie data
-    const std::int32_t contact_bdry_1 = 12; // top contact interface
-    const std::int32_t contact_bdry_2 = 6;  // bottom contact interface
     // point to correct surface markers
     std::vector<std::int32_t> data = {contact_bdry_1, contact_bdry_2};
     std::vector<std::int32_t> offsets = {0, 2};
@@ -359,6 +365,7 @@ int main(int argc, char* argv[])
     // solve non-linear problem
     newton_solver.solve(_u.vec());
 
+    loguru::g_stderr_verbosity = loguru::Verbosity_OFF;
     // write solution to file
     dolfinx::io::XDMFFile file(mesh->comm(), "result.xdmf", "w");
     file.write_mesh(*mesh);
