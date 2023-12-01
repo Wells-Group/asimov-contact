@@ -764,8 +764,7 @@ void dolfinx_contact::Contact::crop_invalid_points(std::size_t pair,
     }
   }
   _facet_maps[pair]
-      = std::make_shared<dolfinx::graph::AdjacencyList<std::int32_t>>(
-          dolfinx::graph::AdjacencyList<std::int32_t>(data, offsets));
+      = std::make_shared<dolfinx::graph::AdjacencyList<std::int32_t>>(data, offsets);
 }
 //------------------------------------------------------------------------------------------------
 std::pair<std::vector<PetscScalar>, int>

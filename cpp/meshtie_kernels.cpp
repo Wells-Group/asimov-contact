@@ -362,8 +362,7 @@ dolfinx_contact::generate_poisson_kernel(
   std::shared_ptr<const dolfinx::mesh::Mesh<double>> mesh = V->mesh();
   assert(mesh);
   const std::size_t gdim = mesh->geometry().dim(); // geometrical dimension
-  const std::size_t bs = V->dofmap()->bs();
-  if (bs != 1)
+  if (V->dofmap()->bs() != 1)
   {
     throw std::invalid_argument(
         "This kernel is expecting a variable with bs=1");
