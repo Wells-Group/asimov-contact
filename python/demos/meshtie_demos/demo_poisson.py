@@ -137,7 +137,7 @@ if __name__ == "__main__":
     # Solver options
     ksp_tol = 1e-10
 
-    # petsc_options = {"ksp_type": "preonly", "pc_type": "lu"}
+    # for debugging: petsc_options = {"ksp_type": "preonly", "pc_type": "lu"}
     petsc_options = {
         "matptap_via": "scalable",
         "ksp_type": "cg",

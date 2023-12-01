@@ -217,7 +217,7 @@ def compute_dof_permutations_all(V_dg, V_cg, gap):
     num_cells = mesh_dg.topology.index_map(tdim).size_local
     for cell in range(num_cells):
         midpoint = compute_midpoints(mesh_dg, tdim, [cell])[0]
-        if not midpoint[tdim - 1] > 0:
+        if midpoint[tdim - 1] <= 0:
             # coordinates of corresponding dofs need to be adjusted by gap
             dofs_dg1 = V_dg.dofmap.cell_dofs(cell)
             x_dg[dofs_dg1, tdim - 1] -= gap
@@ -698,7 +698,6 @@ def test_poisson_kernels(ct, gap, quadrature_degree, theta):
 
     # DG formulation
     kdt = 5
-    dx = ufl.Measure("dx", domain=mesh_ufl)
     F0 = poisson_dg(u0, v0, h, n, kdt, gamma, theta, dS)
     J0 = poisson_dg(w0, v0, h, n, kdt, gamma, theta, dS)
 

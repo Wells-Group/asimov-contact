@@ -39,19 +39,21 @@ void dolfinx_contact::MeshTie::generate_kernel_data(
   std::vector<std::shared_ptr<dolfinx::fem::Function<double>>> coeff_list;
   switch (problem_type)
   {
-  case dolfinx_contact::Problem::Elasticity:
+  
+  using enum dolfinx_contact::Problem;
+  case Elasticity:
 
     if (auto it = coefficients.find("mu"); it != coefficients.end())
       coeff_list.push_back(it->second);
     else
     {
-      throw std::runtime_error("Lame parameter mu not provided.");
+      throw std::invalid_argument("Lame parameter mu not provided.");
     }
     if (auto it = coefficients.find("lambda"); it != coefficients.end())
       coeff_list.push_back(it->second);
     else
     {
-      throw std::runtime_error("Lame parameter lambda not provided.");
+      throw std::invalid_argument("Lame parameter lambda not provided.");
     }
     if (auto it = coefficients.find("u"); it != coefficients.end())
     {
@@ -65,12 +67,12 @@ void dolfinx_contact::MeshTie::generate_kernel_data(
           V, coeff_list[1], coeff_list[0], gamma, theta);
     }
     break;
-  case dolfinx_contact::Problem::Poisson:
+  case Poisson:
     if (auto it = coefficients.find("kdt"); it != coefficients.end())
       coeff_list.push_back(it->second);
     else
     {
-      throw std::runtime_error("kdt not provided.");
+      throw std::invalid_argument("kdt not provided.");
     }
     if (auto it = coefficients.find("T"); it != coefficients.end())
     {
@@ -84,7 +86,7 @@ void dolfinx_contact::MeshTie::generate_kernel_data(
           V, coeff_list[0], gamma, theta);
     }
     break;
-  case dolfinx_contact::Problem::ThermoElasticity:
+  case ThermoElasticity:
     throw std::invalid_argument("Problem type not implemented");
     break;
   default:
@@ -180,15 +182,16 @@ void dolfinx_contact::MeshTie::update_meshtie_data(
 {
   switch (problem_type)
   {
-  case dolfinx_contact::Problem::Elasticity:
+  using enum dolfinx_contact::Problem;
+  case Elasticity:
     update_meshtie_data(u, _coeffs, offset_elasticity(u->function_space()),
                         _cstride);
     break;
-  case dolfinx_contact::Problem::Poisson:
+  case Poisson:
     update_meshtie_data(u, _coeffs_poisson, offset_poisson(u->function_space()),
                         _cstride_poisson);
     break;
-  case dolfinx_contact::Problem::ThermoElasticity:
+  case ThermoElasticity:
     update_meshtie_data(u, _coeffs, offset_elasticity(u->function_space()),
                         _cstride);
     break;
@@ -276,9 +279,9 @@ void dolfinx_contact::MeshTie::generate_poisson_data_matrix_only(
 
   _cstride_poisson = std::accumulate(cstrides.cbegin(), cstrides.cend(), 0);
   _kernel_rhs_poisson = dolfinx_contact::generate_poisson_kernel(
-      Kernel::MeshTieRhs, V, Contact::quadrature_rule(), max_links, cstrides);
+      Kernel::MeshTieRhs, V, Contact::quadrature_rule(), cstrides);
   _kernel_jac_poisson = dolfinx_contact::generate_poisson_kernel(
-      Kernel::MeshTieJac, V, Contact::quadrature_rule(), max_links, cstrides);
+      Kernel::MeshTieJac, V, Contact::quadrature_rule(), cstrides);
 
   // save nitsche parameters as constants
   _consts_poisson = {gamma, theta};
@@ -347,16 +350,17 @@ void dolfinx_contact::MeshTie::assemble_vector(
 {
   switch (problem_type)
   {
-  case dolfinx_contact::Problem::Elasticity:
+  using enum dolfinx_contact::Problem;
+  case Elasticity:
     for (int i = 0; i < _num_pairs; ++i)
       assemble_vector(b, i, _kernel_rhs, _coeffs[i], (int)_cstride, _consts, V);
     break;
-  case dolfinx_contact::Problem::Poisson:
+  case Poisson:
     for (int i = 0; i < _num_pairs; ++i)
       assemble_vector(b, i, _kernel_rhs_poisson, _coeffs_poisson[i],
                       (int)_cstride_poisson, _consts_poisson, V);
     break;
-  case dolfinx_contact::Problem::ThermoElasticity:
+  case ThermoElasticity:
     for (int i = 0; i < _num_pairs; ++i)
       assemble_vector(b, i, _kernel_rhs, _coeffs[i], (int)_cstride, _consts, V);
     break;
@@ -372,17 +376,18 @@ void dolfinx_contact::MeshTie::assemble_matrix(
 {
   switch (problem_type)
   {
-  case dolfinx_contact::Problem::Elasticity:
+  using enum dolfinx_contact::Problem;
+  case Elasticity:
     for (int i = 0; i < _num_pairs; ++i)
       assemble_matrix(mat_set, i, _kernel_jac, _coeffs[i], (int)_cstride,
                       _consts, V);
     break;
-  case dolfinx_contact::Problem::Poisson:
+  case Poisson:
     for (int i = 0; i < _num_pairs; ++i)
       assemble_matrix(mat_set, i, _kernel_jac_poisson, _coeffs_poisson[i],
                       (int)_cstride_poisson, _consts_poisson, V);
     break;
-  case dolfinx_contact::Problem::ThermoElasticity:
+  case ThermoElasticity:
     for (int i = 0; i < _num_pairs; ++i)
       assemble_matrix(mat_set, i, _kernel_jac, _coeffs[i], (int)_cstride,
                       _consts, V);
@@ -395,7 +400,6 @@ void dolfinx_contact::MeshTie::assemble_matrix(
 std::pair<std::vector<double>, std::size_t>
 dolfinx_contact::MeshTie::coeffs(int pair)
 {
-  ;
   std::vector<double>& coeffs = _coeffs[pair];
   return {coeffs, _cstride};
 }

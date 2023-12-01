@@ -376,7 +376,7 @@ compute_projection_map(const dolfinx::mesh::Mesh<double>& mesh,
   const std::size_t num_points = points.size() / 3;
   std::vector<double> candidate_X(num_points * tdim, 0);
 
-  if (facet_tuples.size()==0)
+  if (facet_tuples.empty())
   {
     std::vector<std::int32_t> closest_facets(num_points, -1);
     return {closest_facets, candidate_X, {candidate_X.size() / tdim, tdim}};
