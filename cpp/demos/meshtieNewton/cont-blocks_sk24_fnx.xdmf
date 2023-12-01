@@ -1,0 +1,29 @@
+<?xml version="1.0"?>
+<!DOCTYPE Xdmf SYSTEM "Xdmf.dtd" []>
+<Xdmf Version="3.0" xmlns:xi="http://www.w3.org/2001/XInclude">
+  <Domain>
+    <Grid Name="geometry" GridType="Uniform">
+      <Geometry GeometryType="XYZ">
+        <DataItem Dimensions="75 3" Format="HDF">cont-blocks_sk24_fnx.h5:/Geometry/geometry/geometry</DataItem>
+      </Geometry>
+    </Grid>
+    <Grid Name="volume markers" GridType="Uniform">
+      <xi:include xpointer="xpointer(/Xdmf/Domain/Grid[@Name='geometry']/Geometry)" />
+      <Topology TopologyType="Tetrahedron" NumberOfElements="130" NodesPerElement="4">
+        <DataItem Dimensions="130 4" NumberType="Int" Format="HDF">cont-blocks_sk24_fnx.h5:/MeshTags/volume markers/topology</DataItem>
+      </Topology>
+      <Attribute Name="volume markers" AttributeType="Scalar" Center="Cell">
+        <DataItem Dimensions="130 1" Format="HDF">cont-blocks_sk24_fnx.h5:/MeshTags/volume markers/Values</DataItem>
+      </Attribute>
+    </Grid>
+    <Grid Name="facet markers" GridType="Uniform">
+      <xi:include xpointer="xpointer(/Xdmf/Domain/Grid[@Name='geometry']/Geometry)" />
+      <Topology TopologyType="Triangle" NumberOfElements="132" NodesPerElement="3">
+        <DataItem Dimensions="132 3" NumberType="Int" Format="HDF">cont-blocks_sk24_fnx.h5:/MeshTags/facet markers/topology</DataItem>
+      </Topology>
+      <Attribute Name="facet markers" AttributeType="Scalar" Center="Cell">
+        <DataItem Dimensions="132 1" Format="HDF">cont-blocks_sk24_fnx.h5:/MeshTags/facet markers/Values</DataItem>
+      </Attribute>
+    </Grid>
+  </Domain>
+</Xdmf>

@@ -10,7 +10,7 @@ import ufl
 from dolfinx import log, default_scalar_type
 from dolfinx.common import TimingType, list_timings, Timer, timing
 from dolfinx.fem import (dirichletbc, Constant, form, Function, FunctionSpace,
-                         locate_dofs_topological, VectorFunctionSpace)
+                         locate_dofs_topological)
 from dolfinx.fem.petsc import (apply_lifting, assemble_vector, assemble_matrix,
                                create_vector, set_bc)
 from dolfinx.graph import adjacencylist
@@ -18,7 +18,7 @@ from dolfinx.io import XDMFFile
 from mpi4py import MPI
 from petsc4py import PETSc
 
-from dolfinx_contact.helpers import lame_parameters, epsilon, sigma_func, rigid_motions_nullspace_subdomains
+from dolfinx_contact.helpers import near_nullspace_subdomains
 from dolfinx_contact.meshing import (convert_mesh,
                                      create_box_mesh_3D)
 from dolfinx_contact.parallel_mesh_ghosting import create_contact_mesh
@@ -46,8 +46,7 @@ if __name__ == "__main__":
                           help="Use triangle/tet mesh", default=False)
     parser.add_argument("--E", default=1e3, type=np.float64, dest="E",
                         help="Youngs modulus of material")
-    parser.add_argument("--nu", default=0.1, type=np.float64,
-                        dest="nu", help="Poisson's ratio")
+    parser.add_argument("--nu", default=0.1, type=np.float64, dest="nu", help="Poisson's ratio")
     parser.add_argument("--outfile", type=str, default=None, required=False,
                         help="File for appending results", dest="outfile")
     _lifting = parser.add_mutually_exclusive_group(required=False)
@@ -96,7 +95,7 @@ if __name__ == "__main__":
             mesh, facet_marker, domain_marker, [contact_bdy_1, contact_bdy_2])
 
     # Function, TestFunction, TrialFunction and measures
-    V = VectorFunctionSpace(mesh, ("Lagrange", 1))
+    V = FunctionSpace(mesh, ("Lagrange", 1))
     v = ufl.TestFunction(V)
     w = ufl.TrialFunction(V)
     dx = ufl.Measure("dx", domain=mesh, subdomain_data=domain_marker)
@@ -104,58 +103,41 @@ if __name__ == "__main__":
     h = ufl.CellDiameter(mesh)
     n = ufl.FacetNormal(mesh)
 
-    # Compute lame parameters
-    E = args.E
-    nu = args.nu
-    mu_func, lambda_func = lame_parameters(False)
-    V2 = FunctionSpace(mesh, ("DG", 0))
-    lmbda = Function(V2)
-    lmbda.interpolate(lambda x: np.full((1, x.shape[1]), lambda_func(E, nu)))
-    mu = Function(V2)
-    mu.interpolate(lambda x: np.full((1, x.shape[1]), mu_func(E, nu)))
-    sigma = sigma_func(mu, lmbda)
-
     # Nitsche parameters
     gamma = args.gamma
     theta = args.theta
 
-    J = ufl.inner(sigma(w), epsilon(v)) * dx
+    # bilinear form
+    kdt_val = 5
+    V0 = FunctionSpace(mesh, ("DG", 0))
+    kdt = Function(V0)
+    kdt.interpolate(lambda x: np.full((1, x.shape[1]), kdt_val))
+    J = kdt * ufl.inner(ufl.grad(w), ufl.grad(v)) * dx
 
-    # body forces
-    f = Constant(mesh, default_scalar_type((0.0, 0.5, 0.0)))
+    # source term
+    f = Constant(mesh, default_scalar_type(1.0))
     F = ufl.inner(f, v) * dx
 
-    # traction (neumann) boundary condition on mesh boundary with tag 3
-    t = Constant(mesh, default_scalar_type((0.0, 0.5, 0.0)))
+    # Neumann (flux) boundary condition on mesh boundary with tag 3
+    t = Constant(mesh, default_scalar_type(0.5))
     F += ufl.inner(t, v) * ds(neumann_bdy)
 
     # Dirichlet bdry conditions
-    g = Constant(mesh, default_scalar_type((0.0, 0.0, 0.0)))
-    if args.lifting:
-        bdy_dofs = locate_dofs_topological(
-            V, tdim - 1, facet_marker.find(dirichlet_bdy))  # type: ignore
-        bcs = [dirichletbc(g, bdy_dofs, V)]
-    else:
-        bcs = []
-        J += - ufl.inner(sigma(w) * n, v) * ds(dirichlet_bdy)\
-            - theta * ufl.inner(sigma(v) * n, w) * \
-            ds(dirichlet_bdy) + E * gamma / h * \
-            ufl.inner(w, v) * ds(dirichlet_bdy)
-        F += - theta * ufl.inner(sigma(v) * n, g) * \
-            ds(dirichlet_bdy) + E * gamma / h * \
-            ufl.inner(g, v) * ds(dirichlet_bdy)
+    g = Constant(mesh, default_scalar_type((0.0)))
+
+    bdy_dofs = locate_dofs_topological(V, tdim - 1, facet_marker.find(dirichlet_bdy))  # type: ignore
+    bcs = [dirichletbc(g, bdy_dofs, V)]
 
     # compile forms
     cffi_options = ["-Ofast", "-march=native"]
-    jit_options = {"cffi_extra_compile_args": cffi_options,
-                   "cffi_libraries": ["m"]}
+    jit_options = {"cffi_extra_compile_args": cffi_options, "cffi_libraries": ["m"]}
     F = form(F, jit_options=jit_options)
     J = form(J, jit_options=jit_options)
 
     # Solver options
     ksp_tol = 1e-10
 
-    # for debugging use petsc_options = {"ksp_type": "preonly", "pc_type": "lu"}
+    # for debugging: petsc_options = {"ksp_type": "preonly", "pc_type": "lu"}
     petsc_options = {
         "matptap_via": "scalable",
         "ksp_type": "cg",
@@ -163,6 +145,7 @@ if __name__ == "__main__":
         "ksp_atol": ksp_tol,
         "pc_type": "gamg",
         "pc_mg_levels": 3,
+        "pc_mg_cycles": 1,   # 1 is v, 2 is w
         "mg_levels_ksp_type": "chebyshev",
         "mg_levels_pc_type": "jacobi",
         "pc_gamg_type": "agg",
@@ -170,6 +153,8 @@ if __name__ == "__main__":
         "pc_gamg_agg_nsmooths": 1,
         "pc_gamg_threshold": 1e-3,
         "pc_gamg_square_graph": 2,
+        "pc_gamg_reuse_interpolation": False,
+        "ksp_norm_type": "unpreconditioned"
     }
     # Pack mesh data for Nitsche solver
     contact = [(1, 0), (0, 1)]
@@ -183,8 +168,7 @@ if __name__ == "__main__":
     # initialise meshties
     meshties = MeshTie([facet_marker._cpp_object], surfaces, contact,
                        mesh._cpp_object, quadrature_degree=5)
-    meshties.generate_kernel_data(Problem.Elasticity, V._cpp_object, {
-        "lambda": lmbda._cpp_object, "mu": mu._cpp_object}, E * gamma, theta)
+    meshties.generate_kernel_data(Problem.Poisson, V._cpp_object, {"kdt": kdt._cpp_object}, gamma, theta)
 
     # create matrix, vector
     A = meshties.create_matrix(J._cpp_object)
@@ -192,27 +176,25 @@ if __name__ == "__main__":
 
     # Assemble right hand side
     b.zeroEntries()
-    b.ghostUpdate(addv=PETSc.InsertMode.INSERT,    # type: ignore
-                  mode=PETSc.ScatterMode.FORWARD)  # type: ignore
+    b.ghostUpdate(addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD)  # type: ignore
     assemble_vector(b, F)
 
     # Apply boundary condition and scatter reverse
     if len(bcs) > 0:
         apply_lifting(b, [J], bcs=[bcs], scale=-1.0)
-    b.ghostUpdate(addv=PETSc.InsertMode.ADD,       # type: ignore
-                  mode=PETSc.ScatterMode.REVERSE)  # type: ignore
+    b.ghostUpdate(addv=PETSc.InsertMode.ADD, mode=PETSc.ScatterMode.REVERSE)  # type: ignore
     if len(bcs) > 0:
         set_bc(b, bcs)
 
     # Assemble matrix
     A.zeroEntries()
-    meshties.assemble_matrix(A, V._cpp_object, Problem.Elasticity)
+    meshties.assemble_matrix(A, V._cpp_object, Problem.Poisson)
     assemble_matrix(A, J, bcs=bcs)  # type: ignore
     A.assemble()
 
-    # Set rigid motion nullspace
-    null_space = rigid_motions_nullspace_subdomains(V, domain_marker, np.unique(domain_marker.values),
-                                                    num_domains=2)
+    # Set piecewise constant nullspace
+    null_space = near_nullspace_subdomains(V, domain_marker, np.unique(domain_marker.values),
+                                           num_domains=2)
     A.setNearNullSpace(null_space)
 
     # Create PETSc Krylov solver and turn convergence monitoring on
@@ -231,8 +213,7 @@ if __name__ == "__main__":
     log.set_log_level(log.LogLevel.OFF)
     # Set a monitor, solve linear system, and display the solver
     # configuration
-    solver.setMonitor(lambda _, its, rnorm: print(
-        f"Iteration: {its}, rel. residual: {rnorm}"))
+    solver.setMonitor(lambda _, its, rnorm: print(f"Iteration: {its}, rel. residual: {rnorm}"))
     timing_str = "~Contact : Krylov Solver"
     with Timer(timing_str):
         solver.solve(b, uh.vector)
@@ -246,7 +227,7 @@ if __name__ == "__main__":
           f"Solver time {solver_time}", flush=True)
 
     # Reset mesh to initial state and write accumulated solution
-    with XDMFFile(mesh.comm, "results/u_meshtie.xdmf", "w") as xdmf:
+    with XDMFFile(mesh.comm, "results/poisson.xdmf", "w") as xdmf:
         xdmf.write_mesh(mesh)
         uh.name = "u"
         xdmf.write_function(uh)

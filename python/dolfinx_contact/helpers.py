@@ -207,6 +207,42 @@ def rigid_motions_nullspace(V: FunctionSpaceBase):
     return PETSc.NullSpace().create(vectors=nullspace_basis)  # type: ignore
 
 
+def near_nullspace_subdomains(V: FunctionSpaceBase, mt: MeshTags,
+                              tags: numpy.typing.NDArray[numpy.int32],
+                              num_domains=2):
+    """
+    Function to build nullspace for 2D/3D elasticity.
+
+    Parameters:
+    ===========
+    V
+        The function space
+    mt
+        Meshtag that contains tags for all objects that need to be considered
+        for defining the rigid motion nullspace
+    tags
+        The values of the meshtags for the objects
+    """
+    _x = Function(V)
+
+    # Create list of vectors for null space
+    nullspace_basis = [_x.vector.copy() for i in range(num_domains)]
+
+    with ExitStack() as stack:
+        vec_local = [stack.enter_context(x.localForm()) for x in nullspace_basis]
+        basis = [numpy.asarray(x) for x in vec_local]
+        for j, tag in enumerate(tags):
+            cells = mt.find(tag)
+            dofs = numpy.unique(numpy.hstack([V.dofmap.cell_dofs(cell) for cell in cells]))
+
+            # Build translational null space basis
+            basis[j][dofs] = 1.0
+
+        _la.orthonormalize(nullspace_basis)
+        assert _la.is_orthonormal(nullspace_basis)
+    return PETSc.NullSpace().create(vectors=nullspace_basis)  # type: ignore
+
+
 def rigid_motions_nullspace_subdomains(V: FunctionSpaceBase, mt: MeshTags,
                                        tags: numpy.typing.NDArray[numpy.int32],
                                        num_domains=2):

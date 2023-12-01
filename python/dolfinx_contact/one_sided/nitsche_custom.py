@@ -155,7 +155,7 @@ def nitsche_custom(mesh: dmesh.Mesh, mesh_data: Tuple[dmesh.MeshTags, int, int],
     offsets = np.array([0, 2], dtype=np.int32)
     surfaces = adjacencylist(data, offsets)
     contact = dolfinx_contact.cpp.Contact([facet_marker._cpp_object], surfaces, [(0, 1)],
-                                          V._cpp_object, quadrature_degree=quadrature_degree)
+                                          mesh._cpp_object, quadrature_degree=quadrature_degree)
     contact.create_distance_map(0)
 
     # Compute gap from contact boundary
@@ -169,7 +169,7 @@ def nitsche_custom(mesh: dmesh.Mesh, mesh_data: Tuple[dmesh.MeshTags, int, int],
     kernel_rhs = dolfinx_contact.cpp.generate_rigid_surface_kernel(V._cpp_object, dolfinx_contact.Kernel.Rhs, q_rule)
     # NOTE: HACK to make "one-sided" contact work with assemble_matrix/assemble_vector
     contact_assembler = dolfinx_contact.cpp.Contact([facet_marker._cpp_object], surfaces, [(0, 1)],
-                                                    V._cpp_object, quadrature_degree=quadrature_degree)
+                                                    mesh._cpp_object, quadrature_degree=quadrature_degree)
 
     def assemble_residual(x, b, cf):
         x.copy(u.vector)
@@ -179,7 +179,7 @@ def nitsche_custom(mesh: dmesh.Mesh, mesh_data: Tuple[dmesh.MeshTags, int, int],
         c = np.hstack([coeffs, u_packed, grad_u_packed])
         with b.localForm() as b_local:
             b_local.set(0.0)
-        contact_assembler.assemble_vector(b, 0, kernel_rhs, c, consts)
+        contact_assembler.assemble_vector(b, 0, kernel_rhs, c, consts, V._cpp_object)
         _fem.petsc.assemble_vector(b, L_custom)
 
     # Create Jacobian kernels
@@ -193,7 +193,7 @@ def nitsche_custom(mesh: dmesh.Mesh, mesh_data: Tuple[dmesh.MeshTags, int, int],
             u._cpp_object, quadrature_degree, integral_entities)
         c = np.hstack([coeffs, u_packed, grad_u_packed])
         a_mat.zeroEntries()
-        contact_assembler.assemble_matrix(a_mat, 0, kernel_J, c, consts)
+        contact_assembler.assemble_matrix(a_mat, 0, kernel_J, c, consts, V._cpp_object)
         _fem.petsc.assemble_matrix(a_mat, a_custom)
         a_mat.assemble()
 

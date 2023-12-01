@@ -376,6 +376,7 @@ if __name__ == "__main__":
         outnamej = f"{outname}_{j}"
         rhs_fns = []
         bcs = []
+        bc_fns = []
         Fj = F
         for k, d in enumerate(load_increment):
             tag = dirichlet_vals[k]
@@ -383,6 +384,7 @@ if __name__ == "__main__":
             if args.lifting:
                 dofs = locate_dofs_topological(V, tdim - 1, facet_marker.find(tag))
                 bcs.append(dirichletbc(g, dofs, V))
+                bc_fns.append(g)
             else:
                 rhs_fns.append(g)
                 Fj = weak_dirichlet(Fj, u, rhs_fns[k], sigma, E * gamma, theta, ds(tag))
@@ -393,7 +395,8 @@ if __name__ == "__main__":
         u, newton_its, krylov_iterations, solver_time = nitsche_unbiased(args.time_steps, ufl_form=Fj,
                                                                          u=u, rhs_fns=rhs_fns,
                                                                          markers=[domain_marker, facet_marker],
-                                                                         contact_data=(surfaces, contact), bcs=bcs,
+                                                                         contact_data=(surfaces, contact),
+                                                                         bcs=bcs, bc_fns=bc_fns,
                                                                          problem_parameters=problem_parameters,
                                                                          newton_options=newton_options,
                                                                          petsc_options=petsc_options,

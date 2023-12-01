@@ -7,7 +7,6 @@
 # to surface 1 in Pi(x) and point inwards. The normalised version (Pi(x) - x)||Pi(x)-x|| should therefore
 # be the same as the outward unit normal in the point Pi(x) with the opposite sign.
 
-import dolfinx.fem as _fem
 import numpy as np
 import pytest
 from dolfinx.graph import adjacencylist
@@ -86,15 +85,12 @@ def test_projection(q_deg, surf, dim):
     sorted_ind = np.argsort(indices)
     facet_marker = meshtags(mesh, tdim - 1, indices[sorted_ind], values[sorted_ind])
 
-    # Functions space
-    V = _fem.VectorFunctionSpace(mesh, ("Lagrange", 1))
-
     # Create contact class, gap function and normals
     data = np.array([surface_0_val, surface_1_val], dtype=np.int32)
     offsets = np.array([0, 2], dtype=np.int32)
     surfaces = adjacencylist(data, offsets)
     contact = dolfinx_contact.cpp.Contact([facet_marker._cpp_object], surfaces, [(0, 1), (1, 0)],
-                                          V._cpp_object, quadrature_degree=q_deg)
+                                          mesh._cpp_object, quadrature_degree=q_deg)
     contact.create_distance_map(surf)
     gap = contact.pack_gap(surf)
     normals = contact.pack_ny(surf)
