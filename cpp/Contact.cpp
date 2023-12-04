@@ -753,19 +753,18 @@ void dolfinx_contact::Contact::crop_invalid_points(std::size_t pair,
       }
       norm = std::sqrt(norm);
       if (norm > tol)
-      data[offsets[f] + q] = -1;
+        data[offsets[f] + q] = -1;
       else if (norm > 1e-7)
       {
         dot = std::abs(dot) / norm;
 
-        if (dot < (0.7))
+        if (dot < 0.7)
           data[offsets[f] + q] = -1;
       }
     }
   }
-  auto new_map = dolfinx::graph::AdjacencyList<std::int32_t>(data, offsets);
   _facet_maps[pair]
-      = std::make_shared<dolfinx::graph::AdjacencyList<std::int32_t>>(new_map);
+      = std::make_shared<dolfinx::graph::AdjacencyList<std::int32_t>>(data, offsets);
 }
 //------------------------------------------------------------------------------------------------
 std::pair<std::vector<PetscScalar>, int>
@@ -1501,8 +1500,7 @@ dolfinx_contact::Contact::pack_grad_u_contact(
     auto links = map->links((int)i);
     for (std::size_t q = 0; q < num_q_points; ++q)
     {
-            
-    if (links[q] < 0)
+      if (links[q] < 0)
         continue;
       // Get degrees of freedom for current cell
       auto dofs = dofmap->cell_dofs(cells[i * num_q_points + q]);

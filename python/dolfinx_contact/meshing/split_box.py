@@ -73,7 +73,7 @@ def get_surface_points(domain: list[int], points: list[list[float]],
 
 
 def retrieve_mesh_data(model: gmsh.model, name: str, gdim: int = 3) -> \
-    Tuple[npt.NDArray[np.float64], npt.NDArray[np.int64],
+    Tuple[int, npt.NDArray[np.float64], npt.NDArray[np.int64],
           npt.NDArray[np.int32], npt.NDArray[np.int64],
           npt.NDArray[np.int32]]:
     assert model is not None, "Gmsh model is None on rank responsible for mesh creation."
@@ -220,7 +220,7 @@ def create_unsplit_box_2d(H: float = 1.0, L: float = 5.0, res: float = 0.1, x0: 
         model.mesh.optimize("Netgen")
 
     cell_id, x, cells, cell_data, marked_facets, facet_values = retrieve_mesh_data(
-        model, "box", MPI.COMM_WORLD, MPI.COMM_WORLD.rank, gdim=2)
+        model, "box", gdim=2)
 
     create_dolfinx_mesh(
         filename, x[:, :2], cells, cell_data, marked_facets, facet_values, cell_id, 2)
@@ -327,7 +327,7 @@ def create_unsplit_box_3d(L: float = 5.0, H: float = 1.0, W: float = 1.0, res: f
         model.mesh.setOrder(order)
 
     cell_id, x, cells, cell_data, marked_facets, facet_values = retrieve_mesh_data(
-        model, "box", MPI.COMM_WORLD, MPI.COMM_WORLD.rank, gdim=3)
+        model, "box", gdim=3)
 
     create_dolfinx_mesh(
         fname, x[:, :3], cells, cell_data, marked_facets, facet_values, cell_id, 3)

@@ -192,14 +192,14 @@ if __name__ == "__main__":
 
     # Assemble right hand side
     b.zeroEntries()
-    b.ghostUpdate(addv=PETSc.InsertMode.INSERT,
+    b.ghostUpdate(addv=PETSc.InsertMode.INSERT,    # type: ignore
                   mode=PETSc.ScatterMode.FORWARD)  # type: ignore
     assemble_vector(b, F)
 
     # Apply boundary condition and scatter reverse
     if len(bcs) > 0:
         apply_lifting(b, [J], bcs=[bcs], scale=-1.0)
-    b.ghostUpdate(addv=PETSc.InsertMode.ADD,
+    b.ghostUpdate(addv=PETSc.InsertMode.ADD,       # type: ignore
                   mode=PETSc.ScatterMode.REVERSE)  # type: ignore
     if len(bcs) > 0:
         set_bc(b, bcs)

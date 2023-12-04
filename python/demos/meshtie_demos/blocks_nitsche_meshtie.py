@@ -136,21 +136,22 @@ class MeshTieProblem:
            x: The vector containing the latest solution
 
         """
-        x.ghostUpdate(addv=PETSc.InsertMode.INSERT,
+        x.ghostUpdate(addv=PETSc.InsertMode.INSERT,    # type: ignore
                       mode=PETSc.ScatterMode.FORWARD)  # type: ignore
 
 
 # read mesh from file
 fname = "cont-blocks_sk24_fnx"
 with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
-    cell_type, cell_degree = xdmf.read_cell_type(name="volume markers")
-    topo = xdmf.read_topology_data(name="volume markers")
+    topo_name = "volume markers"
+    cell_type, cell_degree = xdmf.read_cell_type(name=topo_name)
+    topo = xdmf.read_topology_data(name=topo_name)
     x = xdmf.read_geometry_data(name="geometry")
     domain = Mesh(element("Lagrange", cell_type.name,
                   cell_degree, shape=(x.shape[1],)))
     mesh = create_mesh(MPI.COMM_WORLD, topo, x, domain)
     tdim = mesh.topology.dim
-    domain_marker = xdmf.read_meshtags(mesh, name="volume markers")
+    domain_marker = xdmf.read_meshtags(mesh, name=topo_name)
     mesh.topology.create_connectivity(tdim - 1, tdim)
     facet_marker = xdmf.read_meshtags(mesh, name="facet markers")
 

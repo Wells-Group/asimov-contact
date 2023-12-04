@@ -357,13 +357,12 @@ dolfinx_contact::generate_poisson_kernel(
     dolfinx_contact::Kernel type,
     std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V,
     std::shared_ptr<const dolfinx_contact::QuadratureRule> quadrature_rule,
-    const std::size_t max_links, std::vector<std::size_t> cstrides)
+    const std::vector<std::size_t>& cstrides)
 {
   std::shared_ptr<const dolfinx::mesh::Mesh<double>> mesh = V->mesh();
   assert(mesh);
   const std::size_t gdim = mesh->geometry().dim(); // geometrical dimension
-  const std::size_t bs = V->dofmap()->bs();
-  if (bs != 1)
+  if (V->dofmap()->bs() != 1)
   {
     throw std::invalid_argument(
         "This kernel is expecting a variable with bs=1");
@@ -386,7 +385,7 @@ dolfinx_contact::generate_poisson_kernel(
   /// @param[in] coordinate_dofs The physical coordinates of cell. Assumed to
   /// be padded to 3D, (shape (num_nodes, 3)).
   kernel_fn<PetscScalar> poisson_rhs
-      = [kd, gdim, bs,
+      = [kd, gdim,
          ndofs_cell](std::vector<std::vector<PetscScalar>>& b,
                      std::span<const PetscScalar> c, const PetscScalar* w,
                      const double* coordinate_dofs,
@@ -513,7 +512,7 @@ dolfinx_contact::generate_poisson_kernel(
   /// @param[in] coordinate_dofs The physical coordinates of cell. Assumed
   /// to be padded to 3D, (shape (num_nodes, 3)).
   kernel_fn<PetscScalar> poisson_jac
-      = [kd, gdim, bs, ndofs_cell](
+      = [kd, gdim, ndofs_cell](
             std::vector<std::vector<PetscScalar>>& A, std::span<const double> c,
             const double* w, const double* coordinate_dofs,
             const std::size_t facet_index, const std::size_t num_links,

@@ -158,7 +158,7 @@ def unsplit_domain(threed: bool = False, runs: int = 1, order: int = 1):
 
         b = assemble_vector(F)
         apply_lifting(b, [J], bcs=[[]])
-        b.ghostUpdate(addv=PETSc.InsertMode.ADD,
+        b.ghostUpdate(addv=PETSc.InsertMode.ADD,       # type: ignore
                       mode=PETSc.ScatterMode.REVERSE)  # type: ignore
         set_bc(b, [])
 
@@ -353,10 +353,10 @@ def test_meshtie(threed: bool = False, simplex: bool = True, runs: int = 5, orde
 
         # Assemble right hand side
         b.zeroEntries()
-        b.ghostUpdate(addv=PETSc.InsertMode.INSERT,
+        b.ghostUpdate(addv=PETSc.InsertMode.INSERT,    # type: ignore
                       mode=PETSc.ScatterMode.FORWARD)  # type: ignore
         assemble_vector(b, F)
-        b.ghostUpdate(addv=PETSc.InsertMode.ADD,
+        b.ghostUpdate(addv=PETSc.InsertMode.ADD,       # type: ignore
                       mode=PETSc.ScatterMode.REVERSE)  # type: ignore
 
         # Assemble matrix

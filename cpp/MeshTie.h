@@ -45,10 +45,10 @@ public:
       {
         auto [ny, cstride1] = Contact::pack_ny(i);
         auto [gap, cstride] = Contact::pack_gap(i);
-        
+
         std::span<const std::int32_t> entities
             = Contact::active_entities(pair[0]);
-        
+
         // Retrieve cells connected to integration facets
         std::vector<std::int32_t> cells(num_facets);
         for (std::size_t e = 0; e < num_facets; ++e)
