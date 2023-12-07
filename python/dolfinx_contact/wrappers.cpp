@@ -342,7 +342,8 @@ PYBIND11_MODULE(cpp, m)
       .value("CoulombRhs", dolfinx_contact::Kernel::CoulombRhs)
       .value("CoulombJac", dolfinx_contact::Kernel::CoulombJac)
       .value("MeshTieRhs", dolfinx_contact::Kernel::MeshTieRhs)
-      .value("MeshTieJac", dolfinx_contact::Kernel::MeshTieJac);
+      .value("MeshTieJac", dolfinx_contact::Kernel::MeshTieJac)
+      .value("ThermoElasticRhs", dolfinx_contact::Kernel::ThermoElasticRhs);
 
   // Contact
   py::class_<dolfinx_contact::MeshTie,
@@ -368,15 +369,15 @@ PYBIND11_MODULE(cpp, m)
           },
           "Get packed coefficients")
       .def("generate_kernel_data",
-           &dolfinx_contact::MeshTie::generate_kernel_data)
-      .def("generate_meshtie_data",
-           &dolfinx_contact::MeshTie::generate_meshtie_data)
+           &dolfinx_contact::MeshTie::generate_kernel_data,
+           py::arg("problem_type"), py::arg("functionspace"), py::arg("coefficients"),
+           py::arg("gamma"), py::arg("theta"), py::arg("alpha") = -1)
+      .def("update_meshtie_data",
+           &dolfinx_contact::MeshTie::update_meshtie_data)
       .def("generate_meshtie_data_matrix_only",
            &dolfinx_contact::MeshTie::generate_meshtie_data_matrix_only)
       .def("generate_poisson_data_matrix_only",
                 &dolfinx_contact::MeshTie::generate_poisson_data_matrix_only)
-      .def("generate_poisson_data",
-                &dolfinx_contact::MeshTie::generate_poisson_data)
       .def("assemble_matrix",
            [](dolfinx_contact::MeshTie& self, Mat A,
               std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V,

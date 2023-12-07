@@ -5,9 +5,12 @@
 import numpy as np
 
 from dolfinx import default_scalar_type
+from dolfinx import log
+from dolfinx.cpp.nls.petsc import NewtonSolver
 from dolfinx.io import VTXWriter, XDMFFile
-from dolfinx.fem import Constant, dirichletbc, form, functionspace, Function, locate_dofs_topological
+from dolfinx.fem import Constant, dirichletbc, DirichletBC, form, Form, functionspace, Function, locate_dofs_topological
 from dolfinx.fem.petsc import assemble_matrix, assemble_vector, apply_lifting, set_bc, create_vector
+from dolfinx.la import vector, create_petsc_vector_wrap
 from dolfinx.mesh import locate_entities_boundary
 from dolfinx.graph import adjacencylist
 from dolfinx_contact.cpp import MeshTie, Problem
@@ -16,7 +19,123 @@ from dolfinx_contact.meshing import create_split_box_2D, horizontal_sine
 from dolfinx_contact.parallel_mesh_ghosting import create_contact_mesh
 from mpi4py import MPI
 from petsc4py import PETSc
-from ufl import (grad, inner, sym, tr, Identity, lhs, rhs, Measure, TrialFunction, TestFunction)
+from ufl import (derivative, grad, inner, sym, tr, Identity, lhs, rhs, Measure, TrialFunction, TestFunction)
+
+class ThermoElasticProblem:
+    __slots__ = ["_l", "_j", "_bcs", "_meshties", "_b", "_b_petsc", "_mat_a", "_u", "_T",
+                 "_lmbda", "_mu", "_gamma", "_theta", "_alpha"]
+
+    def __init__(self, a: Form, j: Form, bcs: list[DirichletBC], meshties: MeshTie, subdomains,
+                 u: Function, T: Function, lmbda: Function, mu: Function, gamma: np.float64, theta: np.float64, alpha: np.float64):
+        """
+        Create a MeshTie problem
+
+        Args:
+            l:          The form describing the residual
+            j:          The form describing the jacobian
+            bcs:        The boundary conditions
+            meshties:   The MeshTie class describing the tied surfaces
+            subdomains: The domain marker labelling the individual components
+            u:          The displacement function
+            lmbda:      The lame parameter lambda
+            mu:         The lame parameter mu
+            gamma:      The Nitsche parameter
+            theta:      The parameter selecting version of Nitsche (1 - symmetric, -1
+                        anti-symmetric, 0 - penalty-like)
+        """
+        # Initialise class from input
+        self._l = a
+        self._j = j
+        self._bcs = bcs
+        self._meshties = meshties
+        self._mat_a = self._meshties.create_matrix(self._j._cpp_object)
+        self._u = u
+        self._T = T
+        self._lmbda = lmbda
+        self._mu = mu
+        self._gamma = gamma
+        self._theta = theta
+        self._alpha = alpha
+
+        # Create PETSc rhs vector
+        self._b = vector(
+            a.function_spaces[0].dofmap.index_map, a.function_spaces[0].dofmap.index_map_bs)
+        self._b_petsc = create_petsc_vector_wrap(self._b)
+
+        # Initialise the input data for integration kernels
+        self._meshties.generate_kernel_data(Problem.ThermoElasticity, a.function_spaces[0],
+                                            {"lambda": lmbda._cpp_object,
+                                                "mu": mu._cpp_object},
+                                            gamma, theta, alpha)
+
+        # Build near null space preventing rigid body motion of individual components
+        tags = np.unique(subdomains.values)
+        ns = rigid_motions_nullspace_subdomains(
+            u.function_space, subdomains, tags, len(tags))
+        self._mat_a.setNearNullSpace(ns)
+
+    def f(self, x, _b):
+        """Function for computing the residual vector.
+
+        Args:
+           x: The vector containing the latest solution.
+           b: The residual vector.
+
+        """
+        # Avoid long log output coming from the custom kernel
+        log.set_log_level(log.LogLevel.OFF)
+
+        # Generate input data for custom kernel.
+        self._meshties.update_meshtie_data({"T": self._T._cpp_object, "u": self._u._cpp_object}, Problem.ThermoElasticity)
+
+        # Assemble residual vector
+        self._b_petsc.zeroEntries()
+        self._b_petsc.ghostUpdate(
+            addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD)
+        self._meshties.assemble_vector(
+            self._b_petsc, self._l.function_spaces[0], Problem.ThermoElasticity)  # custom kernel
+        assemble_vector(self._b_petsc, self._l)  # standard kernels
+
+        # Apply boundary condition
+        apply_lifting(self._b_petsc, [self._j], bcs=[
+                      self._bcs], x0=[x], scale=-1.0)
+        self._b_petsc.ghostUpdate(
+            addv=PETSc.InsertMode.ADD, mode=PETSc.ScatterMode.REVERSE)
+        set_bc(self._b_petsc, self._bcs, x, -1.0)
+
+        # Restore log level info for monitoring Newton solver
+        log.set_log_level(log.LogLevel.INFO)
+
+    def j(self, _x, _matrix):
+        """Function for computing the Jacobian matrix.
+
+        Args:
+           x: The vector containing the latest solution.
+           A: The matrix to assemble into.
+
+        """
+        log.set_log_level(log.LogLevel.OFF)
+        self._mat_a.zeroEntries()
+        self._meshties.assemble_matrix(
+            self._mat_a, self._j.function_spaces[0], Problem.ThermoElasticity)
+        assemble_matrix(self._mat_a, self._j, self._bcs)
+        self._mat_a.assemble()
+        log.set_log_level(log.LogLevel.INFO)
+
+    def form(self,
+             x: PETSc.Vec  # type: ignore
+             ) -> None:
+        """This function is called before the residual or Jacobian is
+        computed in the NewtonSolver. Used to update ghost values.
+
+        Args:
+           x: The vector containing the latest solution
+
+        """
+        x.ghostUpdate(addv=PETSc.InsertMode.INSERT,    # type: ignore
+                      mode=PETSc.ScatterMode.FORWARD)  # type: ignore
+
+
 
 L = 2.0
 H = 2.0
@@ -158,8 +277,6 @@ lmbda = Function(V2)
 lmbda.interpolate(lambda x: np.full((1, x.shape[1]), lambda_func(E, nu)))
 mu = Function(V2)
 mu.interpolate(lambda x: np.full((1, x.shape[1]), mu_func(E, nu)))
-meshties.generate_meshtie_data_matrix_only(V._cpp_object, lmbda._cpp_object, mu._cpp_object, E * gamma, theta)
-
 
 def eps(w):
     return sym(grad(w))
@@ -173,9 +290,8 @@ def sigma(w, T):
 
 
 # Elasticity problem: ufl
-F = inner(sigma(w, T0), epsilon(v)) * dx
-J, F = lhs(F), rhs(F)
-
+F = inner(sigma(u, T0), epsilon(v)) * dx
+J = derivative(F, u, w)
 # boundary conditions
 dirichlet_facets2 = locate_entities_boundary(mesh, tdim - 1, lambda x: np.isclose(x[1], 1))
 g = Constant(mesh, default_scalar_type((0.0, 0.0)))
@@ -186,46 +302,32 @@ bcs = [dirichletbc(g, dofs_e2, V)]
 # matrix and vector
 F = form(F, jit_options=jit_options)
 J = form(J, jit_options=jit_options)
-A = meshties.create_matrix(J._cpp_object)
-b = create_vector(F)
 
-# Set rigid motion nullspace
-null_space = rigid_motions_nullspace_subdomains(V, domain_marker, np.unique(domain_marker.values),
-                                                num_domains=2)
-A.setNearNullSpace(null_space)
+elastic_problem = ThermoElasticProblem(F, J, bcs, meshties, domain_marker, u, T0, lmbda, mu, gamma * E, theta, alpha)
 
+# Set up Newton sovler
+newton_solver = NewtonSolver(mesh.comm)
 
-# Elasticity problem: functions for updating matrix and vector
-def assemble_mat_el(A):
-    A.zeroEntries()
-    meshties.assemble_matrix(A, V._cpp_object, Problem.Elasticity)
-    assemble_matrix(A, J, bcs=bcs)
-    A.assemble()
+# Set matrix-vector computations
+newton_solver.setF(elastic_problem.f, elastic_problem._b_petsc)
+newton_solver.setJ(elastic_problem.j, elastic_problem._mat_a)
+newton_solver.set_form(elastic_problem.form)
 
+# Set Newton options
+newton_solver.rtol = 1e-7
+newton_solver.atol = 1e-7
+newton_solver.report = True
+log.set_log_level(log.LogLevel.INFO)
 
-def assemble_vec_el(b):
-    b.zeroEntries()
-    b.ghostUpdate(addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD)  # type: ignore
-    assemble_vector(b, F)
-
-    # Apply boundary condition and scatter reverse
-    apply_lifting(b, [J], bcs=[bcs], scale=1.0)
-    b.ghostUpdate(addv=PETSc.InsertMode.ADD, mode=PETSc.ScatterMode.REVERSE)  # type: ignore
-    set_bc(b, bcs)
-
-
-# Elasticity problem: create linear solver
-ksp_el = PETSc.KSP().create(mesh.comm)
-prefix_el = "Solver_elasticity_"
-ksp_el.setOptionsPrefix(prefix_el)
+# Set Krylov solver options
+ksp = newton_solver.krylov_solver
 opts = PETSc.Options()  # type: ignore
-opts.prefixPush(ksp_el.getOptionsPrefix())
-for key in petsc_options:
-    opts[key] = petsc_options[key]
+option_prefix = ksp.getOptionsPrefix()
+opts.prefixPush(option_prefix)
+for k, v in petsc_options.items():
+    opts[k] = v
 opts.prefixPop()
-ksp_el.setFromOptions()
-ksp_el.setOperators(A)
-ksp_el.setMonitor(lambda _, its, rnorm: print(f"Iteration: {its}, rel. residual: {rnorm}"))
+ksp.setFromOptions()
 
 time_steps = 40
 T0.name = 'temperature'
@@ -238,9 +340,7 @@ for i in range(time_steps):
     assemble_vec_therm(vec_therm)
     ksp_therm.solve(vec_therm, T0.vector)
     T0.x.scatter_forward()
-    assemble_mat_el(A)
-    assemble_vec_el(b)
-    ksp_el.solve(b, u.vector)
+    newton_solver.solve(u.vector)
     u.x.scatter_forward()
     vtx.write(i + 1)
 vtx.close()

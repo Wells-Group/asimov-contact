@@ -415,21 +415,9 @@ dolfinx_contact::Contact::generate_kernel(
 {
   const std::size_t max_links
       = *std::max_element(_max_links.begin(), _max_links.end());
-  switch (type)
-  {
-  case Kernel::MeshTieRhs:
-  {
-
-    return generate_meshtie_kernel(type, V, _quadrature_rule, max_links);
-  }
-  case Kernel::MeshTieJac:
-  {
-    return generate_meshtie_kernel(type, V, _quadrature_rule, max_links);
-  }
-  default:
-    return generate_contact_kernel(type, V, _quadrature_rule, max_links);
-  }
+  return generate_contact_kernel(type, V, _quadrature_rule, max_links);
 }
+
 //------------------------------------------------------------------------------------------------
 void dolfinx_contact::Contact::create_q_phys(int origin_meshtag)
 {
@@ -764,7 +752,8 @@ void dolfinx_contact::Contact::crop_invalid_points(std::size_t pair,
     }
   }
   _facet_maps[pair]
-      = std::make_shared<dolfinx::graph::AdjacencyList<std::int32_t>>(data, offsets);
+      = std::make_shared<dolfinx::graph::AdjacencyList<std::int32_t>>(data,
+                                                                      offsets);
 }
 //------------------------------------------------------------------------------------------------
 std::pair<std::vector<PetscScalar>, int>
