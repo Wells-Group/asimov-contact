@@ -452,7 +452,7 @@ def test_contact_kernels(ct, gap, quadrature_degree, theta, formulation, search)
     V_ufl = _fem.functionspace(mesh_ufl, ("DG", 1, (gdim,)))
     V_custom = _fem.FunctionSpace(mesh_custom, ("Lagrange", 1, (gdim,)))
     tdim = mesh_ufl.topology.dim
-    
+
     TOL = 1e-7
     cells_ufl_0 = locate_entities(
         mesh_ufl, tdim, lambda x: x[tdim - 1] > 0 - TOL)
@@ -646,6 +646,7 @@ def tied_dg_T(u0, v0, T0, h, n, gamma, theta, sigma, sigma_T, dS):
         theta * ufl.inner(ufl.avg(sigma(v0)) * n('-'), ufl.jump(u0)) * dS
     return 0.5 * F
 
+
 @pytest.mark.parametrize("ct", ["triangle", "quadrilateral", "tetrahedron", "hexahedron"])
 @pytest.mark.parametrize("gap", [0.5, -0.5])
 @pytest.mark.parametrize("quadrature_degree", [1, 5])
@@ -681,6 +682,7 @@ def test_meshtie_kernels(ct, gap, quadrature_degree, theta, problem):
     if problem == Problem.Poisson:
         V_ufl = _fem.functionspace(mesh_ufl, ("DG", 1))
         V_custom = _fem.FunctionSpace(mesh_custom, ("Lagrange", 1))
+
         def _u0(x):
             return np.sin(x[0]) + 1
 
@@ -692,6 +694,7 @@ def test_meshtie_kernels(ct, gap, quadrature_degree, theta, problem):
     else:
         V_ufl = _fem.functionspace(mesh_ufl, ("DG", 1, (gdim,)))
         V_custom = _fem.FunctionSpace(mesh_custom, ("Lagrange", 1, (gdim,)))
+
         def _u0(x):
             values = np.zeros((gdim, x.shape[1]))
             for i in range(tdim):
@@ -735,7 +738,7 @@ def test_meshtie_kernels(ct, gap, quadrature_degree, theta, problem):
 
     # Scaled Nitsche parameter
     h = ufl.CellDiameter(mesh_ufl)
-    alpha  = 0.5
+    alpha = 0.5
 
     # DG formulation
     if problem == Problem.Poisson:
@@ -753,11 +756,11 @@ def test_meshtie_kernels(ct, gap, quadrature_degree, theta, problem):
         T0.interpolate(lambda x: np.sin(x[tdim - 1]) + 2, cells_ufl_1)
         T1.interpolate(lambda x: np.sin(x[0]) + 1, cells[0])
         T1.interpolate(lambda x: np.sin(x[tdim - 1] + gap) + 2, cells[1])
+
         def sigma_T(w, T):
             return sigma(w) - alpha * (3 * lmbda + 2 * mu) * T * ufl.Identity(gdim)
         F0 = tied_dg_T(u0, v0, T0, h, n, gamma * E, theta, sigma, sigma_T, dS)
         J0 = tied_dg(w0, v0, h, n, gamma * E, theta, sigma, dS)
-
 
     # rhs vector
     F0 = _fem.form(F0)
@@ -771,7 +774,6 @@ def test_meshtie_kernels(ct, gap, quadrature_degree, theta, problem):
     A0.zeroEntries()
     _fem.petsc.assemble_matrix(A0, J0)
     A0.assemble()
-
 
     V0 = _fem.FunctionSpace(mesh_custom, ("DG", 0))
     kdt_custom = _fem.Function(V0)
@@ -787,7 +789,8 @@ def test_meshtie_kernels(ct, gap, quadrature_degree, theta, problem):
         coeffs = {"u": u1._cpp_object, "mu": mu_custom._cpp_object, "lambda": lmbda_custom._cpp_object}
         gamma = gamma * E
     else:
-        coeffs = {"u": u1._cpp_object, "T": T1._cpp_object, "mu": mu_custom._cpp_object, "lambda": lmbda_custom._cpp_object}
+        coeffs = {"u": u1._cpp_object, "T": T1._cpp_object,
+                  "mu": mu_custom._cpp_object, "lambda": lmbda_custom._cpp_object}
         gamma = gamma * E
 
     # Dummy form for creating vector/matrix

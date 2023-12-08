@@ -21,12 +21,14 @@ from mpi4py import MPI
 from petsc4py import PETSc
 from ufl import (derivative, grad, inner, sym, tr, Identity, lhs, rhs, Measure, TrialFunction, TestFunction)
 
+
 class ThermoElasticProblem:
     __slots__ = ["_l", "_j", "_bcs", "_meshties", "_b", "_b_petsc", "_mat_a", "_u", "_T",
                  "_lmbda", "_mu", "_gamma", "_theta", "_alpha"]
 
     def __init__(self, a: Form, j: Form, bcs: list[DirichletBC], meshties: MeshTie, subdomains,
-                 u: Function, T: Function, lmbda: Function, mu: Function, gamma: np.float64, theta: np.float64, alpha: np.float64):
+                 u: Function, T: Function, lmbda: Function, mu: Function,
+                 gamma: np.float64, theta: np.float64, alpha: np.float64, num_domains: int=2):
         """
         Create a MeshTie problem
 
@@ -71,7 +73,7 @@ class ThermoElasticProblem:
         # Build near null space preventing rigid body motion of individual components
         tags = np.unique(subdomains.values)
         ns = rigid_motions_nullspace_subdomains(
-            u.function_space, subdomains, tags, len(tags))
+            u.function_space, subdomains, tags, num_domains)
         self._mat_a.setNearNullSpace(ns)
 
     def f(self, x, _b):
@@ -86,7 +88,8 @@ class ThermoElasticProblem:
         log.set_log_level(log.LogLevel.OFF)
 
         # Generate input data for custom kernel.
-        self._meshties.update_meshtie_data({"T": self._T._cpp_object, "u": self._u._cpp_object}, Problem.ThermoElasticity)
+        self._meshties.update_meshtie_data(
+            {"T": self._T._cpp_object, "u": self._u._cpp_object}, Problem.ThermoElasticity)
 
         # Assemble residual vector
         self._b_petsc.zeroEntries()
@@ -134,7 +137,6 @@ class ThermoElasticProblem:
         """
         x.ghostUpdate(addv=PETSc.InsertMode.INSERT,    # type: ignore
                       mode=PETSc.ScatterMode.FORWARD)  # type: ignore
-
 
 
 L = 2.0
@@ -221,7 +223,7 @@ surfaces = adjacencylist(data, offsets)
 meshties = MeshTie([facet_marker._cpp_object], surfaces, contact,
                    mesh._cpp_object, quadrature_degree=3)
 meshties.generate_kernel_data(Problem.Poisson, Q._cpp_object, {
-                                  "T": T0._cpp_object, "kdt": kdt_custom._cpp_object}, gamma, theta)
+    "T": T0._cpp_object, "kdt": kdt_custom._cpp_object}, gamma, theta)
 
 # Create matrix and vector
 a_therm = form(a_therm, jit_options=jit_options)
@@ -250,7 +252,7 @@ def assemble_vec_therm(b):
 
 
 # Thermal problem: create linear solver
-ksp_therm = PETSc.KSP().create(mesh.comm)
+ksp_therm = PETSc.KSP().create(mesh.comm)  # type: ignore
 prefix_therm = "Solver_thermal_"
 ksp_therm.setOptionsPrefix(prefix_therm)
 opts = PETSc.Options()  # type: ignore
@@ -278,6 +280,7 @@ lmbda.interpolate(lambda x: np.full((1, x.shape[1]), lambda_func(E, nu)))
 mu = Function(V2)
 mu.interpolate(lambda x: np.full((1, x.shape[1]), mu_func(E, nu)))
 
+
 def eps(w):
     return sym(grad(w))
 
@@ -303,7 +306,8 @@ bcs = [dirichletbc(g, dofs_e2, V)]
 F = form(F, jit_options=jit_options)
 J = form(J, jit_options=jit_options)
 
-elastic_problem = ThermoElasticProblem(F, J, bcs, meshties, domain_marker, u, T0, lmbda, mu, gamma * E, theta, alpha)
+elastic_problem = ThermoElasticProblem(F, J, bcs, meshties, domain_marker, u, T0, lmbda, mu,
+                                       np.float64(gamma * E), np.float64(theta), np.float64(alpha))
 
 # Set up Newton sovler
 newton_solver = NewtonSolver(mesh.comm)

@@ -111,7 +111,7 @@ public:
       loguru::g_stderr_verbosity = loguru::Verbosity_OFF;
 
       // Generate input data for custom kernel
-      _meshties->update_meshtie_data(_u, dolfinx_contact::Problem::Elasticity);
+      _meshties->update_meshtie_data({{"u", _u}}, dolfinx_contact::Problem::Elasticity);
 
       // Assemble b
       std::span<T> b(_b.mutable_array());
