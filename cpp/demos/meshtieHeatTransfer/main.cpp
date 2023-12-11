@@ -38,26 +38,30 @@ public:
   /// @param[in] subdomains The domain marker labelling the individual
   /// components
   /// @param[in] u The displacement function to be solved for
+  /// @param[in] T The temperature
   /// @param[in] lmbda The lame parameter lambda
   /// @param[in] mu The lame parameter mu
   /// @param[in] gamma Nitsche parameter
   /// @param[in] theta parameter selecting version of Nitsche (1 - symmetric, -1
   /// anti-symmetric, 0 - penalty-like)
-  MeshTieProblem(
+  /// @param[in] alpha thermo-elastic coefficient
+  ThermoElasticProblem(
       std::shared_ptr<dolfinx::fem::Form<T>> L,
       std::shared_ptr<dolfinx::fem::Form<T>> J,
       std::vector<std::shared_ptr<const dolfinx::fem::DirichletBC<T>>> bcs,
       std::shared_ptr<dolfinx_contact::MeshTie> meshties,
       dolfinx::mesh::MeshTags<std::int32_t> subdomains,
       std::shared_ptr<dolfinx::fem::Function<T>> u,
+      std::shared_ptr<dolfinx::fem::Function<T>> T,
       std::shared_ptr<dolfinx::fem::Function<T>> lmbda,
-      std::shared_ptr<dolfinx::fem::Function<T>> mu, double gamma, double theta)
+      std::shared_ptr<dolfinx::fem::Function<T>> mu, 
+      double gamma, double theta, double alpha)
       : _l(L), _j(J), _bcs(bcs), _meshties(meshties),
         _b(L->function_spaces()[0]->dofmap()->index_map,
            L->function_spaces()[0]->dofmap()->index_map_bs()),
         _matA(dolfinx::la::petsc::Matrix(
             meshties->create_petsc_matrix(*J, std::string()), false)),
-        _u(u)
+        _u(u), _T(T)
   {
     // create PETSc rhs vector
     auto map = L->function_spaces()[0]->dofmap()->index_map;
@@ -71,8 +75,8 @@ public:
 
     // initialise the input data for integration kernels
     _meshties->generate_kernel_data(
-        dolfinx_contact::Problem::Elasticity, L->function_spaces()[0],
-        {{"u", u}, {"mu", mu}, {"lambda", lmbda}}, gamma, theta);
+        dolfinx_contact::Problem::ThermoElasticity, L->function_spaces()[0],
+        {{"u", u}, {"T", T}, {"mu", mu}, {"lambda", lmbda}}, gamma, theta, alpha);
 
     // build near null space preventing rigid body motion of individual
     // components)
@@ -111,14 +115,14 @@ public:
       loguru::g_stderr_verbosity = loguru::Verbosity_OFF;
 
       // Generate input data for custom kernel
-      _meshties->update_meshtie_data({{"u", _u}}, dolfinx_contact::Problem::Elasticity);
+      _meshties->update_meshtie_data({{"u", _u}, {"T", _T}}, dolfinx_contact::Problem::ThermoElasticity);
 
       // Assemble b
       std::span<T> b(_b.mutable_array());
       std::fill(b.begin(), b.end(), 0.0);
       _meshties->assemble_vector(
           b, _l->function_spaces()[0],
-          dolfinx_contact::Problem::Elasticity); // custom kernel for mesh tying
+          dolfinx_contact::Problem::ThermoElasticity); // custom kernel for mesh tying
       fem::assemble_vector<T>(b, *_l);           // standard assembly
 
       // Apply lifting
@@ -158,7 +162,7 @@ public:
       // custom assembly for mesh tying
       _meshties->assemble_matrix(la::petsc::Matrix::set_block_fn(A, ADD_VALUES),
                                  _j->function_spaces()[0],
-                                 dolfinx_contact::Problem::Elasticity);
+                                 dolfinx_contact::Problem::ThermoElasticity);
       MatAssemblyBegin(A, MAT_FLUSH_ASSEMBLY);
       MatAssemblyEnd(A, MAT_FLUSH_ASSEMBLY);
 
@@ -200,11 +204,14 @@ private:
   la::petsc::Matrix _matA;
   // displacement function
   std::shared_ptr<dolfinx::fem::Function<T>> _u;
+  // temperature function
+  std::shared_ptr<dolfinx::fem::Function<T>> _T;
 };
 
 int main(int argc, char* argv[])
 {
 
+  const std::size_t time_steps = 40;
   init_logging(argc, argv);
 
   PetscInitialize(&argc, &argv, nullptr, nullptr);
@@ -214,28 +221,90 @@ int main(int argc, char* argv[])
   std::string thread_name = "RANK " + std::to_string(mpi_rank);
   loguru::set_thread_name(thread_name.c_str());
   {
+    
+    // Read in mesh
     auto [mesh_init, domain1_init, facet1_init]
-        = dolfinx_contact::read_mesh("../meshes/cont-blocks_sk24_fnx.xdmf");
+        = dolfinx_contact::read_mesh("cont-blocks_sk24_fnx.xdmf");
 
+    // Add necessary ghosts
     const std::int32_t contact_bdry_1 = 12; // top contact interface
     const std::int32_t contact_bdry_2 = 6;  // bottom contact interface
     loguru::g_stderr_verbosity = loguru::Verbosity_OFF;
     auto [mesh_new, facet1, domain1] = dolfinx_contact::create_contact_mesh(
         *mesh_init, facet1_init, domain1_init,
         {contact_bdry_1, contact_bdry_2}, 10.0);
-
     auto mesh = std::make_shared<dolfinx::mesh::Mesh<U>>(mesh_new);
+    
+    // Define meshtie data structures
+    // point to correct surface markers
+    std::vector<std::int32_t> data = {contact_bdry_1, contact_bdry_2};
+    std::vector<std::int32_t> offsets = {0, 2};
+    auto contact_markers
+        = std::make_shared<dolfinx::graph::AdjacencyList<std::int32_t>>(
+            std::move(data), std::move(offsets));
+    // wrap facet markers
+    std::vector<std::shared_ptr<dolfinx::mesh::MeshTags<std::int32_t>>> markers
+        = {std::make_shared<dolfinx::mesh::MeshTags<std::int32_t>>(facet1)};
+    // define pairs (slave, master)
+    std::vector<std::array<int, 2>> pairs = {{0, 1}, {1, 0}};
+
+    // create meshties
+    auto meshties = std::make_shared<dolfinx_contact::MeshTie>(
+        dolfinx_contact::MeshTie(markers, contact_markers, pairs, mesh, 5));
+
+    // Nitsche parameters
+    double gamma = 10;
+    double theta = 1;
+
+
+    // DG function space used for parameters
+    auto V0 = std::make_shared<fem::FunctionSpace<U>>(fem::create_functionspace(
+        functionspace_form_linear_elasticity_J, "mu", mesh));
+    
+    // Thermal Problem
+    auto Q = std::make_shared<fem::FunctionSpace<U>>(fem::create_functionspace(
+        functionspace_form_linear_elasticity_a_therm, "r", mesh));
+
+    double kdt_val = 0.1;
+    auto kdt = std::make_shared<fem::Function<T>>(V0);
+    kdt->interpolate(
+        [kdt_val](
+            auto x) -> std::pair<std::vector<T>, std::vector<std::size_t>>
+        {
+          std::vector<T> _f;
+          for (std::size_t p = 0; p < x.extent(1); ++p)
+          {
+            _f.push_back(kdt_val);
+          }
+          return {_f, {_f.size()}};
+        });
+  
+    // temperature function
+    auto T0 = std::make_shared<fem::Function<T>>(Q);
+
+    // Define variational forms
+    auto a_therm = std::make_shared<fem::Form<T>>(
+        fem::create_form<T>(*form_thermo_elasticity_a_therm, {V, V},
+                            {{"kdt", kdt}, {"T", T0}}, {}, {}));
+    auto L_therm = std::make_shared<fem::Form<T>>(fem::create_form<T>(
+        *form_thermo_elasticity_L_therm, {V},
+        {{"kdt", kdt}, {"T", T0}}, {},{}));
+
+    // Data for meshtie integration kernels
+    meshtie->generate_kernel_data(Problem.Poisson, Q, {{"kdt", kdt}, {"T", T0}}, gamma, theta);
+
+    // Thermo-elastic problem
     // Create function spaces
     auto V = std::make_shared<fem::FunctionSpace<U>>(fem::create_functionspace(
         functionspace_form_linear_elasticity_J, "w", mesh));
-    auto V0 = std::make_shared<fem::FunctionSpace<U>>(fem::create_functionspace(
-        functionspace_form_linear_elasticity_J, "mu", mesh));
+    
+
+    
 
     // Problem parameters (material & Nitsche)
     double E = 1E4;
     double nu = 0.2;
-    double gamma = E * 10;
-    double theta = 1;
+
 
     double lmbda_val = E * nu / ((1 + nu) * (1 - 2 * nu));
     double mu_val = E / (2 * (1 + nu));
@@ -299,27 +368,11 @@ int main(int argc, char* argv[])
                 std::make_shared<const dolfinx::fem::DirichletBC<T>>(
                     std::vector<T>({0.0, 0.0, 0.0}), bdofs_2, V)};
 
-    // Define meshtie data
-    // point to correct surface markers
-    std::vector<std::int32_t> data = {contact_bdry_1, contact_bdry_2};
-    std::vector<std::int32_t> offsets = {0, 2};
-    auto contact_markers
-        = std::make_shared<dolfinx::graph::AdjacencyList<std::int32_t>>(
-            std::move(data), std::move(offsets));
-    // wrap facet markers
-    std::vector<std::shared_ptr<dolfinx::mesh::MeshTags<std::int32_t>>> markers
-        = {std::make_shared<dolfinx::mesh::MeshTags<std::int32_t>>(facet1)};
-    // define pairs (slave, master)
-    std::vector<std::array<int, 2>> pairs = {{0, 1}, {1, 0}};
-
-    // create meshties
-    auto meshties = std::make_shared<dolfinx_contact::MeshTie>(
-        dolfinx_contact::MeshTie(markers, contact_markers, pairs, mesh, 5));
-
+    
     // create "non-linear" meshtie problem (linear problem written as non-linear
     // problem)
-    auto problem = MeshTieProblem(F, J, bcs, meshties, domain1, u, lmbda, mu,
-                                  gamma, theta);
+    auto problem = ThermoElasticProblem(F, J, bcs, meshties, domain1, u, lmbda, mu,
+                                  E * gamma, theta, alpha);
 
     // loglevel INFO shows NewtonSolver output
     loguru::g_stderr_verbosity = loguru::Verbosity_INFO;

@@ -35,7 +35,7 @@ int main(int argc, char* argv[])
   loguru::set_thread_name(thread_name.c_str());
   {
     auto [mesh_init, domain1_init, facet1_init] = dolfinx_contact::read_mesh(
-        "box_3D.xdmf", "mesh", "mesh", "cell_marker", "facet_marker");
+        "../meshes/box_3D.xdmf", "mesh", "mesh", "cell_marker", "facet_marker");
 
 
     const std::int32_t contact_bdry_1 = 6; // top contact interface

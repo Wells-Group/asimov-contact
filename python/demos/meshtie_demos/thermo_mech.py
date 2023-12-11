@@ -19,7 +19,8 @@ from dolfinx_contact.meshing import create_split_box_2D, horizontal_sine
 from dolfinx_contact.parallel_mesh_ghosting import create_contact_mesh
 from mpi4py import MPI
 from petsc4py import PETSc
-from ufl import (derivative, grad, inner, sym, tr, Identity, lhs, rhs, Measure, TrialFunction, TestFunction)
+from ufl import (derivative, grad, inner, sym, tr, Identity,
+                 lhs, rhs, Measure, TrialFunction, TestFunction)
 
 
 class ThermoElasticProblem:
@@ -28,7 +29,7 @@ class ThermoElasticProblem:
 
     def __init__(self, a: Form, j: Form, bcs: list[DirichletBC], meshties: MeshTie, subdomains,
                  u: Function, T: Function, lmbda: Function, mu: Function,
-                 gamma: np.float64, theta: np.float64, alpha: np.float64, num_domains: int=2):
+                 gamma: np.float64, theta: np.float64, alpha: np.float64, num_domains: int = 2):
         """
         Create a MeshTie problem
 
@@ -206,7 +207,8 @@ therm = (q - T0) * r * dx + kdt * inner(grad(q), grad(r)) * dx
 a_therm, L_therm = lhs(therm), rhs(therm)
 T0.x.array[:] = 0
 
-dirichlet_facets = locate_entities_boundary(mesh, tdim - 1, lambda x: np.isclose(x[1], 0))
+dirichlet_facets = locate_entities_boundary(
+    mesh, tdim - 1, lambda x: np.isclose(x[1], 0))
 dofs = locate_dofs_topological(Q, tdim - 1, dirichlet_facets)
 Tbc = dirichletbc(value=default_scalar_type((1.0)), dofs=dofs, V=Q)
 
@@ -242,12 +244,14 @@ def assemble_mat_therm(A):
 
 def assemble_vec_therm(b):
     b.zeroEntries()
-    b.ghostUpdate(addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD)  # type: ignore
+    b.ghostUpdate(addv=PETSc.InsertMode.INSERT,    # type: ignore
+                  mode=PETSc.ScatterMode.FORWARD)  # type: ignore
     assemble_vector(b, L_therm)
 
     # Apply boundary condition and scatter reverse
     apply_lifting(b, [a_therm], bcs=[[Tbc]], scale=1.0)
-    b.ghostUpdate(addv=PETSc.InsertMode.ADD, mode=PETSc.ScatterMode.REVERSE)  # type: ignore
+    b.ghostUpdate(addv=PETSc.InsertMode.ADD,       # type: ignore
+                  mode=PETSc.ScatterMode.REVERSE)  # type: ignore
     set_bc(b, [Tbc])
 
 
@@ -262,7 +266,8 @@ for key in petsc_options:
 opts.prefixPop()
 ksp_therm.setFromOptions()
 ksp_therm.setOperators(mat_therm)
-ksp_therm.setMonitor(lambda _, its, rnorm: print(f"Iteration: {its}, rel. residual: {rnorm}"))
+ksp_therm.setMonitor(lambda _, its, rnorm: print(
+    f"Iteration: {its}, rel. residual: {rnorm}"))
 
 
 # Elasticity problem
@@ -296,7 +301,8 @@ def sigma(w, T):
 F = inner(sigma(u, T0), epsilon(v)) * dx
 J = derivative(F, u, w)
 # boundary conditions
-dirichlet_facets2 = locate_entities_boundary(mesh, tdim - 1, lambda x: np.isclose(x[1], 1))
+dirichlet_facets2 = locate_entities_boundary(
+    mesh, tdim - 1, lambda x: np.isclose(x[1], 1))
 g = Constant(mesh, default_scalar_type((0.0, 0.0)))
 dofs_e = locate_dofs_topological(V, tdim - 1, dirichlet_facets)
 dofs_e2 = locate_dofs_topological(V, tdim - 1, dirichlet_facets2)
