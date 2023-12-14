@@ -116,7 +116,7 @@ public:
       loguru::g_stderr_verbosity = loguru::Verbosity_OFF;
 
       // Generate input data for custom kernel
-      _meshties->update_meshtie_data(
+      _meshties->update_kernel_data(
           {{"u", _u}, {"T", _T}}, dolfinx_contact::Problem::ThermoElasticity);
 
       // Assemble b

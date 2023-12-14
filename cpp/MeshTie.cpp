@@ -37,7 +37,7 @@ void dolfinx_contact::MeshTie::generate_kernel_data(
         problem_type, V, coeff_list[1], coeff_list[0], gamma, theta);
     if (auto it = coefficients.find("u"); it != coefficients.end())
     {
-      update_meshtie_data(coefficients, problem_type);
+      update_kernel_data(coefficients, problem_type);
     }
     break;
   case Poisson:
@@ -50,7 +50,7 @@ void dolfinx_contact::MeshTie::generate_kernel_data(
     dolfinx_contact::MeshTie::generate_poisson_data_matrix_only(
         V, coeff_list[0], gamma, theta);
     if (auto it = coefficients.find("T"); it != coefficients.end())
-      update_meshtie_data(coefficients, problem_type);
+      update_kernel_data(coefficients, problem_type);
     break;
   case ThermoElasticity:
     if (auto it = coefficients.find("mu"); it != coefficients.end())
@@ -68,7 +68,7 @@ void dolfinx_contact::MeshTie::generate_kernel_data(
     dolfinx_contact::MeshTie::generate_meshtie_data_matrix_only(
         problem_type, V, coeff_list[1], coeff_list[0], gamma, theta, alpha);
     if (auto it = coefficients.find("u"); it != coefficients.end())
-      update_meshtie_data(coefficients, problem_type);
+      update_kernel_data(coefficients, problem_type);
     break;
   default:
     throw std::invalid_argument("Problem type not implemented");
@@ -180,7 +180,7 @@ void dolfinx_contact::MeshTie::generate_meshtie_data_matrix_only(
     _coeffs[i] = coeffs;
   }
 }
-void dolfinx_contact::MeshTie::update_meshtie_data(
+void dolfinx_contact::MeshTie::update_kernel_data(
     const std::map<std::string,
                    std::shared_ptr<dolfinx::fem::Function<double>>>&
         coefficients,

@@ -104,7 +104,7 @@ public:
   /// kernel, u is used for displacements, T for temperature/scalar valued
   /// function
   /// @param[in] problem_type - the type of equation, e.g. elasticity
-  void update_meshtie_data(
+  void update_kernel_data(
       const std::map<std::string,
                      std::shared_ptr<dolfinx::fem::Function<double>>>&
           coefficients,

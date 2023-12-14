@@ -89,7 +89,7 @@ class ThermoElasticProblem:
         log.set_log_level(log.LogLevel.OFF)
 
         # Generate input data for custom kernel.
-        self._meshties.update_meshtie_data(
+        self._meshties.update_kernel_data(
             {"T": self._T._cpp_object, "u": self._u._cpp_object}, Problem.ThermoElasticity)
 
         # Assemble residual vector
