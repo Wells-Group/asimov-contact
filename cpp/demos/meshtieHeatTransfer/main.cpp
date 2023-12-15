@@ -53,6 +53,7 @@ public:
       std::vector<std::shared_ptr<const dolfinx::fem::DirichletBC<T>>> bcs,
       std::shared_ptr<dolfinx_contact::MeshTie> meshties,
       dolfinx::mesh::MeshTags<std::int32_t> subdomains,
+      std::vector<std::int32_t> subdomain_tags,
       std::shared_ptr<dolfinx::fem::Function<T>> u,
       std::shared_ptr<dolfinx::fem::Function<T>> T0,
       std::shared_ptr<dolfinx::fem::Function<T>> lmbda,
