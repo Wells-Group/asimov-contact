@@ -226,7 +226,6 @@ void dolfinx_contact::MeshTie::update_kernel_data(
     }
     gdim = coeff_list[0]->function_space()->mesh()->geometry().dim();
     ndofs_cell = coeff_list[0]->function_space()->dofmap()->cell_dofs(0).size();
-    bs = coeff_list[0]->function_space()->dofmap()->bs();
     offset0 = 2 + (1 + gdim) * (num_pts * max_links * ndofs_cell);
     offset1 = offset0 + (1 + gdim) * num_pts;
     update_function_data(coeff_list[0], _coeffs_poisson, offset0, offset1,
