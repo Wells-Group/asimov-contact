@@ -10,7 +10,8 @@ import ufl
 from dolfinx import default_scalar_type, log
 from dolfinx.common import Timer, TimingType, list_timings, timing
 from dolfinx.fem import (Constant, Function, FunctionSpace,
-                         assemble_scalar, form)
+                         assemble_scalar, form, locate_dofs_topological,
+                         dirichletbc)
 from dolfinx.fem.petsc import (apply_lifting, assemble_matrix, assemble_vector,
                                create_vector, set_bc)
 from dolfinx.graph import adjacencylist
@@ -101,7 +102,7 @@ def unsplit_domain(threed: bool = False, runs: int = 1, order: int = 1):
             facet_marker = xdmf.read_meshtags(mesh, name="contact_facets")
 
         # Functions space and FEM functions
-        V = FunctionSpace(mesh, ("DG", order))
+        V = FunctionSpace(mesh, ("Lagrange", order))
         ndofs.append(V.dofmap.index_map_bs * V.dofmap.index_map.size_global)
         f = Function(V)
         c = 0.01  # amplitude of solution
@@ -109,47 +110,16 @@ def unsplit_domain(threed: bool = False, runs: int = 1, order: int = 1):
         v = ufl.TestFunction(V)
         u = ufl.TrialFunction(V)
 
-        # # Boundary conditions
-        # facets = facet_marker.find(2)
-        # bc = dirichletbc(default_scalar_type(0),
-        #                  locate_dofs_topological(V, entity_dim=tdim - 1, entities=facets), V=V)
+        # Boundary conditions
+        facets = facet_marker.find(2)
+        bc = dirichletbc(default_scalar_type(0),
+                         locate_dofs_topological(V, entity_dim=tdim - 1, entities=facets), V=V)
 
         dx = ufl.Measure("dx", domain=mesh)
-        ds = ufl.Measure("ds", domain=mesh, subdomain_data=facet_marker)
-        dS = ufl.Measure("dS", domain=mesh)
+        J = form(ufl.inner(ufl.grad(u), ufl.grad(v)) * dx)
+        F = form(ufl.inner(f, v) * dx)
 
-        J = ufl.inner(ufl.grad(u), ufl.grad(v)) * dx
-        F = ufl.inner(f, v) * dx
-
-        gamma = 50 * order**2
-        theta = 1
-        # 0 dirichlet
-        g = Constant(mesh, default_scalar_type((0.0)))
-        V0 = FunctionSpace(mesh, ("DG", 0))
-        ncells = mesh.topology.index_map(tdim).size_local
-        h = Function(V0)
-        h_vals = cell_diameter(
-            mesh._cpp_object, mesh.topology.dim, np.arange(0, ncells, dtype=np.int32))
-        h.x.array[:ncells] = h_vals[:]
-        n = ufl.FacetNormal(mesh)
-        for tag in [2]:
-            J += - ufl.inner(ufl.grad(u), n) * v * ds(tag)\
-                - theta * ufl.inner(ufl.grad(v), n) * u * \
-                ds(tag) + gamma / h * u * v * ds(tag)
-            F += - theta * ufl.inner(ufl.grad(v), n) * g * \
-                ds(tag) + gamma / h * g * v * ds(tag)
-
-        J += 0.5 * gamma / h('+') * ufl.inner(ufl.jump(u), ufl.jump(v)) * dS + \
-            0.5 * gamma / h('-') * ufl.inner(ufl.jump(u), ufl.jump(v)) * dS -\
-            0.5 * ufl.inner(ufl.avg(ufl.grad(u)), n('+')) * ufl.jump(v) * dS +\
-            0.5 * ufl.inner(ufl.avg(ufl.grad(u)), n('-')) * ufl.jump(v) * dS -\
-            0.5 * theta * ufl.inner(ufl.avg(ufl.grad(v)), n('+')) * ufl.jump(u) * dS +\
-            0.5 * theta * ufl.inner(ufl.avg(ufl.grad(v)),
-                                    n('-')) * ufl.jump(u) * dS
-
-        J = form(J)
-        F = form(F)
-        A = assemble_matrix(J, bcs=[])
+        A = assemble_matrix(J, bcs=[bc])
         A.assemble()
 
         # # Set null-space
@@ -157,10 +127,10 @@ def unsplit_domain(threed: bool = False, runs: int = 1, order: int = 1):
         # A.setNearNullSpace(null_space)
 
         b = assemble_vector(F)
-        apply_lifting(b, [J], bcs=[[]])
+        apply_lifting(b, [J], bcs=[[bc]])
         b.ghostUpdate(addv=PETSc.InsertMode.ADD,       # type: ignore
                       mode=PETSc.ScatterMode.REVERSE)  # type: ignore
-        set_bc(b, [])
+        set_bc(b, [bc])
 
         # Set solver options
         opts = PETSc.Options()  # type: ignore
@@ -218,7 +188,10 @@ def unsplit_domain(threed: bool = False, runs: int = 1, order: int = 1):
         xdmf.write_meshtags(process_marker, mesh.geometry)
     print("L2-error: ", errors)
     h = 1. / (np.array(ndofs)**(1 / tdim))
-    rates = [(np.log(errors[i - 1]) - np.log(errors[i])) / (np.log(h[i - 1]) - np.log(h[i])) for i in range(1, runs)]
+    h_diff = [(np.log(h[i - 1]) - np.log(h[i])) for i in range(1, runs)]
+    err_diff = [(np.log(errors[i - 1]) - np.log(errors[i]))
+                for i in range(1, runs)]
+    rates = [err_diff[i] / h_diff[i] for i in range(runs - 1)]
     print("Rates: ", rates)
     print("Number of dofs: ", ndofs)
     print("Linear solver time: ", times)
@@ -422,7 +395,8 @@ def test_meshtie(threed: bool = False, simplex: bool = True, runs: int = 5, orde
     print("L2 errors; ", errors)
     h = 1. / (np.array(dofs)**(1 / tdim))
     h_diff = [(np.log(h[i - 1]) - np.log(h[i])) for i in range(1, runs)]
-    err_diff = [(np.log(errors[i - 1]) - np.log(errors[i])) for i in range(1, runs)]
+    err_diff = [(np.log(errors[i - 1]) - np.log(errors[i]))
+                for i in range(1, runs)]
     rates = [err_diff[i] / h_diff[i] for i in range(runs - 1)]
     print("Rates: ", rates)
     print("Solver time: ", times)
