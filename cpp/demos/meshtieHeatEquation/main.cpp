@@ -4,7 +4,7 @@
 //
 // SPDX-License-Identifier:    MIT
 
-// meshtie demo
+// meshtie demo for the heat equation with implicit Euler
 // ====================================================
 
 #include "heat_equation.h"
@@ -37,32 +37,29 @@ int main(int argc, char* argv[])
     auto [mesh_init, domain1_init, facet1_init]
         = dolfinx_contact::read_mesh("../meshes/cont-blocks_sk24_fnx.xdmf");
 
-
-    const std::int32_t contact_bdry_1 = 6; // top contact interface
-    const std::int32_t contact_bdry_2 = 12;  // bottom contact interface
+    const std::int32_t contact_bdry_1 = 6;  // top contact interface
+    const std::int32_t contact_bdry_2 = 12; // bottom contact interface
     loguru::g_stderr_verbosity = loguru::Verbosity_OFF;
     auto [mesh_new, facet1, domain1] = dolfinx_contact::create_contact_mesh(
-        *mesh_init, facet1_init, domain1_init,
-        {contact_bdry_1, contact_bdry_2}, 10.0);
+        *mesh_init, facet1_init, domain1_init, {contact_bdry_1, contact_bdry_2},
+        10.0);
     auto mesh = std::make_shared<dolfinx::mesh::Mesh<U>>(mesh_new);
 
     // Create function spaces
     auto Q = std::make_shared<fem::FunctionSpace<U>>(fem::create_functionspace(
-        functionspace_form_heat_equation_a_therm, "w", mesh));
+        functionspace_form_heat_equation_a_therm, "q", mesh));
     auto V0 = std::make_shared<fem::FunctionSpace<U>>(fem::create_functionspace(
         functionspace_form_heat_equation_a_therm, "kdt", mesh));
 
-
+    // Nitsche parameters
     double gamma = 10;
     double theta = 1;
 
+    // Create DG0 function for time-step/heat coefficient
     double kdt_val = 0.1;
-
-    // Create DG0 function for lame parameter lambda
     auto kdt = std::make_shared<fem::Function<T>>(V0);
     kdt->interpolate(
-        [kdt_val](
-            auto x) -> std::pair<std::vector<T>, std::vector<std::size_t>>
+        [kdt_val](auto x) -> std::pair<std::vector<T>, std::vector<std::size_t>>
         {
           std::vector<T> _f;
           for (std::size_t p = 0; p < x.extent(1); ++p)
@@ -72,7 +69,9 @@ int main(int argc, char* argv[])
           return {_f, {_f.size()}};
         });
 
+    // Temperature function
     auto T0 = std::make_shared<fem::Function<T>>(Q);
+
     // Define variational forms
     auto a_therm = std::make_shared<fem::Form<T>>(
         fem::create_form<T>(*form_heat_equation_a_therm, {Q, Q},
@@ -85,8 +84,8 @@ int main(int argc, char* argv[])
     auto facets = facet1.find(dirichlet_bdy);
     auto bdofs = dolfinx::fem::locate_dofs_topological(
         *Q->mesh()->topology_mutable(), *Q->dofmap(), 2, facets);
-    auto bc = std::make_shared<const dolfinx::fem::DirichletBC<T>>(
-        1.0, bdofs, Q);
+    auto bc
+        = std::make_shared<const dolfinx::fem::DirichletBC<T>>(1.0, bdofs, Q);
 
     // Create meshties
     std::vector<std::int32_t> data = {contact_bdry_1, contact_bdry_2};
@@ -106,9 +105,9 @@ int main(int argc, char* argv[])
     // Create matrix and vector
     auto A_therm = dolfinx::la::petsc::Matrix(
         meshties.create_petsc_matrix(*a_therm, std::string()), false);
-    dolfinx::la::Vector<T> b_therm(L_therm->function_spaces()[0]->dofmap()->index_map,
-                             L_therm->function_spaces()[0]->dofmap()->index_map_bs());
-
+    dolfinx::la::Vector<T> b_therm(
+        L_therm->function_spaces()[0]->dofmap()->index_map,
+        L_therm->function_spaces()[0]->dofmap()->index_map_bs());
 
     // Set up linear solver with parameters
     dolfinx::la::petsc::KrylovSolver ksp_therm(MPI_COMM_WORLD);
@@ -130,51 +129,56 @@ int main(int argc, char* argv[])
     ksp_therm.set_from_options();
     ksp_therm.set_operator(A_therm.mat());
 
-    // displacement function
+    // petsc vectors for temperature and rhs
     dolfinx::la::petsc::Vector _T(
         dolfinx::la::petsc::create_vector_wrap(*T0->x()), false);
-    dolfinx::la::petsc::Vector _b_therm(dolfinx::la::petsc::create_vector_wrap(b_therm),
-                                  false);
+    dolfinx::la::petsc::Vector _b_therm(
+        dolfinx::la::petsc::create_vector_wrap(b_therm), false);
 
-        dolfinx::io::VTXWriter<U> outfile(mesh->comm(), "results.bp", {T0},
-                                      "BP4");
+    // set up output file
+    dolfinx::io::VTXWriter<U> outfile(mesh->comm(), "results.bp", {T0}, "BP4");
     outfile.write(0.0);
+
+    // time stepping loop
     std::size_t time_steps = 40;
-    for (std::size_t k = 0; k<time_steps; ++k)
-{    // Assemble vector
-    b_therm.set(0.0);
-    meshties.assemble_vector(b_therm.mutable_array(), Q,
-                             dolfinx_contact::Problem::Poisson);
-    dolfinx::fem::assemble_vector(b_therm.mutable_array(), *L_therm);
-    dolfinx::fem::apply_lifting<T, U>(b_therm.mutable_array(), {a_therm}, {{bc}}, {},
-                                      double(1.0));
-    b_therm.scatter_rev(std::plus<T>());
-    dolfinx::fem::set_bc<T, U>(b_therm.mutable_array(), {bc});
+    for (std::size_t k = 0; k < time_steps; ++k)
+    { 
+        
+      // Assemble vector
+      b_therm.set(0.0);
+      meshties.assemble_vector(b_therm.mutable_array(), Q,
+                               dolfinx_contact::Problem::Poisson);
+      dolfinx::fem::assemble_vector(b_therm.mutable_array(), *L_therm);
+      dolfinx::fem::apply_lifting<T, U>(b_therm.mutable_array(), {a_therm},
+                                        {{bc}}, {}, double(1.0));
+      b_therm.scatter_rev(std::plus<T>());
+      dolfinx::fem::set_bc<T, U>(b_therm.mutable_array(), {bc});
 
-    // Assemble matrix
-    MatZeroEntries(A_therm.mat());
-    meshties.assemble_matrix(
-        la::petsc::Matrix::set_block_fn(A_therm.mat(), ADD_VALUES),
-        a_therm->function_spaces()[0], dolfinx_contact::Problem::Poisson);
-    MatAssemblyBegin(A_therm.mat(), MAT_FLUSH_ASSEMBLY);
-    MatAssemblyEnd(A_therm.mat(), MAT_FLUSH_ASSEMBLY);
-    dolfinx::fem::assemble_matrix(
-        dolfinx::la::petsc::Matrix::set_block_fn(A_therm.mat(), ADD_VALUES), *a_therm,
-        {bc});
-    MatAssemblyBegin(A_therm.mat(), MAT_FLUSH_ASSEMBLY);
-    MatAssemblyEnd(A_therm.mat(), MAT_FLUSH_ASSEMBLY);
+      // Assemble matrix
+      MatZeroEntries(A_therm.mat());
+      meshties.assemble_matrix(
+          la::petsc::Matrix::set_block_fn(A_therm.mat(), ADD_VALUES),
+          a_therm->function_spaces()[0], dolfinx_contact::Problem::Poisson);
+      MatAssemblyBegin(A_therm.mat(), MAT_FLUSH_ASSEMBLY);
+      MatAssemblyEnd(A_therm.mat(), MAT_FLUSH_ASSEMBLY);
+      dolfinx::fem::assemble_matrix(
+          dolfinx::la::petsc::Matrix::set_block_fn(A_therm.mat(), ADD_VALUES),
+          *a_therm, {bc});
+      MatAssemblyBegin(A_therm.mat(), MAT_FLUSH_ASSEMBLY);
+      MatAssemblyEnd(A_therm.mat(), MAT_FLUSH_ASSEMBLY);
 
-    dolfinx::fem::set_diagonal<T>(
-        dolfinx::la::petsc::Matrix::set_fn(A_therm.mat(), INSERT_VALUES), *Q, {bc});
-    MatAssemblyBegin(A_therm.mat(), MAT_FINAL_ASSEMBLY);
-    MatAssemblyEnd(A_therm.mat(), MAT_FINAL_ASSEMBLY);
+      dolfinx::fem::set_diagonal<T>(
+          dolfinx::la::petsc::Matrix::set_fn(A_therm.mat(), INSERT_VALUES), *Q,
+          {bc});
+      MatAssemblyBegin(A_therm.mat(), MAT_FINAL_ASSEMBLY);
+      MatAssemblyEnd(A_therm.mat(), MAT_FINAL_ASSEMBLY);
 
-    // solve linear system
-    ksp_therm.solve(_T.vec(), _b_therm.vec());
+      // solve linear system
+      ksp_therm.solve(_T.vec(), _b_therm.vec());
 
-    // Update ghost values before output
-    T0->x()->scatter_fwd();
-    outfile.write(double(k + 1));
+      // Update ghost values before output
+      T0->x()->scatter_fwd();
+      outfile.write(double(k + 1));
     }
     outfile.close();
   }

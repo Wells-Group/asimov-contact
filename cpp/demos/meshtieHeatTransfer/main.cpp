@@ -4,8 +4,8 @@
 //
 // SPDX-License-Identifier:    MIT
 
-// meshtie demo written as a nonlinear problem using
-// the NewtonSolver provided by dolfinx
+// demo showing the meshtie capability for
+// thermo-elasticity
 // ====================================================
 
 #include "thermo_elasticity.h"
@@ -25,7 +25,8 @@ using T = PetscScalar;
 using U = typename dolfinx::scalar_value_type_t<T>;
 
 //------------------------------------------------------------------------------
-/// Problem class to define a mesh tying problem as a non-linear problem
+/// Problem class to define the elastic part of the system as a non-linear
+/// problem
 //------------------------------------------------------------------------------
 class ThermoElasticProblem
 {
@@ -37,6 +38,7 @@ public:
   /// @param[in] meshties The MeshTie class describing the tied surfaces
   /// @param[in] subdomains The domain marker labelling the individual
   /// components
+  /// @param[in] subdomain_tags The tags of the individual components
   /// @param[in] u The displacement function to be solved for
   /// @param[in] T The temperature
   /// @param[in] lmbda The lame parameter lambda
@@ -81,9 +83,8 @@ public:
 
     // build near null space preventing rigid body motion of individual
     // components)
-    std::vector<std::int32_t> tags = {1, 2};
     MatNullSpace ns = dolfinx_contact::build_nullspace_multibody(
-        *L->function_spaces()[0], subdomains, tags);
+        *L->function_spaces()[0], subdomains, subdomain_tags);
     MatSetNearNullSpace(_matA.mat(), ns);
     MatNullSpaceDestroy(&ns);
   }
@@ -116,8 +117,8 @@ public:
       loguru::g_stderr_verbosity = loguru::Verbosity_OFF;
 
       // Generate input data for custom kernel
-      _meshties->update_kernel_data(
-          {{"u", _u}, {"T", _T}}, dolfinx_contact::Problem::ThermoElasticity);
+      _meshties->update_kernel_data({{"u", _u}, {"T", _T}},
+                                    dolfinx_contact::Problem::ThermoElasticity);
 
       // Assemble b
       std::span<T> b(_b.mutable_array());
@@ -307,17 +308,17 @@ int main(int argc, char* argv[])
         1.0, bdofs_therm, Q);
 
     // Data for meshtie integration kernels
-    meshties->generate_kernel_data(dolfinx_contact::Problem::Poisson, Q, {{"kdt", kdt}, {"T", T0}},
-                                  gamma, theta);
+    meshties->generate_kernel_data(dolfinx_contact::Problem::Poisson, Q,
+                                   {{"kdt", kdt}, {"T", T0}}, gamma, theta);
 
     // Create matrix and vector
     auto A_therm = dolfinx::la::petsc::Matrix(
         meshties->create_petsc_matrix(*a_therm, std::string()), false);
-    dolfinx::la::Vector<T> b_therm(L_therm->function_spaces()[0]->dofmap()->index_map,
-                             L_therm->function_spaces()[0]->dofmap()->index_map_bs());
+    dolfinx::la::Vector<T> b_therm(
+        L_therm->function_spaces()[0]->dofmap()->index_map,
+        L_therm->function_spaces()[0]->dofmap()->index_map_bs());
 
-
-        // Create linear solver for thermal problem
+    // Create linear solver for thermal problem
     dolfinx::la::petsc::KrylovSolver ksp_therm(MPI_COMM_WORLD);
     dolfinx::la::petsc::options::set("ksp_type", "cg");
     dolfinx::la::petsc::options::set("pc_type", "gamg");
@@ -336,11 +337,11 @@ int main(int argc, char* argv[])
 
     ksp_therm.set_from_options();
     ksp_therm.set_operator(A_therm.mat());
-        // petsc wrap for temperature and rhs
+    // petsc wrap for temperature and rhs
     dolfinx::la::petsc::Vector _T(
         dolfinx::la::petsc::create_vector_wrap(*T0->x()), false);
-    dolfinx::la::petsc::Vector _b_therm(dolfinx::la::petsc::create_vector_wrap(b_therm),
-                                  false);
+    dolfinx::la::petsc::Vector _b_therm(
+        dolfinx::la::petsc::create_vector_wrap(b_therm), false);
 
     // Thermo-elastic problem
     // Create function space
@@ -384,12 +385,13 @@ int main(int argc, char* argv[])
     auto u = std::make_shared<fem::Function<T>>(V);
     auto alpha_c = std::make_shared<fem::Constant<T>>(alpha);
     // Define variational forms
-    auto J = std::make_shared<fem::Form<T>>(
-        fem::create_form<T>(*form_thermo_elasticity_J, {V, V},
-                            {{"mu", mu}, {"lmbda", lmbda}}, {{"alpha", alpha_c}}, {}));
+    auto J = std::make_shared<fem::Form<T>>(fem::create_form<T>(
+        *form_thermo_elasticity_J, {V, V}, {{"mu", mu}, {"lmbda", lmbda}},
+        {{"alpha", alpha_c}}, {}));
     auto F = std::make_shared<fem::Form<T>>(fem::create_form<T>(
         *form_thermo_elasticity_F, {V},
-        {{"u", u}, {"T0", T0}, {"mu", mu}, {"lmbda", lmbda}}, {{"alpha", alpha_c}}, {}));
+        {{"u", u}, {"T0", T0}, {"mu", mu}, {"lmbda", lmbda}},
+        {{"alpha", alpha_c}}, {}));
 
     // Define boundary conditions
     // bottom fixed, top displaced in y-diretion by -0.2
@@ -398,12 +400,13 @@ int main(int argc, char* argv[])
     auto bdofs_2 = dolfinx::fem::locate_dofs_topological(
         *V->mesh()->topology_mutable(), *V->dofmap(), 2, facets_2);
     auto bcs = std::make_shared<const dolfinx::fem::DirichletBC<T>>(
-                    std::vector<T>({0.0, 0.0, 0.0}), bdofs_2, V);
+        std::vector<T>({0.0, 0.0, 0.0}), bdofs_2, V);
 
     // create "non-linear" meshtie problem (linear problem written as non-linear
     // problem)
-    auto problem = ThermoElasticProblem(F, J, {bcs}, meshties, domain1, u, T0,
-                                        lmbda, mu, E * gamma, theta, alpha);
+    auto problem
+        = ThermoElasticProblem(F, J, {bcs}, meshties, domain1, {1, 2}, u, T0,
+                               lmbda, mu, E * gamma, theta, alpha);
     // petsc vector corresponding to displacement function
     dolfinx::la::petsc::Vector _u(
         dolfinx::la::petsc::create_vector_wrap(*u->x()), false);
@@ -445,52 +448,56 @@ int main(int argc, char* argv[])
     dolfinx::la::petsc::options::set(options_prefix + "ksp_monitor");
     ksp.set_from_options();
 
+    // Create output file
     u->name = "displacement";
     T0->name = "temperature";
     dolfinx::io::VTXWriter<U> outfile(mesh->comm(), "results.bp", {u, T0},
                                       "BP4");
     outfile.write(0.0);
-    std::cout<<"entering time loop\n";
+
+    // time step loop
     std::size_t time_steps = 40;
     for (std::size_t k = 0; k < time_steps; ++k)
-    { 
-    //  Assemble linear thermal problem
+    {
+      //  Assemble linear thermal problem
 
-    // Assemble vector
-    b_therm.set(0.0);
-    meshties->assemble_vector(b_therm.mutable_array(), Q,
-                             dolfinx_contact::Problem::Poisson);
-    dolfinx::fem::assemble_vector(b_therm.mutable_array(), *L_therm);
-    dolfinx::fem::apply_lifting<T, U>(b_therm.mutable_array(), {a_therm}, {{bcs_therm}}, {},
-                                      double(1.0));
-    b_therm.scatter_rev(std::plus<T>());
-    dolfinx::fem::set_bc<T, U>(b_therm.mutable_array(), {bcs_therm});
+      // Assemble vector
+      b_therm.set(0.0);
+      meshties->assemble_vector(b_therm.mutable_array(), Q,
+                                dolfinx_contact::Problem::Poisson);
+      dolfinx::fem::assemble_vector(b_therm.mutable_array(), *L_therm);
+      dolfinx::fem::apply_lifting<T, U>(b_therm.mutable_array(), {a_therm},
+                                        {{bcs_therm}}, {}, double(1.0));
+      b_therm.scatter_rev(std::plus<T>());
+      dolfinx::fem::set_bc<T, U>(b_therm.mutable_array(), {bcs_therm});
 
-    // Assemble matrix
-    MatZeroEntries(A_therm.mat());
-    meshties->assemble_matrix(
-        la::petsc::Matrix::set_block_fn(A_therm.mat(), ADD_VALUES),
-        a_therm->function_spaces()[0], dolfinx_contact::Problem::Poisson);
-    MatAssemblyBegin(A_therm.mat(), MAT_FLUSH_ASSEMBLY);
-    MatAssemblyEnd(A_therm.mat(), MAT_FLUSH_ASSEMBLY);
-    dolfinx::fem::assemble_matrix(
-        dolfinx::la::petsc::Matrix::set_block_fn(A_therm.mat(), ADD_VALUES), *a_therm,
-        {bcs_therm});
-    MatAssemblyBegin(A_therm.mat(), MAT_FLUSH_ASSEMBLY);
-    MatAssemblyEnd(A_therm.mat(), MAT_FLUSH_ASSEMBLY);
+      // Assemble matrix
+      MatZeroEntries(A_therm.mat());
+      meshties->assemble_matrix(
+          la::petsc::Matrix::set_block_fn(A_therm.mat(), ADD_VALUES),
+          a_therm->function_spaces()[0], dolfinx_contact::Problem::Poisson);
+      MatAssemblyBegin(A_therm.mat(), MAT_FLUSH_ASSEMBLY);
+      MatAssemblyEnd(A_therm.mat(), MAT_FLUSH_ASSEMBLY);
+      dolfinx::fem::assemble_matrix(
+          dolfinx::la::petsc::Matrix::set_block_fn(A_therm.mat(), ADD_VALUES),
+          *a_therm, {bcs_therm});
+      MatAssemblyBegin(A_therm.mat(), MAT_FLUSH_ASSEMBLY);
+      MatAssemblyEnd(A_therm.mat(), MAT_FLUSH_ASSEMBLY);
 
-    dolfinx::fem::set_diagonal<T>(
-        dolfinx::la::petsc::Matrix::set_fn(A_therm.mat(), INSERT_VALUES), *Q, {bcs_therm});
-    MatAssemblyBegin(A_therm.mat(), MAT_FINAL_ASSEMBLY);
-    MatAssemblyEnd(A_therm.mat(), MAT_FINAL_ASSEMBLY);
+      dolfinx::fem::set_diagonal<T>(
+          dolfinx::la::petsc::Matrix::set_fn(A_therm.mat(), INSERT_VALUES), *Q,
+          {bcs_therm});
+      MatAssemblyBegin(A_therm.mat(), MAT_FINAL_ASSEMBLY);
+      MatAssemblyEnd(A_therm.mat(), MAT_FINAL_ASSEMBLY);
 
-    // solve linear system
-    ksp_therm.solve(_T.vec(), _b_therm.vec());
-    // Update ghost values before output
-    T0->x()->scatter_fwd();
+      // solve linear system
+      ksp_therm.solve(_T.vec(), _b_therm.vec());
+      // Update ghost values before output
+      T0->x()->scatter_fwd();
+
       // solve non-linear problem
-       newton_solver.solve(_u.vec());
-      outfile.write(k+1);
+      newton_solver.solve(_u.vec());
+      outfile.write(k + 1);
     }
 
     // outfile.close();

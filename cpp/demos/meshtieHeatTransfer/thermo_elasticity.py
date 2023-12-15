@@ -7,7 +7,7 @@
 # ====================================================
 
 from basix.ufl import element
-from ufl import (Constant, Coefficient, derivative, ds, dx, FunctionSpace, grad, Identity,
+from ufl import (Constant, Coefficient, derivative, dx, FunctionSpace, grad, Identity,
                  inner, rhs, lhs, Mesh, sym, TestFunction, tr, TrialFunction)
 
 # Mesh
@@ -32,7 +32,7 @@ T0 = Coefficient(Q)
 therm = (q - T0) * r * dx + kdt * inner(grad(q), grad(r)) * dx
 a_therm, L_therm = lhs(therm), rhs(therm)
 
-# Thermo-elastic problem
+# Elastic problem
 
 # Functionspace, functions, coefficients
 e_disp = element("Lagrange", "tetrahedron", 1, shape=(3,))
@@ -41,11 +41,13 @@ V = FunctionSpace(mesh, e_disp)
 v = TestFunction(V)
 w = TrialFunction(V)
 
+# Material parameters
 lmbda = Coefficient(V0)
 mu = Coefficient(V0)
 u = Coefficient(V)
 
 
+# Stress tensor definition
 def epsilon(z):
     return sym(grad(z))
 
