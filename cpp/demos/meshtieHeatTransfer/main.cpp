@@ -461,7 +461,7 @@ int main(int argc, char* argv[])
     outfile.write(0.0);
 
     // time step loop
-    std::size_t time_steps = 40;
+    std::size_t time_steps = 80;
     for (std::size_t k = 0; k < time_steps; ++k)
     {
       //  Assemble linear thermal problem
