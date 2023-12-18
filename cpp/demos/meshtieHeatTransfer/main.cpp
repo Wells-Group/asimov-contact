@@ -354,7 +354,7 @@ int main(int argc, char* argv[])
     double nu = 0.2;
     double lmbda_val = E * nu / ((1 + nu) * (1 - 2 * nu));
     double mu_val = E / (2 * (1 + nu));
-    double alpha = 0.1;
+    double alpha = 0.3;
     // Create DG0 function for lame parameter lambda
     auto lmbda = std::make_shared<fem::Function<T>>(V0);
     lmbda->interpolate(
@@ -400,14 +400,18 @@ int main(int argc, char* argv[])
         *V->mesh()->topology_mutable(), *V->dofmap(), 2, facets_1);
     auto bdofs_2 = dolfinx::fem::locate_dofs_topological(
         *V->mesh()->topology_mutable(), *V->dofmap(), 2, facets_2);
-    auto bcs = std::make_shared<const dolfinx::fem::DirichletBC<T>>(
-        std::vector<T>({0.0, 0.0, 0.0}), bdofs_2, V);
+    // bc_fun will be changed further down in each time step
+    auto bc_fun = std::make_shared<dolfinx::fem::Constant<T>>(
+        std::vector<T>({0.0, 0.0, 0.0}));
+    auto bcs = {std::make_shared<const dolfinx::fem::DirichletBC<T>>(
+                    bc_fun, bdofs_1, V),
+                std::make_shared<const dolfinx::fem::DirichletBC<T>>(
+                    std::vector<T>({0.0, 0.0, 0.0}), bdofs_2, V)};
 
     // create "non-linear" meshtie problem (linear problem written as non-linear
     // problem)
-    auto problem
-        = ThermoElasticProblem(F, J, {bcs}, meshties, domain1, {1, 2}, u, T0,
-                               lmbda, mu, E * gamma, theta, alpha);
+    auto problem = ThermoElasticProblem(F, J, bcs, meshties, domain1, {1, 2}, u,
+                                        T0, lmbda, mu, E * gamma, theta, alpha);
     // petsc vector corresponding to displacement function
     dolfinx::la::petsc::Vector _u(
         dolfinx::la::petsc::create_vector_wrap(*u->x()), false);
@@ -496,6 +500,7 @@ int main(int argc, char* argv[])
       // Update ghost values before output
       T0->x()->scatter_fwd();
 
+      bc_fun->value[1] = -0.5 * (k + 1) / time_steps;
       // solve non-linear problem
       newton_solver.solve(_u.vec());
       outfile.write(k + 1);
