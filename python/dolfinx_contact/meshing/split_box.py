@@ -219,11 +219,20 @@ def create_unsplit_box_2d(H: float = 1.0, L: float = 5.0, res: float = 0.1, x0: 
         model.mesh.setOrder(order)
         model.mesh.optimize("Netgen")
 
-    cell_id, x, cells, cell_data, marked_facets, facet_values = retrieve_mesh_data(
-        model, "box", gdim=2)
+        cell_id, x, cells, cell_data, marked_facets, facet_values = retrieve_mesh_data(
+            model, "box", gdim=2)
+        cell_id, num_nodes = MPI.COMM_WORLD.bcast(
+            [cell_id, cells.shape[1]], root=0)
+    else:
+        cell_id, num_nodes = MPI.COMM_WORLD.bcast([None, None], root=0)
+        cells, x = np.empty([0, num_nodes], dtype=np.int64), np.empty([0, 3])
+        cell_data = np.empty((0,), dtype=np.int32)
+        marked_facets, facet_values = np.empty(
+            (0, 3), dtype=np.int64), np.empty((0,), dtype=np.int32)
 
+    ufl_domain = ufl_mesh(cell_id, 2)
     create_dolfinx_mesh(
-        filename, x[:, :2], cells, cell_data, marked_facets, facet_values, cell_id, 2)
+        filename, x[:, :2], cells, cell_data, marked_facets, facet_values, ufl_domain, 2)
 
 
 def create_unsplit_box_3d(L: float = 5.0, H: float = 1.0, W: float = 1.0, res: float = 0.1, fname: str = "box_3D",
@@ -326,11 +335,20 @@ def create_unsplit_box_3d(L: float = 5.0, H: float = 1.0, W: float = 1.0, res: f
         model.mesh.generate(3)
         model.mesh.setOrder(order)
 
-    cell_id, x, cells, cell_data, marked_facets, facet_values = retrieve_mesh_data(
-        model, "box", gdim=3)
+        cell_id, x, cells, cell_data, marked_facets, facet_values = retrieve_mesh_data(
+            model, "box", gdim=3)
+        cell_id, num_nodes = MPI.COMM_WORLD.bcast(
+            [cell_id, cells.shape[1]], root=0)
+    else:
+        cell_id, num_nodes = MPI.COMM_WORLD.bcast([None, None], root=0)
+        cells, x = np.empty([0, num_nodes], dtype=np.int64), np.empty([0, 3])
+        cell_data = np.empty((0,), dtype=np.int32)
+        marked_facets, facet_values = np.empty(
+            (0, 3), dtype=np.int64), np.empty((0,), dtype=np.int32)
 
+    ufl_domain = ufl_mesh(cell_id, 3)
     create_dolfinx_mesh(
-        fname, x[:, :3], cells, cell_data, marked_facets, facet_values, cell_id, 3)
+        fname, x[:, :3], cells, cell_data, marked_facets, facet_values, ufl_domain, 3)
 
 
 def create_tet_mesh(domain: list[int], points: list[list[float]], line_pts: list[list[float]],
@@ -435,7 +453,7 @@ def create_split_box_2D(filename: str, res: float = 0.8, L: float = 5.0, H: floa
         create_surface_mesh(domain_1, points, line_pts,
                             model, tags, order=order)
 
-        ufl_domain, x, cells, cell_data, marked_facets, facet_values = retrieve_mesh_data(
+        cell_id, x, cells, cell_data, marked_facets, facet_values = retrieve_mesh_data(
             model, "first", gdim=2)
 
         model.add("second")

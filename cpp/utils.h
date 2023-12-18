@@ -47,6 +47,7 @@ enum class Kernel
   Jac,
   MeshTieRhs,
   MeshTieJac,
+  ThermoElasticRhs,
   TrescaRhs,
   TrescaJac,
   CoulombRhs,

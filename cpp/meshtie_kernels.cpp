@@ -10,7 +10,7 @@ dolfinx_contact::generate_meshtie_kernel(
     dolfinx_contact::Kernel type,
     std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V,
     std::shared_ptr<const dolfinx_contact::QuadratureRule> quadrature_rule,
-    const std::size_t max_links)
+    const std::vector<std::size_t>& cstrides)
 {
   std::shared_ptr<const dolfinx::mesh::Mesh<double>> mesh = V->mesh();
   assert(mesh);
@@ -18,24 +18,7 @@ dolfinx_contact::generate_meshtie_kernel(
   const std::size_t bs = V->dofmap()->bs();
   // NOTE: Assuming same number of quadrature points on each cell
   dolfinx_contact::error::check_cell_type(mesh->topology()->cell_types()[0]);
-  const std::vector<std::size_t>& qp_offsets = quadrature_rule->offset();
-  const std::size_t num_q_points = qp_offsets[1] - qp_offsets[0];
   const std::size_t ndofs_cell = V->dofmap()->element_dof_layout().num_dofs();
-
-  // Coefficient offsets
-  // Expecting coefficients in following order:
-  // mu, lmbda, h,test_fn, grad(test_fn), u, grad(u), u_opposite,
-  // grad(u_opposite)
-  std::vector<std::size_t> cstrides
-      = {1,
-         1,
-         1,
-         num_q_points * ndofs_cell * bs * max_links,
-         num_q_points * ndofs_cell * bs * max_links,
-         num_q_points * gdim,
-         num_q_points * gdim * gdim,
-         num_q_points * bs,
-         num_q_points * gdim * bs};
 
   auto kd = dolfinx_contact::KernelData(V, quadrature_rule, cstrides);
   /// @brief Assemble kernel for RHS gluing two objects with Nitsche
@@ -179,6 +162,109 @@ dolfinx_contact::generate_meshtie_kernel(
     }
   };
 
+/// @brief Assemble kernel for RHS gluing two objects with Nitsche
+  ///
+  /// Assemble of the residual of the unbiased contact problem into vector
+  /// `b`.
+  /// @param[in,out] b The vector to assemble the residual into
+  /// @param[in] c The coefficients used in kernel. Assumed to be
+  /// ordered as mu, lmbda, h, gap, normals, test_fn, u, u_opposite.
+  /// @param[in] w The constants used in kernel. Assumed to be ordered as
+  /// `gamma`, `theta`.
+  /// @param[in] coordinate_dofs The physical coordinates of cell. Assumed to
+  /// be padded to 3D, (shape (num_nodes, 3)).
+  kernel_fn<PetscScalar> meshtie_thermo_elastic
+      = [kd, gdim, bs,
+         ndofs_cell](std::vector<std::vector<PetscScalar>>& b,
+                     std::span<const PetscScalar> c, const PetscScalar* w,
+                     const double* coordinate_dofs,
+                     const std::size_t facet_index, const std::size_t num_links,
+                     std::span<const std::int32_t> q_indices)
+  {
+    // Retrieve some data from kd
+    auto tdim = std::size_t(kd.tdim());
+
+    // NOTE: DOLFINx has 3D input coordinate dofs
+    cmdspan2_t coord(coordinate_dofs, kd.num_coordinate_dofs(), 3);
+
+    // Create data structures for jacobians
+    // We allocate more memory than required, but its better for the compiler
+    std::array<double, 9> Jb;
+    mdspan2_t J(Jb.data(), gdim, tdim);
+    std::array<double, 9> Kb;
+    mdspan2_t K(Kb.data(), tdim, gdim);
+    std::array<double, 6> J_totb;
+    mdspan2_t J_tot(J_totb.data(), gdim, tdim - 1);
+    double detJ = 0;
+    std::array<double, 18> detJ_scratch;
+
+    // Normal vector on physical facet at a single quadrature point
+    std::array<double, 3> n_phys;
+
+    // Pre-compute jacobians and normals for affine meshes
+    if (kd.affine())
+    {
+      detJ = kd.compute_first_facet_jacobian(facet_index, J, K, J_tot,
+                                             detJ_scratch, coord);
+
+      dolfinx_contact::physical_facet_normal(
+          std::span(n_phys.data(), gdim), K,
+          stdex::submdspan(kd.facet_normals(), facet_index,
+                           MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent));
+    }
+
+    // Extract constants used inside quadrature loop
+    double mu = c[0];
+    double lmbda = c[1];
+    double alpha = w[2]* (3 * lmbda + 2 * mu);
+
+    // Extract reference to the tabulated basis function
+    cmdspan2_t phi = kd.phi();
+
+    // Extract reference to quadrature weights for the local facet
+    std::span<const double> weights = kd.weights(facet_index);
+
+    // Loop over quadrature points
+    std::array<std::size_t, 2> q_offset
+        = {kd.qp_offsets(facet_index), kd.qp_offsets(facet_index + 1)};
+    const std::size_t num_points = q_offset.back() - q_offset.front();
+    for (auto q : q_indices)
+    {
+      const std::size_t q_pos = q_offset.front() + q;
+
+      // Update Jacobian and physical normal
+      detJ = kd.update_jacobian(q, facet_index, detJ, J, K, J_tot, detJ_scratch,
+                                coord);
+      kd.update_normal(std::span(n_phys.data(), gdim), K, facet_index);
+
+      const double w0 = 0.5 * weights[q] * detJ;
+
+      double avg_T = 0.5 * (c[kd.offsets(9) + q] + c[kd.offsets(10) +q]);
+      // Fill contributions of facet with itself
+
+      for (std::size_t i = 0; i < ndofs_cell; i++)
+      {
+        for (std::size_t n = 0; n < bs; n++)
+        {
+          // inner(-avg(sig(u)n) + gamma[[u]], v)
+          b[0][n + i * bs]
+              += alpha * avg_T * n_phys[n]  * phi(q_pos, i) * w0;
+
+          // entries corresponding to v on the other surface
+          for (std::size_t k = 0; k < num_links; k++)
+          {
+            std::size_t index = kd.offsets(3) + k * num_points * ndofs_cell * bs
+                                + i * num_points * bs + q * bs + n;
+
+            // -inner(-avg(sig(u)n) + gamma[[u]], v_opposite)
+            b[k + 1][n + i * bs]
+                -=  alpha * avg_T * n_phys[n] * c[index] * w0;
+
+          }
+        }
+      }
+    }
+  };
   /// @brief Assemble kernel for Jacobian (LHS) for gluing two problems with
   /// Nitsche
   ///
@@ -347,6 +433,8 @@ dolfinx_contact::generate_meshtie_kernel(
     return meshtie_rhs;
   case dolfinx_contact::Kernel::MeshTieJac:
     return meshtie_jac;
+  case dolfinx_contact::Kernel::ThermoElasticRhs:
+    return meshtie_thermo_elastic;
   default:
     throw std::invalid_argument("Unrecognized kernel");
   }

@@ -89,8 +89,7 @@ class MeshTieProblem:
         log.set_log_level(log.LogLevel.OFF)
 
         # Generate input data for custom kernel.
-        self._meshties.generate_meshtie_data(
-            self._u._cpp_object, self._lmbda._cpp_object, self._mu._cpp_object, gamma, theta)
+        self._meshties.update_kernel_data({"u": self._u._cpp_object}, Problem.Elasticity)
 
         # Assemble residual vector
         self._b_petsc.zeroEntries()

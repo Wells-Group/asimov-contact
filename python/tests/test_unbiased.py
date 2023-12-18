@@ -28,23 +28,14 @@ from dolfinx.mesh import (CellType, locate_entities_boundary, locate_entities, c
 from mpi4py import MPI
 
 import dolfinx_contact
-import dolfinx_contact.cpp
+from dolfinx_contact.cpp import (Contact, ContactMode, MeshTie, Problem, Kernel,
+                                 pack_coefficient_quadrature, pack_gradient_quadrature)
 from dolfinx_contact.helpers import (R_minus, dR_minus, R_plus, dR_plus, epsilon,
                                      lame_parameters, sigma_func, tangential_proj,
                                      ball_projection, d_ball_projection,
                                      d_alpha_ball_projection)
 
-kt = dolfinx_contact.cpp.Kernel
-
-
-def tied_dg(u0, v0, h, n, gamma, theta, sigma, dS):
-    F = gamma / h('+') * ufl.inner(ufl.jump(u0), ufl.jump(v0)) * dS + \
-        gamma / h('-') * ufl.inner(ufl.jump(u0), ufl.jump(v0)) * dS -\
-        ufl.inner(ufl.avg(sigma(u0)) * n('+'), ufl.jump(v0)) * dS +\
-        ufl.inner(ufl.avg(sigma(u0)) * n('-'), ufl.jump(v0)) * dS -\
-        theta * ufl.inner(ufl.avg(sigma(v0)) * n('+'), ufl.jump(u0)) * dS +\
-        theta * ufl.inner(ufl.avg(sigma(v0)) * n('-'), ufl.jump(u0)) * dS
-    return 0.5 * F
+kt = Kernel
 
 
 def DG_rhs_plus(u0, v0, h, n, gamma, theta, sigma, gap, dS):
@@ -232,7 +223,7 @@ def compute_dof_permutations_all(V_dg, V_cg, gap):
     return indices_dg
 
 
-def create_functionspaces(ct, gap, vector=True):
+def create_meshes(ct, gap):
     ''' This is a helper function to create the two element function spaces
         both for custom assembly and the DG formulation for
         quads, triangles, hexes and tetrahedra'''
@@ -275,22 +266,13 @@ def create_functionspaces(ct, gap, vector=True):
         raise ValueError(f"Unsupported mesh type {ct}")
     gdim = x_ufl.shape[1]
     coord_el = element("Lagrange", cell_type.name, 1, shape=(gdim,), gdim=gdim)
-    if vector:
-        el_shape = (gdim,)
-    else:
-        el_shape = ()
     domain = ufl.Mesh(coord_el)
     mesh_ufl = create_mesh(MPI.COMM_WORLD, cells_ufl, x_ufl, domain)
-    el_ufl = element("DG", cell_type.name, 1, shape=el_shape, gdim=gdim)
-    V_ufl = _fem.FunctionSpace(mesh_ufl, el_ufl)
-    el_custom = element("Lagrange", cell_type.name,
-                        1, shape=el_shape, gdim=gdim)
     domain_custom = ufl.Mesh(coord_el)
     mesh_custom = create_mesh(
         MPI.COMM_WORLD, cells_custom, x_custom, domain_custom)
-    V_custom = _fem.FunctionSpace(mesh_custom, el_custom)
 
-    return V_ufl, V_custom
+    return mesh_ufl, mesh_custom
 
 
 def locate_contact_facets_custom(V, gap):
@@ -352,9 +334,9 @@ def create_contact_data(V, u, quadrature_degree, lmbda, mu, facets_cg, search, t
     offsets = np.array([0, 2], dtype=np.int32)
     surfaces = adjacencylist(data, offsets)
     # create contact class
-    contact = dolfinx_contact.cpp.Contact([facet_marker._cpp_object], surfaces, [(0, 1), (1, 0)],
-                                          mesh._cpp_object, quadrature_degree=quadrature_degree,
-                                          search_method=search)
+    contact = Contact([facet_marker._cpp_object], surfaces, [(0, 1), (1, 0)],
+                      mesh._cpp_object, quadrature_degree=quadrature_degree,
+                      search_method=search)
     contact.create_distance_map(0)
     contact.create_distance_map(1)
 
@@ -377,17 +359,17 @@ def create_contact_data(V, u, quadrature_degree, lmbda, mu, facets_cg, search, t
     entities_1 = entities_1[:num_local_1]
 
     # pack coeffs mu, lambda
-    material_0 = np.hstack([dolfinx_contact.cpp.pack_coefficient_quadrature(
+    material_0 = np.hstack([pack_coefficient_quadrature(
         mu2._cpp_object, 0, entities_0),
-        dolfinx_contact.cpp.pack_coefficient_quadrature(
+        pack_coefficient_quadrature(
         lmbda2._cpp_object, 0, entities_0)])
-    material_1 = np.hstack([dolfinx_contact.cpp.pack_coefficient_quadrature(
+    material_1 = np.hstack([pack_coefficient_quadrature(
         mu2._cpp_object, 0, entities_1),
-        dolfinx_contact.cpp.pack_coefficient_quadrature(
+        pack_coefficient_quadrature(
         lmbda2._cpp_object, 0, entities_1)])
-    friction_0 = dolfinx_contact.cpp.pack_coefficient_quadrature(
+    friction_0 = pack_coefficient_quadrature(
         fric_coeff._cpp_object, 0, entities_0)
-    friction_1 = dolfinx_contact.cpp.pack_coefficient_quadrature(
+    friction_1 = pack_coefficient_quadrature(
         fric_coeff._cpp_object, 0, entities_1)
 
     # Pack cell diameter on each surface
@@ -396,9 +378,9 @@ def create_contact_data(V, u, quadrature_degree, lmbda, mu, facets_cg, search, t
     h_int = _fem.Function(V2)
     expr = _fem.Expression(h, V2.element.interpolation_points())
     h_int.interpolate(expr, surface_cells)
-    h_0 = dolfinx_contact.cpp.pack_coefficient_quadrature(
+    h_0 = pack_coefficient_quadrature(
         h_int._cpp_object, 0, entities_0)
-    h_1 = dolfinx_contact.cpp.pack_coefficient_quadrature(
+    h_1 = pack_coefficient_quadrature(
         h_int._cpp_object, 0, entities_1)
 
     # Pack gap
@@ -411,13 +393,13 @@ def create_contact_data(V, u, quadrature_degree, lmbda, mu, facets_cg, search, t
     # pack u
     u_opp_0 = contact.pack_u_contact(0, u._cpp_object)
     u_opp_1 = contact.pack_u_contact(1, u._cpp_object)
-    u_0 = dolfinx_contact.cpp.pack_coefficient_quadrature(
+    u_0 = pack_coefficient_quadrature(
         u._cpp_object, quadrature_degree, entities_0)
-    u_1 = dolfinx_contact.cpp.pack_coefficient_quadrature(
+    u_1 = pack_coefficient_quadrature(
         u._cpp_object, quadrature_degree, entities_1)
-    grad_u_0 = dolfinx_contact.cpp.pack_gradient_quadrature(
+    grad_u_0 = pack_gradient_quadrature(
         u._cpp_object, quadrature_degree, entities_0)
-    grad_u_1 = dolfinx_contact.cpp.pack_gradient_quadrature(
+    grad_u_1 = pack_gradient_quadrature(
         u._cpp_object, quadrature_degree, entities_1)
     if tied:
         grad_test_fn_0 = contact.pack_grad_test_functions(0, V._cpp_object)
@@ -447,13 +429,10 @@ def create_contact_data(V, u, quadrature_degree, lmbda, mu, facets_cg, search, t
 @pytest.mark.parametrize("gap", [0.5, -0.5])
 @pytest.mark.parametrize("quadrature_degree", [1, 5])
 @pytest.mark.parametrize("theta", [1, 0, -1])
-@pytest.mark.parametrize("formulation", ["meshtie", "frictionless", "tresca", "coulomb"])
-@pytest.mark.parametrize("search", [dolfinx_contact.cpp.ContactMode.ClosestPoint,
-                                    dolfinx_contact.cpp.ContactMode.Raytracing])
+@pytest.mark.parametrize("formulation", ["frictionless", "tresca", "coulomb"])
+@pytest.mark.parametrize("search", [ContactMode.ClosestPoint,
+                                    ContactMode.Raytracing])
 def test_contact_kernels(ct, gap, quadrature_degree, theta, formulation, search):
-
-    if formulation == "meshtie" and search == dolfinx_contact.cpp.ContactMode.Raytracing:
-        pytest.xfail("Raytracing and MeshTie not supported")
 
     # Compute lame parameters
     plane_strain = False
@@ -468,11 +447,12 @@ def test_contact_kernels(ct, gap, quadrature_degree, theta, formulation, search)
     gamma = 10
 
     # create meshes and function spaces
-    V_ufl, V_custom = create_functionspaces(ct, gap)
-    mesh_ufl = V_ufl.mesh
-    mesh_custom = V_custom.mesh
-    tdim = mesh_ufl.topology.dim
+    mesh_ufl, mesh_custom = create_meshes(ct, gap)
     gdim = mesh_ufl.geometry.dim
+    V_ufl = _fem.functionspace(mesh_ufl, ("DG", 1, (gdim,)))
+    V_custom = _fem.FunctionSpace(mesh_custom, ("Lagrange", 1, (gdim,)))
+    tdim = mesh_ufl.topology.dim
+
     TOL = 1e-7
     cells_ufl_0 = locate_entities(
         mesh_ufl, tdim, lambda x: x[tdim - 1] > 0 - TOL)
@@ -514,13 +494,7 @@ def test_contact_kernels(ct, gap, quadrature_degree, theta, formulation, search)
     gamma_scaled = gamma * E
 
     # DG formulation
-
-    if formulation == "meshtie":
-        F0 = tied_dg(u0, v0, h, n, gamma_scaled, theta, sigma, dS)
-        J0 = tied_dg(w0, v0, h, n, gamma_scaled, theta, sigma, dS)
-        kernel_type_rhs = kt.MeshTieRhs
-        kernel_type_jac = kt.MeshTieJac
-    elif formulation == "frictionless":
+    if formulation == "frictionless":
         # Contact terms formulated using ufl consistent with https://doi.org/10.1007/s00211-018-0950-x
         F0 = DG_rhs_plus(u0, v0, h, n, gamma_scaled, theta, sigma, gap, dS)
         J0 = DG_jac_plus(u0, v0, w0, h, n, gamma_scaled, theta, sigma, gap, dS)
@@ -653,19 +627,51 @@ def poisson_dg(u0, v0, h, n, kdt, gamma, theta, dS):
     return 0.5 * kdt * F
 
 
+def tied_dg(u0, v0, h, n, gamma, theta, sigma, dS):
+    F = gamma / h('+') * ufl.inner(ufl.jump(u0), ufl.jump(v0)) * dS + \
+        gamma / h('-') * ufl.inner(ufl.jump(u0), ufl.jump(v0)) * dS -\
+        ufl.inner(ufl.avg(sigma(u0)) * n('+'), ufl.jump(v0)) * dS +\
+        ufl.inner(ufl.avg(sigma(u0)) * n('-'), ufl.jump(v0)) * dS -\
+        theta * ufl.inner(ufl.avg(sigma(v0)) * n('+'), ufl.jump(u0)) * dS +\
+        theta * ufl.inner(ufl.avg(sigma(v0)) * n('-'), ufl.jump(u0)) * dS
+    return 0.5 * F
+
+
+def tied_dg_T(u0, v0, T0, h, n, gamma, theta, sigma, sigma_T, dS):
+    F = gamma / h('+') * ufl.inner(ufl.jump(u0), ufl.jump(v0)) * dS + \
+        gamma / h('-') * ufl.inner(ufl.jump(u0), ufl.jump(v0)) * dS -\
+        ufl.inner(ufl.avg(sigma_T(u0, T0)) * n('+'), ufl.jump(v0)) * dS +\
+        ufl.inner(ufl.avg(sigma_T(u0, T0)) * n('-'), ufl.jump(v0)) * dS -\
+        theta * ufl.inner(ufl.avg(sigma(v0)) * n('+'), ufl.jump(u0)) * dS +\
+        theta * ufl.inner(ufl.avg(sigma(v0)) * n('-'), ufl.jump(u0)) * dS
+    return 0.5 * F
+
+
 @pytest.mark.parametrize("ct", ["triangle", "quadrilateral", "tetrahedron", "hexahedron"])
 @pytest.mark.parametrize("gap", [0.5, -0.5])
 @pytest.mark.parametrize("quadrature_degree", [1, 5])
 @pytest.mark.parametrize("theta", [1, 0, -1])
-def test_poisson_kernels(ct, gap, quadrature_degree, theta):
+@pytest.mark.parametrize("problem", [Problem.Poisson, Problem.Elasticity, Problem.ThermoElasticity])
+def test_meshtie_kernels(ct, gap, quadrature_degree, theta, problem):
+
+    # Problem parameters
+    kdt = 5
+    plane_strain = False
+    E = 1e3
+    nu = 0.1
+    mu_func, lambda_func = lame_parameters(plane_strain)
+    mu = mu_func(E, nu)
+    lmbda = lambda_func(E, nu)
+    sigma = sigma_func(mu, lmbda)
 
     # Nitche parameter
     gamma = 10
 
     # create meshes and function spaces
-    V_ufl, V_custom = create_functionspaces(ct, gap, vector=False)
-    mesh_ufl = V_ufl.mesh
-    mesh_custom = V_custom.mesh
+
+    # create meshes and function spaces
+    mesh_ufl, mesh_custom = create_meshes(ct, gap)
+    gdim = mesh_ufl.geometry.dim
     tdim = mesh_ufl.topology.dim
     TOL = 1e-7
     cells_ufl_0 = locate_entities(
@@ -673,33 +679,88 @@ def test_poisson_kernels(ct, gap, quadrature_degree, theta):
     cells_ufl_1 = locate_entities(
         mesh_ufl, tdim, lambda x: x[tdim - 1] < 0 + TOL)
 
-    def _u0(x):
-        return np.sin(x[0]) + 1
+    if problem == Problem.Poisson:
+        V_ufl = _fem.functionspace(mesh_ufl, ("DG", 1))
+        V_custom = _fem.FunctionSpace(mesh_custom, ("Lagrange", 1))
 
-    def _u1(x):
-        return np.sin(x[tdim - 1]) + 2
+        def _u0(x):
+            return np.sin(x[0]) + 1
 
-    def _u2(x):
-        return np.sin(x[tdim - 1] + gap) + 2
+        def _u1(x):
+            return np.sin(x[tdim - 1]) + 2
 
+        def _u2(x):
+            return np.sin(x[tdim - 1] + gap) + 2
+    else:
+        V_ufl = _fem.functionspace(mesh_ufl, ("DG", 1, (gdim,)))
+        V_custom = _fem.FunctionSpace(mesh_custom, ("Lagrange", 1, (gdim,)))
+
+        def _u0(x):
+            values = np.zeros((gdim, x.shape[1]))
+            for i in range(tdim):
+                values[i] = np.sin(x[i]) + 1
+            return values
+
+        def _u1(x):
+            values = np.zeros((gdim, x.shape[1]))
+            for i in range(tdim):
+                values[i] = np.sin(x[i]) + 2
+            return values
+
+        def _u2(x):
+            values = np.zeros((gdim, x.shape[1]))
+            for i in range(tdim):
+                values[i] = np.sin(x[i] + gap) + 2 if i == tdim - \
+                    1 else np.sin(x[i]) + 2
+            return values
     # DG ufl 'contact'
     u0 = _fem.Function(V_ufl)
     u0.interpolate(_u0, cells_ufl_0)
     u0.interpolate(_u1, cells_ufl_1)
     v0 = ufl.TestFunction(V_ufl)
     w0 = ufl.TrialFunction(V_ufl)
+    T0, Q_ufl, Q_custom = None, None, None
     metadata = {"quadrature_degree": quadrature_degree}
     dS = ufl.Measure("dS", domain=mesh_ufl, metadata=metadata)
+
+    # Custom assembly
+    cells, facets_cg = locate_contact_facets_custom(V_custom, gap)
+    # Fem functions
+    u1 = _fem.Function(V_custom)
+    v1 = ufl.TestFunction(V_custom)
+    w1 = ufl.TrialFunction(V_custom)
+
+    u1.interpolate(_u0, cells[0])
+    u1.interpolate(_u2, cells[1])
+    u1.x.scatter_forward()
 
     n = ufl.FacetNormal(mesh_ufl)
 
     # Scaled Nitsche parameter
     h = ufl.CellDiameter(mesh_ufl)
+    alpha = 0.5
 
     # DG formulation
-    kdt = 5
-    F0 = poisson_dg(u0, v0, h, n, kdt, gamma, theta, dS)
-    J0 = poisson_dg(w0, v0, h, n, kdt, gamma, theta, dS)
+    if problem == Problem.Poisson:
+        F0 = poisson_dg(u0, v0, h, n, kdt, gamma, theta, dS)
+        J0 = poisson_dg(w0, v0, h, n, kdt, gamma, theta, dS)
+    elif problem == Problem.Elasticity:
+        F0 = tied_dg(u0, v0, h, n, gamma * E, theta, sigma, dS)
+        J0 = tied_dg(w0, v0, h, n, gamma * E, theta, sigma, dS)
+    elif problem == Problem.ThermoElasticity:
+        Q_ufl = _fem.functionspace(mesh_ufl, ("DG", 1))
+        Q_custom = _fem.functionspace(mesh_custom, ("Lagrange", 1))
+        T0 = _fem.Function(Q_ufl)
+        T1 = _fem.Function(Q_custom)
+        T0.interpolate(lambda x: np.sin(x[0]) + 1, cells_ufl_0)
+        T0.interpolate(lambda x: np.sin(x[tdim - 1]) + 2, cells_ufl_1)
+        T1.interpolate(lambda x: np.sin(x[0]) + 1, cells[0])
+        T1.interpolate(lambda x: np.sin(x[tdim - 1] + gap) + 2, cells[1])
+
+        def sigma_T(w, T):
+            return sigma(w) - alpha * (3 * lmbda + 2 * mu) * T * ufl.Identity(gdim)
+        F0 = tied_dg_T(u0, v0, T0, h, n, gamma * E, theta, sigma, sigma_T, dS)
+        J0 = tied_dg(w0, v0, h, n, gamma * E, theta, sigma, dS)
 
     # rhs vector
     F0 = _fem.form(F0)
@@ -714,21 +775,23 @@ def test_poisson_kernels(ct, gap, quadrature_degree, theta):
     _fem.petsc.assemble_matrix(A0, J0)
     A0.assemble()
 
-    # Custom assembly
-    cells, facets_cg = locate_contact_facets_custom(V_custom, gap)
-
-    # Fem functions
-    u1 = _fem.Function(V_custom)
-    v1 = ufl.TestFunction(V_custom)
-    w1 = ufl.TrialFunction(V_custom)
-
-    u1.interpolate(_u0, cells[0])
-    u1.interpolate(_u2, cells[1])
-    u1.x.scatter_forward()
-
     V0 = _fem.FunctionSpace(mesh_custom, ("DG", 0))
     kdt_custom = _fem.Function(V0)
     kdt_custom.interpolate(lambda x: np.full((1, x.shape[1]), kdt))
+    lmbda_custom = _fem.Function(V0)
+    lmbda_custom.interpolate(lambda x: np.full((1, x.shape[1]), lmbda))
+    mu_custom = _fem.Function(V0)
+    mu_custom.interpolate(lambda x: np.full((1, x.shape[1]), mu))
+
+    if problem == Problem.Poisson:
+        coeffs = {"T": u1._cpp_object, "kdt": kdt_custom._cpp_object}
+    elif problem == Problem.Elasticity:
+        coeffs = {"u": u1._cpp_object, "mu": mu_custom._cpp_object, "lambda": lmbda_custom._cpp_object}
+        gamma = gamma * E
+    else:
+        coeffs = {"u": u1._cpp_object, "T": T1._cpp_object,
+                  "mu": mu_custom._cpp_object, "lambda": lmbda_custom._cpp_object}
+        gamma = gamma * E
 
     # Dummy form for creating vector/matrix
     dx = ufl.Measure("dx", domain=mesh_custom)
@@ -742,10 +805,9 @@ def test_poisson_kernels(ct, gap, quadrature_degree, theta):
     offsets = np.array([0, 2], dtype=np.int32)
     surfaces = adjacencylist(data, offsets)
     # initialise meshties
-    meshties = dolfinx_contact.cpp.MeshTie([facet_marker._cpp_object], surfaces, [(0, 1), (1, 0)],
-                                           mesh_custom._cpp_object, quadrature_degree=quadrature_degree)
-    meshties.generate_kernel_data(dolfinx_contact.cpp.Problem.Poisson, V_custom._cpp_object, {
-                                  "T": u1._cpp_object, "kdt": kdt_custom._cpp_object}, gamma, theta)
+    meshties = MeshTie([facet_marker._cpp_object], surfaces, [(0, 1), (1, 0)],
+                       mesh_custom._cpp_object, quadrature_degree=quadrature_degree)
+    meshties.generate_kernel_data(problem, V_custom._cpp_object, coeffs, gamma, theta, alpha)
 
     # Generate residual data structures
     F_custom = _fem.form(F0)
@@ -757,13 +819,11 @@ def test_poisson_kernels(ct, gap, quadrature_degree, theta):
 
     # Assemble  residual
     b1.zeroEntries()
-    meshties.assemble_vector(b1, V_custom._cpp_object,
-                             dolfinx_contact.cpp.Problem.Poisson)
+    meshties.assemble_vector(b1, V_custom._cpp_object, problem)
 
     # Assemble  jacobian
     A1.zeroEntries()
-    meshties.assemble_matrix(A1, V_custom._cpp_object,
-                             dolfinx_contact.cpp.Problem.Poisson)
+    meshties.assemble_matrix(A1, V_custom._cpp_object, problem)
     A1.assemble()
 
     # Retrieve data necessary for comparison

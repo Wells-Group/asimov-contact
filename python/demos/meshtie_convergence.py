@@ -106,13 +106,13 @@ def unsplit_domain(threed: bool = False, runs: int = 1):
         print(f"Run {i}")
         # create mesh
         if threed:
-            fname = f"box_3D_{i}"
+            fname = f"./meshes/box_3D_{i}"
             create_unsplit_box_3d(
                 res=res, num_segments=num_segments, fname=fname)
             fun = fun_3d
             u_fun = u_fun_3d
         else:
-            fname = f"box_2D_{i}"
+            fname = f"./meshes/box_2D_{i}"
             create_unsplit_box_2d(
                 res=res, num_segments=num_segments, filename=fname)
             fun = fun_2d
