@@ -5,21 +5,22 @@
 import argparse
 import sys
 
-import numpy as np
-from dolfinx import log
 import dolfinx.fem as _fem
+import numpy as np
+import ufl
+from mpi4py import MPI
+from dolfinx import default_scalar_type, log
 from dolfinx.common import timing, Timer
 from dolfinx.graph import adjacencylist
 from dolfinx.io import XDMFFile, VTXWriter
 from dolfinx.mesh import locate_entities_boundary, GhostMode, meshtags
-from mpi4py import MPI
-from petsc4py import PETSc as _PETSc
-import ufl
+from dolfinx_contact.helpers import (epsilon, lame_parameters, sigma_func,
+                                     weak_dirichlet)
+
 
 from dolfinx_contact.meshing import convert_mesh, create_christmas_tree_mesh_3D
-from dolfinx_contact.unbiased.nitsche_unbiased import nitsche_unbiased
-from dolfinx_contact.helpers import lame_parameters, sigma_func, weak_dirichlet, epsilon
 from dolfinx_contact.parallel_mesh_ghosting import create_contact_mesh
+from dolfinx_contact.unbiased.nitsche_unbiased import nitsche_unbiased
 from dolfinx_contact.cpp import ContactMode
 
 if __name__ == "__main__":
@@ -105,13 +106,13 @@ if __name__ == "__main__":
     dirichlet_dofs = _fem.locate_dofs_topological(V.sub(2), tdim - 1, indices[sorted_facets])
     # Create Dirichlet bdy conditions for preventing rigid body motion in z-direction
     dofs = _fem.locate_dofs_topological(V.sub(2), mesh.topology.dim - 1, facet_marker.find(z_Dirichlet))
-    g0 = _fem.Constant(mesh, _PETSc.ScalarType(0))
+    g0 = _fem.Constant(mesh, default_scalar_type(0))
     bcs = [_fem.dirichletbc(g0, dofs, V.sub(2))]
     bc_fns = [g0]
     # Functions for Dirichlet and Neuman boundaries, body force
-    g = _fem.Constant(mesh, _PETSc.ScalarType((0, 0, 0)))      # zero dirichlet
-    t = _fem.Constant(mesh, _PETSc.ScalarType((0.2, 0.5, 0)))  # traction
-    f = _fem.Constant(mesh, _PETSc.ScalarType((1.0, 0.5, 0)))  # body force
+    g = _fem.Constant(mesh, default_scalar_type((0, 0, 0)))      # zero dirichlet
+    t = _fem.Constant(mesh, default_scalar_type((0.2, 0.5, 0)))  # traction
+    f = _fem.Constant(mesh, default_scalar_type((1.0, 0.5, 0)))  # body force
 
     ncells = mesh.topology.index_map(tdim).size_local
     indices = np.array(range(ncells), dtype=np.int32)
@@ -219,7 +220,8 @@ if __name__ == "__main__":
                                                                        rhs_fns=rhs_fns, markers=[
                                                                            domain_marker, facet_marker],
                                                                        contact_data=(surfaces, contact_pairs),
-                                                                       bcs=bcs, bc_fns = bc_fns, problem_parameters=problem_parameters,
+                                                                       bcs=bcs, bc_fns = bc_fns,
+                                                                       problem_parameters=problem_parameters,                                                                       
                                                                        search_method=search_mode,
                                                                        newton_options=newton_options,
                                                                        petsc_options=petsc_options,

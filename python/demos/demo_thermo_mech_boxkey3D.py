@@ -7,7 +7,7 @@ import argparse
 import dolfinx.fem as _fem
 import numpy as np
 import ufl
-from dolfinx import io, log
+from dolfinx import default_scalar_type, io, log
 from dolfinx.common import Timer, TimingType, list_timings
 from dolfinx.fem import (Function, FunctionSpace)
 from dolfinx.fem.petsc import LinearProblem
@@ -20,7 +20,6 @@ from dolfinx_contact.parallel_mesh_ghosting import create_contact_mesh
 from dolfinx_contact.unbiased.contact_problem import create_contact_solver
 from dolfinx_contact.cpp import ContactMode
 from mpi4py import MPI
-from petsc4py import PETSc as _PETSc
 
 desc = "Thermal expansion leading to contact"
 parser = argparse.ArgumentParser(description=desc,
@@ -105,15 +104,15 @@ a_therm, L_therm = ufl.lhs(therm), ufl.rhs(therm)
 
 T0.x.array[:] = 0.0
 dofs = _fem.locate_dofs_topological(Q, entity_dim=tdim - 1, entities=facet_marker.find(dirichlet_bdy1))
-Tbc = _fem.dirichletbc(value=_PETSc.ScalarType((1.0)), dofs=dofs, V=Q)
+Tbc = _fem.dirichletbc(value=default_scalar_type((1.0)), dofs=dofs, V=Q)
 dofs2 = _fem.locate_dofs_topological(Q, entity_dim=tdim - 1, entities=facet_marker.find(dirichlet_bdy2))
-Tbc2 = _fem.dirichletbc(value=_PETSc.ScalarType((0.0)), dofs=dofs2, V=Q)
+Tbc2 = _fem.dirichletbc(value=default_scalar_type((0.0)), dofs=dofs2, V=Q)
 Tproblem = LinearProblem(a_therm, L_therm, bcs=[Tbc, Tbc2], petsc_options=petsc_options, u=T0)
 
 
 # Elasticity problem
 V = _fem.VectorFunctionSpace(mesh, ("Lagrange", 1))
-g = _fem.Constant(mesh, _PETSc.ScalarType((0, 0, 0)))     # zero Dirichlet
+g = _fem.Constant(mesh, default_scalar_type((0, 0, 0)))     # zero Dirichlet
 
 
 # contact surface data

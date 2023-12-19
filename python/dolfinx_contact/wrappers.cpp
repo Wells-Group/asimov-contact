@@ -53,6 +53,11 @@ PYBIND11_MODULE(cpp, m)
       .value("ClosestPoint", dolfinx_contact::ContactMode::ClosestPoint)
       .value("Raytracing", dolfinx_contact::ContactMode::RayTracing);
 
+  py::enum_<dolfinx_contact::Problem>(m, "Problem")
+      .value("Elasticity", dolfinx_contact::Problem::Elasticity)
+      .value("Poisson", dolfinx_contact::Problem::Poisson)
+      .value("ThermoElasticity", dolfinx_contact::Problem::ThermoElasticity);
+
   // QuadratureRule
   py::class_<dolfinx_contact::QuadratureRule,
              std::shared_ptr<dolfinx_contact::QuadratureRule>>(
@@ -60,7 +65,7 @@ PYBIND11_MODULE(cpp, m)
       .def(py::init<dolfinx::mesh::CellType, int, int,
                     basix::quadrature::type>(),
            py::arg("cell_type"), py::arg("degree"), py::arg("dim"),
-           py::arg("type") = basix::quadrature::type::Default)
+           py::arg("type"))
       .def("points",
            [](dolfinx_contact::QuadratureRule& self)
            {
@@ -108,7 +113,7 @@ PYBIND11_MODULE(cpp, m)
                     std::shared_ptr<dolfinx::fem::FunctionSpace<double>>,
                     std::vector<dolfinx_contact::ContactMode>, const int>(),
            py::arg("markers"), py::arg("surfaces"), py::arg("contact_pairs"),
-           py::arg("V"),py::arg("search_method"), py::arg("quadrature_degree") = 3
+           py::arg("V"), py::arg("search_method"), py::arg("quadrature_degree") = 3
            )
       .def("create_distance_map",
 
@@ -222,21 +227,23 @@ PYBIND11_MODULE(cpp, m)
               submesh.copy_function(*u, *u_sub);
           })
       .def("coefficients_size", &dolfinx_contact::Contact::coefficients_size,
-           py::arg("meshtie"))
+           py::arg("meshtie"), py::arg("function_space"))
       .def("set_quadrature_rule",
            &dolfinx_contact::Contact::set_quadrature_rule)
       .def("set_search_radius",
            &dolfinx_contact::Contact::set_search_radius)
       .def("generate_kernel",
-           [](dolfinx_contact::Contact& self, dolfinx_contact::Kernel type) {
-             return contact_wrappers::KernelWrapper(self.generate_kernel(type));
+           [](dolfinx_contact::Contact& self, dolfinx_contact::Kernel type,
+              std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V) {
+             return contact_wrappers::KernelWrapper(self.generate_kernel(type, V));
            })
 
       .def("assemble_matrix",
            [](dolfinx_contact::Contact& self, Mat A,
               int origin_meshtag, contact_wrappers::KernelWrapper& kernel,
               const py::array_t<PetscScalar, py::array::c_style>& coeffs,
-              const py::array_t<PetscScalar, py::array::c_style>& constants)
+              const py::array_t<PetscScalar, py::array::c_style>& constants,
+              std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V)
            {
              auto ker = kernel.get();
              self.assemble_matrix(
@@ -244,37 +251,39 @@ PYBIND11_MODULE(cpp, m)
                  origin_meshtag, ker,
                  std::span<const PetscScalar>(coeffs.data(), coeffs.size()),
                  coeffs.shape(1),
-                 std::span(constants.data(), constants.shape(0)));
+                 std::span(constants.data(), constants.shape(0)), V);
            })
       .def("assemble_vector",
            [](dolfinx_contact::Contact& self,
               py::array_t<PetscScalar, py::array::c_style>& b,
               int origin_meshtag, contact_wrappers::KernelWrapper& kernel,
               const py::array_t<PetscScalar, py::array::c_style>& coeffs,
-              const py::array_t<PetscScalar, py::array::c_style>& constants)
+              const py::array_t<PetscScalar, py::array::c_style>& constants,
+              std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V)
            {
              auto ker = kernel.get();
              self.assemble_vector(
                  std::span(b.mutable_data(), b.size()), origin_meshtag, ker,
                  std::span(coeffs.data(), coeffs.size()),
                  coeffs.shape(1),
-                 std::span(constants.data(), constants.size()));
+                 std::span(constants.data(), constants.size()), V);
            })
       .def("pack_test_functions",
-           [](dolfinx_contact::Contact& self, int origin_meshtag)
+           [](dolfinx_contact::Contact& self, int origin_meshtag,
+              std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V)
            {
              auto [coeffs, cstride] = self.pack_test_functions(
-                 origin_meshtag);
+                 origin_meshtag, V);
              int shape0 = cstride == 0 ? 0 : coeffs.size() / cstride;
              return dolfinx_wrappers::as_pyarray(std::move(coeffs),
                                                  std::array{shape0, cstride});
            })
       .def(
           "pack_grad_test_functions",
-          [](dolfinx_contact::Contact& self, int origin_meshtag)
+          [](dolfinx_contact::Contact& self, int origin_meshtag, std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V)
           {
             auto [coeffs, cstride] = self.pack_grad_test_functions(
-                origin_meshtag);
+                origin_meshtag, V);
             int shape0 = cstride == 0 ? 0 : coeffs.size() / cstride;
             return dolfinx_wrappers::as_pyarray(std::move(coeffs),
                                                 std::array{shape0, cstride});
@@ -340,7 +349,8 @@ PYBIND11_MODULE(cpp, m)
       .value("CoulombRhs", dolfinx_contact::Kernel::CoulombRhs)
       .value("CoulombJac", dolfinx_contact::Kernel::CoulombJac)
       .value("MeshTieRhs", dolfinx_contact::Kernel::MeshTieRhs)
-      .value("MeshTieJac", dolfinx_contact::Kernel::MeshTieJac);
+      .value("MeshTieJac", dolfinx_contact::Kernel::MeshTieJac)
+      .value("ThermoElasticRhs", dolfinx_contact::Kernel::ThermoElasticRhs);
 
   // Contact
   py::class_<dolfinx_contact::MeshTie,
@@ -351,10 +361,10 @@ PYBIND11_MODULE(cpp, m)
                     std::shared_ptr<
                         const dolfinx::graph::AdjacencyList<std::int32_t>>,
                     std::vector<std::array<int, 2>>,
-                    std::shared_ptr<dolfinx::fem::FunctionSpace<double>>,
+                    std::shared_ptr<dolfinx::mesh::Mesh<double>>,
                     const int>(),
            py::arg("markers"), py::arg("surfaces"), py::arg("contact_pairs"),
-           py::arg("V"), py::arg("quadrature_degree") = 3)
+           py::arg("mesh"), py::arg("quadrature_degree") = 3)
       .def(
           "coeffs",
           [](dolfinx_contact::MeshTie& self, int pair)
@@ -365,20 +375,30 @@ PYBIND11_MODULE(cpp, m)
             return dolfinx_wrappers::as_pyarray(std::move(coeffs), shape_out);
           },
           "Get packed coefficients")
-      .def("generate_meshtie_data",
-           &dolfinx_contact::MeshTie::generate_meshtie_data)
+      .def("generate_kernel_data",
+           &dolfinx_contact::MeshTie::generate_kernel_data,
+           py::arg("problem_type"), py::arg("functionspace"), py::arg("coefficients"),
+           py::arg("gamma"), py::arg("theta"), py::arg("alpha") = -1)
+      .def("update_kernel_data",
+           &dolfinx_contact::MeshTie::update_kernel_data)
       .def("generate_meshtie_data_matrix_only",
            &dolfinx_contact::MeshTie::generate_meshtie_data_matrix_only)
+      .def("generate_poisson_data_matrix_only",
+                &dolfinx_contact::MeshTie::generate_poisson_data_matrix_only)
       .def("assemble_matrix",
-           [](dolfinx_contact::MeshTie& self, Mat A)
+           [](dolfinx_contact::MeshTie& self, Mat A,
+              std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V,
+              dolfinx_contact::Problem problemtype)
            {
              self.assemble_matrix(
-                 dolfinx::la::petsc::Matrix::set_block_fn(A, ADD_VALUES));
+                 dolfinx::la::petsc::Matrix::set_block_fn(A, ADD_VALUES), V, problemtype);
            })
       .def("assemble_vector",
            [](dolfinx_contact::MeshTie& self,
-              py::array_t<PetscScalar, py::array::c_style>& b)
-           { self.assemble_vector(std::span(b.mutable_data(), b.size())); })
+              py::array_t<PetscScalar, py::array::c_style>& b,
+              std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V,
+              dolfinx_contact::Problem problemtype)
+           { self.assemble_vector(std::span(b.mutable_data(), b.size()), V, problemtype); })
       .def(
           "create_matrix",
           [](dolfinx_contact::MeshTie& self, dolfinx::fem::Form<PetscScalar>& a,
@@ -526,6 +546,10 @@ PYBIND11_MODULE(cpp, m)
         return dolfinx_contact::compute_ghost_cell_destinations(mesh,
                                                                 marker_span, r);
       });
+
+  m.def("lex_match", &dolfinx_contact::lex_match);
+
+  m.def("create_contact_mesh_cpp", &dolfinx_contact::create_contact_mesh);
 
   m.def(
       "raytracing",

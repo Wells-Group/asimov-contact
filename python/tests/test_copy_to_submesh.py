@@ -96,7 +96,7 @@ def test_copy_to_submesh(order, res, simplex, dim):
     contact_surfaces = adjacencylist(data, offsets)
     search_method = [ContactMode.ClosestPoint, ContactMode.Raytracing]
     contact = Contact([facet_marker._cpp_object], contact_surfaces, contact_pairs,
-                      V._cpp_object, quadrature_degree=3,
+                      mesh._cpp_object, quadrature_degree=3,
                       search_method=search_method)
 
     u = Function(V)

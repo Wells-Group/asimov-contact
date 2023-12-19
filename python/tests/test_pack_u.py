@@ -65,7 +65,7 @@ def test_pack_u():
     quadrature_degree = 2
     search_mode = [dolfinx_contact.cpp.ContactMode.ClosestPoint, dolfinx_contact.cpp.ContactMode.ClosestPoint]
     contact = dolfinx_contact.cpp.Contact([facet_marker._cpp_object], surfaces, [(0, 1), (1, 0)],
-                                          V._cpp_object, search_method=search_mode, quadrature_degree=quadrature_degree)
+                                          mesh._cpp_object, search_method=search_mode, quadrature_degree=quadrature_degree)
     contact.create_distance_map(0)
     contact.create_distance_map(1)
 

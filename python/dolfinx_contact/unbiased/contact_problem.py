@@ -405,7 +405,7 @@ def create_contact_solver(ufl_form: ufl.Form, u: fem.Function,
     markers_cpp = [marker._cpp_object for marker in markers[1:]]
     with common.Timer("~Contact: Init"):
         contact = dolfinx_contact.cpp.Contact(markers_cpp, contact_surfaces, contact_pairs,
-                                              V._cpp_object, quadrature_degree=quadrature_degree,
+                                              mesh._cpp_object, quadrature_degree=quadrature_degree,
                                               search_method=search_method)
 
     contact.set_search_radius(search_radius)

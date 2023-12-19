@@ -139,7 +139,7 @@ def test_vector_surface_kernel(dim, kernel_type, P, Q):
     surfaces = adjacencylist(data, offsets)
     search_mode = [dolfinx_contact.cpp.ContactMode.ClosestPoint]
     contact = dolfinx_contact.cpp.Contact([ft._cpp_object], surfaces, [(0, 0)],
-                                          V._cpp_object, search_mode, quadrature_degree=2 * P + Q + 1)
+                                          mesh._cpp_object, search_mode, quadrature_degree=2 * P + Q + 1)
     contact.create_distance_map(0)
     g_vec = contact.pack_gap_plane(0, -g)
     # FIXME: assuming all facets are the same type
@@ -153,7 +153,7 @@ def test_vector_surface_kernel(dim, kernel_type, P, Q):
     kernel = dolfinx_contact.cpp.generate_rigid_surface_kernel(V._cpp_object, kernel_type, q_rule)
 
     b2.zeroEntries()
-    contact.assemble_vector(b2, 0, kernel, coeffs, consts)
+    contact.assemble_vector(b2, 0, kernel, coeffs, consts, V._cpp_object)
     assemble_vector(b2, L_custom)
     b2.assemble()
     assert np.allclose(b.array, b2.array)
@@ -272,7 +272,7 @@ def test_matrix_surface_kernel(dim, kernel_type, P, Q):
     surfaces = adjacencylist(data, offsets)
     search_mode = [dolfinx_contact.cpp.ContactMode.ClosestPoint]
     contact = dolfinx_contact.cpp.Contact([ft._cpp_object], surfaces, [(0, 0)],
-                                          V._cpp_object, search_mode, quadrature_degree=2 * P + Q + 1)
+                                          mesh._cpp_object, search_mode, quadrature_degree=2 * P + Q + 1)
     contact.create_distance_map(0)
     g_vec = contact.pack_gap_plane(0, -g)
     coeffs = np.hstack([mu_packed, lmbda_packed, h_facets, g_vec, u_packed, grad_u_packed])
@@ -283,7 +283,7 @@ def test_matrix_surface_kernel(dim, kernel_type, P, Q):
         V._cpp_object, kernel_type, q_rule)
     B.zeroEntries()
 
-    contact.assemble_matrix(B, 0, kernel, coeffs, consts)
+    contact.assemble_matrix(B, 0, kernel, coeffs, consts, V._cpp_object)
     assemble_matrix(B, a_custom)
     B.assemble()
 
