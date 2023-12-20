@@ -121,7 +121,6 @@ class ContactProblem:
                     self.normals.append(-self.contact.pack_nx(i))
                 else:
                     self.normals.append(self.contact.pack_ny(i))
-                # contact.update_distance_map(i, gaps[i], normals[i])
                 test_fns.append(self.contact.pack_test_functions(i))
 
         # pack grad u
@@ -168,7 +167,6 @@ class ContactProblem:
                     normals.append(-self.contact.pack_nx(i))
                 else:
                     normals.append(self.contact.pack_ny(i))
-                # contact.update_distance_map(i, gaps[i], normals[i])
                 test_fns.append(self.contact.pack_test_functions(i))
 
         # Concatenate all coeffs

@@ -10,21 +10,21 @@ from petsc4py import PETSc as _PETSc
 
 import dolfinx_contact
 import dolfinx_contact.cpp
-
-from .nitsche_unbiased import setup_newton_solver, get_problem_parameters
-kt = dolfinx_contact.cpp.Kernel
 from dolfinx_contact.helpers import rigid_motions_nullspace_subdomains
+from .nitsche_unbiased import setup_newton_solver, get_problem_parameters
+
+kt = dolfinx_contact.cpp.Kernel
 
 
 def setup_snes_solver(F_custom: fem.forms.Form, J_custom: fem.forms.Form,
-                        bcs: list[fem.DirichletBC],
-                        u: fem.Function, du: fem.Function,
-                        contact: dolfinx_contact.cpp.Contact, markers: list[_mesh.MeshTags],
-                        entities: list[npt.NDArray[np.int32]], quadrature_degree: int,
-                        const_coeffs: list[npt.NDArray[np.float64]], consts: npt.NDArray[np.float64],
-                        search_method: list[dolfinx_contact.cpp.ContactMode],
-                        petsc_options, snes_options,
-                        coulomb: bool, normals_old=None):
+                      bcs: list[fem.DirichletBC],
+                      u: fem.Function, du: fem.Function,
+                      contact: dolfinx_contact.cpp.Contact, markers: list[_mesh.MeshTags],
+                      entities: list[npt.NDArray[np.int32]], quadrature_degree: int,
+                      const_coeffs: list[npt.NDArray[np.float64]], consts: npt.NDArray[np.float64],
+                      search_method: list[dolfinx_contact.cpp.ContactMode],
+                      petsc_options, snes_options,
+                      coulomb: bool, normals_old=None):
     """
     Set up newton solver for contact problem.
     Generate kernels and define functions for updating coefficients, stiffness matrix and residual vector.
@@ -47,7 +47,6 @@ def setup_snes_solver(F_custom: fem.forms.Form, J_custom: fem.forms.Form,
 
     num_pairs = len(const_coeffs)
     V = u.function_space
-    mesh = V.mesh
 
     # generate kernels
     with common.Timer("~Contact: Generate Jacobian kernel"):
@@ -78,7 +77,6 @@ def setup_snes_solver(F_custom: fem.forms.Form, J_custom: fem.forms.Form,
                 normals.append(-contact.pack_nx(i))
             else:
                 normals.append(contact.pack_ny(i))
-            # contact.update_distance_map(i, gaps[i], normals[i])
             test_fns.append(contact.pack_test_functions(i))
 
     # Concatenate all coeffs
@@ -124,11 +122,11 @@ def setup_snes_solver(F_custom: fem.forms.Form, J_custom: fem.forms.Form,
         coeffs = []
         for i in range(num_pairs):
             coeffs.append(np.hstack([ccfs[i], u_puppet[i], grad_u_puppet[i]
-                            + grad_u[i], u_candidate[i], normals_old[i], u_old_opp[i]]))
+                                     + grad_u[i], u_candidate[i], normals_old[i], u_old_opp[i]]))
         return coeffs
-            
 
     # function for computing residual
+
     @common.timed("~Contact: Assemble residual")
     def compute_residual(snes, x, b):
         coeffs = compute_coefficients(x)
@@ -162,9 +160,9 @@ def setup_snes_solver(F_custom: fem.forms.Form, J_custom: fem.forms.Form,
         A.assemble()
 
     # Create semismooth Newton solver (SNES)
-    snes = _PETSc.SNES().create()
+    snes = _PETSc.SNES().create()  # type: ignore
     # Set SNES options
-    opts = _PETSc.Options()
+    opts = _PETSc.Options()  # type: ignore
     snes.setOptionsPrefix(f"snes_solve_{id(snes)}")
     option_prefix = snes.getOptionsPrefix()
     opts.prefixPush(option_prefix)
@@ -183,7 +181,7 @@ def setup_snes_solver(F_custom: fem.forms.Form, J_custom: fem.forms.Form,
     # Set ksp options
     ksp = snes.ksp
     ksp.setOptionsPrefix(f"snes_ksp_{id(ksp)}")
-    opts = _PETSc.Options()
+    opts = _PETSc.Options()  # type: ignore
     option_prefix = ksp.getOptionsPrefix()
     opts.prefixPush(option_prefix)
     for k, v in petsc_options.items():
@@ -239,15 +237,15 @@ class ContactProblem:
         if not converged:
             print("Newton solver did not converge")
         return n
-    
+
         # newton_solver = setup_snes_solver(self.F, self.J, self.bcs, self.u, self.du, self.contact, self.markers,
         #                                     self.entities, self.q_deg, self.coeffs, self.consts,
-        #                                      self.search_method, self.petsc_options, self.newton_options, 
+        #                                      self.search_method, self.petsc_options, self.newton_options,
         #                                      self.coulomb, self.normals)
         # newton_solver.solve(None, self.du.vector)
         # if (newton_solver.getConvergedReason() <= 1) or (newton_solver.getConvergedReason() >= 4):
         #     print(f"Snes solver did not converge. Converged Reason {newton_solver.getConvergedReason()}")
-        
+
         # return newton_solver.getIterationNumber()
     # def generate_integration_kernels(self):
     #         # generate kernels
@@ -263,11 +261,11 @@ class ContactProblem:
     #             self.kernel_friction_rhs = self.generate_kernel(kt.CoulombRhs)
     #         else:
     #             self.kernel_friction_rhs = self.generate_kernel(kt.TrescaRhs)
-                
+
     # def compute_coefficients(self, x, coeffs):
     #     num_pairs = len(self.const_coeffs)
     #     V = self.u.function_space
-    
+
     def set_normals(self):
         normals = []
         for i in range(len(self.normals)):

@@ -32,8 +32,9 @@ public:
           surfaces,
       const std::vector<std::array<int, 2>>& connected_pairs,
       std::shared_ptr<dolfinx::mesh::Mesh<double>> mesh, const int q_deg = 3)
-      : Contact::Contact(markers, surfaces, connected_pairs, mesh, q_deg,
-                         ContactMode::ClosestPoint)
+      : Contact::Contact(markers, surfaces, connected_pairs, mesh,
+                        std::vector<ContactMode>(connected_pairs.size(),
+                        ContactMode::ClosestPoint), q_deg)
   {
     // Finde closest pointes
     for (int i = 0; i < (int)connected_pairs.size(); ++i)

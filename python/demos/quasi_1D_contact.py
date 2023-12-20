@@ -6,13 +6,13 @@ import argparse
 
 import numpy as np
 import ufl
+from dolfinx import default_scalar_type
 from dolfinx.io import XDMFFile
 from dolfinx.fem import (Constant, dirichletbc, Function, FunctionSpace, VectorFunctionSpace,
                          locate_dofs_topological, form, assemble_scalar)
 from dolfinx.graph import adjacencylist
 from dolfinx.mesh import locate_entities
 from mpi4py import MPI
-from petsc4py.PETSc import ScalarType
 
 from dolfinx_contact.helpers import (epsilon, sigma_func, lame_parameters)
 from dolfinx_contact.meshing import (convert_mesh,
@@ -70,11 +70,14 @@ if __name__ == "__main__":
     dirichlet_nodes = locate_entities(mesh, 0, lambda x: np.logical_and(
         np.isclose(x[1], 0.5 * H), np.logical_or(np.isclose(x[0], 2 * L + gap - args.res / 5),
                                                  np.isclose(x[0], 2 * L + gap - args.res / 10))))
-    print(dirichlet_nodes)
+
     dirichlet_dofs2 = locate_dofs_topological(V.sub(1), 0, dirichlet_nodes)
 
-    bcs = [dirichletbc(Constant(mesh, ScalarType((0, 0))), dirichlet_dofs1, V),
-           dirichletbc(Constant(mesh, ScalarType(0.0)), dirichlet_dofs2, V.sub(1))]
+    g0 = Constant(mesh, default_scalar_type((0, 0)))
+    g1 = Constant(mesh, default_scalar_type(0.0))
+    bcs = [dirichletbc(g0, dirichlet_dofs1, V),
+           dirichletbc(g1, dirichlet_dofs2, V.sub(1))]
+    bc_fns = [g0, g1]
 
     # Solver options
     ksp_tol = 1e-10
@@ -149,6 +152,7 @@ if __name__ == "__main__":
                                                                      markers=[domain_marker, facet_marker],
                                                                      contact_data=(
                                                                          surfaces, contact), bcs=bcs,
+                                                                     bc_fns=bc_fns,
                                                                      problem_parameters=problem_parameters,
                                                                      newton_options=newton_options,
                                                                      petsc_options=petsc_options,

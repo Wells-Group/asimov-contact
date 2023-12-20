@@ -3,11 +3,10 @@
 # SPDX-License-Identifier:    MIT
 
 from enum import Enum
-from typing import Callable, List, Tuple, Union, Optional
+from typing import Any, Callable, List, Tuple, Union, Optional
 
 import numpy
 import numpy.typing as npt
-from dolfinx import common, fem
 from dolfinx.io import VTXWriter
 from dolfinx import common, default_scalar_type, fem
 from mpi4py import MPI
@@ -61,7 +60,7 @@ class NewtonSolver():
         self.krylov_solver.setOptionsPrefix("Newton_solver_")
         self.error_on_nonconvergence = False
 
-    def set_krylov_options(self, options: dict[str, str]):
+    def set_krylov_options(self, options: dict[str, Any]):
         """
         Set options for Krylov solver
         """
@@ -268,7 +267,7 @@ class NewtonSolver():
             raise RuntimeError("Function for computing residual vector has not been provided")
 
         newton_converged = False
-        res_old = self._b.norm(PETSc.NormType.NORM_2)
+        res_old = self._b.norm(PETSc.NormType.NORM_2)  # type: ignore
         if self.convergence_criterion == ConvergenceCriterion.residual:
             self.residual, newton_converged = self._check_convergence(self.b)
         elif (self.convergence_criterion == ConvergenceCriterion.incremental):
@@ -328,7 +327,7 @@ class NewtonSolver():
             # Compute residual (F)
             self._compute_residual(x_vec, self._b, self._coeffs)
 
-            res_new = self._b.norm(PETSc.NormType.NORM_2)
+            res_new = self._b.norm(PETSc.NormType.NORM_2)  # type: ignore
 
             success += 1
             while res_old < res_new:
@@ -351,7 +350,7 @@ class NewtonSolver():
 
                 # Compute residual (F)
                 self._compute_residual(x_vec, self._b, self._coeffs)
-                res_new = self._b.norm(PETSc.NormType.NORM_2)
+                res_new = self._b.norm(PETSc.NormType.NORM_2)  # type: ignore
                 # print(res_new)
 
             res_old = res_new

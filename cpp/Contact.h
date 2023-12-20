@@ -52,8 +52,8 @@ public:
       std::shared_ptr<const dolfinx::graph::AdjacencyList<std::int32_t>>
           surfaces,
       const std::vector<std::array<int, 2>>& contact_pairs,
-      std::shared_ptr<dolfinx::mesh::Mesh<double>> mesh, const int q_deg = 3,
-      ContactMode mode = ContactMode::ClosestPoint);
+      std::shared_ptr<dolfinx::mesh::Mesh<double>> mesh,
+      std::vector<ContactMode> mode, const int q_deg = 3);
 
   /// Return meshtag value for surface with index surface
   /// @param[in] surface - the index of the surface
@@ -244,7 +244,7 @@ public:
   /// @param[in] tol - max distance
   void crop_invalid_points(std::size_t pair, std::span<const double> gap,
                            std::span<const double> n_y, double tol);
-                           
+
   /// Compute function on opposite surface at quadrature points of
   /// facets
   /// @param[in] pair - index of contact pair

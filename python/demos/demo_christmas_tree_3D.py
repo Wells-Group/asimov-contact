@@ -220,8 +220,8 @@ if __name__ == "__main__":
                                                                        rhs_fns=rhs_fns, markers=[
                                                                            domain_marker, facet_marker],
                                                                        contact_data=(surfaces, contact_pairs),
-                                                                       bcs=bcs, bc_fns = bc_fns,
-                                                                       problem_parameters=problem_parameters,                                                                       
+                                                                       bcs=bcs, bc_fns=bc_fns,
+                                                                       problem_parameters=problem_parameters,
                                                                        search_method=search_mode,
                                                                        newton_options=newton_options,
                                                                        petsc_options=petsc_options,

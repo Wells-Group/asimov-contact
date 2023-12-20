@@ -110,10 +110,10 @@ PYBIND11_MODULE(cpp, m)
                     std::shared_ptr<
                         const dolfinx::graph::AdjacencyList<std::int32_t>>,
                     std::vector<std::array<int, 2>>,
-                    std::shared_ptr<dolfinx::fem::FunctionSpace<double>>,
+                    std::shared_ptr<dolfinx::mesh::Mesh<double>>,
                     std::vector<dolfinx_contact::ContactMode>, const int>(),
            py::arg("markers"), py::arg("surfaces"), py::arg("contact_pairs"),
-           py::arg("V"), py::arg("search_method"), py::arg("quadrature_degree") = 3
+           py::arg("mesh"), py::arg("search_method"), py::arg("quadrature_degree") = 3
            )
       .def("create_distance_map",
 
@@ -209,12 +209,6 @@ PYBIND11_MODULE(cpp, m)
                  dolfinx::graph::AdjacencyList<std::int32_t>>(
                  std::move(data), std::move(offsets));
            })
-      .def("update_distance_map",
-          [] (dolfinx_contact::Contact& self, int pair, const py::array_t<PetscScalar, py::array::c_style>& gap,
-              const py::array_t<PetscScalar, py::array::c_style>& n_y){
-            self.update_distance_map(pair, std::span<const PetscScalar>(gap.data(), gap.size()),
-            std::span<const PetscScalar>(n_y.data(), n_y.size()));
-          })
       .def("submesh",
            [](dolfinx_contact::Contact& self)
            {

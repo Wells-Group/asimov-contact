@@ -7,7 +7,7 @@ import sys
 
 import numpy as np
 import ufl
-from dolfinx import log
+from dolfinx import default_scalar_type, log
 from dolfinx.common import Timer, TimingType, list_timings, timing
 from dolfinx.fem import (Constant, dirichletbc, form, Function, Expression, FunctionSpace,
                          VectorFunctionSpace, locate_dofs_topological)
@@ -16,7 +16,6 @@ from dolfinx.graph import adjacencylist
 from dolfinx.io import XDMFFile, VTXWriter
 from dolfinx.mesh import locate_entities_boundary, GhostMode, meshtags
 from mpi4py import MPI
-from petsc4py.PETSc import ScalarType
 
 from dolfinx_contact.helpers import (epsilon, lame_parameters, sigma_func,
                                      weak_dirichlet)
@@ -110,7 +109,7 @@ if __name__ == "__main__":
     # and the bottom (contact condition)
 
     if threed:
-        displacement = [[0, 0, -args.disp], [0, 0, 0]]
+        displacement = np.array([[0, 0, -args.disp], [0, 0, 0]])
         if problem == 1:
             outname = "results/problem1_3D_simplex" if simplex else "results/problem1_3D_hex"
             fname = f"{mesh_dir}/box_3D"
@@ -166,7 +165,7 @@ if __name__ == "__main__":
         elif problem == 3:
             outname = "results/problem3_3D_simplex" if simplex else "results/problem3_3D_hex"
             fname = "cylinder_cylinder_3D"
-            displacement = [[-1, 0, 0], [0, 0, 0]]
+            displacement = np.array([[-1, 0, 0], [0, 0, 0]])
             create_cylinder_cylinder_mesh(fname, res=args.res, simplex=simplex)
             with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
                 mesh = xdmf.read_mesh(name="cylinder_cylinder")
@@ -208,7 +207,7 @@ if __name__ == "__main__":
                 args.radius = 0.8 / args.time_steps
 
     else:
-        displacement = [[0, -args.disp], [0, 0]]
+        displacement = np.array([[0, -args.disp], [0, 0]])
         if problem == 1:
             outname = "results/problem1_2D_simplex" if simplex else "results/problem1_2D_quads"
             fname = f"{mesh_dir}/box_2D"
@@ -363,16 +362,16 @@ if __name__ == "__main__":
     gdim = mesh.geometry.dim
     bcs = []
     bc_fns = []
-    for k, d in enumerate(displacement):
+    for k in range(displacement.shape[0]):
+        d = displacement[k, :]
         tag = dirichlet_vals[k]
-        g = Constant(mesh, ScalarType(tuple(d[i] for i in range(gdim))))
+        g = Constant(mesh, default_scalar_type(tuple(d[i] for i in range(gdim))))
         bc_fns.append(g)
         if args.lifting:
             dofs = locate_dofs_topological(V, tdim - 1, facet_marker.find(tag))
             bcs.append(dirichletbc(g, dofs, V))
-        else:  
+        else:
             F = weak_dirichlet(F, u, g, sigma, E * gamma * args.order**2, theta, ds(tag))
-
 
     F = ufl.replace(F, {u: u + du})
     J = ufl.derivative(F, du, w)
@@ -380,7 +379,7 @@ if __name__ == "__main__":
     # compiler options to improve performance
     cffi_options = ["-Ofast", "-march=native"]
     jit_options = {"cffi_extra_compile_args": cffi_options,
-                "cffi_libraries": ["m"]}
+                   "cffi_libraries": ["m"]}
     # compiled forms for rhs and tangen system
     F_compiled = form(F, jit_options=jit_options)
     J_compiled = form(J, jit_options=jit_options)
@@ -397,7 +396,6 @@ if __name__ == "__main__":
 
     solver_outfile = args.outfile if args.ksp else None
 
-
     V0 = FunctionSpace(mesh, ("DG", 0))
     mu0 = Function(V0)
     lmbda0 = Function(V0)
@@ -411,13 +409,10 @@ if __name__ == "__main__":
     else:
         search_mode = [ContactMode.ClosestPoint for i in range(len(contact))]
 
-
-
     # create contact solver
     contact_problem = ContactProblem([facet_marker], surfaces, contact, V, search_mode, args.q_degree)
     contact_problem.generate_kernel_data(u, du, mu0, lmbda0, fric, E * gamma * args.order**2, theta)
     contact_problem.set_forms(F_compiled, J_compiled, bcs)
-
 
     # create vector and matrix
     A = contact_problem.create_matrix()
@@ -425,11 +420,11 @@ if __name__ == "__main__":
 
     # define functions for newton solver
     def compute_coefficients(x, coeffs):
-            size_local = V.dofmap.index_map.size_local
-            bs = V.dofmap.index_map_bs
-            du.x.array[:size_local * bs] = x.array_r[:size_local * bs]
-            du.x.scatter_forward()
-            contact_problem.update_kernel_data(du)
+        size_local = V.dofmap.index_map.size_local
+        bs = V.dofmap.index_map_bs
+        du.x.array[:size_local * bs] = x.array_r[:size_local * bs]
+        du.x.scatter_forward()
+        contact_problem.update_kernel_data(du)
 
     def compute_residual(x, b, coeffs):
         contact_problem.compute_residual(x, b)
@@ -458,10 +453,9 @@ if __name__ == "__main__":
     # initialise vtx writer
     vtx = VTXWriter(mesh.comm, f"{outname}_1_step.bp", [u], "bp4")
     vtx.write(0)
-    displacement = np.array(displacement)
     for i in range(nload_steps):
         for k, g in enumerate(bc_fns):
-            g.value[:] = displacement[k, :]/nload_steps
+            g.value[:] = displacement[k, :] / nload_steps
         timing_str = f"~Contact: {i+1} Newton Solver"
         with Timer(timing_str):
             n, converged = newton_solver.solve(du, write_solution=True)

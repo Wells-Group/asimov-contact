@@ -144,7 +144,7 @@ petsc_options = {
 
 
 # Solve contact problem using Nitsche's method
-problem_parameters = {"gamma": np.float64((1-alpha) * E * gamma), "theta": np.float64(theta), "fric": np.float64(0.4)}
+problem_parameters = {"gamma": np.float64((1 - alpha) * E * gamma), "theta": np.float64(theta), "fric": np.float64(0.4)}
 log.set_log_level(log.LogLevel.WARNING)
 size = mesh.comm.size
 outname = f"results/xmas_{tdim}D_{size}"
@@ -170,7 +170,8 @@ contact_problem = create_contact_solver(ufl_form=F, u=u, mu=mu_dg, lmbda=lmbda_d
 # initialise vtx write
 W = FunctionSpace(mesh, ("CG", 1))
 sigma_vm_h = Function(W)
-sigma_dev = sigma(contact_problem.u, T0) - (1 / 3) * ufl.tr(sigma(contact_problem.u, T0)) * ufl.Identity(len(contact_problem.u))
+sigma_dev = sigma(contact_problem.u, T0) - (1 / 3) * \
+    ufl.tr(sigma(contact_problem.u, T0)) * ufl.Identity(len(contact_problem.u))
 sigma_vm = ufl.sqrt((3 / 2) * ufl.inner(sigma_dev, sigma_dev))
 sigma_vm_h.name = "vonMises"
 vtx_therm = io.VTXWriter(mesh.comm, "results/xmas_disp.bp", [contact_problem.u, T0, sigma_vm_h], "bp4")

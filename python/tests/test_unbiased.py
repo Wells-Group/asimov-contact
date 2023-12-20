@@ -47,10 +47,12 @@ def DG_rhs_plus(u0, v0, h, n, gamma, theta, sigma, gap, dS):
         return ufl.dot(v(a) - v(b), -n(b)) - theta * (h(a) / gamma) * ufl.dot(sigma(v(a)) * n(a), -n(b))
 
     F = 0.5 * (gamma / h('+')) * R_plus(Pn_g(u0, '+', '-')) * \
-        Pn_gtheta(v0, '+', '-') * dS
+        Pn_gtheta(v0, '+', '-') * dS - 0.5 * (h('+') / gamma) * theta * ufl.dot(sigma(u0('+')) * n('+'), -n('-')) * \
+        ufl.dot(sigma(v0('+')) * n('+'), -n('-')) * dS
 
     F += 0.5 * (gamma / h('-')) * R_plus(Pn_g(u0, '-', '+')) * \
-        Pn_gtheta(v0, '-', '+') * dS
+        Pn_gtheta(v0, '-', '+') * dS - 0.5 * (h('-') / gamma) * theta * ufl.dot(sigma(u0('-')) * n('-'), -n('+')) * \
+        ufl.dot(sigma(v0('-')) * n('-'), -n('+')) * dS
 
     return F
 
@@ -64,10 +66,12 @@ def DG_rhs_minus(u0, v0, h, n, gamma, theta, sigma, gap, dS):
         return theta * ufl.dot(sigma(v(a)) * n(a), -n(b)) - (gamma / h(a)) * ufl.dot(v(a) - v(b), -n(b))
 
     F = 0.5 * (h('+') / gamma) * R_minus(Pn_g(u0, '+', '-')) * \
-        Pn_gtheta(v0, '+', '-') * dS
+        Pn_gtheta(v0, '+', '-') * dS - 0.5 * (h('+') / gamma) * theta * ufl.dot(sigma(u0('+')) * n('+'), -n('-')) * \
+        ufl.dot(sigma(v0('+')) * n('+'), -n('-')) * dS
 
     F += 0.5 * (h('-') / gamma) * R_minus(Pn_g(u0, '-', '+')) * \
-        Pn_gtheta(v0, '-', '+') * dS
+        Pn_gtheta(v0, '-', '+') * dS - 0.5 * (h('-') / gamma) * theta * ufl.dot(sigma(u0('-')) * n('-'), -n('+')) * \
+        ufl.dot(sigma(v0('-')) * n('-'), -n('+')) * dS
 
     return F
 
@@ -81,10 +85,14 @@ def DG_jac_plus(u0, v0, w0, h, n, gamma, theta, sigma, gap, dS):
         return ufl.dot(v(a) - v(b), -n(b)) - t * (h(a) / gamma) * ufl.dot(sigma(v(a)) * n(a), -n(b))
 
     J = 0.5 * (gamma / h('+')) * dR_plus(Pn_g(u0, '+', '-')) * \
-        Pn_gtheta(w0, '+', '-', 1.0) * Pn_gtheta(v0, '+', '-', theta) * dS
+        Pn_gtheta(w0, '+', '-', 1.0) * Pn_gtheta(v0, '+', '-', theta) * dS\
+        - 0.5 * (h('+') / gamma) * theta * ufl.dot(sigma(w0('+')) * n('+'), -n('-')) * \
+        ufl.dot(sigma(v0('+')) * n('+'), -n('-')) * dS
 
     J += 0.5 * (gamma / h('-')) * dR_plus(Pn_g(u0, '-', '+')) * \
-        Pn_gtheta(w0, '-', '+', 1.0) * Pn_gtheta(v0, '-', '+', theta) * dS
+        Pn_gtheta(w0, '-', '+', 1.0) * Pn_gtheta(v0, '-', '+', theta) * dS\
+        - 0.5 * (h('-') / gamma) * theta * ufl.dot(sigma(w0('-')) * n('-'), -n('+')) * \
+        ufl.dot(sigma(v0('-')) * n('-'), -n('+')) * dS
 
     return J
 
@@ -98,10 +106,14 @@ def DG_jac_minus(u0, v0, w0, h, n, gamma, theta, sigma, gap, dS):
         return t * ufl.dot(sigma(v(a)) * n(a), -n(b)) - (gamma / h(a)) * ufl.dot(v(a) - v(b), -n(b))
 
     J = 0.5 * (h('+') / gamma) * dR_minus(Pn_g(u0, '+', '-')) * \
-        Pn_gtheta(w0, '+', '-', 1.0) * Pn_gtheta(v0, '+', '-', theta) * dS
+        Pn_gtheta(w0, '+', '-', 1.0) * Pn_gtheta(v0, '+', '-', theta) * dS\
+        - 0.5 * (h('+') / gamma) * theta * ufl.dot(sigma(w0('+')) * n('+'), -n('-')) * \
+        ufl.dot(sigma(v0('+')) * n('+'), -n('-')) * dS
 
     J += 0.5 * (h('-') / gamma) * dR_minus(Pn_g(u0, '-', '+')) * \
-        Pn_gtheta(w0, '-', '+', 1.0) * Pn_gtheta(v0, '-', '+', theta) * dS
+        Pn_gtheta(w0, '-', '+', 1.0) * Pn_gtheta(v0, '-', '+', theta) * dS\
+        - 0.5 * (h('-') / gamma) * theta * ufl.dot(sigma(w0('-')) * n('-'), -n('+')) * \
+        ufl.dot(sigma(v0('-')) * n('-'), -n('+')) * dS
 
     return J
 
@@ -112,10 +124,16 @@ def DG_rhs_tresca(u0, v0, h, n, gamma, theta, sigma, fric, dS, gdim):
     """
     def Pt_g(u, a, b, c):
         return tangential_proj(u(a) - u(b) - h(a) * c * sigma(u(a)) * n(a), -n(b))
+
+    def Pt_sig(u, a, b):
+        return tangential_proj(sigma(u(a)) * n(a), -n(b))
+
     return 0.5 * gamma / h('+') * ufl.dot(ball_projection(Pt_g(u0, '+', '-', 1. / gamma), fric * h('+') / gamma, gdim),
                                           Pt_g(v0, '+', '-', theta / gamma)) * dS\
         + 0.5 * gamma / h('-') * ufl.dot(ball_projection(Pt_g(u0, '-', '+', 1. / gamma), fric * h('-') / gamma, gdim),
-                                         Pt_g(v0, '-', '+', theta / gamma)) * dS
+                                         Pt_g(v0, '-', '+', theta / gamma)) * dS\
+        - 0.5 * (h('+') / gamma) * theta * ufl.dot(Pt_sig(u0, '+', '-'), Pt_sig(v0, '+', '-')) * dS\
+        - 0.5 * (h('-') / gamma) * theta * ufl.dot(Pt_sig(u0, '-', '+'), Pt_sig(v0, '-', '+')) * dS
 
 
 def DG_jac_tresca(u0, v0, w0, h, n, gamma, theta, sigma, fric, dS, gdim):
@@ -125,10 +143,15 @@ def DG_jac_tresca(u0, v0, w0, h, n, gamma, theta, sigma, fric, dS, gdim):
     def Pt_g(u, a, b, c):
         return tangential_proj(u(a) - u(b) - h(a) * c * sigma(u(a)) * n(a), -n(b))
 
+    def Pt_sig(u, a, b):
+        return tangential_proj(sigma(u(a)) * n(a), -n(b))
+
     J = 0.5 * gamma / h('+') * ufl.dot(d_ball_projection(Pt_g(u0, '+', '-', 1. / gamma), fric * h('+') / gamma, gdim)
-                                       * Pt_g(w0, '+', '-', 1. / gamma), Pt_g(v0, '+', '-', theta / gamma)) * dS
+                                       * Pt_g(w0, '+', '-', 1. / gamma), Pt_g(v0, '+', '-', theta / gamma)) * dS\
+        - 0.5 * (h('+') / gamma) * theta * ufl.dot(Pt_sig(w0, '+', '-'), Pt_sig(v0, '+', '-')) * dS
     J += 0.5 * gamma / h('-') * ufl.dot(d_ball_projection(Pt_g(u0, '-', '+', 1. / gamma), fric * h('-') / gamma, gdim)
-                                        * Pt_g(w0, '-', '+', 1. / gamma), Pt_g(v0, '-', '+', theta / gamma)) * dS
+                                        * Pt_g(w0, '-', '+', 1. / gamma), Pt_g(v0, '-', '+', theta / gamma)) * dS\
+        - 0.5 * (h('-') / gamma) * theta * ufl.dot(Pt_sig(w0, '-', '+'), Pt_sig(v0, '-', '+')) * dS
 
     return J
 
@@ -143,6 +166,9 @@ def DG_rhs_coulomb(u0, v0, h, n, gamma, theta, sigma, gap, fric, dS, gdim):
     def Pt_g(u, a, b, c):
         return tangential_proj(u(a) - u(b) - h(a) * c * sigma(u(a)) * n(a), -n(b))
 
+    def Pt_sig(u, a, b):
+        return tangential_proj(sigma(u(a)) * n(a), -n(b))
+
     Pn_u_plus = R_plus(Pn_g(u0, '+', '-'))
     Pn_u_minus = R_plus(Pn_g(u0, '-', '+'))
     return 0.5 * gamma / h('+') * ufl.dot(ball_projection(Pt_g(u0, '+', '-', 1. / gamma),
@@ -150,7 +176,9 @@ def DG_rhs_coulomb(u0, v0, h, n, gamma, theta, sigma, gap, fric, dS, gdim):
                                           Pt_g(v0, '+', '-', theta / gamma)) * dS\
         + 0.5 * gamma / h('-') * ufl.dot(ball_projection(Pt_g(u0, '-', '+', 1. / gamma),
                                                          Pn_u_minus * fric, gdim),
-                                         Pt_g(v0, '-', '+', theta / gamma)) * dS
+                                         Pt_g(v0, '-', '+', theta / gamma)) * dS\
+        - 0.5 * (h('+') / gamma) * theta * ufl.dot(Pt_sig(u0, '+', '-'), Pt_sig(v0, '+', '-')) * dS\
+        - 0.5 * (h('-') / gamma) * theta * ufl.dot(Pt_sig(u0, '-', '+'), Pt_sig(v0, '-', '+')) * dS
 
 
 def DG_jac_coulomb(u0, v0, w0, h, n, gamma, theta, sigma, gap, fric, dS, gdim):
@@ -166,15 +194,20 @@ def DG_jac_coulomb(u0, v0, w0, h, n, gamma, theta, sigma, gap, fric, dS, gdim):
     def Pt_g(u, a, b, c):
         return tangential_proj(u(a) - u(b) - h(a) * c * sigma(u(a)) * n(a), -n(b))
 
+    def Pt_sig(u, a, b):
+        return tangential_proj(sigma(u(a)) * n(a), -n(b))
+
     Pn_u_plus = R_plus(Pn_g(u0, '+', '-'))
     Pn_u_minus = R_plus(Pn_g(u0, '-', '+'))
 
     J = 0.5 * gamma / h('+') * ufl.dot(d_ball_projection(Pt_g(u0, '+', '-', 1. / gamma),
                                                          Pn_u_plus * fric, gdim)
-                                       * Pt_g(w0, '+', '-', 1. / gamma), Pt_g(v0, '+', '-', theta / gamma)) * dS
+                                       * Pt_g(w0, '+', '-', 1. / gamma), Pt_g(v0, '+', '-', theta / gamma)) * dS\
+        - 0.5 * (h('+') / gamma) * theta * ufl.dot(Pt_sig(w0, '+', '-'), Pt_sig(v0, '+', '-')) * dS
     J += 0.5 * gamma / h('-') * ufl.dot(d_ball_projection(Pt_g(u0, '-', '+', 1. / gamma),
                                                           Pn_u_minus * fric, gdim)
-                                        * Pt_g(w0, '-', '+', 1. / gamma), Pt_g(v0, '-', '+', theta / gamma)) * dS
+                                        * Pt_g(w0, '-', '+', 1. / gamma), Pt_g(v0, '-', '+', theta / gamma)) * dS\
+        - 0.5 * (h('-') / gamma) * theta * ufl.dot(Pt_sig(w0, '-', '+'), Pt_sig(v0, '-', '+')) * dS
 
     d_alpha_plus = d_alpha_ball_projection(Pt_g(u0, '+', '-', 1. / gamma), Pn_u_plus * fric,
                                            dR_plus(Pn_g(u0, '+', '-')) * fric, gdim)

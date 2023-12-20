@@ -3,24 +3,18 @@
 # SPDX-License-Identifier:    MIT
 
 from typing import Optional, Tuple, Union, Any
-from dolfinx import common, fem, io, log, cpp
-from dolfinx import mesh as _mesh
-from dolfinx.fem.petsc import create_vector
 import numpy as np
 import numpy.typing as npt
+
 import ufl
-from dolfinx import common, cpp, default_scalar_type, fem, io, log
 from dolfinx import mesh as _mesh
+from dolfinx import common, cpp, default_scalar_type, fem, io, log
 from dolfinx.cpp.graph import AdjacencyList_int32
 from dolfinx.fem.petsc import create_vector
-from dolfinx_contact.helpers import (rigid_motions_nullspace_subdomains,
-                                     sigma_func)
 from petsc4py import PETSc as _PETSc
-
 import dolfinx_contact
 import dolfinx_contact.cpp
 from dolfinx_contact.helpers import (rigid_motions_nullspace_subdomains, sigma_func)
-# from dolfinx_contact.output import write_pressure_xdmf
 
 kt = dolfinx_contact.cpp.Kernel
 
@@ -236,6 +230,7 @@ def update_fns(t: float, fns: list[Union[fem.Function, fem.Constant]],
             fn.x.scatter_forward()
         elif type(fn) is fem.Constant:
             fn.value = t * old_fns[k].value  # type: ignore
+
 
 def nitsche_unbiased(steps: int, ufl_form: ufl.Form, u: fem.Function, mu: fem.Function, lmbda: fem.Function,
                      rhs_fns: list[Any], markers: list[_mesh.MeshTags],
