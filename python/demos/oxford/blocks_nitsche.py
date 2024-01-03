@@ -5,14 +5,14 @@
 import numpy as np
 
 from basix.ufl import element
-from dolfinx.fem import (Constant, dirichletbc, form, Function,
+from dolfinx import default_scalar_type
+from dolfinx.fem import (Constant, dirichletbc, Function, form,
                          functionspace, locate_dofs_topological)
 from dolfinx.fem.petsc import create_vector
 from dolfinx.graph import adjacencylist
 from dolfinx.io import XDMFFile
 from dolfinx.mesh import create_mesh
 from mpi4py import MPI
-from petsc4py.PETSc import ScalarType
 from ufl import (derivative, grad, Identity, inner, Mesh, Measure,
                  replace, sym, TrialFunction, TestFunction, tr)
 
@@ -96,10 +96,10 @@ F_compiled = form(F, jit_options=jit_options)
 J_compiled = form(J, jit_options=jit_options)
 
 # boundary conditions
-g = Constant(mesh, ScalarType((0, 0, 0)))     # zero Dirichlet
+g = Constant(mesh, default_scalar_type((0, 0, 0)))     # zero Dirichlet
 dofs_g = locate_dofs_topological(
     V, tdim - 1, facet_marker.find(dirichlet_bdy_2))
-d = Constant(mesh, ScalarType((0, -0.2, 0)))  # vertical displacement
+d = Constant(mesh, default_scalar_type((0, -0.2, 0)))  # vertical displacement
 dofs_d = locate_dofs_topological(
     V, tdim - 1, facet_marker.find(dirichlet_bdy_1))
 bcs = [dirichletbc(d, dofs_d, V), dirichletbc(g, dofs_g, V)]
@@ -165,17 +165,20 @@ b = create_vector(F_compiled)
 
 # define functions for newton solver
 def compute_coefficients(x, coeffs):
-        size_local = V.dofmap.index_map.size_local
-        bs = V.dofmap.index_map_bs
-        du.x.array[:size_local * bs] = x.array_r[:size_local * bs]
-        du.x.scatter_forward()
-        contact_problem.update_kernel_data(du)
+    size_local = V.dofmap.index_map.size_local
+    bs = V.dofmap.index_map_bs
+    du.x.array[:size_local * bs] = x.array_r[:size_local * bs]
+    du.x.scatter_forward()
+    contact_problem.update_kernel_data(du)
+
 
 def compute_residual(x, b, coeffs):
     contact_problem.compute_residual(x, b)
 
+
 def compute_jacobian_matrix(x, A, coeffs):
-     contact_problem.compute_jacobian_matrix(x, A)
+    contact_problem.compute_jacobian_matrix(x, A)
+
 
 # Set up snes solver for nonlinear solver
 newton_solver = NewtonSolver(mesh.comm, A, b, contact_problem.coeffs)

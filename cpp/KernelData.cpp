@@ -19,7 +19,7 @@ dolfinx_contact::KernelData::KernelData(
   const dolfinx::mesh::Geometry<double>& geometry = mesh->geometry();
   const dolfinx::fem::CoordinateElement<double>& cmap = geometry.cmaps()[0];
 
-  _affine = false;
+  _affine = cmap.is_affine();
   _num_coordinate_dofs = cmap.dim();
 
   _gdim = geometry.dim();
@@ -49,13 +49,6 @@ dolfinx_contact::KernelData::KernelData(
   {
     throw std::invalid_argument(
         "Contact kernel not supported for spaces with value size!=1");
-  }
-
-  if (_bs != _gdim)
-  {
-    throw std::invalid_argument(
-        "The geometric dimension of the mesh is not equal to the block size "
-        "of the function space.");
   }
 
   /// Pack test and trial functions

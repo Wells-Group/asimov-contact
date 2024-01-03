@@ -5,13 +5,13 @@
 import argparse
 import numpy as np
 import ufl
+from dolfinx import default_scalar_type
 from dolfinx.io import XDMFFile
 from dolfinx.fem import (Constant, dirichletbc, Expression, Function, FunctionSpace,
                          VectorFunctionSpace, locate_dofs_topological,
                          form, assemble_scalar)
 from dolfinx.graph import adjacencylist
 from mpi4py import MPI
-from petsc4py.PETSc import ScalarType
 
 from dolfinx_contact.helpers import (epsilon, sigma_func, lame_parameters)
 from dolfinx_contact.meshing import (convert_mesh,
@@ -73,13 +73,16 @@ if __name__ == "__main__":
 
     V = VectorFunctionSpace(mesh, ("CG", args.order))
     # boundary conditions
-    t = Constant(mesh, ScalarType((0.3, 0.0)))
+    t = Constant(mesh, default_scalar_type((0.3, 0.0)))
 
     dirichlet_dofs_1 = locate_dofs_topological(V.sub(1), 1, facet_marker.find(dirichlet_bdy_1))
     dirichlet_dofs_2 = locate_dofs_topological(V, 1, facet_marker.find(dirichlet_bdy_2))
 
-    bcs = [dirichletbc(Constant(mesh, ScalarType(0.0)), dirichlet_dofs_1, V.sub(1)),
-           dirichletbc(Constant(mesh, ScalarType((0, 0))), dirichlet_dofs_2, V)]
+    g0 = Constant(mesh, default_scalar_type(0.0))
+    g1 = Constant(mesh, default_scalar_type((0, 0)))
+    bcs = [dirichletbc(g0, dirichlet_dofs_1, V.sub(1)),
+           dirichletbc(g1, dirichlet_dofs_2, V)]
+    bc_fns = [g0, g1]
 
     # DG-0 funciton for material
     V0 = FunctionSpace(mesh, ("DG", 0))
@@ -151,6 +154,7 @@ if __name__ == "__main__":
                                                                      markers=[domain_marker, facet_marker],
                                                                      contact_data=(
                                                                          surfaces, contact), bcs=bcs,
+                                                                     bc_fns=bc_fns,
                                                                      problem_parameters=problem_parameters,
                                                                      newton_options=newton_options,
                                                                      petsc_options=petsc_options,
@@ -170,8 +174,8 @@ if __name__ == "__main__":
 
     ds = ufl.Measure("ds", domain=mesh, metadata=metadata,
                      subdomain_data=facet_marker)
-    ex = Constant(mesh, ScalarType((1.0, 0.0)))
-    ey = Constant(mesh, ScalarType((0.0, 1.0)))
+    ex = Constant(mesh, default_scalar_type((1.0, 0.0)))
+    ey = Constant(mesh, default_scalar_type((0.0, 1.0)))
     Rx_1form = form(ufl.inner(sigma(u) * n, ex) * ds(contact_bdy_1))
     Ry_1form = form(ufl.inner(sigma(u) * n, ey) * ds(contact_bdy_1))
     Rx_2form = form(ufl.inner(sigma(u) * n, ex) * ds(contact_bdy_2))

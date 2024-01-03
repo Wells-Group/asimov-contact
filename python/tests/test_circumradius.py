@@ -4,8 +4,8 @@
 
 import numpy as np
 import pytest
-import ufl
-from dolfinx.fem import Function, FunctionSpace, IntegralType
+from ufl import Circumradius, TestFunction, TrialFunction, Measure
+from dolfinx.fem import Function, functionspace, IntegralType
 from dolfinx.fem.petsc import LinearProblem
 from dolfinx.mesh import create_unit_cube, create_unit_square, locate_entities_boundary
 from mpi4py import MPI
@@ -23,7 +23,7 @@ def test_circumradius(dim):
         mesh = create_unit_square(MPI.COMM_WORLD, N, N)
 
     # Perturb geometry to get spatially varying circumradius
-    V = FunctionSpace(mesh, ufl.VectorElement("Lagrange", mesh.ufl_cell(), 1))
+    V = functionspace(mesh, ("Lagrange", 1, (mesh.geometry.dim,)))
     u = Function(V)
     if dim == 3:
         u.interpolate(lambda x: (0.1 * (x[1] > 0.5), 0.1 * np.sin(2 * np.pi * x[2]), np.zeros(x.shape[1])))
@@ -41,11 +41,11 @@ def test_circumradius(dim):
 
     sorted = np.argsort(facets)
     facets = facets[sorted]
-    h1 = ufl.Circumradius(mesh)
-    V = FunctionSpace(mesh, ("DG", 0))
-    v = ufl.TestFunction(V)
-    u = ufl.TrialFunction(V)
-    dx = ufl.Measure("dx", domain=mesh)
+    h1 = Circumradius(mesh)
+    V = functionspace(mesh, ("DG", 0))
+    v = TestFunction(V)
+    u = TrialFunction(V)
+    dx = Measure("dx", domain=mesh)
     a = u * v * dx
     L = h1 * v * dx
     problem = LinearProblem(a, L, bcs=[], petsc_options={"ksp_type": "preonly", "pc_type": "lu"})

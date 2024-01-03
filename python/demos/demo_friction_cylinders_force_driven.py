@@ -6,15 +6,15 @@ import argparse
 
 import numpy as np
 import ufl
+from dolfinx import default_scalar_type
 from dolfinx.io import XDMFFile, VTXWriter
-from dolfinx.fem import (assemble_scalar, Constant, dirichletbc, form,
+from dolfinx.fem import (Constant, dirichletbc, form,
                          Function, FunctionSpace,
                          VectorFunctionSpace, locate_dofs_topological)
 from dolfinx.fem.petsc import set_bc
 from dolfinx.graph import adjacencylist
 from dolfinx.mesh import locate_entities
 from mpi4py import MPI
-from petsc4py.PETSc import ScalarType
 
 from dolfinx_contact.helpers import (epsilon, sigma_func, lame_parameters)
 from dolfinx_contact.meshing import (convert_mesh,
@@ -90,10 +90,10 @@ if __name__ == "__main__":
     #                   "max_it": 200,
     #                   "error_on_nonconvergence": True}
     newton_options = {"snes_monitor": None, "snes_max_it": 50,
-                    "snes_max_fail": 20, "snes_type": "newtonls",
-                    "snes_linesearch_type": "l2",
-                    "snes_linesearch_order": 1,
-                    "snes_rtol": 1e-10, "snes_atol": 1e-10, "snes_view": None}
+                      "snes_max_fail": 20, "snes_type": "newtonls",
+                      "snes_linesearch_type": "l2",
+                      "snes_linesearch_order": 1,
+                      "snes_rtol": 1e-10, "snes_atol": 1e-10, "snes_view": None}
     # petsc_options = {"ksp_type": "preonly", "pc_type": "lu"}
     petsc_options = {
         "matptap_via": "scalable",
@@ -118,17 +118,17 @@ if __name__ == "__main__":
     # Step 1: frictionless contact
     V = VectorFunctionSpace(mesh, ("CG", args.order))
     # boundary conditions
-    t = Constant(mesh, ScalarType((0.0, -p)))
-    g = Constant(mesh, ScalarType((0.0)))
+    t = Constant(mesh, default_scalar_type((0.0, -p)))
+    g = Constant(mesh, default_scalar_type((0.0)))
 
-    symmetry_nodes = locate_entities(mesh, 0, lambda x: np.logical_and(np.isclose(x[0], 0), x[1]>= -8))
+    symmetry_nodes = locate_entities(mesh, 0, lambda x: np.logical_and(np.isclose(x[0], 0), x[1] >= -8))
     dofs_symmetry = locate_dofs_topological(V.sub(0), 0, symmetry_nodes)
     dofs_bottom = locate_dofs_topological(V, 1, facet_marker.find(bottom))
     dofs_top = locate_dofs_topological(V, 1, facet_marker.find(top))
 
-    g_top = Constant(mesh, ScalarType((0.0, -0.1)))
+    g_top = Constant(mesh, default_scalar_type((0.0, -0.1)))
     bcs = [dirichletbc(g, dofs_symmetry, V.sub(0)),
-           dirichletbc(Constant(mesh, ScalarType((0.0, 0.0))), dofs_bottom, V)]
+           dirichletbc(Constant(mesh, default_scalar_type((0.0, 0.0))), dofs_bottom, V)]
 
     # DG-0 funciton for material
     V0 = FunctionSpace(mesh, ("DG", 0))
@@ -158,8 +158,8 @@ if __name__ == "__main__":
 
     # Set up force postprocessing
     n = ufl.FacetNormal(mesh)
-    ex = Constant(mesh, ScalarType((1.0, 0.0)))
-    ey = Constant(mesh, ScalarType((0.0, 1.0)))
+    ex = Constant(mesh, default_scalar_type((1.0, 0.0)))
+    ey = Constant(mesh, default_scalar_type((0.0, 1.0)))
     Rx_form = form(ufl.inner(sigma(u) * n, ex) * ds(top))
     Ry_form = form(ufl.inner(sigma(u) * n, ey) * ds(top))
 
@@ -236,13 +236,13 @@ if __name__ == "__main__":
         problem1.set_normals()
         # Compute forces
         pr = abs(val)
-        q = 0
+        q = 0.0
         # R_x = mesh.comm.allreduce(assemble_scalar(Rx_form), op=MPI.SUM)
         # R_y = mesh.comm.allreduce(assemble_scalar(Ry_form), op=MPI.SUM)
-        
+
         # pr = abs(R_y / (2 * R))
         # q = abs(R_x / (2 * R))
-        load = pr * 2 * R  
+        load = pr * 2 * R
         a = 2 * np.sqrt(R * load / (2 * np.pi * Estar))
         p0 = 2 * load / (np.pi * a)
         print(pr, q)
@@ -262,7 +262,7 @@ if __name__ == "__main__":
     # F = ufl.inner(sigma(u2), epsilon(v)) * dx
 
     # # body forces
-    # t2 = Constant(mesh, ScalarType((0.0, -p)))
+    # t2 = Constant(mesh, default_scalar_type((0.0, -p)))
     # F -= ufl.inner(t2, v) * ds(top)
 
     # problem_parameters = {"gamma": np.float64(E * 1000), "theta": np.float64(1), "friction": np.float64(0.3)}
@@ -298,16 +298,16 @@ if __name__ == "__main__":
     # symmetry_nodes = locate_entities(mesh, 0, lambda x: np.logical_and(np.isclose(x[0], 0), np.isclose(x[1], -R)))
     # dofs_symmetry = locate_dofs_topological(V.sub(0), 0, symmetry_nodes)
     # dofs_bottom = locate_dofs_topological(V, 1, facet_marker.find(bottom))
-    # bcs2 = [dirichletbc(Constant(mesh, ScalarType((0, 0))), dofs_bottom, V)]
+    # bcs2 = [dirichletbc(Constant(mesh, default_scalar_type((0, 0))), dofs_bottom, V)]
     # # Solve contact problem using Nitsche's method
     # # update_geometry(u._cpp_object, mesh._cpp_object)
     # # u2.x.array[:] = u.x.array[:]
     def identifier(x):
-        return np.logical_and(np.logical_and(x[0]<-0.5, x[0]>-1), np.logical_and(x[1]>-0.5, x[1]<0.5))
+        return np.logical_and(np.logical_and(x[0] < -0.5, x[0] > -1), np.logical_and(x[1] > -0.5, x[1] < 0.5))
     constraint_nodes = locate_entities(mesh, 0, identifier)
     dofs_constraint = locate_dofs_topological(V.sub(1), 0, constraint_nodes)
-    g_top = Constant(mesh, ScalarType((0.0, 0.0)))
-    bcs = [dirichletbc(Constant(mesh, ScalarType((0.0, 0.0))), dofs_bottom, V), 
+    g_top = Constant(mesh, default_scalar_type((0.0, 0.0)))
+    bcs = [dirichletbc(Constant(mesh, default_scalar_type((0.0, 0.0))), dofs_bottom, V),
            dirichletbc(g, dofs_constraint, V.sub(1))]
 
     problem1.bcs = bcs
@@ -352,7 +352,7 @@ if __name__ == "__main__":
         # pr = abs(R_y / (2 * R))
         q = abs(val)
         # q = abs(R_x / (2 * R))
-        load = 2 * R * abs(pr) 
+        load = 2 * R * abs(pr)
         a = 2 * np.sqrt(R * load / (2 * np.pi * Estar))
         p0 = 2 * load / (np.pi * a)
         print(pr, q)

@@ -7,7 +7,7 @@ import sys
 
 import numpy as np
 import ufl
-from dolfinx import log
+from dolfinx import log, default_scalar_type
 from dolfinx.common import TimingType, list_timings, Timer, timing
 from dolfinx.fem import (dirichletbc, Constant, form, Function, FunctionSpace,
                          locate_dofs_topological, VectorFunctionSpace)
@@ -16,14 +16,13 @@ from dolfinx.fem.petsc import (apply_lifting, assemble_vector, assemble_matrix,
 from dolfinx.graph import adjacencylist
 from dolfinx.io import XDMFFile
 from mpi4py import MPI
-from petsc4py.PETSc import ScalarType
 from petsc4py import PETSc
 
 from dolfinx_contact.helpers import lame_parameters, epsilon, sigma_func, rigid_motions_nullspace_subdomains
 from dolfinx_contact.meshing import (convert_mesh,
                                      create_box_mesh_3D)
 from dolfinx_contact.parallel_mesh_ghosting import create_contact_mesh
-from dolfinx_contact.cpp import MeshTie
+from dolfinx_contact.cpp import MeshTie, Problem
 
 if __name__ == "__main__":
     desc = "Nitsche's method for two elastic bodies using custom assemblers"
@@ -47,7 +46,8 @@ if __name__ == "__main__":
                           help="Use triangle/tet mesh", default=False)
     parser.add_argument("--E", default=1e3, type=np.float64, dest="E",
                         help="Youngs modulus of material")
-    parser.add_argument("--nu", default=0.1, type=np.float64, dest="nu", help="Poisson's ratio")
+    parser.add_argument("--nu", default=0.1, type=np.float64,
+                        dest="nu", help="Poisson's ratio")
     parser.add_argument("--outfile", type=str, default=None, required=False,
                         help="File for appending results", dest="outfile")
     _lifting = parser.add_mutually_exclusive_group(required=False)
@@ -122,29 +122,33 @@ if __name__ == "__main__":
     J = ufl.inner(sigma(w), epsilon(v)) * dx
 
     # body forces
-    f = Constant(mesh, ScalarType((0.0, 0.5, 0.0)))
+    f = Constant(mesh, default_scalar_type((0.0, 0.5, 0.0)))
     F = ufl.inner(f, v) * dx
 
     # traction (neumann) boundary condition on mesh boundary with tag 3
-    t = Constant(mesh, ScalarType((0.0, 0.5, 0.0)))
+    t = Constant(mesh, default_scalar_type((0.0, 0.5, 0.0)))
     F += ufl.inner(t, v) * ds(neumann_bdy)
 
     # Dirichlet bdry conditions
-    g = Constant(mesh, ScalarType((0.0, 0.0, 0.0)))
+    g = Constant(mesh, default_scalar_type((0.0, 0.0, 0.0)))
     if args.lifting:
-        bdy_dofs = locate_dofs_topological(V, tdim - 1, facet_marker.find(dirichlet_bdy))  # type: ignore
+        bdy_dofs = locate_dofs_topological(
+            V, tdim - 1, facet_marker.find(dirichlet_bdy))  # type: ignore
         bcs = [dirichletbc(g, bdy_dofs, V)]
     else:
         bcs = []
         J += - ufl.inner(sigma(w) * n, v) * ds(dirichlet_bdy)\
             - theta * ufl.inner(sigma(v) * n, w) * \
-            ds(dirichlet_bdy) + E * gamma / h * ufl.inner(w, v) * ds(dirichlet_bdy)
+            ds(dirichlet_bdy) + E * gamma / h * \
+            ufl.inner(w, v) * ds(dirichlet_bdy)
         F += - theta * ufl.inner(sigma(v) * n, g) * \
-            ds(dirichlet_bdy) + E * gamma / h * ufl.inner(g, v) * ds(dirichlet_bdy)
+            ds(dirichlet_bdy) + E * gamma / h * \
+            ufl.inner(g, v) * ds(dirichlet_bdy)
 
     # compile forms
     cffi_options = ["-Ofast", "-march=native"]
-    jit_options = {"cffi_extra_compile_args": cffi_options, "cffi_libraries": ["m"]}
+    jit_options = {"cffi_extra_compile_args": cffi_options,
+                   "cffi_libraries": ["m"]}
     F = form(F, jit_options=jit_options)
     J = form(J, jit_options=jit_options)
 
@@ -178,8 +182,9 @@ if __name__ == "__main__":
 
     # initialise meshties
     meshties = MeshTie([facet_marker._cpp_object], surfaces, contact,
-                       V._cpp_object, quadrature_degree=5)
-    meshties.generate_meshtie_data_matrix_only(lmbda._cpp_object, mu._cpp_object, E * gamma, theta)
+                       mesh._cpp_object, quadrature_degree=5)
+    meshties.generate_kernel_data(Problem.Elasticity, V._cpp_object, {
+        "lambda": lmbda._cpp_object, "mu": mu._cpp_object}, E * gamma, theta)
 
     # create matrix, vector
     A = meshties.create_matrix(J._cpp_object)
@@ -187,19 +192,21 @@ if __name__ == "__main__":
 
     # Assemble right hand side
     b.zeroEntries()
-    b.ghostUpdate(addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD)
+    b.ghostUpdate(addv=PETSc.InsertMode.INSERT,    # type: ignore
+                  mode=PETSc.ScatterMode.FORWARD)  # type: ignore
     assemble_vector(b, F)
 
     # Apply boundary condition and scatter reverse
     if len(bcs) > 0:
         apply_lifting(b, [J], bcs=[bcs], scale=-1.0)
-    b.ghostUpdate(addv=PETSc.InsertMode.ADD, mode=PETSc.ScatterMode.REVERSE)
+    b.ghostUpdate(addv=PETSc.InsertMode.ADD,       # type: ignore
+                  mode=PETSc.ScatterMode.REVERSE)  # type: ignore
     if len(bcs) > 0:
         set_bc(b, bcs)
 
     # Assemble matrix
     A.zeroEntries()
-    meshties.assemble_matrix(A)
+    meshties.assemble_matrix(A, V._cpp_object, Problem.Elasticity)
     assemble_matrix(A, J, bcs=bcs)  # type: ignore
     A.assemble()
 
@@ -209,10 +216,10 @@ if __name__ == "__main__":
     A.setNearNullSpace(null_space)
 
     # Create PETSc Krylov solver and turn convergence monitoring on
-    opts = PETSc.Options()
+    opts = PETSc.Options()  # type: ignore
     for key in petsc_options:
         opts[key] = petsc_options[key]
-    solver = PETSc.KSP().create(mesh.comm)
+    solver = PETSc.KSP().create(mesh.comm)  # type: ignore
     solver.setFromOptions()
 
     # Set matrix operator
@@ -224,7 +231,8 @@ if __name__ == "__main__":
     log.set_log_level(log.LogLevel.OFF)
     # Set a monitor, solve linear system, and display the solver
     # configuration
-    solver.setMonitor(lambda _, its, rnorm: print(f"Iteration: {its}, rel. residual: {rnorm}"))
+    solver.setMonitor(lambda _, its, rnorm: print(
+        f"Iteration: {its}, rel. residual: {rnorm}"))
     timing_str = "~Contact : Krylov Solver"
     with Timer(timing_str):
         solver.solve(b, uh.vector)

@@ -201,7 +201,7 @@ dolfinx_contact::pack_coefficient_quadrature(
           coordinate_dofs(j, k) = x_g[pos + k];
       }
 
-      if (false)
+      if (cmap.is_affine())
       {
         std::fill(Jb.begin(), Jb.end(), 0);
         auto dphi_q
@@ -466,7 +466,7 @@ dolfinx_contact::pack_gradient_quadrature(
         std::div_t pos = std::div(int(d * dofmap_bs + b), (int)bs);
 
         // Pack coefficients for each quadrature point
-        if (false)
+        if (cmap.is_affine())
         {
           // compute jacobian and its inverse once for affine geometries
           std::fill(Jb.begin(), Jb.end(), 0);

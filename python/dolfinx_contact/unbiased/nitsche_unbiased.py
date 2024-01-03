@@ -3,19 +3,18 @@
 # SPDX-License-Identifier:    MIT
 
 from typing import Optional, Tuple, Union, Any
-from dolfinx import common, fem, io, log, cpp
-from dolfinx import mesh as _mesh
-from dolfinx.fem.petsc import create_vector
 import numpy as np
 import numpy.typing as npt
-import ufl
-from dolfinx.cpp.graph import AdjacencyList_int32
-from petsc4py import PETSc as _PETSc
 
+import ufl
+from dolfinx import mesh as _mesh
+from dolfinx import common, cpp, default_scalar_type, fem, io, log
+from dolfinx.cpp.graph import AdjacencyList_int32
+from dolfinx.fem.petsc import create_vector
+from petsc4py import PETSc as _PETSc
 import dolfinx_contact
 import dolfinx_contact.cpp
 from dolfinx_contact.helpers import (rigid_motions_nullspace_subdomains, sigma_func)
-# from dolfinx_contact.output import write_pressure_xdmf
 
 kt = dolfinx_contact.cpp.Kernel
 
@@ -56,17 +55,17 @@ def setup_newton_solver(F_custom: fem.forms.Form, J_custom: fem.forms.Form,
 
     # generate kernels
     with common.Timer("~Contact: Generate Jacobian kernel"):
-        kernel_jac = contact.generate_kernel(kt.Jac)
+        kernel_jac = contact.generate_kernel(kt.Jac, V._cpp_object)
         if coulomb:
-            kernel_friction_jac = contact.generate_kernel(kt.CoulombJac)
+            kernel_friction_jac = contact.generate_kernel(kt.CoulombJac, V._cpp_object)
         else:
-            kernel_friction_jac = contact.generate_kernel(kt.TrescaJac)
+            kernel_friction_jac = contact.generate_kernel(kt.TrescaJac, V._cpp_object)
     with common.Timer("~Contact: Generate residual kernel"):
-        kernel_rhs = contact.generate_kernel(kt.Rhs)
+        kernel_rhs = contact.generate_kernel(kt.Rhs, V._cpp_object)
         if coulomb:
-            kernel_friction_rhs = contact.generate_kernel(kt.CoulombRhs)
+            kernel_friction_rhs = contact.generate_kernel(kt.CoulombRhs, V._cpp_object)
         else:
-            kernel_friction_rhs = contact.generate_kernel(kt.TrescaRhs)
+            kernel_friction_rhs = contact.generate_kernel(kt.TrescaRhs, V._cpp_object)
 
     # create vector and matrix
     A = contact.create_matrix(J_custom._cpp_object)
@@ -83,8 +82,7 @@ def setup_newton_solver(F_custom: fem.forms.Form, J_custom: fem.forms.Form,
                 normals.append(-contact.pack_nx(i))
             else:
                 normals.append(contact.pack_ny(i))
-            # contact.update_distance_map(i, gaps[i], normals[i])
-            test_fns.append(contact.pack_test_functions(i))
+            test_fns.append(contact.pack_test_functions(i, V._cpp_object))
 
     # Concatenate all coeffs
     ccfs = []
@@ -138,8 +136,8 @@ def setup_newton_solver(F_custom: fem.forms.Form, J_custom: fem.forms.Form,
         b.ghostUpdate(addv=_PETSc.InsertMode.INSERT, mode=_PETSc.ScatterMode.FORWARD)
         with common.Timer("~~Contact: Contact contributions (in assemble vector)"):
             for i in range(num_pairs):
-                contact.assemble_vector(b, i, kernel_rhs, coeffs[i], consts)
-                contact.assemble_vector(b, i, kernel_friction_rhs, coeffs[i], consts)
+                contact.assemble_vector(b, i, kernel_rhs, coeffs[i], consts, V._cpp_object)
+                contact.assemble_vector(b, i, kernel_friction_rhs, coeffs[i], consts, V._cpp_object)
         with common.Timer("~~Contact: Standard contributions (in assemble vector)"):
             fem.petsc.assemble_vector(b, F_custom)
 
@@ -156,14 +154,14 @@ def setup_newton_solver(F_custom: fem.forms.Form, J_custom: fem.forms.Form,
         A.zeroEntries()
         with common.Timer("~~Contact: Contact contributions (in assemble matrix)"):
             for i in range(num_pairs):
-                contact.assemble_matrix(A, i, kernel_jac, coeffs[i], consts)
-                contact.assemble_matrix(A, i, kernel_friction_jac, coeffs[i], consts)
+                contact.assemble_matrix(A, i, kernel_jac, coeffs[i], consts, V._cpp_object)
+                contact.assemble_matrix(A, i, kernel_friction_jac, coeffs[i], consts, V._cpp_object)
         with common.Timer("~~Contact: Standard contributions (in assemble matrix)"):
             fem.petsc.assemble_matrix(A, J_custom, bcs=bcs)
         A.assemble()
 
     # coefficient arrays
-    num_coeffs = contact.coefficients_size(False)
+    num_coeffs = contact.coefficients_size(False, V._cpp_object)
 
     coeffs = [np.zeros((len(entities[i]), num_coeffs)) for i in range(num_pairs)]
     newton_solver = dolfinx_contact.NewtonSolver(mesh.comm, A, b, coeffs)
@@ -212,7 +210,7 @@ def copy_fns(fns: list[Union[fem.Function, fem.Constant]],
             old_fns.append(new_fn)
         elif type(fn) is fem.Constant:
             shape = fn.value.shape
-            temp = np.zeros(shape, dtype=_PETSc.ScalarType)
+            temp = np.zeros(shape, dtype=default_scalar_type)
             new_const = fem.Constant(mesh, temp)
             new_const.value = fn.value
             old_fns.append(new_const)
@@ -233,10 +231,11 @@ def update_fns(t: float, fns: list[Union[fem.Function, fem.Constant]],
         elif type(fn) is fem.Constant:
             fn.value = t * old_fns[k].value  # type: ignore
 
+
 def nitsche_unbiased(steps: int, ufl_form: ufl.Form, u: fem.Function, mu: fem.Function, lmbda: fem.Function,
                      rhs_fns: list[Any], markers: list[_mesh.MeshTags],
                      contact_data: Tuple[AdjacencyList_int32, list[Tuple[int, int]]],
-                     bcs: list[fem.DirichletBC], bc_fns: list[Union[fem.Function, fem.Constant]],
+                     bcs: list[fem.DirichletBC], bc_fns: list[Union[fem.Constant, fem.Function]],
                      problem_parameters: dict[str, np.float64],
                      search_method: list[dolfinx_contact.cpp.ContactMode],
                      quadrature_degree: int = 5,
@@ -366,7 +365,7 @@ def nitsche_unbiased(steps: int, ufl_form: ufl.Form, u: fem.Function, mu: fem.Fu
     markers_cpp = [marker._cpp_object for marker in markers[1:]]
     with common.Timer("~Contact: Init"):
         contact = dolfinx_contact.cpp.Contact(markers_cpp, contact_surfaces, contact_pairs,
-                                              V._cpp_object, quadrature_degree=quadrature_degree,
+                                              mesh._cpp_object, quadrature_degree=quadrature_degree,
                                               search_method=search_method)
 
     xdmf = cpp.io.XDMFFile(mesh.comm, "debug.xdmf", "w")
@@ -454,7 +453,7 @@ def nitsche_unbiased(steps: int, ufl_form: ufl.Form, u: fem.Function, mu: fem.Fu
         with common.Timer(timing_str):
             n, converged = newton_solver.solve(du, write_solution=True)
         if outfile is not None:
-            viewer = _PETSc.Viewer().createASCII(outfile, "a")
+            viewer = _PETSc.Viewer().createASCII(outfile, "a")  # type: ignore
             newton_solver.krylov_solver.view(viewer)
 
         # collect solver stats

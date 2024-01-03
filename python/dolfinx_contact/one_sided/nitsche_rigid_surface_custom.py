@@ -188,7 +188,7 @@ def nitsche_rigid_surface_custom(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTa
     surfaces = adjacencylist(data, offsets)
     search_mode = [ContactMode.ClosestPoint]
     contact = Contact([facet_marker._cpp_object], surfaces, [(0, 1)],
-                      V._cpp_object, search_mode, quadrature_degree=quadrature_degree)
+                      mesh._cpp_object, search_mode, quadrature_degree=quadrature_degree)
 
     # Compute gap and normals
     contact.create_distance_map(0)
@@ -204,7 +204,7 @@ def nitsche_rigid_surface_custom(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTa
     kernel_J = generate_rigid_surface_kernel(V._cpp_object, kt.Jac, q_rule, False)
 
     # NOTE: HACK to make "one-sided" contact work with assemble_matrix/assemble_vector
-    contact_assembler = Contact([facet_marker._cpp_object], surfaces, [(0, 1)], V._cpp_object,
+    contact_assembler = Contact([facet_marker._cpp_object], surfaces, [(0, 1)], mesh._cpp_object,
                                 search_mode, quadrature_degree=quadrature_degree)
 
     # Pack coefficients to get numpy array of correct size for Newton solver
@@ -232,7 +232,7 @@ def nitsche_rigid_surface_custom(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTa
         """
         with b.localForm() as b_local:
             b_local.set(0.0)
-        contact_assembler.assemble_vector(b, 0, kernel_rhs, coeffs[0], consts)
+        contact_assembler.assemble_vector(b, 0, kernel_rhs, coeffs[0], consts, V._cpp_object)
         _fem.petsc.assemble_vector(b, F_custom)
 
     def compute_jacobian(x, A, coeffs):
@@ -240,7 +240,7 @@ def nitsche_rigid_surface_custom(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTa
         Compute Jacobian for Newton solver LHS, given precomputed coefficients
         """
         A.zeroEntries()
-        contact_assembler.assemble_matrix(A, 0, kernel_J, coeffs[0], consts)
+        contact_assembler.assemble_matrix(A, 0, kernel_J, coeffs[0], consts, V._cpp_object)
         _fem.petsc.assemble_matrix(A, J_custom)
         A.assemble()
 

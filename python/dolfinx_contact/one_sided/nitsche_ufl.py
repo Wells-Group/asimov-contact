@@ -201,11 +201,10 @@ def nitsche_ufl(mesh: dmesh.Mesh, mesh_data: Tuple[dmesh.MeshTags, int, int],
 
     # Define solver and options
     ksp = solver.krylov_solver
-    opts = _PETSc.Options()
+    opts = _PETSc.Options()  # type: ignore
     option_prefix = ksp.getOptionsPrefix()
 
     # Set PETSc options
-    opts = _PETSc.Options()
     opts.prefixPush(option_prefix)
     for k, v in petsc_options.items():
         opts[k] = v

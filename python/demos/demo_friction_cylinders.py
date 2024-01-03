@@ -6,6 +6,7 @@ import argparse
 
 import numpy as np
 import ufl
+from dolfinx import default_scalar_type
 from dolfinx.io import XDMFFile, VTXWriter
 from dolfinx.fem import (assemble_scalar, Constant, dirichletbc, form,
                          Function, FunctionSpace, Expression,
@@ -14,7 +15,6 @@ from dolfinx.fem.petsc import set_bc
 from dolfinx.graph import adjacencylist
 from dolfinx.mesh import locate_entities
 from mpi4py import MPI
-from petsc4py.PETSc import ScalarType
 
 from dolfinx_contact.helpers import (epsilon, sigma_func, lame_parameters)
 from dolfinx_contact.meshing import (convert_mesh,
@@ -116,17 +116,17 @@ if __name__ == "__main__":
     # Step 1: frictionless contact
     V = VectorFunctionSpace(mesh, ("CG", args.order))
     # boundary conditions
-    t = Constant(mesh, ScalarType((0.0, -p)))
-    g = Constant(mesh, ScalarType((0.0)))
+    t = Constant(mesh, default_scalar_type((0.0, -p)))
+    g = Constant(mesh, default_scalar_type((0.0)))
 
-    symmetry_nodes = locate_entities(mesh, 0, lambda x: np.logical_and(np.isclose(x[0], 0), x[1]>= -8))
+    symmetry_nodes = locate_entities(mesh, 0, lambda x: np.logical_and(np.isclose(x[0], 0), x[1] >= -8))
     dofs_symmetry = locate_dofs_topological(V.sub(0), 0, symmetry_nodes)
     dofs_bottom = locate_dofs_topological(V, 1, facet_marker.find(bottom))
     dofs_top = locate_dofs_topological(V, 1, facet_marker.find(top))
 
-    g_top = Constant(mesh, ScalarType((0.0, -0.1)))
+    g_top = Constant(mesh, default_scalar_type((0.0, -0.1)))
     bcs = [dirichletbc(g, dofs_symmetry, V.sub(0)),
-           dirichletbc(Constant(mesh, ScalarType((0.0, 0.0))), dofs_bottom, V),
+           dirichletbc(Constant(mesh, default_scalar_type((0.0, 0.0))), dofs_bottom, V),
            dirichletbc(g_top, dofs_top, V)]
 
     # DG-0 funciton for material
@@ -157,8 +157,8 @@ if __name__ == "__main__":
 
     # Set up force postprocessing
     n = ufl.FacetNormal(mesh)
-    ex = Constant(mesh, ScalarType((1.0, 0.0)))
-    ey = Constant(mesh, ScalarType((0.0, 1.0)))
+    ex = Constant(mesh, default_scalar_type((1.0, 0.0)))
+    ey = Constant(mesh, default_scalar_type((0.0, 1.0)))
     Rx_form = form(ufl.inner(sigma(u) * n, ex) * ds(top))
     Ry_form = form(ufl.inner(sigma(u) * n, ey) * ds(top))
 
@@ -225,14 +225,14 @@ if __name__ == "__main__":
     vtx.write(0)
     vtx2.write(0)
     newton_steps1 = []
-    
+
     for i in range(steps1):
 
         for j in range(len(contact)):
             problem1.contact.create_distance_map(j)
-        #val = -p * (i + 1) / steps1  # -0.2 / steps1  #
+        # val = -p * (i + 1) / steps1  # -0.2 / steps1  #
         g_top.value[1] = -0.2 / steps1
-        t.value[1] = 0 #val
+        t.value[1] = 0  # val
         print(f"Fricitionless part: Step {i+1} of {steps1}----------------------------------------------")
         # g_top.value[1] = val
         set_bc(problem1.du.vector, bcs)
@@ -246,10 +246,10 @@ if __name__ == "__main__":
         # pr = abs(val)
         R_x = mesh.comm.allreduce(assemble_scalar(Rx_form), op=MPI.SUM)
         R_y = mesh.comm.allreduce(assemble_scalar(Ry_form), op=MPI.SUM)
-        
+
         pr = abs(R_y / (2 * R))
         q = abs(R_x / (2 * R))
-        load = pr * 2 * R  
+        load = pr * 2 * R
         a = 2 * np.sqrt(R * load / (2 * np.pi * Estar))
         p0 = 2 * load / (np.pi * a)
         print(pr, q)
@@ -272,7 +272,7 @@ if __name__ == "__main__":
     # F = ufl.inner(sigma(u2), epsilon(v)) * dx
 
     # # body forces
-    # t2 = Constant(mesh, ScalarType((0.0, -p)))
+    # t2 = Constant(mesh, default_scalar_type((0.0, -p)))
     # F -= ufl.inner(t2, v) * ds(top)
 
     # problem_parameters = {"gamma": np.float64(E * 1000), "theta": np.float64(1), "friction": np.float64(0.3)}
@@ -308,16 +308,16 @@ if __name__ == "__main__":
     # symmetry_nodes = locate_entities(mesh, 0, lambda x: np.logical_and(np.isclose(x[0], 0), np.isclose(x[1], -R)))
     # dofs_symmetry = locate_dofs_topological(V.sub(0), 0, symmetry_nodes)
     # dofs_bottom = locate_dofs_topological(V, 1, facet_marker.find(bottom))
-    # bcs2 = [dirichletbc(Constant(mesh, ScalarType((0, 0))), dofs_bottom, V)]
+    # bcs2 = [dirichletbc(Constant(mesh, default_scalar_type((0, 0))), dofs_bottom, V)]
     # # Solve contact problem using Nitsche's method
     # # update_geometry(u._cpp_object, mesh._cpp_object)
     # # u2.x.array[:] = u.x.array[:]
     def identifier(x):
-        return np.logical_and(np.logical_and(x[0]<-0.5, x[0]>-1), np.logical_and(x[1]>-0.5, x[1]<0.5))
+        return np.logical_and(np.logical_and(x[0] < -0.5, x[0] > -1), np.logical_and(x[1] > -0.5, x[1] < 0.5))
     constraint_nodes = locate_entities(mesh, 0, identifier)
     dofs_constraint = locate_dofs_topological(V.sub(1), 0, constraint_nodes)
-    g_top = Constant(mesh, ScalarType((0.0, 0.0)))
-    bcs = [dirichletbc(Constant(mesh, ScalarType((0.0, 0.0))), dofs_bottom, V), 
+    g_top = Constant(mesh, default_scalar_type((0.0, 0.0)))
+    bcs = [dirichletbc(Constant(mesh, default_scalar_type((0.0, 0.0))), dofs_bottom, V),
            dirichletbc(g, dofs_constraint, V.sub(1)),
            dirichletbc(g_top, dofs_top, V)]
 
@@ -350,7 +350,7 @@ if __name__ == "__main__":
         # print(problem1.du.x.array[:])
         set_bc(problem1.du.vector, bcs)
 
-        #t.value[0] = 0.03 * (i + 1) / steps2
+        # t.value[0] = 0.03 * (i + 1) / steps2
         g_top.value[0] = 6 * 0.05 / steps2
         n = problem1.solve()
         newton_steps2.append(n)
@@ -362,9 +362,9 @@ if __name__ == "__main__":
         R_x = mesh.comm.allreduce(assemble_scalar(Rx_form), op=MPI.SUM)
         R_y = mesh.comm.allreduce(assemble_scalar(Ry_form), op=MPI.SUM)
         pr = abs(R_y / (2 * R))
-        # q = 0.03 * (i + 1) / steps2  # 
+        # q = 0.03 * (i + 1) / steps2  #
         q = abs(R_x / (2 * R))
-        load = 2 * R * abs(pr) 
+        load = 2 * R * abs(pr)
         a = 2 * np.sqrt(R * load / (2 * np.pi * Estar))
         p0 = 2 * load / (np.pi * a)
         print(pr, q)
@@ -374,7 +374,7 @@ if __name__ == "__main__":
         problem1.contact.update_submesh_geometry(problem1.u._cpp_object)
         # take a fraction of du as initial guess
         # this is to ensure non-singular matrices in the case of no Dirichlet boundary
-        problem1.du.x.array[:] = 0.1/3 * h * problem1.du.x.array[:]
+        problem1.du.x.array[:] = 0.1 / 3 * h * problem1.du.x.array[:]
         sigma_vm_expr = Expression(sigma_vm, W.element.interpolation_points())
         sigma_vm_h.interpolate(sigma_vm_expr)
         vtx.write(steps1 + 1 + i)

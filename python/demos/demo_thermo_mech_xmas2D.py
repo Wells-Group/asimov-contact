@@ -4,7 +4,7 @@
 import dolfinx.fem as _fem
 import numpy as np
 import ufl
-from dolfinx import io, log
+from dolfinx import default_scalar_type, io, log
 from dolfinx.fem import (Function, FunctionSpace)
 from dolfinx.fem.petsc import LinearProblem
 from dolfinx.graph import adjacencylist
@@ -16,7 +16,6 @@ from dolfinx_contact.parallel_mesh_ghosting import create_contact_mesh
 from dolfinx_contact.unbiased.contact_problem import create_contact_solver
 from dolfinx_contact.cpp import ContactMode
 from mpi4py import MPI
-from petsc4py import PETSc as _PETSc
 
 fname = "meshes/xmas_2D"
 create_christmas_tree_mesh(filename=fname, res=0.2)
@@ -51,18 +50,18 @@ a_therm, L_therm = ufl.lhs(therm), ufl.rhs(therm)
 
 T0.x.array[:] = 0
 dofs = _fem.locate_dofs_topological(Q, entity_dim=tdim - 1, entities=facet_marker.find(3))
-Tbc = _fem.dirichletbc(value=_PETSc.ScalarType((1.0)), dofs=dofs, V=Q)
+Tbc = _fem.dirichletbc(value=default_scalar_type((1.0)), dofs=dofs, V=Q)
 dofs2 = _fem.locate_dofs_topological(Q, entity_dim=tdim - 1, entities=facet_marker.find(4))
-Tbc2 = _fem.dirichletbc(value=_PETSc.ScalarType((0.0)), dofs=dofs2, V=Q)
+Tbc2 = _fem.dirichletbc(value=default_scalar_type((0.0)), dofs=dofs2, V=Q)
 Tproblem = LinearProblem(a_therm, L_therm, bcs=[Tbc, Tbc2], petsc_options={
     "ksp_type": "preonly", "pc_type": "lu"}, u=T0)
 
 
 # Elasticity problem
 V = _fem.VectorFunctionSpace(mesh, ("Lagrange", 1))
-g = _fem.Constant(mesh, _PETSc.ScalarType((0, 0)))     # zero Dirichlet
-t = _fem.Constant(mesh, _PETSc.ScalarType((0.2, 0.5)))  # traction
-f = _fem.Constant(mesh, _PETSc.ScalarType((1.0, 0.5)))  # body force
+g = _fem.Constant(mesh, default_scalar_type((0, 0)))     # zero Dirichlet
+t = _fem.Constant(mesh, default_scalar_type((0.2, 0.5)))  # traction
+f = _fem.Constant(mesh, default_scalar_type((1.0, 0.5)))  # body force
 
 
 # contact surface data
@@ -145,7 +144,7 @@ petsc_options = {
 
 
 # Solve contact problem using Nitsche's method
-problem_parameters = {"gamma": np.float64((1-alpha) * E * gamma), "theta": np.float64(theta), "fric": np.float64(0.4)}
+problem_parameters = {"gamma": np.float64((1 - alpha) * E * gamma), "theta": np.float64(theta), "fric": np.float64(0.4)}
 log.set_log_level(log.LogLevel.WARNING)
 size = mesh.comm.size
 outname = f"results/xmas_{tdim}D_{size}"
@@ -171,7 +170,8 @@ contact_problem = create_contact_solver(ufl_form=F, u=u, mu=mu_dg, lmbda=lmbda_d
 # initialise vtx write
 W = FunctionSpace(mesh, ("CG", 1))
 sigma_vm_h = Function(W)
-sigma_dev = sigma(contact_problem.u, T0) - (1 / 3) * ufl.tr(sigma(contact_problem.u, T0)) * ufl.Identity(len(contact_problem.u))
+sigma_dev = sigma(contact_problem.u, T0) - (1 / 3) * \
+    ufl.tr(sigma(contact_problem.u, T0)) * ufl.Identity(len(contact_problem.u))
 sigma_vm = ufl.sqrt((3 / 2) * ufl.inner(sigma_dev, sigma_dev))
 sigma_vm_h.name = "vonMises"
 vtx_therm = io.VTXWriter(mesh.comm, "results/xmas_disp.bp", [contact_problem.u, T0, sigma_vm_h], "bp4")

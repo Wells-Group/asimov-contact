@@ -7,6 +7,7 @@ import argparse
 import numpy as np
 import numpy.typing as npt
 import ufl
+from dolfinx import default_scalar_type
 from dolfinx.io import XDMFFile, VTXWriter
 from dolfinx.fem import (Constant, dirichletbc, form, Function, FunctionSpace,
                          VectorFunctionSpace, locate_dofs_topological)
@@ -16,7 +17,6 @@ from dolfinx.geometry import bb_tree, compute_closest_entity
 from dolfinx.mesh import Mesh
 
 from mpi4py import MPI
-from petsc4py.PETSc import ScalarType
 
 from dolfinx_contact.helpers import (epsilon, sigma_func, lame_parameters)
 from dolfinx_contact.meshing import (convert_mesh,
@@ -60,7 +60,7 @@ if __name__ == "__main__":
                         choices=[1, 2])
     _chouly = parser.add_mutually_exclusive_group(required=False)
     _chouly.add_argument('--chouly', dest='chouly', action='store_true',
-                          help="Use parameters from Chouly paper", default=False)
+                         help="Use parameters from Chouly paper", default=False)
     # Parse input arguments or set to defualt values
     args = parser.parse_args()
     threed = args.threed
@@ -82,9 +82,9 @@ if __name__ == "__main__":
         nu1 = 0.25
         nu2 = 0.25
     else:
-        R = 8  
-        L = 20 
-        H = 20  
+        R = 8
+        L = 20
+        H = 20
         load = 2 * R * 0.625
         E1 = 200
         E2 = 200
@@ -140,8 +140,8 @@ if __name__ == "__main__":
         dirichlet_dofs2 = locate_dofs_topological(V.sub(1), 0, dirichlet_nodes)
         dirichlet_dofs3 = locate_dofs_topological(V, mesh.topology.dim - 1, facet_marker.find(dirichlet_bdy))
 
-        g0 = Constant(mesh, ScalarType(0.0))
-        g = Constant(mesh, ScalarType((0.0, 0.0, 0.0)))
+        g0 = Constant(mesh, default_scalar_type(0.0))
+        g = Constant(mesh, default_scalar_type((0.0, 0.0, 0.0)))
         bcs = [dirichletbc(g0, dirichlet_dofs1, V.sub(0)),
                dirichletbc(g0, dirichlet_dofs2, V.sub(1)),
                dirichletbc(g, dirichlet_dofs3, V)]
@@ -149,18 +149,18 @@ if __name__ == "__main__":
 
         if problem == 1:
             distributed_load = 3 * load / (4 * np.pi * R**3)
-            f = Constant(mesh, ScalarType((0.0, 0.0, -distributed_load)))
-            t = Constant(mesh, ScalarType((0.0, 0.0, 0.0)))
+            f = Constant(mesh, default_scalar_type((0.0, 0.0, -distributed_load)))
+            t = Constant(mesh, default_scalar_type((0.0, 0.0, 0.0)))
         else:
             distributed_load = load / (np.pi * R**2)
-            f = Constant(mesh, ScalarType((0.0, 0.0, 0.0)))
-            t = Constant(mesh, ScalarType((0.0, 0.0, -distributed_load)))
+            f = Constant(mesh, default_scalar_type((0.0, 0.0, 0.0)))
+            t = Constant(mesh, default_scalar_type((0.0, 0.0, -distributed_load)))
 
         a = np.cbrt(3.0 * load * R / (4 * Estar))
         force = 4 * a**3 * Estar / (3 * R)
         p0 = 3 * force / (2 * np.pi * a**2)
 
-        def _pressure(x):
+        def _pressure(x, p0, a):
             vals = np.zeros(x.shape[1])
             for i in range(x.shape[1]):
                 rsquared = x[0][i]**2 + x[1][i]**2
@@ -202,20 +202,20 @@ if __name__ == "__main__":
         dirichlet_dofs1 = locate_dofs_topological(V.sub(0), 0, dirichlet_nodes)
         dirichlet_dofs2 = locate_dofs_topological(V, mesh.topology.dim - 1, facet_marker.find(dirichlet_bdy))
 
-        g0 = Constant(mesh, ScalarType(0.0))
-        g = Constant(mesh, ScalarType((0, 0)))
+        g0 = Constant(mesh, default_scalar_type(0.0))
+        g = Constant(mesh, default_scalar_type((0, 0)))
         bcs = [dirichletbc(g0, dirichlet_dofs1, V.sub(0)),
                dirichletbc(g, dirichlet_dofs2, V)]
         bc_fns = [g0, g]
 
         if problem == 1:
             distributed_load = load / (np.pi * R**2)
-            f = Constant(mesh, ScalarType((0.0, -distributed_load)))
-            t = Constant(mesh, ScalarType((0.0, 0.0)))
+            f = Constant(mesh, default_scalar_type((0.0, -distributed_load)))
+            t = Constant(mesh, default_scalar_type((0.0, 0.0)))
         else:
             distributed_load = load / (2 * R)
-            f = Constant(mesh, ScalarType((0.0, 0.0)))
-            t = Constant(mesh, ScalarType((0.0, -distributed_load)))
+            f = Constant(mesh, default_scalar_type((0.0, 0.0)))
+            t = Constant(mesh, default_scalar_type((0.0, -distributed_load)))
 
         a = 2 * np.sqrt(R * load / (np.pi * Estar))
         p0 = 2 * load / (np.pi * a)
@@ -299,11 +299,10 @@ if __name__ == "__main__":
     # compiler options to improve performance
     cffi_options = ["-Ofast", "-march=native"]
     jit_options = {"cffi_extra_compile_args": cffi_options,
-                "cffi_libraries": ["m"]}
+                   "cffi_libraries": ["m"]}
     # compiled forms for rhs and tangen system
     F_compiled = form(F, jit_options=jit_options)
     J_compiled = form(J, jit_options=jit_options)
-
 
     # Nitsche parameters
     gamma = E2 * 100 * args.order**2
@@ -322,18 +321,17 @@ if __name__ == "__main__":
     contact_problem.set_forms(F_compiled, J_compiled, bcs)
     du.interpolate(_u_initial, disk_cells)
 
-
     # create vector and matrix
     A = contact_problem.create_matrix()
     b = create_vector(F_compiled)
 
     # define functions for newton solver
     def compute_coefficients(x, coeffs):
-            size_local = V.dofmap.index_map.size_local
-            bs = V.dofmap.index_map_bs
-            du.x.array[:size_local * bs] = x.array_r[:size_local * bs]
-            du.x.scatter_forward()
-            contact_problem.update_kernel_data(du)
+        size_local = V.dofmap.index_map.size_local
+        bs = V.dofmap.index_map_bs
+        du.x.array[:size_local * bs] = x.array_r[:size_local * bs]
+        du.x.scatter_forward()
+        contact_problem.update_kernel_data(du)
 
     def compute_residual(x, b, coeffs):
         contact_problem.compute_residual(x, b)
@@ -361,23 +359,23 @@ if __name__ == "__main__":
 
     if not threed:
         writer = ContactWriter(mesh, contact_problem.contact, u, contact,
-                            args.q_degree, search_mode, contact_problem.entities,
-                            contact_problem.coeffs, args.order, simplex,
-                            [(tdim - 1, 0), (tdim - 1, -R)],
-                            f'{outname}_1_step')
+                               args.q_degree, search_mode, contact_problem.entities,
+                               contact_problem.coeffs, args.order, simplex,
+                               [(tdim - 1, 0), (tdim - 1, -R)],
+                               f'{outname}_1_step')
     # initialise vtx writer
     vtx = VTXWriter(mesh.comm, f"{outname}_1_step.bp", [u], "bp4")
     vtx.write(0)
     steps = 4
     for i in range(steps):
         if problem == 1:
-            f.value[-1] = -distributed_load * (i + 1)/steps
+            f.value[-1] = -distributed_load * (i + 1) / steps
         else:
-            t.value[-1] = -distributed_load * (i + 1)/steps
+            t.value[-1] = -distributed_load * (i + 1) / steps
         n, converged = newton_solver.solve(du, write_solution=True)
         du.x.scatter_forward()
         u.x.array[:] += du.x.array[:]
-        a = 2 * np.sqrt(R * load * (i + 1)/ (steps * np.pi * Estar))
+        a = 2 * np.sqrt(R * load * (i + 1) / (steps * np.pi * Estar))
         p0 = 2 * load * (i + 1) / (steps * np.pi * a)
         if not threed:
             writer.write(i + 1, lambda x: _pressure(x, p0, a), lambda x: np.zeros(x.shape[1]))
