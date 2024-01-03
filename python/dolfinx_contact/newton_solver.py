@@ -241,8 +241,8 @@ class NewtonSolver():
                 out.x.array[:] = x.x.array[:] + u.x.array[:]
             else:
                 out = x
-            vtx = VTXWriter(mesh.comm, "newton.bp", [out])
-        vtx.write(0)
+            vtx = VTXWriter(mesh.comm, "results/newton.bp", [out])
+            vtx.write(0)
         # Reset iteration counts
         self.iteration = 0
         self.krylov_iterations = 0

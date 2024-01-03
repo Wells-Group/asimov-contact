@@ -173,7 +173,9 @@ def nitsche_custom(mesh: dmesh.Mesh, mesh_data: Tuple[dmesh.MeshTags, int, int],
                                 mesh._cpp_object, search_mode, quadrature_degree=quadrature_degree)
 
     def assemble_residual(x, b, cf):
-        u.vector[:] = x.array
+        size_local = V.dofmap.index_map.size_local
+        bs = V.dofmap.index_map_bs
+        u.x.array[:size_local * bs] = x.array_r[:size_local * bs]
         u_packed = pack_coefficient_quadrature(u._cpp_object, quadrature_degree, integral_entities)
         grad_u_packed = pack_gradient_quadrature(
             u._cpp_object, quadrature_degree, integral_entities)
@@ -188,7 +190,9 @@ def nitsche_custom(mesh: dmesh.Mesh, mesh_data: Tuple[dmesh.MeshTags, int, int],
     kernel_J = generate_rigid_surface_kernel(V._cpp_object, dolfinx_contact.Kernel.Jac, q_rule)
 
     def assemble_jacobian(x, a_mat, cf):
-        u.vector[:] = x.array
+        size_local = V.dofmap.index_map.size_local
+        bs = V.dofmap.index_map_bs
+        u.x.array[:size_local * bs] = x.array_r[:size_local * bs]
         u_packed = pack_coefficient_quadrature(u._cpp_object, quadrature_degree, integral_entities)
         grad_u_packed = pack_gradient_quadrature(u._cpp_object, quadrature_degree, integral_entities)
         c = np.hstack([coeffs, u_packed, grad_u_packed])

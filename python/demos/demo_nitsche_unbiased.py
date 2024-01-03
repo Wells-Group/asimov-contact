@@ -164,7 +164,7 @@ if __name__ == "__main__":
 
         elif problem == 3:
             outname = "results/problem3_3D_simplex" if simplex else "results/problem3_3D_hex"
-            fname = "cylinder_cylinder_3D"
+            fname = "meshes/cylinder_cylinder_3D"
             displacement = np.array([[-1, 0, 0], [0, 0, 0]])
             create_cylinder_cylinder_mesh(fname, res=args.res, simplex=simplex)
             with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
@@ -203,8 +203,6 @@ if __name__ == "__main__":
             values = np.hstack([val0, val1, val2, val3])
             sorted_facets = np.argsort(indices)
             facet_marker = meshtags(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
-            if args.radius > 0.8 / args.time_steps:
-                args.radius = 0.8 / args.time_steps
 
     else:
         displacement = np.array([[0, -args.disp], [0, 0]])
