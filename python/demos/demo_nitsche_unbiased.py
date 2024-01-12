@@ -490,6 +490,9 @@ if __name__ == "__main__":
         du.x.scatter_forward()
         u.x.array[:] += du.x.array[:]
         contact_problem.update_contact_detection(u)
+        A = contact_problem.create_matrix(J_compiled)
+        A.setNearNullSpace(null_space)
+        newton_solver.set_petsc_matrix(A)
         du.x.array[:] = 0.1 * du.x.array[:]
         contact_problem.update_contact_data(du)
         vtx.write(i + 1)

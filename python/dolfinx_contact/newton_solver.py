@@ -129,6 +129,9 @@ class NewtonSolver():
         """
         self._compute_jacobian = func
 
+    def set_petsc_matrix(self, A: PETSc.Mat):
+        self._A = A
+
     def set_residual(self,
                      func: Callable[  # type: ignore
                          [PETSc.Vec, PETSc.Vec, List[npt.NDArray[default_scalar_type]]],
