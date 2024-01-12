@@ -375,7 +375,7 @@ def create_box_mesh_2D(filename: str, quads: bool = False, res=0.1, order: int =
     """
     L = 0.5
     H = 0.5
-    disp = -0.6
+    disp = -0.63
     delta = 0.1
 
     gmsh.initialize()

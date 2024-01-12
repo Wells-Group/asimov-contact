@@ -8,14 +8,15 @@ import sys
 import numpy as np
 import ufl
 from dolfinx import default_scalar_type, log
-from dolfinx.common import Timer, TimingType, list_timings, timing
+from dolfinx.common import timed, Timer, TimingType, list_timings, timing
 from dolfinx.fem import (Constant, dirichletbc, form, Function, Expression, FunctionSpace,
                          VectorFunctionSpace, locate_dofs_topological)
-from dolfinx.fem.petsc import create_vector
+from dolfinx.fem.petsc import create_vector, assemble_vector, assemble_matrix, set_bc, apply_lifting
 from dolfinx.graph import adjacencylist
 from dolfinx.io import XDMFFile, VTXWriter
 from dolfinx.mesh import locate_entities_boundary, GhostMode, meshtags
 from mpi4py import MPI
+from petsc4py.PETSc import ScatterMode, InsertMode
 
 from dolfinx_contact.helpers import (epsilon, lame_parameters, sigma_func,
                                      weak_dirichlet)
@@ -25,7 +26,7 @@ from dolfinx_contact.meshing import (convert_mesh, create_box_mesh_2D,
                                      create_circle_plane_mesh,
                                      create_cylinder_cylinder_mesh,
                                      create_sphere_plane_mesh)
-from dolfinx_contact.unbiased.contact_problem_new import ContactProblem
+from dolfinx_contact.unbiased.contact_problem_new import ContactProblem, FrictionLaw
 from dolfinx_contact.parallel_mesh_ghosting import create_contact_mesh
 from dolfinx_contact.helpers import rigid_motions_nullspace_subdomains
 from dolfinx_contact.newton_solver import NewtonSolver
@@ -38,7 +39,7 @@ if __name__ == "__main__":
     parser.add_argument("--theta", default=1., type=float, dest="theta",
                         help="Theta parameter for Nitsche, 1 symmetric, -1 skew symmetric, 0 Penalty-like",
                         choices=[1., -1., 0.])
-    parser.add_argument("--gamma", default=5, type=float, dest="gamma",
+    parser.add_argument("--gamma", default=10, type=float, dest="gamma",
                         help="Coercivity/Stabilization parameter for Nitsche condition")
     parser.add_argument("--quadrature", default=5, type=int, dest="q_degree",
                         help="Quadrature degree used for contact integrals")
@@ -307,7 +308,7 @@ if __name__ == "__main__":
                       "atol": newton_tol,
                       "rtol": newton_tol,
                       "convergence_criterion": "residual",
-                      "max_it": 50,
+                      "max_it": 200,
                       "error_on_nonconvergence": True}
     # petsc_options = {"ksp_type": "preonly", "pc_type": "lu"}
     petsc_options = {
@@ -325,11 +326,12 @@ if __name__ == "__main__":
         "pc_gamg_agg_nsmooths": 1,
         "pc_gamg_threshold": 1e-3,
         "pc_gamg_square_graph": 2,
-        "pc_gamg_reuse_interpolation": False
+        "pc_gamg_reuse_interpolation": False,
+        "ksp_norm_type": "unpreconditioned"
     }
     # Pack mesh data for Nitsche solver
     dirichlet_vals = [dirichlet_bdy_1, dirichlet_bdy_2]
-    contact = [(0, 1), (1, 0)]
+    contact = [(1, 0), (0, 1)]
     data = np.array([contact_bdy_1, contact_bdy_2], dtype=np.int32)
     offsets = np.array([0, 2], dtype=np.int32)
     surfaces = adjacencylist(data, offsets)
@@ -382,11 +384,6 @@ if __name__ == "__main__":
     F_compiled = form(F, jit_options=jit_options)
     J_compiled = form(J, jit_options=jit_options)
 
-    # Data to be stored on the unperturb domain at the end of the simulation
-    u_all = Function(V)
-    u_all.x.array[:] = np.zeros(u.x.array[:].shape)
-    geometry = mesh.geometry.x[:].copy()
-
     log.set_log_level(log.LogLevel.WARNING)
     num_newton_its = np.zeros(nload_steps, dtype=int)
     num_krylov_its = np.zeros(nload_steps, dtype=int)
@@ -408,13 +405,14 @@ if __name__ == "__main__":
         search_mode = [ContactMode.ClosestPoint for i in range(len(contact))]
 
     # create contact solver
-    contact_problem = ContactProblem([facet_marker], surfaces, contact, V, search_mode, args.q_degree)
-    contact_problem.generate_kernel_data(u, du, mu0, lmbda0, fric, E * gamma * args.order**2, theta)
-    contact_problem.set_forms(F_compiled, J_compiled, bcs)
-
-    # create vector and matrix
-    A = contact_problem.create_matrix()
-    b = create_vector(F_compiled)
+    contact_problem = ContactProblem([facet_marker], surfaces, contact, mesh, args.q_degree, search_mode)
+    if args.coulomb:
+        friction_law = FrictionLaw.Coulomb
+    else:
+        friction_law = FrictionLaw.Tresca
+    contact_problem.generate_contact_data(friction_law, V, {"u": u, "du": du, "mu": mu0,
+                                                            "lambda": lmbda0, "fric": fric},
+                                          E * gamma * args.order**2, theta)
 
     # define functions for newton solver
     def compute_coefficients(x, coeffs):
@@ -422,13 +420,39 @@ if __name__ == "__main__":
         bs = V.dofmap.index_map_bs
         du.x.array[:size_local * bs] = x.array_r[:size_local * bs]
         du.x.scatter_forward()
-        contact_problem.update_kernel_data(du)
+        contact_problem.update_contact_data(du)
 
+    @timed("~Contact: Assemble residual")
     def compute_residual(x, b, coeffs):
-        contact_problem.compute_residual(x, b)
+        b.zeroEntries()
+        b.ghostUpdate(addv=InsertMode.INSERT,
+                      mode=ScatterMode.FORWARD)
+        with Timer("~~Contact: Contact contributions (in assemble vector)"):
+            contact_problem.assemble_vector(b, V)
+        with Timer("~~Contact: Standard contributions (in assemble vector)"):
+            assemble_vector(b, F_compiled)
 
+        # Apply boundary condition
+        if len(bcs) > 0:
+            apply_lifting(
+                b, [J_compiled], bcs=[bcs], x0=[x], scale=-1.0)
+        b.ghostUpdate(addv=InsertMode.ADD,
+                      mode=ScatterMode.REVERSE)
+        if len(bcs) > 0:
+            set_bc(b, bcs, x, -1.0)
+
+    @timed("~Contact: Assemble matrix")
     def compute_jacobian_matrix(x, A, coeffs):
-        contact_problem.compute_jacobian_matrix(x, A)
+        A.zeroEntries()
+        with Timer("~~Contact: Contact contributions (in assemble matrix)"):
+            contact_problem.assemble_matrix(A, V)
+        with Timer("~~Contact: Standard contributions (in assemble matrix)"):
+            assemble_matrix(A, J_compiled, bcs=bcs)
+        A.assemble()
+
+    # create vector and matrix
+    A = contact_problem.create_matrix(J_compiled)
+    b = create_vector(F_compiled)
 
     # Set up snes solver for nonlinear solver
     newton_solver = NewtonSolver(mesh.comm, A, b, contact_problem.coeffs)
@@ -449,11 +473,15 @@ if __name__ == "__main__":
     newton_solver.set_krylov_options(petsc_options)
 
     # initialise vtx writer
-    vtx = VTXWriter(mesh.comm, f"{outname}_1_step.bp", [u], "bp4")
+    u.name = "u"
+    vtx = VTXWriter(mesh.comm, f"{outname}_{nload_steps}_step.bp", [u], "bp4")
     vtx.write(0)
     for i in range(nload_steps):
         for k, g in enumerate(bc_fns):
-            g.value[:] = displacement[k, :] / nload_steps
+            if len(bcs) > 0:
+                g.value[:] = displacement[k, :] / nload_steps
+            else:
+                g.value[:] = (i + 1) * displacement[k, :] / nload_steps
         timing_str = f"~Contact: {i+1} Newton Solver"
         with Timer(timing_str):
             n, converged = newton_solver.solve(du, write_solution=True)
@@ -463,10 +491,11 @@ if __name__ == "__main__":
         u.x.array[:] += du.x.array[:]
         contact_problem.update_contact_detection(u)
         du.x.array[:] = 0.1 * du.x.array[:]
+        contact_problem.update_contact_data(du)
         vtx.write(i + 1)
     vtx.close()
 
-    sigma_dev = sigma(u_all) - (1 / 3) * ufl.tr(sigma(u_all)) * ufl.Identity(len(u_all))
+    sigma_dev = sigma(u) - (1 / 3) * ufl.tr(sigma(u)) * ufl.Identity(len(u))
     sigma_vm = ufl.sqrt((3 / 2) * ufl.inner(sigma_dev, sigma_dev))
     W = FunctionSpace(mesh, ("Discontinuous Lagrange", args.order - 1))
     sigma_vm_expr = Expression(sigma_vm, W.element.interpolation_points())
@@ -475,8 +504,8 @@ if __name__ == "__main__":
     sigma_vm_h.name = "vonMises"
     with XDMFFile(mesh.comm, "results/u_unbiased_total.xdmf", "w") as xdmf:
         xdmf.write_mesh(mesh)
-        u_all.name = "u"
-        xdmf.write_function(u_all)
+        u.name = "u"
+        xdmf.write_function(u)
 
     with XDMFFile(mesh.comm, "results/u_unbiased_vonMises.xdmf", "w") as xdmf:
         xdmf.write_mesh(mesh)

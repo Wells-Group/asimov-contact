@@ -322,7 +322,14 @@ PYBIND11_MODULE(cpp, m)
                                                 std::array{shape0, cstride});
           })
       .def("update_submesh_geometry",
-           &dolfinx_contact::Contact::update_submesh_geometry);
+           &dolfinx_contact::Contact::update_submesh_geometry)
+      .def("crop_invalid_points",
+           [] (dolfinx_contact::Contact& self, int pair, const py::array_t<PetscScalar, py::array::c_style>& gap,
+              const py::array_t<PetscScalar, py::array::c_style>& n_y, double tol){
+            return self.crop_invalid_points(pair, std::span(gap.data(), gap.size()),
+            std::span(n_y.data(), n_y.size()), tol);
+           })
+      .def("max_links", [] (dolfinx_contact::Contact& self) {return self.max_links();});
   m.def(
       "generate_rigid_surface_kernel",
       [](std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V,

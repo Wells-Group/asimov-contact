@@ -36,7 +36,7 @@ public:
                         std::vector<ContactMode>(connected_pairs.size(),
                         ContactMode::ClosestPoint), q_deg)
   {
-    // Finde closest pointes
+    // Find closest points
     for (int i = 0; i < (int)connected_pairs.size(); ++i)
     {
       Contact::create_distance_map(i);

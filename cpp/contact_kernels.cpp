@@ -32,6 +32,7 @@ dolfinx_contact::generate_contact_kernel(
   // offsets(4) - u           size num_q_points * gdim
   // offsets(5) - grad(u)     size num_q_points * gdim * gdim
   // offsets(6) - u_opposite  size num_q_points * bs
+  // offsets(7) - normals in previous step size num_q__points * gdim
   std::vector<std::size_t> cstrides
       = {4,
          num_q_points * gdim,
@@ -40,8 +41,7 @@ dolfinx_contact::generate_contact_kernel(
          num_q_points * gdim,
          num_q_points * gdim * gdim,
          num_q_points * bs,
-         num_q_points * gdim,
-         num_q_points * bs};
+         num_q_points * gdim};
 
   auto kd = dolfinx_contact::KernelData(V, quadrature_rule, cstrides);
 
