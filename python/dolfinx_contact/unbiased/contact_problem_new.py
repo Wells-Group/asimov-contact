@@ -1,6 +1,11 @@
-from dolfinx import common, cpp, fem
+# Copyright (C) 2024 Sarah Roggendorf
+#
+# SPDX-License-Identifier:    MIT
+
+from enum import Enum
 import numpy as np
-from petsc4py import PETSc as _PETSc
+from typing import Union
+from dolfinx import common, cpp, fem
 
 import dolfinx_contact
 import dolfinx_contact.cpp
@@ -8,100 +13,122 @@ import dolfinx_contact.cpp
 kt = dolfinx_contact.cpp.Kernel
 
 
-class ContactProblem:
-    __slots__ = ["F", "J", "bcs", "u", "du", "contact", "markers", "entities",
-                 "quadrature_degree", "const_coeffs", "coeffs", "consts", "search_method", "coulomb", "normals",
-                 "kernel_jac", "kernel_friction_jac", "kernel_rhs", "kernel_friction_rhs",
-                 "contact_pairs", "function_space", "grad_u", "u_old", "u_old_opp"]
+class FrictionLaw(Enum):
+    Frictionless = 1
+    Coulomb = 2
+    Tresca = 3
 
-    def __init__(self, markers, surfaces, contact_pairs, V, search_method, quadrature_degree,
-                 search_radius=-1.0, coulomb=False):
+
+class ContactProblem(dolfinx_contact.cpp.Contact):
+    __slots__ = ["_matrix_kernels", "_vector_kernels", "coeffs", "_consts", "_q_deg",
+                 "_num_pairs", "_cstrides", "_entities", "_normals", "_search_method",
+                 "_grad_u"]
+
+    def __init__(self, markers, surfaces, contact_pairs, mesh, quadrature_degree, search_method, search_radius=-1.0):
 
         # create contact class
         markers_cpp = [marker._cpp_object for marker in markers]
-        mesh = V.mesh
         with common.Timer("~Contact: Init"):
-            self.contact = dolfinx_contact.cpp.Contact(markers_cpp, surfaces, contact_pairs,
-                                                       mesh._cpp_object, quadrature_degree=quadrature_degree,
-                                                       search_method=search_method)
+            super().__init__(markers_cpp, surfaces, contact_pairs,
+                             mesh._cpp_object, quadrature_degree=quadrature_degree,
+                             search_method=search_method)
 
-        self.contact.set_search_radius(search_radius)
+        self.set_search_radius(search_radius)
         # Perform contact detection
         for j in range(len(contact_pairs)):
-            self.contact.create_distance_map(j)
+            self.create_distance_map(j)
 
-        # generate kernels
-        with common.Timer("~Contact: Generate Jacobian kernel"):
-            self.kernel_jac = self.contact.generate_kernel(
-                kt.Jac, V._cpp_object)
-            if coulomb:
-                self.kernel_friction_jac = self.contact.generate_kernel(
-                    kt.CoulombJac, V._cpp_object)
-            else:
-                self.kernel_friction_jac = self.contact.generate_kernel(
-                    kt.TrescaJac, V._cpp_object)
-        with common.Timer("~Contact: Generate residual kernel"):
-            self.kernel_rhs = self.contact.generate_kernel(
-                kt.Rhs, V._cpp_object)
-            if coulomb:
-                self.kernel_friction_rhs = self.contact.generate_kernel(
-                    kt.CoulombRhs, V._cpp_object)
-            else:
-                self.kernel_friction_rhs = self.contact.generate_kernel(
-                    kt.TrescaRhs, V._cpp_object)
-
-        self.markers = markers
-        self.search_method = search_method
-        self.contact_pairs = contact_pairs
-        self.function_space = V
-        self.quadrature_degree = quadrature_degree
-
-    @common.timed("~Contact: Update coefficients")
-    def update_kernel_data(self, du):
-        num_pairs = len(self.contact_pairs)
-        u_candidate = []
-        with common.Timer("~~Contact: Pack u contact"):
-            for i in range(num_pairs):
-                u_candidate.append(
-                    self.contact.pack_u_contact(i, du._cpp_object))
-        u_puppet = []
-        grad_u_puppet = []
-        with common.Timer("~~Contact: Pack u"):
-            for i in range(num_pairs):
-                u_puppet.append(dolfinx_contact.cpp.pack_coefficient_quadrature(
-                    du._cpp_object, self.quadrature_degree, self.entities[i]))
-                grad_u_puppet.append(dolfinx_contact.cpp.pack_gradient_quadrature(
-                    du._cpp_object, self.quadrature_degree, self.entities[i]))
-        for i in range(num_pairs):
-            c_0 = np.hstack([self.const_coeffs[i], u_puppet[i], grad_u_puppet[i]
-                            + self.grad_u[i], u_candidate[i], self.normals[i], self.u_old_opp[i]])
-            self.coeffs[i][:, :] = c_0[:, :]
-
-    def generate_kernel_data(self, u, du, mu, lmbda, fric_coeff, gamma, theta):
-
-        # pack constants
-        self.consts = np.array([gamma, theta], dtype=np.float64)
+        self._q_deg = quadrature_degree
+        self._num_pairs = len(contact_pairs)
 
         # Retrieve active entities
-        self.entities = []
+        self._entities = []
         with common.Timer("~Contact: Compute active entities"):
-            for pair in self.contact_pairs:
-                self.entities.append(self.contact.active_entities(pair[0]))
+            for pair in contact_pairs:
+                self._entities.append(self.active_entities(pair[0]))
+
+        self._search_method = search_method
+
+    @common.timed("~Contact: Update coefficients")
+    def update_contact_data(self, du):
+        max_links = self.max_links()
+        ndofs_cell = len(du.function_space.dofmap.cell_dofs(0))
+        gdim = du.function_space.mesh.geometry.dim
+
+        with common.Timer("~~Contact: Pack u"):
+            for i in range(self._num_pairs):
+                offset0 = 4 + self._normals[i].shape[1] * (2 + ndofs_cell * max_links)
+                offset1 = offset0 + self._normals[i].shape[1]
+                self.coeffs[i][:, offset0:offset1] = dolfinx_contact.cpp.pack_coefficient_quadrature(
+                    du._cpp_object, self._q_deg, self._entities[i])[:, :]
+                offset0 = offset1
+                offset1 = offset0 + self._normals[i].shape[1] * gdim
+                self.coeffs[i][:, offset0:offset1] = dolfinx_contact.cpp.pack_gradient_quadrature(
+                    du._cpp_object, self._q_deg, self._entities[i])[:, :] + self._grad_u[i][:, :]
+                offset0 = offset1
+                offset1 = offset0 + self._normals[i].shape[1]
+                self.coeffs[i][:, offset0:offset1] = self.pack_u_contact(i, du._cpp_object)[:, :]
+                self.coeffs[i][:, offset1:] = self._normals[i][:, :]
+
+    def generate_contact_data(self, friction_law: FrictionLaw, function_space: fem.FunctionSpace,
+                              coefficients: dict[str, Union[fem.Function, fem.Constant, np.float64]],
+                              gamma, theta):
+
+        # generate kernels
+        self._matrix_kernels = []
+        with common.Timer("~Contact: Generate Jacobian kernel"):
+            self._matrix_kernels.append(self.generate_kernel(
+                kt.Jac, function_space._cpp_object))
+            if friction_law == FrictionLaw.Coulomb:
+                self._matrix_kernels.append(self.generate_kernel(
+                    kt.CoulombJac, function_space._cpp_object))
+            elif friction_law == FrictionLaw.Tresca:
+                self._matrix_kernels.append(self.generate_kernel(
+                    kt.TrescaJac, function_space._cpp_object))
+
+        self._vector_kernels = []
+        with common.Timer("~Contact: Generate residual kernel"):
+            self._vector_kernels.append(self.generate_kernel(
+                kt.Rhs, function_space._cpp_object))
+            if friction_law == FrictionLaw.Coulomb:
+                self._vector_kernels.append(self.generate_kernel(
+                    kt.CoulombRhs, function_space._cpp_object))
+            elif friction_law == FrictionLaw.Tresca:
+                self._vector_kernels.append(self.generate_kernel(
+                    kt.TrescaRhs, function_space._cpp_object))
+        # pack constants
+        self._consts = np.array([gamma, theta], dtype=np.float64)
 
         # Pack material parameters
-        material = []
-        with common.Timer("~Contact: Pack coeffs (mu, lmbda"):
-            for i in range(len(self.contact_pairs)):
-                material.append(np.hstack([dolfinx_contact.cpp.pack_coefficient_quadrature(
-                    mu._cpp_object, 0, self.entities[i]),
-                    dolfinx_contact.cpp.pack_coefficient_quadrature(
-                    lmbda._cpp_object, 0, self.entities[i]),
-                    dolfinx_contact.cpp.pack_coefficient_quadrature(
-                    fric_coeff._cpp_object, 0, self.entities[i])]))
+        keys = []
+        if coefficients.get("mu") is None:
+            raise RuntimeError("Lame parameter mu missing.")
+        else:
+            keys.append("mu")
+        if coefficients.get("lambda") is None:
+            raise RuntimeError("Lame parameter lambda missing.")
+        else:
+            keys.append("lambda")
+        if coefficients.get("fric") is not None:
+            keys.append("fric")
 
-        mesh = self.function_space.mesh
+        # coefficient arrays
+        numcoeffs = self.coefficients_size(
+            False, function_space._cpp_object)
+
+        self.coeffs = [np.zeros((len(self._entities[i]), numcoeffs))
+                       for i in range(self._num_pairs)]
+
+        with common.Timer("~Contact: Pack coeffs (mu, lmbda, fric)"):
+            for i in range(self._num_pairs):
+                for j, key in enumerate(keys):
+                    self.coeffs[i][:, j] = dolfinx_contact.cpp.pack_coefficient_quadrature(
+                        coefficients[key]._cpp_object, 0, self._entities[i])[:, 0]
+
+        mesh = function_space.mesh
         V2 = fem.FunctionSpace(mesh, ("DG", 0))
         tdim = mesh.topology.dim
+        gdim = mesh.geometry.dim
 
         h = fem.Function(V2)
         ncells = mesh.topology.index_map(tdim).size_local
@@ -109,172 +136,142 @@ class ContactProblem:
                             np.arange(0, ncells, dtype=np.int32))
         h.x.array[:ncells] = h_vals[:]
         # Pack celldiameter on each surface
-        h_packed = []
         with common.Timer("~Contact: Compute and pack celldiameter"):
-            for i in range(len(self.contact_pairs)):
-                h_packed.append(dolfinx_contact.cpp.pack_coefficient_quadrature(
-                    h._cpp_object, 0, self.entities[i]))
+            for i in range(self._num_pairs):
+                self.coeffs[i][:, 3] = dolfinx_contact.cpp.pack_coefficient_quadrature(
+                    h._cpp_object, 0, self._entities[i])[:, 0]
 
-        for j in range(len(self.contact_pairs)):
-            self.contact.create_distance_map(j)
+        for j in range(self._num_pairs):
+            self.create_distance_map(j)
 
         # Pack gap, normals and test functions on each surface
-        gaps = []
-        self.normals = []
-        test_fns = []
-        num_pairs = len(self.contact_pairs)
+        self._normals = []
+        max_links = self.max_links()
+        ndofs_cell = len(function_space.dofmap.cell_dofs(0))
         with common.Timer("~Contact: Pack gap, normals, testfunction"):
-            for i in range(num_pairs):
-                gaps.append(self. contact.pack_gap(i))
-                if self.search_method[i] == dolfinx_contact.cpp.ContactMode.Raytracing:
-                    self.normals.append(-self.contact.pack_nx(i))
+            for i in range(self._num_pairs):
+                if self._search_method[i] == dolfinx_contact.cpp.ContactMode.Raytracing:
+                    self._normals.append(-self.pack_nx(i))
                 else:
-                    self.normals.append(self.contact.pack_ny(i))
-                test_fns.append(self.contact.pack_test_functions(
-                    i, self.function_space._cpp_object))
+                    self._normals.append(self.pack_ny(i))
+                offset0 = 4
+                offset1 = offset0 + self._normals[i].shape[1]
+                self.coeffs[i][:, offset0:offset1] = self.pack_gap(i)
+                offset0 = offset1
+                offset1 = offset0 + self._normals[i].shape[1]
+                self.coeffs[i][:, offset0:offset1] = self._normals[i][:, :]
+                offset0 = offset1
+                offset1 = offset0 + self._normals[i].shape[1] * max_links * ndofs_cell
+                self.coeffs[i][:, offset0:offset1] = self.pack_test_functions(
+                    i, function_space._cpp_object)
 
         # pack grad u
-        self.grad_u = []
-        self.u_old = []
-        self.u_old_opp = []
-        with common.Timer("~~Contact: Pack grad(u)"):
-            for i in range(num_pairs):
-                self.grad_u.append(dolfinx_contact.cpp.pack_gradient_quadrature(
-                    u._cpp_object, self.quadrature_degree, self.entities[i]))
-                self.u_old.append(dolfinx_contact.cpp.pack_coefficient_quadrature(
-                    u._cpp_object, self.quadrature_degree, self.entities[i]))
-                self.u_old_opp.append(
-                    self.contact.pack_u_contact(i, u._cpp_object))
+        # This is to track grad_u if several load steps are used
+        # grad(u_total) = grad(u) + grad(du),
+        # where u is the displacement to date and du the displacement update
+        # if u is not provided, this is set to zero
+        self._grad_u = [np.zeros((self._normals[i].shape[0], self._normals[i].shape[1] * gdim))
+                        for i in range(self._num_pairs)]
 
-        # Concatenate material parameters, he4
-        self.const_coeffs = []
-        for i in range(len(self.contact_pairs)):
-            self.const_coeffs.append(
-                np.hstack([material[i], h_packed[i], gaps[i], self.normals[i], test_fns[i]]))
+        if coefficients.get("u") is not None:
+            with common.Timer("~~Contact: Pack grad(u)"):
+                for i in range(self._num_pairs):
+                    self._grad_u[i][:, :] = dolfinx_contact.cpp.pack_gradient_quadrature(
+                        coefficients["u"]._cpp_object, self._q_deg, self._entities[i])[:, :]
 
-        # coefficient arrays
-        num_coeffs = self.contact.coefficients_size(
-            False, self.function_space._cpp_object)
-
-        self.coeffs = [np.zeros((len(self.entities[i]), num_coeffs))
-                       for i in range(num_pairs)]
-
-        self.update_kernel_data(du)
+        if coefficients.get("du") is not None:
+            self.update_contact_data(coefficients["du"])
 
     def update_contact_detection(self, u):
-        self.contact.update_submesh_geometry(u._cpp_object)
-        for j in range(len(self.contact_pairs)):
-            self.contact.create_distance_map(j)
+        self.update_submesh_geometry(u._cpp_object)
+        for j in range(self._num_pairs):
+            self.create_distance_map(j)
 
-        num_pairs = len(self.contact_pairs)
+        num_pairs = self._num_pairs
         for i in range(num_pairs):
-            self.normals[i] = self.const_coeffs[i][:,
-                                                   7:7 + self.normals[i].shape[1]]
+            offset0 = 4 + self._normals[i].shape[1]
+            offset1 = offset0 + self._normals[i].shape[1]
+            self._normals[i] = self.coeffs[i][:, offset0:offset1]
 
         # Pack gap, normals and test functions on each surface
-        gaps = []
-        normals = []
-        test_fns = []
+        max_links = self.max_links()
+        ndofs_cell = len(u.function_space.dofmap.cell_dofs(0))
         with common.Timer("~Contact: Pack gap, normals, testfunction"):
             for i in range(num_pairs):
-                gaps.append(self. contact.pack_gap(i))
-                if self.search_method[i] == dolfinx_contact.cpp.ContactMode.Raytracing:
-                    normals.append(-self.contact.pack_nx(i))
+                offset0 = 4
+                offset1 = offset0 + self._normals[i].shape[1]
+                self.coeffs[i][:, offset0:offset1] = self.pack_gap(i)
+                offset0 = offset1
+                offset1 = offset0 + self._normals[i].shape[1]
+                if self._search_method[i] == dolfinx_contact.cpp.ContactMode.Raytracing:
+                    self.coeffs[i][:, offset0:offset1] = -self.pack_nx(i)[:, :]
                 else:
-                    normals.append(self.contact.pack_ny(i))
-                test_fns.append(self.contact.pack_test_functions(
-                    i, self.function_space._cpp_object))
-
-        # Concatenate all coeffs
-        for i in range(num_pairs):
-            c_0 = np.hstack([gaps[i], normals[i], test_fns[i]])
-            self.const_coeffs[i][:, 4:] = c_0[:, :]
+                    self.coeffs[i][:, offset0:offset1] = self.pack_ny(i)[:, :]
+                offset0 = offset1
+                offset1 = offset0 + self._normals[i].shape[1] * max_links * ndofs_cell
+                self.coeffs[i][:, offset0:offset1] = self.pack_test_functions(
+                    i, u.function_space._cpp_object)
 
         # pack grad u
-        self.grad_u = []
-        self.u_old = []
-        self.u_old_opp = []
+        self._grad_u = []
         with common.Timer("~~Contact: Pack grad(u)"):
             for i in range(num_pairs):
-                self.grad_u.append(dolfinx_contact.cpp.pack_gradient_quadrature(
-                    u._cpp_object, self.quadrature_degree, self.entities[i]))
-                self.u_old.append(dolfinx_contact.cpp.pack_coefficient_quadrature(
-                    u._cpp_object, self.quadrature_degree, self.entities[i]))
-                self.u_old_opp.append(
-                    self.contact.pack_u_contact(i, u._cpp_object))
+                self._grad_u.append(dolfinx_contact.cpp.pack_gradient_quadrature(
+                    u._cpp_object, self._q_deg, self._entities[i]))
 
-    def set_normals(self):
-        normals = []
-        for i in range(len(self.normals)):
-            if self.search_method[i] == dolfinx_contact.cpp.ContactMode.Raytracing:
-                normals.append(-self.contact.pack_nx(i))
-            else:
-                normals.append(self.contact.pack_ny(i))
-        self.normals = normals
+    # def set_normals(self):
+    #     normals = []
+    #     for i in range(len(self._normals)):
+    #         if self._search_method[i] == dolfinx_contact.cpp.ContactMode.Raytracing:
+    #             normals.append(-self.pack_nx(i))
+    #         else:
+    #             normals.append(self.pack_ny(i))
+    #     self._normals = normals
 
-    def update_friction_coefficient(self, s):
-        mesh = self.u.function_space.mesh
-        V2 = fem.FunctionSpace(mesh, ("DG", 0))
-        # interpolate friction coefficient
-        fric_coeff = fem.Function(V2)
-        fric_coeff.interpolate(lambda x: np.full((1, x.shape[1]), s))
-        for i in range(len(self.coeffs)):
-            fric = dolfinx_contact.cpp.pack_coefficient_quadrature(
-                fric_coeff._cpp_object, 0, self.entities[i])
-            self.coeffs[i][:, 2] = fric[:, 0]
+    # def update_friction_coefficient(self, s):
+    #     mesh = self.u.function_space.mesh
+    #     V2 = fem.FunctionSpace(mesh, ("DG", 0))
+    #     # interpolate friction coefficient
+    #     fric_coeff = fem.Function(V2)
+    #     fric_coeff.interpolate(lambda x: np.full((1, x.shape[1]), s))
+    #     for i in range(len(self.coeffs)):
+    #         fric = dolfinx_contact.cpp.pack_coefficient_quadrature(
+    #             fric_coeff._cpp_object, 0, self._entities[i])
+    #         self.coeffs[i][:, 2] = fric[:, 0]
 
-    def update_nitsche_parameters(self, gamma, theta):
-        self.consts[0] = gamma
-        self.consts[1] = theta
+    # def update_nitsche_parameters(self, gamma, theta):
+    #     self._consts[0] = gamma
+    #     self._consts[1] = theta
 
-    def h_surfaces(self):
-        h = []
-        for i in range(len(self.coeffs)):
-            h.append(np.sum(self.coeffs[i][:, 3]) / self.coeffs[i].shape[0])
-        return h
+    # def h_surfaces(self):
+    #     h = []
+    #     for i in range(len(self.coeffs)):
+    #         h.append(np.sum(self.coeffs[i][:, 3]) / self.coeffs[i].shape[0])
+    #     return h
 
-    def create_matrix(self):
-        return self.contact.create_matrix(self.J._cpp_object)
+    def create_matrix(self, J):
+        return super().create_matrix(J._cpp_object)
 
-    def set_forms(self, F, J, bcs):
-        self.F = F
-        self.J = J
-        self.bcs = bcs
+    # vector assembly
 
-    # function for computing residual
-    @common.timed("~Contact: Assemble residual")
-    def compute_residual(self, x, b):
-        b.zeroEntries()
-        b.ghostUpdate(addv=_PETSc.InsertMode.INSERT,
-                      mode=_PETSc.ScatterMode.FORWARD)
-        with common.Timer("~~Contact: Contact contributions (in assemble vector)"):
-            for i in range(len(self.contact_pairs)):
-                self.contact.assemble_vector(
-                    b, i, self.kernel_rhs, self.coeffs[i], self.consts, self.function_space._cpp_object)
-                self.contact.assemble_vector(
-                    b, i, self.kernel_friction_rhs, self.coeffs[i], self.consts, self.function_space._cpp_object)
-        with common.Timer("~~Contact: Standard contributions (in assemble vector)"):
-            fem.petsc.assemble_vector(b, self.F)
+    def assemble_vector(self, b, function_space):
+        for i in range(self._num_pairs):
+            for kernel in self._vector_kernels:
+                super().assemble_vector(
+                    b, i, kernel, self.coeffs[i], self._consts, function_space._cpp_object)
 
-        # Apply boundary condition
-        if len(self.bcs) > 0:
-            fem.petsc.apply_lifting(
-                b, [self.J], bcs=[self.bcs], x0=[x], scale=-1.0)
-        b.ghostUpdate(addv=_PETSc.InsertMode.ADD,
-                      mode=_PETSc.ScatterMode.REVERSE)
-        if len(self.bcs) > 0:
-            fem.petsc.set_bc(b, self.bcs, x, -1.0)
+    # matrix assembly
 
-    # function for computing jacobian
     @common.timed("~Contact: Assemble matrix")
-    def compute_jacobian_matrix(self, x, A):
-        A.zeroEntries()
-        with common.Timer("~~Contact: Contact contributions (in assemble matrix)"):
-            for i in range(len(self.contact_pairs)):
-                self.contact.assemble_matrix(
-                    A, i, self.kernel_jac, self.coeffs[i], self.consts, self.function_space._cpp_object)
-                self.contact.assemble_matrix(
-                    A, i, self.kernel_friction_jac, self.coeffs[i], self.consts, self.function_space._cpp_object)
-        with common.Timer("~~Contact: Standard contributions (in assemble matrix)"):
-            fem.petsc.assemble_matrix(A, self.J, bcs=self.bcs)
-        A.assemble()
+    def assemble_matrix(self, A, function_space):
+        for i in range(self._num_pairs):
+            for kernel in self._matrix_kernels:
+                super().assemble_matrix(
+                    A, i, kernel, self.coeffs[i], self._consts, function_space._cpp_object)
+
+    def crop_invalid_points(self, tol):
+
+        for i in range(self._num_pairs):
+            cstride = self._normals[i].shape[1]
+            super().crop_invalid_points(i, self.coeffs[i][:, 4:4 + cstride],
+                                        self.coeffs[i][:, 4 + cstride:4 + 2 * cstride], tol)
