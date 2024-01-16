@@ -242,6 +242,7 @@ if __name__ == "__main__":
     
     # define functions for newton solver
     def compute_coefficients(x, coeffs):
+        du.x.scatter_forward()
         contact_problem.update_contact_data(du)
 
     @timed("~Contact: Assemble residual")
@@ -286,7 +287,7 @@ if __name__ == "__main__":
 
     # Set rigid motion nullspace
     null_space = rigid_motions_nullspace_subdomains(V, domain_marker, np.unique(
-        domain_marker.values), num_domains=len(np.unique(domain_marker.values)))
+        domain_marker.values), num_domains=2)
     newton_solver.A.setNearNullSpace(null_space)
 
     # Set Newton solver options
