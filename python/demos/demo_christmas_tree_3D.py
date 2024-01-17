@@ -90,7 +90,7 @@ if __name__ == "__main__":
     # Call function that repartitions mesh for parallel computation
     if mesh.comm.size > 1:
         mesh, facet_marker, domain_marker = create_contact_mesh(
-            mesh, facet_marker, domain_marker, [6, 7])
+            mesh, facet_marker, domain_marker, [surface_1, surface_2])
 
     V = _fem.VectorFunctionSpace(mesh, ("Lagrange", 1))
 
@@ -134,8 +134,7 @@ if __name__ == "__main__":
     data = np.array([surface_1, surface_2], dtype=np.int32)
     offsets = np.array([0, 2], dtype=np.int32)
     surfaces = adjacencylist(data, offsets)
-
-    # zero dirichlet boundary condition on mesh boundary with tag 5
+    print(surface_1, surface_2)
 
     # Function, TestFunction, TrialFunction and measures
     u = _fem.Function(V)
@@ -221,7 +220,6 @@ if __name__ == "__main__":
     }
 
     # Solve contact problem using Nitsche's method
-    problem_parameters = {"gamma": np.float64(E * gamma), "theta": np.float64(theta), "fric": np.float64(0.3)}
     V0 = _fem.FunctionSpace(mesh, ("DG", 0))
     mu0 = _fem.Function(V0)
     lmbda0 = _fem.Function(V0)

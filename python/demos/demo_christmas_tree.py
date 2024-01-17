@@ -95,18 +95,17 @@ if __name__ == "__main__":
         dirichlet_facets1 = locate_entities_boundary(mesh, tdim - 1, lambda x: identifier(x, 0.0))
         dirichlet_facets2 = locate_entities_boundary(mesh, tdim - 1, lambda x: identifier(x, 1.0))
 
-        # create facet_marker including z Dirichlet facets
-        tag = marker_offset + 4 * split + 1
+        # create new facet_marker including z Dirichlet facets
+        z_Dirichlet = marker_offset + 4 * split + 1
         indices = np.hstack([facet_marker.indices, dirichlet_facets1, dirichlet_facets2])
-        values = np.hstack([facet_marker.values, tag * np.ones(len(dirichlet_facets1)
-                           + len(dirichlet_facets2), dtype=np.int32)])
+        values = np.hstack([facet_marker.values, z_Dirichlet * np.ones(len(dirichlet_facets1)
+                            + len(dirichlet_facets2), dtype=np.int32)])
         sorted_facets = np.argsort(indices)
         facet_marker = meshtags(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
         # Create Dirichlet bdy conditions
-        dofs = _fem.locate_dofs_topological(V, mesh.topology.dim - 1, facet_marker.find(tag))
+        dofs = _fem.locate_dofs_topological(V.sub(2), mesh.topology.dim - 1, facet_marker.find(z_Dirichlet))
         gz = _fem.Constant(mesh, default_scalar_type(0))
         bcs = [_fem.dirichletbc(gz, dofs, V.sub(2))]
-        bc_fns = [gz]
         g = _fem.Constant(mesh, default_scalar_type((0, 0, 0)))      # zero dirichlet
         t_val = (0.2, 0.5, 0.0)
         f_val = (1.0, 0.5, 0.0)
@@ -199,6 +198,7 @@ if __name__ == "__main__":
     # body forces
     F -= ufl.inner(f, v) * dx(1)
 
+    F = ufl.replace(F, {u: u + du})
     J = ufl.derivative(F, du, w)
 
     # compiler options to improve performance
@@ -276,13 +276,13 @@ if __name__ == "__main__":
 
     contact_problem = ContactProblem(mts[1:], surfaces, contact_pairs, mesh, args.q_degree, search_mode, args.radius)
     contact_problem.generate_contact_data(FrictionLaw.Frictionless, V, {"u": u, "du": du, "mu": mu0,
-                                                            "lambda": lmbda0}, E * gamma, theta)
+                                                                        "lambda": lmbda0}, E * gamma, theta)
     solver_outfile = None
     log.set_log_level(log.LogLevel.WARNING)
     rhs_fns = [g, t, f]
     size = mesh.comm.size
     outname = f"results/xmas_{tdim}D_{size}"
-    
+
     # define functions for newton solver
     def compute_coefficients(x, coeffs):
         du.x.scatter_forward()
@@ -320,7 +320,6 @@ if __name__ == "__main__":
     A = contact_problem.create_matrix(J_compiled)
     b = create_vector(F_compiled)
 
-
     # Set up snes solver for nonlinear solver
     newton_solver = NewtonSolver(mesh.comm, A, b, contact_problem.coeffs)
     # Set matrix-vector computations
@@ -330,7 +329,7 @@ if __name__ == "__main__":
 
     # Set rigid motion nullspace
     null_space = rigid_motions_nullspace_subdomains(V, domain_marker, np.unique(
-        domain_marker.values), num_domains=len(np.unique(domain_marker.values)))
+        domain_marker.values), 2)
     newton_solver.A.setNearNullSpace(null_space)
 
     # Set Newton solver options

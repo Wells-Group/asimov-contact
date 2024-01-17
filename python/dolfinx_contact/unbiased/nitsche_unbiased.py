@@ -126,7 +126,7 @@ def setup_newton_solver(F_custom: fem.forms.Form, J_custom: fem.forms.Form,
                     du._cpp_object, quadrature_degree, entities[i]))
         for i in range(num_pairs):
             c_0 = np.hstack([ccfs[i], u_puppet[i], grad_u_puppet[i]
-                            + grad_u[i], u_candidate[i], normals_old[i], u_old_opp[i]])
+                            + grad_u[i], u_candidate[i], normals_old[i]])
             coeffs[i][:, :] = c_0[:, :]
 
     # function for computing residual
@@ -137,7 +137,6 @@ def setup_newton_solver(F_custom: fem.forms.Form, J_custom: fem.forms.Form,
         with common.Timer("~~Contact: Contact contributions (in assemble vector)"):
             for i in range(num_pairs):
                 contact.assemble_vector(b, i, kernel_rhs, coeffs[i], consts, V._cpp_object)
-                contact.assemble_vector(b, i, kernel_friction_rhs, coeffs[i], consts, V._cpp_object)
         with common.Timer("~~Contact: Standard contributions (in assemble vector)"):
             fem.petsc.assemble_vector(b, F_custom)
 
@@ -155,7 +154,6 @@ def setup_newton_solver(F_custom: fem.forms.Form, J_custom: fem.forms.Form,
         with common.Timer("~~Contact: Contact contributions (in assemble matrix)"):
             for i in range(num_pairs):
                 contact.assemble_matrix(A, i, kernel_jac, coeffs[i], consts, V._cpp_object)
-                contact.assemble_matrix(A, i, kernel_friction_jac, coeffs[i], consts, V._cpp_object)
         with common.Timer("~~Contact: Standard contributions (in assemble matrix)"):
             fem.petsc.assemble_matrix(A, J_custom, bcs=bcs)
         A.assemble()
@@ -345,11 +343,7 @@ def nitsche_unbiased(steps: int, ufl_form: ufl.Form, u: fem.Function, mu: fem.Fu
     # Integration measure and ufl part of linear/bilinear form
     ds = ufl.Measure("ds", domain=mesh, subdomain_data=markers[1])
 
-    # ufl part of contact
-    for contact_pair in contact_pairs:
-        surface_value = int(contact_surfaces.links(0)[contact_pair[0]])
-        ufl_form += - 0.5 * theta * h / gamma * ufl.inner(sigma(u) * n, sigma(v) * n) * \
-            ds(surface_value)
+
     F = ufl.replace(ufl_form, {u: u + du})
     J = ufl.derivative(F, du, w)
 
