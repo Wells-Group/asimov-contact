@@ -782,6 +782,8 @@ def test_meshtie_kernels(ct, gap, quadrature_degree, theta, problem):
     lmbda_custom.interpolate(lambda x: np.full((1, x.shape[1]), lmbda))
     mu_custom = _fem.Function(V0)
     mu_custom.interpolate(lambda x: np.full((1, x.shape[1]), mu))
+    alpha_custom = _fem.Function(V0)
+    alpha_custom.interpolate(lambda x: np.full((1, x.shape[1]), alpha))
 
     if problem == Problem.Poisson:
         coeffs = {"T": u1._cpp_object, "kdt": kdt_custom._cpp_object}
@@ -790,7 +792,8 @@ def test_meshtie_kernels(ct, gap, quadrature_degree, theta, problem):
         gamma = gamma * E
     else:
         coeffs = {"u": u1._cpp_object, "T": T1._cpp_object,
-                  "mu": mu_custom._cpp_object, "lambda": lmbda_custom._cpp_object}
+                  "mu": mu_custom._cpp_object, "lambda": lmbda_custom._cpp_object,
+                  "alpha": alpha_custom._cpp_object}
         gamma = gamma * E
 
     # Dummy form for creating vector/matrix
@@ -807,7 +810,7 @@ def test_meshtie_kernels(ct, gap, quadrature_degree, theta, problem):
     # initialise meshties
     meshties = MeshTie([facet_marker._cpp_object], surfaces, [(0, 1), (1, 0)],
                        mesh_custom._cpp_object, quadrature_degree=quadrature_degree)
-    meshties.generate_kernel_data(problem, V_custom._cpp_object, coeffs, gamma, theta, alpha)
+    meshties.generate_kernel_data(problem, V_custom._cpp_object, coeffs, gamma, theta)
 
     # Generate residual data structures
     F_custom = _fem.form(F0)

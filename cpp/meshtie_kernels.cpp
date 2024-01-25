@@ -108,22 +108,22 @@ dolfinx_contact::generate_meshtie_kernel(
       compute_sigma_n_basis(sig_n, K, dphi, std::span(n_phys.data(), gdim), mu,
                             lmbda, q_pos);
       compute_sigma_n_opp(
-          sig_n_opp, c.subspan(kd.offsets(4), kd.offsets(5) - kd.offsets(4)),
+          sig_n_opp, c.subspan(kd.offsets(2), kd.offsets(3) - kd.offsets(2)),
           std::span(n_phys.data(), gdim), mu, lmbda, q, num_points);
 
       // compute u, sig_n(u)
       std::fill(sig_n_u.begin(), sig_n_u.end(), 0.0);
       compute_sigma_n_u(sig_n_u,
-                        c.subspan(kd.offsets(6) + q * gdim * gdim, gdim * gdim),
+                        c.subspan(kd.offsets(4) + q * gdim * gdim, gdim * gdim),
                         std::span(n_phys.data(), gdim), mu, lmbda);
       // avg(sig_n(u)):  sig_n(u) +=  sig_n(u_opposite)
       compute_sigma_n_u(sig_n_u,
-                        c.subspan(kd.offsets(8) + q * gdim * gdim, gdim * gdim),
+                        c.subspan(kd.offsets(6) + q * gdim * gdim, gdim * gdim),
                         std::span(n_phys.data(), gdim), mu, lmbda);
 
       // compute [[u]] = jump(u) = u - u_opp
-      std::size_t offset_u_opp = kd.offsets(7) + q * bs;
-      std::size_t offset_u = kd.offsets(5) + q * bs;
+      std::size_t offset_u_opp = kd.offsets(5) + q * bs;
+      std::size_t offset_u = kd.offsets(3) + q * bs;
       for (std::size_t j = 0; j < bs; ++j)
         jump_u[j] = c[offset_u + j] - c[offset_u_opp + j];
       const double w0 = 0.5 * weights[q] * detJ;
@@ -145,7 +145,7 @@ dolfinx_contact::generate_meshtie_kernel(
           // entries corresponding to v on the other surface
           for (std::size_t k = 0; k < num_links; k++)
           {
-            std::size_t index = kd.offsets(3) + k * num_points * ndofs_cell * bs
+            std::size_t index = kd.offsets(1) + k * num_points * ndofs_cell * bs
                                 + i * num_points * bs + q * bs + n;
 
             // -inner(-avg(sig(u)n) + gamma[[u]], v_opposite)
@@ -162,7 +162,7 @@ dolfinx_contact::generate_meshtie_kernel(
     }
   };
 
-/// @brief Assemble kernel for RHS gluing two objects with Nitsche
+  /// @brief Assemble kernel for RHS gluing two objects with Nitsche
   ///
   /// Assemble of the residual of the unbiased contact problem into vector
   /// `b`.
@@ -216,7 +216,7 @@ dolfinx_contact::generate_meshtie_kernel(
     // Extract constants used inside quadrature loop
     double mu = c[0];
     double lmbda = c[1];
-    double alpha = w[2]* (3 * lmbda + 2 * mu);
+    double alpha = c[3] * (3 * lmbda + 2 * mu);
 
     // Extract reference to the tabulated basis function
     cmdspan2_t phi = kd.phi();
@@ -239,7 +239,7 @@ dolfinx_contact::generate_meshtie_kernel(
 
       const double w0 = 0.5 * weights[q] * detJ;
 
-      double avg_T = 0.5 * (c[kd.offsets(9) + q] + c[kd.offsets(10) +q]);
+      double avg_T = 0.5 * (c[kd.offsets(7) + q] + c[kd.offsets(8) + q]);
       // Fill contributions of facet with itself
 
       for (std::size_t i = 0; i < ndofs_cell; i++)
@@ -247,19 +247,16 @@ dolfinx_contact::generate_meshtie_kernel(
         for (std::size_t n = 0; n < bs; n++)
         {
           // inner(-avg(sig(u)n) + gamma[[u]], v)
-          b[0][n + i * bs]
-              += alpha * avg_T * n_phys[n]  * phi(q_pos, i) * w0;
+          b[0][n + i * bs] += alpha * avg_T * n_phys[n] * phi(q_pos, i) * w0;
 
           // entries corresponding to v on the other surface
           for (std::size_t k = 0; k < num_links; k++)
           {
-            std::size_t index = kd.offsets(3) + k * num_points * ndofs_cell * bs
+            std::size_t index = kd.offsets(1) + k * num_points * ndofs_cell * bs
                                 + i * num_points * bs + q * bs + n;
 
             // -inner(-avg(sig(u)n) + gamma[[u]], v_opposite)
-            b[k + 1][n + i * bs]
-                -=  alpha * avg_T * n_phys[n] * c[index] * w0;
-
+            b[k + 1][n + i * bs] -= alpha * avg_T * n_phys[n] * c[index] * w0;
           }
         }
       }
@@ -348,7 +345,7 @@ dolfinx_contact::generate_meshtie_kernel(
       compute_sigma_n_basis(sig_n, K, dphi, std::span(n_phys.data(), gdim), mu,
                             lmbda, q_pos);
       compute_sigma_n_opp(
-          sig_n_opp, c.subspan(kd.offsets(4), kd.offsets(5) - kd.offsets(4)),
+          sig_n_opp, c.subspan(kd.offsets(2), kd.offsets(3) - kd.offsets(2)),
           std::span(n_phys.data(), gdim), mu, lmbda, q, num_points);
 
       const double w0 = 0.5 * weights[q] * detJ;
@@ -367,10 +364,10 @@ dolfinx_contact::generate_meshtie_kernel(
             // corresponds to same block index
             for (std::size_t k = 0; k < num_links; k++)
             {
-              std::size_t index_u = kd.offsets(3)
+              std::size_t index_u = kd.offsets(1)
                                     + k * num_points * ndofs_cell * bs
                                     + j * num_points * bs + q * bs + l;
-              std::size_t index_v = kd.offsets(3)
+              std::size_t index_v = kd.offsets(1)
                                     + k * num_points * ndofs_cell * bs
                                     + i * num_points * bs + q * bs + l;
 
@@ -397,10 +394,10 @@ dolfinx_contact::generate_meshtie_kernel(
               // entries corresponding to u and v on the other surface
               for (std::size_t k = 0; k < num_links; k++)
               {
-                std::size_t index_u = kd.offsets(3)
+                std::size_t index_u = kd.offsets(1)
                                       + k * num_points * ndofs_cell * bs
                                       + j * num_points * bs + q * bs + l;
-                std::size_t index_v = kd.offsets(3)
+                std::size_t index_v = kd.offsets(1)
                                       + k * num_points * ndofs_cell * bs
                                       + i * num_points * bs + q * bs + b;
                 // -0.5 inner(sig(u_opp), v) +0.5 theta inner(sig(v), u_opp)
