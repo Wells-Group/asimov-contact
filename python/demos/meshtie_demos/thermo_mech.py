@@ -28,8 +28,8 @@ class ThermoElasticProblem:
                  "_lmbda", "_mu", "_gamma", "_theta", "_alpha"]
 
     def __init__(self, a: Form, j: Form, bcs: list[DirichletBC], meshties: MeshTie, subdomains,
-                 u: Function, T: Function, lmbda: Function, mu: Function,
-                 gamma: np.float64, theta: np.float64, alpha: np.float64, num_domains: int = 2):
+                 u: Function, T: Function, lmbda: Function, mu: Function, alpha: Function,
+                 gamma: np.float64, theta: np.float64, num_domains: int = 2):
         """
         Create a MeshTie problem
 
@@ -68,8 +68,9 @@ class ThermoElasticProblem:
         # Initialise the input data for integration kernels
         self._meshties.generate_kernel_data(Problem.ThermoElasticity, a.function_spaces[0],
                                             {"lambda": lmbda._cpp_object,
-                                                "mu": mu._cpp_object},
-                                            gamma, theta, alpha)
+                                                "mu": mu._cpp_object,
+                                             "alpha": alpha._cpp_object},
+                                            gamma, theta)
 
         # Build near null space preventing rigid body motion of individual components
         tags = np.unique(subdomains.values)
@@ -278,19 +279,19 @@ u = Function(V)
 # Compute lame parameters
 E = 1e3
 nu = 0.1
+alpha = 1.0
 mu_func, lambda_func = lame_parameters(False)
 V2 = functionspace(mesh, ("DG", 0))
 lmbda = Function(V2)
 lmbda.interpolate(lambda x: np.full((1, x.shape[1]), lambda_func(E, nu)))
 mu = Function(V2)
 mu.interpolate(lambda x: np.full((1, x.shape[1]), mu_func(E, nu)))
+alpha_c = Function(V2)
+alpha_c.interpolate(lambda x: np.full((1, x.shape[1]), alpha))
 
 
 def eps(w):
     return sym(grad(w))
-
-
-alpha = 1.0
 
 
 def sigma(w, T):
@@ -312,8 +313,8 @@ bcs = [dirichletbc(g, dofs_e2, V)]
 F = form(F, jit_options=jit_options)
 J = form(J, jit_options=jit_options)
 
-elastic_problem = ThermoElasticProblem(F, J, bcs, meshties, domain_marker, u, T0, lmbda, mu,
-                                       np.float64(gamma * E), np.float64(theta), np.float64(alpha))
+elastic_problem = ThermoElasticProblem(F, J, bcs, meshties, domain_marker, u, T0, lmbda, mu, alpha_c,
+                                       np.float64(gamma * E), np.float64(theta))
 
 # Set up Newton sovler
 newton_solver = NewtonSolver(mesh.comm)

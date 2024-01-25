@@ -223,7 +223,7 @@ def create_box_mesh_3D(filename: str, simplex: bool = True, order: int = 1,
     if MPI.COMM_WORLD.rank == 0:
         # Create box
         if simplex:
-            model.occ.add_box(0, 0, 0 + offset, L, H, W)
+            model.occ.add_box(0, 0 + offset, 0, L, H, W)
             model.occ.add_box(0, 0, disp, L, H, W)
             model.occ.synchronize()
         else:

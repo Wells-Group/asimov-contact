@@ -57,8 +57,9 @@ public:
       std::shared_ptr<dolfinx::fem::Function<T>> u,
       std::shared_ptr<dolfinx::fem::Function<T>> T0,
       std::shared_ptr<dolfinx::fem::Function<T>> lmbda,
-      std::shared_ptr<dolfinx::fem::Function<T>> mu, double gamma, double theta,
-      double alpha)
+      std::shared_ptr<dolfinx::fem::Function<T>> mu,
+      std::shared_ptr<dolfinx::fem::Function<T>> alpha, double gamma,
+      double theta)
       : _l(L), _j(J), _bcs(bcs), _meshties(meshties),
         _b(L->function_spaces()[0]->dofmap()->index_map,
            L->function_spaces()[0]->dofmap()->index_map_bs()),
@@ -79,8 +80,8 @@ public:
     // initialise the input data for integration kernels
     _meshties->generate_kernel_data(
         dolfinx_contact::Problem::ThermoElasticity, L->function_spaces()[0],
-        {{"u", u}, {"T", T0}, {"mu", mu}, {"lambda", lmbda}}, gamma, theta,
-        alpha);
+        {{"u", u}, {"T", T0}, {"mu", mu}, {"lambda", lmbda}, {"alpha", alpha}},
+        gamma, theta);
 
     // build near null space preventing rigid body motion of individual
     // components)
@@ -382,17 +383,32 @@ int main(int argc, char* argv[])
           return {_f, {_f.size()}};
         });
 
+    auto alpha_c = std::make_shared<fem::Function<T>>(V0);
+    alpha_c->interpolate(
+        [alpha](auto x) -> std::pair<std::vector<T>, std::vector<std::size_t>>
+        {
+          std::vector<T> _f;
+          for (std::size_t p = 0; p < x.extent(1); ++p)
+          {
+            _f.push_back(alpha);
+          }
+          return {_f, {_f.size()}};
+        });
+
     // diplacement function
     auto u = std::make_shared<fem::Function<T>>(V);
-    auto alpha_c = std::make_shared<fem::Constant<T>>(alpha);
     // Define variational forms
     auto J = std::make_shared<fem::Form<T>>(fem::create_form<T>(
-        *form_thermo_elasticity_J, {V, V}, {{"mu", mu}, {"lmbda", lmbda}},
-        {{"alpha", alpha_c}}, {}));
-    auto F = std::make_shared<fem::Form<T>>(fem::create_form<T>(
-        *form_thermo_elasticity_F, {V},
-        {{"u", u}, {"T0", T0}, {"mu", mu}, {"lmbda", lmbda}},
-        {{"alpha", alpha_c}}, {}));
+        *form_thermo_elasticity_J, {V, V},
+        {{"mu", mu}, {"lmbda", lmbda}, {"alpha", alpha_c}}, {}, {}));
+    auto F = std::make_shared<fem::Form<T>>(
+        fem::create_form<T>(*form_thermo_elasticity_F, {V},
+                            {{"u", u},
+                             {"T0", T0},
+                             {"mu", mu},
+                             {"lmbda", lmbda},
+                             {"alpha", alpha_c}},
+                            {}, {}));
 
     // Define boundary conditions
     // bottom fixed, top displaced in y-diretion by -0.2
@@ -410,8 +426,9 @@ int main(int argc, char* argv[])
 
     // create "non-linear" meshtie problem (linear problem written as non-linear
     // problem)
-    auto problem = ThermoElasticProblem(F, J, bcs, meshties, domain1, {1, 2}, u,
-                                        T0, lmbda, mu, E * gamma, theta, alpha);
+    auto problem
+        = ThermoElasticProblem(F, J, bcs, meshties, domain1, {1, 2}, u, T0,
+                               lmbda, mu, alpha_c, E * gamma, theta);
     // petsc vector corresponding to displacement function
     dolfinx::la::petsc::Vector _u(
         dolfinx::la::petsc::create_vector_wrap(*u->x()), false);

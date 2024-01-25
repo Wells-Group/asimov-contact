@@ -85,7 +85,7 @@ public:
       const std::map<std::string,
                      std::shared_ptr<dolfinx::fem::Function<double>>>&
           coefficients,
-      double gamma, double theta, double alpha=-1);
+      double gamma, double theta);
 
   /// Generate data for matrix assembly
   /// @param[in] lambda - lame parameter lambda as DG0 function
@@ -95,9 +95,8 @@ public:
   void generate_meshtie_data_matrix_only(
       dolfinx_contact::Problem problem_type,
       std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V,
-      std::shared_ptr<dolfinx::fem::Function<double>> lambda,
-      std::shared_ptr<dolfinx::fem::Function<double>> mu, double gamma,
-      double theta, double alpha=-1);
+      std::vector<std::shared_ptr<dolfinx::fem::Function<double>>> coeffs,
+      double gamma, double theta);
 
   /// Update data for vector assembly based on state
   /// @param[in] coefficients maps coefficients to their names used for the

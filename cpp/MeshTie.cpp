@@ -12,7 +12,7 @@ void dolfinx_contact::MeshTie::generate_kernel_data(
     const std::map<std::string,
                    std::shared_ptr<dolfinx::fem::Function<double>>>&
         coefficients,
-    double gamma, double theta, double alpha)
+    double gamma, double theta)
 {
   std::vector<std::shared_ptr<dolfinx::fem::Function<double>>> coeff_list;
   switch (problem_type)
@@ -34,7 +34,7 @@ void dolfinx_contact::MeshTie::generate_kernel_data(
       throw std::invalid_argument("Lame parameter lambda not provided.");
     }
     dolfinx_contact::MeshTie::generate_meshtie_data_matrix_only(
-        problem_type, V, coeff_list[1], coeff_list[0], gamma, theta);
+        problem_type, V, coeff_list, gamma, theta);
     if (auto it = coefficients.find("u"); it != coefficients.end())
     {
       update_kernel_data(coefficients, problem_type);
@@ -65,8 +65,14 @@ void dolfinx_contact::MeshTie::generate_kernel_data(
     {
       throw std::invalid_argument("Lame parameter lambda not provided.");
     }
+    if (auto it = coefficients.find("alpha"); it != coefficients.end())
+      coeff_list.push_back(it->second);
+    else
+    {
+      throw std::invalid_argument("Thermal expansion coefficient.");
+    }
     dolfinx_contact::MeshTie::generate_meshtie_data_matrix_only(
-        problem_type, V, coeff_list[1], coeff_list[0], gamma, theta, alpha);
+        problem_type, V, coeff_list, gamma, theta);
     if (auto it = coefficients.find("u"); it != coefficients.end())
       update_kernel_data(coefficients, problem_type);
     break;
@@ -78,9 +84,8 @@ void dolfinx_contact::MeshTie::generate_kernel_data(
 void dolfinx_contact::MeshTie::generate_meshtie_data_matrix_only(
     dolfinx_contact::Problem problem_type,
     std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V,
-    std::shared_ptr<dolfinx::fem::Function<double>> lambda,
-    std::shared_ptr<dolfinx::fem::Function<double>> mu, double gamma,
-    double theta, double alpha)
+    std::vector<std::shared_ptr<dolfinx::fem::Function<double>>> coeffs,
+    double gamma, double theta)
 {
   // mesh data
   std::shared_ptr<const dolfinx::mesh::Mesh<double>> mesh = V->mesh();
@@ -101,10 +106,9 @@ void dolfinx_contact::MeshTie::generate_meshtie_data_matrix_only(
   // Expecting coefficients in following order:
   // mu, lmbda, h,test_fn, grad(test_fn), u, grad(u), u_opposite,
   // grad(u_opposite)
+
   std::vector<std::size_t> cstrides
-      = {1,
-         1,
-         1,
+      = {3,
          num_q_points * ndofs_cell * bs * max_links,
          num_q_points * ndofs_cell * bs * max_links,
          num_q_points * gdim,
@@ -114,6 +118,7 @@ void dolfinx_contact::MeshTie::generate_meshtie_data_matrix_only(
 
   if (problem_type == dolfinx_contact::Problem::ThermoElasticity)
   {
+    cstrides[0] = 4;
     cstrides.push_back(num_q_points);
     cstrides.push_back(num_q_points);
     _kernel_thermo_el = dolfinx_contact::generate_meshtie_kernel(
@@ -127,7 +132,7 @@ void dolfinx_contact::MeshTie::generate_meshtie_data_matrix_only(
       Kernel::MeshTieJac, V, Contact::quadrature_rule(), cstrides);
 
   // save nitsche parameters as constants
-  _consts = {gamma, theta, alpha};
+  _consts = {gamma, theta};
   auto it = dolfinx::fem::IntegralType::exterior_facet;
   _cstride = std::accumulate(cstrides.cbegin(), cstrides.cend(), 0);
 
@@ -149,8 +154,9 @@ void dolfinx_contact::MeshTie::generate_meshtie_data_matrix_only(
     std::vector<double> h_p = dolfinx::mesh::h(*mesh, cells, tdim);
     std::size_t c_h = 1;
     auto [lm_p, c_lm]
-        = pack_coefficient_quadrature(lambda, 0, entities, it); // lambda
-    auto [mu_p, c_mu] = pack_coefficient_quadrature(mu, 0, entities, it); // mu
+        = pack_coefficient_quadrature(coeffs[1], 0, entities, it); // lambda
+    auto [mu_p, c_mu]
+        = pack_coefficient_quadrature(coeffs[0], 0, entities, it); // mu
     auto [gap, cgap] = Contact::pack_gap(i);                   // gap function
     auto [testfn, ctest] = Contact::pack_test_functions(i, V); // test functions
     auto [gradtst, cgt] = Contact::pack_grad_test_functions(
@@ -158,26 +164,33 @@ void dolfinx_contact::MeshTie::generate_meshtie_data_matrix_only(
 
     // copy data into one common data vector in the order expected by the
     // integration kernel
-    std::vector<double> coeffs(_cstride* num_facets);
+    _coeffs[i].resize(_cstride * num_facets);
     for (std::size_t e = 0; e < num_facets; ++e)
     {
       std::copy_n(std::next(mu_p.begin(), e * c_mu), c_mu,
-                  std::next(coeffs.begin(), e * _cstride));
+                  std::next(_coeffs[i].begin(), e * _cstride));
       std::size_t offset = c_mu;
       std::copy_n(std::next(lm_p.begin(), e * c_lm), c_lm,
-                  std::next(coeffs.begin(), e * _cstride+ offset));
+                  std::next(_coeffs[i].begin(), e * _cstride + offset));
       offset += c_lm;
       std::copy_n(std::next(h_p.begin(), e * c_h), c_h,
-                  std::next(coeffs.begin(), e * _cstride+ offset));
-      offset += c_h;
+                  std::next(_coeffs[i].begin(), e * _cstride + offset));
+
+      offset = cstrides[0];
       std::copy_n(std::next(testfn.begin(), e * ctest), ctest,
-                  std::next(coeffs.begin(), e * _cstride+ offset));
+                  std::next(_coeffs[i].begin(), e * _cstride + offset));
       offset += ctest;
       std::copy_n(std::next(gradtst.begin(), e * cgt), cgt,
-                  std::next(coeffs.begin(), e * _cstride+ offset));
+                  std::next(_coeffs[i].begin(), e * _cstride + offset));
     }
-
-    _coeffs[i] = coeffs;
+    if (problem_type == dolfinx_contact::Problem::ThermoElasticity)
+    {
+      auto [alpha, c_alpha]
+          = pack_coefficient_quadrature(coeffs[2], 0, entities, it); // alpha
+      for (std::size_t e = 0; e < num_facets; ++e)
+        std::copy_n(std::next(alpha.begin(), e * c_alpha), c_alpha,
+                    std::next(_coeffs[i].begin(), e * _cstride + 3));
+    }
   }
 }
 void dolfinx_contact::MeshTie::update_kernel_data(
@@ -236,7 +249,7 @@ void dolfinx_contact::MeshTie::update_kernel_data(
                          _cstride_poisson);
     break;
   case ThermoElasticity:
-      if (auto it = coefficients.find("u"); it != coefficients.end())
+    if (auto it = coefficients.find("u"); it != coefficients.end())
     {
       coeff_list.push_back(it->second);
     }
@@ -253,7 +266,7 @@ void dolfinx_contact::MeshTie::update_kernel_data(
     gdim = coeff_list[0]->function_space()->mesh()->geometry().dim();
     ndofs_cell = coeff_list[0]->function_space()->dofmap()->cell_dofs(0).size();
     bs = coeff_list[0]->function_space()->dofmap()->bs();
-    offset0 = 3 + 2 * (num_pts * max_links * bs * ndofs_cell);
+    offset0 = 4 + 2 * (num_pts * max_links * bs * ndofs_cell);
     offset1 = offset0 + (1 + gdim) * num_pts * bs;
     update_function_data(coeff_list[0], _coeffs, offset0, offset1, _cstride);
     offset0 += num_pts * bs;
@@ -404,23 +417,24 @@ void dolfinx_contact::MeshTie::generate_poisson_data_matrix_only(
 
     // copy data into one common data vector in the order expected by the
     // integration kernel
-    std::vector<double> coeffs(_cstride_poisson * num_facets);
+    _coeffs_poisson[i].resize(_cstride_poisson * num_facets);
     for (std::size_t e = 0; e < num_facets; ++e)
     {
       std::copy_n(std::next(h_p.begin(), e * c_h), c_h,
-                  std::next(coeffs.begin(), e * _cstride_poisson));
+                  std::next(_coeffs_poisson[i].begin(), e * _cstride_poisson));
       std::size_t offset = c_h;
-      std::copy_n(std::next(kdt_p.begin(), e * c_kdt), c_kdt,
-                  std::next(coeffs.begin(), e * _cstride_poisson + offset));
+      std::copy_n(
+          std::next(kdt_p.begin(), e * c_kdt), c_kdt,
+          std::next(_coeffs_poisson[i].begin(), e * _cstride_poisson + offset));
       offset += c_kdt;
-      std::copy_n(std::next(testfn.begin(), e * ctest), ctest,
-                  std::next(coeffs.begin(), e * _cstride_poisson + offset));
+      std::copy_n(
+          std::next(testfn.begin(), e * ctest), ctest,
+          std::next(_coeffs_poisson[i].begin(), e * _cstride_poisson + offset));
       offset += ctest;
-      std::copy_n(std::next(gradtst.begin(), e * cgt), cgt,
-                  std::next(coeffs.begin(), e * _cstride_poisson + offset));
+      std::copy_n(
+          std::next(gradtst.begin(), e * cgt), cgt,
+          std::next(_coeffs_poisson[i].begin(), e * _cstride_poisson + offset));
     }
-
-    _coeffs_poisson[i] = coeffs;
   }
 }
 
