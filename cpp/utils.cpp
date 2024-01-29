@@ -178,7 +178,7 @@ void dolfinx_contact::update_geometry(
   // The Function and the mesh must have identical element_dof_layouts
   // (up to the block size)
   assert(dofmap->element_dof_layout()
-         == mesh->geometry().cmaps()[0].create_dof_layout());
+         == mesh->geometry().cmap().create_dof_layout());
 
   const int tdim = mesh->topology()->dim();
   std::shared_ptr<const dolfinx::common::IndexMap> cell_map
@@ -340,7 +340,7 @@ void dolfinx_contact::evaluate_basis_functions(
   stdex::mdspan<const std::int32_t,
                 MDSPAN_IMPL_STANDARD_NAMESPACE::dextents<std::size_t, 2>>
       x_dofmap = geometry.dofmap();
-  const dolfinx::fem::CoordinateElement<double>& cmap = geometry.cmaps()[0];
+  const dolfinx::fem::CoordinateElement<double>& cmap = geometry.cmap();
   const std::size_t num_dofs_g = cmap.dim();
 
   // Get element
@@ -692,7 +692,7 @@ dolfinx_contact::entities_to_geometry_dofs(
   // Get mesh geometry and topology data
   const dolfinx::mesh::Geometry<double>& geometry = mesh.geometry();
   const dolfinx::fem::ElementDofLayout layout
-      = geometry.cmaps()[0].create_dof_layout();
+      = geometry.cmap().create_dof_layout();
   // FIXME: What does this return for prisms?
   const std::size_t num_entity_dofs = layout.num_entity_closure_dofs(dim);
   stdex::mdspan<const std::int32_t,
@@ -878,7 +878,7 @@ void dolfinx_contact::compute_physical_points(
   // Geometrical info
   const dolfinx::mesh::Geometry<double>& geometry = mesh.geometry();
   std::span<const double> mesh_geometry = geometry.x();
-  const dolfinx::fem::CoordinateElement<double>& cmap = geometry.cmaps()[0];
+  const dolfinx::fem::CoordinateElement<double>& cmap = geometry.cmap();
   const std::size_t num_dofs_g = cmap.dim();
   stdex::mdspan<const std::int32_t,
                 MDSPAN_IMPL_STANDARD_NAMESPACE::dextents<std::size_t, 2>>
@@ -887,7 +887,7 @@ void dolfinx_contact::compute_physical_points(
 
   // Create storage for output quadrature points
   // NOTE: Assume that all facets have the same number of quadrature points
-  dolfinx_contact::error::check_cell_type(mesh.topology()->cell_types()[0]);
+  dolfinx_contact::error::check_cell_type(mesh.topology()->cell_type());
   std::size_t num_q_points = offsets[1] - offsets[0];
 
   dolfinx_contact::mdspan3_t all_qps(qp_phys.data(),
@@ -935,11 +935,11 @@ dolfinx_contact::compute_distance_map(
 {
   dolfinx::common::Timer t("~Contact: compute distance map");
   const dolfinx::mesh::Geometry<double>& geometry = quadrature_mesh.geometry();
-  const dolfinx::fem::CoordinateElement<double>& cmap = geometry.cmaps()[0];
+  const dolfinx::fem::CoordinateElement<double>& cmap = geometry.cmap();
 
   const std::size_t gdim = geometry.dim();
   auto topology = quadrature_mesh.topology();
-  const dolfinx::mesh::CellType cell_type = topology->cell_types()[0];
+  const dolfinx::mesh::CellType cell_type = topology->cell_type();
   dolfinx_contact::error::check_cell_type(cell_type);
 
   const int tdim = topology->dim();

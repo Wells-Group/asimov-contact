@@ -60,7 +60,7 @@ dolfinx_contact::pack_coefficient_quadrature(
   // Get topology data
   auto topology = mesh->topology();
   const std::size_t tdim = topology->dim();
-  const dolfinx::mesh::CellType cell_type = topology->cell_types()[0];
+  const dolfinx::mesh::CellType cell_type = topology->cell_type();
 
   // Get what entity type we are integrating over
   std::size_t entity_dim;
@@ -148,7 +148,7 @@ dolfinx_contact::pack_coefficient_quadrature(
     stdex::mdspan<const std::int32_t,
                   MDSPAN_IMPL_STANDARD_NAMESPACE::dextents<std::size_t, 2>>
         x_dofmap = mesh->geometry().dofmap();
-    const dolfinx::fem::CoordinateElement<double>& cmap = geometry.cmaps()[0];
+    const dolfinx::fem::CoordinateElement<double>& cmap = geometry.cmap();
     const std::size_t num_dofs_g = cmap.dim();
     std::span<const double> x_g = geometry.x();
 
@@ -328,7 +328,7 @@ dolfinx_contact::pack_gradient_quadrature(
   // Get topology data
   auto topology = mesh->topology();
   const std::size_t tdim = topology->dim();
-  const dolfinx::mesh::CellType cell_type = topology->cell_types()[0];
+  const dolfinx::mesh::CellType cell_type = topology->cell_type();
 
   // Get what entity type we are integrating over
   std::size_t entity_dim;
@@ -377,7 +377,7 @@ dolfinx_contact::pack_gradient_quadrature(
   stdex::mdspan<const std::int32_t,
                 MDSPAN_IMPL_STANDARD_NAMESPACE::dextents<std::size_t, 2>>
       x_dofmap = geometry.dofmap();
-  const dolfinx::fem::CoordinateElement<double>& cmap = geometry.cmaps()[0];
+  const dolfinx::fem::CoordinateElement<double>& cmap = geometry.cmap();
 
   const std::size_t num_dofs_g = cmap.dim();
   std::span<const double> x_g = geometry.x();
@@ -550,11 +550,11 @@ std::vector<PetscScalar> dolfinx_contact::pack_circumradius(
   const dolfinx::mesh::Geometry<double>& geometry = mesh.geometry();
 
   auto topology = mesh.topology();
-  if (!geometry.cmaps()[0].is_affine())
+  if (!geometry.cmap().is_affine())
     throw std::invalid_argument("Non-affine circumradius is not implemented");
 
   // Tabulate element at quadrature points
-  const dolfinx::mesh::CellType cell_type = topology->cell_types()[0];
+  const dolfinx::mesh::CellType cell_type = topology->cell_type();
   dolfinx_contact::error::check_cell_type(cell_type);
 
   const int tdim = topology->dim();
@@ -569,7 +569,7 @@ std::vector<PetscScalar> dolfinx_contact::pack_circumradius(
   assert(q_rule.tdim() == (std::size_t)tdim);
 
   // Tabulate coordinate basis for Jacobian computation
-  const dolfinx::fem::CoordinateElement<double>& cmap = geometry.cmaps()[0];
+  const dolfinx::fem::CoordinateElement<double>& cmap = geometry.cmap();
   const std::array<std::size_t, 4> tab_shape
       = cmap.tabulate_shape(1, sum_q_points);
   std::vector<double> coordinate_basisb(

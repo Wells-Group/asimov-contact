@@ -283,7 +283,8 @@ int raytracing_cell(
     // Push forward reference coordinate
     dolfinx::fem::CoordinateElement<double>::push_forward(
         _xk, coords,
-        stdex::submdspan(basis, 0, MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent, MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent, 0));
+        stdex::submdspan(basis, 0, MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent,
+                         MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent, 0));
 
     // Compute residual at current iteration
     std::fill(Gk.begin(), Gk.end(), 0);
@@ -426,17 +427,17 @@ compute_ray(const dolfinx::mesh::Mesh<double>& mesh,
             const double tol = 1e-8)
 {
   int status = -1;
-  dolfinx::mesh::CellType cell_type = mesh.topology()->cell_types()[0];
+  dolfinx::mesh::CellType cell_type = mesh.topology()->cell_type();
   if ((mesh.topology()->dim() != tdim) or (mesh.geometry().dim() != gdim))
     throw std::invalid_argument("Invalid topological or geometrical dimension");
 
-  const dolfinx::fem::CoordinateElement<double>& cmap
-      = mesh.geometry().cmaps()[0];
+  const dolfinx::fem::CoordinateElement<double>& cmap = mesh.geometry().cmap();
 
   // Get cell coordinates/geometry
   const dolfinx::mesh::Geometry<double>& geometry = mesh.geometry();
-  stdex::mdspan<const std::int32_t, MDSPAN_IMPL_STANDARD_NAMESPACE::dextents<std::size_t, 2>> x_dofmap
-      = geometry.dofmap();
+  stdex::mdspan<const std::int32_t,
+                MDSPAN_IMPL_STANDARD_NAMESPACE::dextents<std::size_t, 2>>
+      x_dofmap = geometry.dofmap();
   std::span<const double> x_g = geometry.x();
   const std::size_t num_dofs_g = cmap.dim();
   std::vector<double> coordinate_dofs(num_dofs_g * gdim);
@@ -478,7 +479,8 @@ compute_ray(const dolfinx::mesh::Mesh<double>& mesh,
   {
 
     // Get cell geometry
-    auto x_dofs = stdex::submdspan(x_dofmap, cells[c], MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent);
+    auto x_dofs = stdex::submdspan(x_dofmap, cells[c],
+                                   MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent);
     for (std::size_t j = 0; j < x_dofs.size(); ++j)
     {
       std::copy_n(std::next(x_g.begin(), 3 * x_dofs[j]), gdim,
