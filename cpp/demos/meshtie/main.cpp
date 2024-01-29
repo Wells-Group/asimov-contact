@@ -4,7 +4,6 @@
 //
 // SPDX-License-Identifier:    MIT
 
-
 // meshtie demo
 // ====================================================
 
@@ -38,12 +37,11 @@ auto read_mesh(const std::string& filename)
   for (std::size_t i = 0; i < cshape[0]; ++i)
     offset[i + 1] = offset[i] + cshape[1];
 
-  dolfinx::graph::AdjacencyList<std::int64_t> cells_adj(std::move(cells),
-                                                        std::move(offset));
   const std::vector<double>& _x = std::get<std::vector<double>>(x);
   auto mesh = std::make_shared<dolfinx::mesh::Mesh<double>>(
-      dolfinx::mesh::create_mesh(MPI_COMM_WORLD, cells_adj, {cmap}, _x, xshape,
-                                 dolfinx::mesh::GhostMode::none));
+      dolfinx::mesh::create_mesh(MPI_COMM_WORLD,
+                                 std::span<const std::int64_t>(cells), {cmap},
+                                 _x, xshape, dolfinx::mesh::GhostMode::none));
 
   mesh->topology_mutable()->create_entities(2);
   mesh->topology_mutable()->create_connectivity(2, 3);
@@ -124,7 +122,6 @@ int main(int argc, char* argv[])
           return {_f, {_f.size()}};
         });
 
-
     // Function for body force
     auto f = std::make_shared<fem::Function<double>>(V);
     std::size_t bs = V->dofmap()->bs();
@@ -133,8 +130,9 @@ int main(int argc, char* argv[])
         {
           std::vector<double> fdata(bs * x.extent(1), 0.0);
           namespace stdex = std::experimental;
-          stdex::mdspan<double, MDSPAN_IMPL_STANDARD_NAMESPACE::dextents<std::size_t, 2>> _f(
-              fdata.data(), bs, x.extent(1));
+          stdex::mdspan<
+              double, MDSPAN_IMPL_STANDARD_NAMESPACE::dextents<std::size_t, 2>>
+              _f(fdata.data(), bs, x.extent(1));
           for (std::size_t p = 0; p < x.extent(1); ++p)
           {
             _f(1, p) = 0.5;
@@ -150,8 +148,9 @@ int main(int argc, char* argv[])
         {
           std::vector<double> fdata(bs * x.extent(1), 0.0);
           namespace stdex = std::experimental;
-          stdex::mdspan<double, MDSPAN_IMPL_STANDARD_NAMESPACE::dextents<std::size_t, 2>> _f(
-              fdata.data(), bs, x.extent(1));
+          stdex::mdspan<
+              double, MDSPAN_IMPL_STANDARD_NAMESPACE::dextents<std::size_t, 2>>
+              _f(fdata.data(), bs, x.extent(1));
           for (std::size_t p = 0; p < x.extent(1); ++p)
           {
             _f(1, p) = 0.5;
@@ -168,9 +167,18 @@ int main(int argc, char* argv[])
     auto J = std::make_shared<fem::Form<double>>(
         fem::create_form<double>(*form_linear_elasticity_J, {V, V},
                                  {{"mu", mu}, {"lmbda", lmbda}}, {}, {}));
+    std::vector<std::pair<std::int32_t, std::span<const std::int32_t>>>
+        integration_domain;
+    std::transform(
+        facet_domains.begin(), facet_domains.end(),
+        std::back_inserter(integration_domain),
+        [](auto& domain)
+            -> std::pair<std::int32_t, std::span<const std::int32_t>> {
+          return {domain.first, std::span<const std::int32_t>(domain.second)};
+        });
     auto F = std::make_shared<fem::Form<double>>(fem::create_form<double>(
         *form_linear_elasticity_F, {V}, {{"f", f}, {"t", t}}, {},
-        {{dolfinx::fem::IntegralType::exterior_facet, facet_domains}}));
+        {{dolfinx::fem::IntegralType::exterior_facet, integration_domain}}));
 
     // Define boundary conditions
     const std::int32_t dirichlet_bdy = 12; // bottom face
@@ -230,9 +238,9 @@ int main(int argc, char* argv[])
     MatAssemblyEnd(A.mat(), MAT_FINAL_ASSEMBLY);
 
     // Build near-nullspace and attach to matrix
-    std::vector<std::int32_t>tags = {1, 2};
-    MatNullSpace ns = dolfinx_contact::build_nullspace_multibody(
-        *V, domain1, tags);
+    std::vector<std::int32_t> tags = {1, 2};
+    MatNullSpace ns
+        = dolfinx_contact::build_nullspace_multibody(*V, domain1, tags);
     MatSetNearNullSpace(A.mat(), ns);
     MatNullSpaceDestroy(&ns);
 
