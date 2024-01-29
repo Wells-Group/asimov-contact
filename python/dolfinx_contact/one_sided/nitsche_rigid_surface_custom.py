@@ -153,7 +153,7 @@ def nitsche_rigid_surface_custom(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTa
 
     # Custom assembly of contact boundary conditions
     _log.set_log_level(_log.LogLevel.OFF)  # avoid large amounts of output
-    q_rule = dolfinx_contact.QuadratureRule(mesh.topology.cell_types[0], quadrature_degree,
+    q_rule = dolfinx_contact.QuadratureRule(mesh.topology.cell_type, quadrature_degree,
                                             mesh.topology.dim - 1, basix.QuadratureType.Default)
     consts = np.array([gamma * E, theta])
 

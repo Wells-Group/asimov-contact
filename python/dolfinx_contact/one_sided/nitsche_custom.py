@@ -125,7 +125,7 @@ def nitsche_custom(mesh: dmesh.Mesh, mesh_data: Tuple[dmesh.MeshTags, int, int],
         raise RuntimeError("Dirichlet bc not implemented in custom assemblers yet.")
 
     # Custom assembly of contact boundary condition
-    q_rule = dolfinx_contact.QuadratureRule(mesh.topology.cell_types[0], quadrature_degree,
+    q_rule = dolfinx_contact.QuadratureRule(mesh.topology.cell_type, quadrature_degree,
                                             mesh.topology.dim - 1, basix.QuadratureType.Default)
     consts = np.array([E * gamma, theta])
     consts = np.hstack((consts, n_vec))

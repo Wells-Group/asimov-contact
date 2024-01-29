@@ -250,7 +250,7 @@ if __name__ == "__main__":
         outfile = open(args.outfile, "a")
     print("-" * 25, file=outfile)
     print(f"num_dofs: {uh.function_space.dofmap.index_map_bs*uh.function_space.dofmap.index_map.size_global}"
-          + f", {mesh.topology.cell_types[0]}", file=outfile)
+          + f", {mesh.topology.cell_type}", file=outfile)
     print(f"Krylov solver {solver_time}", file=outfile)
     print(f"Krylov iterations {solver.getIterationNumber()}", file=outfile)
     print("-" * 25, file=outfile)
