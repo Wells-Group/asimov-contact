@@ -206,8 +206,8 @@ def rigid_motions_nullspace(V: FunctionSpace):
 
     _la.orthonormalize(nullspace_basis)
     assert _la.is_orthonormal(nullspace_basis)
-    _x.vector.destroy()
-    return PETSc.NullSpace().create(vectors=nullspace_basis)  # type: ignore
+    del x
+    return PETSc.NullSpace().create(comm=V.mesh.comm, vectors=nullspace_basis)  # type: ignore
 
 
 def rigid_motions_nullspace_subdomains(V: FunctionSpace, mt: MeshTags,

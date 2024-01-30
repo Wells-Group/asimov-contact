@@ -2,19 +2,19 @@
 #
 # SPDX-License-Identifier:    MIT
 
-from typing import Dict, Optional, Tuple
-
-from petsc4py import PETSc as _PETSc
-
-import numpy as np
+from typing import Dict, Tuple, Optional
 
 import dolfinx.common as _common
 import dolfinx.fem as _fem
 import dolfinx.log as _log
 import dolfinx.mesh as dmesh
-import ufl
 from dolfinx.nls.petsc import NewtonSolver
-from dolfinx_contact.helpers import R_minus, epsilon, lame_parameters, rigid_motions_nullspace, sigma_func
+import numpy as np
+import ufl
+from petsc4py import PETSc as _PETSc
+
+from dolfinx_contact.helpers import (R_minus, epsilon, lame_parameters,
+                                     rigid_motions_nullspace, sigma_func)
 
 __all__ = ["nitsche_ufl"]
 
@@ -190,6 +190,7 @@ def nitsche_ufl(mesh: dmesh.Mesh, mesh_data: Tuple[dmesh.MeshTags, int, int],
     # xdmf.write_mesh(mesh)
 
     solver = NewtonSolver(mesh.comm, problem)
+    
     null_space = rigid_motions_nullspace(V)
     solver.A.setNearNullSpace(null_space)
 

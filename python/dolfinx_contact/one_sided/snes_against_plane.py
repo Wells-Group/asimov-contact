@@ -194,5 +194,5 @@ def snes_solver(mesh: dmesh.Mesh, mesh_data: Tuple[dmesh.MeshTags, int, int],
 
     assert snes.getConvergedReason() > 1
     assert snes.getConvergedReason() < 4
-    null_space.destroy()
+
     return u
