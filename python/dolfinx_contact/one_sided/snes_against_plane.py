@@ -62,8 +62,8 @@ def snes_solver(mesh: dmesh.Mesh, mesh_data: Tuple[dmesh.MeshTags, int, int],
     """
     # Compute lame parameters
     plane_strain = physical_parameters.get("strain", False)
-    E = physical_parameters.get("E", 1e3)
-    nu = physical_parameters.get("nu", 0.1)
+    E = _fem.Constant(mesh, default_scalar_type(physical_parameters.get("E", 1e3)))
+    nu = _fem.Constant(mesh, default_scalar_type(physical_parameters.get("nu", 0.1)))
     mu_func, lambda_func = lame_parameters(plane_strain)
     mu = mu_func(E, nu)
     lmbda = lambda_func(E, nu)
@@ -102,7 +102,7 @@ def snes_solver(mesh: dmesh.Mesh, mesh_data: Tuple[dmesh.MeshTags, int, int],
 
     # Dirichlet boundary conditions
     def _u_D(x):
-        values = np.zeros((mesh.geometry.dim, x.shape[1]))
+        values = np.zeros((mesh.geometry.dim, x.shape[1]), dtype=default_scalar_type())
         values[mesh.geometry.dim - 1] = vertical_displacement
         return values
     u_D = _fem.Function(V)
@@ -147,7 +147,8 @@ def snes_solver(mesh: dmesh.Mesh, mesh_data: Tuple[dmesh.MeshTags, int, int],
     umin.interpolate(_constraint_l)
 
     # Create LHS matrix and RHS vector
-    b = _la.create_petsc_vector(V.dofmap.index_map, V.dofmap.index_map_bs)
+    b_func = _fem.Function(V)
+    b = b_func.vector
     J = create_matrix(problem.a)
 
     # Create semismooth Newton solver (SNES)

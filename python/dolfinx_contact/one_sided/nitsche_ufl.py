@@ -2,19 +2,19 @@
 #
 # SPDX-License-Identifier:    MIT
 
-from typing import Dict, Tuple, Optional
+from typing import Dict, Optional, Tuple
+
+from petsc4py import PETSc as _PETSc
+
+import numpy as np
 
 import dolfinx.common as _common
 import dolfinx.fem as _fem
 import dolfinx.log as _log
 import dolfinx.mesh as dmesh
-from dolfinx.nls.petsc import NewtonSolver
-import numpy as np
 import ufl
-from petsc4py import PETSc as _PETSc
-
-from dolfinx_contact.helpers import (R_minus, epsilon, lame_parameters,
-                                     rigid_motions_nullspace, sigma_func)
+from dolfinx.nls.petsc import NewtonSolver
+from dolfinx_contact.helpers import R_minus, epsilon, lame_parameters, rigid_motions_nullspace, sigma_func
 
 __all__ = ["nitsche_ufl"]
 
