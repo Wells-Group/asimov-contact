@@ -190,7 +190,7 @@ def nitsche_ufl(mesh: dmesh.Mesh, mesh_data: Tuple[dmesh.MeshTags, int, int],
     # xdmf.write_mesh(mesh)
 
     solver = NewtonSolver(mesh.comm, problem)
-    
+
     null_space = rigid_motions_nullspace(V)
     solver.A.setNearNullSpace(null_space)
 

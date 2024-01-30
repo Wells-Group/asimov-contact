@@ -6,16 +6,11 @@
 #  against a rigid plane with a SNES implementation
 import argparse
 
-import petsc4py
 from mpi4py import MPI
 
 import numpy as np
 
 import ufl
-
-petsc4py.init("-on_error_attach_debugger")
-from petsc4py import PETSc
-
 from dolfinx.common import timing
 from dolfinx.fem import assemble_scalar, form
 from dolfinx.io import XDMFFile
@@ -147,7 +142,6 @@ if __name__ == "__main__":
                          plane_loc=gap, nitsche_bc=nitsche_bc, petsc_options=petsc_options,
                          newton_options=newton_options, form_compiler_options=form_compiler_options,
                          jit_options=jit_options)
-
         with XDMFFile(mesh.comm, f"results/u_nitsche_{i}.xdmf", "w") as xdmf:
             xdmf.write_mesh(mesh)
             xdmf.write_function(u1)

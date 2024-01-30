@@ -10,9 +10,9 @@ import numpy as np
 
 import dolfinx.common as _common
 import dolfinx.fem as _fem
-import dolfinx.la as _la
 import dolfinx.mesh as dmesh
 import ufl
+from dolfinx import default_scalar_type
 from dolfinx.fem.petsc import create_matrix
 from dolfinx_contact.helpers import (NonlinearPDE_SNESProblem, epsilon, lame_parameters, rigid_motions_nullspace,
                                      sigma_func)
@@ -87,7 +87,8 @@ def snes_solver(mesh: dmesh.Mesh, mesh_data: Tuple[dmesh.MeshTags, int, int],
     u = _fem.Function(V)
     v = ufl.TestFunction(V)
     dx = ufl.Measure("dx", domain=mesh)
-    zero = np.asarray([0, ] * mesh.geometry.dim, dtype=np.float64)
+    zero = np.array([0, ] * mesh.geometry.dim, dtype=default_scalar_type)
+
     F = ufl.inner(sigma(u), epsilon(v)) * dx - \
         ufl.inner(_fem.Constant(mesh, zero), v) * dx
 
@@ -105,6 +106,7 @@ def snes_solver(mesh: dmesh.Mesh, mesh_data: Tuple[dmesh.MeshTags, int, int],
         values = np.zeros((mesh.geometry.dim, x.shape[1]), dtype=default_scalar_type())
         values[mesh.geometry.dim - 1] = vertical_displacement
         return values
+
     u_D = _fem.Function(V)
     u_D.interpolate(_u_D)
     u_D.name = "u_D"
