@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier:    MIT
 
-from typing import Dict, Tuple
+from typing import Dict, Tuple, Optional
 
 import dolfinx.common as _common
 import dolfinx.fem as _fem
@@ -20,10 +20,13 @@ __all__ = ["nitsche_ufl"]
 
 
 def nitsche_ufl(mesh: dmesh.Mesh, mesh_data: Tuple[dmesh.MeshTags, int, int],
-                physical_parameters: dict = {}, nitsche_parameters: Dict[str, float] = {},
+                physical_parameters: Optional[Dict] = None, 
+                nitsche_parameters: Optional[Dict[str, float]] = None,
                 plane_loc: float = 0.0, vertical_displacement: float = -0.1,
-                nitsche_bc: bool = True, quadrature_degree: int = 5, form_compiler_options: Dict = {},
-                jit_options: Dict = {}, petsc_options: Dict = {}, newton_options: Dict = {}) -> _fem.Function:
+                nitsche_bc: bool = True, quadrature_degree: int = 5,
+                form_compiler_options: Optional[Dict] = None,
+                jit_options: Optional[Dict] = None, petsc_options: Optional[Dict] = None,
+                newton_options: Optional[Dict] = None) -> _fem.Function:
     """
     Use UFL to compute the one sided contact problem with a mesh coming into contact
     with a rigid surface (not meshed).
@@ -71,6 +74,13 @@ def nitsche_ufl(mesh: dmesh.Mesh, mesh_data: Tuple[dmesh.MeshTags, int, int],
         ("max_it", int), ("error_on_nonconvergence", bool), ("relaxation_parameter", float)
     """
     # Compute lame parameters
+    physical_parameters = {} if physical_parameters is None else physical_parameters
+    nitsche_parameters = {} if nitsche_parameters is None else nitsche_parameters
+    form_compiler_options = {} if form_compiler_options is None else form_compiler_options
+    jit_options = {} if jit_options is None else jit_options
+    petsc_options = {} if petsc_options is None else petsc_options
+    newton_options = {} if newton_options is None else newton_options
+
     plane_strain = physical_parameters.get("strain", False)
     E = physical_parameters.get("E", 1e3)
     nu = physical_parameters.get("nu", 0.1)
@@ -220,5 +230,5 @@ def nitsche_ufl(mesh: dmesh.Mesh, mesh_data: Tuple[dmesh.MeshTags, int, int],
     if solver.error_on_nonconvergence:
         assert converged
     print(f"{num_dofs_global}, Number of interations: {n:d}")
-    ksp.destroy()
+    null_space.destroy()
     return u

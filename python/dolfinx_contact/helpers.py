@@ -204,6 +204,7 @@ def rigid_motions_nullspace(V: FunctionSpace):
 
     _la.orthonormalize(nullspace_basis)
     assert _la.is_orthonormal(nullspace_basis)
+    _x.vector.destroy()
     return PETSc.NullSpace().create(vectors=nullspace_basis)  # type: ignore
 
 

@@ -101,8 +101,6 @@ jobs:
           cmake -G Ninja -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_FLAGS="${CONTACT_CMAKE_CXX_FLAGS}" -B build-contact -S cpp/
 
       - name: Run demos (C++)
-        if: steps.cpp-contact.outcome == 'success'
-        continue-on-error: true
         run: |
           . dolfinx-real-mode
           cd cpp/demos/meshtie
@@ -112,45 +110,34 @@ jobs:
 
       - name: Install contact
         id: python-contact
-        if: steps.cpp-contact.outcome == 'success'
         run: |
           python3 -m pip -v install -r ./python/build-requirements.txt
-          python3 -m pip -v install --config-settings=build-dir="build-${{ matrix.run_mode }}" --config-settings=cmake.build-type="${{ matrix.run_mode }}" --no-build-isolation ./python/ 
+          python3 -m pip -v install --config-settings=build-dir="build-${{ matrix.run_mode }}" --config-settings=cmake.build-type="${{ matrix.run_mode }}" --no-build-isolation -e ./python/ 
 
       - name: Flake8 code
         if: always()
         run: flake8 python/
 
       - name: Run mypy checks
-        if: steps.python-contact.outcome == 'success'
-        continue-on-error: true
         run: |
           pip3 install mypy
           cd python
           python3 -m mypy . --exclude=build
 
-    
       - name: Create output folders
         id: output-creation
-        if: steps.python-contact.outcome == 'success'
-        continue-on-error: true
         working-directory: ./python/demos
         run: |
-          mkdir -p results
-          mkdir -p meshes
-
+            mkdir -p results
+            mkdir -p meshes
 
       - name: Run SNES demos
-        continue-on-error: true
-        if: steps.output-creation.outcome == 'success'
         working-directory: ./python/demos
         run: |
           python3 compare_custom_snes_one_sided.py
           python3 compare_nitsche_snes.py
 
       - name: Run rigid surface demos
-        continue-on-error: true
-        if: steps.output-creation.outcome == 'success'
         working-directory: ./python/demos
         run: |  
           python3 demo_nitsche_rigid_surface_ufl.py
@@ -158,8 +145,6 @@ jobs:
           python3 nitsche_euler_bernoulli.py
 
       - name: Run unbiased demos
-        continue-on-error: true
-        if: steps.output-creation.outcome == 'success'
         working-directory: ./python/demos
         run: |  
           python3 demo_nitsche_unbiased.py --problem=1
@@ -168,8 +153,6 @@ jobs:
           python3 demo_nitsche_unbiased.py --problem=3 --3D --friction=0.1 --coulomb
 
       - name: Run meshties demos
-        continue-on-error: true
-        if: steps.output-creation.outcome == 'success'
         working-directory: ./python/demos
         run: |  
           python3 demo_nitsche_meshties.py
@@ -179,23 +162,17 @@ jobs:
           python3 meshtie_convergence.py --simplex --runs=4
         
       - name: Run Oxford demo
-        continue-on-error: true
-        if: steps.output-creation.outcome == 'success'
         working-directory: ./python/demos/oxford
         run: 
           python3 blocks_nitsche.py
 
       - name: Run tests
-        continue-on-error: true
-        if: steps.output-creation.outcome == 'success'
         run: |
           cd python/tests
           mkdir -p meshes
           python3 -m pytest . -vs
 
       - name: Run unbiased demos in parallel
-        continue-on-error: true
-        if: steps.output-creation.outcome == 'success'
         working-directory: ./python/demos
         run: |
           mpirun -np 2 python3 demo_nitsche_unbiased.py --problem=1
@@ -204,8 +181,6 @@ jobs:
           mpirun -np 2 python3 demo_nitsche_unbiased.py --problem=3 --3D --friction=0.1 --coulomb
 
       - name: Run meshties demos in parallel
-        continue-on-error: true
-        if: steps.output-creation.outcome == 'success'
         working-directory: ./python/demos
         run: |  
           mpirun -np 2 python3 demo_nitsche_meshties.py
