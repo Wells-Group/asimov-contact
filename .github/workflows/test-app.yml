@@ -90,7 +90,8 @@ jobs:
       #     python3 -m pip -v install --no-build-isolation ./dolfinx/python/
 
       - name: Echo petsc
-        run:
+        run: |
+          . dolfinx-real-mode
           echo $PETSC_ARCH $PETSC_DIR
       - name: Install contact (C++)
         id: cpp-contact
@@ -102,6 +103,7 @@ jobs:
       - name: Run demos (C++)
         if: steps.cpp-contact.outcome == 'success'
         run: |
+          . dolfinx-real-mode
           cd cpp/demos/meshtie
           cmake -G Ninja -B build-dir
           ninja -C build-dir
