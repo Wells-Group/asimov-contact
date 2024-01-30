@@ -56,10 +56,17 @@ NB_MODULE(cpp, m)
   // QuadratureRule
   nb::class_<dolfinx_contact::QuadratureRule>(m, "QuadratureRule",
                                               "QuadratureRule object")
-      .def(nb::init<dolfinx::mesh::CellType, int, int,
-                    basix::quadrature::type>(),
-           nb::arg("cell_type"), nb::arg("degree"), nb::arg("dim"),
-           nb::arg("type"))
+      .def(
+          "__init__",
+          [](dolfinx_contact::QuadratureRule* qr, int cell_type, int degree,
+             int dim, int type)
+          {
+            new (qr) dolfinx_contact::QuadratureRule(
+                static_cast<dolfinx::mesh::CellType>(cell_type), degree, dim,
+                static_cast<basix::quadrature::type>(type));
+          },
+          nb::arg("cell_type"), nb::arg("degree"), nb::arg("dim"),
+          nb::arg("type"))
       .def("points",
            [](dolfinx_contact::QuadratureRule& self)
            {
