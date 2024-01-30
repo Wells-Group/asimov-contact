@@ -24,7 +24,7 @@ jobs:
         petsc_mode: ["real"]
         petsc_precision: ["64"]
         petsc_int: ["32"]
-        CXX: [c++]
+        CXX: [g++]
         CC: [cc]
         # exclude:
         #   - CC: cc
