@@ -55,6 +55,7 @@ if __name__ == "__main__":
 
     # Parse input arguments or set to defualt values
     args = parser.parse_args()
+    #  python3 compare_nitsche_snes.py --refinements=0
 
     # Current formulation uses unilateral contact
     nitsche_parameters = {"gamma": args.gamma, "theta": args.theta}
@@ -136,7 +137,6 @@ if __name__ == "__main__":
         sorted_facets = np.argsort(indices)
         facet_marker = meshtags(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
         mesh_data = (facet_marker, top_value, bottom_value)
-
         # Solve contact problem using Nitsche's method
         u1 = nitsche_ufl(mesh=mesh, mesh_data=mesh_data, physical_parameters=physical_parameters,
                          vertical_displacement=vertical_displacement, nitsche_parameters=nitsche_parameters,
@@ -156,7 +156,6 @@ if __name__ == "__main__":
         with XDMFFile(mesh.comm, f"results/u_snes_{i}.xdmf", "w") as xdmf:
             xdmf.write_mesh(mesh)
             xdmf.write_function(u2)
-
         # Compute the difference (error) between Nitsche and SNES
         V = u1.function_space
         dx = ufl.Measure("dx", domain=mesh)
@@ -170,6 +169,8 @@ if __name__ == "__main__":
         e_abs.append(E_L2)
         e_rel.append(E_L2 / u2_L2)
         dofs_global.append(V.dofmap.index_map.size_global * V.dofmap.index_map_bs)
+
+        del u1, u2
 
     # Output absolute and relative errors of Nitsche compared to SNES
     if rank == 0:
