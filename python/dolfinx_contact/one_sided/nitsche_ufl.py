@@ -20,7 +20,7 @@ __all__ = ["nitsche_ufl"]
 
 
 def nitsche_ufl(mesh: dmesh.Mesh, mesh_data: Tuple[dmesh.MeshTags, int, int],
-                physical_parameters: Optional[Dict] = None, 
+                physical_parameters: Optional[Dict] = None,
                 nitsche_parameters: Optional[Dict[str, float]] = None,
                 plane_loc: float = 0.0, vertical_displacement: float = -0.1,
                 nitsche_bc: bool = True, quadrature_degree: int = 5,
