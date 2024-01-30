@@ -89,10 +89,6 @@ jobs:
       #     python3 -m pip -v install -r ./dolfinx/python/build-requirements.txt
       #     python3 -m pip -v install --no-build-isolation ./dolfinx/python/
 
-      - name: Echo petsc
-        run: |
-          . dolfinx-real-mode
-          echo $PETSC_ARCH $PETSC_DIR
       - name: Install contact (C++)
         id: cpp-contact
         run: |
