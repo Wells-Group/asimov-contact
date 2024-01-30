@@ -6,17 +6,17 @@
 
 import argparse
 import os
+
+from mpi4py import MPI
+
 import numpy as np
+
 import ufl
 from dolfinx.common import timing
 from dolfinx.fem import Function, assemble_scalar, form
 from dolfinx.io import XDMFFile
-from dolfinx.mesh import (create_unit_cube, create_unit_square,
-                          locate_entities_boundary, meshtags, refine)
-from mpi4py import MPI
-
-from dolfinx_contact.meshing import (convert_mesh, create_disk_mesh,
-                                     create_sphere_mesh)
+from dolfinx.mesh import create_unit_cube, create_unit_square, locate_entities_boundary, meshtags, refine
+from dolfinx_contact.meshing import convert_mesh, create_disk_mesh, create_sphere_mesh
 from dolfinx_contact.one_sided.nitsche_custom import nitsche_custom
 from dolfinx_contact.one_sided.snes_against_plane import snes_solver
 

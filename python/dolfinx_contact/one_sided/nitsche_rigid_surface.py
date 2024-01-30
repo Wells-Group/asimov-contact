@@ -2,23 +2,23 @@
 #
 # SPDX-License-Identifier:    MIT
 
-from typing import Tuple, Dict
+from typing import Dict, Tuple
+
+from petsc4py import PETSc as _PETSc
+
+import numpy as np
 
 import dolfinx.common as _common
 import dolfinx.cpp as _cpp
-from dolfinx.graph import adjacencylist
 import dolfinx.fem as _fem
 import dolfinx.geometry as _geometry
 import dolfinx.log as _log
 import dolfinx.mesh as _mesh
 import dolfinx.nls as _nls
-import numpy as np
-import ufl
-from petsc4py import PETSc as _PETSc
-
 import dolfinx_contact.cpp
-from dolfinx_contact.helpers import (R_minus, epsilon, lame_parameters,
-                                     rigid_motions_nullspace, sigma_func)
+import ufl
+from dolfinx.graph import adjacencylist
+from dolfinx_contact.helpers import R_minus, epsilon, lame_parameters, rigid_motions_nullspace, sigma_func
 
 
 def nitsche_rigid_surface(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTags, int, int, int, int],

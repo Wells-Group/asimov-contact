@@ -7,16 +7,19 @@
 # to surface 1 in Pi(x) and point inwards. The normalised version (Pi(x) - x)||Pi(x)-x|| should therefore
 # be the same as the outward unit normal in the point Pi(x) with the opposite sign.
 
-import dolfinx.fem as _fem
+import os
+
+from mpi4py import MPI
+
 import numpy as np
 import pytest
-from dolfinx.graph import adjacencylist
-from dolfinx.io import XDMFFile
-from dolfinx.mesh import meshtags, locate_entities_boundary
-from mpi4py import MPI
-import os
+
+import dolfinx.fem as _fem
 import dolfinx_contact
 import dolfinx_contact.cpp
+from dolfinx.graph import adjacencylist
+from dolfinx.io import XDMFFile
+from dolfinx.mesh import locate_entities_boundary, meshtags
 from dolfinx_contact.meshing import convert_mesh, create_box_mesh_2D, create_box_mesh_3D
 
 os.system("mkdir -p meshes")

@@ -5,19 +5,20 @@
 import argparse
 import sys
 
-import dolfinx.fem as _fem
+from mpi4py import MPI
+
 import numpy as np
+
+import dolfinx.fem as _fem
 import ufl
 from dolfinx import default_scalar_type, log
 from dolfinx.common import Timer, TimingType, list_timings, timing
 from dolfinx.graph import adjacencylist
 from dolfinx.io import XDMFFile
 from dolfinx.mesh import GhostMode, meshtags
-from dolfinx_contact.helpers import (epsilon, lame_parameters, sigma_func,
-                                     weak_dirichlet)
+from dolfinx_contact.helpers import epsilon, lame_parameters, sigma_func, weak_dirichlet
 from dolfinx_contact.parallel_mesh_ghosting import create_contact_mesh
 from dolfinx_contact.unbiased.nitsche_unbiased import nitsche_unbiased
-from mpi4py import MPI
 
 if __name__ == "__main__":
     desc = "Nitsche's method for two elastic bodies using custom assemblers"

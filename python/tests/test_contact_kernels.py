@@ -2,21 +2,20 @@
 #
 # SPDX-License-Identifier:   MIT
 
-import basix
-import dolfinx.mesh
-import numpy as np
-import pytest
-import ufl
-from dolfinx.graph import adjacencylist
-from dolfinx.fem import (Function, IntegralType, form, functionspace)
-from dolfinx.fem.petsc import (assemble_matrix, assemble_vector, create_matrix,
-                               create_vector)
-from dolfinx.mesh import (meshtags, create_unit_cube, create_unit_square,
-                          locate_entities_boundary)
 from mpi4py import MPI
 
+import numpy as np
+import pytest
+
+import basix
+import dolfinx.mesh
 import dolfinx_contact
 import dolfinx_contact.cpp
+import ufl
+from dolfinx.fem import Function, IntegralType, form, functionspace
+from dolfinx.fem.petsc import assemble_matrix, assemble_vector, create_matrix, create_vector
+from dolfinx.graph import adjacencylist
+from dolfinx.mesh import create_unit_cube, create_unit_square, locate_entities_boundary, meshtags
 
 kt = dolfinx_contact.cpp.Kernel
 compare_matrices = dolfinx_contact.helpers.compare_matrices

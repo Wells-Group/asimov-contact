@@ -4,8 +4,9 @@
 
 import warnings
 
-import gmsh
 from mpi4py import MPI
+
+import gmsh
 
 warnings.filterwarnings("ignore")
 

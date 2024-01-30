@@ -5,12 +5,14 @@
 # This test check that the ray-tracing routines give the same result as the closest point projection
 # when a solution is found (It is not guaranteed that a ray hits the mesh on all processes in parallel)
 
-import dolfinx_contact
-import basix.ufl
 from mpi4py import MPI
-import dolfinx
+
 import numpy as np
 import pytest
+
+import basix.ufl
+import dolfinx
+import dolfinx_contact
 import ufl
 
 

@@ -18,7 +18,7 @@ readme = "README.md"
 requires-python = ">=3.8.0"
 license = { file = "../LICENSE" }
 authors = [
-      { email = "sr957@cam.ac.uk", name = "Sarah Roggendorf"},
+      { email = "sr957@cam.ac.uk", name = "Sarah Roggendorf" },
       { email = "dokken@simula.no", name = "Jørgen S. Dokken" },
 ]
 dependencies = [
@@ -44,3 +44,19 @@ junit_family = "xunit2"
 
 [tool.mypy]
 ignore_missing_imports = true
+
+
+[tool.isort]
+line_length = 120
+src_paths = ["demos", "asimov-contact", "tests"]
+known_first_party = ["dolfinx_contact", "basix", "dolfinx", "ffcx", "ufl"]
+known_third_party = ["gmsh", "numba", "numpy", "pytest", "pyvista"]
+known_mpi = ["mpi4py", "petsc4py"]
+sections = [
+      "FUTURE",
+      "STDLIB",
+      "MPI",
+      "THIRDPARTY",
+      "FIRSTPARTY",
+      "LOCALFOLDER",
+]

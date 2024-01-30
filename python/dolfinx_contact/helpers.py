@@ -6,14 +6,16 @@
 from contextlib import ExitStack
 from typing import Union
 
-from dolfinx.fem import Constant, form, Function, FunctionSpace
-from dolfinx.fem.petsc import apply_lifting, assemble_matrix, assemble_vector, set_bc
-import dolfinx.la as _la
-from dolfinx.mesh import MeshTags
+from petsc4py import PETSc
+
 import numpy
 import scipy.sparse
+
+import dolfinx.la as _la
 import ufl
-from petsc4py import PETSc
+from dolfinx.fem import Constant, Function, FunctionSpace, form
+from dolfinx.fem.petsc import apply_lifting, assemble_matrix, assemble_vector, set_bc
+from dolfinx.mesh import MeshTags
 
 __all__ = ["compare_matrices", "lame_parameters", "epsilon", "sigma_func", "R_minus", "dR_minus", "R_plus",
            "dR_plus", "ball_projection", "d_ball_projection", "tangential_proj", "NonlinearPDE_SNESProblem",

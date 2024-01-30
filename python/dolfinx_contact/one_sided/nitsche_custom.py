@@ -4,19 +4,19 @@
 
 from typing import Dict, Tuple
 
-import basix
 import numpy as np
+
+import basix
+import dolfinx_contact
+import dolfinx_contact.cpp
 import ufl
 from dolfinx import common as _common
 from dolfinx import fem as _fem
-from dolfinx.fem.petsc import create_matrix, create_vector
 from dolfinx import log as _log
 from dolfinx import mesh as dmesh
+from dolfinx.fem.petsc import create_matrix, create_vector
 from dolfinx.graph import adjacencylist
-import dolfinx_contact
-import dolfinx_contact.cpp
-from dolfinx_contact.helpers import (epsilon, lame_parameters,
-                                     rigid_motions_nullspace, sigma_func)
+from dolfinx_contact.helpers import epsilon, lame_parameters, rigid_motions_nullspace, sigma_func
 
 __all__ = ["nitsche_custom"]
 

@@ -4,16 +4,15 @@
 
 import argparse
 
-import numpy as np
-from dolfinx.io import XDMFFile
-from dolfinx.mesh import locate_entities_boundary, meshtags
 from mpi4py import MPI
 
-from dolfinx_contact.meshing import (convert_mesh, create_circle_circle_mesh,
-                                     create_circle_plane_mesh,
+import numpy as np
+
+from dolfinx.io import XDMFFile
+from dolfinx.mesh import locate_entities_boundary, meshtags
+from dolfinx_contact.meshing import (convert_mesh, create_circle_circle_mesh, create_circle_plane_mesh,
                                      create_sphere_plane_mesh)
-from dolfinx_contact.one_sided.nitsche_rigid_surface_custom import \
-    nitsche_rigid_surface_custom
+from dolfinx_contact.one_sided.nitsche_rigid_surface_custom import nitsche_rigid_surface_custom
 
 if __name__ == "__main__":
     desc = "Nitsche's method with rigid surface using custom assemblers"

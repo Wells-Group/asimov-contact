@@ -1,5 +1,6 @@
-import numpy as np
 import gmsh
+import numpy as np
+
 from dolfinx_contact.meshing import convert_mesh
 
 

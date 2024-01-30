@@ -1,8 +1,9 @@
 # Copyright (C) 2021 Sarah Roggendorf
 #
 # SPDX-License-Identifier:    MIT
-import dolfinx
 from matplotlib import pyplot as plt
+
+import dolfinx
 
 
 # Visualise the gap. For debugging. Works in 2D only

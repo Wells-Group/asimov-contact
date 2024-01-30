@@ -2,16 +2,17 @@
 #
 # SPDX-License-Identifier:   MIT
 
-import basix
+from mpi4py import MPI
+
 import numpy as np
 import pytest
-from dolfinx.fem import (Expression, Function, IntegralType, functionspace)
-from dolfinx.mesh import (CellType, create_unit_cube, create_unit_square,
-                          locate_entities_boundary, to_string)
-from mpi4py import MPI
-from ufl import grad
-from basix.ufl import element, mixed_element
+
+import basix
 import dolfinx_contact.cpp
+from basix.ufl import element, mixed_element
+from dolfinx.fem import Expression, Function, IntegralType, functionspace
+from dolfinx.mesh import CellType, create_unit_cube, create_unit_square, locate_entities_boundary, to_string
+from ufl import grad
 
 
 @pytest.mark.parametrize("ct", [CellType.triangle, CellType.quadrilateral])

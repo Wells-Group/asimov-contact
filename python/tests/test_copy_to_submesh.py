@@ -1,19 +1,18 @@
 # Copyright (C) 2023 Sarah Roggendorf
 #
 # SPDX-License-Identifier:    MIT
+from mpi4py import MPI
+
 import numpy as np
 import pytest
 
 from dolfinx.fem import Function, functionspace
 from dolfinx.graph import adjacencylist
 from dolfinx.io import XDMFFile
-from dolfinx.mesh import locate_entities_boundary, meshtags, Mesh
-from dolfinx_contact.meshing import (convert_mesh,
-                                     create_cylinder_cylinder_mesh,
-                                     create_circle_plane_mesh,
-                                     create_sphere_plane_mesh)
+from dolfinx.mesh import Mesh, locate_entities_boundary, meshtags
 from dolfinx_contact.cpp import Contact
-from mpi4py import MPI
+from dolfinx_contact.meshing import (convert_mesh, create_circle_plane_mesh, create_cylinder_cylinder_mesh,
+                                     create_sphere_plane_mesh)
 
 
 @pytest.mark.parametrize("order", [1, 2])

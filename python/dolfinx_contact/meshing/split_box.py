@@ -2,17 +2,17 @@
 #
 # SPDX-License-Identifier:    MIT
 
-import numpy as np
-import numpy.typing as npt
-import gmsh
-from mpi4py import MPI
 from typing import Callable, Tuple
 
+from mpi4py import MPI
+
+import gmsh
+import numpy as np
+import numpy.typing as npt
+
 from dolfinx.graph import adjacencylist
-from dolfinx.io.gmshio import (cell_perm_array,
-                               extract_geometry,
-                               extract_topology_and_markers, ufl_mesh)
 from dolfinx.io import XDMFFile, distribute_entity_data
+from dolfinx.io.gmshio import cell_perm_array, extract_geometry, extract_topology_and_markers, ufl_mesh
 from dolfinx.mesh import CellType, create_mesh, meshtags_from_entities
 
 

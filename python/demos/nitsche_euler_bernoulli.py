@@ -5,19 +5,17 @@
 import argparse
 import os
 
-import numpy as np
-import ufl
-from dolfinx.fem import (Function, dirichletbc, functionspace,
-                         locate_dofs_topological)
-from dolfinx.fem.petsc import LinearProblem, NonlinearProblem
-from dolfinx.geometry import (bb_tree, compute_colliding_cells,
-                              compute_collisions_points)
-from dolfinx.io import XDMFFile
-from dolfinx.mesh import (CellType, GhostMode, create_rectangle,
-                          locate_entities_boundary, meshtags)
-from dolfinx.nls.petsc import NewtonSolver
 from mpi4py import MPI
 
+import numpy as np
+
+import ufl
+from dolfinx.fem import Function, dirichletbc, functionspace, locate_dofs_topological
+from dolfinx.fem.petsc import LinearProblem, NonlinearProblem
+from dolfinx.geometry import bb_tree, compute_colliding_cells, compute_collisions_points
+from dolfinx.io import XDMFFile
+from dolfinx.mesh import CellType, GhostMode, create_rectangle, locate_entities_boundary, meshtags
+from dolfinx.nls.petsc import NewtonSolver
 from dolfinx_contact.helpers import epsilon, lame_parameters, sigma_func
 
 

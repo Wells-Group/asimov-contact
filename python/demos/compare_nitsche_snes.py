@@ -6,17 +6,21 @@
 #  against a rigid plane with a SNES implementation
 import argparse
 
+import petsc4py
+from mpi4py import MPI
+
 import numpy as np
+
 import ufl
+
+petsc4py.init("-on_error_attach_debugger")
+from petsc4py import PETSc
+
 from dolfinx.common import timing
 from dolfinx.fem import assemble_scalar, form
 from dolfinx.io import XDMFFile
-from dolfinx.mesh import (create_unit_cube, create_unit_square,
-                          locate_entities_boundary, meshtags, refine)
-from mpi4py import MPI
-
-from dolfinx_contact.meshing import (convert_mesh, create_disk_mesh,
-                                     create_sphere_mesh)
+from dolfinx.mesh import create_unit_cube, create_unit_square, locate_entities_boundary, meshtags, refine
+from dolfinx_contact.meshing import convert_mesh, create_disk_mesh, create_sphere_mesh
 from dolfinx_contact.one_sided import nitsche_ufl, snes_solver
 
 if __name__ == "__main__":
@@ -156,6 +160,7 @@ if __name__ == "__main__":
         with XDMFFile(mesh.comm, f"results/u_snes_{i}.xdmf", "w") as xdmf:
             xdmf.write_mesh(mesh)
             xdmf.write_function(u2)
+
         # Compute the difference (error) between Nitsche and SNES
         V = u1.function_space
         dx = ufl.Measure("dx", domain=mesh)
@@ -169,8 +174,6 @@ if __name__ == "__main__":
         e_abs.append(E_L2)
         e_rel.append(E_L2 / u2_L2)
         dofs_global.append(V.dofmap.index_map.size_global * V.dofmap.index_map_bs)
-
-        del u1, u2
 
     # Output absolute and relative errors of Nitsche compared to SNES
     if rank == 0:

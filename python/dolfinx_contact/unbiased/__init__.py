@@ -4,5 +4,4 @@
 
 from .nitsche_unbiased import nitsche_unbiased
 
-
 __all__ = ["nitsche_unbiased"]

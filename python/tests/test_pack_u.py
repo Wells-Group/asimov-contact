@@ -3,16 +3,17 @@
 # SPDX-License-Identifier:    MIT
 
 
-import numpy as np
-import pytest
-import basix.ufl
-import ufl
-from dolfinx.graph import adjacencylist
-from dolfinx import fem, graph
-from dolfinx import mesh as msh
 from mpi4py import MPI
 
+import numpy as np
+import pytest
+
+import basix.ufl
 import dolfinx_contact
+import ufl
+from dolfinx import fem, graph
+from dolfinx import mesh as msh
+from dolfinx.graph import adjacencylist
 
 
 @pytest.mark.skipif(MPI.COMM_WORLD.size > 1,

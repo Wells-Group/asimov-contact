@@ -5,24 +5,22 @@
 import argparse
 import sys
 
-import numpy as np
-import ufl
-from dolfinx import log, default_scalar_type
-from dolfinx.common import TimingType, list_timings, Timer, timing
-from dolfinx.fem import (dirichletbc, Constant, form, Function, functionspace,
-                         locate_dofs_topological)
-from dolfinx.fem.petsc import (apply_lifting, assemble_vector, assemble_matrix,
-                               create_vector, set_bc)
-from dolfinx.graph import adjacencylist
-from dolfinx.io import XDMFFile
 from mpi4py import MPI
 from petsc4py import PETSc
 
-from dolfinx_contact.helpers import lame_parameters, epsilon, sigma_func, rigid_motions_nullspace_subdomains
-from dolfinx_contact.meshing import (convert_mesh,
-                                     create_box_mesh_3D)
-from dolfinx_contact.parallel_mesh_ghosting import create_contact_mesh
+import numpy as np
+
+import ufl
+from dolfinx import default_scalar_type, log
+from dolfinx.common import Timer, TimingType, list_timings, timing
+from dolfinx.fem import Constant, Function, dirichletbc, form, functionspace, locate_dofs_topological
+from dolfinx.fem.petsc import apply_lifting, assemble_matrix, assemble_vector, create_vector, set_bc
+from dolfinx.graph import adjacencylist
+from dolfinx.io import XDMFFile
 from dolfinx_contact.cpp import MeshTie
+from dolfinx_contact.helpers import epsilon, lame_parameters, rigid_motions_nullspace_subdomains, sigma_func
+from dolfinx_contact.meshing import convert_mesh, create_box_mesh_3D
+from dolfinx_contact.parallel_mesh_ghosting import create_contact_mesh
 
 if __name__ == "__main__":
     desc = "Nitsche's method for two elastic bodies using custom assemblers"

@@ -2,16 +2,17 @@
 #
 # SPDX-License-Identifier:   MIT
 
-import numpy as np
-import pytest
-import basix.ufl
-import ufl
-from dolfinx.fem import Function, functionspace, IntegralType
-from dolfinx.fem.petsc import LinearProblem
-from dolfinx.mesh import create_unit_cube, create_unit_square, locate_entities_boundary
 from mpi4py import MPI
 
+import numpy as np
+import pytest
+
+import basix.ufl
 import dolfinx_contact.cpp
+import ufl
+from dolfinx.fem import Function, IntegralType, functionspace
+from dolfinx.fem.petsc import LinearProblem
+from dolfinx.mesh import create_unit_cube, create_unit_square, locate_entities_boundary
 
 
 @pytest.mark.parametrize("dim", [2, 3])

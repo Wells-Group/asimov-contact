@@ -2,22 +2,21 @@
 #
 # SPDX-License-Identifier:    MIT
 
-from typing import Optional, Dict, Tuple
+from typing import Dict, Optional, Tuple
+
+import numpy as np
 
 import basix
 import dolfinx.common as _common
 import dolfinx.fem as _fem
-from dolfinx.fem.petsc import create_matrix, create_vector
 import dolfinx.log as _log
 import dolfinx.mesh as _mesh
-import numpy as np
-import ufl
-from dolfinx.graph import adjacencylist
-
 import dolfinx_contact
 import dolfinx_contact.cpp
-from dolfinx_contact.helpers import (epsilon, lame_parameters,
-                                     rigid_motions_nullspace, sigma_func)
+import ufl
+from dolfinx.fem.petsc import create_matrix, create_vector
+from dolfinx.graph import adjacencylist
+from dolfinx_contact.helpers import epsilon, lame_parameters, rigid_motions_nullspace, sigma_func
 
 __all__ = ["nitsche_rigid_surface_custom"]
 kt = dolfinx_contact.cpp.Kernel

@@ -2,23 +2,24 @@
 #
 # SPDX-License-Identifier:    MIT
 
+import os
+
+from mpi4py import MPI
+
+import numpy as np
+import pytest
+
 import basix
 import dolfinx.fem
 import dolfinx.io
 import dolfinx.mesh
-import numpy as np
-import pytest
-import ufl
-from mpi4py import MPI
-from dolfinx.graph import adjacencylist
-from dolfinx.fem.petsc import create_matrix
-import os
 import dolfinx_contact
 import dolfinx_contact.cpp
-from dolfinx_contact.helpers import (R_minus, epsilon, lame_parameters,
-                                     sigma_func, compare_matrices)
-from dolfinx_contact.meshing import (convert_mesh, create_disk_mesh,
-                                     create_sphere_mesh)
+import ufl
+from dolfinx.fem.petsc import create_matrix
+from dolfinx.graph import adjacencylist
+from dolfinx_contact.helpers import R_minus, compare_matrices, epsilon, lame_parameters, sigma_func
+from dolfinx_contact.meshing import convert_mesh, create_disk_mesh, create_sphere_mesh
 
 kt = dolfinx_contact.cpp.Kernel
 

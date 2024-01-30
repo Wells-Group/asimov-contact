@@ -2,19 +2,18 @@
 #
 # SPDX-License-Identifier:    MIT
 #
+from mpi4py import MPI
+
 import numpy as np
 
 from basix.ufl import element
 from dolfinx import default_scalar_type
-from dolfinx.fem import (Constant, dirichletbc, Function,
-                         functionspace, locate_dofs_topological)
+from dolfinx.fem import Constant, Function, dirichletbc, functionspace, locate_dofs_topological
 from dolfinx.graph import adjacencylist
 from dolfinx.io import XDMFFile
 from dolfinx.mesh import create_mesh
-from mpi4py import MPI
-from ufl import grad, Identity, inner, Mesh, Measure, TestFunction, tr, sym
-
 from dolfinx_contact.unbiased.contact_problem import create_contact_solver
+from ufl import Identity, Measure, Mesh, TestFunction, grad, inner, sym, tr
 
 # read mesh from file
 fname = "cont-blocks_sk24_fnx"

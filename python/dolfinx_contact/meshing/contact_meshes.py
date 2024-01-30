@@ -2,10 +2,12 @@
 #
 # SPDX-License-Identifier:    MIT
 
+from mpi4py import MPI
+
 import gmsh
 import numpy as np
-from dolfinx.io import gmshio, XDMFFile
-from mpi4py import MPI
+
+from dolfinx.io import XDMFFile, gmshio
 
 __all__ = ["create_circle_plane_mesh", "create_circle_circle_mesh", "create_box_mesh_2D",
            "create_box_mesh_3D", "create_sphere_plane_mesh", "create_sphere_sphere_mesh",

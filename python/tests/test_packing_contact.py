@@ -2,19 +2,20 @@
 #
 # SPDX-License-Identifier:   MIT
 
-import numpy as np
-import pytest
-import ufl
-import basix.ufl
-from dolfinx.cpp.mesh import to_type
-from dolfinx.io import XDMFFile
-import dolfinx.fem as _fem
-from dolfinx.graph import adjacencylist
-from dolfinx.mesh import (CellType, create_mesh, locate_entities_boundary, meshtags)
 from mpi4py import MPI
 
+import numpy as np
+import pytest
+
+import basix.ufl
+import dolfinx.fem as _fem
 import dolfinx_contact
 import dolfinx_contact.cpp
+import ufl
+from dolfinx.cpp.mesh import to_type
+from dolfinx.graph import adjacencylist
+from dolfinx.io import XDMFFile
+from dolfinx.mesh import CellType, create_mesh, locate_entities_boundary, meshtags
 
 
 def create_functionspaces(ct, gap, delta):

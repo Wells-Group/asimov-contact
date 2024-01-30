@@ -4,30 +4,26 @@
 
 import argparse
 
+from mpi4py import MPI
+from petsc4py import PETSc
+
 import numpy as np
 import numpy.typing as npt
+
 import ufl
 from dolfinx import default_scalar_type, log
 from dolfinx.common import Timer, TimingType, list_timings, timing
-from dolfinx.fem import (Constant, Function,
-                         assemble_scalar, dirichletbc,
-                         form, functionspace, locate_dofs_topological)
-from dolfinx.fem.petsc import (apply_lifting, assemble_matrix, assemble_vector,
-                               create_vector, set_bc)
+from dolfinx.fem import Constant, Function, assemble_scalar, dirichletbc, form, functionspace, locate_dofs_topological
+from dolfinx.fem.petsc import apply_lifting, assemble_matrix, assemble_vector, create_vector, set_bc
 from dolfinx.graph import adjacencylist
 from dolfinx.io import XDMFFile
 from dolfinx.mesh import meshtags
 from dolfinx_contact.cpp import MeshTie
-from dolfinx_contact.helpers import (epsilon, lame_parameters,
-                                     rigid_motions_nullspace,
-                                     rigid_motions_nullspace_subdomains,
-                                     sigma_func)
-from dolfinx_contact.meshing import (create_split_box_2D, create_split_box_3D,
-                                     create_unsplit_box_2d,
+from dolfinx_contact.helpers import (epsilon, lame_parameters, rigid_motions_nullspace,
+                                     rigid_motions_nullspace_subdomains, sigma_func)
+from dolfinx_contact.meshing import (create_split_box_2D, create_split_box_3D, create_unsplit_box_2d,
                                      create_unsplit_box_3d, horizontal_sine)
 from dolfinx_contact.parallel_mesh_ghosting import create_contact_mesh
-from mpi4py import MPI
-from petsc4py import PETSc
 
 
 # manufactured solution 2D

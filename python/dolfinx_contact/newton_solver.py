@@ -3,13 +3,15 @@
 # SPDX-License-Identifier:    MIT
 
 from enum import Enum
-from typing import Callable, List, Tuple, Union, Optional
+from typing import Callable, List, Optional, Tuple, Union
+
+from mpi4py import MPI
+from petsc4py import PETSc
 
 import numpy
 import numpy.typing as npt
+
 from dolfinx import common, default_scalar_type, fem
-from mpi4py import MPI
-from petsc4py import PETSc
 
 __all__ = ["NewtonSolver", "ConvergenceCriterion"]
 

@@ -4,18 +4,19 @@
 
 from typing import Any, Optional, Tuple, Union
 
-import dolfinx_contact
-import dolfinx_contact.cpp
+from petsc4py import PETSc as _PETSc
+
 import numpy as np
 import numpy.typing as npt
+
+import dolfinx_contact
+import dolfinx_contact.cpp
 import ufl
 from dolfinx import common, cpp, default_scalar_type, fem, io, log
 from dolfinx import mesh as _mesh
 from dolfinx.cpp.graph import AdjacencyList_int32
 from dolfinx.fem.petsc import create_vector
-from dolfinx_contact.helpers import (rigid_motions_nullspace_subdomains,
-                                     sigma_func)
-from petsc4py import PETSc as _PETSc
+from dolfinx_contact.helpers import rigid_motions_nullspace_subdomains, sigma_func
 
 kt = dolfinx_contact.cpp.Kernel
 

@@ -3,19 +3,19 @@
 # SPDX-License-Identifier:    MIT
 
 import os
+from typing import List
+
+from mpi4py import MPI
 
 import numpy as np
 import pytest
+
 import ufl
-from dolfinx.fem import (DirichletBC, Function, functionspace,
-                         assemble_scalar, form)
+from dolfinx.fem import DirichletBC, Function, assemble_scalar, form, functionspace
 from dolfinx.fem.petsc import LinearProblem, NonlinearProblem
 from dolfinx.io import XDMFFile
-from dolfinx.mesh import (CellType, GhostMode, create_rectangle,
-                          locate_entities_boundary, meshtags)
+from dolfinx.mesh import CellType, GhostMode, create_rectangle, locate_entities_boundary, meshtags
 from dolfinx.nls.petsc import NewtonSolver
-from mpi4py import MPI
-from typing import List
 from dolfinx_contact.helpers import epsilon, lame_parameters, sigma_func
 
 

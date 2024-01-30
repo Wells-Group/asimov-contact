@@ -1,15 +1,16 @@
 from typing import Optional, Tuple
-from dolfinx import common, fem
-from dolfinx import mesh as _mesh
+
 import numpy as np
 import numpy.typing as npt
-import ufl
-from dolfinx.cpp.graph import AdjacencyList_int32
 
 import dolfinx_contact
 import dolfinx_contact.cpp
+import ufl
+from dolfinx import common, fem
+from dolfinx import mesh as _mesh
+from dolfinx.cpp.graph import AdjacencyList_int32
 
-from .nitsche_unbiased import setup_newton_solver, get_problem_parameters
+from .nitsche_unbiased import get_problem_parameters, setup_newton_solver
 
 
 class ContactProblem:

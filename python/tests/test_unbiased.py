@@ -15,24 +15,22 @@
 # constant gap.
 
 
-import numpy as np
-import scipy
-import pytest
-import ufl
-import basix.ufl
-from dolfinx.cpp.mesh import to_type
-import dolfinx.fem as _fem
-from dolfinx.graph import adjacencylist
-from dolfinx.mesh import (CellType, locate_entities_boundary, locate_entities, create_mesh,
-                          compute_midpoints, meshtags)
 from mpi4py import MPI
 
+import numpy as np
+import pytest
+import scipy
+
+import basix.ufl
+import dolfinx.fem as _fem
 import dolfinx_contact
 import dolfinx_contact.cpp
-from dolfinx_contact.helpers import (R_minus, dR_minus, R_plus, dR_plus, epsilon,
-                                     lame_parameters, sigma_func, tangential_proj,
-                                     ball_projection, d_ball_projection,
-                                     d_alpha_ball_projection)
+import ufl
+from dolfinx.cpp.mesh import to_type
+from dolfinx.graph import adjacencylist
+from dolfinx.mesh import CellType, compute_midpoints, create_mesh, locate_entities, locate_entities_boundary, meshtags
+from dolfinx_contact.helpers import (R_minus, R_plus, ball_projection, d_alpha_ball_projection, d_ball_projection,
+                                     dR_minus, dR_plus, epsilon, lame_parameters, sigma_func, tangential_proj)
 
 kt = dolfinx_contact.cpp.Kernel
 

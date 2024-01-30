@@ -4,14 +4,13 @@
 
 import argparse
 
-import numpy as np
-from dolfinx.io import XDMFFile
 from mpi4py import MPI
 
-from dolfinx_contact.meshing import (convert_mesh, create_circle_plane_mesh,
-                                     create_sphere_plane_mesh)
-from dolfinx_contact.one_sided.nitsche_rigid_surface import \
-    nitsche_rigid_surface
+import numpy as np
+
+from dolfinx.io import XDMFFile
+from dolfinx_contact.meshing import convert_mesh, create_circle_plane_mesh, create_sphere_plane_mesh
+from dolfinx_contact.one_sided.nitsche_rigid_surface import nitsche_rigid_surface
 
 if __name__ == "__main__":
     desc = "Compare Nitsche's metood for contact against a straight plane with PETSc SNES"

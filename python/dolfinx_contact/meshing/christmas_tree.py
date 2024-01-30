@@ -2,9 +2,10 @@
 #
 # SPDX-License-Identifier:    MIT
 
-import numpy as np
-import gmsh
 from mpi4py import MPI
+
+import gmsh
+import numpy as np
 
 __all__ = ["create_christmas_tree_mesh"]
 

@@ -4,8 +4,11 @@
 
 import argparse
 
-import dolfinx.fem as _fem
+from mpi4py import MPI
+
 import numpy as np
+
+import dolfinx.fem as _fem
 import ufl
 from dolfinx import default_scalar_type, io, log
 from dolfinx.common import Timer, TimingType, list_timings
@@ -13,11 +16,9 @@ from dolfinx.fem.petsc import LinearProblem
 from dolfinx.graph import adjacencylist
 from dolfinx.io import XDMFFile
 from dolfinx.mesh import GhostMode
-from dolfinx_contact.helpers import (epsilon, lame_parameters, sigma_func,
-                                     weak_dirichlet)
+from dolfinx_contact.helpers import epsilon, lame_parameters, sigma_func, weak_dirichlet
 from dolfinx_contact.parallel_mesh_ghosting import create_contact_mesh
 from dolfinx_contact.unbiased.contact_problem import create_contact_solver
-from mpi4py import MPI
 
 desc = "Thermal expansion leading to contact"
 parser = argparse.ArgumentParser(description=desc,

@@ -4,17 +4,17 @@
 
 from typing import Dict, Tuple
 
-import dolfinx.common as _common
-import dolfinx.fem as _fem
-from dolfinx.fem.petsc import create_matrix
-import dolfinx.la as _la
-import dolfinx.mesh as dmesh
-import numpy as np
-import ufl
 from petsc4py import PETSc as _PETSc
 
-from dolfinx_contact.helpers import (NonlinearPDE_SNESProblem, epsilon,
-                                     lame_parameters, rigid_motions_nullspace,
+import numpy as np
+
+import dolfinx.common as _common
+import dolfinx.fem as _fem
+import dolfinx.la as _la
+import dolfinx.mesh as dmesh
+import ufl
+from dolfinx.fem.petsc import create_matrix
+from dolfinx_contact.helpers import (NonlinearPDE_SNESProblem, epsilon, lame_parameters, rigid_motions_nullspace,
                                      sigma_func)
 
 
@@ -151,7 +151,7 @@ def snes_solver(mesh: dmesh.Mesh, mesh_data: Tuple[dmesh.MeshTags, int, int],
     J = create_matrix(problem.a)
 
     # Create semismooth Newton solver (SNES)
-    snes = _PETSc.SNES().create()  # type: ignore
+    snes = _PETSc.SNES().create(comm=mesh.comm)  # type: ignore
 
     # Set SNES options
     opts = _PETSc.Options()  # type: ignore
