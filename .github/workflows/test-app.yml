@@ -21,20 +21,20 @@ jobs:
       matrix:
         # Complex mode not working
         run_mode: ["Release", "Debug"]
-        petsc_mode: ["real"]
-        petsc_precision: ["64"]
-        petsc_int: ["32"]
-        CXX: [g++]
-        CC: [cc]
+        # petsc_mode: ["real"]
+        # petsc_precision: ["64"]
+        # petsc_int: ["32"]
+        # CXX: [g++]
+        # CC: [cc]
         # exclude:
         #   - CC: cc
         #     CXX: clang++
         #   - CC: clang
         #     CXX: c++
     env:
-      CC: ${{ matrix.CC }}
-      CXX: ${{ matrix.CXX }}
-      PETSC_ARCH: linux-gnu-${{ matrix.petsc_mode }}${{ matrix.petsc_precision}}-${{ matrix.petsc_int }}
+      # CC: ${{ matrix.CC }}
+      # CXX: ${{ matrix.CXX }}
+      # PETSC_ARCH: linux-gnu-${{ matrix.petsc_mode }}${{ matrix.petsc_precision}}-${{ matrix.petsc_int }}
       OMPI_ALLOW_RUN_AS_ROOT: 1
       OMPI_ALLOW_RUN_AS_ROOT_CONFIRM: 1
       OMPI_MCA_rmaps_base_oversubscribe: 1
