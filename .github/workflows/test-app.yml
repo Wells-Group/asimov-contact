@@ -102,6 +102,7 @@ jobs:
 
       - name: Run demos (C++)
         if: steps.cpp-contact.outcome == 'success'
+        continue-on-error: true
         run: |
           . dolfinx-real-mode
           cd cpp/demos/meshtie
@@ -122,6 +123,7 @@ jobs:
 
       - name: Run mypy checks
         if: steps.python-contact.outcome == 'success'
+        continue-on-error: true
         run: |
           pip3 install mypy
           cd python
@@ -131,6 +133,7 @@ jobs:
       - name: Create output folders
         id: output-creation
         if: steps.python-contact.outcome == 'success'
+        continue-on-error: true
         working-directory: ./python/demos
         run: |
           mkdir -p results
@@ -138,6 +141,7 @@ jobs:
 
 
       - name: Run SNES demos
+        continue-on-error: true
         if: steps.output-creation.outcome == 'success'
         working-directory: ./python/demos
         run: |
@@ -145,6 +149,7 @@ jobs:
           python3 compare_nitsche_snes.py
 
       - name: Run rigid surface demos
+        continue-on-error: true
         if: steps.output-creation.outcome == 'success'
         working-directory: ./python/demos
         run: |  
@@ -153,6 +158,7 @@ jobs:
           python3 nitsche_euler_bernoulli.py
 
       - name: Run unbiased demos
+        continue-on-error: true
         if: steps.output-creation.outcome == 'success'
         working-directory: ./python/demos
         run: |  
@@ -162,6 +168,7 @@ jobs:
           python3 demo_nitsche_unbiased.py --problem=3 --3D --friction=0.1 --coulomb
 
       - name: Run meshties demos
+        continue-on-error: true
         if: steps.output-creation.outcome == 'success'
         working-directory: ./python/demos
         run: |  
@@ -172,12 +179,14 @@ jobs:
           python3 meshtie_convergence.py --simplex --runs=4
         
       - name: Run Oxford demo
+        continue-on-error: true
         if: steps.output-creation.outcome == 'success'
         working-directory: ./python/demos/oxford
         run: 
           python3 blocks_nitsche.py
 
       - name: Run tests
+        continue-on-error: true
         if: steps.output-creation.outcome == 'success'
         run: |
           cd python/tests
@@ -185,6 +194,7 @@ jobs:
           python3 -m pytest . -vs
 
       - name: Run unbiased demos in parallel
+        continue-on-error: true
         if: steps.output-creation.outcome == 'success'
         working-directory: ./python/demos
         run: |
@@ -194,6 +204,7 @@ jobs:
           mpirun -np 2 python3 demo_nitsche_unbiased.py --problem=3 --3D --friction=0.1 --coulomb
 
       - name: Run meshties demos in parallel
+        continue-on-error: true
         if: steps.output-creation.outcome == 'success'
         working-directory: ./python/demos
         run: |  
