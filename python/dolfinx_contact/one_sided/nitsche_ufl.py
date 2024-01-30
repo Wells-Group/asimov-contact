@@ -13,6 +13,8 @@ import dolfinx.fem as _fem
 import dolfinx.log as _log
 import dolfinx.mesh as dmesh
 import ufl
+
+from dolfinx import default_scalar_type
 from dolfinx.nls.petsc import NewtonSolver
 from dolfinx_contact.helpers import R_minus, epsilon, lame_parameters, rigid_motions_nullspace, sigma_func
 
@@ -82,8 +84,8 @@ def nitsche_ufl(mesh: dmesh.Mesh, mesh_data: Tuple[dmesh.MeshTags, int, int],
     newton_options = {} if newton_options is None else newton_options
 
     plane_strain = physical_parameters.get("strain", False)
-    E = physical_parameters.get("E", 1e3)
-    nu = physical_parameters.get("nu", 0.1)
+    E = _fem.Constant(mesh, default_scalar_type(physical_parameters.get("E", 1e3)))
+    nu = _fem.Constant(mesh, default_scalar_type(physical_parameters.get("nu", 0.1)))
     mu_func, lambda_func = lame_parameters(plane_strain)
     mu = mu_func(E, nu)
     lmbda = lambda_func(E, nu)
@@ -98,7 +100,7 @@ def nitsche_ufl(mesh: dmesh.Mesh, mesh_data: Tuple[dmesh.MeshTags, int, int],
 
     # Normal vector pointing into plane (but outward of the body coming into contact)
     # Similar to computing the normal by finding the gap vector between two meshes
-    n_vec = np.zeros(mesh.geometry.dim)
+    n_vec = np.zeros(mesh.geometry.dim, dtype=default_scalar_type)
     n_vec[mesh.geometry.dim - 1] = -1
     n_2 = ufl.as_vector(n_vec)  # Normal of plane (projection onto other body)
 
@@ -109,8 +111,7 @@ def nitsche_ufl(mesh: dmesh.Mesh, mesh_data: Tuple[dmesh.MeshTags, int, int],
     # Mimicking the plane y=-plane_loc
     x = ufl.SpatialCoordinate(mesh)
     gap = x[mesh.geometry.dim - 1] + plane_loc
-    g_vec = [i for i in range(mesh.geometry.dim)]
-    g_vec[mesh.geometry.dim - 1] = gap
+
 
     V = _fem.functionspace(mesh, ("Lagrange", 1, (mesh.geometry.dim, )))
     u = _fem.Function(V)
@@ -120,7 +121,7 @@ def nitsche_ufl(mesh: dmesh.Mesh, mesh_data: Tuple[dmesh.MeshTags, int, int],
     dx = ufl.Measure("dx", domain=mesh)
     ds = ufl.Measure("ds", domain=mesh, metadata=metadata,
                      subdomain_data=facet_marker)
-    zero = np.asarray([0, ] * mesh.geometry.dim, dtype=np.float64)
+    zero = np.array([0, ] * mesh.geometry.dim, dtype=default_scalar_type)
     a = ufl.inner(sigma(u), epsilon(v)) * dx
     L = ufl.inner(_fem.Constant(mesh, zero), v) * dx
 
