@@ -16,6 +16,7 @@ set(CMAKE_INCLUDE_CURRENT_DIR ON)
 set(ufl_file linear_elasticity)
 
 # Add target to compile UFL files
+MESSAGE(STATUS "PETSC STATUS ${PETSC_SCALAR_COMPLEX} ${PETSC_ARCH}")
 if (PETSC_SCALAR_COMPLEX EQUAL 1)
   set(SCALAR_TYPE "--scalar_type=complex128")
 endif()
