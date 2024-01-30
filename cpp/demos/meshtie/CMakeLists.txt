@@ -17,7 +17,7 @@ set(ufl_file linear_elasticity)
 
 # Add target to compile UFL files
 if (PETSC_SCALAR_COMPLEX EQUAL 1)
-  set(SCALAR_TYPE "--scalar_type=double _Complex")
+  set(SCALAR_TYPE "--scalar_type=complex128")
 endif()
 # Create compilation command
 add_custom_command(
