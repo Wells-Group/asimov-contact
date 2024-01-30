@@ -15,10 +15,25 @@ set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
 set(ufl_file linear_elasticity)
 
+# Check for what petsc version we are using
+include(CheckSymbolExists)
+set(CMAKE_REQUIRED_INCLUDES ${PETSC_INCLUDE_DIRS})
+check_symbol_exists(PETSC_USE_COMPLEX petscsystypes.h PETSC_SCALAR_COMPLEX)
+check_symbol_exists(PETSC_USE_REAL_DOUBLE petscsystypes.h PETSC_REAL_DOUBLE)
+
 # Add target to compile UFL files
-MESSAGE(STATUS "PETSC STATUS ${PETSC_SCALAR_COMPLEX} ${PETSC_ARCH}")
-if (PETSC_SCALAR_COMPLEX EQUAL 1)
-  set(SCALAR_TYPE "--scalar_type=complex128")
+if(PETSC_SCALAR_COMPLEX EQUAL 1)
+  if(PETSC_REAL_DOUBLE EQUAL 1)
+    set(SCALAR_TYPE "--scalar_type=complex128")
+  else()
+    set(SCALAR_TYPE "--scalar_type=complex64")
+  endif()
+else()
+  if(PETSC_REAL_DOUBLE EQUAL 1)
+    set(SCALAR_TYPE "--scalar_type=float64")
+  else()
+    set(SCALAR_TYPE "--scalar_type=float32")
+  endif()
 endif()
 # Create compilation command
 add_custom_command(
