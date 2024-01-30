@@ -89,12 +89,15 @@ jobs:
       #     python3 -m pip -v install -r ./dolfinx/python/build-requirements.txt
       #     python3 -m pip -v install --no-build-isolation ./dolfinx/python/
 
-
+      - name: Echo petsc
+        run:
+          echo $PETSC_ARCH $PETSC_DIR
       - name: Install contact (C++)
         id: cpp-contact
         run: |
           cmake -G Ninja -DCMAKE_BUILD_TYPE=${{ matrix.run_mode }} -DCMAKE_CXX_FLAGS="${CONTACT_CMAKE_CXX_FLAGS}" -B build-contact -S cpp/
           ninja -C build-contact install
+          cmake -G Ninja -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_FLAGS="${CONTACT_CMAKE_CXX_FLAGS}" -B build-contact -S cpp/
 
       - name: Run demos (C++)
         if: steps.cpp-contact.outcome == 'success'
