@@ -24,7 +24,7 @@ add_custom_command(
   OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${ufl_file}.c
   COMMAND ffcx ${SCALAR_TYPE} ${CMAKE_CURRENT_SOURCE_DIR}/${ufl_file}.py -o ${CMAKE_CURRENT_BINARY_DIR}
   DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/${ufl_file}.py
-  COMMENT "Compiling ${ufl_file}.py"
+  COMMENT "Compiling ${ufl_file}.py with ${SCALAR_TYPE}"
 )
 
 
