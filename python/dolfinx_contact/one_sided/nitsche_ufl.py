@@ -92,8 +92,8 @@ def nitsche_ufl(mesh: dmesh.Mesh, mesh_data: Tuple[dmesh.MeshTags, int, int],
     sigma = sigma_func(mu, lmbda)
 
     # Nitche parameters and variables
-    theta = nitsche_parameters.get("theta", 1)
-    gamma = nitsche_parameters.get("gamma", 1)
+    theta = _fem.Constant(mesh, default_scalar_type(nitsche_parameters.get("theta", 1)))
+    gamma = _fem.Constant(mesh, default_scalar_type(nitsche_parameters.get("gamma", 1)))
 
     (facet_marker, top_value, bottom_value) = mesh_data
     assert facet_marker.dim == mesh.topology.dim - 1
@@ -102,7 +102,7 @@ def nitsche_ufl(mesh: dmesh.Mesh, mesh_data: Tuple[dmesh.MeshTags, int, int],
     # Similar to computing the normal by finding the gap vector between two meshes
     n_vec = np.zeros(mesh.geometry.dim, dtype=default_scalar_type)
     n_vec[mesh.geometry.dim - 1] = -1
-    n_2 = ufl.as_vector(n_vec)  # Normal of plane (projection onto other body)
+    n_2 = _fem.Constant(mesh, n_vec)  # Normal of plane (projection onto other body)
 
     # Scaled Nitsche parameter
     h = ufl.CellDiameter(mesh)

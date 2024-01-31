@@ -81,7 +81,7 @@ def R_plus(x):
     """
     Positive restriction of variable (x if x>0 else 0)
     """
-    return 0.5 * (x + numpy.abs(x))
+    return 0.5 * (x + abs(x))
 
 
 def dR_plus(x):

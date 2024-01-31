@@ -184,7 +184,7 @@ def unsplit_domain(threed: bool = False, runs: int = 1):
         timing_str = "~Krylov Solver"
         with Timer(timing_str):
             solver.solve(b, uh.vector)
-        
+
         times.append(timing(timing_str)[1])
         its.append(solver.getIterationNumber())
         solver.destroy()
