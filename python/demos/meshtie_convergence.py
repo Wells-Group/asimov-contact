@@ -184,10 +184,10 @@ def unsplit_domain(threed: bool = False, runs: int = 1):
         timing_str = "~Krylov Solver"
         with Timer(timing_str):
             solver.solve(b, uh.vector)
-        solver.destroy()
+        
         times.append(timing(timing_str)[1])
         its.append(solver.getIterationNumber())
-
+        solver.destroy()
         # Scatter forward the solution vector to update ghost values
         uh.x.scatter_forward()
 
