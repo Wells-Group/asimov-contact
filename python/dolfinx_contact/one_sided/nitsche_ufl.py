@@ -112,7 +112,6 @@ def nitsche_ufl(mesh: dmesh.Mesh, mesh_data: Tuple[dmesh.MeshTags, int, int],
     x = ufl.SpatialCoordinate(mesh)
     gap = x[mesh.geometry.dim - 1] + plane_loc
 
-
     V = _fem.functionspace(mesh, ("Lagrange", 1, (mesh.geometry.dim, )))
     u = _fem.Function(V)
     v = ufl.TestFunction(V)
@@ -121,7 +120,7 @@ def nitsche_ufl(mesh: dmesh.Mesh, mesh_data: Tuple[dmesh.MeshTags, int, int],
     dx = ufl.Measure("dx", domain=mesh)
     ds = ufl.Measure("ds", domain=mesh, metadata=metadata,
                      subdomain_data=facet_marker)
-    zero = np.array([0, ] * mesh.geometry.dim, dtype=default_scalar_type)
+    zero = np.array([0., ] * mesh.geometry.dim, dtype=default_scalar_type)
     a = ufl.inner(sigma(u), epsilon(v)) * dx
     L = ufl.inner(_fem.Constant(mesh, zero), v) * dx
 
@@ -147,7 +146,7 @@ def nitsche_ufl(mesh: dmesh.Mesh, mesh_data: Tuple[dmesh.MeshTags, int, int],
     # Nitsche for Dirichlet, another theta-scheme.
     # https://doi.org/10.1016/j.cma.2018.05.024
     if nitsche_bc:
-        disp_vec = np.zeros(mesh.geometry.dim)
+        disp_vec = np.zeros(mesh.geometry.dim, dtype=default_scalar_type)
         disp_vec[mesh.geometry.dim - 1] = vertical_displacement
         u_D = ufl.as_vector(disp_vec)
         F += - ufl.inner(sigma(u) * n, v) * ds(top_value)\
@@ -160,7 +159,7 @@ def nitsche_ufl(mesh: dmesh.Mesh, mesh_data: Tuple[dmesh.MeshTags, int, int],
     else:
         # strong Dirichlet boundary conditions
         def _u_D(x):
-            values = np.zeros((mesh.geometry.dim, x.shape[1]))
+            values = np.zeros((mesh.geometry.dim, x.shape[1]), dtype=default_scalar_type)
             values[mesh.geometry.dim - 1] = vertical_displacement
             return values
         u_D = _fem.Function(V)
@@ -204,7 +203,7 @@ def nitsche_ufl(mesh: dmesh.Mesh, mesh_data: Tuple[dmesh.MeshTags, int, int],
     solver.relaxation_parameter = newton_options.get("relaxation_parameter", 0.8)
 
     def _u_initial(x):
-        values = np.zeros((mesh.geometry.dim, x.shape[1]))
+        values = np.zeros((mesh.geometry.dim, x.shape[1]), dtype=default_scalar_type)
         values[-1] = -0.01 - plane_loc
         return values
 
