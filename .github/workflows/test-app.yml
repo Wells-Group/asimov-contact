@@ -98,9 +98,9 @@ jobs:
           ninja -C build-contact install
           python3 -m pip -v install -r ./python/build-requirements.txt
           python3 -m pip -v install --config-settings=build-dir="build-debug-contact" --config-settings=cmake.build-type="Debug"  --config-settings=install.strip=false --no-build-isolation -e ./python/ 
+
       - name: Run demos (C++)
         run: |
-          . dolfinx-real-mode
           cd cpp/demos/meshtie
           cmake -G Ninja -B build-dir
           ninja -C build-dir
