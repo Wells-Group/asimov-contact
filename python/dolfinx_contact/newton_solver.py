@@ -333,5 +333,6 @@ class NewtonSolver():
         return self.iteration, newton_converged
 
     def __del__(self):
-        if self.krylov_solver is not None:
-            self.krylov_solver.destroy()
+        pass
+        # if self.krylov_solver is not None:
+        #     self.krylov_solver.destroy()
