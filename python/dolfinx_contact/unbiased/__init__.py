@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier:    MIT
 
-from .nitsche_unbiased import nitsche_unbiased
+from .contact_problem import ContactProblem, FrictionLaw
 
 
-__all__ = ["nitsche_unbiased"]
+__all__ = ["ContactProblem", "FrictionLaw"]

@@ -4,22 +4,23 @@
 
 import argparse
 
-import dolfinx.fem as _fem
 import numpy as np
 import ufl
 from dolfinx import default_scalar_type, io, log
-from dolfinx.common import Timer, TimingType, list_timings
-from dolfinx.fem import (Function, FunctionSpace)
-from dolfinx.fem.petsc import LinearProblem
+from dolfinx.common import timed, Timer, TimingType, list_timings
+from dolfinx.fem import (Constant, form, Function, functionspace, locate_dofs_topological, dirichletbc)
+from dolfinx.fem.petsc import assemble_vector, assemble_matrix, create_vector, LinearProblem
 from dolfinx.graph import adjacencylist
 from dolfinx.io import XDMFFile
 from dolfinx.mesh import GhostMode
 from dolfinx_contact.helpers import (epsilon, lame_parameters, sigma_func,
-                                     weak_dirichlet)
+                                     weak_dirichlet, rigid_motions_nullspace_subdomains)
+from dolfinx_contact.newton_solver import NewtonSolver
 from dolfinx_contact.parallel_mesh_ghosting import create_contact_mesh
-from dolfinx_contact.unbiased.contact_problem import create_contact_solver
+from dolfinx_contact.unbiased.contact_problem import ContactProblem, FrictionLaw
 from dolfinx_contact.cpp import ContactMode
 from mpi4py import MPI
+from petsc4py.PETSc import InsertMode, ScatterMode
 
 desc = "Thermal expansion leading to contact"
 parser = argparse.ArgumentParser(description=desc,
@@ -93,9 +94,9 @@ ds = ufl.Measure("ds", domain=mesh, subdomain_data=facet_marker)
 
 
 # Thermal problem
-Q = _fem.FunctionSpace(mesh, ("CG", 1))
+Q = functionspace(mesh, ("CG", 1))
 q, r = ufl.TrialFunction(Q), ufl.TestFunction(Q)
-T0 = _fem.Function(Q)
+T0 = Function(Q)
 kdt = 0.1
 tau = 1.0
 therm = (q - T0) * r * dx + kdt * ufl.inner(ufl.grad(tau * q + (1 - tau) * T0), ufl.grad(r)) * dx
@@ -103,16 +104,17 @@ therm = (q - T0) * r * dx + kdt * ufl.inner(ufl.grad(tau * q + (1 - tau) * T0), 
 a_therm, L_therm = ufl.lhs(therm), ufl.rhs(therm)
 
 T0.x.array[:] = 0.0
-dofs = _fem.locate_dofs_topological(Q, entity_dim=tdim - 1, entities=facet_marker.find(dirichlet_bdy1))
-Tbc = _fem.dirichletbc(value=default_scalar_type((1.0)), dofs=dofs, V=Q)
-dofs2 = _fem.locate_dofs_topological(Q, entity_dim=tdim - 1, entities=facet_marker.find(dirichlet_bdy2))
-Tbc2 = _fem.dirichletbc(value=default_scalar_type((0.0)), dofs=dofs2, V=Q)
+dofs = locate_dofs_topological(Q, entity_dim=tdim - 1, entities=facet_marker.find(dirichlet_bdy1))
+Tbc = dirichletbc(value=default_scalar_type((1.0)), dofs=dofs, V=Q)
+dofs2 = locate_dofs_topological(Q, entity_dim=tdim - 1, entities=facet_marker.find(dirichlet_bdy2))
+Tbc2 = dirichletbc(value=default_scalar_type((0.0)), dofs=dofs2, V=Q)
 Tproblem = LinearProblem(a_therm, L_therm, bcs=[Tbc, Tbc2], petsc_options=petsc_options, u=T0)
 
 
 # Elasticity problem
-V = _fem.VectorFunctionSpace(mesh, ("Lagrange", 1))
-g = _fem.Constant(mesh, default_scalar_type((0, 0, 0)))     # zero Dirichlet
+gdim = mesh.geometry.dim
+V = functionspace(mesh, ("Lagrange", 1, (gdim, )))
+g = Constant(mesh, default_scalar_type((0, 0, 0)))     # zero Dirichlet
 
 
 # contact surface data
@@ -123,7 +125,9 @@ surfaces = adjacencylist(data, offsets)
 
 
 # Function, TestFunction, TrialFunction and measures
-u = _fem.Function(V)
+u = Function(V)
+du = Function(V)
+w = ufl.TrialFunction(V)
 v = ufl.TestFunction(V)
 
 # Compute lame parameters
@@ -132,7 +136,7 @@ nu = 0.2
 mu_func, lambda_func = lame_parameters(True)
 mu = mu_func(E, nu)
 lmbda = lambda_func(E, nu)
-V0 = FunctionSpace(mesh, ("DG", 0))
+V0 = functionspace(mesh, ("DG", 0))
 mu_dg = Function(V0)
 lmbda_dg = Function(V0)
 mu_dg.interpolate(lambda x: np.full((1, x.shape[1]), mu))
@@ -161,47 +165,97 @@ sigma_u = sigma_func(mu, lmbda)
 F = weak_dirichlet(F, u, g, sigma_u, E * gamma, theta, ds(dirichlet_bdy1))
 F = weak_dirichlet(F, u, g, sigma_u, E * gamma, theta, ds(dirichlet_bdy2))
 
+F = ufl.replace(F, {u: u + du})
+
+J = ufl.derivative(F, du, w)
+
+# compiler options to improve performance
+cffi_options = ["-Ofast", "-march=native"]
+jit_options = {"cffi_extra_compile_args": cffi_options,
+                "cffi_libraries": ["m"]}
+# compiled forms for rhs and tangen system
+F_compiled = form(F, jit_options=jit_options)
+J_compiled = form(J, jit_options=jit_options)
+
 
 # Solve contact problem using Nitsche's method
-problem_parameters = {"gamma": np.float64(E * gamma), "theta": np.float64(theta)}
 log.set_log_level(log.LogLevel.WARNING)
 size = mesh.comm.size
-outname = f"results/xmas_{tdim}D_{size}"
 u.name = 'displacement'
 T0.name = 'temperature'
 
-cffi_options = ["-Ofast", "-march=native"]
-jit_options = {"cffi_extra_compile_args": cffi_options, "cffi_libraries": ["m"]}
-search_mode = [ContactMode.ClosestPoint for i in range(len(contact_pairs))]
-contact_problem = create_contact_solver(ufl_form=F, u=u, mu=mu_dg, lmbda=lmbda_dg,
-                                        markers=[domain_marker, facet_marker],
-                                        contact_data=(surfaces, contact_pairs),
-                                        bcs=[],
-                                        problem_parameters=problem_parameters,
-                                        search_method=search_mode,
-                                        newton_options=newton_options,
-                                        petsc_options=petsc_options,
-                                        jit_options=jit_options,
-                                        quadrature_degree=5,
-                                        search_radius=np.float64(0.5))
 
+search_mode = [ContactMode.ClosestPoint for i in range(len(contact_pairs))]
+contact_problem = ContactProblem([facet_marker], surfaces, contact_pairs, mesh, 5, search_mode)
+contact_problem.generate_contact_data(FrictionLaw.Frictionless, V, {"u": u, "du": du, "mu": mu_dg,
+                                                        "lambda": lmbda_dg}, E * gamma, theta)
+# define functions for newton solver
+def compute_coefficients(x, coeffs):
+    du.x.scatter_forward()
+    contact_problem.update_contact_data(du)
+
+@timed("~Contact: Assemble residual")
+def compute_residual(x, b, coeffs):
+    b.zeroEntries()
+    b.ghostUpdate(addv=InsertMode.INSERT,
+                    mode=ScatterMode.FORWARD)
+    with Timer("~~Contact: Contact contributions (in assemble vector)"):
+        contact_problem.assemble_vector(b, V)
+    with Timer("~~Contact: Standard contributions (in assemble vector)"):
+        assemble_vector(b, F_compiled)
+    b.ghostUpdate(addv=InsertMode.ADD,
+                    mode=ScatterMode.REVERSE)
+
+@timed("~Contact: Assemble matrix")
+def compute_jacobian_matrix(x, A, coeffs):
+    A.zeroEntries()
+    with Timer("~~Contact: Contact contributions (in assemble matrix)"):
+        contact_problem.assemble_matrix(A, V)
+    with Timer("~~Contact: Standard contributions (in assemble matrix)"):
+        assemble_matrix(A, J_compiled)
+    A.assemble()
+
+# create vector and matrix
+A = contact_problem.create_matrix(J_compiled)
+b = create_vector(F_compiled)
+
+
+# Set up snes solver for nonlinear solver
+newton_solver = NewtonSolver(mesh.comm, A, b, contact_problem.coeffs)
+# Set matrix-vector computations
+newton_solver.set_residual(compute_residual)
+newton_solver.set_jacobian(compute_jacobian_matrix)
+newton_solver.set_coefficients(compute_coefficients)
+
+# Set rigid motion nullspace
+null_space = rigid_motions_nullspace_subdomains(V, domain_marker, np.unique(
+    domain_marker.values), num_domains=2)
+newton_solver.A.setNearNullSpace(null_space)
+
+# Set Newton solver options
+newton_solver.set_newton_options(newton_options)
+
+# Set Krylov solver options
+newton_solver.set_krylov_options(petsc_options)
 # initialise vtx write
-vtx = io.VTXWriter(mesh.comm, "results/box_key_thermo_mech.bp", [contact_problem.u, T0])
+vtx = io.VTXWriter(mesh.comm, "results/box_key_thermo_mech.bp", [u, T0], "bp4")
 vtx.write(0)
 for i in range(steps):
     with Timer("~Contact: Solve thermal"):
         Tproblem.solve()
     with Timer("~Contact: Solve contact"):
-        for j in range(len(contact_pairs)):
-            contact_problem.contact.create_distance_map(j)
 
-        n = contact_problem.solve()
-        contact_problem.du.x.scatter_forward()
-        contact_problem.u.x.array[:] += contact_problem.du.x.array[:]
-        contact_problem.contact.update_submesh_geometry(u._cpp_object)
+        n, converged = newton_solver.solve(du)
+        du.x.scatter_forward()
+        u.x.array[:] += du.x.array[:]
+        contact_problem.update_contact_detection(u)
+        A = contact_problem.create_matrix(J_compiled)
+        A.setNearNullSpace(null_space)
+        newton_solver.set_petsc_matrix(A)
         # take a fraction of du as initial guess
         # this is to ensure non-singular matrices in the case of no Dirichlet boundary
-        contact_problem.du.x.array[:] = 0.1 * contact_problem.du.x.array[:]
+        du.x.array[:] = 0.1 * du.x.array[:]
+        contact_problem.update_contact_data(du)
     vtx.write(i + 1)
 vtx.close()
 timer.stop()

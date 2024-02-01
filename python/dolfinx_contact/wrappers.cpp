@@ -215,6 +215,8 @@ PYBIND11_MODULE(cpp, m)
              const dolfinx_contact::SubMesh& submesh = self.submesh();
              return submesh.mesh();
            })
+      .def("mesh",
+           &dolfinx_contact::Contact::mesh)
       .def("copy_to_submesh",
           [] (dolfinx_contact::Contact& self, std::shared_ptr<dolfinx::fem::Function<PetscScalar>> u, std::shared_ptr<dolfinx::fem::Function<PetscScalar>> u_sub){
               dolfinx_contact::SubMesh submesh = self.submesh();

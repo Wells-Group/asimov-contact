@@ -15,30 +15,27 @@ from mpi4py import MPI
 
 
 class ContactWriter:
-    __slots__ = ["vtx", "contact", "u", "contact_pairs", "search_method", "material",
-                 "projection_coordinates", "mesh", "entities", "facet_list", "facet_mesh",
+    __slots__ = ["vtx", "contact", "u", "contact_pairs", "material",
+                 "projection_coordinates", "mesh", "facet_list", "facet_mesh",
                  "msh_to_fm", "pn", "pt", "a_form", "L", "L2", "p_f", "pt_f", "p_hertz",
-                 "t_hertz", "quadrature_degree"]
+                 "t_hertz"]
 
-    def __init__(self, mesh, contact, u, contact_pairs, quadrature_degree,
-                 search_method, entities, material, order, simplex,
+    def __init__(self, mesh, contact, u, contact_pairs,
+                 material, order, simplex,
                  projection_coordinates, fname):
         self.contact = contact
         self.u = u
         self.contact_pairs = contact_pairs
-        self.search_method = search_method
         self.material = material
         self.projection_coordinates = projection_coordinates
         self.mesh = mesh
-        self.entities = entities
-        self.quadrature_degree = quadrature_degree
 
         tdim = mesh.topology.dim
         c_to_f = mesh.topology.connectivity(tdim, tdim - 1)
         facet_list = []
         for j in range(len(contact_pairs)):
-            facet_list.append(np.zeros(len(entities[j]), dtype=np.int32))
-            for i, e in enumerate(entities[j]):
+            facet_list.append(np.zeros(len(contact.entities[j]), dtype=np.int32))
+            for i, e in enumerate(contact.entities[j]):
                 facet = c_to_f.links(e[0])[e[1]]
                 facet_list[j][i] = facet
         self.facet_list = facet_list
@@ -57,16 +54,16 @@ class ContactWriter:
         if tdim == 2:
             Q_element = ufl.FiniteElement("Quadrature", ufl.Cell(
                 "interval", geometric_dimension=facet_mesh.geometry.dim),
-                degree=quadrature_degree, quad_scheme="default")
+                degree=contact.q_deg, quad_scheme="default")
         else:
             if simplex:
                 Q_element = ufl.FiniteElement("Quadrature", ufl.Cell(
                     "triangle", geometric_dimension=facet_mesh.geometry.dim),
-                    quadrature_degree, quad_scheme="default")
+                    contact.q_deg, quad_scheme="default")
             else:
                 Q_element = ufl.FiniteElement("Quadrature", ufl.Cell(
                     "quadrilateral", geometric_dimension=facet_mesh.geometry.dim),
-                    quadrature_degree, quad_scheme="default")
+                    contact.q_deg, quad_scheme="default")
 
         Q = FunctionSpace(facet_mesh, Q_element)
         P = FunctionSpace(facet_mesh, ("DG", max(order - 1, 1)))
@@ -111,7 +108,7 @@ class ContactWriter:
     def write(self, t, pressure_function, tangent_force):
         normals = []
         for i in range(len(self.contact_pairs)):
-            if self.search_method[i] == dolfinx_contact.cpp.ContactMode.Raytracing:
+            if self.contact.search_method[i] == dolfinx_contact.cpp.ContactMode.Raytracing:
                 n_contact = np.array(-self.contact.pack_nx(i))
             else:
                 n_contact = np.array(self.contact.pack_ny(i))
@@ -127,8 +124,8 @@ class ContactWriter:
             n_contact = normals[i]
             n_x = self.contact.pack_nx(i)
             grad_u = dolfinx_contact.cpp.pack_gradient_quadrature(
-                self.u._cpp_object, self.quadrature_degree, self.entities[i])
-            num_facets = self.entities[i].shape[0]
+                self.u._cpp_object, self.contact.q_deg, self.contact.entities[i])
+            num_facets = self.contact.entities[i].shape[0]
             num_q_points = n_x.shape[1] // gdim
             # this assumes mu, lmbda are constant for each body
             sign = np.array(dolfinx_contact.cpp.compute_contact_forces(
@@ -142,11 +139,11 @@ class ContactWriter:
             sig_n.append(sign.reshape(-1, gdim))
             forces.append([pn, pt])
 
-        num_q_points = np.int32(len(forces[0][0]) / len(self.entities[0]))
+        num_q_points = np.int32(len(forces[0][0]) / len(self.contact.entities[0]))
         for j in range(len(self.contact_pairs)):
             dofs = np.array(np.hstack([range(self.msh_to_fm[self.facet_list[j]][i] * num_q_points,
                             num_q_points * (self.msh_to_fm[self.facet_list[j]][i] + 1))
-                for i in range(len(self.entities[j]))]))
+                for i in range(len(self.contact.entities[j]))]))
             self.pn.x.array[dofs] = forces[j][0][:]
             self.pt.x.array[dofs] = forces[j][1][:]
 

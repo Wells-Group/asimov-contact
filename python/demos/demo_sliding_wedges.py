@@ -6,20 +6,23 @@ import argparse
 import numpy as np
 import ufl
 from dolfinx import default_scalar_type
-from dolfinx.io import XDMFFile
+from dolfinx.io import XDMFFile, VTXWriter
 from dolfinx.fem import (Constant, dirichletbc, Expression, Function, FunctionSpace,
                          VectorFunctionSpace, locate_dofs_topological,
                          form, assemble_scalar)
+from dolfinx.fem.petsc import (assemble_matrix, assemble_vector, apply_lifting, create_vector, set_bc)
 from dolfinx.graph import adjacencylist
 from mpi4py import MPI
+from petsc4py.PETSc import InsertMode, ScatterMode
 
-from dolfinx_contact.helpers import (epsilon, sigma_func, lame_parameters)
+from dolfinx_contact.helpers import (epsilon, sigma_func, lame_parameters, rigid_motions_nullspace_subdomains)
 from dolfinx_contact.meshing import (convert_mesh,
                                      sliding_wedges)
+from dolfinx_contact.newton_solver import NewtonSolver
 from dolfinx_contact.cpp import ContactMode
 
 
-from dolfinx_contact.unbiased.nitsche_unbiased import nitsche_unbiased
+from dolfinx_contact.unbiased.contact_problem import ContactProblem, FrictionLaw
 
 if __name__ == "__main__":
     desc = "Friction example with two elastic cylinders for verifying correctness of code"
@@ -88,9 +91,11 @@ if __name__ == "__main__":
     V0 = FunctionSpace(mesh, ("DG", 0))
     mu_dg = Function(V0)
     lmbda_dg = Function(V0)
+    fric_dg = Function(V0)
     mu_dg.interpolate(lambda x: np.full((1, x.shape[1]), mu))
     lmbda_dg.interpolate(lambda x: np.full((1, x.shape[1]), lmbda))
     sigma = sigma_func(mu, lmbda)
+    fric_dg.interpolate(lambda x: np.full((1, x.shape[1]), fric))
 
     # Pack mesh data for Nitsche solver
     contact = [(0, 1), (1, 0)]
@@ -100,6 +105,8 @@ if __name__ == "__main__":
 
     # Function, TestFunction, TrialFunction and measures
     u = Function(V)
+    du = Function(V)
+    w = ufl.TrialFunction(V)
     v = ufl.TestFunction(V)
     dx = ufl.Measure("dx", domain=mesh, subdomain_data=domain_marker)
     ds = ufl.Measure("ds", domain=mesh, subdomain_data=facet_marker)
@@ -110,7 +117,18 @@ if __name__ == "__main__":
     # body forces
     F -= ufl.inner(t, v) * ds(neumann_bdy)
 
-    problem_parameters = {"gamma": np.float64(E * 10), "theta": np.float64(-1), "friction": np.float64(fric)}
+    F = ufl.replace(F, {u: u + du})
+
+    J = ufl.derivative(F, du, w)
+
+    # compiler options to improve performance
+    cffi_options = ["-Ofast", "-march=native"]
+    jit_options = {"cffi_extra_compile_args": cffi_options,
+                   "cffi_libraries": ["m"]}
+    # compiled forms for rhs and tangen system
+    F_compiled = form(F, jit_options=jit_options)
+    J_compiled = form(J, jit_options=jit_options)
+
 
     search_mode = [ContactMode.ClosestPoint, ContactMode.ClosestPoint]
 
@@ -149,26 +167,68 @@ if __name__ == "__main__":
         return vals
 
     # Solve contact problem using Nitsche's method
-    u, newton_its, krylov_iterations, solver_time = nitsche_unbiased(1, ufl_form=F,
-                                                                     u=u, mu=mu_dg, lmbda=lmbda_dg, rhs_fns=[t],
-                                                                     markers=[domain_marker, facet_marker],
-                                                                     contact_data=(
-                                                                         surfaces, contact), bcs=bcs,
-                                                                     bc_fns=bc_fns,
-                                                                     problem_parameters=problem_parameters,
-                                                                     newton_options=newton_options,
-                                                                     petsc_options=petsc_options,
-                                                                     search_method=search_mode,
-                                                                     outfile=None,
-                                                                     fname=outname,
-                                                                     quadrature_degree=args.q_degree,
-                                                                     search_radius=np.float64(-1),
-                                                                     order=args.order, simplex=simplex,
-                                                                     pressure_function=_pressure,
-                                                                     projection_coordinates=[
-                                                                         (tdim - 1, -R), (tdim - 1, -R - 0.1)],
-                                                                     coulomb=True)
+    contact_problem = ContactProblem([facet_marker], surfaces, contact, mesh, args.q_degree, search_mode)
+    contact_problem.generate_contact_data(FrictionLaw.Coulomb, V, {"u": u, "du": du, "mu": mu_dg,
+                                                            "lambda": lmbda_dg, "fric": fric_dg}, E * 10, -1)
+    
+        # define functions for newton solver
+    def compute_coefficients(x, coeffs):
+        du.x.scatter_forward()
+        contact_problem.update_contact_data(du)
 
+    def compute_residual(x, b, coeffs):
+        b.zeroEntries()
+        b.ghostUpdate(addv=InsertMode.INSERT,
+                      mode=ScatterMode.FORWARD)
+        contact_problem.assemble_vector(b, V)
+        assemble_vector(b, F_compiled)
+
+        # Apply boundary condition
+        if len(bcs) > 0:
+            apply_lifting(
+                b, [J_compiled], bcs=[bcs], x0=[x], scale=-1.0)
+        b.ghostUpdate(addv=InsertMode.ADD,
+                      mode=ScatterMode.REVERSE)
+        if len(bcs) > 0:
+            set_bc(b, bcs, x, -1.0)
+
+    def compute_jacobian_matrix(x, A, coeffs):
+        A.zeroEntries()
+        contact_problem.assemble_matrix(A, V)
+        assemble_matrix(A, J_compiled, bcs=bcs)
+        A.assemble()
+
+    # create vector and matrix
+    A = contact_problem.create_matrix(J_compiled)
+    b = create_vector(F_compiled)
+
+
+    # Set up snes solver for nonlinear solver
+    newton_solver = NewtonSolver(mesh.comm, A, b, contact_problem.coeffs)
+    # Set matrix-vector computations
+    newton_solver.set_residual(compute_residual)
+    newton_solver.set_jacobian(compute_jacobian_matrix)
+    newton_solver.set_coefficients(compute_coefficients)
+
+    # Set rigid motion nullspace
+    null_space = rigid_motions_nullspace_subdomains(V, domain_marker, np.unique(
+        domain_marker.values), num_domains=2)
+    newton_solver.A.setNearNullSpace(null_space)
+
+    # Set Newton solver options
+    newton_solver.set_newton_options(newton_options)
+
+    # Set Krylov solver options
+    newton_solver.set_krylov_options(petsc_options)
+    # initialise vtx writer
+    u.name = "u"
+    vtx = VTXWriter(mesh.comm, f"results/sliding_wedges.bp", [u], "bp4")
+    vtx.write(0)
+    n, converged = newton_solver.solve(du, write_solution=True)
+    du.x.scatter_forward()
+    u.x.array[:] += du.x.array[:]
+    vtx.write(1)
+    
     n = ufl.FacetNormal(mesh)
     metadata = {"quadrature_degree": 2}
 
@@ -186,32 +246,4 @@ if __name__ == "__main__":
     R_y2 = mesh.comm.allreduce(assemble_scalar(Ry_2form), op=MPI.SUM)
 
     print("Rx/Ry", abs(R_x1) / abs(R_y1), abs(R_x2) / abs(R_y2), (fric + np.tan(angle)) / (1 - fric * np.tan(angle)))
-    sigma_dev = sigma(u) - (1 / 3) * ufl.tr(sigma(u)) * ufl.Identity(len(u))
-    sigma_vm = ufl.sqrt((3 / 2) * ufl.inner(sigma_dev, sigma_dev))
-    W = FunctionSpace(mesh, ("Discontinuous Lagrange", args.order - 1))
-    sigma_vm_expr = Expression(sigma_vm, W.element.interpolation_points())
-    sigma_vm_h = Function(W)
-    sigma_vm_h.interpolate(sigma_vm_expr)
-    sigma_vm_h.name = "vonMises"
-    with XDMFFile(mesh.comm, f"{outname}_vonMises.xdmf", "w") as xdmf:
-        xdmf.write_mesh(mesh)
-        xdmf.write_function(sigma_vm_h)
 
-    # # Create quadrature points for integration on facets
-    # x = []
-    # num_facets = len(facet_marker.find(contact_bdy_1))
-    # for i in range(num_facets):
-    #     qps = contact.qp_phys(0, i)
-    #     for pt in qps:
-    #         x.append(pt[0])
-    # num_pts = len(x)
-    # print(len(x))
-
-    # plt.figure()
-    # plt.plot(x, sig_n[0][:, 0], '*')
-    # plt.plot(x, sig_n[0][:, 1], 'x')
-    # plt.xlim((5.97, 6.01))
-    # plt.xlabel('x')
-    # plt.ylabel('R')
-
-    # plt.savefig("reaction_force.png")

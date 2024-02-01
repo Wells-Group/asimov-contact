@@ -7,11 +7,13 @@ import argparse
 import numpy as np
 import numpy.typing as npt
 import ufl
+from petsc4py.PETSc import InsertMode, ScatterMode
 from dolfinx import default_scalar_type
+from dolfinx.common import Timer, timed
 from dolfinx.io import XDMFFile, VTXWriter
 from dolfinx.fem import (Constant, dirichletbc, form, Function, FunctionSpace,
                          VectorFunctionSpace, locate_dofs_topological)
-from dolfinx.fem.petsc import create_vector
+from dolfinx.fem.petsc import apply_lifting, assemble_matrix, assemble_vector, create_vector, set_bc
 from dolfinx.graph import adjacencylist
 from dolfinx.geometry import bb_tree, compute_closest_entity
 from dolfinx.mesh import Mesh
@@ -27,7 +29,7 @@ from dolfinx_contact.cpp import ContactMode
 from dolfinx_contact.output import ContactWriter
 
 
-from dolfinx_contact.unbiased.contact_problem_new import ContactProblem
+from dolfinx_contact.unbiased.contact_problem import ContactProblem, FrictionLaw
 from dolfinx_contact.newton_solver import NewtonSolver
 from dolfinx_contact.helpers import rigid_motions_nullspace_subdomains
 
@@ -67,6 +69,7 @@ if __name__ == "__main__":
     simplex = args.simplex
     problem = args.problem
     mesh_dir = "meshes"
+    steps = 4
 
     # Problem paramters
     if args.chouly:
@@ -264,7 +267,6 @@ if __name__ == "__main__":
     lmbda = Function(V0)
     disk_cells = domain_marker.find(1)
     block_cells = domain_marker.find(2)
-    fric = Function(V0)
     mu.interpolate(lambda x: np.full((1, x.shape[1]), mu2), disk_cells)
     mu.interpolate(lambda x: np.full((1, x.shape[1]), mu1), block_cells)
     lmbda.interpolate(lambda x: np.full((1, x.shape[1]), lmbda2), disk_cells)
@@ -316,28 +318,48 @@ if __name__ == "__main__":
     search_mode = [ContactMode.ClosestPoint, ContactMode.ClosestPoint]
 
     # create contact solver
-    contact_problem = ContactProblem([facet_marker], surfaces, contact, V, search_mode, args.q_degree)
-    contact_problem.generate_kernel_data(u, du, mu, lmbda, fric, gamma, theta)
-    contact_problem.set_forms(F_compiled, J_compiled, bcs)
+    contact_problem = ContactProblem([facet_marker], surfaces, contact, mesh, args.q_degree, search_mode)
+    contact_problem.generate_contact_data(FrictionLaw.Frictionless, V, {"u": u, "du": du, "mu": mu,
+                                                                        "lambda": lmbda}, gamma, theta)
+    solver_outfile = None
     du.interpolate(_u_initial, disk_cells)
 
     # create vector and matrix
-    A = contact_problem.create_matrix()
+    A = contact_problem.create_matrix(J_compiled)
     b = create_vector(F_compiled)
 
     # define functions for newton solver
     def compute_coefficients(x, coeffs):
-        size_local = V.dofmap.index_map.size_local
-        bs = V.dofmap.index_map_bs
-        du.x.array[:size_local * bs] = x.array_r[:size_local * bs]
         du.x.scatter_forward()
-        contact_problem.update_kernel_data(du)
+        contact_problem.update_contact_data(du)
 
+    @timed("~Contact: Assemble residual")
     def compute_residual(x, b, coeffs):
-        contact_problem.compute_residual(x, b)
+        b.zeroEntries()
+        b.ghostUpdate(addv=InsertMode.INSERT,
+                      mode=ScatterMode.FORWARD)
+        with Timer("~~Contact: Contact contributions (in assemble vector)"):
+            contact_problem.assemble_vector(b, V)
+        with Timer("~~Contact: Standard contributions (in assemble vector)"):
+            assemble_vector(b, F_compiled)
 
+        # Apply boundary condition
+        if len(bcs) > 0:
+            apply_lifting(
+                b, [J_compiled], bcs=[bcs], x0=[x], scale=-1.0)
+        b.ghostUpdate(addv=InsertMode.ADD,
+                      mode=ScatterMode.REVERSE)
+        if len(bcs) > 0:
+            set_bc(b, bcs, x, -1.0)
+
+    @timed("~Contact: Assemble matrix")
     def compute_jacobian_matrix(x, A, coeffs):
-        contact_problem.compute_jacobian_matrix(x, A)
+        A.zeroEntries()
+        with Timer("~~Contact: Contact contributions (in assemble matrix)"):
+            contact_problem.assemble_matrix(A, V)
+        with Timer("~~Contact: Standard contributions (in assemble matrix)"):
+            assemble_matrix(A, J_compiled, bcs=bcs)
+        A.assemble()
 
     # Set up snes solver for nonlinear solver
     newton_solver = NewtonSolver(mesh.comm, A, b, contact_problem.coeffs)
@@ -358,15 +380,14 @@ if __name__ == "__main__":
     newton_solver.set_krylov_options(petsc_options)
 
     if not threed:
-        writer = ContactWriter(mesh, contact_problem.contact, u, contact,
-                               args.q_degree, search_mode, contact_problem.entities,
-                               contact_problem.coeffs, args.order, simplex,
+        writer = ContactWriter(mesh, contact_problem, u, contact,
+                               contact_problem.coeffs,
+                               args.order, simplex,
                                [(tdim - 1, 0), (tdim - 1, -R)],
-                               f'{outname}_1_step')
+                               f'{outname}_{steps}_step')
     # initialise vtx writer
-    vtx = VTXWriter(mesh.comm, f"{outname}_1_step.bp", [u], "bp4")
+    vtx = VTXWriter(mesh.comm, f"{outname}_{steps}_step.bp", [u], "bp4")
     vtx.write(0)
-    steps = 4
     for i in range(steps):
         if problem == 1:
             f.value[-1] = -distributed_load * (i + 1) / steps
@@ -380,7 +401,11 @@ if __name__ == "__main__":
         if not threed:
             writer.write(i + 1, lambda x: _pressure(x, p0, a), lambda x: np.zeros(x.shape[1]))
         contact_problem.update_contact_detection(u)
+        A = contact_problem.create_matrix(J_compiled)
+        A.setNearNullSpace(null_space)
+        newton_solver.set_petsc_matrix(A)
         du.x.array[:] = 0.1 * du.x.array[:]
+        contact_problem.update_contact_data(du)
         vtx.write(i + 1)
 
     vtx.close()

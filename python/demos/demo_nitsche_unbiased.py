@@ -26,7 +26,7 @@ from dolfinx_contact.meshing import (convert_mesh, create_box_mesh_2D,
                                      create_circle_plane_mesh,
                                      create_cylinder_cylinder_mesh,
                                      create_sphere_plane_mesh)
-from dolfinx_contact.unbiased.contact_problem_new import ContactProblem, FrictionLaw
+from dolfinx_contact.unbiased.contact_problem import ContactProblem, FrictionLaw
 from dolfinx_contact.parallel_mesh_ghosting import create_contact_mesh
 from dolfinx_contact.helpers import rigid_motions_nullspace_subdomains
 from dolfinx_contact.newton_solver import NewtonSolver
