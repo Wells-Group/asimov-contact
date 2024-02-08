@@ -7,13 +7,13 @@ import numpy as np
 import ufl
 from dolfinx import default_scalar_type
 from dolfinx.io import XDMFFile, VTXWriter
-from dolfinx.fem import (Constant, dirichletbc, Expression, Function, FunctionSpace,
+from dolfinx.fem import (Constant, dirichletbc, Function, FunctionSpace,
                          VectorFunctionSpace, locate_dofs_topological,
                          form, assemble_scalar)
 from dolfinx.fem.petsc import (assemble_matrix, assemble_vector, apply_lifting, create_vector, set_bc)
 from dolfinx.graph import adjacencylist
 from mpi4py import MPI
-from petsc4py.PETSc import InsertMode, ScatterMode
+from petsc4py.PETSc import InsertMode, ScatterMode  # type: ignore
 
 from dolfinx_contact.helpers import (epsilon, sigma_func, lame_parameters, rigid_motions_nullspace_subdomains)
 from dolfinx_contact.meshing import (convert_mesh,
@@ -129,7 +129,6 @@ if __name__ == "__main__":
     F_compiled = form(F, jit_options=jit_options)
     J_compiled = form(J, jit_options=jit_options)
 
-
     search_mode = [ContactMode.ClosestPoint, ContactMode.ClosestPoint]
 
     # Solver options
@@ -169,9 +168,9 @@ if __name__ == "__main__":
     # Solve contact problem using Nitsche's method
     contact_problem = ContactProblem([facet_marker], surfaces, contact, mesh, args.q_degree, search_mode)
     contact_problem.generate_contact_data(FrictionLaw.Coulomb, V, {"u": u, "du": du, "mu": mu_dg,
-                                                            "lambda": lmbda_dg, "fric": fric_dg}, E * 10, -1)
-    
-        # define functions for newton solver
+                                                                   "lambda": lmbda_dg, "fric": fric_dg}, E * 10, -1)
+
+    # define functions for newton solver
     def compute_coefficients(x, coeffs):
         du.x.scatter_forward()
         contact_problem.update_contact_data(du)
@@ -202,7 +201,6 @@ if __name__ == "__main__":
     A = contact_problem.create_matrix(J_compiled)
     b = create_vector(F_compiled)
 
-
     # Set up snes solver for nonlinear solver
     newton_solver = NewtonSolver(mesh.comm, A, b, contact_problem.coeffs)
     # Set matrix-vector computations
@@ -222,13 +220,13 @@ if __name__ == "__main__":
     newton_solver.set_krylov_options(petsc_options)
     # initialise vtx writer
     u.name = "u"
-    vtx = VTXWriter(mesh.comm, f"results/sliding_wedges.bp", [u], "bp4")
+    vtx = VTXWriter(mesh.comm, "results/sliding_wedges.bp", [u], "bp4")
     vtx.write(0)
     n, converged = newton_solver.solve(du, write_solution=True)
     du.x.scatter_forward()
     u.x.array[:] += du.x.array[:]
     vtx.write(1)
-    
+
     n = ufl.FacetNormal(mesh)
     metadata = {"quadrature_degree": 2}
 
@@ -246,4 +244,3 @@ if __name__ == "__main__":
     R_y2 = mesh.comm.allreduce(assemble_scalar(Ry_2form), op=MPI.SUM)
 
     print("Rx/Ry", abs(R_x1) / abs(R_y1), abs(R_x2) / abs(R_y2), (fric + np.tan(angle)) / (1 - fric * np.tan(angle)))
-

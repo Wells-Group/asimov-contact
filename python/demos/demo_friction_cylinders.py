@@ -15,7 +15,7 @@ from dolfinx.fem.petsc import set_bc, apply_lifting, assemble_matrix, assemble_v
 from dolfinx.graph import adjacencylist
 from dolfinx.mesh import locate_entities
 from mpi4py import MPI
-from petsc4py.PETSc import InsertMode, ScatterMode
+from petsc4py.PETSc import InsertMode, ScatterMode  # type: ignore
 from dolfinx_contact.helpers import (epsilon, sigma_func, lame_parameters, rigid_motions_nullspace_subdomains)
 from dolfinx_contact.meshing import (convert_mesh,
                                      create_quarter_disks_mesh)
@@ -194,7 +194,6 @@ if __name__ == "__main__":
                 vals[i] = p0 * np.sqrt(1 - x[0][i]**2 / a**2)
         return vals
 
-
     top_cells = domain_marker.find(1)
 
     # u.interpolate(_u_initial, top_cells)
@@ -204,7 +203,7 @@ if __name__ == "__main__":
     steps1 = 4
     contact_problem = ContactProblem([facet_marker], surfaces, contact_pairs, mesh, args.q_degree, search_mode)
     contact_problem.generate_contact_data(FrictionLaw.Frictionless, V, {"u": u, "du": du, "mu": mu_dg,
-                                                            "lambda": lmbda_dg}, E * 100 * args.order**2, 1)
+                                                                        "lambda": lmbda_dg}, E * 100 * args.order**2, 1)
     h = contact_problem.h_surfaces()[1]
     # create initial guess
 
@@ -214,7 +213,7 @@ if __name__ == "__main__":
         return values
 
     du.interpolate(_u_initial, top_cells)
-    
+
     # define functions for newton solver
     def compute_coefficients(x, coeffs):
         du.x.scatter_forward()
@@ -260,7 +259,6 @@ if __name__ == "__main__":
     # create vector and matrix
     A = contact_problem.create_matrix(J_compiled)
     b = create_vector(F_compiled)
-
 
     # Set up snes solver for nonlinear solver
     newton_solver = NewtonSolver(mesh.comm, A, b, contact_problem.coeffs)
@@ -380,14 +378,12 @@ if __name__ == "__main__":
 
     fric = Function(V0)
     fric.interpolate(lambda x: np.full((1, x.shape[1]), 0.3))
-    du.x.array[:] = 0.1 * du.x.array[:]
     contact_problem.generate_contact_data(FrictionLaw.Coulomb, V, {"u": u, "du": du, "mu": mu_dg,
-                                                            "lambda": lmbda_dg, "fric": fric}, E * 10 * args.order**2, 1)
-    contact_problem.update_nitsche_parameters(E * 10 * args.order**2, 1)
-    newton_solver.set_krylov_options(petsc_options)
+                                                                   "lambda": lmbda_dg, "fric": fric},
+                                          E * 10 * args.order**2, 1)
+    newton_solver.update_krylov_solver(petsc_options)
     steps2 = 6 * 16
 
-    
     # du.interpolate(_du_initial, top_cells)
     # initialise vtx write
     # vtx = VTXWriter(mesh.comm, "results/cylinders_coulomb.bp", [u])
@@ -431,9 +427,8 @@ if __name__ == "__main__":
         newton_solver.set_petsc_matrix(A)
         # take a fraction of du as initial guess
         # this is to ensure non-singular matrices in the case of no Dirichlet boundary
-        du.x.array[:] = 0.1 / 3 * h * du.x.array[:]
+        du.x.array[:] = 0.1 * du.x.array[:]
         contact_problem.update_contact_data(du)
-
 
     vtx.close()
     print("Newton iterations: ")

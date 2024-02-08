@@ -16,7 +16,7 @@ from dolfinx.graph import adjacencylist
 from dolfinx.io import XDMFFile, VTXWriter
 from dolfinx.mesh import locate_entities_boundary, GhostMode, meshtags
 from mpi4py import MPI
-from petsc4py.PETSc import ScatterMode, InsertMode
+from petsc4py.PETSc import InsertMode, ScatterMode  # type: ignore
 
 from dolfinx_contact.helpers import (epsilon, lame_parameters, sigma_func,
                                      weak_dirichlet)

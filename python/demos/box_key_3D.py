@@ -21,7 +21,7 @@ from dolfinx_contact.unbiased.contact_problem import ContactProblem, FrictionLaw
 from dolfinx_contact.newton_solver import NewtonSolver
 from dolfinx_contact.cpp import ContactMode
 from mpi4py import MPI
-from petsc4py.PETSc import InsertMode, ScatterMode
+from petsc4py.PETSc import InsertMode, ScatterMode  # type: ignore
 
 if __name__ == "__main__":
     desc = "Nitsche's method for two elastic bodies using custom assemblers"
@@ -211,7 +211,7 @@ if __name__ == "__main__":
     search_mode = [ContactMode.ClosestPoint for i in range(len(contact_pairs))]
     contact_problem = ContactProblem([facet_marker], surfaces, contact_pairs, mesh, args.q_degree, search_mode)
     contact_problem.generate_contact_data(FrictionLaw.Frictionless, V, {"u": u, "du": du, "mu": mu0,
-                                                            "lambda": lmbda0}, E * gamma, theta)
+                                                                        "lambda": lmbda0}, E * gamma, theta)
 
     # define functions for newton solver
     def compute_coefficients(x, coeffs):
@@ -241,11 +241,9 @@ if __name__ == "__main__":
             assemble_matrix(A, J_compiled)
         A.assemble()
 
-
         # create vector and matrix
     A = contact_problem.create_matrix(J_compiled)
     b = create_vector(F_compiled)
-
 
     # Set up snes solver for nonlinear solver
     newton_solver = NewtonSolver(mesh.comm, A, b, contact_problem.coeffs)
@@ -273,7 +271,7 @@ if __name__ == "__main__":
     num_krylov_its = np.zeros(nload_steps, dtype=int)
     newton_time = np.zeros(nload_steps, dtype=np.float64)
     for i in range(nload_steps):
-        t.interpolate(lambda x: _torque(x, (i+1)/nload_steps))
+        t.interpolate(lambda x: _torque(x, (i + 1) / nload_steps))
         f.value[:] = (i + 1) * np.array(f_val) / nload_steps
         timing_str = f"~Contact: {i+1} Newton Solver"
         with Timer(timing_str):

@@ -9,7 +9,7 @@ import dolfinx.fem as _fem
 import numpy as np
 import ufl
 from mpi4py import MPI
-from petsc4py.PETSc import InsertMode, ScatterMode
+from petsc4py.PETSc import InsertMode, ScatterMode  # type: ignore
 from dolfinx import default_scalar_type, log
 from dolfinx.common import timing, Timer, timed
 from dolfinx.graph import adjacencylist
@@ -225,18 +225,17 @@ if __name__ == "__main__":
     mu0.interpolate(lambda x: np.full((1, x.shape[1]), mu))
     lmbda0.interpolate(lambda x: np.full((1, x.shape[1]), lmbda))
 
-
     # create contact solver
     search_mode = [ContactMode.ClosestPoint for i in range(len(contact_pairs))]
     contact_problem = ContactProblem([facet_marker], surfaces, contact_pairs, mesh, args.q_degree, search_mode)
     contact_problem.generate_contact_data(FrictionLaw.Frictionless, V, {"u": u, "du": du, "mu": mu0,
-                                                            "lambda": lmbda0}, E * gamma, theta)
+                                                                        "lambda": lmbda0}, E * gamma, theta)
     solver_outfile = None
     log.set_log_level(log.LogLevel.WARNING)
     rhs_fns = [g, t, f]
     size = mesh.comm.size
     outname = f"results/xmas_{tdim}D_{size}"
-    
+
     # define functions for newton solver
     def compute_coefficients(x, coeffs):
         du.x.scatter_forward()
@@ -273,7 +272,6 @@ if __name__ == "__main__":
     # create vector and matrix
     A = contact_problem.create_matrix(J_compiled)
     b = create_vector(F_compiled)
-
 
     # Set up snes solver for nonlinear solver
     newton_solver = NewtonSolver(mesh.comm, A, b, contact_problem.coeffs)

@@ -5,17 +5,20 @@ import dolfinx.fem as _fem
 import numpy as np
 import ufl
 from dolfinx import default_scalar_type, io, log
+from dolfinx.common import timed, Timer
 from dolfinx.fem import (Function, FunctionSpace)
-from dolfinx.fem.petsc import LinearProblem
+from dolfinx.fem.petsc import LinearProblem, assemble_vector, assemble_matrix, create_vector
 from dolfinx.graph import adjacencylist
 from dolfinx.io import XDMFFile
 from dolfinx_contact.helpers import (epsilon, lame_parameters, sigma_func,
-                                     weak_dirichlet)
+                                     weak_dirichlet, rigid_motions_nullspace_subdomains)
 from dolfinx_contact.meshing import convert_mesh, create_christmas_tree_mesh
+from dolfinx_contact.newton_solver import NewtonSolver
 from dolfinx_contact.parallel_mesh_ghosting import create_contact_mesh
-from dolfinx_contact.unbiased.contact_problem import create_contact_solver
+from dolfinx_contact.unbiased.contact_problem import ContactProblem, FrictionLaw
 from dolfinx_contact.cpp import ContactMode
 from mpi4py import MPI
+from petsc4py.PETSc import InsertMode, ScatterMode  # type: ignore
 
 fname = "meshes/xmas_2D"
 create_christmas_tree_mesh(filename=fname, res=0.2)
@@ -73,6 +76,8 @@ surfaces = adjacencylist(data, offsets)
 
 # Function, TestFunction, TrialFunction and measures
 u = _fem.Function(V)
+du = _fem.Function(V)
+w = ufl.TrialFunction(V)
 v = ufl.TestFunction(V)
 
 # Compute lame parameters
@@ -110,6 +115,17 @@ sigma_u = sigma_func(mu, lmbda)
 F = weak_dirichlet(F, u, g, sigma_u, E * gamma, theta, ds(4))
 F = weak_dirichlet(F, u, g, sigma_u, E * gamma, theta, ds(3))
 
+F = ufl.replace(F, {u: u + du})
+
+J = ufl.derivative(F, du, w)
+
+# compiler options to improve performance
+cffi_options = ["-Ofast", "-march=native"]
+jit_options = {"cffi_extra_compile_args": cffi_options,
+               "cffi_libraries": ["m"]}
+# compiled forms for rhs and tangen system
+F_compiled = _fem.form(F, jit_options=jit_options)
+J_compiled = _fem.form(J, jit_options=jit_options)
 
 # Solver options
 ksp_tol = 1e-10
@@ -151,50 +167,100 @@ outname = f"results/xmas_{tdim}D_{size}"
 u.name = 'displacement'
 T0.name = 'temperature'
 
-cffi_options = ["-Ofast", "-march=native"]
-jit_options = {"cffi_extra_compile_args": cffi_options, "cffi_libraries": ["m"]}
 search_mode = [ContactMode.ClosestPoint for i in range(len(contact_pairs))]
-contact_problem = create_contact_solver(ufl_form=F, u=u, mu=mu_dg, lmbda=lmbda_dg,
-                                        markers=[domain_marker, facet_marker],
-                                        contact_data=(surfaces, contact_pairs),
-                                        bcs=[],
-                                        problem_parameters=problem_parameters,
-                                        search_method=search_mode,
-                                        newton_options=newton_options,
-                                        petsc_options=petsc_options,
-                                        jit_options=jit_options,
-                                        quadrature_degree=5,
-                                        search_radius=np.float64(0.5),
-                                        coulomb=True)
+contact_problem = ContactProblem([facet_marker], surfaces, contact_pairs, mesh, 5, search_mode)
+contact_problem.generate_contact_data(FrictionLaw.Frictionless, V, {"u": u, "du": du, "mu": mu_dg,
+                                                                    "lambda": lmbda_dg}, E * gamma, theta)
+# define functions for newton solver
+
+
+def compute_coefficients(x, coeffs):
+    du.x.scatter_forward()
+    contact_problem.update_contact_data(du)
+
+
+@timed("~Contact: Assemble residual")
+def compute_residual(x, b, coeffs):
+    b.zeroEntries()
+    b.ghostUpdate(addv=InsertMode.INSERT,
+                  mode=ScatterMode.FORWARD)
+    with Timer("~~Contact: Contact contributions (in assemble vector)"):
+        contact_problem.assemble_vector(b, V)
+    with Timer("~~Contact: Standard contributions (in assemble vector)"):
+        assemble_vector(b, F_compiled)
+    b.ghostUpdate(addv=InsertMode.ADD,
+                  mode=ScatterMode.REVERSE)
+
+
+@timed("~Contact: Assemble matrix")
+def compute_jacobian_matrix(x, A, coeffs):
+    A.zeroEntries()
+    with Timer("~~Contact: Contact contributions (in assemble matrix)"):
+        contact_problem.assemble_matrix(A, V)
+    with Timer("~~Contact: Standard contributions (in assemble matrix)"):
+        assemble_matrix(A, J_compiled)
+    A.assemble()
+
+
+# create vector and matrix
+A = contact_problem.create_matrix(J_compiled)
+b = create_vector(F_compiled)
+
+
+# Set up snes solver for nonlinear solver
+newton_solver = NewtonSolver(mesh.comm, A, b, contact_problem.coeffs)
+# Set matrix-vector computations
+newton_solver.set_residual(compute_residual)
+newton_solver.set_jacobian(compute_jacobian_matrix)
+newton_solver.set_coefficients(compute_coefficients)
+
+# Set rigid motion nullspace
+null_space = rigid_motions_nullspace_subdomains(V, domain_marker, np.unique(
+    domain_marker.values), num_domains=2)
+newton_solver.A.setNearNullSpace(null_space)
+
+# Set Newton solver options
+newton_solver.set_newton_options(newton_options)
+
+# Set Krylov solver options
+newton_solver.set_krylov_options(petsc_options)
+
 
 # initialise vtx write
-W = FunctionSpace(mesh, ("CG", 1))
+W = FunctionSpace(mesh, ("DG", 1))
 sigma_vm_h = Function(W)
-sigma_dev = sigma(contact_problem.u, T0) - (1 / 3) * \
-    ufl.tr(sigma(contact_problem.u, T0)) * ufl.Identity(len(contact_problem.u))
+sigma_dev = sigma(u, T0) - (1 / 3) * \
+    ufl.tr(sigma(u, T0)) * ufl.Identity(len(u))
 sigma_vm = ufl.sqrt((3 / 2) * ufl.inner(sigma_dev, sigma_dev))
+gdim = mesh.geometry.dim
+W2 = _fem.functionspace(mesh, ("Discontinuous Lagrange", 1, (gdim, )))
+u_dg = Function(W2)
+u_dg.interpolate(u)
+T_dg = Function(W)
+T_dg.interpolate(T0)
 sigma_vm_h.name = "vonMises"
-vtx_therm = io.VTXWriter(mesh.comm, "results/xmas_disp.bp", [contact_problem.u, T0, sigma_vm_h], "bp4")
-vtx_mech = io.VTXWriter(mesh.comm, "results/xmas_temp.bp", [T0], "bp4")
-vtx_therm.write(0)
-vtx_mech.write(0)
+u_dg.name = "displacement"
+T_dg.name = "temperature"
+vtx = io.VTXWriter(mesh.comm, "results/xmas_disp.bp", [u_dg, T_dg, sigma_vm_h], "bp4")
+vtx.write(0)
 for i in range(50):
     Tproblem.solve()
-    for j in range(len(contact_pairs)):
-        contact_problem.contact.create_distance_map(j)
 
-    n = contact_problem.solve()
-    contact_problem.du.x.scatter_forward()
-    contact_problem.u.x.array[:] += contact_problem.du.x.array[:]
-    contact_problem.contact.update_submesh_geometry(u._cpp_object)
+    n, converged = newton_solver.solve(du)
+    du.x.scatter_forward()
+    u.x.array[:] += du.x.array[:]
+    contact_problem.update_contact_detection(u)
+    A = contact_problem.create_matrix(J_compiled)
+    A.setNearNullSpace(null_space)
+    newton_solver.set_petsc_matrix(A)
     # take a fraction of du as initial guess
     # this is to ensure non-singular matrices in the case of no Dirichlet boundary
-    contact_problem.du.x.array[:] = 0.1 * contact_problem.du.x.array[:]
+    du.x.array[:] = 0.1 * du.x.array[:]
+    contact_problem.update_contact_data(du)
     sigma_vm_expr = _fem.Expression(sigma_vm, W.element.interpolation_points())
     sigma_vm_h.interpolate(sigma_vm_expr)
-    vtx_therm.write(i + 1)
-    vtx_mech.write(i + 1)
+    u_dg.interpolate(u)
+    T_dg.interpolate(T0)
+    vtx.write(i + 1)
 
-
-vtx_therm.close()
-vtx_mech.close()
+vtx.close()

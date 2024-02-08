@@ -7,7 +7,7 @@ import argparse
 import numpy as np
 import numpy.typing as npt
 import ufl
-from petsc4py.PETSc import InsertMode, ScatterMode
+from petsc4py.PETSc import InsertMode, ScatterMode  # type: ignore
 from dolfinx import default_scalar_type
 from dolfinx.common import Timer, timed
 from dolfinx.io import XDMFFile, VTXWriter

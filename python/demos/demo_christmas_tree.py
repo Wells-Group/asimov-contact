@@ -4,7 +4,7 @@
 
 import argparse
 import sys
-
+from typing import Union  # noqa: F401
 import dolfinx.fem as _fem
 import numpy as np
 import ufl
@@ -23,7 +23,7 @@ from dolfinx_contact.parallel_mesh_ghosting import create_contact_mesh
 from dolfinx_contact.unbiased.contact_problem import ContactProblem, FrictionLaw
 from dolfinx_contact.newton_solver import NewtonSolver
 from mpi4py import MPI
-from petsc4py.PETSc import InsertMode, ScatterMode
+from petsc4py.PETSc import InsertMode, ScatterMode  # type: ignore
 
 if __name__ == "__main__":
     desc = "Nitsche's method for two elastic bodies using custom assemblers"
@@ -105,10 +105,11 @@ if __name__ == "__main__":
         # Create Dirichlet bdy conditions
         dofs = _fem.locate_dofs_topological(V.sub(2), mesh.topology.dim - 1, facet_marker.find(z_Dirichlet))
         gz = _fem.Constant(mesh, default_scalar_type(0))
-        bcs = [_fem.dirichletbc(gz, dofs, V.sub(2))]
+        bcs = [_fem.dirichletbc(gz, dofs, V.sub(2))]  # type: list[_fem.DirichletBC]
+        bc_fns = [gz]  # type: list[Union[_fem.Constant, _fem.Function]]
         g = _fem.Constant(mesh, default_scalar_type((0, 0, 0)))      # zero dirichlet
-        t_val = (0.2, 0.5, 0.0)
-        f_val = (1.0, 0.5, 0.0)
+        t_val = [0.2, 0.5, 0.0]
+        f_val = [1.0, 0.5, 0.0]
         t = _fem.Constant(mesh, default_scalar_type(t_val))  # traction
         f = _fem.Constant(mesh, default_scalar_type(f_val))  # body force
 
@@ -131,8 +132,8 @@ if __name__ == "__main__":
         bcs = []
         bc_fns = []
         g = _fem.Constant(mesh, default_scalar_type((0, 0)))     # zero Dirichlet
-        t_val = (0.2, 0.5)
-        f_val = (1.0, 0.5)
+        t_val = [0.2, 0.5]
+        f_val = [1.0, 0.5]
         t = _fem.Constant(mesh, default_scalar_type(t_val))  # traction
         f = _fem.Constant(mesh, default_scalar_type(f_val))  # body force
 

@@ -159,7 +159,7 @@ contact_problem.generate_kernel_data(u, du, mu_dg, lmbda_dg, fric, gamma, theta)
 contact_problem.set_forms(F_compiled, J_compiled, bcs)
 
 # create vector and matrix
-A = contact_problem.create_matrix()
+A = contact_problem.create_matrix(J_compiled)
 b = create_vector(F_compiled)
 
 

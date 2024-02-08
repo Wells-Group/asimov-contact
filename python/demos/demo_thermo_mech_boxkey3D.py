@@ -20,7 +20,7 @@ from dolfinx_contact.parallel_mesh_ghosting import create_contact_mesh
 from dolfinx_contact.unbiased.contact_problem import ContactProblem, FrictionLaw
 from dolfinx_contact.cpp import ContactMode
 from mpi4py import MPI
-from petsc4py.PETSc import InsertMode, ScatterMode
+from petsc4py.PETSc import InsertMode, ScatterMode  # type: ignore
 
 desc = "Thermal expansion leading to contact"
 parser = argparse.ArgumentParser(description=desc,
@@ -172,7 +172,7 @@ J = ufl.derivative(F, du, w)
 # compiler options to improve performance
 cffi_options = ["-Ofast", "-march=native"]
 jit_options = {"cffi_extra_compile_args": cffi_options,
-                "cffi_libraries": ["m"]}
+               "cffi_libraries": ["m"]}
 # compiled forms for rhs and tangen system
 F_compiled = form(F, jit_options=jit_options)
 J_compiled = form(J, jit_options=jit_options)
@@ -188,23 +188,27 @@ T0.name = 'temperature'
 search_mode = [ContactMode.ClosestPoint for i in range(len(contact_pairs))]
 contact_problem = ContactProblem([facet_marker], surfaces, contact_pairs, mesh, 5, search_mode)
 contact_problem.generate_contact_data(FrictionLaw.Frictionless, V, {"u": u, "du": du, "mu": mu_dg,
-                                                        "lambda": lmbda_dg}, E * gamma, theta)
+                                                                    "lambda": lmbda_dg}, E * gamma, theta)
 # define functions for newton solver
+
+
 def compute_coefficients(x, coeffs):
     du.x.scatter_forward()
     contact_problem.update_contact_data(du)
+
 
 @timed("~Contact: Assemble residual")
 def compute_residual(x, b, coeffs):
     b.zeroEntries()
     b.ghostUpdate(addv=InsertMode.INSERT,
-                    mode=ScatterMode.FORWARD)
+                  mode=ScatterMode.FORWARD)
     with Timer("~~Contact: Contact contributions (in assemble vector)"):
         contact_problem.assemble_vector(b, V)
     with Timer("~~Contact: Standard contributions (in assemble vector)"):
         assemble_vector(b, F_compiled)
     b.ghostUpdate(addv=InsertMode.ADD,
-                    mode=ScatterMode.REVERSE)
+                  mode=ScatterMode.REVERSE)
+
 
 @timed("~Contact: Assemble matrix")
 def compute_jacobian_matrix(x, A, coeffs):
@@ -214,6 +218,7 @@ def compute_jacobian_matrix(x, A, coeffs):
     with Timer("~~Contact: Standard contributions (in assemble matrix)"):
         assemble_matrix(A, J_compiled)
     A.assemble()
+
 
 # create vector and matrix
 A = contact_problem.create_matrix(J_compiled)

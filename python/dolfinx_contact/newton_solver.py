@@ -92,6 +92,12 @@ class NewtonSolver():
         self._b.setOptionsPrefix(self.krylov_solver.getOptionsPrefix())
         self._b.setFromOptions()
 
+    def update_krylov_solver(self, options: dict[str, Any]):
+        self.krylov_solver = PETSc.KSP()  # type: ignore
+        self.krylov_solver.create(self.comm)
+        self.krylov_solver.setOptionsPrefix("Newton_solver_")
+        self.set_krylov_options(options)
+
     def solve(self, u: Union[fem.Function, PETSc.Vec],  # type: ignore
               write_solution: bool = False,
               offset_fun: Union[fem.Function, None] = None):
@@ -129,7 +135,7 @@ class NewtonSolver():
         """
         self._compute_jacobian = func
 
-    def set_petsc_matrix(self, A: PETSc.Mat):
+    def set_petsc_matrix(self, A: PETSc.Mat):  # type: ignore
         self._A = A
 
     def set_residual(self,

@@ -70,8 +70,8 @@ class ContactProblem(dolfinx_contact.cpp.Contact):
                 offset1 = offset0 + self._num_q_points[i] * gdim
                 self.coeffs[i][:, offset0:offset1] = self.pack_u_contact(i, du._cpp_object)[:, :]
 
-    def generate_contact_data(self, friction_law: FrictionLaw, function_space: fem.FunctionSpace,
-                              coefficients: dict[str, Union[fem.Function, fem.Constant, np.float64]],
+    def generate_contact_data(self, friction_law: FrictionLaw, function_space: fem.FunctionSpaceBase,
+                              coefficients: dict[str, Union[fem.Function, fem.Constant]],
                               gamma, theta):
 
         # generate kernels
@@ -120,7 +120,7 @@ class ContactProblem(dolfinx_contact.cpp.Contact):
         if self.coeffs is None:
             new_model = True
             self.coeffs = [np.zeros((len(self.entities[i]), numcoeffs))
-                        for i in range(self._num_pairs)]
+                           for i in range(self._num_pairs)]
 
         with common.Timer("~Contact: Pack coeffs (mu, lmbda, fric)"):
             for i in range(self._num_pairs):
@@ -169,7 +169,7 @@ class ContactProblem(dolfinx_contact.cpp.Contact):
                 self.coeffs[i][:, offset0:offset1] = self.pack_test_functions(
                     i, function_space._cpp_object)
                 if new_model:
-                    self.coeffs[i][:,-normals.shape[1]:] = normals[:,:]
+                    self.coeffs[i][:, -normals.shape[1]:] = normals[:, :]
 
         # pack grad u
         # This is to track grad_u if several load steps are used
@@ -199,7 +199,7 @@ class ContactProblem(dolfinx_contact.cpp.Contact):
         num_pairs = self._num_pairs
         for i in range(num_pairs):
             offsetn = 4 + self._num_q_points[i] * gdim * (2 + ndofs_cell * max_links)\
-                      + self._num_q_points[i] * gdim * (2 + gdim)
+                + self._num_q_points[i] * gdim * (2 + gdim)
             offset0 = 4 + self._num_q_points[i] * gdim
             offset1 = offset0 + self._num_q_points[i] * gdim
             self.coeffs[i][:, offsetn:] = self.coeffs[i][:, offset0:offset1]
