@@ -604,6 +604,10 @@ dolfinx_contact::Contact::pack_test_functions(
       = _submesh.mesh();
   assert(quadrature_mesh);
 
+  std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> sub_to_parent
+        = _submesh.facet_map();
+  std::span<const std::int32_t> parent_cells = _submesh.parent_cells();
+
   // Get (cell, local_facet_index) tuples on quadrature submesh
   const std::size_t num_facets = _local_facets[quadrature_mt];
   // Get (cell, local_facet_index) tuples on quadrature submesh
@@ -679,11 +683,15 @@ dolfinx_contact::Contact::pack_test_functions(
   std::vector<std::int32_t> cells(facets.size(), -1);
   for (std::size_t i = 0; i < cells.size(); ++i)
   {
-    if (facets[i] < 0)
-      continue;
-    auto f_cells = f_to_c->links(facets[i]);
-    assert(f_cells.size() == 1);
-    cells[i] = f_cells.front();
+    if (facets[i] >= 0)
+      {
+        // Extract (cell, facet) pair from submesh
+        auto facet_pair = sub_to_parent->links(facets[i]);
+        assert(facet_pair.size() == 2);
+        cells[i] = parent_cells[facet_pair[0]];
+      }
+    else
+        cells[i] = -1;
   }
 
   std::vector<std::int32_t> perm(num_q_points);
@@ -692,6 +700,7 @@ dolfinx_contact::Contact::pack_test_functions(
     std::span<const std::int32_t> f_cells(cells.data() + i * num_q_points,
                                           num_q_points);
     auto [unique_cells, offsets] = sort_cells(f_cells, perm);
+    std::int32_t link = 0;
     for (std::size_t j = 0; j < unique_cells.size(); ++j)
     {
       if (unique_cells[j] < 0)
@@ -704,9 +713,10 @@ dolfinx_contact::Contact::pack_test_functions(
         for (std::size_t q = 0; q < indices.size(); ++q)
           for (std::size_t l = 0; l < c.extent(4); ++l)
           {
-            c(i, j, k, indices[q], l)
+            c(i, link, k, indices[q], l)
                 = basis_values(0, i * num_q_points + indices[q], k, 0);
           }
+      link += 1;
     }
   }
 
@@ -1367,6 +1377,7 @@ dolfinx_contact::Contact::pack_grad_test_functions(
         std::span(perm.data(), perm.size()));
 
     // Loop over sorted array of unique cells
+    std::int32_t link = 0;
     for (std::size_t j = 0; j < unique_cells.size(); ++j)
     {
       if (unique_cells[j] < 0)
@@ -1404,10 +1415,11 @@ dolfinx_contact::Contact::pack_grad_test_functions(
         for (std::size_t q = 0; q < indices.size(); ++q)
           for (std::size_t l = 0; l < gdim; l++)
           {
-            c[i * cstride + j * ndofs * gdim * num_q_points
+            c[i * cstride + link * ndofs * gdim * num_q_points
               + k * gdim * num_q_points + indices[q] * gdim + l]
                 = basis_values(l + 1, q, k, 0);
           }
+      link +=1;
     }
   }
 

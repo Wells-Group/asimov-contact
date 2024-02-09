@@ -44,15 +44,13 @@ w = TrialFunction(V)
 # Material parameters
 lmbda = Coefficient(V0)
 mu = Coefficient(V0)
+alpha = Coefficient(V0)
 u = Coefficient(V)
 
 
 # Stress tensor definition
 def epsilon(z):
     return sym(grad(z))
-
-
-alpha = Constant(mesh)
 
 
 def sigma(z, T):

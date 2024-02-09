@@ -381,7 +381,7 @@ PYBIND11_MODULE(cpp, m)
       .def("generate_kernel_data",
            &dolfinx_contact::MeshTie::generate_kernel_data,
            py::arg("problem_type"), py::arg("functionspace"), py::arg("coefficients"),
-           py::arg("gamma"), py::arg("theta"), py::arg("alpha") = -1)
+           py::arg("gamma"), py::arg("theta"))
       .def("update_kernel_data",
            &dolfinx_contact::MeshTie::update_kernel_data)
       .def("generate_meshtie_data_matrix_only",
