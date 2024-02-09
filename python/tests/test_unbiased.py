@@ -27,9 +27,8 @@ from dolfinx.mesh import (CellType, locate_entities_boundary, locate_entities, c
                           compute_midpoints, meshtags)
 from mpi4py import MPI
 
-import dolfinx_contact
-from dolfinx_contact.cpp import (Contact, ContactMode, MeshTie, Problem, Kernel,
-                                 pack_coefficient_quadrature, pack_gradient_quadrature)
+from dolfinx_contact.unbiased.contact_problem import ContactProblem, FrictionLaw
+from dolfinx_contact.cpp import (ContactMode, MeshTie, Problem, Kernel)
 from dolfinx_contact.helpers import (R_minus, dR_minus, R_plus, dR_plus, epsilon,
                                      lame_parameters, sigma_func, tangential_proj,
                                      ball_projection, d_ball_projection,
@@ -354,117 +353,13 @@ def create_facet_markers(mesh, facets_cg):
     return meshtags(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
 
 
-def create_contact_data(V, u, quadrature_degree, lmbda, mu, facets_cg, search, tied=False):
-    ''' This function creates the contact class and the coefficients
-        passed to the assembly for the unbiased Nitsche method'''
-
-    # Retrieve mesh
-    mesh = V.mesh
-    # create meshtags
-    facet_marker = create_facet_markers(mesh, facets_cg)
-
-    data = np.array([0, 1], dtype=np.int32)
-    offsets = np.array([0, 2], dtype=np.int32)
-    surfaces = adjacencylist(data, offsets)
-    # create contact class
-    contact = Contact([facet_marker._cpp_object], surfaces, [(0, 1), (1, 0)],
-                      mesh._cpp_object, [search, search], quadrature_degree=quadrature_degree)
-    contact.create_distance_map(0)
-    contact.create_distance_map(1)
-
-    # Pack material parameters mu and lambda on each contact surface
-    V2 = _fem.FunctionSpace(mesh, ("DG", 0))
-    lmbda2 = _fem.Function(V2)
-    lmbda2.interpolate(lambda x: np.full((1, x.shape[1]), lmbda))
-    mu2 = _fem.Function(V2)
-    mu2.interpolate(lambda x: np.full((1, x.shape[1]), mu))
-    fric_coeff = _fem.Function(V2)
-    fric_coeff.interpolate(lambda x: np.full((1, x.shape[1]), 0.1))
-
-    # compute active entities
-    integral = _fem.IntegralType.exterior_facet
-    entities_0, num_local_0 = dolfinx_contact.compute_active_entities(
-        mesh._cpp_object, facets_cg[0], integral)
-    entities_0 = entities_0[:num_local_0]
-    entities_1, num_local_1 = dolfinx_contact.compute_active_entities(
-        mesh._cpp_object, facets_cg[1], integral)
-    entities_1 = entities_1[:num_local_1]
-
-    # pack coeffs mu, lambda
-    material_0 = np.hstack([pack_coefficient_quadrature(
-        mu2._cpp_object, 0, entities_0),
-        pack_coefficient_quadrature(
-        lmbda2._cpp_object, 0, entities_0)])
-    material_1 = np.hstack([pack_coefficient_quadrature(
-        mu2._cpp_object, 0, entities_1),
-        pack_coefficient_quadrature(
-        lmbda2._cpp_object, 0, entities_1)])
-    friction_0 = pack_coefficient_quadrature(
-        fric_coeff._cpp_object, 0, entities_0)
-    friction_1 = pack_coefficient_quadrature(
-        fric_coeff._cpp_object, 0, entities_1)
-
-    # Pack cell diameter on each surface
-    h = ufl.CellDiameter(mesh)
-    surface_cells = np.unique(np.hstack([entities_0[:, 0], entities_1[:, 0]]))
-    h_int = _fem.Function(V2)
-    expr = _fem.Expression(h, V2.element.interpolation_points())
-    h_int.interpolate(expr, surface_cells)
-    h_0 = pack_coefficient_quadrature(
-        h_int._cpp_object, 0, entities_0)
-    h_1 = pack_coefficient_quadrature(
-        h_int._cpp_object, 0, entities_1)
-
-    # Pack gap
-    gap_0 = contact.pack_gap(0)
-    gap_1 = contact.pack_gap(1)
-
-    # Pack test functions
-    test_fn_0 = contact.pack_test_functions(0, V._cpp_object)
-    test_fn_1 = contact.pack_test_functions(1, V._cpp_object)
-    # pack u
-    u_opp_0 = contact.pack_u_contact(0, u._cpp_object)
-    u_opp_1 = contact.pack_u_contact(1, u._cpp_object)
-    u_0 = pack_coefficient_quadrature(
-        u._cpp_object, quadrature_degree, entities_0)
-    u_1 = pack_coefficient_quadrature(
-        u._cpp_object, quadrature_degree, entities_1)
-    grad_u_0 = pack_gradient_quadrature(
-        u._cpp_object, quadrature_degree, entities_0)
-    grad_u_1 = pack_gradient_quadrature(
-        u._cpp_object, quadrature_degree, entities_1)
-    if tied:
-        grad_test_fn_0 = contact.pack_grad_test_functions(0, V._cpp_object)
-        grad_test_fn_1 = contact.pack_grad_test_functions(1, V._cpp_object)
-        grad_u_opp_0 = contact.pack_grad_u_contact(0, u._cpp_object)
-        grad_u_opp_1 = contact.pack_grad_u_contact(1, u._cpp_object)
-
-        # Concatenate all coeffs
-        coeff_0 = np.hstack([material_0, h_0, test_fn_0,
-                            grad_test_fn_0, u_0, grad_u_0, u_opp_0, grad_u_opp_0])
-        coeff_1 = np.hstack([material_1, h_1, test_fn_1,
-                            grad_test_fn_1, u_1, grad_u_1, u_opp_1, grad_u_opp_1])
-    else:
-        n_0 = contact.pack_ny(0)
-        n_1 = contact.pack_ny(1)
-
-        # Concatenate all coeffs
-        coeff_0 = np.hstack([material_0, friction_0, h_0, gap_0, n_0, test_fn_0,
-                            u_0, grad_u_0, u_opp_0, np.zeros(n_0.shape)])
-        coeff_1 = np.hstack([material_1, friction_1, h_1, gap_1, n_1, test_fn_1,
-                            u_1, grad_u_1, u_opp_1, np.zeros(n_1.shape)])
-
-    return contact, coeff_0, coeff_1
-
-
 @pytest.mark.parametrize("ct", ["triangle", "quadrilateral", "tetrahedron", "hexahedron"])
 @pytest.mark.parametrize("gap", [0.5, -0.5])
 @pytest.mark.parametrize("quadrature_degree", [1, 5])
 @pytest.mark.parametrize("theta", [1, 0, -1])
-@pytest.mark.parametrize("formulation", ["frictionless", "tresca", "coulomb"])
-@pytest.mark.parametrize("search", [ContactMode.ClosestPoint,
-                                    ContactMode.Raytracing])
-def test_contact_kernels(ct, gap, quadrature_degree, theta, formulation, search):
+@pytest.mark.parametrize("frictionlaw", [FrictionLaw.Frictionless, FrictionLaw.Coulomb, FrictionLaw.Tresca])
+@pytest.mark.parametrize("search", [ContactMode.Raytracing, ContactMode.ClosestPoint])
+def test_contact_kernels(ct, gap, quadrature_degree, theta, frictionlaw, search):
 
     # Compute lame parameters
     plane_strain = False
@@ -526,26 +421,20 @@ def test_contact_kernels(ct, gap, quadrature_degree, theta, formulation, search)
     gamma_scaled = gamma * E
 
     # DG formulation
-    if formulation == "frictionless":
-        # Contact terms formulated using ufl consistent with https://doi.org/10.1007/s00211-018-0950-x
-        F0 = DG_rhs_plus(u0, v0, h, n, gamma_scaled, theta, sigma, gap, dS)
-        J0 = DG_jac_plus(u0, v0, w0, h, n, gamma_scaled, theta, sigma, gap, dS)
-        kernel_type_rhs = kt.Rhs
-        kernel_type_jac = kt.Jac
-    elif formulation == "tresca":
-        F0 = DG_rhs_tresca(u0, v0, h, n, gamma_scaled,
-                           theta, sigma, 0.1, dS, gdim)
-        J0 = DG_jac_tresca(u0, v0, w0, h, n, gamma_scaled,
-                           theta, sigma, 0.1, dS, gdim)
-        kernel_type_rhs = kt.TrescaRhs
-        kernel_type_jac = kt.TrescaJac
-    else:
-        F0 = DG_rhs_coulomb(u0, v0, h, n, gamma_scaled,
-                            theta, sigma, gap, 0.1, dS, gdim)
-        J0 = DG_jac_coulomb(u0, v0, w0, h, n, gamma_scaled,
-                            theta, sigma, gap, 0.1, dS, gdim)
-        kernel_type_rhs = kt.CoulombRhs
-        kernel_type_jac = kt.CoulombJac
+    # Contact terms formulated using ufl consistent with https://doi.org/10.1007/s00211-018-0950-x
+    F0 = DG_rhs_plus(u0, v0, h, n, gamma_scaled, theta, sigma, gap, dS)
+    J0 = DG_jac_plus(u0, v0, w0, h, n, gamma_scaled, theta, sigma, gap, dS)
+    if frictionlaw == FrictionLaw.Tresca:
+        F0 += DG_rhs_tresca(u0, v0, h, n, gamma_scaled,
+                            theta, sigma, 0.1, dS, gdim)
+
+        J0 += DG_jac_tresca(u0, v0, w0, h, n, gamma_scaled,
+                            theta, sigma, 0.1, dS, gdim)
+    elif frictionlaw == FrictionLaw.Coulomb:
+        F0 += DG_rhs_coulomb(u0, v0, h, n, gamma_scaled,
+                             theta, sigma, gap, 0.1, dS, gdim)
+        J0 += DG_jac_coulomb(u0, v0, w0, h, n, gamma_scaled,
+                             theta, sigma, gap, 0.1, dS, gdim)
 
     # rhs vector
     F0 = _fem.form(F0)
@@ -567,6 +456,7 @@ def test_contact_kernels(ct, gap, quadrature_degree, theta, formulation, search)
     u1 = _fem.Function(V_custom)
     v1 = ufl.TestFunction(V_custom)
     w1 = ufl.TrialFunction(V_custom)
+    u = _fem.Function(V_custom)
 
     u1.interpolate(_u0, cells[0])
     u1.interpolate(_u2, cells[1])
@@ -577,35 +467,43 @@ def test_contact_kernels(ct, gap, quadrature_degree, theta, formulation, search)
     F_custom = ufl.inner(sigma(u1), epsilon(v1)) * dx
     J_custom = ufl.inner(sigma(w1), epsilon(v1)) * dx
 
-    contact, c_0, c_1 = create_contact_data(V_custom, u1, quadrature_degree, lmbda,
-                                            mu, facets_cg, search, formulation == "meshtie")
+    V0 = _fem.functionspace(mesh_custom, ("DG", 0))
+    mu0 = _fem.Function(V0)
+    lmbda0 = _fem.Function(V0)
+    fric = _fem.Function(V0)
+    mu0.interpolate(lambda x: np.full((1, x.shape[1]), mu))
+    lmbda0.interpolate(lambda x: np.full((1, x.shape[1]), lmbda))
+    fric.interpolate(lambda x: np.full((1, x.shape[1]), 0.1))
+    # create meshtags
+    facet_marker = create_facet_markers(mesh_custom, facets_cg)
+    data = np.array([0, 1], dtype=np.int32)
+    offsets = np.array([0, 2], dtype=np.int32)
+    surfaces = adjacencylist(data, offsets)
+    contact_problem = ContactProblem([facet_marker], surfaces, [(0, 1), (1, 0)],
+                                     mesh_custom, quadrature_degree, [search, search])
+    contact_problem.generate_contact_data(frictionlaw, V_custom, {"u": u, "du": u1, "mu": mu0,
+                                                                  "lambda": lmbda0, "fric": fric},
+                                          E * gamma, theta)
 
+    # compiler options to improve performance
+    cffi_options = ["-Ofast", "-march=native"]
+    jit_options = {"cffi_extra_compile_args": cffi_options,
+                   "cffi_libraries": ["m"]}
     # Generate residual data structures
-    F_custom = _fem.form(F0)
-    kernel_rhs = contact.generate_kernel(kernel_type_rhs, V_custom._cpp_object)
+    F_custom = _fem.form(F_custom, jit_options=jit_options)
     b1 = _fem.petsc.create_vector(F_custom)
 
     # Generate residual data structures
-    J_custom = _fem.form(J_custom)
-    kernel_jac = contact.generate_kernel(kernel_type_jac, V_custom._cpp_object)
-    A1 = contact.create_matrix(J_custom._cpp_object)
-
-    # Pack constants
-    consts = np.array([gamma_scaled, theta, 1.0])
+    J_custom = _fem.form(J_custom, jit_options=jit_options)
+    A1 = contact_problem.create_matrix(J_custom)
 
     # Assemble  residual
     b1.zeroEntries()
-    contact.assemble_vector(b1, 0, kernel_rhs, c_0,
-                            consts, V_custom._cpp_object)
-    contact.assemble_vector(b1, 1, kernel_rhs, c_1,
-                            consts, V_custom._cpp_object)
+    contact_problem.assemble_vector(b1, V_custom)
 
     # Assemble  jacobian
     A1.zeroEntries()
-    contact.assemble_matrix(A1, 0, kernel_jac, c_0,
-                            consts, V_custom._cpp_object)
-    contact.assemble_matrix(A1, 1, kernel_jac, c_1,
-                            consts, V_custom._cpp_object)
+    contact_problem.assemble_matrix(A1, V_custom)
     A1.assemble()
 
     # Retrieve data necessary for comparison
@@ -624,7 +522,7 @@ def test_contact_kernels(ct, gap, quadrature_degree, theta, formulation, search)
     assert np.allclose(A_sp[ind_dg, :][:, ind_dg], B_sp)
 
     # Sanity check different formulations
-    if formulation == "frictionless":
+    if frictionlaw == FrictionLaw.Frictionless:
         # Contact terms formulated using ufl consistent with nitsche_ufl.py
         F2 = DG_rhs_minus(u0, v0, h, n, gamma_scaled, theta, sigma, gap, dS)
 

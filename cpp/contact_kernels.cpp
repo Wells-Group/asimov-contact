@@ -931,7 +931,7 @@ dolfinx_contact::generate_contact_kernel(
       {
         sign_u += sig_n_u[j] * n_surf[j];
         jump_un += c[kd.offsets(4) + gdim * q + j] * n_surf[j];
-        ndotn = n_surf[j] * n_old[j];
+        ndotn += n_surf[j] * n_old[j];
       }
       std::size_t offset_u_opp = kd.offsets(6) + q * bs;
       for (std::size_t j = 0; j < bs; ++j)
@@ -1123,7 +1123,7 @@ dolfinx_contact::generate_contact_kernel(
       {
         sign_u += sig_n_u[j] * n_surf[j];
         jump_un += c[kd.offsets(4) + gdim * q + j] * n_surf[j];
-        ndotn = n_surf[j] * n_old[j];
+        ndotn += n_surf[j] * n_old[j];
       }
       std::size_t offset_u_opp = kd.offsets(6) + q * bs;
       for (std::size_t j = 0; j < bs; ++j)

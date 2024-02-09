@@ -322,11 +322,11 @@ if __name__ == "__main__":
         "mg_levels_ksp_type": "chebyshev",
         "mg_levels_pc_type": "jacobi",
         "pc_gamg_type": "agg",
-        "pc_gamg_coarse_eq_limit": 100,
+        "pc_gamg_coarse_eq_limit": 1000,
         "pc_gamg_agg_nsmooths": 1,
-        "pc_gamg_threshold": 1e-3,
+        "pc_gamg_threshold": 0.015,
         "pc_gamg_square_graph": 2,
-        "pc_gamg_reuse_interpolation": False,
+        "pc_gamg_reuse_interpolation": True,
         "ksp_norm_type": "unpreconditioned"
     }
     # Pack mesh data for Nitsche solver
