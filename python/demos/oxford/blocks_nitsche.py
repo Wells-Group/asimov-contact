@@ -8,17 +8,18 @@ from basix.ufl import element
 from dolfinx import default_scalar_type
 from dolfinx.fem import (Constant, dirichletbc, Function, form,
                          functionspace, locate_dofs_topological)
-from dolfinx.fem.petsc import create_vector
+from dolfinx.fem.petsc import set_bc, apply_lifting, assemble_matrix, assemble_vector, create_vector
 from dolfinx.graph import adjacencylist
 from dolfinx.io import XDMFFile
 from dolfinx.mesh import create_mesh
 from mpi4py import MPI
+from petsc4py.PETSc import InsertMode, ScatterMode  # type: ignore
 from ufl import (derivative, grad, Identity, inner, Mesh, Measure,
                  replace, sym, TrialFunction, TestFunction, tr)
 
 from dolfinx_contact.helpers import rigid_motions_nullspace_subdomains
 from dolfinx_contact.newton_solver import NewtonSolver
-from dolfinx_contact.unbiased.contact_problem import ContactProblem
+from dolfinx_contact.unbiased.contact_problem import ContactProblem, FrictionLaw
 from dolfinx_contact.cpp import ContactMode
 
 # read mesh from file
@@ -67,7 +68,7 @@ lmbda = E * nu / ((1 + nu) * (1 - 2 * nu))
 V0 = functionspace(mesh, ("DG", 0))
 mu_dg = Function(V0)
 lmbda_dg = Function(V0)
-fric = Function(V0)
+
 mu_dg.interpolate(lambda x: np.full((1, x.shape[1]), mu))
 lmbda_dg.interpolate(lambda x: np.full((1, x.shape[1]), lmbda))
 
@@ -154,10 +155,9 @@ petsc_options = {
 }
 
 # create contact solver
-contact_problem = ContactProblem([facet_marker], surfaces, contact_pairs, V, search_mode, 5)
-contact_problem.generate_kernel_data(u, du, mu_dg, lmbda_dg, fric, gamma, theta)
-contact_problem.set_forms(F_compiled, J_compiled, bcs)
-
+contact_problem = ContactProblem([facet_marker], surfaces, contact_pairs, mesh, 5, search_mode)
+contact_problem.generate_contact_data(FrictionLaw.Frictionless, V, {"u": u, "du": du, "mu": mu_dg,
+                                      "lambda": lmbda_dg}, gamma, theta)
 # create vector and matrix
 A = contact_problem.create_matrix(J_compiled)
 b = create_vector(F_compiled)
@@ -165,19 +165,26 @@ b = create_vector(F_compiled)
 
 # define functions for newton solver
 def compute_coefficients(x, coeffs):
-    size_local = V.dofmap.index_map.size_local
-    bs = V.dofmap.index_map_bs
-    du.x.array[:size_local * bs] = x.array_r[:size_local * bs]
     du.x.scatter_forward()
-    contact_problem.update_kernel_data(du)
+    contact_problem.update_contact_data(du)
 
 
 def compute_residual(x, b, coeffs):
-    contact_problem.compute_residual(x, b)
+    b.zeroEntries()
+    b.ghostUpdate(addv=InsertMode.INSERT,
+                  mode=ScatterMode.FORWARD)
+    contact_problem.assemble_vector(b, V)
+    assemble_vector(b, F_compiled)
+    apply_lifting(b, [J_compiled], bcs=[bcs], x0=[x], scale=-1.0)
+    b.ghostUpdate(addv=InsertMode.ADD, mode=ScatterMode.REVERSE)
+    set_bc(b, bcs, x, -1.0)
 
 
 def compute_jacobian_matrix(x, A, coeffs):
-    contact_problem.compute_jacobian_matrix(x, A)
+    A.zeroEntries()
+    contact_problem.assemble_matrix(A, V)
+    assemble_matrix(A, J_compiled, bcs=bcs)
+    A.assemble()
 
 
 # Set up snes solver for nonlinear solver
