@@ -49,7 +49,7 @@ if __name__ == "__main__":
     # Problem parameters
     R = 8
     gap = 0.01
-    p = 2.0
+    p = 0.625
     E = 200
     nu = 0.3
     Estar = E / (2 * (1 - nu**2))
@@ -91,12 +91,7 @@ if __name__ == "__main__":
                       "convergence_criterion": "residual",
                       "max_it": 200,
                       "error_on_nonconvergence": True}
-    # newton_options = {"snes_monitor": None, "snes_max_it": 50,
-    #                   "snes_max_fail": 20, "snes_type": "newtonls",
-    #                   "snes_linesearch_type": "l2",
-    #                   "snes_linesearch_order": 1,
-    #                   "snes_rtol": 1e-10, "snes_atol": 1e-10, "snes_view": None}
-    # petsc_options = {"ksp_type": "preonly", "pc_type": "lu"}
+
     petsc_options = {
         "matptap_via": "scalable",
         "ksp_type": "cg",
@@ -195,16 +190,13 @@ if __name__ == "__main__":
                 vals[i] = p0 * np.sqrt(1 - x[0][i]**2 / a**2)
         return vals
 
-    problem_parameters = {"gamma": np.float64(E * 100 * args.order**2),
-                          "theta": np.float64(1), "friction": np.float64(0.0)}
-
     top_cells = domain_marker.find(1)
 
     # u.interpolate(_u_initial, top_cells)
     search_mode = [ContactMode.ClosestPoint, ContactMode.ClosestPoint]
 
     # Solve contact problem using Nitsche's method
-    steps1 = 8
+    steps1 = 4
     contact_problem = ContactProblem([facet_marker], surfaces, contact_pairs, mesh, args.q_degree, search_mode)
     contact_problem.generate_contact_data(FrictionLaw.Frictionless, V, {"u": u, "du": du, "mu": mu_dg,
                                                                         "lambda": lmbda_dg}, E * 100 * args.order**2, 1)
@@ -214,7 +206,7 @@ if __name__ == "__main__":
 
     def _u_initial(x):
         values = np.zeros((mesh.geometry.dim, x.shape[1]))
-        values[-1] = -0.01 * h - gap
+        values[-1] = -0.01 - gap
         return values
 
     du.interpolate(_u_initial, top_cells)
@@ -240,24 +232,24 @@ if __name__ == "__main__":
         if len(bcs) > 0:
             set_bc(b, bcs, x, -1.0)
 
-    def compute_jacobian_matrix(x, A, coeffs):
-        A.zeroEntries()
-        contact_problem.assemble_matrix(A, V)
-        assemble_matrix(A, J_compiled, bcs=bcs)
-        A.assemble()
+    def compute_jacobian_matrix(x, a_mat, coeffs):
+        a_mat.zeroEntries()
+        contact_problem.assemble_matrix(a_mat, V)
+        assemble_matrix(a_mat, J_compiled, bcs=bcs)
+        a_mat.assemble()
 
     writer = ContactWriter(mesh, contact_problem, u, contact_pairs,
                            contact_problem.coeffs, args.order, simplex,
                            [(tdim - 1, 0), (tdim - 1, -R)],
-                           outname)
+                           f"{outname}_mod")
     # initialise vtx writer
-    vtx = VTXWriter(mesh.comm, f"{outname}.bp", [u], "bp4")
+    vtx = VTXWriter(mesh.comm, f"{outname}_mod.bp", [u], "bp4")
     vtx.write(0)
     # create vector and matrix
     A = contact_problem.create_matrix(J_compiled)
     b = create_vector(F_compiled)
 
-    # Set up snes solver for nonlinear solver
+    # Set up newton solver for nonlinear solver
     newton_solver = NewtonSolver(mesh.comm, A, b, contact_problem.coeffs)
     # Set matrix-vector computations
     newton_solver.set_residual(compute_residual)
@@ -281,7 +273,6 @@ if __name__ == "__main__":
         val = -p * (i + 1) / steps1  # -0.2 / steps1  #
         t.value[1] = val
         print(f"Fricitionless part: Step {i+1} of {steps1}----------------------------------------------")
-        # g_top.value[1] = val
         set_bc(du.vector, bcs)
         n, converged = newton_solver.solve(du, write_solution=True)
         newton_steps1.append(n)
@@ -290,11 +281,6 @@ if __name__ == "__main__":
         # Compute forces
         pr = abs(val)
         q = 0.0
-        # R_x = mesh.comm.allreduce(assemble_scalar(Rx_form), op=MPI.SUM)
-        # R_y = mesh.comm.allreduce(assemble_scalar(Ry_form), op=MPI.SUM)
-
-        # pr = abs(R_y / (2 * R))
-        # q = abs(R_x / (2 * R))
         load = pr * 2 * R
         a = 2 * np.sqrt(R * load / (2 * np.pi * Estar))
         p0 = 2 * load / (np.pi * a)
@@ -302,29 +288,18 @@ if __name__ == "__main__":
         # print(val, 0)
         fric = 0.3
         c = a * np.sqrt(1 - 0 / (fric * pr))
-        writer.write(i + 1, lambda x: _pressure(x, p0, a), lambda x: _tangent(x, pr, a, c))
+        writer.write(i + 1, lambda x, pi=p0, ai=a: _pressure(x, pi, ai),
+                     lambda x, pi=pr, ai=a, ci=c: _tangent(x, pi, ai, ci))
         vtx.write(i + 1)
 
         contact_problem.update_contact_detection(u)
         A = contact_problem.create_matrix(J_compiled)
         A.setNearNullSpace(null_space)
         newton_solver.set_petsc_matrix(A)
-        du.x.array[:] = 0.1 * h * du.x.array[:]
+        du.x.array[:] = 0.1 * du.x.array[:]
         contact_problem.update_contact_data(du)
 
     # # Step 2: Frictional contact
-    # geometry = mesh.geometry.x[:].copy()
-
-    # u2 = Function(V)
-    # # Create variational form without contact contributions
-    # F = ufl.inner(sigma(u2), epsilon(v)) * dx
-
-    # # body forces
-    # t2 = Constant(mesh, default_scalar_type((0.0, -p)))
-    # F -= ufl.inner(t2, v) * ds(top)
-
-    # problem_parameters = {"gamma": np.float64(E * 1000), "theta": np.float64(1), "friction": np.float64(0.3)}
-
     ksp_tol = 1e-12
     petsc_options = {
         "matptap_via": "scalable",
@@ -345,15 +320,11 @@ if __name__ == "__main__":
         "ksp_initial_guess_nonzero": False,
         "ksp_norm_type": "unpreconditioned"
     }
-    # petsc_options = {"ksp_type": "preonly", "pc_type": "lu"}
 
-    def identifier(x):
-        return np.logical_and(np.logical_and(x[0] < -0.5, x[0] > -1), np.logical_and(x[1] > -0.5, x[1] < 0.5))
-    constraint_nodes = locate_entities(mesh, 0, identifier)
-    dofs_constraint = locate_dofs_topological(V.sub(1), 0, constraint_nodes)
+    dofs_constraint = locate_dofs_topological(V.sub(1), 1, facet_marker.find(top))
     g_top = Constant(mesh, default_scalar_type((0.0, 0.0)))
     bcs = [dirichletbc(Constant(mesh, default_scalar_type((0.0, 0.0))), dofs_bottom, V),
-           dirichletbc(g, dofs_constraint, V.sub(1))]
+           dirichletbc(Constant(mesh, default_scalar_type(0.0)), dofs_constraint, V.sub(1))]
 
     fric = Function(V0)
     fric.interpolate(lambda x: np.full((1, x.shape[1]), 0.3))
@@ -364,10 +335,7 @@ if __name__ == "__main__":
     steps2 = 8
 
     newton_steps2 = []
-    # problem1.newton_options['rtol'] = 3e-2
-    # problem1.newton_options['atol'] = 3e-2
     for i in range(steps2):
-        # g_top.value[0] = 0.1 / steps2
         print(f"Fricitional part: Step {i+1} of {steps2}----------------------------------------------")
         # print(problem1.du.x.array[:])
         set_bc(du.vector, bcs)
@@ -379,18 +347,15 @@ if __name__ == "__main__":
         u.x.array[:] += du.x.array[:]
         # Compute forces
         pr = abs(p)
-        # R_x = mesh.comm.allreduce(assemble_scalar(Rx_form), op=MPI.SUM)
-        # R_y = mesh.comm.allreduce(assemble_scalar(Ry_form), op=MPI.SUM)
-        # pr = abs(R_y / (2 * R))
         q = abs(val)
-        # q = abs(R_x / (2 * R))
         load = 2 * R * abs(pr)
         a = 2 * np.sqrt(R * load / (2 * np.pi * Estar))
         p0 = 2 * load / (np.pi * a)
         print(pr, q)
         fric = 0.3
         c = a * np.sqrt(1 - q / (fric * abs(pr)))
-        writer.write(steps1 + i + 1, lambda x: _pressure(x, p0, a), lambda x: _tangent(x, abs(pr), a, c))
+        writer.write(steps1 + i + 1, lambda x, pi=p0, ai=a: _pressure(x, pi, ai),
+                     lambda x, pi=pr, ai=a, ci=c: _tangent(x, pi, ai, ci))
         vtx.write(steps1 + 1 + i)
         contact_problem.update_contact_detection(u)
         A = contact_problem.create_matrix(J_compiled)

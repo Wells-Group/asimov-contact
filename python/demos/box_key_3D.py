@@ -208,7 +208,7 @@ if __name__ == "__main__":
     search_mode = [ContactMode.ClosestPoint, ContactMode.ClosestPoint]
 
     # create contact solver
-    search_mode = [ContactMode.ClosestPoint for i in range(len(contact_pairs))]
+    search_mode = [ContactMode.ClosestPoint for _ in range(len(contact_pairs))]
     contact_problem = ContactProblem([facet_marker], surfaces, contact_pairs, mesh, args.q_degree, search_mode)
     contact_problem.generate_contact_data(FrictionLaw.Frictionless, V, {"u": u, "du": du, "mu": mu0,
                                                                         "lambda": lmbda0}, E * gamma, theta)
@@ -233,13 +233,13 @@ if __name__ == "__main__":
                       mode=ScatterMode.REVERSE)
 
     @timed("~Contact: Assemble matrix")
-    def compute_jacobian_matrix(x, A, coeffs):
-        A.zeroEntries()
+    def compute_jacobian_matrix(x, a_mat, coeffs):
+        a_mat.zeroEntries()
         with Timer("~~Contact: Contact contributions (in assemble matrix)"):
-            contact_problem.assemble_matrix(A, V)
+            contact_problem.assemble_matrix(a_mat, V)
         with Timer("~~Contact: Standard contributions (in assemble matrix)"):
-            assemble_matrix(A, J_compiled)
-        A.assemble()
+            assemble_matrix(a_mat, J_compiled)
+        a_mat.assemble()
 
         # create vector and matrix
     A = contact_problem.create_matrix(J_compiled)
@@ -271,7 +271,7 @@ if __name__ == "__main__":
     num_krylov_its = np.zeros(nload_steps, dtype=int)
     newton_time = np.zeros(nload_steps, dtype=np.float64)
     for i in range(nload_steps):
-        t.interpolate(lambda x: _torque(x, (i + 1) / nload_steps))
+        t.interpolate(lambda x, j=i: _torque(x, (j + 1) / nload_steps))
         f.value[:] = (i + 1) * np.array(f_val) / nload_steps
         timing_str = f"~Contact: {i+1} Newton Solver"
         with Timer(timing_str):

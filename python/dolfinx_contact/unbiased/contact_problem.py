@@ -70,36 +70,14 @@ class ContactProblem(dolfinx_contact.cpp.Contact):
                 offset1 = offset0 + self._num_q_points[i] * gdim
                 self.coeffs[i][:, offset0:offset1] = self.pack_u_contact(i, du._cpp_object)[:, :]
 
-    def generate_contact_data(self, friction_law: FrictionLaw, function_space: fem.FunctionSpaceBase,
-                              coefficients: dict[str, Union[fem.Function, fem.Constant]],
-                              gamma, theta):
+    def pack_normals(self, i):
+        if self.search_method[i] == dolfinx_contact.cpp.ContactMode.Raytracing:
+            normals = -self.pack_nx(i)
+        else:
+            normals = self.pack_ny(i)
+        return normals
 
-        # generate kernels
-        self._matrix_kernels = []
-        with common.Timer("~Contact: Generate Jacobian kernel"):
-            self._matrix_kernels.append(self.generate_kernel(
-                kt.Jac, function_space._cpp_object))
-            if friction_law == FrictionLaw.Coulomb:
-                self._matrix_kernels.append(self.generate_kernel(
-                    kt.CoulombJac, function_space._cpp_object))
-            elif friction_law == FrictionLaw.Tresca:
-                self._matrix_kernels.append(self.generate_kernel(
-                    kt.TrescaJac, function_space._cpp_object))
-
-        self._vector_kernels = []
-        with common.Timer("~Contact: Generate residual kernel"):
-            self._vector_kernels.append(self.generate_kernel(
-                kt.Rhs, function_space._cpp_object))
-            if friction_law == FrictionLaw.Coulomb:
-                self._vector_kernels.append(self.generate_kernel(
-                    kt.CoulombRhs, function_space._cpp_object))
-            elif friction_law == FrictionLaw.Tresca:
-                self._vector_kernels.append(self.generate_kernel(
-                    kt.TrescaRhs, function_space._cpp_object))
-        # pack constants
-        self._consts = np.array([gamma, theta], dtype=np.float64)
-
-        # Pack material parameters
+    def retrieve_material_parameters(self, coefficients: dict[str, Union[fem.Function, fem.Constant]]) -> list[str]:
         keys = []
         if coefficients.get("mu") is None:
             raise RuntimeError("Lame parameter mu missing.")
@@ -112,22 +90,41 @@ class ContactProblem(dolfinx_contact.cpp.Contact):
         if coefficients.get("fric") is not None:
             keys.append("fric")
 
+        return keys
+
+    def generate_contact_data(self, friction_law: FrictionLaw, function_space: fem.FunctionSpaceBase,
+                              coefficients: dict[str, Union[fem.Function, fem.Constant]],
+                              gamma, theta):
+
+        # generate kernels
+        self._matrix_kernels = []
+        self._vector_kernels = []
+        with common.Timer("~Contact: Generate integration kernels"):
+            self._matrix_kernels.append(self.generate_kernel(
+                kt.Jac, function_space._cpp_object))
+            self._vector_kernels.append(self.generate_kernel(
+                kt.Rhs, function_space._cpp_object))
+            if friction_law == FrictionLaw.Coulomb:
+                self._matrix_kernels.append(self.generate_kernel(
+                    kt.CoulombJac, function_space._cpp_object))
+                self._vector_kernels.append(self.generate_kernel(
+                    kt.CoulombRhs, function_space._cpp_object))
+            elif friction_law == FrictionLaw.Tresca:
+                self._matrix_kernels.append(self.generate_kernel(
+                    kt.TrescaJac, function_space._cpp_object))
+                self._vector_kernels.append(self.generate_kernel(
+                    kt.TrescaRhs, function_space._cpp_object))
+
+        # pack constants
+        self._consts = np.array([gamma, theta], dtype=np.float64)
+
+        # Pack material parameters
+        keys = self.retrieve_material_parameters(coefficients)
         # coefficient arrays
         numcoeffs = self.coefficients_size(
             False, function_space._cpp_object)
 
-        new_model = False
-        if self.coeffs is None:
-            new_model = True
-            self.coeffs = [np.zeros((len(self.entities[i]), numcoeffs))
-                           for i in range(self._num_pairs)]
-
-        with common.Timer("~Contact: Pack coeffs (mu, lmbda, fric)"):
-            for i in range(self._num_pairs):
-                for j, key in enumerate(keys):
-                    self.coeffs[i][:, j] = dolfinx_contact.cpp.pack_coefficient_quadrature(
-                        coefficients[key]._cpp_object, 0, self.entities[i])[:, 0]
-
+        # Compute cell diameters
         mesh = function_space.mesh
         V2 = fem.FunctionSpace(mesh, ("DG", 0))
         tdim = mesh.topology.dim
@@ -138,14 +135,21 @@ class ContactProblem(dolfinx_contact.cpp.Contact):
         h_vals = cpp.mesh.h(mesh._cpp_object, mesh.topology.dim,
                             np.arange(0, ncells, dtype=np.int32))
         h.x.array[:ncells] = h_vals[:]
-        # Pack celldiameter on each surface
-        with common.Timer("~Contact: Compute and pack celldiameter"):
+
+        new_model = False
+        if self.coeffs is None:
+            new_model = True
+            self.coeffs = [np.zeros((len(self.entities[i]), numcoeffs))
+                           for i in range(self._num_pairs)]
+
+        with common.Timer("~Contact: Pack coeffs (mu, lmbda, fric, h)"):
             for i in range(self._num_pairs):
+                self.create_distance_map(i)
+                for j, key in enumerate(keys):
+                    self.coeffs[i][:, j] = dolfinx_contact.cpp.pack_coefficient_quadrature(
+                        coefficients[key]._cpp_object, 0, self.entities[i])[:, 0]
                 self.coeffs[i][:, 3] = dolfinx_contact.cpp.pack_coefficient_quadrature(
                     h._cpp_object, 0, self.entities[i])[:, 0]
-
-        for j in range(self._num_pairs):
-            self.create_distance_map(j)
 
         # Pack gap, normals and test functions on each surface
         self._num_q_points = []
@@ -153,10 +157,7 @@ class ContactProblem(dolfinx_contact.cpp.Contact):
         ndofs_cell = len(function_space.dofmap.cell_dofs(0))
         with common.Timer("~Contact: Pack gap, normals, testfunction"):
             for i in range(self._num_pairs):
-                if self.search_method[i] == dolfinx_contact.cpp.ContactMode.Raytracing:
-                    normals = -self.pack_nx(i)
-                else:
-                    normals = self.pack_ny(i)
+                normals = self.pack_normals(i)
                 self._num_q_points.append(normals.shape[1] // gdim)
                 offset0 = 4
                 offset1 = offset0 + self._num_q_points[i] * gdim
@@ -212,10 +213,7 @@ class ContactProblem(dolfinx_contact.cpp.Contact):
                 self.coeffs[i][:, offset0:offset1] = self.pack_gap(i)
                 offset0 = offset1
                 offset1 = offset0 + self._num_q_points[i] * gdim
-                if self.search_method[i] == dolfinx_contact.cpp.ContactMode.Raytracing:
-                    self.coeffs[i][:, offset0:offset1] = -self.pack_nx(i)[:, :]
-                else:
-                    self.coeffs[i][:, offset0:offset1] = self.pack_ny(i)[:, :]
+                self.coeffs[i][:, offset0:offset1] = self.pack_normals(i)[:, :]
                 offset0 = offset1
                 offset1 = offset0 + self._num_q_points[i] * gdim * max_links * ndofs_cell
                 self.coeffs[i][:, offset0:offset1] = self.pack_test_functions(
@@ -238,8 +236,8 @@ class ContactProblem(dolfinx_contact.cpp.Contact):
             h.append(np.sum(self.coeffs[i][:, 3]) / self.coeffs[i].shape[0])
         return h
 
-    def create_matrix(self, J):
-        return super().create_matrix(J._cpp_object)
+    def create_matrix(self, j_form: fem.Form):
+        return super().create_matrix(j_form._cpp_object)
 
     # vector assembly
 
@@ -252,11 +250,11 @@ class ContactProblem(dolfinx_contact.cpp.Contact):
     # matrix assembly
 
     @common.timed("~Contact: Assemble matrix")
-    def assemble_matrix(self, A, function_space):
+    def assemble_matrix(self, a_mat, function_space):
         for i in range(self._num_pairs):
             for kernel in self._matrix_kernels:
                 super().assemble_matrix(
-                    A, i, kernel, self.coeffs[i], self._consts, function_space._cpp_object)
+                    a_mat, i, kernel, self.coeffs[i], self._consts, function_space._cpp_object)
 
     def crop_invalid_points(self, tol):
         gdim = super().mesh().geometry.dim

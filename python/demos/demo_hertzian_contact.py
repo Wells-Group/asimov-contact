@@ -240,7 +240,7 @@ if __name__ == "__main__":
                       "max_it": 200,
                       "error_on_nonconvergence": True}
 
-    # petsc_options = {"ksp_type": "preonly", "pc_type": "lu"}
+    # for debugging use petsc_options = {"ksp_type": "preonly", "pc_type": "lu"}
     petsc_options = {
         "matptap_via": "scalable",
         "ksp_type": "gmres",
@@ -353,13 +353,13 @@ if __name__ == "__main__":
             set_bc(b, bcs, x, -1.0)
 
     @timed("~Contact: Assemble matrix")
-    def compute_jacobian_matrix(x, A, coeffs):
-        A.zeroEntries()
+    def compute_jacobian_matrix(x, a_mat, coeffs):
+        a_mat.zeroEntries()
         with Timer("~~Contact: Contact contributions (in assemble matrix)"):
-            contact_problem.assemble_matrix(A, V)
+            contact_problem.assemble_matrix(a_mat, V)
         with Timer("~~Contact: Standard contributions (in assemble matrix)"):
-            assemble_matrix(A, J_compiled, bcs=bcs)
-        A.assemble()
+            assemble_matrix(a_mat, J_compiled, bcs=bcs)
+        a_mat.assemble()
 
     # Set up snes solver for nonlinear solver
     newton_solver = NewtonSolver(mesh.comm, A, b, contact_problem.coeffs)

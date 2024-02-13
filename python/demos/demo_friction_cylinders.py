@@ -235,11 +235,11 @@ if __name__ == "__main__":
         if len(bcs) > 0:
             set_bc(b, bcs, x, -1.0)
 
-    def compute_jacobian_matrix(x, A, coeffs):
-        A.zeroEntries()
-        contact_problem.assemble_matrix(A, V)
-        assemble_matrix(A, J_compiled, bcs=bcs)
-        A.assemble()
+    def compute_jacobian_matrix(x, a_mat, coeffs):
+        a_mat.zeroEntries()
+        contact_problem.assemble_matrix(a_mat, V)
+        assemble_matrix(a_mat, J_compiled, bcs=bcs)
+        a_mat.assemble()
 
     writer = ContactWriter(mesh, contact_problem, u, contact_pairs,
                            contact_problem.coeffs, args.order, simplex,
@@ -280,12 +280,9 @@ if __name__ == "__main__":
     newton_steps1 = []
 
     for i in range(steps1):
-
-        # val = -p * (i + 1) / steps1  # -0.2 / steps1  #
         g_top.value[1] = -0.2 / steps1
         t.value[1] = 0  # val
         print(f"Fricitionless part: Step {i+1} of {steps1}----------------------------------------------")
-        # g_top.value[1] = val
         set_bc(du.vector, bcs)
         n, converged = newton_solver.solve(du, write_solution=True)
         newton_steps1.append(n)
@@ -306,7 +303,8 @@ if __name__ == "__main__":
         # print(val, 0)
         fric = 0.3
         c = a * np.sqrt(1 - 0 / (fric * pr))
-        writer.write(i + 1, lambda x: _pressure(x, p0, a), lambda x: _tangent(x, pr, a, c))
+        writer.write(i + 1, lambda x, pi=p0, ai=a: _pressure(x, pi, ai),
+                     lambda x, pi=pr, ai=a, ci=c: _tangent(x, pi, ai, ci))
         sigma_vm_expr = Expression(sigma_vm, W.element.interpolation_points())
         sigma_vm_h.interpolate(sigma_vm_expr)
         u_dg.interpolate(u)
@@ -320,17 +318,6 @@ if __name__ == "__main__":
         contact_problem.update_contact_data(du)
 
     # # Step 2: Frictional contact
-    # geometry = mesh.geometry.x[:].copy()
-
-    # u2 = Function(V)
-    # # Create variational form without contact contributions
-    # F = ufl.inner(sigma(u2), epsilon(v)) * dx
-
-    # # body forces
-    # t2 = Constant(mesh, default_scalar_type((0.0, -p)))
-    # F -= ufl.inner(t2, v) * ds(top)
-
-    # problem_parameters = {"gamma": np.float64(E * 1000), "theta": np.float64(1), "friction": np.float64(0.3)}
 
     ksp_tol = 1e-12
     petsc_options = {
@@ -352,21 +339,7 @@ if __name__ == "__main__":
         "ksp_initial_guess_nonzero": False,
         "ksp_norm_type": "unpreconditioned"
     }
-    # petsc_options = {"ksp_type": "preonly", "pc_type": "lu"}
 
-    # newton_options = {"relaxation_parameter": 1.0,
-    #                   "atol": newton_tol,
-    #                   "rtol": newton_tol,
-    #                   "convergence_criterion": "residual",
-    #                   "max_it": 200,
-    #                   "error_on_nonconvergence": True}
-    # symmetry_nodes = locate_entities(mesh, 0, lambda x: np.logical_and(np.isclose(x[0], 0), np.isclose(x[1], -R)))
-    # dofs_symmetry = locate_dofs_topological(V.sub(0), 0, symmetry_nodes)
-    # dofs_bottom = locate_dofs_topological(V, 1, facet_marker.find(bottom))
-    # bcs2 = [dirichletbc(Constant(mesh, default_scalar_type((0, 0))), dofs_bottom, V)]
-    # # Solve contact problem using Nitsche's method
-    # # update_geometry(u._cpp_object, mesh._cpp_object)
-    # # u2.x.array[:] = u.x.array[:]
     def identifier(x):
         return np.logical_and(np.logical_and(x[0] < -0.5, x[0] > -1), np.logical_and(x[1] > -0.5, x[1] < 0.5))
     constraint_nodes = locate_entities(mesh, 0, identifier)
@@ -384,20 +357,11 @@ if __name__ == "__main__":
     newton_solver.update_krylov_solver(petsc_options)
     steps2 = 6 * 16
 
-    # du.interpolate(_du_initial, top_cells)
-    # initialise vtx write
-    # vtx = VTXWriter(mesh.comm, "results/cylinders_coulomb.bp", [u])
-    # vtx.write(0)
     newton_steps2 = []
-    # contact_problem.newton_options['rtol'] = 3e-2
-    # contact_problem.newton_options['atol'] = 3e-2
     for i in range(steps2):
-        # g_top.value[0] = 0.1 / steps2
         print(f"Fricitional part: Step {i+1} of {steps2}----------------------------------------------")
         # print(du.x.array[:])
         set_bc(du.vector, bcs)
-
-        # t.value[0] = 0.03 * (i + 1) / steps2
         g_top.value[0] = 6 * 0.05 / steps2
         n, converged = newton_solver.solve(du, write_solution=True)
         newton_steps2.append(n)
@@ -416,7 +380,8 @@ if __name__ == "__main__":
         print(pr, q)
         fric = 0.3
         c = a * np.sqrt(1 - q / (fric * abs(pr)))
-        writer.write(steps1 + i + 1, lambda x: _pressure(x, p0, a), lambda x: _tangent(x, abs(pr), a, c))
+        writer.write(steps1 + i + 1, lambda x, pi=p0, ai=a: _pressure(x, pi, ai),
+                     lambda x, pi=abs(pr), ai=a, ci=c: _tangent(x, pi, ai, ci))
         sigma_vm_expr = Expression(sigma_vm, W.element.interpolation_points())
         sigma_vm_h.interpolate(sigma_vm_expr)
         u_dg.interpolate(u)
