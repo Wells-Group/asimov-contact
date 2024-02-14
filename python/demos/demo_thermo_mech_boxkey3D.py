@@ -185,7 +185,7 @@ u.name = 'displacement'
 T0.name = 'temperature'
 
 
-search_mode = [ContactMode.ClosestPoint for i in range(len(contact_pairs))]
+search_mode = [ContactMode.ClosestPoint for _ in range(len(contact_pairs))]
 contact_problem = ContactProblem([facet_marker], surfaces, contact_pairs, mesh, 5, search_mode)
 contact_problem.generate_contact_data(FrictionLaw.Frictionless, V, {"u": u, "du": du, "mu": mu_dg,
                                                                     "lambda": lmbda_dg}, E * gamma, theta)
@@ -211,22 +211,22 @@ def compute_residual(x, b, coeffs):
 
 
 @timed("~Contact: Assemble matrix")
-def compute_jacobian_matrix(x, A, coeffs):
-    A.zeroEntries()
+def compute_jacobian_matrix(x, a_mat, coeffs):
+    a_mat.zeroEntries()
     with Timer("~~Contact: Contact contributions (in assemble matrix)"):
-        contact_problem.assemble_matrix(A, V)
+        contact_problem.assemble_matrix(a_mat, V)
     with Timer("~~Contact: Standard contributions (in assemble matrix)"):
-        assemble_matrix(A, J_compiled)
-    A.assemble()
+        assemble_matrix(a_mat, J_compiled)
+    a_mat.assemble()
 
 
 # create vector and matrix
-A = contact_problem.create_matrix(J_compiled)
+a_mat = contact_problem.create_matrix(J_compiled)
 b = create_vector(F_compiled)
 
 
 # Set up snes solver for nonlinear solver
-newton_solver = NewtonSolver(mesh.comm, A, b, contact_problem.coeffs)
+newton_solver = NewtonSolver(mesh.comm, a_mat, b, contact_problem.coeffs)
 # Set matrix-vector computations
 newton_solver.set_residual(compute_residual)
 newton_solver.set_jacobian(compute_jacobian_matrix)
@@ -254,9 +254,9 @@ for i in range(steps):
         du.x.scatter_forward()
         u.x.array[:] += du.x.array[:]
         contact_problem.update_contact_detection(u)
-        A = contact_problem.create_matrix(J_compiled)
-        A.setNearNullSpace(null_space)
-        newton_solver.set_petsc_matrix(A)
+        a_mat = contact_problem.create_matrix(J_compiled)
+        a_mat.setNearNullSpace(null_space)
+        newton_solver.set_petsc_matrix(a_mat)
         # take a fraction of du as initial guess
         # this is to ensure non-singular matrices in the case of no Dirichlet boundary
         du.x.array[:] = 0.1 * du.x.array[:]

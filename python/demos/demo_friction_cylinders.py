@@ -89,11 +89,7 @@ if __name__ == "__main__":
                       "convergence_criterion": "residual",
                       "max_it": 200,
                       "error_on_nonconvergence": True}
-    # newton_options = {"snes_monitor": None, "snes_max_it": 50,
-    #                 "snes_max_fail": 20, "snes_type": "newtonls",
-    #                 "snes_linesearch_type": "basic",
-    #                 "snes_rtol": 1e-10, "snes_atol": 1e-10, "snes_view": None}
-    # # petsc_options = {"ksp_type": "preonly", "pc_type": "lu"}
+
     petsc_options = {
         "matptap_via": "scalable",
         "ksp_type": "cg",
@@ -360,7 +356,6 @@ if __name__ == "__main__":
     newton_steps2 = []
     for i in range(steps2):
         print(f"Fricitional part: Step {i+1} of {steps2}----------------------------------------------")
-        # print(du.x.array[:])
         set_bc(du.vector, bcs)
         g_top.value[0] = 6 * 0.05 / steps2
         n, converged = newton_solver.solve(du, write_solution=True)
@@ -368,11 +363,9 @@ if __name__ == "__main__":
         du.x.scatter_forward()
         u.x.array[:] += du.x.array[:]
         # Compute forces
-        # pr = p
         R_x = mesh.comm.allreduce(assemble_scalar(Rx_form), op=MPI.SUM)
         R_y = mesh.comm.allreduce(assemble_scalar(Ry_form), op=MPI.SUM)
         pr = abs(R_y / (2 * R))
-        # q = 0.03 * (i + 1) / steps2  #
         q = abs(R_x / (2 * R))
         load = 2 * R * abs(pr)
         a = 2 * np.sqrt(R * load / (2 * np.pi * Estar))

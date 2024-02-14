@@ -124,7 +124,7 @@ if __name__ == "__main__":
         else:
             fname = f"{mesh_dir}/twomeshes"
             create_circle_plane_mesh(filename=f"{fname}.msh", quads=(
-                not simplex), res=0.05, r=0.3, gap=0.1, H=0.1, L=1.0)
+                not simplex), res=0.05, r=0.3, gap=0.1, height=0.1, length=1.0)
             convert_mesh(fname, f"{fname}.xdmf", gdim=2)
 
             with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:

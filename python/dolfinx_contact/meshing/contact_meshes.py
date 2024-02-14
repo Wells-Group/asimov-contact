@@ -9,15 +9,15 @@ from mpi4py import MPI
 
 __all__ = ["create_circle_plane_mesh", "create_circle_circle_mesh", "create_box_mesh_2D",
            "create_box_mesh_3D", "create_sphere_plane_mesh", "create_sphere_sphere_mesh",
-           "create_cylinder_cylinder_mesh", "create_2D_rectangle_split", "create_quarter_disks_mesh",
+           "create_cylinder_cylinder_mesh", "create_2d_rectangle_split", "create_quarter_disks_mesh",
            "sliding_wedges"]
 
 
 def create_circle_plane_mesh(filename: str, quads: bool = False, res=0.1, order: int = 1,
-                             r: float = 0.25, H: float = 0.25, L: float = 1.0, gap: float = 0.01):
+                             r: float = 0.25, height: float = 0.25, length: float = 1.0, gap: float = 0.01):
     """
     Create a circular mesh, with center at (0.0,0.0,0) with radius r
-    and a box [-L/2, L/2]x[-H-gap-r,-gap-r]
+    and a box [-length/2, length/2]x[-height-gap-r,-gap-r]
     """
     center = [0, 0, 0]
     gmsh.initialize()
@@ -41,10 +41,10 @@ def create_circle_plane_mesh(filename: str, quads: bool = False, res=0.1, order:
 
         surface = gmsh.model.occ.addPlaneSurface([curve])
         # Create box
-        p0 = gmsh.model.occ.addPoint(-L / 2, -H - r - gap, 0)
-        p1 = gmsh.model.occ.addPoint(L / 2, -H - r - gap, 0)
-        p2 = gmsh.model.occ.addPoint(L / 2, -r - gap, 0)
-        p3 = gmsh.model.occ.addPoint(-L / 2, -r - gap, 0)
+        p0 = gmsh.model.occ.addPoint(-length / 2, -height - r - gap, 0)
+        p1 = gmsh.model.occ.addPoint(length / 2, -height - r - gap, 0)
+        p2 = gmsh.model.occ.addPoint(length / 2, -r - gap, 0)
+        p3 = gmsh.model.occ.addPoint(-length / 2, -r - gap, 0)
         ps = [p0, p1, p2, p3]
         lines = [gmsh.model.occ.addLine(ps[i - 1], ps[i]) for i in range(len(ps))]
         curve2 = gmsh.model.occ.addCurveLoop(lines)
@@ -82,10 +82,11 @@ def create_circle_plane_mesh(filename: str, quads: bool = False, res=0.1, order:
     gmsh.finalize()
 
 
-def create_halfdisk_plane_mesh(filename: str, res=0.1, order: int = 1, quads=False, r=0.25, H=0.25, L=1.0, gap=0.01):
+def create_halfdisk_plane_mesh(filename: str, res=0.1, order: int = 1, quads=False,
+                               r=0.25, height=0.25, length=1.0, gap=0.01):
     """
     Create a halfdisk, with center at (0.0,0.0,0), radius r and  y<=0.0
-    and a box [-L/2, L/2]x[-H-gap-r,-gap-r]
+    and a box [-length/2, length/2]x[-height-gap-r,-gap-r]
     """
     center = [0, 0, 0]
     gmsh.initialize()
@@ -102,10 +103,10 @@ def create_halfdisk_plane_mesh(filename: str, res=0.1, order: int = 1, quads=Fal
         gmsh.model.occ.synchronize()
         surface = gmsh.model.occ.addPlaneSurface([curve])
         # Create boxpy
-        p0 = gmsh.model.occ.addPoint(-L / 2, -r - H - gap, 0)
-        p1 = gmsh.model.occ.addPoint(L / 2, -r - H - gap, 0)
-        p2 = gmsh.model.occ.addPoint(L / 2, -r - gap, 0)
-        p3 = gmsh.model.occ.addPoint(-L / 2, -r - gap, 0)
+        p0 = gmsh.model.occ.addPoint(-length / 2, -r - height - gap, 0)
+        p1 = gmsh.model.occ.addPoint(length / 2, -r - height - gap, 0)
+        p2 = gmsh.model.occ.addPoint(length / 2, -r - gap, 0)
+        p3 = gmsh.model.occ.addPoint(-length / 2, -r - gap, 0)
         ps = [p0, p1, p2, p3]
         lines = [gmsh.model.occ.addLine(ps[i - 1], ps[i]) for i in range(len(ps))]
         curve2 = gmsh.model.occ.addCurveLoop(lines)
@@ -373,8 +374,8 @@ def create_box_mesh_2D(filename: str, quads: bool = False, res=0.1, order: int =
     """
     Create two boxes, one slightly skewed
     """
-    L = 0.5
-    H = 0.5
+    length = 0.5
+    height = 0.5
     disp = -0.6
     delta = 0.1
 
@@ -384,9 +385,9 @@ def create_box_mesh_2D(filename: str, quads: bool = False, res=0.1, order: int =
 
         # Create box
         p0 = gmsh.model.occ.addPoint(-delta, 0, 0)
-        p1 = gmsh.model.occ.addPoint(L - delta, delta, 0)
-        p2 = gmsh.model.occ.addPoint(L - delta, H + delta, 0)
-        p3 = gmsh.model.occ.addPoint(-delta, H, 0)
+        p1 = gmsh.model.occ.addPoint(length - delta, delta, 0)
+        p2 = gmsh.model.occ.addPoint(length - delta, height + delta, 0)
+        p3 = gmsh.model.occ.addPoint(-delta, height, 0)
         ps = [p0, p1, p2, p3]
         lines = [gmsh.model.occ.addLine(ps[i - 1], ps[i]) for i in range(len(ps))]
         curve = gmsh.model.occ.addCurveLoop(lines)
@@ -394,9 +395,9 @@ def create_box_mesh_2D(filename: str, quads: bool = False, res=0.1, order: int =
 
         # Create box
         p4 = gmsh.model.occ.addPoint(0, 0 + disp, 0)
-        p5 = gmsh.model.occ.addPoint(L, 0 + disp, 0)
-        p6 = gmsh.model.occ.addPoint(L, H + disp, 0)
-        p7 = gmsh.model.occ.addPoint(0, H + disp, 0)
+        p5 = gmsh.model.occ.addPoint(length, 0 + disp, 0)
+        p6 = gmsh.model.occ.addPoint(length, height + disp, 0)
+        p7 = gmsh.model.occ.addPoint(0, height + disp, 0)
         ps2 = [p4, p5, p6, p7]
         lines2 = [gmsh.model.occ.addLine(ps2[i - 1], ps2[i]) for i in range(len(ps2))]
         curve2 = gmsh.model.occ.addCurveLoop(lines2)
@@ -435,26 +436,26 @@ def create_box_mesh_2D(filename: str, quads: bool = False, res=0.1, order: int =
 
 
 def create_box_mesh_3D(filename: str, simplex: bool = True, order: int = 1,
-                       res: float = 0.1, gap: float = 0.1, W: float = 0.5, offset: float = 0.2):
+                       res: float = 0.1, gap: float = 0.1, width: float = 0.5, offset: float = 0.2):
     """
     Create two boxes lying directly over eachother with a gap in between"""
-    L = 0.5
-    H = 0.5
+    length = 0.5
+    height = 0.5
 
-    disp = -W - gap
+    disp = -width - gap
     gmsh.initialize()
     model = gmsh.model
     if MPI.COMM_WORLD.rank == 0:
         # Create box
         if simplex:
-            model.occ.add_box(0, 0 + offset, 0, L, H, W)
-            model.occ.add_box(0, 0, disp, L, H, W)
+            model.occ.add_box(0, 0 + offset, 0, length, height, width)
+            model.occ.add_box(0, 0, disp, length, height, width)
             model.occ.synchronize()
         else:
-            square1 = model.occ.add_rectangle(0, 0 + offset, 0, L, H)
-            square2 = model.occ.add_rectangle(0, 0, disp, L, H)
-            model.occ.extrude([(2, square1)], 0, 0, W, numElements=[20], recombine=True)
-            model.occ.extrude([(2, square2)], 0, 0, W, numElements=[15], recombine=True)
+            square1 = model.occ.add_rectangle(0, 0 + offset, 0, length, height)
+            square2 = model.occ.add_rectangle(0, 0, disp, length, height)
+            model.occ.extrude([(2, square1)], 0, 0, width, numElements=[20], recombine=True)
+            model.occ.extrude([(2, square2)], 0, 0, width, numElements=[15], recombine=True)
             model.occ.synchronize()
         volumes = model.getEntities(3)
 
@@ -462,11 +463,11 @@ def create_box_mesh_3D(filename: str, simplex: bool = True, order: int = 1,
         model.mesh.field.setNumber(1, "VIn", res / 5.)
         model.mesh.field.setNumber(1, "VOut", res)
         model.mesh.field.setNumber(1, "XMin", 0)
-        model.mesh.field.setNumber(1, "XMax", L)
+        model.mesh.field.setNumber(1, "XMax", length)
         model.mesh.field.setNumber(1, "YMin", 0)
-        model.mesh.field.setNumber(1, "YMax", H)
+        model.mesh.field.setNumber(1, "YMax", height)
         model.mesh.field.setNumber(1, "ZMin", 0)
-        model.mesh.field.setNumber(1, "ZMax", W)
+        model.mesh.field.setNumber(1, "ZMax", width)
 
         model.mesh.field.setAsBackgroundMesh(1)
 
@@ -491,15 +492,16 @@ def create_box_mesh_3D(filename: str, simplex: bool = True, order: int = 1,
     gmsh.finalize()
 
 
-def create_sphere_plane_mesh(filename: str, order: int = 1, res=0.05, r=0.25, H=0.25, L=1.0, W=1.0, gap=0.0):
+def create_sphere_plane_mesh(filename: str, order: int = 1, res=0.05, r=0.25, height=0.25,
+                             length=1.0, width=1.0, gap=0.0):
     """
     Create a 3D sphere with center (0,0,0) an radius r
-    with a box at [-L/2, L/2] x [ -W/2, W/2] x [-gap-H-r, -gap-r]
+    with a box at [-length/2, length/2] x [ -width/2, width/2] x [-gap-height-r, -gap-r]
     """
     center = [0.0, 0.0, 0.0]
     angle = 0
-    LcMin = res
-    LcMax = 2 * res
+    lc_min = res
+    lc_max = 2 * res
     gmsh.initialize()
     if MPI.COMM_WORLD.rank == 0:
         # Create sphere composed of of two volumes
@@ -509,7 +511,7 @@ def create_sphere_plane_mesh(filename: str, order: int = 1, res=0.05, r=0.25, H=
         out_vol_tags, _ = gmsh.model.occ.fragment([(3, sphere_bottom)], [(3, sphere_top)])
 
         # Add bottom box
-        box = gmsh.model.occ.add_box(-L / 2, -W / 2, -H - r - gap, L, W, H)
+        box = gmsh.model.occ.add_box(-length / 2, -width / 2, -height - r - gap, length, width, height)
 
         # Synchronize and create physical tags
         gmsh.model.occ.synchronize()
@@ -531,8 +533,8 @@ def create_sphere_plane_mesh(filename: str, order: int = 1, res=0.05, r=0.25, H=
 
         gmsh.model.mesh.field.add("Threshold", 2)
         gmsh.model.mesh.field.setNumber(2, "IField", 1)
-        gmsh.model.mesh.field.setNumber(2, "LcMin", LcMin)
-        gmsh.model.mesh.field.setNumber(2, "LcMax", LcMax)
+        gmsh.model.mesh.field.setNumber(2, "LcMin", lc_min)
+        gmsh.model.mesh.field.setNumber(2, "LcMax", lc_max)
         gmsh.model.mesh.field.setNumber(2, "DistMin", 0.5 * r)
         gmsh.model.mesh.field.setNumber(2, "DistMax", r)
         gmsh.model.mesh.field.setAsBackgroundMesh(2)
@@ -554,8 +556,8 @@ def create_sphere_sphere_mesh(filename: str, order: int = 1):
     center = [0.5, 0.5, 0.5]
     r = 0.3
     angle = np.pi / 8
-    LcMin = 0.05 * r
-    LcMax = 0.2 * r
+    lc_min = 0.05 * r
+    lc_max = 0.2 * r
     gmsh.initialize()
     if MPI.COMM_WORLD.rank == 0:
         # Create sphere 1 composed of of two volumes
@@ -592,8 +594,8 @@ def create_sphere_sphere_mesh(filename: str, order: int = 1):
 
         gmsh.model.mesh.field.add("Threshold", 2)
         gmsh.model.mesh.field.setNumber(2, "IField", 1)
-        gmsh.model.mesh.field.setNumber(2, "LcMin", LcMin)
-        gmsh.model.mesh.field.setNumber(2, "LcMax", LcMax)
+        gmsh.model.mesh.field.setNumber(2, "LcMin", lc_min)
+        gmsh.model.mesh.field.setNumber(2, "LcMax", lc_max)
         gmsh.model.mesh.field.setNumber(2, "DistMin", 0.5 * r)
         gmsh.model.mesh.field.setNumber(2, "DistMax", r)
         gmsh.model.mesh.field.setAsBackgroundMesh(2)
@@ -669,12 +671,12 @@ def create_cylinder_cylinder_mesh(filename: str, order: int = 1, res=0.25, simpl
     gmsh.finalize()
 
 
-def create_2D_rectangle_split(filename: str, quads: bool = False, res=0.1, order: int = 1, gap=0.2):
+def create_2d_rectangle_split(filename: str, quads: bool = False, res=0.1, order: int = 1, gap=0.2):
     """
     Create rectangle split into two domains
     """
-    L = 0.5
-    H = 0.5
+    length = 0.5
+    height = 0.5
 
     gmsh.initialize()
     if MPI.COMM_WORLD.rank == 0:
@@ -682,26 +684,26 @@ def create_2D_rectangle_split(filename: str, quads: bool = False, res=0.1, order
 
         # Create box
         p0 = gmsh.model.occ.addPoint(0, 0, 0)
-        p1 = gmsh.model.occ.addPoint(L, 0, 0)
-        p2 = gmsh.model.occ.addPoint(L, H, 0)
-        p3 = gmsh.model.occ.addPoint(0, H, 0)
+        p1 = gmsh.model.occ.addPoint(length, 0, 0)
+        p2 = gmsh.model.occ.addPoint(length, height, 0)
+        p3 = gmsh.model.occ.addPoint(0, height, 0)
         ps = [p0, p1, p2, p3]
         lines = [gmsh.model.occ.addLine(ps[i - 1], ps[i]) for i in range(len(ps))]
         curve = gmsh.model.occ.addCurveLoop(lines)
         surface = gmsh.model.occ.addPlaneSurface([curve])
 
         # Create box
-        p4 = gmsh.model.occ.addPoint(L + gap, 0, 0)
-        p5 = gmsh.model.occ.addPoint(2 * L + gap, 0, 0)
-        p6 = gmsh.model.occ.addPoint(2 * L + gap, H, 0)
-        p7 = gmsh.model.occ.addPoint(L + gap, H, 0)
+        p4 = gmsh.model.occ.addPoint(length + gap, 0, 0)
+        p5 = gmsh.model.occ.addPoint(2 * length + gap, 0, 0)
+        p6 = gmsh.model.occ.addPoint(2 * length + gap, height, 0)
+        p7 = gmsh.model.occ.addPoint(length + gap, height, 0)
         ps2 = [p4, p5, p6, p7]
         lines2 = [gmsh.model.occ.addLine(ps2[i - 1], ps2[i]) for i in range(len(ps2))]
         curve2 = gmsh.model.occ.addCurveLoop(lines2)
         surface2 = gmsh.model.occ.addPlaneSurface([curve2])
 
-        p8 = gmsh.model.occ.addPoint(2 * L + gap - res / 10, 0.5 * H, 0)
-        p9 = gmsh.model.occ.addPoint(2 * L + gap - res / 5, 0.5 * H, 0)
+        p8 = gmsh.model.occ.addPoint(2 * length + gap - res / 10, 0.5 * height, 0)
+        p9 = gmsh.model.occ.addPoint(2 * length + gap - res / 5, 0.5 * height, 0)
 
         gmsh.model.occ.synchronize()
         # Set mesh sizes on the points from the surface we are extruding
@@ -733,25 +735,24 @@ def create_2D_rectangle_split(filename: str, quads: bool = False, res=0.1, order
     gmsh.finalize()
 
 
-def create_halfsphere_box_mesh(filename: str, order: int = 1, res=0.05, r=0.25, H=0.25, L=1.0, W=1.0, gap=0.0):
+def create_halfsphere_box_mesh(filename: str, order: int = 1, res=0.05, r=0.25,
+                               height=0.25, length=1.0, width=1.0, gap=0.0):
     """
     Create a 3D half-sphere with center (0,0,0), radius r and z<=0.0
-    with a box at [-L/2, L/2] x [ -W/2, W/2] x [-gap-H-r, -gap-r]
+    with a box at [-length/2, length/2] x [ -width/2, width/2] x [-gap-height-r, -gap-r]
     """
     center = [0.0, 0.0, 0.0]
     angle = 0
-    LcMin = res
-    LcMax = 2 * res
+    lc_min = res
+    lc_max = 2 * res
     gmsh.initialize()
     if MPI.COMM_WORLD.rank == 0:
         # Create sphere composed of of two volumes
         sphere_bottom = gmsh.model.occ.addSphere(center[0], center[1], center[2], r, angle1=-np.pi / 2, angle2=-angle)
         p0 = gmsh.model.occ.addPoint(center[0], center[1], center[2] - r)
-        # sphere_top = gmsh.model.occ.addSphere(center[0], center[1], center[2], r, angle1=-angle, angle2=np.pi / 2)
-        # out_vol_tags, _ = gmsh.model.occ.fragment([(3, sphere_bottom)], [(3, sphere_top)])
 
         # Add bottom box
-        box = gmsh.model.occ.add_box(-L / 2, -W / 2, -H - r - gap, L, W, H)
+        box = gmsh.model.occ.add_box(-length / 2, -width / 2, -height - r - gap, length, width, height)
 
         # Synchronize and create physical tags
         gmsh.model.occ.synchronize()
@@ -772,8 +773,8 @@ def create_halfsphere_box_mesh(filename: str, order: int = 1, res=0.05, r=0.25, 
 
         gmsh.model.mesh.field.add("Threshold", 2)
         gmsh.model.mesh.field.setNumber(2, "IField", 1)
-        gmsh.model.mesh.field.setNumber(2, "LcMin", LcMin)
-        gmsh.model.mesh.field.setNumber(2, "LcMax", LcMax)
+        gmsh.model.mesh.field.setNumber(2, "LcMin", lc_min)
+        gmsh.model.mesh.field.setNumber(2, "LcMax", lc_max)
         gmsh.model.mesh.field.setNumber(2, "DistMin", 0.5 * r)
         gmsh.model.mesh.field.setNumber(2, "DistMax", r)
         gmsh.model.mesh.field.setAsBackgroundMesh(2)

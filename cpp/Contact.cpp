@@ -80,7 +80,7 @@ dolfinx_contact::Contact::Contact(
     std::shared_ptr<const dolfinx::graph::AdjacencyList<std::int32_t>> surfaces,
     const std::vector<std::array<int, 2>>& contact_pairs,
     std::shared_ptr<dolfinx::mesh::Mesh<double>> mesh,
-      std::vector<ContactMode> mode, const int q_deg)
+      const std::vector<ContactMode>& mode, const int q_deg)
     : _surfaces(surfaces->array()), _contact_pairs(contact_pairs), _mesh(mesh),
       _mode(mode)
 {

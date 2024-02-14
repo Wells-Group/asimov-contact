@@ -228,7 +228,7 @@ if __name__ == "__main__":
             outname = "results/problem2_2D_simplex" if simplex else "results/problem2_2D_quads"
             fname = f"{mesh_dir}/problem2_2D_simplex" if simplex else f"{mesh_dir}/problem2_2D_quads"
             create_circle_plane_mesh(filename=f"{fname}.msh", quads=not simplex,
-                                     res=args.res, order=args.order, r=0.3, gap=0.1, H=0.1, L=1.0)
+                                     res=args.res, order=args.order, r=0.3, gap=0.1, height=0.1, length=1.0)
             convert_mesh(fname, f"{fname}.xdmf", gdim=2)
 
             with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
@@ -400,9 +400,9 @@ if __name__ == "__main__":
     fric.interpolate(lambda x: np.full((1, x.shape[1]), args.fric))
 
     if args.raytracing:
-        search_mode = [ContactMode.Raytracing for i in range(len(contact))]
+        search_mode = [ContactMode.Raytracing for _ in range(len(contact))]
     else:
-        search_mode = [ContactMode.ClosestPoint for i in range(len(contact))]
+        search_mode = [ContactMode.ClosestPoint for _ in range(len(contact))]
 
     # create contact solver
     contact_problem = ContactProblem([facet_marker], surfaces, contact, mesh, args.q_degree, search_mode)
@@ -442,20 +442,20 @@ if __name__ == "__main__":
             set_bc(b, bcs, x, -1.0)
 
     @timed("~Contact: Assemble matrix")
-    def compute_jacobian_matrix(x, A, coeffs):
-        A.zeroEntries()
+    def compute_jacobian_matrix(x, a_mat, coeffs):
+        a_mat.zeroEntries()
         with Timer("~~Contact: Contact contributions (in assemble matrix)"):
-            contact_problem.assemble_matrix(A, V)
+            contact_problem.assemble_matrix(a_mat, V)
         with Timer("~~Contact: Standard contributions (in assemble matrix)"):
-            assemble_matrix(A, J_compiled, bcs=bcs)
-        A.assemble()
+            assemble_matrix(a_mat, J_compiled, bcs=bcs)
+        a_mat.assemble()
 
     # create vector and matrix
-    A = contact_problem.create_matrix(J_compiled)
+    a_mat = contact_problem.create_matrix(J_compiled)
     b = create_vector(F_compiled)
 
     # Set up snes solver for nonlinear solver
-    newton_solver = NewtonSolver(mesh.comm, A, b, contact_problem.coeffs)
+    newton_solver = NewtonSolver(mesh.comm, a_mat, b, contact_problem.coeffs)
     # Set matrix-vector computations
     newton_solver.set_residual(compute_residual)
     newton_solver.set_jacobian(compute_jacobian_matrix)
@@ -490,9 +490,9 @@ if __name__ == "__main__":
         du.x.scatter_forward()
         u.x.array[:] += du.x.array[:]
         contact_problem.update_contact_detection(u)
-        A = contact_problem.create_matrix(J_compiled)
-        A.setNearNullSpace(null_space)
-        newton_solver.set_petsc_matrix(A)
+        a_mat = contact_problem.create_matrix(J_compiled)
+        a_mat.setNearNullSpace(null_space)
+        newton_solver.set_petsc_matrix(a_mat)
         du.x.array[:] = 0.1 * du.x.array[:]
         contact_problem.update_contact_data(du)
         vtx.write(i + 1)

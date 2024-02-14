@@ -16,7 +16,7 @@ from mpi4py import MPI
 
 from dolfinx_contact.helpers import (epsilon, sigma_func, lame_parameters)
 from dolfinx_contact.meshing import (convert_mesh,
-                                     create_2D_rectangle_split)
+                                     create_2d_rectangle_split)
 from dolfinx_contact.cpp import ContactMode
 from dolfinx_contact.unbiased.nitsche_unbiased import nitsche_unbiased
 
@@ -46,7 +46,7 @@ if __name__ == "__main__":
     outname = "results/quasi_1D_simplex" if simplex else "results/quasi_1D_quads"
     fname = f"{mesh_dir}/quasi_1D_simplex" if simplex else f"{mesh_dir}/quasi_1D_quads"
     gap = 0.2
-    create_2D_rectangle_split(filename=f"{fname}.msh", res=args.res, order=args.order, quads=not simplex, gap=gap)
+    create_2d_rectangle_split(filename=f"{fname}.msh", res=args.res, order=args.order, quads=not simplex, gap=gap)
     convert_mesh(fname, f"{fname}.xdmf", gdim=2)
 
     with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:

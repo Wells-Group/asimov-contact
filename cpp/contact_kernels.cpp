@@ -93,9 +93,10 @@ dolfinx_contact::generate_contact_kernel(
     {
       detJ = kd.compute_first_facet_jacobian(facet_index, J, K, J_tot,
                                              detJ_scratch, coord);
-      physical_facet_normal(std::span(n_phys.data(), gdim), K,
-                            stdex::submdspan(kd.facet_normals(), facet_index,
-                                             MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent));
+      physical_facet_normal(
+          std::span(n_phys.data(), gdim), K,
+          stdex::submdspan(kd.facet_normals(), facet_index,
+                           MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent));
     }
 
     // Extract constants used inside quadrature loop
@@ -137,20 +138,12 @@ dolfinx_contact::generate_contact_kernel(
       // For ray tracing the gap is given by n * (Pi(x) -x)
       // where n = n_x
       // For closest point n = -n_y
-      // double dist = 0;
       for (std::size_t i = 0; i < gdim; i++)
       {
         n_surf[i] = -c[kd.offsets(2) + q * gdim + i];
         n_dot += n_phys[i] * n_surf[i];
         gap += c[kd.offsets(1) + q * gdim + i] * n_surf[i];
-        // dist += c[kd.offsets(1) + q * gdim + i]
-        //         * c[kd.offsets(1) + q * gdim + i];
       }
-      // dist -= std::pow(gap, 2);
-      // dist = std::sqrt(dist);
-
-      // if (dist > 0.3 * c[3])
-      //   continue;
 
       compute_normal_strain_basis(epsn, tr, K, dphi, n_surf,
                                   std::span(n_phys.data(), gdim), q_pos);
@@ -249,9 +242,10 @@ dolfinx_contact::generate_contact_kernel(
     {
       detJ = kd.compute_first_facet_jacobian(facet_index, J, K, J_tot,
                                              detJ_scratch, coord);
-      physical_facet_normal(std::span(n_phys.data(), gdim), K,
-                            stdex::submdspan(kd.facet_normals(), facet_index,
-                                             MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent));
+      physical_facet_normal(
+          std::span(n_phys.data(), gdim), K,
+          stdex::submdspan(kd.facet_normals(), facet_index,
+                           MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent));
     }
 
     // Extract scaled gamma (h/gamma) and its inverse
@@ -289,20 +283,12 @@ dolfinx_contact::generate_contact_kernel(
       // The gap is given by n * (Pi(x) -x)
       // For raytracing n = n_x
       // For closest point n = -n_y
-      // double dist = 0;
       for (std::size_t i = 0; i < gdim; i++)
       {
         n_surf[i] = -c[kd.offsets(2) + q * gdim + i];
         n_dot += n_phys[i] * n_surf[i];
         gap += c[kd.offsets(1) + q * gdim + i] * n_surf[i];
-        // dist += c[kd.offsets(1) + q * gdim + i]
-        //         * c[kd.offsets(1) + q * gdim + i];
       }
-      // dist -= std::pow(gap, 2);
-      // dist = std::sqrt(dist);
-
-      // if (dist > 0.3 * c[3])
-      //   continue;
 
       compute_normal_strain_basis(epsn, tr, K, dphi, n_surf,
                                   std::span(n_phys.data(), gdim), q_pos);
@@ -347,7 +333,7 @@ dolfinx_contact::generate_contact_kernel(
               double Pn_v = v_dot_nsurf - gamma * theta * sign_v;
               A[0][(b + i * bs) * ndofs_cell * bs + l + j * bs]
                   += 0.5 * gamma_inv * Pn_du * Pn_v
-                  - 0.5 * theta * gamma * sign_du * sign_v;
+                     - 0.5 * theta * gamma * sign_du * sign_v;
 
               // entries corresponding to u and v on the other surface
               for (std::size_t k = 0; k < num_links; k++)
@@ -422,9 +408,10 @@ dolfinx_contact::generate_contact_kernel(
     {
       detJ = kd.compute_first_facet_jacobian(facet_index, J, K, J_tot,
                                              detJ_scratch, coord);
-      physical_facet_normal(std::span(n_phys.data(), gdim), K,
-                            stdex::submdspan(kd.facet_normals(), facet_index,
-                                             MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent));
+      physical_facet_normal(
+          std::span(n_phys.data(), gdim), K,
+          stdex::submdspan(kd.facet_normals(), facet_index,
+                           MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent));
     }
 
     // Extract constants used inside quadrature loop
@@ -470,20 +457,12 @@ dolfinx_contact::generate_contact_kernel(
       // For ray tracing the gap is given by n * (Pi(x) -x)
       // where n = n_x
       // For closest point n = -n_y
-      // double dist = 0;
       for (std::size_t i = 0; i < gdim; i++)
       {
         n_surf[i] = -c[kd.offsets(2) + q * gdim + i];
         n_dot += n_phys[i] * n_surf[i];
         gap += c[kd.offsets(1) + q * gdim + i] * n_surf[i];
-        // dist += c[kd.offsets(1) + q * gdim + i]
-        //         * c[kd.offsets(1) + q * gdim + i];
       }
-      // dist -= std::pow(gap, 2);
-      // dist = std::sqrt(dist);
-
-      // if (dist > 0.3 * c[3])
-      //   continue;
 
       compute_normal_strain_basis(epsn, tr, K, dphi, n_surf,
                                   std::span(n_phys.data(), gdim), q_pos);
@@ -538,7 +517,9 @@ dolfinx_contact::generate_contact_kernel(
                   - theta * gamma * (sig_n(i, n, j) - sign_v * n_surf[j]);
             // Pt_u_proj[j] * Pt_vj
             b[0][n + i * bs] += 0.5 * gamma_inv * Pt_u_proj[j] * Pt_vj * w0
-            -0.5 * w0 * gamma * theta * (sig_n_u[j] - sign_u * n_surf[j]) * (sig_n(i, n, j) - sign_v * n_surf[j]);
+                                - 0.5 * w0 * gamma * theta
+                                      * (sig_n_u[j] - sign_u * n_surf[j])
+                                      * (sig_n(i, n, j) - sign_v * n_surf[j]);
           }
 
           // entries corresponding to v on the other surface
@@ -611,9 +592,10 @@ dolfinx_contact::generate_contact_kernel(
     {
       detJ = kd.compute_first_facet_jacobian(facet_index, J, K, J_tot,
                                              detJ_scratch, coord);
-      physical_facet_normal(std::span(n_phys.data(), gdim), K,
-                            stdex::submdspan(kd.facet_normals(), facet_index,
-                                             MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent));
+      physical_facet_normal(
+          std::span(n_phys.data(), gdim), K,
+          stdex::submdspan(kd.facet_normals(), facet_index,
+                           MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent));
     }
 
     // Extract scaled gamma (h/gamma) and its inverse
@@ -655,20 +637,12 @@ dolfinx_contact::generate_contact_kernel(
       // The gap is given by n * (Pi(x) -x)
       // For raytracing n = n_x
       // For closest point n = -n_y
-      // double dist = 0;
       for (std::size_t i = 0; i < gdim; i++)
       {
         n_surf[i] = -c[kd.offsets(2) + q * gdim + i];
         n_dot += n_phys[i] * n_surf[i];
         gap += c[kd.offsets(1) + q * gdim + i] * n_surf[i];
-        // dist += c[kd.offsets(1) + q * gdim + i]
-        //         * c[kd.offsets(1) + q * gdim + i];
       }
-      // dist -= std::pow(gap, 2);
-      // dist = std::sqrt(dist);
-
-      // if (dist > 0.3 * c[3])
-      //   continue;
 
       compute_normal_strain_basis(epsn, tr, K, dphi, n_surf,
                                   std::span(n_phys.data(), gdim), q_pos);
@@ -744,7 +718,9 @@ dolfinx_contact::generate_contact_kernel(
                 // Pt_w[n] * Pt_vn
                 A[0][(b + i * bs) * ndofs_cell * bs + l + j * bs]
                     += 0.5 * gamma_inv * Pt_w[n] * Pt_vn * w0
-                     - 0.5 * gamma * theta * w0 *(sig_n(i, b, n) - sign_v * n_surf[n]) * (sig_n(j, l, n) - sign_w * n_surf[n]);
+                       - 0.5 * gamma * theta * w0
+                             * (sig_n(i, b, n) - sign_v * n_surf[n])
+                             * (sig_n(j, l, n) - sign_w * n_surf[n]);
               }
 
               // entries corresponding to u and v on the other surface
@@ -847,9 +823,10 @@ dolfinx_contact::generate_contact_kernel(
     {
       detJ = kd.compute_first_facet_jacobian(facet_index, J, K, J_tot,
                                              detJ_scratch, coord);
-      physical_facet_normal(std::span(n_phys.data(), gdim), K,
-                            stdex::submdspan(kd.facet_normals(), facet_index,
-                                             MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent));
+      physical_facet_normal(
+          std::span(n_phys.data(), gdim), K,
+          stdex::submdspan(kd.facet_normals(), facet_index,
+                           MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent));
     }
 
     // Extract constants used inside quadrature loop
@@ -971,7 +948,9 @@ dolfinx_contact::generate_contact_kernel(
                   - theta * gamma * (sig_n(i, n, j) - sign_v * n_surf[j]);
             // Pt_u_proj[j] * Pt_vj
             b[0][n + i * bs] += 0.5 * gamma_inv * Pt_u_proj[j] * Pt_vj * w0
-            -0.5 * w0 * gamma * theta * (sig_n_u[j] - sign_u * n_surf[j]) * (sig_n(i, n, j) - sign_v * n_surf[j]);
+                                - 0.5 * w0 * gamma * theta
+                                      * (sig_n_u[j] - sign_u * n_surf[j])
+                                      * (sig_n(i, n, j) - sign_v * n_surf[j]);
           }
 
           // entries corresponding to v on the other surface
@@ -1044,9 +1023,10 @@ dolfinx_contact::generate_contact_kernel(
     {
       detJ = kd.compute_first_facet_jacobian(facet_index, J, K, J_tot,
                                              detJ_scratch, coord);
-      physical_facet_normal(std::span(n_phys.data(), gdim), K,
-                            stdex::submdspan(kd.facet_normals(), facet_index,
-                                             MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent));
+      physical_facet_normal(
+          std::span(n_phys.data(), gdim), K,
+          stdex::submdspan(kd.facet_normals(), facet_index,
+                           MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent));
     }
 
     // Extract scaled gamma (h/gamma) and its inverse
@@ -1196,8 +1176,9 @@ dolfinx_contact::generate_contact_kernel(
                 // d_alpha_ball * Pn_w * Pt_vn
                 A[0][(b + i * bs) * ndofs_cell * bs + l + j * bs]
                     += 0.5 * gamma_inv * d_alpha_ball[n] * Pn_w * Pt_vn * w0
-                                         - 0.5 * gamma * theta * w0 *(sig_n(i, b, n) - sign_v * n_surf[n]) * (sig_n(j, l, n) - sign_w * n_surf[n]);
-
+                       - 0.5 * gamma * theta * w0
+                             * (sig_n(i, b, n) - sign_v * n_surf[n])
+                             * (sig_n(j, l, n) - sign_w * n_surf[n]);
               }
 
               // entries corresponding to u and v on the other surface

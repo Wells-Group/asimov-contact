@@ -187,7 +187,7 @@ def nitsche_custom(mesh: dmesh.Mesh, mesh_data: Tuple[dmesh.MeshTags, int, int],
 
     # Create Jacobian kernels
     a_custom = _fem.form(J, jit_options=jit_options, form_compiler_options=form_compiler_options)
-    kernel_J = generate_rigid_surface_kernel(V._cpp_object, dolfinx_contact.Kernel.Jac, q_rule)
+    kernel_j = generate_rigid_surface_kernel(V._cpp_object, dolfinx_contact.Kernel.Jac, q_rule)
 
     def assemble_jacobian(x, a_mat, cf):
         size_local = V.dofmap.index_map.size_local
@@ -197,7 +197,7 @@ def nitsche_custom(mesh: dmesh.Mesh, mesh_data: Tuple[dmesh.MeshTags, int, int],
         grad_u_packed = pack_gradient_quadrature(u._cpp_object, quadrature_degree, integral_entities)
         c = np.hstack([coeffs, u_packed, grad_u_packed])
         a_mat.zeroEntries()
-        contact_assembler.assemble_matrix(a_mat, 0, kernel_J, c, consts, V._cpp_object)
+        contact_assembler.assemble_matrix(a_mat, 0, kernel_j, c, consts, V._cpp_object)
         _fem.petsc.assemble_matrix(a_mat, a_custom)
         a_mat.assemble()
 

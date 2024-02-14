@@ -110,7 +110,7 @@ if __name__ == "__main__":
             outname = "results/hertz1_3D_simplex"
             fname = f"{mesh_dir}/hertz1_3D_simplex"
             create_halfsphere_box_mesh(filename=f"{fname}.msh", res=args.res,
-                                       order=args.order, r=R, H=H, L=L, W=L, gap=gap)
+                                       order=args.order, r=R, height=H, length=L, width=L, gap=gap)
             neumann_bdy = 2
             contact_bdy_1 = 1
             contact_bdy_2 = 8
@@ -119,7 +119,7 @@ if __name__ == "__main__":
             outname = "results/hertz2_3D_simplex"
             fname = f"{mesh_dir}/hertz2_3D_simplex"
             create_halfsphere_box_mesh(filename=f"{fname}.msh", res=args.res,
-                                       order=args.order, r=R, H=H, L=L, W=L, gap=gap)
+                                       order=args.order, r=R, height=H, length=L, width=L, gap=gap)
             neumann_bdy = 2
             contact_bdy_1 = 1
             contact_bdy_2 = 8
@@ -183,7 +183,7 @@ if __name__ == "__main__":
             outname = "results/hertz2_2D_simplex_RR" if simplex else "results/hertz2_2D_quads_RR"
             fname = f"{mesh_dir}/hertz2_2D_simplex" if simplex else f"{mesh_dir}/hertz2_2D_quads"
             create_halfdisk_plane_mesh(filename=f"{fname}.msh", res=args.res,
-                                       order=args.order, quads=not simplex, r=R, H=H, L=L, gap=gap)
+                                       order=args.order, quads=not simplex, r=R, height=H, length=L, gap=gap)
             contact_bdy_1 = 7
             contact_bdy_2 = 6
             dirichlet_bdy = 4
@@ -399,7 +399,8 @@ if __name__ == "__main__":
         a = 2 * np.sqrt(R * load * (i + 1) / (steps * np.pi * Estar))
         p0 = 2 * load * (i + 1) / (steps * np.pi * a)
         if not threed:
-            writer.write(i + 1, lambda x: _pressure(x, p0, a), lambda x: np.zeros(x.shape[1]))
+            writer.write(i + 1, lambda x, pi=p0, ai=a: _pressure(x, pi, ai),
+                         lambda x: np.zeros(x.shape[1]))
         contact_problem.update_contact_detection(u)
         A = contact_problem.create_matrix(J_compiled)
         A.setNearNullSpace(null_space)

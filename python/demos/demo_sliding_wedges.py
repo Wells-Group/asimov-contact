@@ -140,7 +140,7 @@ if __name__ == "__main__":
                       "convergence_criterion": "residual",
                       "max_it": 50,
                       "error_on_nonconvergence": True}
-    # petsc_options = {"ksp_type": "preonly", "pc_type": "lu"}
+
     petsc_options = {
         "matptap_via": "scalable",
         "ksp_type": "gmres",
@@ -191,18 +191,18 @@ if __name__ == "__main__":
         if len(bcs) > 0:
             set_bc(b, bcs, x, -1.0)
 
-    def compute_jacobian_matrix(x, A, coeffs):
-        A.zeroEntries()
-        contact_problem.assemble_matrix(A, V)
-        assemble_matrix(A, J_compiled, bcs=bcs)
-        A.assemble()
+    def compute_jacobian_matrix(x, a_mat, coeffs):
+        a_mat.zeroEntries()
+        contact_problem.assemble_matrix(a_mat, V)
+        assemble_matrix(a_mat, J_compiled, bcs=bcs)
+        a_mat.assemble()
 
     # create vector and matrix
-    A = contact_problem.create_matrix(J_compiled)
+    a_mat = contact_problem.create_matrix(J_compiled)
     b = create_vector(F_compiled)
 
     # Set up snes solver for nonlinear solver
-    newton_solver = NewtonSolver(mesh.comm, A, b, contact_problem.coeffs)
+    newton_solver = NewtonSolver(mesh.comm, a_mat, b, contact_problem.coeffs)
     # Set matrix-vector computations
     newton_solver.set_residual(compute_residual)
     newton_solver.set_jacobian(compute_jacobian_matrix)

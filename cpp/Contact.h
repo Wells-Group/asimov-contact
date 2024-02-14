@@ -53,7 +53,7 @@ public:
           surfaces,
       const std::vector<std::array<int, 2>>& contact_pairs,
       std::shared_ptr<dolfinx::mesh::Mesh<double>> mesh,
-      std::vector<ContactMode> mode, const int q_deg = 3);
+      const std::vector<ContactMode>& mode, const int q_deg = 3);
 
   /// Return meshtag value for surface with index surface
   /// @param[in] surface - the index of the surface

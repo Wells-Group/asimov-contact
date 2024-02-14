@@ -119,7 +119,7 @@ offsets = np.array([0, 2], dtype=np.int32)
 surfaces = adjacencylist(data, offsets)
 # For unbiased computation the contact detection is performed in both directions
 contact_pairs = [(0, 1), (1, 0)]
-search_mode = [ContactMode.ClosestPoint for i in range(len(contact_pairs))]
+search_mode = [ContactMode.ClosestPoint for _ in range(len(contact_pairs))]
 
 
 # Solver options
@@ -159,7 +159,7 @@ contact_problem = ContactProblem([facet_marker], surfaces, contact_pairs, mesh, 
 contact_problem.generate_contact_data(FrictionLaw.Frictionless, V, {"u": u, "du": du, "mu": mu_dg,
                                       "lambda": lmbda_dg}, gamma, theta)
 # create vector and matrix
-A = contact_problem.create_matrix(J_compiled)
+a_mat = contact_problem.create_matrix(J_compiled)
 b = create_vector(F_compiled)
 
 
@@ -180,15 +180,15 @@ def compute_residual(x, b, coeffs):
     set_bc(b, bcs, x, -1.0)
 
 
-def compute_jacobian_matrix(x, A, coeffs):
-    A.zeroEntries()
-    contact_problem.assemble_matrix(A, V)
-    assemble_matrix(A, J_compiled, bcs=bcs)
-    A.assemble()
+def compute_jacobian_matrix(x, a_mat, coeffs):
+    a_mat.zeroEntries()
+    contact_problem.assemble_matrix(a_mat, V)
+    assemble_matrix(a_mat, J_compiled, bcs=bcs)
+    a_mat.assemble()
 
 
 # Set up snes solver for nonlinear solver
-newton_solver = NewtonSolver(mesh.comm, A, b, contact_problem.coeffs)
+newton_solver = NewtonSolver(mesh.comm, a_mat, b, contact_problem.coeffs)
 # Set matrix-vector computations
 newton_solver.set_residual(compute_residual)
 newton_solver.set_jacobian(compute_jacobian_matrix)

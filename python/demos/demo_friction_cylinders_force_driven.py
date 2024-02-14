@@ -56,6 +56,8 @@ if __name__ == "__main__":
     mu_func, lambda_func = lame_parameters(True)
     mu = mu_func(E, nu)
     lmbda = lambda_func(E, nu)
+    fric_val = 0.2
+    q_tan = 0.05851
 
     # Create mesh
     name = "force_driven_cylinders"
@@ -178,9 +180,10 @@ if __name__ == "__main__":
         vals = np.zeros(x.shape[1])
         for i in range(x.shape[1]):
             if abs(x[0][i]) <= c:
-                vals[i] = fric * 4 * R * p / (np.pi * a**2) * (np.sqrt(a**2 - x[0][i]**2) - np.sqrt(c**2 - x[0][i]**2))
-            elif abs(x[0][i] < a):
-                vals[i] = fric * 4 * R * p / (np.pi * a**2) * (np.sqrt(a**2 - x[0][i]**2))
+                vals[i] = fric_val * 4 * R * p / (np.pi * a**2) * (np.sqrt(a**2 - x[0]
+                                                                           [i]**2) - np.sqrt(c**2 - x[0][i]**2))
+            elif abs(x[0][i]) < a:
+                vals[i] = fric_val * 4 * R * p / (np.pi * a**2) * (np.sqrt(a**2 - x[0][i]**2))
         return vals
 
     def _pressure(x, p0, a):
@@ -241,9 +244,9 @@ if __name__ == "__main__":
     writer = ContactWriter(mesh, contact_problem, u, contact_pairs,
                            contact_problem.coeffs, args.order, simplex,
                            [(tdim - 1, 0), (tdim - 1, -R)],
-                           f"{outname}_mod")
+                           f"{outname}")
     # initialise vtx writer
-    vtx = VTXWriter(mesh.comm, f"{outname}_mod.bp", [u], "bp4")
+    vtx = VTXWriter(mesh.comm, f"{outname}.bp", [u], "bp4")
     vtx.write(0)
     # create vector and matrix
     A = contact_problem.create_matrix(J_compiled)
@@ -286,8 +289,7 @@ if __name__ == "__main__":
         p0 = 2 * load / (np.pi * a)
         print(pr, q)
         # print(val, 0)
-        fric = 0.3
-        c = a * np.sqrt(1 - 0 / (fric * pr))
+        c = a * np.sqrt(1 - 0 / (fric_val * pr))
         writer.write(i + 1, lambda x, pi=p0, ai=a: _pressure(x, pi, ai),
                      lambda x, pi=pr, ai=a, ci=c: _tangent(x, pi, ai, ci))
         vtx.write(i + 1)
@@ -327,7 +329,7 @@ if __name__ == "__main__":
            dirichletbc(Constant(mesh, default_scalar_type(0.0)), dofs_constraint, V.sub(1))]
 
     fric = Function(V0)
-    fric.interpolate(lambda x: np.full((1, x.shape[1]), 0.3))
+    fric.interpolate(lambda x: np.full((1, x.shape[1]), fric_val))
     contact_problem.generate_contact_data(FrictionLaw.Coulomb, V, {"u": u, "du": du, "mu": mu_dg,
                                                                    "lambda": lmbda_dg, "fric": fric},
                                           E * 10 * args.order**2, 1)
@@ -339,7 +341,7 @@ if __name__ == "__main__":
         print(f"Fricitional part: Step {i+1} of {steps2}----------------------------------------------")
         # print(problem1.du.x.array[:])
         set_bc(du.vector, bcs)
-        val = 0.03 * (i + 1) / steps2
+        val = q_tan * (i + 1) / steps2
         t.value[0] = val
         n, converged = newton_solver.solve(du, write_solution=True)
         newton_steps2.append(n)
@@ -352,8 +354,7 @@ if __name__ == "__main__":
         a = 2 * np.sqrt(R * load / (2 * np.pi * Estar))
         p0 = 2 * load / (np.pi * a)
         print(pr, q)
-        fric = 0.3
-        c = a * np.sqrt(1 - q / (fric * abs(pr)))
+        c = a * np.sqrt(1 - q / (fric_val * abs(pr)))
         writer.write(steps1 + i + 1, lambda x, pi=p0, ai=a: _pressure(x, pi, ai),
                      lambda x, pi=pr, ai=a, ci=c: _tangent(x, pi, ai, ci))
         vtx.write(steps1 + 1 + i)

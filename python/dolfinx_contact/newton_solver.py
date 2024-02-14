@@ -135,8 +135,8 @@ class NewtonSolver():
         """
         self._compute_jacobian = func
 
-    def set_petsc_matrix(self, A: PETSc.Mat):  # type: ignore
-        self._A = A
+    def set_petsc_matrix(self, a_mat: PETSc.Mat):  # type: ignore
+        self._A = a_mat
 
     def set_residual(self,
                      func: Callable[  # type: ignore
@@ -257,7 +257,6 @@ class NewtonSolver():
         self.krylov_iterations = 0
         self.residual = -1
         rel_min = 1e-2
-        success = 0
         res_old = numpy.inf
 
         try:
@@ -300,9 +299,6 @@ class NewtonSolver():
 
             x_copy.array_w[:] = x_vec.array_r[:]
             self.relaxation_parameter = 1.0
-            # if success > 2:
-            #     self.relaxation_parameter = min(2 * self.relaxation_parameter, 1)
-            #     success = 0
             try:
                 self._compute_jacobian(x_vec, self._A, self._coeffs)
             except AttributeError:
@@ -338,9 +334,7 @@ class NewtonSolver():
 
             res_new = self._b.norm(PETSc.NormType.NORM_2)  # type: ignore
 
-            success += 1
             while res_old < res_new:
-                success = 0
                 self.relaxation_parameter = 0.5 * self.relaxation_parameter
                 if self.relaxation_parameter < rel_min:
                     self.relaxation_parameter = 2 * self.relaxation_parameter
