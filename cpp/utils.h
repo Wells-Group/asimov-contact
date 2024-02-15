@@ -869,5 +869,5 @@ MatNullSpace
 build_nullspace_multibody(const dolfinx::fem::FunctionSpace<double>& V,
                           const dolfinx::mesh::MeshTags<std::int32_t>& mt,
                           std::span<const std::int32_t> tags);
-
+MatNullSpace build_near_nullspace(const fem::FunctionSpace<double>& V);
 } // namespace dolfinx_contact
