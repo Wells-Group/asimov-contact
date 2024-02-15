@@ -4,8 +4,11 @@
 
 from enum import Enum
 import numpy as np
-from typing import Union
+import numpy.typing as npt  # noqa: F401
+from typing import Any, Union, Tuple  # noqa: F401
+from dolfinx import default_scalar_type  # noqa: F401
 from dolfinx import common, cpp, fem
+from dolfinx import mesh as _mesh
 
 import dolfinx_contact
 import dolfinx_contact.cpp
@@ -24,8 +27,25 @@ class ContactProblem(dolfinx_contact.cpp.Contact):
                  "_num_pairs", "_cstrides", "entities", "_normals", "search_method",
                  "_grad_u", "_num_q_points"]
 
-    def __init__(self, markers, surfaces, contact_pairs, mesh, quadrature_degree, search_method, search_radius=-1.0):
+    def __init__(self, markers: list[_mesh.MeshTags], surfaces: cpp.AdjacencyList_int32,
+                 contact_pairs: list[Tuple[int, int]], mesh: _mesh.Mesh, quadrature_degree: int,
+                 search_method: list[dolfinx_contact.cpp.ContactMode], search_radius: np.float64 = np.float64(-1.0)):
+        """
+        This class initialises the contact class and provides convenience functions
+        for generating the integration kernels and integration data for frictional contact
+        problems
+        Args:
+            markers:           A list of meshtags containing the facet markers of the contacting surfaces
+            surfaces:          Adjacency list linking each meshtag in markers to the tags marking contacting surfaces
+            contact_pairs:     Pairs of tag indices in the data array of surfaces describing which surfaces are
+                               potential contact pairs
+            mesh:              The underlying mesh
+            quadrature_degree: The quadrature degree
+            search_method:     List containing for each contact pair whether Raytracing or CPP (Closest Point
+                               Projection) is used for contact search
+            search_radius:     Restricts the search radius for contact detection. Only used in raytracing
 
+        """
         # create contact class
         markers_cpp = [marker._cpp_object for marker in markers]
         with common.Timer("~Contact: Init"):
@@ -48,10 +68,16 @@ class ContactProblem(dolfinx_contact.cpp.Contact):
                 self.entities.append(self.active_entities(pair[0]))
 
         self.search_method = search_method
-        self.coeffs = None
+        self.coeffs = []  # type: list[npt.NDArray[default_scalar_type]]
 
     @common.timed("~Contact: Update coefficients")
-    def update_contact_data(self, du):
+    def update_contact_data(self, du: fem.Function):
+        """
+        This function updates the packed input data for the integration kernels
+        based on the current displacement increment
+        Args:
+            du : FE function storing the current displacement increment
+        """
         max_links = self.max_links()
         ndofs_cell = len(du.function_space.dofmap.cell_dofs(0))
         gdim = du.function_space.mesh.geometry.dim
@@ -60,17 +86,25 @@ class ContactProblem(dolfinx_contact.cpp.Contact):
             for i in range(self._num_pairs):
                 offset0 = 4 + self._num_q_points[i] * gdim * (2 + ndofs_cell * max_links)
                 offset1 = offset0 + self._num_q_points[i] * gdim
+                # Pack du on integration surface
                 self.coeffs[i][:, offset0:offset1] = dolfinx_contact.cpp.pack_coefficient_quadrature(
                     du._cpp_object, self.q_deg, self.entities[i])[:, :]
                 offset0 = offset1
                 offset1 = offset0 + self._num_q_points[i] * gdim * gdim
+                # Pack grad(u + du) on integration surface
                 self.coeffs[i][:, offset0:offset1] = dolfinx_contact.cpp.pack_gradient_quadrature(
                     du._cpp_object, self.q_deg, self.entities[i])[:, :] + self._grad_u[i][:, :]
                 offset0 = offset1
                 offset1 = offset0 + self._num_q_points[i] * gdim
+                # Pack du on contacting surface
                 self.coeffs[i][:, offset0:offset1] = self.pack_u_contact(i, du._cpp_object)[:, :]
 
-    def pack_normals(self, i):
+    def pack_normals(self, i: int):
+        """
+        This functions computes the contact normals based on the search method for pair i
+        Args:
+            i : index of contact pair
+        """
         if self.search_method[i] == dolfinx_contact.cpp.ContactMode.Raytracing:
             normals = -self.pack_nx(i)
         else:
@@ -137,7 +171,7 @@ class ContactProblem(dolfinx_contact.cpp.Contact):
         h.x.array[:ncells] = h_vals[:]
 
         new_model = False
-        if self.coeffs is None:
+        if len(self.coeffs) == 0:
             new_model = True
             self.coeffs = [np.zeros((len(self.entities[i]), numcoeffs))
                            for i in range(self._num_pairs)]

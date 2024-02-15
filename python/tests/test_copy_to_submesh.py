@@ -25,7 +25,8 @@ def test_copy_to_submesh(order, res, simplex, dim):
     if dim == 3:
         if simplex:
             fname = f"{mesh_dir}/sphere3D"
-            create_sphere_plane_mesh(filename=f"{fname}.msh", res=res, order=order, r=0.25, H=0.25, L=1.0, W=1.0)
+            create_sphere_plane_mesh(filename=f"{fname}.msh", res=res, order=order,
+                                     r=0.25, height=0.25, length=1.0, width=1.0)
             convert_mesh(fname, f"{fname}.xdmf", gdim=3)
             with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
                 mesh = xdmf.read_mesh()
@@ -75,7 +76,7 @@ def test_copy_to_submesh(order, res, simplex, dim):
     else:
         fname = f"{mesh_dir}/hertz2D_simplex" if simplex else f"{mesh_dir}/hertz2D_quads"
         create_circle_plane_mesh(filename=f"{fname}.msh", res=res, order=order,
-                                 quads=not simplex, r=0.25, H=0.25, L=1.0)
+                                 quads=not simplex, r=0.25, height=0.25, length=1.0)
         convert_mesh(fname, f"{fname}.xdmf", gdim=2)
         with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
             mesh = xdmf.read_mesh()

@@ -78,13 +78,11 @@ void compute_sigma_n_opp(mdspan4_t sig_n_opp, std::span<const double> grad_v,
                          const double lmbda, const std::size_t q,
                          const std::size_t num_q_points);
 
-/// @brief Compute contact pressure dot(sigma(u)*n_x, n_contact) from grad(u),
-/// n_x, n_contact
+/// @brief Compute contact stress sigma(u)*n_x from grad(u), n_x
 ///
 /// all input data packed at quadrature points for each facet
 /// @param[in] grad_u       The gradient of u
 /// @param[in] n_x          The surface normal
-/// @param[in] n_contact    The normal used in contact integrals (-n_x for raytracing, n_y for CPP)
 /// @param[in] num_q_points The number of quadrature points
 /// @param[in] num_facets   The number of facets
 /// @param[in] gdim         The geometrical dimension of the mesh

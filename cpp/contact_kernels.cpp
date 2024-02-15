@@ -875,18 +875,14 @@ dolfinx_contact::generate_contact_kernel(
       // For ray tracing the gap is given by n * (Pi(x) -x)
       // where n = n_x
       // For closest point n = -n_y
-      double dist = 0;
+      // n_old is the normal from previous load step
       for (std::size_t i = 0; i < gdim; i++)
       {
         n_surf[i] = -c[kd.offsets(2) + q * gdim + i];
         n_old[i] = -c[kd.offsets(7) + q * gdim + i];
         n_dot += n_phys[i] * n_surf[i];
         gap += c[kd.offsets(1) + q * gdim + i] * n_surf[i];
-        dist += c[kd.offsets(1) + q * gdim + i]
-                * c[kd.offsets(1) + q * gdim + i];
       }
-      dist -= std::pow(gap, 2);
-      dist = std::sqrt(dist);
 
       compute_normal_strain_basis(epsn, tr, K, dphi, n_surf,
                                   std::span(n_phys.data(), gdim), q_pos);
@@ -914,6 +910,7 @@ dolfinx_contact::generate_contact_kernel(
       for (std::size_t j = 0; j < bs; ++j)
         jump_un += -c[offset_u_opp + j] * n_surf[j];
 
+      // compute relative velocity of surfaces for friction computation
       for (std::size_t j = 0; j < bs; ++j)
       {
         v_rel[j] = c[kd.offsets(4) + gdim * q + j] - c[offset_u_opp + j]
@@ -1070,18 +1067,14 @@ dolfinx_contact::generate_contact_kernel(
       // The gap is given by n * (Pi(x) -x)
       // For raytracing n = n_x
       // For closest point n = -n_y
-      double dist = 0;
+      // n_old is the normal from previous load step
       for (std::size_t i = 0; i < gdim; i++)
       {
         n_surf[i] = -c[kd.offsets(2) + q * gdim + i];
         n_old[i] = -c[kd.offsets(7) + q * gdim + i];
         n_dot += n_phys[i] * n_surf[i];
         gap += c[kd.offsets(1) + q * gdim + i] * n_surf[i];
-        dist += c[kd.offsets(1) + q * gdim + i]
-                * c[kd.offsets(1) + q * gdim + i];
       }
-      dist -= std::pow(gap, 2);
-      dist = std::sqrt(dist);
 
       compute_normal_strain_basis(epsn, tr, K, dphi, n_surf,
                                   std::span(n_phys.data(), gdim), q_pos);
@@ -1108,6 +1101,7 @@ dolfinx_contact::generate_contact_kernel(
       std::size_t offset_u_opp = kd.offsets(6) + q * bs;
       for (std::size_t j = 0; j < bs; ++j)
         jump_un += -c[offset_u_opp + j] * n_surf[j];
+      // compute relative velocity of surfaces for friction computation
       for (std::size_t j = 0; j < bs; ++j)
       {
         v_rel[j] = c[kd.offsets(4) + gdim * q + j] - c[offset_u_opp + j]

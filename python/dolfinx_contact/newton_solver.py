@@ -93,6 +93,9 @@ class NewtonSolver():
         self._b.setFromOptions()
 
     def update_krylov_solver(self, options: dict[str, Any]):
+        """
+        Create new krylov solver with different set of options
+        """
         self.krylov_solver = PETSc.KSP()  # type: ignore
         self.krylov_solver.create(self.comm)
         self.krylov_solver.setOptionsPrefix("Newton_solver_")
@@ -334,6 +337,7 @@ class NewtonSolver():
 
             res_new = self._b.norm(PETSc.NormType.NORM_2)  # type: ignore
 
+            # adaptive relaxation
             while res_old < res_new:
                 self.relaxation_parameter = 0.5 * self.relaxation_parameter
                 if self.relaxation_parameter < rel_min:
