@@ -7,7 +7,7 @@ import numpy as np
 import numpy.typing as npt  # noqa: F401
 from typing import Any, Tuple  # noqa: F401
 from dolfinx import default_scalar_type  # noqa: F401
-from dolfinx import common, cpp, fem, graph
+from dolfinx import common, cpp, fem
 from dolfinx import mesh as _mesh
 from petsc4py import PETSc
 
