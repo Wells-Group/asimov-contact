@@ -27,7 +27,7 @@ from dolfinx.mesh import (CellType, locate_entities_boundary, locate_entities, c
                           compute_midpoints, meshtags)
 from mpi4py import MPI
 
-from dolfinx_contact.unbiased.contact_problem import ContactProblem, FrictionLaw
+from dolfinx_contact.general_contact.contact_problem import ContactProblem, FrictionLaw
 from dolfinx_contact.cpp import (ContactMode, MeshTie, Problem, Kernel)
 from dolfinx_contact.helpers import (R_minus, dR_minus, R_plus, dR_plus, epsilon,
                                      lame_parameters, sigma_func, tangential_proj,

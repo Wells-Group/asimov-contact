@@ -15,7 +15,7 @@ from dolfinx_contact.helpers import (epsilon, lame_parameters, sigma_func,
 from dolfinx_contact.meshing import convert_mesh, create_christmas_tree_mesh
 from dolfinx_contact.newton_solver import NewtonSolver
 from dolfinx_contact.parallel_mesh_ghosting import create_contact_mesh
-from dolfinx_contact.unbiased.contact_problem import ContactProblem, FrictionLaw
+from dolfinx_contact.general_contact.contact_problem import ContactProblem, FrictionLaw
 from dolfinx_contact.cpp import ContactMode
 from mpi4py import MPI
 from petsc4py.PETSc import InsertMode, ScatterMode  # type: ignore

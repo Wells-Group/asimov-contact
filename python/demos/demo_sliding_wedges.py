@@ -22,7 +22,7 @@ from dolfinx_contact.newton_solver import NewtonSolver
 from dolfinx_contact.cpp import ContactMode
 
 
-from dolfinx_contact.unbiased.contact_problem import ContactProblem, FrictionLaw
+from dolfinx_contact.general_contact.contact_problem import ContactProblem, FrictionLaw
 
 if __name__ == "__main__":
     desc = "Friction example with two elastic cylinders for verifying correctness of code"

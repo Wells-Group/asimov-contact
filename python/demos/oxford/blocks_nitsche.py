@@ -19,7 +19,7 @@ from ufl import (derivative, grad, Identity, inner, Mesh, Measure,
 
 from dolfinx_contact.helpers import rigid_motions_nullspace_subdomains
 from dolfinx_contact.newton_solver import NewtonSolver
-from dolfinx_contact.unbiased.contact_problem import ContactProblem, FrictionLaw
+from dolfinx_contact.general_contact.contact_problem import ContactProblem, FrictionLaw
 from dolfinx_contact.cpp import ContactMode
 
 # read mesh from file

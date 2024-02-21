@@ -7,7 +7,7 @@ import numpy as np
 import numpy.typing as npt  # noqa: F401
 from typing import Any, Tuple  # noqa: F401
 from dolfinx import default_scalar_type  # noqa: F401
-from dolfinx import common, cpp, fem
+from dolfinx import common, cpp, fem, graph
 from dolfinx import mesh as _mesh
 from petsc4py import PETSc
 
@@ -28,7 +28,7 @@ class ContactProblem(dolfinx_contact.cpp.Contact):
                  "_num_pairs", "_cstrides", "entities", "_normals", "search_method",
                  "_grad_u", "_num_q_points"]
 
-    def __init__(self, markers: list[_mesh.MeshTags], surfaces: cpp.AdjacencyList_int32,
+    def __init__(self, markers: list[_mesh.MeshTags], surfaces: Any,
                  contact_pairs: list[Tuple[int, int]], mesh: _mesh.Mesh, quadrature_degree: int,
                  search_method: list[dolfinx_contact.cpp.ContactMode], search_radius: np.float64 = np.float64(-1.0)):
         """

@@ -29,7 +29,7 @@ from dolfinx_contact.cpp import ContactMode
 from dolfinx_contact.output import ContactWriter
 
 
-from dolfinx_contact.unbiased.contact_problem import ContactProblem, FrictionLaw
+from dolfinx_contact.general_contact.contact_problem import ContactProblem, FrictionLaw
 from dolfinx_contact.newton_solver import NewtonSolver
 from dolfinx_contact.helpers import rigid_motions_nullspace_subdomains
 
@@ -68,7 +68,7 @@ if __name__ == "__main__":
     threed = args.threed
     simplex = args.simplex
     problem = args.problem
-    mesh_dir = "meshes"
+    mesh_dir = "../meshes"
     steps = 4
 
     # Problem paramters
@@ -107,7 +107,7 @@ if __name__ == "__main__":
 
     if threed:
         if problem == 1:
-            outname = "results/hertz1_3D_simplex"
+            outname = "../results/hertz1_3D_simplex"
             fname = f"{mesh_dir}/hertz1_3D_simplex"
             create_halfsphere_box_mesh(filename=f"{fname}.msh", res=args.res,
                                        order=args.order, r=R, height=H, length=L, width=L, gap=gap)
@@ -116,7 +116,7 @@ if __name__ == "__main__":
             contact_bdy_2 = 8
             dirichlet_bdy = 7
         else:
-            outname = "results/hertz2_3D_simplex"
+            outname = "../results/hertz2_3D_simplex"
             fname = f"{mesh_dir}/hertz2_3D_simplex"
             create_halfsphere_box_mesh(filename=f"{fname}.msh", res=args.res,
                                        order=args.order, r=R, height=H, length=L, width=L, gap=gap)
@@ -172,7 +172,7 @@ if __name__ == "__main__":
             return vals
     else:
         if problem == 1:
-            outname = "results/hertz1_2D_simplex_RR" if simplex else "results/hertz1_2D_quads_RR"
+            outname = "../../results/hertz1_2D_simplex_RR" if simplex else "../results/hertz1_2D_quads_RR"
             fname = f"{mesh_dir}/hertz1_2D_simplex" if simplex else f"{mesh_dir}/hertz1_2D_quads"
             create_circle_plane_mesh(f"{fname}.msh", not simplex, args.res, args.order, R, H, L, gap)
             contact_bdy_1 = 10
@@ -180,7 +180,7 @@ if __name__ == "__main__":
             dirichlet_bdy = 4
             neumann_bdy = 8
         else:
-            outname = "results/hertz2_2D_simplex_RR" if simplex else "results/hertz2_2D_quads_RR"
+            outname = "../results/hertz2_2D_simplex_RR" if simplex else "../results/hertz2_2D_quads_RR"
             fname = f"{mesh_dir}/hertz2_2D_simplex" if simplex else f"{mesh_dir}/hertz2_2D_quads"
             create_halfdisk_plane_mesh(filename=f"{fname}.msh", res=args.res,
                                        order=args.order, quads=not simplex, r=R, height=H, length=L, gap=gap)
