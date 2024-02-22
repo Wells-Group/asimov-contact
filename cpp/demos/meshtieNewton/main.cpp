@@ -77,7 +77,7 @@ public:
     // build near null space preventing rigid body motion of individual
     // components)
     std::vector<std::int32_t> tags = {1, 2};
-    MatNullSpace ns = dolfinx_contact::build_nullspace_multibody(
+    MatNullSpace ns = dolfinx_contact::build_near_nullspace(
         *L->function_spaces()[0], subdomains, tags);
     MatSetNearNullSpace(_matA.mat(), ns);
     MatNullSpaceDestroy(&ns);
