@@ -44,6 +44,7 @@ public:
   /// @param[in] contact_pairs list of pairs (i, j) marking the ith and jth
   /// surface in surfaces->array() as a contact pair
   /// @param[in] V The functions space
+  /// @param[in] mode Contact detection algorithm for each pair
   /// @param[in] q_deg The quadrature degree.
   Contact(
       const std::vector<std::shared_ptr<dolfinx::mesh::MeshTags<std::int32_t>>>&
@@ -51,8 +52,8 @@ public:
       std::shared_ptr<const dolfinx::graph::AdjacencyList<std::int32_t>>
           surfaces,
       const std::vector<std::array<int, 2>>& contact_pairs,
-      std::shared_ptr<dolfinx::mesh::Mesh<double>> mesh, const int q_deg = 3,
-      ContactMode mode = ContactMode::ClosestPoint);
+      std::shared_ptr<dolfinx::mesh::Mesh<double>> mesh,
+      const std::vector<ContactMode>& mode, const int q_deg = 3);
 
   /// Return meshtag value for surface with index surface
   /// @param[in] surface - the index of the surface
@@ -243,7 +244,7 @@ public:
   /// @param[in] tol - max distance
   void crop_invalid_points(std::size_t pair, std::span<const double> gap,
                            std::span<const double> n_y, double tol);
-                           
+
   /// Compute function on opposite surface at quadrature points of
   /// facets
   /// @param[in] pair - index of contact pair
@@ -325,7 +326,7 @@ private:
   std::vector<std::size_t> _local_facets;
 
   // Contact search mode
-  ContactMode _mode;
+  std::vector<ContactMode> _mode;
   // Search radius for ray-tracing
   double _radius = -1;
 };

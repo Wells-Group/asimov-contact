@@ -6,15 +6,21 @@ import numpy as np
 
 from basix.ufl import element
 from dolfinx import default_scalar_type
-from dolfinx.fem import (Constant, dirichletbc, Function,
+from dolfinx.fem import (Constant, dirichletbc, Function, form,
                          functionspace, locate_dofs_topological)
+from dolfinx.fem.petsc import set_bc, apply_lifting, assemble_matrix, assemble_vector, create_vector
 from dolfinx.graph import adjacencylist
 from dolfinx.io import XDMFFile
 from dolfinx.mesh import create_mesh
 from mpi4py import MPI
-from ufl import grad, Identity, inner, Mesh, Measure, TestFunction, tr, sym
+from petsc4py.PETSc import InsertMode, ScatterMode  # type: ignore
+from ufl import (derivative, grad, Identity, inner, Mesh, Measure,
+                 replace, sym, TrialFunction, TestFunction, tr)
 
-from dolfinx_contact.unbiased.contact_problem import create_contact_solver
+from dolfinx_contact.helpers import rigid_motions_nullspace_subdomains
+from dolfinx_contact.newton_solver import NewtonSolver
+from dolfinx_contact.general_contact.contact_problem import ContactProblem, FrictionLaw
+from dolfinx_contact.cpp import ContactMode
 
 # read mesh from file
 fname = "cont-blocks_sk24_fnx"
@@ -50,13 +56,21 @@ V = functionspace(mesh, ("Lagrange", 1, (gdim,)))
 
 # Function, TestFunction
 u = Function(V)
+du = Function(V)
 v = TestFunction(V)
+w = TrialFunction(V)
 
 # Compute lame parameters
 E = 1e4
 nu = 0.2
 mu = E / (2 * (1 + nu))
 lmbda = E * nu / ((1 + nu) * (1 - 2 * nu))
+V0 = functionspace(mesh, ("DG", 0))
+mu_dg = Function(V0)
+lmbda_dg = Function(V0)
+
+mu_dg.interpolate(lambda x: np.full((1, x.shape[1]), mu))
+lmbda_dg.interpolate(lambda x: np.full((1, x.shape[1]), lmbda))
 
 # Create variational form without contact contributions
 
@@ -71,11 +85,16 @@ def sigma(v):
 
 F = inner(sigma(u), epsilon(v)) * dx
 
-# Nitsche parameters
-gamma = 10
-theta = 1  # 1 - symmetric
-problem_parameters = {"gamma": np.float64(E * gamma), "theta": np.float64(theta),
-                      "mu": np.float64(mu), "lambda": np.float64(lmbda)}
+F = replace(F, {u: u + du})
+J = derivative(F, du, w)
+
+# compiler options to improve performance
+cffi_options = ["-Ofast", "-march=native"]
+jit_options = {"cffi_extra_compile_args": cffi_options,
+               "cffi_libraries": ["m"]}
+# compiled forms for rhs and tangen system
+F_compiled = form(F, jit_options=jit_options)
+J_compiled = form(J, jit_options=jit_options)
 
 # boundary conditions
 g = Constant(mesh, default_scalar_type((0, 0, 0)))     # zero Dirichlet
@@ -85,6 +104,10 @@ d = Constant(mesh, default_scalar_type((0, -0.2, 0)))  # vertical displacement
 dofs_d = locate_dofs_topological(
     V, tdim - 1, facet_marker.find(dirichlet_bdy_1))
 bcs = [dirichletbc(d, dofs_d, V), dirichletbc(g, dofs_g, V)]
+
+# Nitsche parameters
+gamma = 10 * E
+theta = 1  # 1 - symmetric
 
 # contact surface data
 # stored in adjacency list to allow for using multiple meshtags to mark
@@ -96,6 +119,7 @@ offsets = np.array([0, 2], dtype=np.int32)
 surfaces = adjacencylist(data, offsets)
 # For unbiased computation the contact detection is performed in both directions
 contact_pairs = [(0, 1), (1, 0)]
+search_mode = [ContactMode.ClosestPoint for _ in range(len(contact_pairs))]
 
 
 # Solver options
@@ -103,11 +127,11 @@ ksp_tol = 1e-10
 newton_tol = 1e-7
 
 # non-linear solver options
-newton_options = {"relaxation_parameter": 1,
+newton_options = {"relaxation_parameter": 1.0,
                   "atol": newton_tol,
                   "rtol": newton_tol,
                   "convergence_criterion": "residual",
-                  "max_it": 50,
+                  "max_it": 200,
                   "error_on_nonconvergence": True}
 
 # linear solver options
@@ -130,38 +154,63 @@ petsc_options = {
     "ksp_norm_type": "unpreconditioned"
 }
 
-# compiler options to improve performance
-cffi_options = ["-Ofast", "-march=native"]
-jit_options = {"cffi_extra_compile_args": cffi_options,
-               "cffi_libraries": ["m"]}
-
-
 # create contact solver
-contact_problem = create_contact_solver(ufl_form=F, u=u, markers=[domain_marker, facet_marker],
-                                        contact_data=(surfaces, contact_pairs),
-                                        bcs=bcs,
-                                        problem_parameters=problem_parameters,
-                                        raytracing=False,
-                                        newton_options=newton_options,
-                                        petsc_options=petsc_options,
-                                        jit_options=jit_options,
-                                        quadrature_degree=5,
-                                        search_radius=np.float64(0.5))
+contact_problem = ContactProblem([facet_marker], surfaces, contact_pairs, mesh, 5, search_mode)
+contact_problem.generate_contact_data(FrictionLaw.Frictionless, V, {"u": u, "du": du, "mu": mu_dg,
+                                      "lambda": lmbda_dg}, gamma, theta)
+# create vector and matrix
+a_mat = contact_problem.create_matrix(J_compiled)
+b = create_vector(F_compiled)
 
-# Perform contact detection
-for j in range(len(contact_pairs)):
-    contact_problem.contact.create_distance_map(j)
 
-# solve non-linear problem
-n = contact_problem.solve()
+# define functions for newton solver
+def compute_coefficients(x, coeffs):
+    du.x.scatter_forward()
+    contact_problem.update_contact_data(du)
 
-# update displacement according to computed increment
-contact_problem.du.x.scatter_forward()  # only relevant in parallel
-contact_problem.u.x.array[:] += contact_problem.du.x.array[:]
 
+def compute_residual(x, b, coeffs):
+    b.zeroEntries()
+    b.ghostUpdate(addv=InsertMode.INSERT,
+                  mode=ScatterMode.FORWARD)
+    contact_problem.assemble_vector(b, V)
+    assemble_vector(b, F_compiled)
+    apply_lifting(b, [J_compiled], bcs=[bcs], x0=[x], scale=-1.0)
+    b.ghostUpdate(addv=InsertMode.ADD, mode=ScatterMode.REVERSE)
+    set_bc(b, bcs, x, -1.0)
+
+
+def compute_jacobian_matrix(x, a_mat, coeffs):
+    a_mat.zeroEntries()
+    contact_problem.assemble_matrix(a_mat, V)
+    assemble_matrix(a_mat, J_compiled, bcs=bcs)
+    a_mat.assemble()
+
+
+# Set up snes solver for nonlinear solver
+newton_solver = NewtonSolver(mesh.comm, a_mat, b, contact_problem.coeffs)
+# Set matrix-vector computations
+newton_solver.set_residual(compute_residual)
+newton_solver.set_jacobian(compute_jacobian_matrix)
+newton_solver.set_coefficients(compute_coefficients)
+
+# Set rigid motion nullspace
+null_space = rigid_motions_nullspace_subdomains(V, domain_marker, np.unique(
+    domain_marker.values), num_domains=len(np.unique(domain_marker.values)))
+newton_solver.A.setNearNullSpace(null_space)
+
+# Set Newton solver options
+newton_solver.set_newton_options(newton_options)
+
+# Set Krylov solver options
+newton_solver.set_krylov_options(petsc_options)
+
+n, converged = newton_solver.solve(du, write_solution=True)
+u.x.array[:] += du.x.array[:]
+u.x.scatter_forward()
 
 # write resulting diplacements to file
 with XDMFFile(mesh.comm, "result.xdmf", "w") as xdmf:
     xdmf.write_mesh(mesh)
-    contact_problem.u.name = "u"
-    xdmf.write_function(contact_problem.u)
+    u.name = "u"
+    xdmf.write_function(u)

@@ -6,9 +6,10 @@
 from contextlib import ExitStack
 from typing import Union
 
-from dolfinx.fem import Constant, form, Function, FunctionSpaceBase
+from dolfinx.fem import Constant, form, Function, FunctionSpace, FunctionSpaceBase
 from dolfinx.fem.petsc import apply_lifting, assemble_matrix, assemble_vector, set_bc
 import dolfinx.la as _la
+from dolfinx import cpp
 from dolfinx.mesh import MeshTags
 import numpy
 import scipy.sparse
@@ -307,7 +308,12 @@ def weak_dirichlet(F: ufl.Form, u: Function,
     V = u.function_space
     v = F.arguments()[0]
     mesh = V.mesh
-    h = ufl.CellDiameter(mesh)
+    V2 = FunctionSpace(mesh, ("DG", 0))
+    tdim = mesh.topology.dim
+    ncells = mesh.topology.index_map(tdim).size_local
+    h = Function(V2)
+    h_vals = cpp.mesh.h(mesh._cpp_object, mesh.topology.dim, numpy.arange(0, ncells, dtype=numpy.int32))
+    h.x.array[:ncells] = h_vals[:]
     n = ufl.FacetNormal(mesh)
     F += - ufl.inner(sigma(u) * n, v) * ds\
         - theta * ufl.inner(sigma(v) * n, u - f) * \

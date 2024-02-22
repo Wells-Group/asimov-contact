@@ -64,8 +64,8 @@ if __name__ == "__main__":
     displacement = [[0, 0, 0]]
     gap = 1e-5
     H = 1.5
-    fname = "box_3D"
-    create_box_mesh_3D(f"{fname}.msh", simplex, gap=gap, W=H, offset=0.0)
+    fname = "meshes/box_3D"
+    create_box_mesh_3D(f"{fname}.msh", simplex, gap=gap, width=H, offset=0.0)
     convert_mesh(fname, fname, gdim=3)
 
     with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
