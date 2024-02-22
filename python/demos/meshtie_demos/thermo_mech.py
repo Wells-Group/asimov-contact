@@ -14,7 +14,7 @@ from dolfinx.la import vector, create_petsc_vector_wrap
 from dolfinx.mesh import locate_entities_boundary
 from dolfinx.graph import adjacencylist
 from dolfinx_contact.cpp import MeshTie, Problem
-from dolfinx_contact.helpers import epsilon, lame_parameters, rigid_motions_nullspace_subdomains
+from dolfinx_contact.helpers import epsilon, lame_parameters, rigid_motions_nullspace
 from dolfinx_contact.meshing import create_split_box_2D, horizontal_sine
 from dolfinx_contact.parallel_mesh_ghosting import create_contact_mesh
 from mpi4py import MPI
@@ -74,8 +74,7 @@ class ThermoElasticProblem:
 
         # Build near null space preventing rigid body motion of individual components
         tags = np.unique(subdomains.values)
-        ns = rigid_motions_nullspace_subdomains(
-            u.function_space, subdomains, tags, num_domains)
+        ns = rigid_motions_nullspace(u.function_space)
         self._mat_a.setNearNullSpace(ns)
 
     def f(self, x, _b):

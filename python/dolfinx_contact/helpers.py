@@ -17,7 +17,7 @@ from petsc4py import PETSc
 
 __all__ = ["compare_matrices", "lame_parameters", "epsilon", "sigma_func", "R_minus", "dR_minus", "R_plus",
            "dR_plus", "ball_projection", "d_ball_projection", "tangential_proj", "NonlinearPDE_SNESProblem",
-           "rigid_motions_nullspace", "rigid_motions_nullspace_subdomains", "weak_dirichlet"]
+           "rigid_motions_nullspace", "rigid_motions_nullspace", "weak_dirichlet"]
 
 
 def compare_matrices(a: PETSc.Mat, b: PETSc.Mat, atol: float = 1e-12):  # type: ignore

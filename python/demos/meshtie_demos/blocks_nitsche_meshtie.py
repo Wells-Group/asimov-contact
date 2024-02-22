@@ -23,7 +23,7 @@ from ufl import (derivative, grad, Identity, inner, Mesh,
                  Measure, TestFunction, TrialFunction, tr, sym)
 
 from dolfinx_contact.cpp import ContactMode, MeshTie, Problem
-from dolfinx_contact.helpers import rigid_motions_nullspace_subdomains
+from dolfinx_contact.helpers import rigid_motions_nullspace
 
 
 class MeshTieProblem:
@@ -73,8 +73,7 @@ class MeshTieProblem:
 
         # Build near null space preventing rigid body motion of individual components
         tags = np.unique(subdomains.values)
-        ns = rigid_motions_nullspace_subdomains(
-            u.function_space, subdomains, tags, len(tags))
+        ns = rigid_motions_nullspace(u.function_space)
         self._mat_a.setNearNullSpace(ns)
 
     def f(self, x, _b):

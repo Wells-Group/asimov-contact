@@ -13,7 +13,7 @@ from dolfinx import common, cpp, default_scalar_type, fem, io, log
 from dolfinx import mesh as _mesh
 from dolfinx.cpp.graph import AdjacencyList_int32
 from dolfinx.fem.petsc import create_vector
-from dolfinx_contact.helpers import (rigid_motions_nullspace_subdomains,
+from dolfinx_contact.helpers import (rigid_motions_nullspace,
                                      sigma_func)
 from petsc4py import PETSc as _PETSc
 
@@ -161,7 +161,7 @@ def setup_newton_solver(F_custom: fem.forms.Form, J_custom: fem.forms.Form,
     newton_solver.set_coefficients(compute_coefficients)
 
     # Set rigid motion nullspace
-    null_space = rigid_motions_nullspace_subdomains(V, markers[0], np.unique(markers[0].values))
+    null_space = rigid_motions_nullspace(V)
     newton_solver.A.setNearNullSpace(null_space)
 
     return newton_solver
