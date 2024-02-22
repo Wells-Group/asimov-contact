@@ -196,8 +196,7 @@ int main(int argc, char* argv[])
 
     // Build near-nullspace and attach to matrix
     std::vector<std::int32_t> tags = {1, 2};
-    MatNullSpace ns
-        = dolfinx_contact::build_nullspace_multibody(*V, domain1, tags);
+    MatNullSpace ns = dolfinx_contact::build_near_nullspace(*V);
     MatSetNearNullSpace(A.mat(), ns);
     MatNullSpaceDestroy(&ns);
 

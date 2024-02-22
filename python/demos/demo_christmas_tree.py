@@ -16,7 +16,7 @@ from dolfinx.io import XDMFFile, VTXWriter
 from dolfinx.mesh import GhostMode, locate_entities_boundary, meshtags
 from dolfinx_contact.cpp import find_candidate_surface_segment, ContactMode
 from dolfinx_contact.helpers import (epsilon, lame_parameters, sigma_func,
-                                     weak_dirichlet, rigid_motions_nullspace_subdomains)
+                                     weak_dirichlet, rigid_motions_nullspace)
 from dolfinx_contact.meshing import (convert_mesh, create_christmas_tree_mesh,
                                      create_christmas_tree_mesh_3D)
 from dolfinx_contact.parallel_mesh_ghosting import create_contact_mesh
@@ -329,8 +329,7 @@ if __name__ == "__main__":
     newton_solver.set_coefficients(compute_coefficients)
 
     # Set rigid motion nullspace
-    null_space = rigid_motions_nullspace_subdomains(V, domain_marker, np.unique(
-        domain_marker.values), 2)
+    null_space = rigid_motions_nullspace(V)
     newton_solver.A.setNearNullSpace(null_space)
 
     # Set Newton solver options

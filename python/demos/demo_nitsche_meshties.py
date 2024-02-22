@@ -18,7 +18,7 @@ from dolfinx.io import XDMFFile
 from mpi4py import MPI
 from petsc4py import PETSc
 
-from dolfinx_contact.helpers import lame_parameters, epsilon, sigma_func, rigid_motions_nullspace_subdomains
+from dolfinx_contact.helpers import lame_parameters, epsilon, sigma_func, rigid_motions_nullspace
 from dolfinx_contact.meshing import (convert_mesh,
                                      create_box_mesh_3D)
 from dolfinx_contact.parallel_mesh_ghosting import create_contact_mesh
@@ -211,8 +211,7 @@ if __name__ == "__main__":
     A.assemble()
 
     # Set rigid motion nullspace
-    null_space = rigid_motions_nullspace_subdomains(V, domain_marker, np.unique(domain_marker.values),
-                                                    num_domains=2)
+    null_space = rigid_motions_nullspace(V)
     A.setNearNullSpace(null_space)
 
     # Create PETSc Krylov solver and turn convergence monitoring on

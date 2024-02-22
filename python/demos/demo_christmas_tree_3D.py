@@ -17,7 +17,7 @@ from dolfinx.fem.petsc import apply_lifting, assemble_matrix, assemble_vector, c
 from dolfinx.io import XDMFFile, VTXWriter
 from dolfinx.mesh import locate_entities_boundary, GhostMode, meshtags
 from dolfinx_contact.helpers import (epsilon, lame_parameters, sigma_func,
-                                     weak_dirichlet, rigid_motions_nullspace_subdomains)
+                                     weak_dirichlet, rigid_motions_nullspace)
 
 
 from dolfinx_contact.meshing import convert_mesh, create_christmas_tree_mesh_3D
@@ -281,8 +281,7 @@ if __name__ == "__main__":
     newton_solver.set_coefficients(compute_coefficients)
 
     # Set rigid motion nullspace
-    null_space = rigid_motions_nullspace_subdomains(V, domain_marker, np.unique(
-        domain_marker.values), num_domains=2)
+    null_space = rigid_motions_nullspace(V)
     newton_solver.A.setNearNullSpace(null_space)
 
     # Set Newton solver options

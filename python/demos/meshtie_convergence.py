@@ -20,7 +20,6 @@ from dolfinx.mesh import meshtags
 from dolfinx_contact.cpp import MeshTie, Problem
 from dolfinx_contact.helpers import (epsilon, lame_parameters,
                                      rigid_motions_nullspace,
-                                     rigid_motions_nullspace_subdomains,
                                      sigma_func)
 from dolfinx_contact.meshing import (create_split_box_2D, create_split_box_3D,
                                      create_unsplit_box_2d,
@@ -372,8 +371,7 @@ def test_meshtie(threed: bool = False, simplex: bool = True, runs: int = 5):
         A.assemble()
 
         # Set rigid motion nullspace
-        null_space = rigid_motions_nullspace_subdomains(V, domain_marker, np.unique(domain_marker.values),
-                                                        num_domains=2)
+        null_space = rigid_motions_nullspace(V)
         A.setNearNullSpace(null_space)
 
         # Create PETSc Krylov solver and turn convergence monitoring on

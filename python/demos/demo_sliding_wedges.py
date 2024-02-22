@@ -15,7 +15,7 @@ from dolfinx.graph import adjacencylist
 from mpi4py import MPI
 from petsc4py.PETSc import InsertMode, ScatterMode  # type: ignore
 
-from dolfinx_contact.helpers import (epsilon, sigma_func, lame_parameters, rigid_motions_nullspace_subdomains)
+from dolfinx_contact.helpers import (epsilon, sigma_func, lame_parameters, rigid_motions_nullspace)
 from dolfinx_contact.meshing import (convert_mesh,
                                      sliding_wedges)
 from dolfinx_contact.newton_solver import NewtonSolver
@@ -209,8 +209,7 @@ if __name__ == "__main__":
     newton_solver.set_coefficients(compute_coefficients)
 
     # Set rigid motion nullspace
-    null_space = rigid_motions_nullspace_subdomains(V, domain_marker, np.unique(
-        domain_marker.values), num_domains=2)
+    null_space = rigid_motions_nullspace(V)
     newton_solver.A.setNearNullSpace(null_space)
 
     # Set Newton solver options

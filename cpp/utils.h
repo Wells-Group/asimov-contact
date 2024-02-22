@@ -857,7 +857,7 @@ compute_raytracing_map(const dolfinx::mesh::Mesh<double>& quadrature_mesh,
           std::array<std::size_t, 2>{reference_points.size() / tdim, tdim}};
 }
 
-/// Create near nullspace that contains transations
+/// Create near nullspace that contains translations
 /// and rotations of each of the disconnected components in
 /// the mesh
 /// @param[in] V The functionspace
@@ -869,5 +869,10 @@ MatNullSpace
 build_nullspace_multibody(const dolfinx::fem::FunctionSpace<double>& V,
                           const dolfinx::mesh::MeshTags<std::int32_t>& mt,
                           std::span<const std::int32_t> tags);
-
+/// Create near nullspace that contains translations
+/// and rotations
+/// @param[in] V The functionspace
+/// @returns A PETSC MatNullSpace containing rotations and translations of
+/// each component                          
+MatNullSpace build_near_nullspace(const fem::FunctionSpace<double>& V);
 } // namespace dolfinx_contact

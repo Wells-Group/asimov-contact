@@ -1218,3 +1218,65 @@ MatNullSpace dolfinx_contact::build_nullspace_multibody(
   std::for_each(v.begin(), v.end(), [](auto v0) { VecDestroy(&v0); });
   return ns;
 }
+
+// Function to compute the near nullspace for elasticity - it is made up
+// of the six rigid body modes
+MatNullSpace dolfinx_contact::build_near_nullspace(const fem::FunctionSpace<double>& V)
+{
+  // Create vectors for nullspace basis
+  auto map = V.dofmap()->index_map;
+  int bs = V.dofmap()->index_map_bs();
+  std::vector<la::Vector<T>> basis(6, la::Vector<T>(map, bs));
+
+  // x0, x1, x2 translations
+  std::int32_t length_block = map->size_local() + map->num_ghosts();
+  for (int k = 0; k < 3; ++k)
+  {
+    std::span<T> x = basis[k].mutable_array();
+    for (std::int32_t i = 0; i < length_block; ++i)
+      x[bs * i + k] = 1.0;
+  }
+
+  // Rotations
+  auto x3 = basis[3].mutable_array();
+  auto x4 = basis[4].mutable_array();
+  auto x5 = basis[5].mutable_array();
+
+  const std::vector<double> x = V.tabulate_dof_coordinates(false);
+  const std::int32_t* dofs = V.dofmap()->map().data_handle();
+  for (std::size_t i = 0; i < V.dofmap()->map().size(); ++i)
+  {
+    std::span<const double, 3> xd(x.data() + 3 * dofs[i], 3);
+
+    x3[bs * dofs[i] + 0] = -xd[1];
+    x3[bs * dofs[i] + 1] = xd[0];
+
+    x4[bs * dofs[i] + 0] = xd[2];
+    x4[bs * dofs[i] + 2] = -xd[0];
+
+    x5[bs * dofs[i] + 2] = xd[1];
+    x5[bs * dofs[i] + 1] = -xd[2];
+  }
+
+  // Orthonormalize basis
+  la::orthonormalize(std::vector<std::reference_wrapper<la::Vector<T>>>(
+      basis.begin(), basis.end()));
+  if (!la::is_orthonormal(
+          std::vector<std::reference_wrapper<const la::Vector<T>>>(
+              basis.begin(), basis.end())))
+  {
+    throw std::runtime_error("Space not orthonormal");
+  }
+
+  // Build PETSc nullspace object
+  std::int32_t length = bs * map->size_local();
+  std::vector<std::span<const T>> basis_local;
+  std::transform(basis.cbegin(), basis.cend(), std::back_inserter(basis_local),
+                 [length](auto& x)
+                 { return std::span(x.array().data(), length); });
+  MPI_Comm comm = V.mesh()->comm();
+  std::vector<Vec> v = la::petsc::create_vectors(comm, basis_local);
+  MatNullSpace ns = la::petsc::create_nullspace(comm, v);
+  std::for_each(v.begin(), v.end(), [](auto v) { VecDestroy(&v); });
+  return ns;
+}
