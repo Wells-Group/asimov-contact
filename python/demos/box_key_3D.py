@@ -15,7 +15,7 @@ from dolfinx.io import XDMFFile, VTXWriter
 from dolfinx.fem.petsc import assemble_matrix, assemble_vector, create_vector
 from dolfinx.mesh import GhostMode, meshtags
 from dolfinx_contact.helpers import (epsilon, lame_parameters, sigma_func,
-                                     weak_dirichlet, rigid_motions_nullspace)
+                                     weak_dirichlet, rigid_motions_nullspace_subdomains)
 from dolfinx_contact.parallel_mesh_ghosting import create_contact_mesh
 from dolfinx_contact.general_contact.contact_problem import ContactProblem, FrictionLaw
 from dolfinx_contact.newton_solver import NewtonSolver
@@ -253,7 +253,8 @@ if __name__ == "__main__":
     newton_solver.set_coefficients(compute_coefficients)
 
     # Set rigid motion nullspace
-    null_space = rigid_motions_nullspace(V)
+    null_space = rigid_motions_nullspace_subdomains(V, domain_marker, np.unique(
+        domain_marker.values), num_domains=2)
     newton_solver.A.setNearNullSpace(null_space)
 
     # Set Newton solver options
