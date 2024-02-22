@@ -225,8 +225,9 @@ def test_packing(ct, gap, q_deg, delta, surface, disp):
     data = np.array([0, 1], dtype=np.int32)
     offsets = np.array([0, 2], dtype=np.int32)
     surfaces = adjacencylist(data, offsets)
+    search_mode = [dolfinx_contact.cpp.ContactMode.ClosestPoint]
     contact = dolfinx_contact.cpp.Contact([facet_marker._cpp_object], surfaces, [
-                                          (s, o)], mesh._cpp_object, quadrature_degree=q_deg)
+                                          (s, o)], mesh._cpp_object, search_mode, quadrature_degree=q_deg)
     if disp:
         contact.update_submesh_geometry(u._cpp_object)
     contact.create_distance_map(0)

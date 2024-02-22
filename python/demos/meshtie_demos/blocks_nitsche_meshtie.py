@@ -139,7 +139,7 @@ class MeshTieProblem:
 
 
 # read mesh from file
-fname = "cont-blocks_sk24_fnx"
+fname = "meshes/cont-blocks_sk24_fnx"
 with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
     topo_name = "volume markers"
     cell_type, cell_degree = xdmf.read_cell_type(name=topo_name)

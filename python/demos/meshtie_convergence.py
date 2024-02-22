@@ -266,13 +266,13 @@ def test_meshtie(threed: bool = False, simplex: bool = True, runs: int = 5):
     for i in range(1, runs + 1):
         print(f"Run {i}")
         if threed:
-            fname = fname = f"beam3D_{i}"
+            fname = fname = f"meshes/beam3D_{i}"
             create_split_box_3D(fname, res=res, L=5.0, H=1.0, W=1.0, domain_1=[0, 1, 5, 4], domain_2=[4, 5, 2, 3], x0=[
                 0, 0.5], x1=[5.0, 0.7], curve_fun=horizontal_sine, num_segments=num_segments, hex=not simplex)
             fun = fun_3d
             u_fun = u_fun_3d
         else:
-            fname = fname = f"beam_{i}"
+            fname = fname = f"meshes/beam_{i}"
             create_split_box_2D(fname, res=res, L=5.0, H=1.0, domain_1=[0, 1, 5, 4], domain_2=[4, 5, 2, 3], x0=[
                 0, 0.5], x1=[5.0, 0.7], curve_fun=horizontal_sine, num_segments=num_segments, quads=not simplex)
             fun = fun_2d

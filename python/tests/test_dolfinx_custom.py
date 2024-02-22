@@ -195,8 +195,9 @@ def test_contact_kernel(theta, gamma, dim, gap):
         data = np.array([bottom_value, top_value], dtype=np.int32)
         offsets = np.array([0, 2], dtype=np.int32)
         surfaces = adjacencylist(data, offsets)
+        search_mode = [dolfinx_contact.cpp.ContactMode.ClosestPoint]
         contact = dolfinx_contact.cpp.Contact([facet_marker._cpp_object], surfaces, [(0, 1)],
-                                              mesh._cpp_object, quadrature_degree=q_deg)
+                                              mesh._cpp_object, search_mode, quadrature_degree=q_deg)
         g_vec = contact.pack_gap_plane(0, g)
         coeffs = np.hstack([mu_packed, lmbda_packed, h_facets, g_vec, u_packed, grad_u_packed])
         # RHS
@@ -205,8 +206,8 @@ def test_contact_kernel(theta, gamma, dim, gap):
         b2 = dolfinx.fem.petsc.create_vector(L_custom)
         kernel = dolfinx_contact.cpp.generate_rigid_surface_kernel(V._cpp_object, kt.Rhs, q_rule)
         b2.zeroEntries()
-        contact_assembler = dolfinx_contact.cpp.Contact(
-            [facet_marker._cpp_object], surfaces, [(0, 1)], mesh._cpp_object, quadrature_degree=q_deg)
+        contact_assembler = dolfinx_contact.cpp.Contact([facet_marker._cpp_object], surfaces, [(0, 1)],
+                                                        mesh._cpp_object, search_mode, quadrature_degree=q_deg)
         contact_assembler.create_distance_map(0)
 
         contact_assembler.assemble_vector(b2, 0, kernel, coeffs, consts, V._cpp_object)

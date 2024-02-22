@@ -9,6 +9,7 @@
 
 #include "QuadratureRule.h"
 #include <span>
+#include <cmath>
 
 namespace dolfinx_contact
 {
@@ -76,5 +77,21 @@ void compute_sigma_n_opp(mdspan4_t sig_n_opp, std::span<const double> grad_v,
                          std::span<const double> n, const double mu,
                          const double lmbda, const std::size_t q,
                          const std::size_t num_q_points);
+
+/// @brief Compute contact stress sigma(u)*n_x from grad(u), n_x
+///
+/// all input data packed at quadrature points for each facet
+/// @param[in] grad_u       The gradient of u
+/// @param[in] n_x          The surface normal
+/// @param[in] num_q_points The number of quadrature points
+/// @param[in] num_facets   The number of facets
+/// @param[in] gdim         The geometrical dimension of the mesh
+/// @param[in] mu           The first Lame parameter
+/// @param[in] lmbda        The second Lame parameter
+/// @return vector containing surface pressure values for each quadrature point on each facet
+std::vector<double>compute_contact_forces(
+    std::span<const double> grad_u, std::span<const double> n_x, const std::size_t num_q_points,
+    std::size_t num_facets, const std::size_t gdim, const double mu,
+    const double lmbda);
 
 } // namespace dolfinx_contact

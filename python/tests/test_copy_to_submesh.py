@@ -12,7 +12,7 @@ from dolfinx_contact.meshing import (convert_mesh,
                                      create_cylinder_cylinder_mesh,
                                      create_circle_plane_mesh,
                                      create_sphere_plane_mesh)
-from dolfinx_contact.cpp import Contact
+from dolfinx_contact.cpp import ContactMode, Contact
 from mpi4py import MPI
 
 
@@ -25,8 +25,9 @@ def test_copy_to_submesh(order, res, simplex, dim):
     if dim == 3:
         if simplex:
             fname = f"{mesh_dir}/sphere3D"
-            create_sphere_plane_mesh(filename=f"{fname}.msh", order=order, res=5 * res)
-            convert_mesh(fname, fname, gdim=3)
+            create_sphere_plane_mesh(filename=f"{fname}.msh", res=res, order=order,
+                                     r=0.25, height=0.25, length=1.0, width=1.0)
+            convert_mesh(fname, f"{fname}.xdmf", gdim=3)
             with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
                 mesh = xdmf.read_mesh()
                 tdim = mesh.topology.dim
@@ -39,7 +40,6 @@ def test_copy_to_submesh(order, res, simplex, dim):
             create_cylinder_cylinder_mesh(fname, order=order, res=10 * res, simplex=simplex)
             with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
                 mesh = xdmf.read_mesh(name="cylinder_cylinder")
-
             tdim = mesh.topology.dim
             mesh.topology.create_connectivity(tdim - 1, tdim)
 
@@ -75,7 +75,8 @@ def test_copy_to_submesh(order, res, simplex, dim):
             facet_marker = meshtags(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
     else:
         fname = f"{mesh_dir}/hertz2D_simplex" if simplex else f"{mesh_dir}/hertz2D_quads"
-        create_circle_plane_mesh(filename=f"{fname}.msh", quads=not simplex, res=res, order=order)
+        create_circle_plane_mesh(filename=f"{fname}.msh", res=res, order=order,
+                                 quads=not simplex, r=0.25, height=0.25, length=1.0)
         convert_mesh(fname, f"{fname}.xdmf", gdim=2)
         with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
             mesh = xdmf.read_mesh()
@@ -94,8 +95,10 @@ def test_copy_to_submesh(order, res, simplex, dim):
     data = np.array([contact_bdy_1, contact_bdy_2], dtype=np.int32)
     offsets = np.array([0, 2], dtype=np.int32)
     contact_surfaces = adjacencylist(data, offsets)
+    search_method = [ContactMode.ClosestPoint, ContactMode.Raytracing]
     contact = Contact([facet_marker._cpp_object], contact_surfaces, contact_pairs,
-                      mesh._cpp_object, quadrature_degree=3)
+                      mesh._cpp_object, quadrature_degree=3,
+                      search_method=search_method)
 
     u = Function(V)
     u.interpolate(_test_fun)

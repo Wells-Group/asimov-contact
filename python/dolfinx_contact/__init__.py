@@ -14,9 +14,10 @@ from dolfinx_contact.cpp import (Kernel, QuadratureRule,
 from .helpers import epsilon, lame_parameters, sigma_func, compare_matrices
 from .newton_solver import ConvergenceCriterion, NewtonSolver
 from .parallel_mesh_ghosting import create_contact_mesh
+from .output import plot_gap
 
 
 __all__ = ["NewtonSolver", "ConvergenceCriterion", "lame_parameters", "epsilon",
            "sigma_func", "Kernel", "pack_circumradius", "update_geometry",
            "QuadratureRule", "compute_active_entities", "compare_matrices",
-           "create_contact_mesh"]
+           "create_contact_mesh", "plot_gap"]

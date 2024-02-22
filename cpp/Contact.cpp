@@ -79,8 +79,8 @@ dolfinx_contact::Contact::Contact(
         markers,
     std::shared_ptr<const dolfinx::graph::AdjacencyList<std::int32_t>> surfaces,
     const std::vector<std::array<int, 2>>& contact_pairs,
-    std::shared_ptr<dolfinx::mesh::Mesh<double>> mesh, const int q_deg,
-    ContactMode mode)
+    std::shared_ptr<dolfinx::mesh::Mesh<double>> mesh,
+      const std::vector<ContactMode>& mode, const int q_deg)
     : _surfaces(surfaces->array()), _contact_pairs(contact_pairs), _mesh(mesh),
       _mode(mode)
 {
@@ -202,7 +202,8 @@ std::size_t dolfinx_contact::Contact::coefficients_size(
            num_q_points * ndofs_cell * bs * max_links,
            num_q_points * gdim,
            num_q_points * gdim * gdim,
-           num_q_points * bs};
+           num_q_points * bs,
+           num_q_points * gdim};
     return std::accumulate(cstrides.cbegin(), cstrides.cend(), 0);
   };
 }
@@ -285,7 +286,7 @@ void dolfinx_contact::Contact::create_distance_map(int pair)
   [[maybe_unused]] auto [adj, reference_x, shape]
       = dolfinx_contact::compute_distance_map(
           *quadrature_mesh, quadrature_facets, *candidate_mesh, submesh_facets,
-          *_quadrature_rule, _mode, _radius);
+          *_quadrature_rule, _mode[pair], _radius);
 
   _facet_maps[pair]
       = std::make_shared<dolfinx::graph::AdjacencyList<std::int32_t>>(adj);

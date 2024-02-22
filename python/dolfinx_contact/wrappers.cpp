@@ -15,6 +15,8 @@
 #include <dolfinx_contact/RayTracing.h>
 #include <dolfinx_contact/SubMesh.h>
 #include <dolfinx_contact/coefficients.h>
+#include <dolfinx_contact/elasticity.h>
+#include <dolfinx_contact/rigid_surface_kernels.h>
 #include <dolfinx_contact/parallel_mesh_ghosting.h>
 #include <dolfinx_contact/point_cloud.h>
 #include <dolfinx_contact/rigid_surface_kernels.h>
@@ -108,12 +110,11 @@ PYBIND11_MODULE(cpp, m)
                     std::shared_ptr<
                         const dolfinx::graph::AdjacencyList<std::int32_t>>,
                     std::vector<std::array<int, 2>>,
-           std::shared_ptr<dolfinx::mesh::Mesh<double>>, const int,
-                    dolfinx_contact::ContactMode>(),
+                    std::shared_ptr<dolfinx::mesh::Mesh<double>>,
+                    std::vector<dolfinx_contact::ContactMode>, const int>(),
            py::arg("markers"), py::arg("surfaces"), py::arg("contact_pairs"),
-           py::arg("mesh"), py::arg("quadrature_degree") = 3,
-           py::arg("search_method")
-           = dolfinx_contact::ContactMode::ClosestPoint)
+           py::arg("mesh"), py::arg("search_method"), py::arg("quadrature_degree") = 3
+           )
       .def("create_distance_map",
 
            [](dolfinx_contact::Contact& self, int pair)
@@ -214,6 +215,8 @@ PYBIND11_MODULE(cpp, m)
              const dolfinx_contact::SubMesh& submesh = self.submesh();
              return submesh.mesh();
            })
+      .def("mesh",
+           &dolfinx_contact::Contact::mesh)
       .def("copy_to_submesh",
           [] (dolfinx_contact::Contact& self, std::shared_ptr<dolfinx::fem::Function<PetscScalar>> u, std::shared_ptr<dolfinx::fem::Function<PetscScalar>> u_sub){
               dolfinx_contact::SubMesh submesh = self.submesh();
@@ -321,7 +324,14 @@ PYBIND11_MODULE(cpp, m)
                                                 std::array{shape0, cstride});
           })
       .def("update_submesh_geometry",
-           &dolfinx_contact::Contact::update_submesh_geometry);
+           &dolfinx_contact::Contact::update_submesh_geometry)
+      .def("crop_invalid_points",
+           [] (dolfinx_contact::Contact& self, int pair, const py::array_t<PetscScalar, py::array::c_style>& gap,
+              const py::array_t<PetscScalar, py::array::c_style>& n_y, double tol){
+            return self.crop_invalid_points(pair, std::span(gap.data(), gap.size()),
+            std::span(n_y.data(), n_y.size()), tol);
+           })
+      .def("max_links", [] (dolfinx_contact::Contact& self) {return self.max_links();});
   m.def(
       "generate_rigid_surface_kernel",
       [](std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V,
@@ -582,4 +592,24 @@ PYBIND11_MODULE(cpp, m)
       },
       py::arg("mesh"), py::arg("point"), py::arg("tangents"), py::arg("cells"),
       py::arg("max_iter") = 25, py::arg("tol") = 1e-8);
+
+  m.def("compute_contact_forces",
+        [](const py::array_t<PetscScalar, py::array::c_style>& grad_u,
+           const py::array_t<PetscScalar, py::array::c_style>& n_x,
+           int num_q_points, int num_facets, int gdim, double mu, double lmbda)
+        {
+          return dolfinx_contact::compute_contact_forces(
+              std::span<const double>(grad_u.data(), grad_u.size()),
+              std::span<const double>(n_x.data(), n_x.size()),
+              num_q_points, num_facets, gdim, mu, lmbda);
+        });
+
+  m.def("entities_to_geometry_dofs",
+        [](const dolfinx::mesh::Mesh<double>& mesh, int dim,
+          py::array_t<std::int32_t, py::array::c_style>&  entity_list)
+        {
+          std::span<const std::int32_t> entities_span(entity_list.data(),
+                                                  entity_list.size());
+          return dolfinx_contact::entities_to_geometry_dofs(mesh, dim, entities_span);
+        });
 }
