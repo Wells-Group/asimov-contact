@@ -17,7 +17,7 @@ from petsc4py.PETSc import InsertMode, ScatterMode  # type: ignore
 from ufl import (derivative, grad, Identity, inner, Mesh, Measure,
                  replace, sym, TrialFunction, TestFunction, tr)
 
-from dolfinx_contact.helpers import rigid_motions_nullspace_subdomains
+from dolfinx_contact.helpers import rigid_motions_nullspace
 from dolfinx_contact.newton_solver import NewtonSolver
 from dolfinx_contact.general_contact.contact_problem import ContactProblem, FrictionLaw
 from dolfinx_contact.cpp import ContactMode
@@ -195,8 +195,7 @@ newton_solver.set_jacobian(compute_jacobian_matrix)
 newton_solver.set_coefficients(compute_coefficients)
 
 # Set rigid motion nullspace
-null_space = rigid_motions_nullspace_subdomains(V, domain_marker, np.unique(
-    domain_marker.values), num_domains=len(np.unique(domain_marker.values)))
+null_space = rigid_motions_nullspace(V)
 newton_solver.A.setNearNullSpace(null_space)
 
 # Set Newton solver options

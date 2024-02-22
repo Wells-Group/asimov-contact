@@ -73,7 +73,6 @@ class ThermoElasticProblem:
                                             gamma, theta)
 
         # Build near null space preventing rigid body motion of individual components
-        tags = np.unique(subdomains.values)
         ns = rigid_motions_nullspace(u.function_space)
         self._mat_a.setNearNullSpace(ns)
 

@@ -11,7 +11,7 @@ from dolfinx.fem.petsc import LinearProblem, assemble_vector, assemble_matrix, c
 from dolfinx.graph import adjacencylist
 from dolfinx.io import XDMFFile
 from dolfinx_contact.helpers import (epsilon, lame_parameters, sigma_func,
-                                     weak_dirichlet, rigid_motions_nullspace_subdomains)
+                                     weak_dirichlet, rigid_motions_nullspace)
 from dolfinx_contact.meshing import convert_mesh, create_christmas_tree_mesh
 from dolfinx_contact.newton_solver import NewtonSolver
 from dolfinx_contact.parallel_mesh_ghosting import create_contact_mesh
@@ -215,8 +215,7 @@ newton_solver.set_jacobian(compute_jacobian_matrix)
 newton_solver.set_coefficients(compute_coefficients)
 
 # Set rigid motion nullspace
-null_space = rigid_motions_nullspace_subdomains(V, domain_marker, np.unique(
-    domain_marker.values), num_domains=2)
+null_space = rigid_motions_nullspace(V)
 newton_solver.A.setNearNullSpace(null_space)
 
 # Set Newton solver options

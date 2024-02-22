@@ -20,7 +20,6 @@ from dolfinx.mesh import meshtags
 from dolfinx_contact.cpp import MeshTie, Problem
 from dolfinx_contact.helpers import (epsilon, lame_parameters,
                                      rigid_motions_nullspace,
-                                     rigid_motions_nullspace,
                                      sigma_func)
 from dolfinx_contact.meshing import (create_split_box_2D, create_split_box_3D,
                                      create_unsplit_box_2d,
