@@ -426,12 +426,11 @@ compute_ray(const dolfinx::mesh::Mesh<double>& mesh,
             const double tol = 1e-8)
 {
   int status = -1;
-  dolfinx::mesh::CellType cell_type = mesh.topology()->cell_types()[0];
+  dolfinx::mesh::CellType cell_type = mesh.topology()->cell_type();
   if ((mesh.topology()->dim() != tdim) or (mesh.geometry().dim() != gdim))
     throw std::invalid_argument("Invalid topological or geometrical dimension");
 
-  const dolfinx::fem::CoordinateElement<double>& cmap
-      = mesh.geometry().cmaps()[0];
+  const dolfinx::fem::CoordinateElement<double>& cmap = mesh.geometry().cmap();
 
   // Get cell coordinates/geometry
   const dolfinx::mesh::Geometry<double>& geometry = mesh.geometry();

@@ -17,7 +17,7 @@ dolfinx_contact::generate_meshtie_kernel(
   const std::size_t gdim = mesh->geometry().dim(); // geometrical dimension
   const std::size_t bs = V->dofmap()->bs();
   // NOTE: Assuming same number of quadrature points on each cell
-  dolfinx_contact::error::check_cell_type(mesh->topology()->cell_types()[0]);
+  dolfinx_contact::error::check_cell_type(mesh->topology()->cell_type());
   const std::size_t ndofs_cell = V->dofmap()->element_dof_layout().num_dofs();
 
   auto kd = dolfinx_contact::KernelData(V, quadrature_rule, cstrides);
@@ -454,7 +454,7 @@ dolfinx_contact::generate_poisson_kernel(
   }
 
   // NOTE: Assuming same number of quadrature points on each cell
-  dolfinx_contact::error::check_cell_type(mesh->topology()->cell_types()[0]);
+  dolfinx_contact::error::check_cell_type(mesh->topology()->cell_type());
   const std::size_t ndofs_cell = V->dofmap()->element_dof_layout().num_dofs();
 
   auto kd = dolfinx_contact::KernelData(V, quadrature_rule, cstrides);

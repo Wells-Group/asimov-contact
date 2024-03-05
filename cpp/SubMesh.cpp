@@ -146,7 +146,9 @@ dolfinx_contact::SubMesh::create_functionspace(
       dolfinx::fem::create_dofmap(_mesh->comm(), element_dof_layout,
                                   *_mesh->topology(), unpermute_dofs, nullptr));
   // create and return function space
-  return dolfinx::fem::FunctionSpace(_mesh, element, dofmap);
+  auto shape = element->reference_value_shape();
+  std::vector<std::size_t> value_shape(shape.begin(), shape.end());
+  return dolfinx::fem::FunctionSpace(_mesh, element, dofmap, value_shape);
 }
 
 //-----------------------------------------------------------------------------------------------

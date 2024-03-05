@@ -17,7 +17,7 @@ dolfinx_contact::KernelData::KernelData(
   assert(mesh);
   // Get mesh info
   const dolfinx::mesh::Geometry<double>& geometry = mesh->geometry();
-  const dolfinx::fem::CoordinateElement<double>& cmap = geometry.cmaps()[0];
+  const dolfinx::fem::CoordinateElement<double>& cmap = geometry.cmap();
 
   _affine = cmap.is_affine();
   _num_coordinate_dofs = cmap.dim();
@@ -26,7 +26,7 @@ dolfinx_contact::KernelData::KernelData(
   auto topology = mesh->topology();
   _tdim = topology->dim();
 
-  dolfinx_contact::error::check_cell_type(topology->cell_types()[0]);
+  dolfinx_contact::error::check_cell_type(topology->cell_type());
   // Create quadrature points on reference facet
   const std::vector<double>& q_points = q_rule->points();
   const std::size_t num_quadrature_pts = _q_weights.size();
@@ -45,7 +45,7 @@ dolfinx_contact::KernelData::KernelData(
                                 "elements requiring dof transformations.");
   }
 
-  if (element->value_size() / _bs != 1)
+  if (element->reference_value_size() / _bs != 1)
   {
     throw std::invalid_argument(
         "Contact kernel not supported for spaces with value size!=1");
@@ -72,8 +72,8 @@ dolfinx_contact::KernelData::KernelData(
 
   // As reference facet and reference cell are affine, we do not need to
   // compute this per quadrature point
-  basix::cell::type basix_cell = dolfinx::mesh::cell_type_to_basix_type(
-      mesh->topology()->cell_types()[0]);
+  basix::cell::type basix_cell
+      = dolfinx::mesh::cell_type_to_basix_type(mesh->topology()->cell_type());
   std::tie(_ref_jacobians, _jac_shape)
       = basix::cell::facet_jacobians<double>(basix_cell);
 

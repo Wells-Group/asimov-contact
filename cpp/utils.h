@@ -381,7 +381,6 @@ compute_projection_map(const dolfinx::mesh::Mesh<double>& mesh,
   {
     std::vector<std::int32_t> closest_facets(num_points, -1);
     return {closest_facets, candidate_X, {candidate_X.size() / tdim, tdim}};
-    
   }
   // Convert cell,local_facet_index to facet_index (local
   // to proc)
@@ -410,8 +409,7 @@ compute_projection_map(const dolfinx::mesh::Mesh<double>& mesh,
                                                   points);
   std::vector<double> candidate_x(num_points * 3);
   std::span<const double> mesh_geometry = mesh.geometry().x();
-  const dolfinx::fem::CoordinateElement<double>& cmap
-      = mesh.geometry().cmaps()[0];
+  const dolfinx::fem::CoordinateElement<double>& cmap = mesh.geometry().cmap();
   {
     // Find displacement vector from each point
     // to closest entity. As a point on the surface
@@ -425,7 +423,7 @@ compute_projection_map(const dolfinx::mesh::Mesh<double>& mesh,
     // cell)
     const dolfinx::fem::ElementDofLayout layout = cmap.create_dof_layout();
 
-    error::check_cell_type(mesh.topology()->cell_types()[0]);
+    error::check_cell_type(mesh.topology()->cell_type());
     const std::vector<std::int32_t>& closure_dofs
         = layout.entity_closure_dofs(tdim - 1, 0);
     const std::size_t num_facet_dofs = closure_dofs.size();
@@ -585,7 +583,7 @@ compute_raytracing_map(const dolfinx::mesh::Mesh<double>& quadrature_mesh,
   // Get relevant information from quadrature mesh
   const dolfinx::mesh::Geometry<double>& geom_q = quadrature_mesh.geometry();
   const dolfinx::fem::CoordinateElement<double>& cmap_q
-      = quadrature_mesh.geometry().cmaps()[0];
+      = quadrature_mesh.geometry().cmap();
   auto top_q = quadrature_mesh.topology();
   std::span<const double> q_x = geom_q.x();
   stdex::mdspan<const std::int32_t,
@@ -596,7 +594,7 @@ compute_raytracing_map(const dolfinx::mesh::Mesh<double>& quadrature_mesh,
   cmdspan2_t coordinate_dofs_q(coordinate_dofs_qb.data(), num_nodes_q, gdim);
   auto [reference_normals, rn_shape]
       = basix::cell::facet_outward_normals<double>(
-          dolfinx::mesh::cell_type_to_basix_type(top_q->cell_types()[0]));
+          dolfinx::mesh::cell_type_to_basix_type(top_q->cell_type()));
 
   // Tabulate at all quadrature points in quadrature rule with quadrature cmap
   const std::array<std::size_t, 4> basis_shape_q
@@ -613,10 +611,9 @@ compute_raytracing_map(const dolfinx::mesh::Mesh<double>& quadrature_mesh,
                           basis_values_q, quadrature_points);
 
   // Structures used for raytracing
-  dolfinx::mesh::CellType cell_type
-      = candidate_mesh.topology()->cell_types()[0];
+  dolfinx::mesh::CellType cell_type = candidate_mesh.topology()->cell_type();
   const dolfinx::mesh::Geometry<double>& c_geometry = candidate_mesh.geometry();
-  const dolfinx::fem::CoordinateElement<double>& cmap_c = c_geometry.cmaps()[0];
+  const dolfinx::fem::CoordinateElement<double>& cmap_c = c_geometry.cmap();
   stdex::mdspan<const std::int32_t,
                 MDSPAN_IMPL_STANDARD_NAMESPACE::dextents<std::size_t, 2>>
       c_dofmap = c_geometry.dofmap();

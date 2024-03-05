@@ -154,7 +154,7 @@ double
 dolfinx_contact::compute_circumradius(const dolfinx::mesh::Mesh<double>& mesh,
                                       double detJ, cmdspan2_t coordinate_dofs)
 {
-  const dolfinx::mesh::CellType cell_type = mesh.topology()->cell_types()[0];
+  const dolfinx::mesh::CellType cell_type = mesh.topology()->cell_type();
   const int gdim = mesh.geometry().dim();
 
   switch (cell_type)

@@ -62,9 +62,9 @@ dolfinx_contact::create_contact_mesh(dolfinx::mesh::Mesh<double>& mesh,
 
   int tdim = mesh.topology()->dim();
   int num_cell_vertices
-      = dolfinx::mesh::num_cell_vertices(mesh.topology()->cell_types()[0]);
+      = dolfinx::mesh::num_cell_vertices(mesh.topology()->cell_type());
   dolfinx::mesh::CellType facet_type
-      = dolfinx::mesh::cell_facet_type(mesh.topology()->cell_types()[0], 0);
+      = dolfinx::mesh::cell_facet_type(mesh.topology()->cell_type(), 0);
   int num_facet_vertices = dolfinx::mesh::num_cell_vertices(facet_type);
 
   // Get cells attached to marked facets
@@ -154,13 +154,12 @@ dolfinx_contact::create_contact_mesh(dolfinx::mesh::Mesh<double>& mesh,
       mesh.comm(), cv_indices, cmarker.values(), num_cell_vertices);
 
   // Convert topology to global indexing, and restrict to non-ghost cells
-  std::vector<int> topo = mesh.topology()->connectivity(tdim, 0)->array();
+  std::vector<std::int32_t> topo
+      = mesh.topology()->connectivity(tdim, 0)->array();
   // Cut off any ghost vertices
   topo.resize(ncells * num_cell_vertices);
   std::vector<std::int64_t> topo_global(topo.size());
   mesh.topology()->index_map(0)->local_to_global(topo, topo_global);
-  dolfinx::graph::AdjacencyList<std::int64_t> topo_adj
-      = dolfinx::graph::regular_adjacency_list(topo_global, num_cell_vertices);
 
   std::size_t num_vertices = mesh.topology()->index_map(0)->size_local();
   std::size_t gdim = mesh.geometry().dim();
@@ -177,7 +176,7 @@ dolfinx_contact::create_contact_mesh(dolfinx::mesh::Mesh<double>& mesh,
 
   auto partitioner
       = [cell_to_dests,
-         ncells](MPI_Comm comm, int nparts, int tdim,
+         ncells](MPI_Comm comm, int nparts, dolfinx::mesh::CellType cell_type,
                  const dolfinx::graph::AdjacencyList<std::int64_t>& cells)
   {
     int rank = dolfinx::MPI::rank(comm);
@@ -199,7 +198,8 @@ dolfinx_contact::create_contact_mesh(dolfinx::mesh::Mesh<double>& mesh,
   LOG(WARNING) << "Repartition";
   dolfinx::common::Timer trepart("~Contact: Add ghosts: Repartition");
   auto new_mesh = dolfinx::mesh::create_mesh(
-      mesh.comm(), topo_adj, mesh.geometry().cmaps(), x, xshape, partitioner);
+      mesh.comm(), mesh.comm(), std::span(topo_global), mesh.geometry().cmap(),
+      mesh.comm(), x, xshape, partitioner);
   trepart.stop();
 
   LOG(WARNING) << "Remap markers on new mesh";
