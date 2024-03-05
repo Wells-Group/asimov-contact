@@ -14,7 +14,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    container: ghcr.io/fenics/test-env:v0.7.2-openmpi
+    container: ghcr.io/fenics/test-env:current-openmpi
     strategy:
       matrix:
         # Complex mode not working
