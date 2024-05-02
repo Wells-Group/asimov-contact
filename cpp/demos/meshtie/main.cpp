@@ -79,12 +79,22 @@ int main(int argc, char* argv[])
   {
     auto [mesh, domain1, facet1] = read_mesh("box_3D.xdmf");
     // Create function spaces
+    auto ct = mesh->topology()->cell_type();
+
+    auto element_mu = basix::create_element<double>(
+        basix::element::family::P, dolfinx::mesh::cell_type_to_basix_type(ct),
+        0, basix::element::lagrange_variant::unset,
+        basix::element::dpc_variant::unset, true);
+    auto element = basix::create_element<double>(
+        basix::element::family::P, dolfinx::mesh::cell_type_to_basix_type(ct),
+        1, basix::element::lagrange_variant::unset,
+        basix::element::dpc_variant::unset, false);
+
     auto V = std::make_shared<fem::FunctionSpace<double>>(
-        fem::create_functionspace(functionspace_form_linear_elasticity_J, "w",
-                                  mesh));
+        fem::create_functionspace(mesh, element,
+                                  {(std::size_t)mesh->geometry().dim()}));
     auto V0 = std::make_shared<fem::FunctionSpace<double>>(
-        fem::create_functionspace(functionspace_form_linear_elasticity_J, "mu",
-                                  mesh));
+        fem::create_functionspace(mesh, element_mu));
 
     double E = 1000;
     double nu = 0.1;
@@ -246,19 +256,19 @@ int main(int argc, char* argv[])
 
     // Set up linear solver with parameters
     dolfinx::la::petsc::KrylovSolver lu(MPI_COMM_WORLD);
-    dolfinx::la::petsc::options::set("ksp_type", "cg");
-    dolfinx::la::petsc::options::set("pc_type", "gamg");
-    dolfinx::la::petsc::options::set("pc_mg_levels", 3);
-    dolfinx::la::petsc::options::set("mg_levels_ksp_type", "chebyshev");
-    dolfinx::la::petsc::options::set("mg_levels_pc_type", "jacobi");
-    dolfinx::la::petsc::options::set("pc_gamg_type", "agg");
-    dolfinx::la::petsc::options::set("pc_gamg_coarse_eq_limit", 100);
-    dolfinx::la::petsc::options::set("pc_gamg_agg_nsmooths", 1);
-    dolfinx::la::petsc::options::set("pc_gamg_threshold", 1E-3);
-    dolfinx::la::petsc::options::set("pc_gamg_square_graph", 2);
-    dolfinx::la::petsc::options::set("ksp_rtol", 1E-10);
-    dolfinx::la::petsc::options::set("ksp_atol", 1E-10);
-    dolfinx::la::petsc::options::set("ksp_monitor");
+    dolfinx::la::petsc::options::set("ksp_type", "preonly");
+    dolfinx::la::petsc::options::set("pc_type", "lu");
+    // dolfinx::la::petsc::options::set("pc_mg_levels", 3);
+    // dolfinx::la::petsc::options::set("mg_levels_ksp_type", "chebyshev");
+    // dolfinx::la::petsc::options::set("mg_levels_pc_type", "jacobi");
+    // dolfinx::la::petsc::options::set("pc_gamg_type", "agg");
+    // dolfinx::la::petsc::options::set("pc_gamg_coarse_eq_limit", 100);
+    // dolfinx::la::petsc::options::set("pc_gamg_agg_nsmooths", 1);
+    // dolfinx::la::petsc::options::set("pc_gamg_threshold", 1E-3);
+    // dolfinx::la::petsc::options::set("pc_gamg_square_graph", 2);
+    // dolfinx::la::petsc::options::set("ksp_rtol", 1E-10);
+    // dolfinx::la::petsc::options::set("ksp_atol", 1E-10);
+    // dolfinx::la::petsc::options::set("ksp_monitor");
 
     lu.set_from_options();
     lu.set_operator(A.mat());
