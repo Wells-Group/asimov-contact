@@ -27,6 +27,8 @@
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/tuple.h>
 #include <nanobind/stl/vector.h>
+#include <petsc4py/petsc4py.h>
+#include <petscmat.h>
 
 #define STRINGIFY(x) #x
 #define MACRO_STRINGIFY(x) STRINGIFY(x)
@@ -144,9 +146,12 @@ NB_MODULE(cpp, m)
             [](dolfinx_contact::Contact& self,
             dolfinx::fem::Form<PetscScalar>& a,
                std::string type) {
-    return self.create_petsc_matrix(a, type);
+    Mat A = self.create_petsc_matrix(a, type);
+    PyObject* obj = PyPetscMat_New(A);
+    PetscObjectDereference((PetscObject)A);
+    return nb::borrow(obj);
                },
-            nb::rv_policy::take_ownership, nb::arg("a"),
+           nb::arg("a"),
             nb::arg("type") = std::string(),
             "Create a PETSc Mat for two-sided contact.")
         .def("qp_phys",
@@ -179,10 +184,9 @@ NB_MODULE(cpp, m)
     // nitsche_rigid_surface.py/demo_nitsche_rigid_surface_ufl.py)
     //  auto contact_pair = self.contact_pair(pair);
     std::shared_ptr<const dolfinx::mesh::Mesh<double>> mesh = self.mesh();
-    const int tdim = mesh->topology()->dim(); //topological dimension
+    const int tdim = mesh->topology()->dim(); // topological dimension
 
-    const int fdim
-        = tdim - 1; // topological dimension of facet
+    const int fdim = tdim - 1; // topological dimension of facet
     auto c_to_f = mesh->topology()->connectivity(tdim, fdim);
     assert(c_to_f);
     std::shared_ptr<const dolfinx::graph::AdjacencyList<std::int32_t>>
@@ -236,17 +240,21 @@ NB_MODULE(cpp, m)
              })
 
         .def("assemble_matrix",
-             [](dolfinx_contact::Contact& self, Mat A,
+              [](dolfinx_contact::Contact& self, 
+              Mat A,
                 int origin_meshtag, contact_wrappers::KernelWrapper& kernel,
                 const nb::ndarray<PetscScalar, nb::numpy>& coeffs,
-                const nb::ndarray<PetscScalar, nb::numpy>& constants)
+                const nb::ndarray<PetscScalar, nb::numpy>& constants
+                )
              {
     auto ker = kernel.get();
     self.assemble_matrix(
-        dolfinx::la::petsc::Matrix::set_block_fn(A, ADD_VALUES), origin_meshtag,
-        ker, std::span<const PetscScalar>(coeffs.data(), coeffs.size()),
-        coeffs.shape(1), std::span(constants.data(), constants.shape(0)));
-             })
+        dolfinx::la::petsc::Matrix::set_block_fn(A, ADD_VALUES),
+        origin_meshtag, ker, std::span<const PetscScalar>(coeffs.data(),
+        coeffs.size()), coeffs.shape(1), std::span(constants.data(),
+        constants.shape(0)));
+              }
+              )
         .def("assemble_vector",
              [](dolfinx_contact::Contact& self,
                nb::ndarray<PetscScalar, nb::numpy>& b,
@@ -376,9 +384,14 @@ NB_MODULE(cpp, m)
       .def(
           "create_matrix",
           [](dolfinx_contact::MeshTie& self, dolfinx::fem::Form<PetscScalar>& a,
-             std::string type) { return self.create_petsc_matrix(a, type); },
-          nb::rv_policy::take_ownership, nb::arg("a"),
-          nb::arg("type") = std::string(),
+             std::string type)
+          {
+            Mat A = self.create_petsc_matrix(a, type);
+            PyObject* obj = PyPetscMat_New(A);
+            PetscObjectDereference((PetscObject)A);
+            return nb::borrow(obj);
+          },
+          nb::arg("a"), nb::arg("type") = std::string(),
           "Create a PETSc Mat for tying disconnected meshes.");
   m.def(
       "pack_coefficient_quadrature",

@@ -69,24 +69,29 @@ public:
   s_cmdspan2_t phi() const
   {
     cmdspan4_t full_basis(_basis_values.data(), _basis_shape);
-    return stdex::submdspan(full_basis, 0, MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent,
-                            MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent, 0);
+    return MDSPAN_IMPL_STANDARD_NAMESPACE::submdspan(
+        full_basis, 0, MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent,
+        MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent, 0);
   }
 
   // Return grad(_phi) at quadrature points for facet f
   s_cmdspan3_t dphi() const
   {
     cmdspan4_t full_basis(_basis_values.data(), _basis_shape);
-    return stdex::submdspan(full_basis, std::pair{1, (std::size_t)_tdim + 1},
-                            MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent, MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent, 0);
+    return MDSPAN_IMPL_STANDARD_NAMESPACE::submdspan(
+        full_basis, std::pair{1, (std::size_t)_tdim + 1},
+        MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent,
+        MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent, 0);
   }
 
   // Return gradient of coordinate bases at quadrature points for facet f
-  cmdspan3_t dphi_c() const
+  s_cmdspan3_t dphi_c() const
   {
     cmdspan4_t full_basis(_c_basis_values.data(), _c_basis_shape);
-    return stdex::submdspan(full_basis, std::pair{1, (std::size_t)_tdim + 1},
-                            MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent, MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent, 0);
+    return MDSPAN_IMPL_STANDARD_NAMESPACE::submdspan(
+        full_basis, std::pair{1, (std::size_t)_tdim + 1},
+        MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent,
+        MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent, 0);
   }
 
   // Return coefficient offsets of coefficient i
@@ -118,12 +123,14 @@ public:
   {
     cmdspan4_t full_basis(_c_basis_values.data(), _c_basis_shape);
     const std::size_t q_pos = _qp_offsets[facet_index] + q;
-    auto dphi_fc
-        = stdex::submdspan(full_basis, std::pair{1, (std::size_t)_tdim + 1},
-                           q_pos, MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent, 0);
+    auto dphi_fc = MDSPAN_IMPL_STANDARD_NAMESPACE::submdspan(
+        full_basis, std::pair{1, (std::size_t)_tdim + 1}, q_pos,
+        MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent, 0);
     cmdspan3_t ref_jacs(_ref_jacobians.data(), _jac_shape);
-    auto J_f = stdex::submdspan(ref_jacs, (std::size_t)facet_index,
-                                MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent, MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent);
+    auto J_f = MDSPAN_IMPL_STANDARD_NAMESPACE::submdspan(
+        ref_jacs, (std::size_t)facet_index,
+        MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent,
+        MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent);
     return _update_jacobian(detJ, J, K, J_tot, detJ_scratch, J_f, dphi_fc,
                             coords);
   }

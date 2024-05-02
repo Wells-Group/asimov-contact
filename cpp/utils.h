@@ -153,8 +153,8 @@ evaluate_basis_shape(const dolfinx::fem::FunctionSpace<double>& V,
 /// Get basis values (not unrolled for block size) for a set of points and
 /// corresponding cells.
 /// @param[in] V The function space
-/// @param[in] x The coordinates of the points in the reference elements. It has shape
-/// (num_points, tdim). Flattened row major
+/// @param[in] x The coordinates of the points in the reference elements. It has
+/// shape (num_points, tdim). Flattened row major
 /// @param[in] cells An array of cell indices. cells[i] is the index
 /// of the cell that contains the point x(i). Negative cell indices
 /// can be passed, and the corresponding point will be ignored.
@@ -372,8 +372,7 @@ compute_projection_map(const dolfinx::mesh::Mesh<double>& mesh,
                                                   points);
   std::vector<double> candidate_x(num_points * 3);
   std::span<const double> mesh_geometry = mesh.geometry().x();
-  const dolfinx::fem::CoordinateElement<double>& cmap
-      = mesh.geometry().cmap();
+  const dolfinx::fem::CoordinateElement<double>& cmap = mesh.geometry().cmap();
   {
     // Find displacement vector from each point
     // to closest entity. As a point on the surface
@@ -440,8 +439,10 @@ compute_projection_map(const dolfinx::mesh::Mesh<double>& mesh,
     std::array<double, gdim> x;
     std::array<double, tdim> X;
     const std::size_t num_dofs_g = cmap.dim();
-    stdex::mdspan<const std::int32_t, MDSPAN_IMPL_STANDARD_NAMESPACE::dextents<std::size_t, 2>> x_dofmap
-        = mesh.geometry().dofmap();
+    MDSPAN_IMPL_STANDARD_NAMESPACE::mdspan<
+        const std::int32_t,
+        MDSPAN_IMPL_STANDARD_NAMESPACE::dextents<std::size_t, 2>>
+        x_dofmap = mesh.geometry().dofmap();
     std::vector<double> coordinate_dofsb(num_dofs_g * gdim);
     cmdspan2_t coordinate_dofs(coordinate_dofsb.data(), num_dofs_g, gdim);
     auto f_to_c = mesh.topology()->connectivity(tdim - 1, tdim);
@@ -454,8 +455,8 @@ compute_projection_map(const dolfinx::mesh::Mesh<double>& mesh,
       assert(cells.size() == 1);
 
       // Pack coordinate dofs
-      auto x_dofs
-          = stdex::submdspan(x_dofmap, cells.front(), MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent);
+      auto x_dofs = MDSPAN_IMPL_STANDARD_NAMESPACE::submdspan(
+          x_dofmap, cells.front(), MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent);
       assert(x_dofs.size() == num_dofs_g);
       for (std::size_t j = 0; j < num_dofs_g; ++j)
       {
@@ -550,8 +551,10 @@ compute_raytracing_map(const dolfinx::mesh::Mesh<double>& quadrature_mesh,
       = quadrature_mesh.geometry().cmap();
   auto top_q = quadrature_mesh.topology();
   std::span<const double> q_x = geom_q.x();
-  stdex::mdspan<const std::int32_t, MDSPAN_IMPL_STANDARD_NAMESPACE::dextents<std::size_t, 2>> q_dofmap
-      = geom_q.dofmap();
+  MDSPAN_IMPL_STANDARD_NAMESPACE::mdspan<
+      const std::int32_t,
+      MDSPAN_IMPL_STANDARD_NAMESPACE::dextents<std::size_t, 2>>
+      q_dofmap = geom_q.dofmap();
   const std::size_t num_nodes_q = cmap_q.dim();
   std::vector<double> coordinate_dofs_qb(num_nodes_q * gdim);
   cmdspan2_t coordinate_dofs_q(coordinate_dofs_qb.data(), num_nodes_q, gdim);
@@ -574,12 +577,13 @@ compute_raytracing_map(const dolfinx::mesh::Mesh<double>& quadrature_mesh,
                           basis_values_q, quadrature_points);
 
   // Structures used for raytracing
-  dolfinx::mesh::CellType cell_type
-      = candidate_mesh.topology()->cell_type();
+  dolfinx::mesh::CellType cell_type = candidate_mesh.topology()->cell_type();
   const dolfinx::mesh::Geometry<double>& c_geometry = candidate_mesh.geometry();
   const dolfinx::fem::CoordinateElement<double>& cmap_c = c_geometry.cmap();
-  stdex::mdspan<const std::int32_t, MDSPAN_IMPL_STANDARD_NAMESPACE::dextents<std::size_t, 2>> c_dofmap
-      = c_geometry.dofmap();
+  MDSPAN_IMPL_STANDARD_NAMESPACE::mdspan<
+      const std::int32_t,
+      MDSPAN_IMPL_STANDARD_NAMESPACE::dextents<std::size_t, 2>>
+      c_dofmap = c_geometry.dofmap();
   std::span<const double> c_x = c_geometry.x();
 
   const std::array<std::size_t, 4> basis_shape_c = cmap_c.tabulate_shape(1, 1);
@@ -637,8 +641,9 @@ compute_raytracing_map(const dolfinx::mesh::Mesh<double>& quadrature_mesh,
                                 q_facets[i / 2], c_facets, 2 * search_radius);
 
     // Pack coordinate dofs
-    auto x_dofs
-        = stdex::submdspan(q_dofmap, quadrature_facets[i], MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent);
+    auto x_dofs = MDSPAN_IMPL_STANDARD_NAMESPACE::submdspan(
+        q_dofmap, quadrature_facets[i],
+        MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent);
     assert(x_dofs.size() == num_nodes_q);
     for (std::size_t j = 0; j < num_nodes_q; ++j)
     {
@@ -649,9 +654,10 @@ compute_raytracing_map(const dolfinx::mesh::Mesh<double>& quadrature_mesh,
     for (std::size_t j = 0; j < num_q_points; ++j)
     {
 
-      auto dphi_q = stdex::submdspan(
+      auto dphi_q = MDSPAN_IMPL_STANDARD_NAMESPACE::submdspan(
           basis_values_q, std::pair{1, (std::size_t)tdim + 1},
-          std::size_t(num_q_points * facet_index + j), MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent, 0);
+          std::size_t(num_q_points * facet_index + j),
+          MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent, 0);
       std::fill(Jb.begin(), Jb.end(), 0);
       dolfinx::fem::CoordinateElement<double>::compute_jacobian(
           dphi_q, coordinate_dofs_q, J);
@@ -681,7 +687,8 @@ compute_raytracing_map(const dolfinx::mesh::Mesh<double>& quadrature_mesh,
         std::int32_t facet_index_c = candidate_facets[2 * cand_patch[c] + 1];
         // Get cell geometry for candidate cell, reusing
         // coordinate dofs to store new coordinate
-        auto x_dofs_c = stdex::submdspan(c_dofmap, cell, MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent);
+        auto x_dofs_c = MDSPAN_IMPL_STANDARD_NAMESPACE::submdspan(
+            c_dofmap, cell, MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent);
         for (std::size_t k = 0; k < x_dofs_c.size(); ++k)
         {
           std::copy_n(std::next(c_x.begin(), 3 * x_dofs_c[k]), gdim,

@@ -101,8 +101,9 @@ dolfinx_contact::generate_rigid_surface_kernel(
                                              detJ_scratch, coord);
       dolfinx_contact::physical_facet_normal(
           std::span(n_phys.data(), gdim), K,
-          stdex::submdspan(kd.facet_normals(), facet_index,
-                           MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent));
+          MDSPAN_IMPL_STANDARD_NAMESPACE::submdspan(
+              kd.facet_normals(), facet_index,
+              MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent));
     }
     // Retrieve normal of rigid surface if constant
     std::array<double, 3> n_surf = {0, 0, 0};
@@ -135,8 +136,8 @@ dolfinx_contact::generate_rigid_surface_kernel(
     std::vector<double> sig_n_u(gdim);
 
     // Extract reference to the tabulated basis function
-    dolfinx_contact::cmdspan2_t phi = kd.phi();
-    dolfinx_contact::cmdspan3_t dphi = kd.dphi();
+    dolfinx_contact::s_cmdspan2_t phi = kd.phi();
+    dolfinx_contact::s_cmdspan3_t dphi = kd.dphi();
 
     // Loop over quadrature points
     const std::array<std::size_t, 2> q_offset
@@ -259,8 +260,9 @@ dolfinx_contact::generate_rigid_surface_kernel(
                                              detJ_scratch, coord);
       dolfinx_contact::physical_facet_normal(
           std::span(n_phys.data(), gdim), K,
-          stdex::submdspan(kd.facet_normals(), facet_index,
-                           MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent));
+          MDSPAN_IMPL_STANDARD_NAMESPACE::submdspan(
+              kd.facet_normals(), facet_index,
+              MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent));
     }
 
     // Retrieve normal of rigid surface if constant
@@ -295,8 +297,8 @@ dolfinx_contact::generate_rigid_surface_kernel(
     std::vector<double> sig_n_u(gdim);
 
     // Extract reference to the tabulated basis function
-    dolfinx_contact::cmdspan2_t phi = kd.phi();
-    dolfinx_contact::cmdspan3_t dphi = kd.dphi();
+    dolfinx_contact::s_cmdspan2_t phi = kd.phi();
+    dolfinx_contact::s_cmdspan3_t dphi = kd.dphi();
 
     // Loop over quadrature points
     const std::array<std::size_t, 2> q_offset

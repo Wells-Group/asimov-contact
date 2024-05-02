@@ -85,8 +85,9 @@ dolfinx_contact::generate_meshtie_kernel(
 
       dolfinx_contact::physical_facet_normal(
           std::span(n_phys.data(), gdim), K,
-          stdex::submdspan(kd.facet_normals(), facet_index,
-                           MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent));
+          MDSPAN_IMPL_STANDARD_NAMESPACE::submdspan(
+              kd.facet_normals(), facet_index,
+              MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent));
     }
 
     // Extract constants used inside quadrature loop
@@ -96,8 +97,8 @@ dolfinx_contact::generate_meshtie_kernel(
     double lmbda = c[1];
 
     // Extract reference to the tabulated basis function
-    cmdspan2_t phi = kd.phi();
-    cmdspan3_t dphi = kd.dphi();
+    s_cmdspan2_t phi = kd.phi();
+    s_cmdspan3_t dphi = kd.dphi();
 
     // Extract reference to quadrature weights for the local facet
     std::span<const double> weights = kd.weights(facet_index);
@@ -225,8 +226,9 @@ dolfinx_contact::generate_meshtie_kernel(
 
       dolfinx_contact::physical_facet_normal(
           std::span(n_phys.data(), gdim), K,
-          stdex::submdspan(kd.facet_normals(), facet_index,
-                           MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent));
+          MDSPAN_IMPL_STANDARD_NAMESPACE::submdspan(
+              kd.facet_normals(), facet_index,
+              MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent));
     }
 
     // Extract constants used inside quadrature loop
@@ -236,8 +238,8 @@ dolfinx_contact::generate_meshtie_kernel(
     double lmbda = c[1];
 
     // Extract reference to the tabulated basis function
-    cmdspan2_t phi = kd.phi();
-    cmdspan3_t dphi = kd.dphi();
+    s_cmdspan2_t phi = kd.phi();
+    s_cmdspan3_t dphi = kd.dphi();
 
     // Extract reference to quadrature weights for the local facet
     std::span<const double> weights = kd.weights(facet_index);

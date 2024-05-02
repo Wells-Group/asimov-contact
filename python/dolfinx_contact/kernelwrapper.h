@@ -1,4 +1,4 @@
-// Copyright (C) 2021 Jørgen S. Dokken, Sarah Roggendorf
+// Copyright (C) 2021-2024 Jørgen S. Dokken, Sarah Roggendorf
 //
 // This file is part of DOLFINx_CONTACT
 //
@@ -10,8 +10,8 @@
 namespace contact_wrappers
 {
 
-/// This class wraps kernels from C++ for use in pybind11,
-/// as pybind automatically wraps std::function of pointers to ints,
+/// This class wraps kernels from C++ for use in nanobind,
+/// as nanobind automatically wraps std::function of pointers to ints,
 /// which in turn cannot be transferred back to C++
 
 class KernelWrapper

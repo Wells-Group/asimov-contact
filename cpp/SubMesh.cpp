@@ -141,12 +141,14 @@ dolfinx_contact::SubMesh::create_functionspace(
   std::function<void(const std::span<std::int32_t>&, std::uint32_t)>
       unpermute_dofs = nullptr;
   if (element->needs_dof_permutations())
-    unpermute_dofs = element->get_dof_permutation_function(true, true);
+    unpermute_dofs = element->dof_permutation_fn(true, true);
   auto dofmap = std::make_shared<dolfinx::fem::DofMap>(
       dolfinx::fem::create_dofmap(_mesh->comm(), element_dof_layout,
                                   *_mesh->topology(), unpermute_dofs, nullptr));
   // create and return function space
-  return dolfinx::fem::FunctionSpace(_mesh, element, dofmap);
+  const auto& vs = V_parent->value_shape();
+  std::vector _value_shape(vs.data(), vs.data() + vs.size());
+  return dolfinx::fem::FunctionSpace(_mesh, element, dofmap, _value_shape);
 }
 
 //-----------------------------------------------------------------------------------------------

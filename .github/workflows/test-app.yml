@@ -59,35 +59,14 @@ jobs:
           ref: main
 
 
-      - name: Install FEniCS Python components (dolfinx)
-        run: |
-          cmake -G Ninja -DCMAKE_BUILD_TYPE=Release -B build-basix -S ./basix/cpp
-          cmake --build build-basix
-          cmake --install build-basix
-          python3 -m pip install --config-settings=build-dir="build-debug-basix" --config-settings=cmake.build-type="Debug"  --config-settings=install.strip=false --no-build-isolation ./basix/python
-          python3 -m pip install --config-settings=install.strip=false git+https://github.com/FEniCS/ufl.git@main
-          python3 -m pip install --config-settings=install.strip=false git+https://github.com/FEniCS/ffcx.git@main
-
-      - name: Install dolfinx
-        uses: actions/checkout@v4
+      - name: Install DOLFINx
+        uses: jorgensd/actions/install-dolfinx@v0.3.0
         with:
-          path: ./dolfinx
-          repository: FEniCS/dolfinx
-          ref: main
-   
-
-      - name: Configure C++ (dolfinx)
-        run: cmake -G Ninja -DCMAKE_BUILD_TYPE=Release -B build-dolfinx -S ./dolfinx/cpp/
-
-      - name: Build and install C++ library (dolfinx)
-        run: |
-          cmake --build build-dolfinx
-          cmake --install build-dolfinx
-
-      - name: Build Python interface (dolfinx)
-        run: |
-          python3 -m pip -v install -r ./dolfinx/python/build-requirements.txt
-          python3 -m pip -v install --config-settings=build-dir="build-debug-dolfinx" --config-settings=cmake.build-type="Debug"  --config-settings=install.strip=false --no-build-isolation ./dolfinx/python/
+          petsc_arch: ${{ env.PETSC_ARCH }}
+          dolfinx:  garth/nls-ref-count-fix
+          ffcx: main
+          ufl: main
+          basix: main
 
       - name: Install contact (C++)
         id: cpp-contact

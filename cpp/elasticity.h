@@ -24,7 +24,7 @@ namespace dolfinx_contact
 /// @param[in] n_2        2nd normal vector, typically n_phys
 /// @param[in] q_pos      offset of quadrature point for accessing dphi
 void compute_normal_strain_basis(mdspan2_t epsn, mdspan2_t tr, cmdspan2_t K,
-                                 cmdspan3_t dphi,
+                                 s_cmdspan3_t s_dphi,
                                  const std::array<double, 3>& n_1,
                                  std::span<const double> n_2,
                                  const std::size_t q_pos);
@@ -43,7 +43,7 @@ void compute_normal_strain_basis(mdspan2_t epsn, mdspan2_t tr, cmdspan2_t K,
 /// @param[in] mu    The poisson ratio
 /// @param[in] lmbda The 1st Lame parameter
 /// @param[in] q_pos The offset of quadrature point for accessing dphi
-void compute_sigma_n_basis(mdspan3_t sig_n, cmdspan2_t K, cmdspan3_t dphi,
+void compute_sigma_n_basis(mdspan3_t sig_n, cmdspan2_t K, s_cmdspan3_t dphi,
                            std::span<const double> n, const double mu,
                            const double lmbda, const std::size_t q_pos);
 
