@@ -162,8 +162,9 @@ def nitsche_rigid_surface(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTags, int
     offsets = np.array([0, 2], dtype=np.int32)
     surfaces = adjacencylist(data, offsets)
     # Ensures that we find closest facet to midpoint of facet by setting quadrature degree to 1
+    search_mode = [dolfinx_contact.cpp.ContactMode.ClosestPoint]
     contact = dolfinx_contact.cpp.Contact([facet_marker._cpp_object], surfaces, [(0, 1)],
-                                          V._cpp_object, quadrature_degree=1)
+                                          mesh._cpp_object, search_mode, quadrature_degree=1)
 
     # Create gap function
     gdim = mesh.geometry.dim

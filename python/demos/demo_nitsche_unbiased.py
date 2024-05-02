@@ -11,17 +11,28 @@ import numpy as np
 
 import ufl
 from dolfinx import default_scalar_type, log
-from dolfinx.common import TimingType, list_timings, timing
-from dolfinx.fem import Constant, Function, dirichletbc, functionspace, locate_dofs_topological
+from dolfinx.common import timed, Timer, TimingType, list_timings, timing
+from dolfinx.fem import (Constant, dirichletbc, form, Function, Expression, functionspace, locate_dofs_topological)
+from dolfinx.fem.petsc import create_vector, assemble_vector, assemble_matrix, set_bc, apply_lifting
 from dolfinx.graph import adjacencylist
-from dolfinx.io import XDMFFile
-from dolfinx.mesh import GhostMode, locate_entities_boundary, meshtags
-from dolfinx_contact import update_geometry
-from dolfinx_contact.helpers import epsilon, lame_parameters, sigma_func, weak_dirichlet
-from dolfinx_contact.meshing import (convert_mesh, create_box_mesh_2D, create_box_mesh_3D, create_circle_circle_mesh,
-                                     create_circle_plane_mesh, create_cylinder_cylinder_mesh, create_sphere_plane_mesh)
+from dolfinx.io import XDMFFile, VTXWriter
+from dolfinx.mesh import locate_entities_boundary, GhostMode, meshtags
+from mpi4py import MPI
+from petsc4py.PETSc import InsertMode, ScatterMode  # type: ignore
+
+from dolfinx_contact.helpers import (epsilon, lame_parameters, sigma_func,
+                                     weak_dirichlet)
+from dolfinx_contact.meshing import (convert_mesh, create_box_mesh_2D,
+                                     create_box_mesh_3D,
+                                     create_circle_circle_mesh,
+                                     create_circle_plane_mesh,
+                                     create_cylinder_cylinder_mesh,
+                                     create_sphere_plane_mesh)
+from dolfinx_contact.general_contact.contact_problem import ContactProblem, FrictionLaw
 from dolfinx_contact.parallel_mesh_ghosting import create_contact_mesh
-from dolfinx_contact.unbiased.nitsche_unbiased import nitsche_unbiased
+from dolfinx_contact.helpers import rigid_motions_nullspace_subdomains
+from dolfinx_contact.newton_solver import NewtonSolver
+from dolfinx_contact.cpp import ContactMode
 
 if __name__ == "__main__":
     desc = "Nitsche's method for two elastic bodies using custom assemblers"
@@ -63,8 +74,6 @@ if __name__ == "__main__":
                         help="Search radius for ray-tracing")
     parser.add_argument("--load_steps", default=1, type=np.int32, dest="nload_steps",
                         help="Number of steps for gradual loading")
-    parser.add_argument("--time_steps", default=1, type=np.int32, dest="time_steps",
-                        help="Number of pseudo time steps")
     parser.add_argument("--res", default=0.1, type=np.float64, dest="res",
                         help="Mesh resolution")
     parser.add_argument("--friction", default=0.0, type=np.float64, dest="fric",
@@ -103,7 +112,7 @@ if __name__ == "__main__":
     # and the bottom (contact condition)
 
     if threed:
-        displacement = [[0, 0, -args.disp], [0, 0, 0]]
+        displacement = np.array([[0, 0, -args.disp], [0, 0, 0]])
         if problem == 1:
             outname = "results/problem1_3D_simplex" if simplex else "results/problem1_3D_hex"
             fname = f"{mesh_dir}/box_3D"
@@ -158,8 +167,8 @@ if __name__ == "__main__":
 
         elif problem == 3:
             outname = "results/problem3_3D_simplex" if simplex else "results/problem3_3D_hex"
-            fname = "cylinder_cylinder_3D"
-            displacement = [[-1, 0, 0], [0, 0, 0]]
+            fname = "meshes/cylinder_cylinder_3D"
+            displacement = np.array([[-1, 0, 0], [0, 0, 0]])
             create_cylinder_cylinder_mesh(fname, res=args.res, simplex=simplex)
             with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
                 mesh = xdmf.read_mesh(name="cylinder_cylinder")
@@ -197,11 +206,9 @@ if __name__ == "__main__":
             values = np.hstack([val0, val1, val2, val3])
             sorted_facets = np.argsort(indices)
             facet_marker = meshtags(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
-            if args.radius > 0.8 / args.time_steps:
-                args.radius = 0.8 / args.time_steps
 
     else:
-        displacement = [[0, -args.disp], [0, 0]]
+        displacement = np.array([[0, -args.disp], [0, 0]])
         if problem == 1:
             outname = "results/problem1_2D_simplex" if simplex else "results/problem1_2D_quads"
             fname = f"{mesh_dir}/box_2D"
@@ -221,8 +228,9 @@ if __name__ == "__main__":
 
         elif problem == 2:
             outname = "results/problem2_2D_simplex" if simplex else "results/problem2_2D_quads"
-            fname = f"{mesh_dir}/twomeshes"
-            create_circle_plane_mesh(filename=f"{fname}.msh", quads=not simplex, res=args.res, order=args.order)
+            fname = f"{mesh_dir}/problem2_2D_simplex" if simplex else f"{mesh_dir}/problem2_2D_quads"
+            create_circle_plane_mesh(filename=f"{fname}.msh", quads=not simplex,
+                                     res=args.res, order=args.order, r=0.3, gap=0.1, height=0.1, length=1.0)
             convert_mesh(fname, f"{fname}.xdmf", gdim=2)
 
             with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
@@ -231,10 +239,10 @@ if __name__ == "__main__":
                 tdim = mesh.topology.dim
                 mesh.topology.create_connectivity(tdim - 1, tdim)
                 facet_marker = xdmf.read_meshtags(mesh, name="facet_marker")
-            dirichlet_bdy_1 = 2
-            contact_bdy_1 = 4
-            contact_bdy_2 = 9
-            dirichlet_bdy_2 = 7
+            dirichlet_bdy_1 = 8
+            contact_bdy_1 = 10
+            contact_bdy_2 = 6
+            dirichlet_bdy_2 = 4
         elif problem == 3:
             outname = "results/problem3_2D_simplex" if simplex else "results/problem3_2D_quads"
             fname = f"{mesh_dir}/two_disks"
@@ -302,7 +310,7 @@ if __name__ == "__main__":
                       "atol": newton_tol,
                       "rtol": newton_tol,
                       "convergence_criterion": "residual",
-                      "max_it": 50,
+                      "max_it": 200,
                       "error_on_nonconvergence": True}
     # petsc_options = {"ksp_type": "preonly", "pc_type": "lu"}
     petsc_options = {
@@ -316,23 +324,26 @@ if __name__ == "__main__":
         "mg_levels_ksp_type": "chebyshev",
         "mg_levels_pc_type": "jacobi",
         "pc_gamg_type": "agg",
-        "pc_gamg_coarse_eq_limit": 100,
+        "pc_gamg_coarse_eq_limit": 1000,
         "pc_gamg_agg_nsmooths": 1,
-        "pc_gamg_threshold": 1e-3,
+        "pc_gamg_threshold": 0.015,
         "pc_gamg_square_graph": 2,
-        "pc_gamg_reuse_interpolation": False
+        "pc_gamg_reuse_interpolation": True,
+        "ksp_norm_type": "unpreconditioned"
     }
     # Pack mesh data for Nitsche solver
     dirichlet_vals = [dirichlet_bdy_1, dirichlet_bdy_2]
-    contact = [(0, 1), (1, 0)]
+    contact = [(1, 0), (0, 1)]
     data = np.array([contact_bdy_1, contact_bdy_2], dtype=np.int32)
     offsets = np.array([0, 2], dtype=np.int32)
     surfaces = adjacencylist(data, offsets)
 
     # Function, TestFunction, TrialFunction and measures
-    V = functionspace(mesh, ("Lagrange", 1, (mesh.geometry.dim, )))
+    V = functionspace(mesh, ("Lagrange", args.order, (mesh.geometry.dim, )))
     u = Function(V)
+    du = Function(V)
     v = ufl.TestFunction(V)
+    w = ufl.TrialFunction(V)
     dx = ufl.Measure("dx", domain=mesh, subdomain_data=domain_marker)
     ds = ufl.Measure("ds", domain=mesh, subdomain_data=facet_marker)
 
@@ -346,81 +357,165 @@ if __name__ == "__main__":
 
     # Create variational form without contact contributions
     F = ufl.inner(sigma(u), epsilon(v)) * dx
-    # Solve contact problem using Nitsche's method
-    load_increment = np.asarray(displacement, dtype=np.float64) / nload_steps
 
-    # Data to be stored on the unperturb domain at the end of the simulation
-    u_all = Function(V)
-    u_all.x.array[:] = np.zeros(u.x.array[:].shape)
-    geometry = mesh.geometry.x[:].copy()
+    # Nitsche parameters
+    gamma = args.gamma
+    theta = args.theta
+    gdim = mesh.geometry.dim
+    bcs = []
+    bc_fns = []
+    for k in range(displacement.shape[0]):
+        d = displacement[k, :]
+        tag = dirichlet_vals[k]
+        g = Constant(mesh, default_scalar_type(tuple(d[i] for i in range(gdim))))
+        bc_fns.append(g)
+        if args.lifting:
+            dofs = locate_dofs_topological(V, tdim - 1, facet_marker.find(tag))
+            bcs.append(dirichletbc(g, dofs, V))
+        else:
+            F = weak_dirichlet(F, u, g, sigma, E * gamma * args.order**2, theta, ds(tag))
+
+    F = ufl.replace(F, {u: u + du})
+    J = ufl.derivative(F, du, w)
+
+    # compiler options to improve performance
+    cffi_options = ["-Ofast", "-march=native"]
+    jit_options = {"cffi_extra_compile_args": cffi_options,
+                   "cffi_libraries": ["m"]}
+    # compiled forms for rhs and tangen system
+    F_compiled = form(F, jit_options=jit_options)
+    J_compiled = form(J, jit_options=jit_options)
 
     log.set_log_level(log.LogLevel.WARNING)
-    num_newton_its = np.zeros((nload_steps, args.time_steps), dtype=int)
-    num_krylov_its = np.zeros((nload_steps, args.time_steps), dtype=int)
-    newton_time = np.zeros((nload_steps, args.time_steps), dtype=np.float64)
+    num_newton_its = np.zeros(nload_steps, dtype=int)
+    num_krylov_its = np.zeros(nload_steps, dtype=int)
+    newton_time = np.zeros(nload_steps, dtype=np.float64)
 
     solver_outfile = args.outfile if args.ksp else None
 
-    # dictionary with problem parameters
-    gamma = args.gamma
-    theta = args.theta
-    problem_parameters = {"mu": mu, "lambda": lmbda, "gamma": E * gamma, "theta": theta, "friction": args.fric}
-    gdim = mesh.geometry.dim
+    V0 = functionspace(mesh, ("DG", 0))
+    mu0 = Function(V0)
+    lmbda0 = Function(V0)
+    fric = Function(V0)
+    mu0.interpolate(lambda x: np.full((1, x.shape[1]), mu))
+    lmbda0.interpolate(lambda x: np.full((1, x.shape[1]), lmbda))
+    fric.interpolate(lambda x: np.full((1, x.shape[1]), args.fric))
 
-    # Load geometry over multiple steps
-    for j in range(nload_steps):
-        outnamej = f"{outname}_{j}"
-        rhs_fns = []
-        bcs = []
-        Fj = F
-        for k, d in enumerate(load_increment):
-            tag = dirichlet_vals[k]
-            g = Constant(mesh, default_scalar_type(tuple(d[i] for i in range(gdim))))
-            if args.lifting:
-                dofs = locate_dofs_topological(V, tdim - 1, facet_marker.find(tag))
-                bcs.append(dirichletbc(g, dofs, V))
+    if args.raytracing:
+        search_mode = [ContactMode.Raytracing for _ in range(len(contact))]
+    else:
+        search_mode = [ContactMode.ClosestPoint for _ in range(len(contact))]
+
+    # create contact solver
+    contact_problem = ContactProblem([facet_marker], surfaces, contact, mesh, args.q_degree, search_mode)
+    if args.coulomb:
+        friction_law = FrictionLaw.Coulomb
+    else:
+        friction_law = FrictionLaw.Tresca
+    contact_problem.generate_contact_data(friction_law, V, {"u": u, "du": du, "mu": mu0,
+                                                            "lambda": lmbda0, "fric": fric},
+                                          E * gamma * args.order**2, theta)
+
+    # define functions for newton solver
+    def compute_coefficients(x, coeffs):
+        size_local = V.dofmap.index_map.size_local
+        bs = V.dofmap.index_map_bs
+        du.x.array[:size_local * bs] = x.array_r[:size_local * bs]
+        du.x.scatter_forward()
+        contact_problem.update_contact_data(du)
+
+    @timed("~Contact: Assemble residual")
+    def compute_residual(x, b, coeffs):
+        b.zeroEntries()
+        b.ghostUpdate(addv=InsertMode.INSERT,
+                      mode=ScatterMode.FORWARD)
+        with Timer("~~Contact: Contact contributions (in assemble vector)"):
+            contact_problem.assemble_vector(b, V)
+        with Timer("~~Contact: Standard contributions (in assemble vector)"):
+            assemble_vector(b, F_compiled)
+
+        # Apply boundary condition
+        if len(bcs) > 0:
+            apply_lifting(
+                b, [J_compiled], bcs=[bcs], x0=[x], scale=-1.0)
+        b.ghostUpdate(addv=InsertMode.ADD,
+                      mode=ScatterMode.REVERSE)
+        if len(bcs) > 0:
+            set_bc(b, bcs, x, -1.0)
+
+    @timed("~Contact: Assemble matrix")
+    def compute_jacobian_matrix(x, a_mat, coeffs):
+        a_mat.zeroEntries()
+        with Timer("~~Contact: Contact contributions (in assemble matrix)"):
+            contact_problem.assemble_matrix(a_mat, V)
+        with Timer("~~Contact: Standard contributions (in assemble matrix)"):
+            assemble_matrix(a_mat, J_compiled, bcs=bcs)
+        a_mat.assemble()
+
+    # create vector and matrix
+    a_mat = contact_problem.create_matrix(J_compiled)
+    b = create_vector(F_compiled)
+
+    # Set up snes solver for nonlinear solver
+    newton_solver = NewtonSolver(mesh.comm, a_mat, b, contact_problem.coeffs)
+    # Set matrix-vector computations
+    newton_solver.set_residual(compute_residual)
+    newton_solver.set_jacobian(compute_jacobian_matrix)
+    newton_solver.set_coefficients(compute_coefficients)
+
+    # Set rigid motion nullspace
+    null_space = rigid_motions_nullspace_subdomains(V, domain_marker, np.unique(
+        domain_marker.values), num_domains=len(np.unique(domain_marker.values)))
+    newton_solver.A.setNearNullSpace(null_space)
+
+    # Set Newton solver options
+    newton_solver.set_newton_options(newton_options)
+
+    # Set Krylov solver options
+    newton_solver.set_krylov_options(petsc_options)
+
+    # initialise vtx writer
+    u.name = "u"
+    vtx = VTXWriter(mesh.comm, f"{outname}_{nload_steps}_step.bp", [u], "bp4")
+    vtx.write(0)
+    for i in range(nload_steps):
+        for k, g in enumerate(bc_fns):
+            if len(bcs) > 0:
+                g.value[:] = displacement[k, :] / nload_steps
             else:
-                rhs_fns.append(g)
-                Fj = weak_dirichlet(Fj, u, rhs_fns[k], sigma, E * gamma, theta, ds(tag))
+                g.value[:] = (i + 1) * displacement[k, :] / nload_steps
+        timing_str = f"~Contact: {i+1} Newton Solver"
+        with Timer(timing_str):
+            n, converged = newton_solver.solve(du, write_solution=True)
+        num_newton_its[i] = n
 
-        cffi_options = ["-Ofast", "-march=native"]
-        jit_options = {"cffi_extra_compile_args": cffi_options, "cffi_libraries": ["m"]}
-        # Solve contact problem using Nitsche's method
-        u, newton_its, krylov_iterations, solver_time = nitsche_unbiased(args.time_steps, ufl_form=Fj,
-                                                                         u=u, rhs_fns=rhs_fns,
-                                                                         markers=[domain_marker, facet_marker],
-                                                                         contact_data=(surfaces, contact), bcs=bcs,
-                                                                         problem_parameters=problem_parameters,
-                                                                         newton_options=newton_options,
-                                                                         petsc_options=petsc_options,
-                                                                         jit_options=jit_options,
-                                                                         outfile=solver_outfile,
-                                                                         fname=outnamej, raytracing=args.raytracing,
-                                                                         quadrature_degree=args.q_degree,
-                                                                         search_radius=args.radius,
-                                                                         coulomb=args.coulomb)
-        num_newton_its[j, :] = newton_its[:]
-        num_krylov_its[j, :] = krylov_iterations[:]
-        newton_time[j, :] = solver_time[:]
-        with XDMFFile(mesh.comm, f"results/u_unbiased_{j}.xdmf", "w") as xdmf:
-            xdmf.write_mesh(mesh)
-            u.name = "u"
-            xdmf.write_function(u)
+        du.x.scatter_forward()
+        u.x.array[:] += du.x.array[:]
+        contact_problem.update_contact_detection(u)
+        a_mat = contact_problem.create_matrix(J_compiled)
+        a_mat.setNearNullSpace(null_space)
+        newton_solver.set_petsc_matrix(a_mat)
+        du.x.array[:] = 0.1 * du.x.array[:]
+        contact_problem.update_contact_data(du)
+        vtx.write(i + 1)
+    vtx.close()
 
-        # Perturb mesh with solution displacement
-        update_geometry(u._cpp_object, mesh._cpp_object)
-
-        # Accumulate displacements
-        u_all.x.array[:] += u.x.array[:]
-        u.x.array[:].fill(0)
-        u.x.scatter_forward()
-
-    # Reset mesh to initial state and write accumulated solution
-    mesh.geometry.x[:] = geometry
+    sigma_dev = sigma(u) - (1 / 3) * ufl.tr(sigma(u)) * ufl.Identity(len(u))
+    sigma_vm = ufl.sqrt((3 / 2) * ufl.inner(sigma_dev, sigma_dev))
+    W = functionspace(mesh, ("Discontinuous Lagrange", args.order - 1))
+    sigma_vm_expr = Expression(sigma_vm, W.element.interpolation_points())
+    sigma_vm_h = Function(W)
+    sigma_vm_h.interpolate(sigma_vm_expr)
+    sigma_vm_h.name = "vonMises"
     with XDMFFile(mesh.comm, "results/u_unbiased_total.xdmf", "w") as xdmf:
         xdmf.write_mesh(mesh)
-        u_all.name = "u"
-        xdmf.write_function(u_all)
+        u.name = "u"
+        xdmf.write_function(u)
+
+    with XDMFFile(mesh.comm, "results/u_unbiased_vonMises.xdmf", "w") as xdmf:
+        xdmf.write_mesh(mesh)
+        xdmf.write_function(sigma_vm_h)
+
     with XDMFFile(mesh.comm, "results/partitioning.xdmf", "w") as xdmf:
         xdmf.write_mesh(mesh)
         xdmf.write_meshtags(process_marker, mesh.geometry)

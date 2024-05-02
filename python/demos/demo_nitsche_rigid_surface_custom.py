@@ -122,7 +122,8 @@ if __name__ == "__main__":
             facet_marker = meshtags(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
         else:
             fname = f"{mesh_dir}/twomeshes"
-            create_circle_plane_mesh(filename=f"{fname}.msh", quads=(not simplex), res=0.05)
+            create_circle_plane_mesh(filename=f"{fname}.msh", quads=(
+                not simplex), res=0.05, r=0.3, gap=0.1, height=0.1, length=1.0)
             convert_mesh(fname, f"{fname}.xdmf", gdim=2)
 
             with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
@@ -132,10 +133,10 @@ if __name__ == "__main__":
                 facet_marker = xdmf.read_meshtags(mesh, "facet_marker")
 
             def top(x):
-                return x[1] > 0.5
+                return x[1] > 0.0
 
             def bottom(x):
-                return np.logical_and(x[1] < 0.45, x[1] > 0.15)
+                return np.logical_and(x[1] < -0.05, x[1] > -0.35)
 
             top_value = 1
             bottom_value = 2
@@ -144,8 +145,8 @@ if __name__ == "__main__":
             # Create meshtag for top and bottom markers
             top_facets1 = locate_entities_boundary(mesh, tdim - 1, top)
             bottom_facets1 = locate_entities_boundary(mesh, tdim - 1, bottom)
-            top_facets2 = locate_entities_boundary(mesh, tdim - 1, lambda x: np.isclose(x[1], 0.1))
-            bottom_facets2 = locate_entities_boundary(mesh, tdim - 1, lambda x: np.isclose(x[1], 0.0))
+            top_facets2 = locate_entities_boundary(mesh, tdim - 1, lambda x: np.isclose(x[1], -0.4))
+            bottom_facets2 = locate_entities_boundary(mesh, tdim - 1, lambda x: np.isclose(x[1], -0.5))
             top_values = np.full(len(top_facets1), top_value, dtype=np.int32)
             bottom_values = np.full(len(bottom_facets1), bottom_value, dtype=np.int32)
 

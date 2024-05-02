@@ -137,3 +137,34 @@ void dolfinx_contact::compute_sigma_n_opp(mdspan4_t sig_n_opp,
       }
     }
 }
+
+std::vector<double> dolfinx_contact::compute_contact_forces(
+    std::span<const double> grad_u, std::span<const double> n_x,
+   const std::size_t num_q_points,
+    std::size_t num_facets, const std::size_t gdim, const double mu,
+    const double lmbda)
+{
+  std::vector<double> sig_n_u(gdim);
+  
+  std::vector<double> sign(num_facets * num_q_points * gdim, 0.0);
+  for (std::size_t f = 0; f < num_facets; ++f)
+  {
+    std::size_t f_offset = num_q_points * gdim * f;
+    for (std::size_t q = 0; q < num_q_points; ++q)
+    {
+      // compute sig(u)*n_x
+      std::fill(sig_n_u.begin(), sig_n_u.end(), 0.0);
+      dolfinx_contact::compute_sigma_n_u(
+          sig_n_u,
+          grad_u.subspan(f_offset * gdim + q * gdim * gdim, gdim * gdim),
+          n_x.subspan(f_offset + q * gdim, gdim), mu, lmbda);
+
+      for (std::size_t j = 0; j < gdim; ++j)
+      {
+        sign[f * num_q_points  * gdim + q * gdim + j] = sig_n_u[j];
+      }
+
+  }
+  }
+  return sign;
+}

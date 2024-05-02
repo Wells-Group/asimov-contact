@@ -10,7 +10,58 @@
 #include "geometric_quantities.h"
 #include <dolfinx/geometry/BoundingBoxTree.h>
 #include <dolfinx/geometry/utils.h>
+#include <dolfinx/io/XDMFFile.h>
 
+//-----------------------------------------------------------------------------
+std::tuple<std::shared_ptr<dolfinx::mesh::Mesh<U>>,
+           dolfinx::mesh::MeshTags<std::int32_t>,
+           dolfinx::mesh::MeshTags<std::int32_t>>
+dolfinx_contact::read_mesh(const std::string& filename,
+                           const std::string& topo_name,
+                           const std::string& geo_name,
+                           const std::string& volume_markers,
+                           const std::string& facet_markers)
+{
+  // Read and create mesh
+  dolfinx::io::XDMFFile file(MPI_COMM_WORLD, filename, "r");
+  auto [ct, cdegree]
+      = file.read_cell_type(volume_markers); // retrieve cell type
+  auto cmap = dolfinx::fem::CoordinateElement<U>(ct, cdegree);
+
+  // Read geometry and topology
+  auto [x, xshape] = file.read_geometry_data(geo_name);
+  [[maybe_unused]] auto [cells, cshape] = file.read_topology_data(topo_name);
+
+  const std::vector<U>& _x = std::get<std::vector<U>>(x);
+  auto mesh = std::make_shared<dolfinx::mesh::Mesh<U>>(
+      dolfinx::mesh::create_mesh(MPI_COMM_WORLD, cells, cmap, _x, xshape,
+                                 dolfinx::mesh::GhostMode::none));
+
+  // Create connectivities needed for reading meshtags
+  mesh->topology_mutable()->create_entities(2);
+  mesh->topology_mutable()->create_connectivity(2, 3);
+
+  // Create entity-vertex connectivity
+  constexpr int tdim = 3;
+  mesh->topology_mutable()->create_entities(tdim - 1);
+  mesh->topology_mutable()->create_connectivity(tdim - 1, tdim);
+
+  // Read domain meshtags
+  if (dolfinx::MPI::rank(mesh->comm()) == 0)
+    std::cout << "Reading domain MeshTags ..." << std::endl;
+  dolfinx::mesh::MeshTags<std::int32_t> domain1
+      = file.read_meshtags(*mesh, volume_markers);
+
+  // Read facet meshtags
+  if (dolfinx::MPI::rank(mesh->comm()) == 0)
+    std::cout << "Reading facet MeshTags ..." << std::endl;
+  dolfinx::mesh::MeshTags<std::int32_t> facet1
+      = file.read_meshtags(*mesh, facet_markers);
+
+  file.close();
+
+  return std::make_tuple(mesh, domain1, facet1);
+}
 //-----------------------------------------------------------------------------
 void dolfinx_contact::pull_back(
     dolfinx_contact::mdspan3_t J, dolfinx_contact::mdspan3_t K,
@@ -1069,7 +1120,7 @@ dolfinx_contact::compute_distance_map(
 MatNullSpace dolfinx_contact::build_nullspace_multibody(
     const dolfinx::fem::FunctionSpace<double>& V,
     const dolfinx::mesh::MeshTags<std::int32_t>& mt,
-    std::vector<std::int32_t>& tags)
+    std::span<const std::int32_t> tags)
 {
   std::size_t gdim = V.mesh()->geometry().dim();
   std::size_t dim = (gdim == 2) ? 3 : 6;

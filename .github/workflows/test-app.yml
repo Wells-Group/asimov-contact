@@ -76,6 +76,22 @@ jobs:
           cmake -G Ninja -B build-dir
           ninja -C build-dir
           ./build-dir/demo_meshtie
+          mpirun -np 2 ./build-dir/demo_meshtie
+          cd ../meshtieNewton
+          cmake -G Ninja -B build-dir
+          ninja -C build-dir
+          ./build-dir/demo_meshtie
+          mpirun -np 2 ./build-dir/demo_meshtie
+          cd ../meshtieHeatTransfer
+          cmake -G Ninja -B build-dir
+          ninja -C build-dir
+          ./build-dir/demo_meshtie
+          mpirun -np 2 ./build-dir/demo_meshtie
+          cd ../meshtieHeatEquation
+          cmake -G Ninja -B build-dir
+          ninja -C build-dir
+          ./build-dir/demo_meshtie
+          mpirun -np 2 ./build-dir/demo_meshtie
 
       - name: Install contact
         id: python-contact
@@ -134,6 +150,11 @@ jobs:
         working-directory: ./python/demos/oxford
         run: 
           python3 blocks_nitsche.py
+          cd ../meshtie_demos
+          python3 blocks_nitsche_meshtie.py
+          python3 poisson_convergence.py --simplex --runs=4
+          python3 poisson_convergence.py --3D
+          python3 demo_poisson.py
 
       - name: Run tests
         run: |

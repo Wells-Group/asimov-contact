@@ -18,7 +18,7 @@ from dolfinx.io import XDMFFile
 from dolfinx.mesh import CellType, create_mesh, locate_entities_boundary, meshtags
 
 
-def create_functionspaces(ct, gap, delta):
+def create_functionspaces(ct, gap, delta, disp):
     ''' This is a helper function to create the two element function spaces
         for custom assembly using quads, triangles, hexes and tetrahedra'''
     cell_type = to_type(ct)
@@ -60,7 +60,11 @@ def create_functionspaces(ct, gap, delta):
     el = basix.ufl.element("Lagrange", ct, 1, shape=(x.shape[1], ), gdim=x.shape[1])
     domain = ufl.Mesh(el)
     mesh = create_mesh(MPI.COMM_WORLD, cells, x, domain)
-    V = _fem.functionspace(mesh, el)
+    if disp:
+        el = ufl.VectorElement("Lagrange", mesh.ufl_cell(), 1)
+    else:
+        el = ufl.FiniteElement("Lagrange", mesh.ufl_cell(), 1)
+    V = _fem.FunctionSpace(mesh, el)
     with XDMFFile(mesh.comm, "test_mesh.xdmf", "w") as xdmf:
         xdmf.write_mesh(mesh)
     return V
@@ -87,8 +91,11 @@ def compare_test_fn(fn_space, test_fn, grad_test_fn, q_indices, link, x_ref, cel
             expr_vals = expr.eval(mesh, cell_arr)
 
             # Create expression vor evaluating derivative of test function and evaluate
-            expr2 = _fem.Expression(ufl.grad(v.sub(k)), x_ref)
-            expr_vals2 = expr2.eval(mesh, cell_arr)
+            if bs == 1:
+                expr2 = _fem.Expression(ufl.grad(v), x_ref)
+            else:
+                expr2 = _fem.Expression(ufl.grad(v.sub(k)), x_ref)
+            expr_vals2 = expr2.eval(mesh, [cell])
             # compare values of test functions
             offset = link * num_q_points * len(dofs) * bs + i * num_q_points * bs
             assert np.allclose(expr_vals[0][q_indices * bs + k], test_fn[offset + q_indices * bs + k])
@@ -142,8 +149,11 @@ def compare_u(fn_space, u, u_opposite, grad_u_opposite, q_indices, x_ref, cell):
     # loop over block
     for k in range(bs):
         # use expression to evaluate gradient
-        expr = _fem.Expression(ufl.grad(u.sub(k)), x_ref)
-        expr_vals = expr.eval(mesh, cell_arr).reshape(-1)
+        if bs == 1:
+            expr = _fem.Expression(ufl.grad(u), x_ref[q_indices, :])
+        else:
+            expr = _fem.Expression(ufl.grad(u.sub(k)), x_ref[q_indices, :])
+        expr_vals = expr.eval(mesh, [cell]).reshape(-1)
 
         # extract jacobian from surf_der and gradient from u_opposite and expr_vals
         for i, q in enumerate(q_indices):
@@ -166,10 +176,11 @@ def compare_u(fn_space, u, u_opposite, grad_u_opposite, q_indices, x_ref, cell):
 @pytest.mark.parametrize("q_deg", [1, 2, 3])
 @pytest.mark.parametrize("delta", [0.0, -0.5])
 @pytest.mark.parametrize("surface", [0, 1])
-def test_packing(ct, gap, q_deg, delta, surface):
+@pytest.mark.parametrize("disp", [True, False])
+def test_packing(ct, gap, q_deg, delta, surface, disp):
 
     # Create function space
-    V = create_functionspaces(ct, gap, delta)
+    V = create_functionspaces(ct, gap, delta, disp)
 
     # Retrieve mesh and mesh data
     mesh = V.mesh
@@ -191,11 +202,17 @@ def test_packing(ct, gap, q_deg, delta, surface):
     sorted_facets = np.argsort(indices)
     facet_marker = meshtags(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
 
-    def func(x):
-        vals = np.zeros((gdim, x.shape[1]))
-        vals[0] = 0.1 * x[0]
-        vals[1] = 0.23 * x[1]
-        return vals
+    if disp:
+        def func(x):
+            vals = np.zeros((gdim, x.shape[1]))
+            vals[0] = x[0]**2
+            vals[1] = 0.23 * x[1]
+            return vals
+    else:
+        def func(x):
+            vals = np.zeros((1, x.shape[1]))
+            vals[0] = np.sin(x[0])
+            return vals
 
     # Compute function that is known on each side
     u = _fem.Function(V)
@@ -208,16 +225,18 @@ def test_packing(ct, gap, q_deg, delta, surface):
     data = np.array([0, 1], dtype=np.int32)
     offsets = np.array([0, 2], dtype=np.int32)
     surfaces = adjacencylist(data, offsets)
+    search_mode = [dolfinx_contact.cpp.ContactMode.ClosestPoint]
     contact = dolfinx_contact.cpp.Contact([facet_marker._cpp_object], surfaces, [
-                                          (s, o)], V._cpp_object, quadrature_degree=q_deg)
-    contact.update_submesh_geometry(u._cpp_object)
+                                          (s, o)], mesh._cpp_object, search_mode, quadrature_degree=q_deg)
+    if disp:
+        contact.update_submesh_geometry(u._cpp_object)
     contact.create_distance_map(0)
 
     # Pack gap on surface, pack test functions, u on opposite surface
     gap = contact.pack_gap(0)
-    test_fn = contact.pack_test_functions(0)
+    test_fn = contact.pack_test_functions(0, V._cpp_object)
     u_packed = contact.pack_u_contact(0, u._cpp_object)
-    grad_test_fn = contact.pack_grad_test_functions(0)
+    grad_test_fn = contact.pack_grad_test_functions(0, V._cpp_object)
     grad_u = contact.pack_grad_u_contact(0, u._cpp_object)
 
     # Retrieve surface facets
@@ -238,7 +257,9 @@ def test_packing(ct, gap, q_deg, delta, surface):
         points = np.zeros((num_q_points, gdim))
 
         points[:, :gdim] = qp_phys[:, :gdim] + \
-            gap[f].reshape((num_q_points, gdim)) - u_packed[f].reshape((num_q_points, gdim))
+            gap[f].reshape((num_q_points, gdim))
+        if disp:
+            points[:, :gdim] = points[:, :gdim] - u_packed[f].reshape((num_q_points, gdim))
 
         # retrieve connected facets
         connected_facets = lookup.links(f)

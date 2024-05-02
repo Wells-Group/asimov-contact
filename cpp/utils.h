@@ -29,6 +29,9 @@
 #include <dolfinx/mesh/Mesh.h>
 #include <dolfinx/mesh/MeshTags.h>
 
+using T = PetscScalar;
+using U = typename dolfinx::scalar_value_type_t<T>;
+
 namespace dolfinx_contact
 {
 
@@ -44,11 +47,38 @@ enum class Kernel
   Jac,
   MeshTieRhs,
   MeshTieJac,
+  ThermoElasticRhs,
   TrescaRhs,
   TrescaJac,
   CoulombRhs,
   CoulombJac
 };
+
+enum class Problem
+{
+  Elasticity,
+  Poisson,
+  ThermoElasticity
+};
+
+//------------------------------------------------------------------------------
+/// Read a mesh
+/// @param[in] filename The file name
+/// @param[in] topo_name Optional, grid name/marker name for extracting topology
+/// @param[in] geo_name Optional, grid name for extracting geometry
+/// @param[in] volume_markers Optional, name of the volume markers
+/// @param[in] facet_markers Optional, name of the facet markers
+/// @return The tuple (mesh, domain tags, facet tags)
+//------------------------------------------------------------------------------
+std::tuple<std::shared_ptr<dolfinx::mesh::Mesh<U>>,
+           dolfinx::mesh::MeshTags<std::int32_t>,
+           dolfinx::mesh::MeshTags<std::int32_t>>
+read_mesh(const std::string& filename,
+          const std::string& topo_name = "volume markers",
+          const std::string& geo_name = "geometry",
+          const std::string& volume_markers = "volume markers",
+          const std::string& facet_markers = "facet markers");
+
 // NOTE: this function should change signature to T * ,..... , num_links,
 // num_dofs_per_link
 template <typename T>
@@ -153,6 +183,8 @@ evaluate_basis_shape(const dolfinx::fem::FunctionSpace<double>& V,
 /// Get basis values (not unrolled for block size) for a set of points and
 /// corresponding cells.
 /// @param[in] V The function space
+/// @param[in] x The coordinates of the points in the reference elements. It has
+/// shape (num_points, tdim). Flattened row major
 /// @param[in] x The coordinates of the points in the reference elements. It has
 /// shape (num_points, tdim). Flattened row major
 /// @param[in] cells An array of cell indices. cells[i] is the index
@@ -340,11 +372,18 @@ compute_projection_map(const dolfinx::mesh::Mesh<double>& mesh,
                        std::span<const std::int32_t> facet_tuples,
                        std::span<const double> points)
 {
+
   assert(tdim == mesh.topology()->dim());
   assert(mesh.geometry().dim() == gdim);
 
   const std::size_t num_points = points.size() / 3;
+  std::vector<double> candidate_X(num_points * tdim, 0);
 
+  if (facet_tuples.empty())
+  {
+    std::vector<std::int32_t> closest_facets(num_points, -1);
+    return {closest_facets, candidate_X, {candidate_X.size() / tdim, tdim}};
+    }
   // Convert cell,local_facet_index to facet_index (local
   // to proc)
   std::vector<std::int32_t> facets(facet_tuples.size() / 2);
@@ -426,7 +465,6 @@ compute_projection_map(const dolfinx::mesh::Mesh<double>& mesh,
   }
 
   // Pull back to reference point for each facet on the surface
-  std::vector<double> candidate_X(num_points * tdim);
   {
     // Temporary data structures used in loop over each
     // quadrature point on each facet
@@ -702,12 +740,11 @@ compute_raytracing_map(const dolfinx::mesh::Mesh<double>& quadrature_mesh,
         // Get parameterization map
         std::function<void(std::span<const double, tdim - 1>,
                            std::span<double, tdim>)>
-            reference_map
-            = [&xb, &x_shape, &bfacets, facet_index = facet_index_c](
-                  std::span<const double, tdim - 1> xi,
-                  std::span<double, tdim> X)
+            reference_map = [&xb, &x_shape, &bfacets, facet_index_c](
+                                std::span<const double, tdim - 1> xi,
+                                std::span<double, tdim> X)
         {
-          const std::vector<int>& facet = bfacets[facet_index];
+          const std::vector<int>& facet = bfacets[facet_index_c];
           dolfinx_contact::cmdspan2_t x(xb.data(), x_shape);
           const int f0 = facet.front();
           for (std::size_t i = 0; i < tdim; ++i)
@@ -834,6 +871,6 @@ compute_raytracing_map(const dolfinx::mesh::Mesh<double>& quadrature_mesh,
 MatNullSpace
 build_nullspace_multibody(const dolfinx::fem::FunctionSpace<double>& V,
                           const dolfinx::mesh::MeshTags<std::int32_t>& mt,
-                          std::vector<std::int32_t>& tags);
+                          std::span<const std::int32_t> tags);
 
 } // namespace dolfinx_contact

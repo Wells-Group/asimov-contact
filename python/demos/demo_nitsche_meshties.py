@@ -5,22 +5,38 @@
 import argparse
 import sys
 
-from mpi4py import MPI
-from petsc4py import PETSc
-
 import numpy as np
-
 import ufl
 from dolfinx import default_scalar_type, log
 from dolfinx.common import Timer, TimingType, list_timings, timing
-from dolfinx.fem import Constant, Function, dirichletbc, form, functionspace, locate_dofs_topological
-from dolfinx.fem.petsc import apply_lifting, assemble_matrix, assemble_vector, create_vector, set_bc
+from dolfinx.fem import (
+    Constant,
+    Function,
+    dirichletbc,
+    form,
+    functionspace,
+    locate_dofs_topological,
+)
+from dolfinx.fem.petsc import (
+    apply_lifting,
+    assemble_matrix,
+    assemble_vector,
+    create_vector,
+    set_bc,
+)
 from dolfinx.graph import adjacencylist
 from dolfinx.io import XDMFFile
-from dolfinx_contact.cpp import MeshTie
-from dolfinx_contact.helpers import epsilon, lame_parameters, rigid_motions_nullspace_subdomains, sigma_func
+from dolfinx_contact.cpp import MeshTie, Problem
+from dolfinx_contact.helpers import (
+    epsilon,
+    lame_parameters,
+    rigid_motions_nullspace_subdomains,
+    sigma_func,
+)
 from dolfinx_contact.meshing import convert_mesh, create_box_mesh_3D
 from dolfinx_contact.parallel_mesh_ghosting import create_contact_mesh
+from mpi4py import MPI
+from petsc4py import PETSc
 
 if __name__ == "__main__":
     desc = "Nitsche's method for two elastic bodies using custom assemblers"
@@ -44,7 +60,8 @@ if __name__ == "__main__":
                           help="Use triangle/tet mesh", default=False)
     parser.add_argument("--E", default=1e3, type=np.float64, dest="E",
                         help="Youngs modulus of material")
-    parser.add_argument("--nu", default=0.1, type=np.float64, dest="nu", help="Poisson's ratio")
+    parser.add_argument("--nu", default=0.1, type=np.float64,
+                        dest="nu", help="Poisson's ratio")
     parser.add_argument("--outfile", type=str, default=None, required=False,
                         help="File for appending results", dest="outfile")
     _lifting = parser.add_mutually_exclusive_group(required=False)
@@ -61,8 +78,8 @@ if __name__ == "__main__":
     displacement = [[0, 0, 0]]
     gap = 1e-5
     H = 1.5
-    fname = "box_3D"
-    create_box_mesh_3D(f"{fname}.msh", simplex, gap=gap, W=H, offset=0.0)
+    fname = "meshes/box_3D"
+    create_box_mesh_3D(f"{fname}.msh", simplex, gap=gap, width=H, offset=0.0)
     convert_mesh(fname, fname, gdim=3)
 
     with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
@@ -129,19 +146,23 @@ if __name__ == "__main__":
     # Dirichlet bdry conditions
     g = Constant(mesh, default_scalar_type((0.0, 0.0, 0.0)))
     if args.lifting:
-        bdy_dofs = locate_dofs_topological(V, tdim - 1, facet_marker.find(dirichlet_bdy))  # type: ignore
+        bdy_dofs = locate_dofs_topological(
+            V, tdim - 1, facet_marker.find(dirichlet_bdy))  # type: ignore
         bcs = [dirichletbc(g, bdy_dofs, V)]
     else:
         bcs = []
         J += - ufl.inner(sigma(w) * n, v) * ds(dirichlet_bdy)\
             - theta * ufl.inner(sigma(v) * n, w) * \
-            ds(dirichlet_bdy) + E * gamma / h * ufl.inner(w, v) * ds(dirichlet_bdy)
+            ds(dirichlet_bdy) + E * gamma / h * \
+            ufl.inner(w, v) * ds(dirichlet_bdy)
         F += - theta * ufl.inner(sigma(v) * n, g) * \
-            ds(dirichlet_bdy) + E * gamma / h * ufl.inner(g, v) * ds(dirichlet_bdy)
+            ds(dirichlet_bdy) + E * gamma / h * \
+            ufl.inner(g, v) * ds(dirichlet_bdy)
 
     # compile forms
     cffi_options = ["-Ofast", "-march=native"]
-    jit_options = {"cffi_extra_compile_args": cffi_options, "cffi_libraries": ["m"]}
+    jit_options = {"cffi_extra_compile_args": cffi_options,
+                   "cffi_libraries": ["m"]}
     F = form(F, jit_options=jit_options)
     J = form(J, jit_options=jit_options)
 
@@ -175,8 +196,9 @@ if __name__ == "__main__":
 
     # initialise meshties
     meshties = MeshTie([facet_marker._cpp_object], surfaces, contact,
-                       V._cpp_object, quadrature_degree=5)
-    meshties.generate_meshtie_data_matrix_only(lmbda._cpp_object, mu._cpp_object, E * gamma, theta)
+                       mesh._cpp_object, quadrature_degree=5)
+    meshties.generate_kernel_data(Problem.Elasticity, V._cpp_object, {
+        "lambda": lmbda._cpp_object, "mu": mu._cpp_object}, E * gamma, theta)
 
     # create matrix, vector
     A = meshties.create_matrix(J._cpp_object)
@@ -184,19 +206,21 @@ if __name__ == "__main__":
 
     # Assemble right hand side
     b.zeroEntries()
-    b.ghostUpdate(addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD)  # type: ignore
+    b.ghostUpdate(addv=PETSc.InsertMode.INSERT,    # type: ignore
+                  mode=PETSc.ScatterMode.FORWARD)  # type: ignore
     assemble_vector(b, F)
 
     # Apply boundary condition and scatter reverse
     if len(bcs) > 0:
         apply_lifting(b, [J], bcs=[bcs], scale=-1.0)
-    b.ghostUpdate(addv=PETSc.InsertMode.ADD, mode=PETSc.ScatterMode.REVERSE)  # type: ignore
+    b.ghostUpdate(addv=PETSc.InsertMode.ADD,       # type: ignore
+                  mode=PETSc.ScatterMode.REVERSE)  # type: ignore
     if len(bcs) > 0:
         set_bc(b, bcs)
 
     # Assemble matrix
     A.zeroEntries()
-    meshties.assemble_matrix(A)
+    meshties.assemble_matrix(A, V._cpp_object, Problem.Elasticity)
     assemble_matrix(A, J, bcs=bcs)  # type: ignore
     A.assemble()
 
@@ -221,7 +245,8 @@ if __name__ == "__main__":
     log.set_log_level(log.LogLevel.OFF)
     # Set a monitor, solve linear system, and display the solver
     # configuration
-    solver.setMonitor(lambda _, its, rnorm: print(f"Iteration: {its}, rel. residual: {rnorm}"))
+    solver.setMonitor(lambda _, its, rnorm: print(
+        f"Iteration: {its}, rel. residual: {rnorm}"))
     timing_str = "~Contact : Krylov Solver"
     with Timer(timing_str):
         solver.solve(b, uh.vector)
