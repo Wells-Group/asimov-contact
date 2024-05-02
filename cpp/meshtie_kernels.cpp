@@ -19,7 +19,6 @@ dolfinx_contact::generate_meshtie_kernel(
   // NOTE: Assuming same number of quadrature points on each cell
   dolfinx_contact::error::check_cell_type(mesh->topology()->cell_type());
   const std::vector<std::size_t>& qp_offsets = quadrature_rule->offset();
-  const std::size_t num_q_points = qp_offsets[1] - qp_offsets[0];
   const std::size_t ndofs_cell = V->dofmap()->element_dof_layout().num_dofs();
 
   auto kd = dolfinx_contact::KernelData(V, quadrature_rule, cstrides);
