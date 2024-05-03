@@ -101,7 +101,9 @@ jobs:
 
       - name: Flake8 code
         if: always()
-        run: flake8 python/
+        run: |
+          python3 -m pip install flake8
+          python3 -m flake8 python/
 
       - name: Run mypy checks
         run: |
