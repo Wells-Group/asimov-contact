@@ -105,7 +105,7 @@ def create_functionspaces(ct, gap, delta, disp):
         )
     else:
         raise ValueError(f"Unsupported mesh type {ct}")
-    el = basix.ufl.element("Lagrange", ct, 1, shape=(x.shape[1],), gdim=x.shape[1])
+    el = basix.ufl.element("Lagrange", ct, 1, shape=(x.shape[1],))
     domain = ufl.Mesh(el)
     mesh = create_mesh(MPI.COMM_WORLD, cells, x, domain)
     if disp:
