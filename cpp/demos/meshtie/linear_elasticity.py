@@ -7,8 +7,20 @@
 # ====================================================
 
 from basix.ufl import element
-from ufl import (Coefficient, ds, dx, FunctionSpace, grad, Identity,
-                 inner, Mesh, sym, TestFunction, tr, TrialFunction)
+from ufl import (
+    Coefficient,
+    ds,
+    dx,
+    FunctionSpace,
+    grad,
+    Identity,
+    inner,
+    Mesh,
+    sym,
+    TestFunction,
+    tr,
+    TrialFunction,
+)
 
 
 # tags for boundaries (see mesh file)
@@ -34,7 +46,7 @@ def epsilon(z):
 
 
 def sigma(z):
-    return (2.0 * mu * epsilon(z) + lmbda * tr(epsilon(z)) * Identity(len(z)))
+    return 2.0 * mu * epsilon(z) + lmbda * tr(epsilon(z)) * Identity(len(z))
 
 
 # Bilinear form
