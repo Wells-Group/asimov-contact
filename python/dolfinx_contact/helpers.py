@@ -309,7 +309,7 @@ def rigid_motions_nullspace_subdomains(
     # Create list of vectors for null space
     nullspace_basis = [
         _la.vector(V.dofmap.index_map, bs=V.dofmap.index_map_bs, dtype=PETSc.ScalarType)  # type: ignore
-        for i in range(dim*num_domains)
+        for i in range(dim * num_domains)
     ]
     basis = [b.array for b in nullspace_basis]
 
