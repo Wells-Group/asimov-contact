@@ -336,7 +336,8 @@ def rigid_motions_nullspace_subdomains(
             basis[j * dim + 4][dofs[2]] = -x0
             basis[j * dim + 5][dofs[2]] = x1
             basis[j * dim + 5][dofs[1]] = -x2
-    [b.scatter_forward() for b in nullspace_basis]
+    for b in nullspace_basis:
+        b.scatter_forward()
     _la.orthonormalize(nullspace_basis)
     assert _la.is_orthonormal(nullspace_basis)
     local_size = V.dofmap.index_map.size_local * V.dofmap.index_map_bs
