@@ -109,7 +109,7 @@ def create_functionspaces(ct, gap, delta, disp):
     domain = ufl.Mesh(el)
     mesh = create_mesh(MPI.COMM_WORLD, cells, x, domain)
     if disp:
-        el = basix.ufl.element("Lagrange", mesh.topology.cell_name(), 1, (mesh.geometry.dim, ))
+        el = basix.ufl.element("Lagrange", mesh.topology.cell_name(), 1, (mesh.geometry.dim,))
     else:
         el = basix.ufl.element("Lagrange", mesh.topology.cell_name(), 1)
     V = _fem.FunctionSpace(mesh, el)
