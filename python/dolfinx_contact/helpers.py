@@ -6,19 +6,34 @@
 from contextlib import ExitStack
 from typing import Union
 
+from petsc4py import PETSc
+
 import dolfinx.la as _la
 import numpy
 import scipy.sparse
 import ufl
 from dolfinx import cpp
-from dolfinx.fem import Constant, Function, FunctionSpace, form
+from dolfinx.fem import Constant, Function, FunctionSpace, form, functionspace
 from dolfinx.fem.petsc import apply_lifting, assemble_matrix, assemble_vector, set_bc
 from dolfinx.mesh import MeshTags
-from petsc4py import PETSc
 
-__all__ = ["compare_matrices", "lame_parameters", "epsilon", "sigma_func", "R_minus", "dR_minus", "R_plus",
-           "dR_plus", "ball_projection", "d_ball_projection", "tangential_proj", "NonlinearPDE_SNESProblem",
-           "rigid_motions_nullspace", "rigid_motions_nullspace_subdomains", "weak_dirichlet"]
+__all__ = [
+    "compare_matrices",
+    "lame_parameters",
+    "epsilon",
+    "sigma_func",
+    "R_minus",
+    "dR_minus",
+    "R_plus",
+    "dR_plus",
+    "ball_projection",
+    "d_ball_projection",
+    "tangential_proj",
+    "NonlinearPDE_SNESProblem",
+    "rigid_motions_nullspace",
+    "rigid_motions_nullspace_subdomains",
+    "weak_dirichlet",
+]
 
 
 def compare_matrices(a: PETSc.Mat, b: PETSc.Mat, atol: float = 1e-12):  # type: ignore
@@ -41,16 +56,21 @@ def lame_parameters(plane_strain: bool = False):
     Returns the Lame parameters for plane stress or plane strain.
     Return type is lambda functions
     """
+
     def mu(E, nu):
         return E / (2 * (1 + nu))
 
     if plane_strain:
+
         def lmbda(E, nu):
             return E * nu / ((1 + nu) * (1 - 2 * nu))
+
         return mu, lmbda
     else:
+
         def lmbda(E, nu):
             return E * nu / ((1 + nu) * (1 - nu))
+
         return mu, lmbda
 
 
@@ -94,7 +114,7 @@ def ball_projection(x, s, dim):
     """
     Ball projection, project a vector quantity x onto a ball of radius r  if |x|>r
     """
-    abs_x = ufl.sqrt(sum([x[i]**2 for i in range(dim)]))
+    abs_x = ufl.sqrt(sum([x[i] ** 2 for i in range(dim)]))
     return ufl.conditional(ufl.le(abs_x, s), x, s * x / abs_x)
 
 
@@ -102,17 +122,24 @@ def d_ball_projection(x, s, dim):
     """
     Derivative of ball projection, project a vector quantity x onto a ball of radius r  if |x|>r
     """
-    abs_x = ufl.sqrt(sum([x[i]**2 for i in range(dim)]))
-    return ufl.conditional(ufl.le(abs_x, s), ufl.Identity(dim),
-                           (s / abs_x) * (ufl.Identity(dim) - ufl.outer(x / abs_x, x / abs_x)))
+    abs_x = ufl.sqrt(sum([x[i] ** 2 for i in range(dim)]))
+    return ufl.conditional(
+        ufl.le(abs_x, s),
+        ufl.Identity(dim),
+        (s / abs_x) * (ufl.Identity(dim) - ufl.outer(x / abs_x, x / abs_x)),
+    )
 
 
 def d_alpha_ball_projection(x, alpha, d_alpha, dim):
     """
     Derivative term of ball projection for x-dependent radius
     """
-    abs_x = ufl.sqrt(sum([x[i]**2 for i in range(dim)]))
-    return ufl.conditional(ufl.le(abs_x, alpha), ufl.as_vector(tuple(0 for _ in range(dim))), d_alpha * x / abs_x)
+    abs_x = ufl.sqrt(sum([x[i] ** 2 for i in range(dim)]))
+    return ufl.conditional(
+        ufl.le(abs_x, alpha),
+        ufl.as_vector(tuple(0 for _ in range(dim))),
+        d_alpha * x / abs_x,
+    )
 
 
 def tangential_proj(u, n):
@@ -128,11 +155,12 @@ class NonlinearPDE_SNESProblem:
         V = u.function_space
         du = ufl.TrialFunction(V)
 
-        self.L = form(F, form_compiler_options=form_compiler_options,
-                      jit_options=jit_options)
-        self.a = form(ufl.derivative(F, u, du),
-                      form_compiler_options=form_compiler_options,
-                      jit_options=jit_options)
+        self.L = form(F, form_compiler_options=form_compiler_options, jit_options=jit_options)
+        self.a = form(
+            ufl.derivative(F, u, du),
+            form_compiler_options=form_compiler_options,
+            jit_options=jit_options,
+        )
         self.bc = bc
         self._F, self._J = None, None
         self.u = u
@@ -141,8 +169,7 @@ class NonlinearPDE_SNESProblem:
         """Assemble residual vector."""
         x.ghostUpdate(addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD)
         x.copy(self.u.vector)
-        self.u.vector.ghostUpdate(
-            addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD)
+        self.u.vector.ghostUpdate(addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD)
         with F.localForm() as f_local:
             f_local.set(0.0)
         assemble_vector(F, self.L)
@@ -175,7 +202,10 @@ def rigid_motions_nullspace(V: FunctionSpace):
     dim = 3 if gdim == 2 else 6
 
     # Create list of vectors for null space
-    nullspace_basis = [_la.vector(V.dofmap.index_map, bs=V.dofmap.index_map_bs, dtype=PETSc.ScalarType) for i in range(dim)]
+    nullspace_basis = [
+        _la.vector(V.dofmap.index_map, bs=V.dofmap.index_map_bs, dtype=PETSc.ScalarType)  # type: ignore
+        for i in range(dim)
+    ]
 
     basis = [b.array for b in nullspace_basis]
     dofs = [V.sub(i).dofmap.list.flatten() for i in range(gdim)]
@@ -204,15 +234,18 @@ def rigid_motions_nullspace(V: FunctionSpace):
     assert _la.is_orthonormal(nullspace_basis)
     local_size = V.dofmap.index_map.size_local * V.dofmap.index_map_bs
     basis_petsc = [
-        PETSc.Vec().createWithArray(x[: local_size], bsize=gdim, comm=V.mesh.comm)  # type: ignore
+        PETSc.Vec().createWithArray(x[:local_size], bsize=gdim, comm=V.mesh.comm)  # type: ignore
         for x in basis
     ]
     return PETSc.NullSpace().create(comm=V.mesh.comm, vectors=basis_petsc)  # type: ignore
 
 
-def near_nullspace_subdomains(V: FunctionSpace, mt: MeshTags,
-                              tags: numpy.typing.NDArray[numpy.int32],
-                              num_domains=2):
+def near_nullspace_subdomains(
+    V: FunctionSpace,
+    mt: MeshTags,
+    tags: numpy.typing.NDArray[numpy.int32],
+    num_domains=2,
+):
     """
     Function to build nullspace for 2D/3D elasticity.
 
@@ -246,9 +279,12 @@ def near_nullspace_subdomains(V: FunctionSpace, mt: MeshTags,
     return PETSc.NullSpace().create(vectors=nullspace_basis)  # type: ignore
 
 
-def rigid_motions_nullspace_subdomains(V: FunctionSpace, mt: MeshTags,
-                                       tags: numpy.typing.NDArray[numpy.int32],
-                                       num_domains=2):
+def rigid_motions_nullspace_subdomains(
+    V: FunctionSpace,
+    mt: MeshTags,
+    tags: numpy.typing.NDArray[numpy.int32],
+    num_domains=2,
+):
     """
     Function to build nullspace for 2D/3D elasticity.
 
@@ -305,19 +341,20 @@ def rigid_motions_nullspace_subdomains(V: FunctionSpace, mt: MeshTags,
     return PETSc.NullSpace().create(vectors=nullspace_basis)  # type: ignore
 
 
-def weak_dirichlet(F: ufl.Form, u: Function,
-                   f: Union[Function, Constant], sigma, gamma, theta, ds):
+def weak_dirichlet(F: ufl.Form, u: Function, f: Union[Function, Constant], sigma, gamma, theta, ds):
     V = u.function_space
     v = F.arguments()[0]
     mesh = V.mesh
-    V2 = FunctionSpace(mesh, ("DG", 0))
+    V2 = functionspace(mesh, ("DG", 0))
     tdim = mesh.topology.dim
     ncells = mesh.topology.index_map(tdim).size_local
     h = Function(V2)
     h_vals = cpp.mesh.h(mesh._cpp_object, mesh.topology.dim, numpy.arange(0, ncells, dtype=numpy.int32))
     h.x.array[:ncells] = h_vals[:]
     n = ufl.FacetNormal(mesh)
-    F += - ufl.inner(sigma(u) * n, v) * ds\
-        - theta * ufl.inner(sigma(v) * n, u - f) * \
-        ds + gamma / h * ufl.inner(u - f, v) * ds
+    F += (
+        -ufl.inner(sigma(u) * n, v) * ds
+        - theta * ufl.inner(sigma(v) * n, u - f) * ds
+        + gamma / h * ufl.inner(u - f, v) * ds
+    )
     return F

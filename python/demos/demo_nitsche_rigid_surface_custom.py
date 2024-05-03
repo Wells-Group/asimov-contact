@@ -7,47 +7,93 @@ import argparse
 from mpi4py import MPI
 
 import numpy as np
-
 from dolfinx.io import XDMFFile
 from dolfinx.mesh import locate_entities_boundary, meshtags
-from dolfinx_contact.meshing import (convert_mesh, create_circle_circle_mesh, create_circle_plane_mesh,
-                                     create_sphere_plane_mesh)
-from dolfinx_contact.one_sided.nitsche_rigid_surface_custom import nitsche_rigid_surface_custom
+from dolfinx_contact.meshing import (
+    convert_mesh,
+    create_circle_circle_mesh,
+    create_circle_plane_mesh,
+    create_sphere_plane_mesh,
+)
+from dolfinx_contact.one_sided.nitsche_rigid_surface_custom import (
+    nitsche_rigid_surface_custom,
+)
 
 if __name__ == "__main__":
     desc = "Nitsche's method with rigid surface using custom assemblers"
-    parser = argparse.ArgumentParser(description=desc,
-                                     formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument("--theta", default=1, type=np.float64, dest="theta",
-                        help="Theta parameter for Nitsche, 1 symmetric, -1 skew symmetric, 0 Penalty-like")
-    parser.add_argument("--gamma", default=10, type=np.float64, dest="gamma",
-                        help="Coercivity/Stabilization parameter for Nitsche condition")
+    parser = argparse.ArgumentParser(description=desc, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument(
+        "--theta",
+        default=1,
+        type=np.float64,
+        dest="theta",
+        help="Theta parameter for Nitsche, 1 symmetric, -1 skew symmetric, 0 Penalty-like",
+    )
+    parser.add_argument(
+        "--gamma",
+        default=10,
+        type=np.float64,
+        dest="gamma",
+        help="Coercivity/Stabilization parameter for Nitsche condition",
+    )
     _solve = parser.add_mutually_exclusive_group(required=False)
-    _solve.add_argument('--linear', dest='linear_solver', action='store_true',
-                        help="Use linear solver", default=False)
+    _solve.add_argument(
+        "--linear",
+        dest="linear_solver",
+        action="store_true",
+        help="Use linear solver",
+        default=False,
+    )
     _3D = parser.add_mutually_exclusive_group(required=False)
-    _3D.add_argument('--3D', dest='threed', action='store_true',
-                     help="Use 3D mesh", default=False)
+    _3D.add_argument("--3D", dest="threed", action="store_true", help="Use 3D mesh", default=False)
     _simplex = parser.add_mutually_exclusive_group(required=False)
-    _simplex.add_argument('--simplex', dest='simplex', action='store_true',
-                          help="Use triangle/test mesh", default=False)
+    _simplex.add_argument(
+        "--simplex",
+        dest="simplex",
+        action="store_true",
+        help="Use triangle/test mesh",
+        default=False,
+    )
     _curved = parser.add_mutually_exclusive_group(required=False)
-    _curved.add_argument('--curved', dest='curved', action='store_true',
-                         help="Use curved rigid surface", default=False)
+    _curved.add_argument(
+        "--curved",
+        dest="curved",
+        action="store_true",
+        help="Use curved rigid surface",
+        default=False,
+    )
     _strain = parser.add_mutually_exclusive_group(required=False)
-    _strain.add_argument('--strain', dest='plane_strain', action='store_true',
-                         help="Use plane strain formulation", default=False)
+    _strain.add_argument(
+        "--strain",
+        dest="plane_strain",
+        action="store_true",
+        help="Use plane strain formulation",
+        default=False,
+    )
     _dirichlet = parser.add_mutually_exclusive_group(required=False)
-    _dirichlet.add_argument('--dirichlet', dest='dirichlet', action='store_true',
-                            help="Use strong Dirichlet formulation", default=False)
-    _E = parser.add_argument("--E", default=1e3, type=np.float64, dest="E",
-                             help="Youngs modulus of material")
-    _nu = parser.add_argument(
-        "--nu", default=0.1, type=np.float64, dest="nu", help="Poisson's ratio")
-    _disp = parser.add_argument("--disp", default=0.2, type=np.float64, dest="disp",
-                                help="Displacement BC in negative y direction")
-    _ref = parser.add_argument("--refinements", default=2, type=np.int32,
-                               dest="refs", help="Number of mesh refinements")
+    _dirichlet.add_argument(
+        "--dirichlet",
+        dest="dirichlet",
+        action="store_true",
+        help="Use strong Dirichlet formulation",
+        default=False,
+    )
+    _E = parser.add_argument("--E", default=1e3, type=np.float64, dest="E", help="Youngs modulus of material")
+    _nu = parser.add_argument("--nu", default=0.1, type=np.float64, dest="nu", help="Poisson's ratio")
+    _disp = parser.add_argument(
+        "--disp",
+        default=0.2,
+        type=np.float64,
+        dest="disp",
+        help="Displacement BC in negative y direction",
+    )
+    _ref = parser.add_argument(
+        "--refinements",
+        default=2,
+        type=np.int32,
+        dest="refs",
+        help="Number of mesh refinements",
+    )
 
     # Parse input arguments or set to defualt values
     args = parser.parse_args()
@@ -122,8 +168,15 @@ if __name__ == "__main__":
             facet_marker = meshtags(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
         else:
             fname = f"{mesh_dir}/twomeshes"
-            create_circle_plane_mesh(filename=f"{fname}.msh", quads=(
-                not simplex), res=0.05, r=0.3, gap=0.1, height=0.1, length=1.0)
+            create_circle_plane_mesh(
+                filename=f"{fname}.msh",
+                quads=(not simplex),
+                res=0.05,
+                r=0.3,
+                gap=0.1,
+                height=0.1,
+                length=1.0,
+            )
             convert_mesh(fname, f"{fname}.xdmf", gdim=2)
 
             with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
@@ -160,19 +213,31 @@ if __name__ == "__main__":
     # Solver options
     newton_options = {"relaxation_parameter": 1.0, "max_it": 50}
     # petsc_options = {"ksp_type": "preonly", "pc_type": "lu"}
-    petsc_options = {"ksp_type": "cg", "pc_type": "gamg", "pc_gamg_coarse_eq_limit": 1000,
-                     "mg_levels_ksp_type": "chebyshev", "mg_levels_pc_type": "jacobi",
-                     "matptap_via": "scalable", "ksp_view": None}
+    petsc_options = {
+        "ksp_type": "cg",
+        "pc_type": "gamg",
+        "pc_gamg_coarse_eq_limit": 1000,
+        "mg_levels_ksp_type": "chebyshev",
+        "mg_levels_pc_type": "jacobi",
+        "matptap_via": "scalable",
+        "ksp_view": None,
+    }
 
     # Pack mesh data for Nitsche solver
     mesh_data = (facet_marker, top_value, bottom_value, surface_value, surface_bottom)
 
     # Solve contact problem using Nitsche's method
-    u1 = nitsche_rigid_surface_custom(mesh=mesh, mesh_data=mesh_data, physical_parameters=physical_parameters,
-                                      nitsche_parameters=nitsche_parameters,
-                                      vertical_displacement=vertical_displacement, nitsche_bc=True,
-                                      quadrature_degree=3, petsc_options=petsc_options,
-                                      newton_options=newton_options)
+    u1 = nitsche_rigid_surface_custom(
+        mesh=mesh,
+        mesh_data=mesh_data,
+        physical_parameters=physical_parameters,
+        nitsche_parameters=nitsche_parameters,
+        vertical_displacement=vertical_displacement,
+        nitsche_bc=True,
+        quadrature_degree=3,
+        petsc_options=petsc_options,
+        newton_options=newton_options,
+    )
 
     with XDMFFile(mesh.comm, "results/u_custom_rigid.xdmf", "w") as xdmf:
         xdmf.write_mesh(mesh)

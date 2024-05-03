@@ -5,19 +5,17 @@
 
 from mpi4py import MPI
 
-import numpy as np
-import pytest
-
 import basix.ufl
 import dolfinx_contact
+import numpy as np
+import pytest
 import ufl
 from dolfinx import fem, graph
 from dolfinx import mesh as msh
 from dolfinx.graph import adjacencylist
 
 
-@pytest.mark.skipif(MPI.COMM_WORLD.size > 1,
-                    reason="This test should only be run in serial.")
+@pytest.mark.skipif(MPI.COMM_WORLD.size > 1, reason="This test should only be run in serial.")
 def test_pack_u():
     """
     Test that evaluation of a function u on the opposite surface is correct
@@ -25,11 +23,13 @@ def test_pack_u():
     """
     # Create mesh consisting of 4 triangles, where they are grouped in two
     # disconnected regions (with two cells in each region)
-    points = np.array([[0, -1], [0.5, -1], [0, -2], [1, -1],
-                       [0, 1], [0.3, 1], [2, 2], [1, 1]], dtype=np.float64)
+    points = np.array(
+        [[0, -1], [0.5, -1], [0, -2], [1, -1], [0, 1], [0.3, 1], [2, 2], [1, 1]],
+        dtype=np.float64,
+    )
     cells = np.array([[0, 1, 2], [4, 5, 6], [1, 3, 2], [5, 6, 7]], dtype=np.int64)
 
-    domain = ufl.Mesh(basix.ufl.element("Lagrange", "triangle", 1, shape=(points.shape[1], )))
+    domain = ufl.Mesh(basix.ufl.element("Lagrange", "triangle", 1, shape=(points.shape[1],)))
     cells = graph.adjacencylist(cells)
     part = msh.create_cell_partitioner(msh.GhostMode.none)
     mesh = msh.create_mesh(MPI.COMM_WORLD, cells, points, domain, part)
@@ -41,7 +41,7 @@ def test_pack_u():
         return vals
 
     # Compute function that is known on each side
-    V = fem.functionspace(mesh, ("Lagrange", 1, (mesh.geometry.dim, )))
+    V = fem.functionspace(mesh, ("Lagrange", 1, (mesh.geometry.dim,)))
     u = fem.Function(V)
     u.interpolate(f)
 
@@ -64,10 +64,18 @@ def test_pack_u():
 
     # Compute contact class
     quadrature_degree = 2
-    search_mode = [dolfinx_contact.cpp.ContactMode.ClosestPoint, dolfinx_contact.cpp.ContactMode.ClosestPoint]
-    contact = dolfinx_contact.cpp.Contact([facet_marker._cpp_object], surfaces, [(0, 1), (1, 0)],
-                                          mesh._cpp_object, search_method=search_mode,
-                                          quadrature_degree=quadrature_degree)
+    search_mode = [
+        dolfinx_contact.cpp.ContactMode.ClosestPoint,
+        dolfinx_contact.cpp.ContactMode.ClosestPoint,
+    ]
+    contact = dolfinx_contact.cpp.Contact(
+        [facet_marker._cpp_object],
+        surfaces,
+        [(0, 1), (1, 0)],
+        mesh._cpp_object,
+        search_method=search_mode,
+        quadrature_degree=quadrature_degree,
+    )
     contact.create_distance_map(0)
     contact.create_distance_map(1)
 

@@ -5,44 +5,64 @@
 import argparse
 
 from mpi4py import MPI
-
-import numpy as np
+from petsc4py.PETSc import InsertMode, ScatterMode  # type: ignore
 
 import dolfinx.fem as _fem
+import numpy as np
 import ufl
 from dolfinx import default_scalar_type, io, log
-from dolfinx.common import timed, Timer, TimingType, list_timings
-from dolfinx.fem import (Constant, form, Function, functionspace, locate_dofs_topological, dirichletbc)
-from dolfinx.fem.petsc import assemble_vector, assemble_matrix, create_vector, LinearProblem
+from dolfinx.common import Timer, TimingType, list_timings, timed
+from dolfinx.fem import (
+    Function,
+    dirichletbc,
+    form,
+    functionspace,
+    locate_dofs_topological,
+)
+from dolfinx.fem.petsc import (
+    LinearProblem,
+    assemble_matrix,
+    assemble_vector,
+    create_vector,
+)
 from dolfinx.graph import adjacencylist
 from dolfinx.io import XDMFFile
 from dolfinx.mesh import GhostMode
-from dolfinx_contact.helpers import (epsilon, lame_parameters, sigma_func,
-                                     weak_dirichlet, rigid_motions_nullspace_subdomains)
+from dolfinx_contact.cpp import ContactMode
+from dolfinx_contact.general_contact.contact_problem import ContactProblem, FrictionLaw
+from dolfinx_contact.helpers import (
+    epsilon,
+    lame_parameters,
+    rigid_motions_nullspace_subdomains,
+    sigma_func,
+    weak_dirichlet,
+)
 from dolfinx_contact.newton_solver import NewtonSolver
 from dolfinx_contact.parallel_mesh_ghosting import create_contact_mesh
-from dolfinx_contact.general_contact.contact_problem import ContactProblem, FrictionLaw
-from dolfinx_contact.cpp import ContactMode
-from mpi4py import MPI
-from petsc4py.PETSc import InsertMode, ScatterMode  # type: ignore
 
 desc = "Thermal expansion leading to contact"
-parser = argparse.ArgumentParser(description=desc,
-                                 formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+parser = argparse.ArgumentParser(description=desc, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
-parser.add_argument("--time_steps", default=50, type=np.int32, dest="time_steps",
-                    help="Number of pseudo time steps")
+parser.add_argument(
+    "--time_steps",
+    default=50,
+    type=np.int32,
+    dest="time_steps",
+    help="Number of pseudo time steps",
+)
 
 
 # Solver options
 ksp_tol = 1e-10
 newton_tol = 1e-6
-newton_options = {"relaxation_parameter": 1.0,
-                  "atol": newton_tol,
-                  "rtol": newton_tol,
-                  "convergence_criterion": "residual",
-                  "max_it": 50,
-                  "error_on_nonconvergence": False}
+newton_options = {
+    "relaxation_parameter": 1.0,
+    "atol": newton_tol,
+    "rtol": newton_tol,
+    "convergence_criterion": "residual",
+    "max_it": 50,
+    "error_on_nonconvergence": False,
+}
 
 # In order to use an LU solver for debugging purposes on small scale problems
 # use the following PETSc options: {"ksp_type": "preonly", "pc_type": "lu"}
@@ -53,7 +73,7 @@ petsc_options = {
     "ksp_atol": ksp_tol,
     "pc_type": "gamg",
     "pc_mg_levels": 3,
-    "pc_mg_cycles": 1,   # 1 is v, 2 is w
+    "pc_mg_cycles": 1,  # 1 is v, 2 is w
     "mg_levels_ksp_type": "chebyshev",
     "mg_levels_pc_type": "jacobi",
     "pc_gamg_type": "agg",
@@ -61,7 +81,7 @@ petsc_options = {
     "pc_gamg_agg_nsmooths": 1,
     "pc_gamg_threshold": 1e-3,
     "pc_gamg_square_graph": 2,
-    "pc_gamg_reuse_interpolation": False
+    "pc_gamg_reuse_interpolation": False,
 }
 
 args = parser.parse_args()
@@ -90,7 +110,8 @@ dirichlet_bdy2 = 4
 if mesh.comm.size > 1:
     with Timer("~Contact: Add ghosts"):
         mesh, facet_marker, domain_marker = create_contact_mesh(
-            mesh, facet_marker, domain_marker, [contact_bdy_1, contact_bdy_2])
+            mesh, facet_marker, domain_marker, [contact_bdy_1, contact_bdy_2]
+        )
 
 # measures
 dx = ufl.Measure("dx", domain=mesh, subdomain_data=domain_marker)
@@ -116,8 +137,8 @@ Tproblem = LinearProblem(a_therm, L_therm, bcs=[Tbc, Tbc2], petsc_options=petsc_
 
 
 # Elasticity problem
-V = _fem.functionspace(mesh, ("Lagrange", 1, (mesh.geometry.dim, )))
-g = _fem.Constant(mesh, default_scalar_type((0, 0, 0)))     # zero Dirichlet
+V = _fem.functionspace(mesh, ("Lagrange", 1, (mesh.geometry.dim,)))
+g = _fem.Constant(mesh, default_scalar_type((0, 0, 0)))  # zero Dirichlet
 
 
 # contact surface data
@@ -174,8 +195,7 @@ J = ufl.derivative(F, du, w)
 
 # compiler options to improve performance
 cffi_options = ["-Ofast", "-march=native"]
-jit_options = {"cffi_extra_compile_args": cffi_options,
-               "cffi_libraries": ["m"]}
+jit_options = {"cffi_extra_compile_args": cffi_options, "cffi_libraries": ["m"]}
 # compiled forms for rhs and tangen system
 F_compiled = form(F, jit_options=jit_options)
 J_compiled = form(J, jit_options=jit_options)
@@ -184,14 +204,19 @@ J_compiled = form(J, jit_options=jit_options)
 # Solve contact problem using Nitsche's method
 log.set_log_level(log.LogLevel.WARNING)
 size = mesh.comm.size
-u.name = 'displacement'
-T0.name = 'temperature'
+u.name = "displacement"
+T0.name = "temperature"
 
 
 search_mode = [ContactMode.ClosestPoint for _ in range(len(contact_pairs))]
 contact_problem = ContactProblem([facet_marker], surfaces, contact_pairs, mesh, 5, search_mode)
-contact_problem.generate_contact_data(FrictionLaw.Frictionless, V, {"u": u, "du": du, "mu": mu_dg,
-                                                                    "lambda": lmbda_dg}, E * gamma, theta)
+contact_problem.generate_contact_data(
+    FrictionLaw.Frictionless,
+    V,
+    {"u": u, "du": du, "mu": mu_dg, "lambda": lmbda_dg},
+    E * gamma,
+    theta,
+)
 # define functions for newton solver
 
 
@@ -203,14 +228,12 @@ def compute_coefficients(x, coeffs):
 @timed("~Contact: Assemble residual")
 def compute_residual(x, b, coeffs):
     b.zeroEntries()
-    b.ghostUpdate(addv=InsertMode.INSERT,
-                  mode=ScatterMode.FORWARD)
+    b.ghostUpdate(addv=InsertMode.INSERT, mode=ScatterMode.FORWARD)
     with Timer("~~Contact: Contact contributions (in assemble vector)"):
         contact_problem.assemble_vector(b, V)
     with Timer("~~Contact: Standard contributions (in assemble vector)"):
         assemble_vector(b, F_compiled)
-    b.ghostUpdate(addv=InsertMode.ADD,
-                  mode=ScatterMode.REVERSE)
+    b.ghostUpdate(addv=InsertMode.ADD, mode=ScatterMode.REVERSE)
 
 
 @timed("~Contact: Assemble matrix")
@@ -236,8 +259,7 @@ newton_solver.set_jacobian(compute_jacobian_matrix)
 newton_solver.set_coefficients(compute_coefficients)
 
 # Set rigid motion nullspace
-null_space = rigid_motions_nullspace_subdomains(V, domain_marker, np.unique(
-    domain_marker.values), num_domains=2)
+null_space = rigid_motions_nullspace_subdomains(V, domain_marker, np.unique(domain_marker.values), num_domains=2)
 newton_solver.A.setNearNullSpace(null_space)
 
 # Set Newton solver options
@@ -252,7 +274,6 @@ for i in range(steps):
     with Timer("~Contact: Solve thermal"):
         Tproblem.solve()
     with Timer("~Contact: Solve contact"):
-
         n, converged = newton_solver.solve(du)
         du.x.scatter_forward()
         u.x.array[:] += du.x.array[:]

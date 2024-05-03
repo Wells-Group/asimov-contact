@@ -5,54 +5,102 @@
 import argparse
 import sys
 
-import numpy as np
-import ufl
-from dolfinx import log, default_scalar_type
-from dolfinx.common import TimingType, list_timings, Timer, timing
-from dolfinx.fem import (dirichletbc, Constant, form, Function, FunctionSpace,
-                         locate_dofs_topological)
-from dolfinx.fem.petsc import (apply_lifting, assemble_vector, assemble_matrix,
-                               create_vector, set_bc)
-from dolfinx.graph import adjacencylist
-from dolfinx.io import XDMFFile
 from mpi4py import MPI
 from petsc4py import PETSc
 
-from dolfinx_contact.helpers import near_nullspace_subdomains
-from dolfinx_contact.meshing import (convert_mesh,
-                                     create_box_mesh_3D)
-from dolfinx_contact.parallel_mesh_ghosting import create_contact_mesh
+import numpy as np
+import ufl
+from dolfinx import default_scalar_type, log
+from dolfinx.common import Timer, TimingType, list_timings, timing
+from dolfinx.fem import (
+    Constant,
+    Function,
+    dirichletbc,
+    form,
+    functionspace,
+    locate_dofs_topological,
+)
+from dolfinx.fem.petsc import (
+    apply_lifting,
+    assemble_matrix,
+    assemble_vector,
+    create_vector,
+    set_bc,
+)
+from dolfinx.graph import adjacencylist
+from dolfinx.io import XDMFFile
 from dolfinx_contact.cpp import MeshTie, Problem
+from dolfinx_contact.helpers import near_nullspace_subdomains
+from dolfinx_contact.meshing import convert_mesh, create_box_mesh_3D
+from dolfinx_contact.parallel_mesh_ghosting import create_contact_mesh
 
 if __name__ == "__main__":
     desc = "Nitsche's method for two elastic bodies using custom assemblers"
-    parser = argparse.ArgumentParser(description=desc,
-                                     formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument("--theta", default=1., type=float, dest="theta",
-                        help="Theta parameter for Nitsche, 1 symmetric, -1 skew symmetric, 0 Penalty-like",
-                        choices=[1., -1., 0.])
-    parser.add_argument("--gamma", default=10, type=float, dest="gamma",
-                        help="Coercivity/Stabilization parameter for Nitsche condition")
-    parser.add_argument("--quadrature", default=5, type=int, dest="q_degree",
-                        help="Quadrature degree used for contact integrals")
+    parser = argparse.ArgumentParser(description=desc, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument(
+        "--theta",
+        default=1.0,
+        type=float,
+        dest="theta",
+        help="Theta parameter for Nitsche, 1 symmetric, -1 skew symmetric, 0 Penalty-like",
+        choices=[1.0, -1.0, 0.0],
+    )
+    parser.add_argument(
+        "--gamma",
+        default=10,
+        type=float,
+        dest="gamma",
+        help="Coercivity/Stabilization parameter for Nitsche condition",
+    )
+    parser.add_argument(
+        "--quadrature",
+        default=5,
+        type=int,
+        dest="q_degree",
+        help="Quadrature degree used for contact integrals",
+    )
     _timing = parser.add_mutually_exclusive_group(required=False)
-    _timing.add_argument('--timing', dest='timing', action='store_true',
-                         help="List timings", default=False)
+    _timing.add_argument(
+        "--timing",
+        dest="timing",
+        action="store_true",
+        help="List timings",
+        default=False,
+    )
     _ksp = parser.add_mutually_exclusive_group(required=False)
-    _ksp.add_argument('--ksp-view', dest='ksp', action='store_true',
-                      help="List ksp options", default=False)
+    _ksp.add_argument(
+        "--ksp-view",
+        dest="ksp",
+        action="store_true",
+        help="List ksp options",
+        default=False,
+    )
     _simplex = parser.add_mutually_exclusive_group(required=False)
-    _simplex.add_argument('--simplex', dest='simplex', action='store_true',
-                          help="Use triangle/tet mesh", default=False)
-    parser.add_argument("--E", default=1e3, type=np.float64, dest="E",
-                        help="Youngs modulus of material")
+    _simplex.add_argument(
+        "--simplex",
+        dest="simplex",
+        action="store_true",
+        help="Use triangle/tet mesh",
+        default=False,
+    )
+    parser.add_argument("--E", default=1e3, type=np.float64, dest="E", help="Youngs modulus of material")
     parser.add_argument("--nu", default=0.1, type=np.float64, dest="nu", help="Poisson's ratio")
-    parser.add_argument("--outfile", type=str, default=None, required=False,
-                        help="File for appending results", dest="outfile")
+    parser.add_argument(
+        "--outfile",
+        type=str,
+        default=None,
+        required=False,
+        help="File for appending results",
+        dest="outfile",
+    )
     _lifting = parser.add_mutually_exclusive_group(required=False)
-    _lifting.add_argument('--lifting', dest='lifting', action='store_true',
-                          help="Apply lifting (strong enforcement of Dirichlet condition",
-                          default=False)
+    _lifting.add_argument(
+        "--lifting",
+        dest="lifting",
+        action="store_true",
+        help="Apply lifting (strong enforcement of Dirichlet condition",
+        default=False,
+    )
 
     # Parse input arguments or set to defualt values
     args = parser.parse_args()
@@ -92,10 +140,11 @@ if __name__ == "__main__":
 
     if mesh.comm.size > 1:
         mesh, facet_marker, domain_marker = create_contact_mesh(
-            mesh, facet_marker, domain_marker, [contact_bdy_1, contact_bdy_2])
+            mesh, facet_marker, domain_marker, [contact_bdy_1, contact_bdy_2]
+        )
 
     # Function, TestFunction, TrialFunction and measures
-    V = FunctionSpace(mesh, ("Lagrange", 1))
+    V = functionspace(mesh, ("Lagrange", 1))
     v = ufl.TestFunction(V)
     w = ufl.TrialFunction(V)
     dx = ufl.Measure("dx", domain=mesh, subdomain_data=domain_marker)
@@ -109,7 +158,7 @@ if __name__ == "__main__":
 
     # bilinear form
     kdt_val = 5
-    V0 = FunctionSpace(mesh, ("DG", 0))
+    V0 = functionspace(mesh, ("DG", 0))
     kdt = Function(V0)
     kdt.interpolate(lambda x: np.full((1, x.shape[1]), kdt_val))
     J = kdt * ufl.inner(ufl.grad(w), ufl.grad(v)) * dx
@@ -145,7 +194,7 @@ if __name__ == "__main__":
         "ksp_atol": ksp_tol,
         "pc_type": "gamg",
         "pc_mg_levels": 3,
-        "pc_mg_cycles": 1,   # 1 is v, 2 is w
+        "pc_mg_cycles": 1,  # 1 is v, 2 is w
         "mg_levels_ksp_type": "chebyshev",
         "mg_levels_pc_type": "jacobi",
         "pc_gamg_type": "agg",
@@ -154,7 +203,7 @@ if __name__ == "__main__":
         "pc_gamg_threshold": 1e-3,
         "pc_gamg_square_graph": 2,
         "pc_gamg_reuse_interpolation": False,
-        "ksp_norm_type": "unpreconditioned"
+        "ksp_norm_type": "unpreconditioned",
     }
     # Pack mesh data for Nitsche solver
     contact = [(1, 0), (0, 1)]
@@ -166,8 +215,13 @@ if __name__ == "__main__":
     solver_outfile = args.outfile if args.ksp else None
 
     # initialise meshties
-    meshties = MeshTie([facet_marker._cpp_object], surfaces, contact,
-                       mesh._cpp_object, quadrature_degree=5)
+    meshties = MeshTie(
+        [facet_marker._cpp_object],
+        surfaces,
+        contact,
+        mesh._cpp_object,
+        quadrature_degree=5,
+    )
     meshties.generate_kernel_data(Problem.Poisson, V._cpp_object, {"kdt": kdt._cpp_object}, gamma, theta)
 
     # create matrix, vector
@@ -193,8 +247,7 @@ if __name__ == "__main__":
     A.assemble()
 
     # Set piecewise constant nullspace
-    null_space = near_nullspace_subdomains(V, domain_marker, np.unique(domain_marker.values),
-                                           num_domains=2)
+    null_space = near_nullspace_subdomains(V, domain_marker, np.unique(domain_marker.values), num_domains=2)
     A.setNearNullSpace(null_space)
 
     # Create PETSc Krylov solver and turn convergence monitoring on
@@ -222,9 +275,12 @@ if __name__ == "__main__":
     uh.x.scatter_forward()
 
     solver_time = timing(timing_str)[1]
-    print(f"{dofs_global}\n",
-          f"Number of Krylov iterations {solver.getIterationNumber()}\n",
-          f"Solver time {solver_time}", flush=True)
+    print(
+        f"{dofs_global}\n",
+        f"Number of Krylov iterations {solver.getIterationNumber()}\n",
+        f"Solver time {solver_time}",
+        flush=True,
+    )
 
     # Reset mesh to initial state and write accumulated solution
     with XDMFFile(mesh.comm, "results/poisson.xdmf", "w") as xdmf:
@@ -239,8 +295,11 @@ if __name__ == "__main__":
     else:
         outfile = open(args.outfile, "a")
     print("-" * 25, file=outfile)
-    print(f"num_dofs: {uh.function_space.dofmap.index_map_bs*uh.function_space.dofmap.index_map.size_global}"
-          + f", {mesh.topology.cell_types[0]}", file=outfile)
+    print(
+        f"num_dofs: {uh.function_space.dofmap.index_map_bs*uh.function_space.dofmap.index_map.size_global}"
+        + f", {mesh.topology.cell_types[0]}",
+        file=outfile,
+    )
     print(f"Krylov solver {solver_time}", file=outfile)
     print(f"Krylov iterations {solver.getIterationNumber()}", file=outfile)
     print("-" * 25, file=outfile)

@@ -1,16 +1,13 @@
 import gmsh
 import numpy as np
-
 from dolfinx_contact.meshing import convert_mesh
 
 
 def add_bars(idx, r, n):
     L = 1.5
     for j in range(n):
-        gmsh.model.occ.addCylinder(5.0 + j, 0.0, -L, 0.0, 0.0, 2 * L, r,
-                                   idx + j * 2)
-        gmsh.model.occ.addCylinder(5.0 + j, -L, 0.0, 0.0, 2 * L, 0.0, r,
-                                   idx + j * 2 + 1)
+        gmsh.model.occ.addCylinder(5.0 + j, 0.0, -L, 0.0, 0.0, 2 * L, r, idx + j * 2)
+        gmsh.model.occ.addCylinder(5.0 + j, -L, 0.0, 0.0, 2 * L, 0.0, r, idx + j * 2 + 1)
 
 
 gmsh.initialize()
@@ -49,8 +46,8 @@ gmsh.model.setPhysicalName(3, 2, "OuterVolume")
 
 inner_surfaces = gmsh.model.getAdjacencies(dim=3, tag=tag_inner)[1]
 outer_surfaces = gmsh.model.getAdjacencies(dim=3, tag=tag_outer)[1]
-print('inner = ', tag_inner, len(inner_surfaces))
-print('outer = ', tag_outer, len(outer_surfaces))
+print("inner = ", tag_inner, len(inner_surfaces))
+print("outer = ", tag_outer, len(outer_surfaces))
 
 inner_list = []
 for s in inner_surfaces:

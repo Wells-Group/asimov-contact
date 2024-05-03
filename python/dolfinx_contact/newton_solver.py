@@ -2,15 +2,16 @@
 #
 # SPDX-License-Identifier:    MIT
 
+from enum import Enum
+from typing import Any, Callable, List, Optional, Tuple, Union
+
 from mpi4py import MPI
 from petsc4py import PETSc
-from enum import Enum
-from typing import Any, Callable, List, Tuple, Union, Optional
 
 import numpy
 import numpy.typing as npt
-from dolfinx.io import VTXWriter
 from dolfinx import common, default_scalar_type, fem
+from dolfinx.io import VTXWriter
 
 __all__ = ["NewtonSolver", "ConvergenceCriterion"]
 
@@ -20,19 +21,39 @@ class ConvergenceCriterion(Enum):
     incremental = 20
 
 
-class NewtonSolver():
-    __slots__ = ["max_it", "rtol", "atol", "report", "error_on_nonconvergence",
-                 "convergence_criterion", "relaxation_parameter", "_compute_residual",
-                 "_compute_jacobian", "_compute_preconditioner", "_compute_coefficients", "krylov_iterations",
-                 "iteration", "residual", "initial_residual", "krylov_solver", "_dx", "comm",
-                 "_A", "_b", "_coeffs", "_P"]
+class NewtonSolver:
+    __slots__ = [
+        "max_it",
+        "rtol",
+        "atol",
+        "report",
+        "error_on_nonconvergence",
+        "convergence_criterion",
+        "relaxation_parameter",
+        "_compute_residual",
+        "_compute_jacobian",
+        "_compute_preconditioner",
+        "_compute_coefficients",
+        "krylov_iterations",
+        "iteration",
+        "residual",
+        "initial_residual",
+        "krylov_solver",
+        "_dx",
+        "comm",
+        "_A",
+        "_b",
+        "_coeffs",
+        "_P",
+    ]
 
     def __init__(
-            self, comm: MPI.Comm,
-            J: PETSc.Mat,  # type: ignore
-            b: PETSc.Vec,  # type: ignore
-            coeffs:
-            List[npt.NDArray[default_scalar_type]]):
+        self,
+        comm: MPI.Comm,
+        J: PETSc.Mat,  # type: ignore
+        b: PETSc.Vec,  # type: ignore
+        coeffs: List[npt.NDArray[default_scalar_type]],
+    ):
         """
         Create a Newton solver
 
@@ -101,9 +122,12 @@ class NewtonSolver():
         self.krylov_solver.setOptionsPrefix("Newton_solver_")
         self.set_krylov_options(options)
 
-    def solve(self, u: Union[fem.Function, PETSc.Vec],  # type: ignore
-              write_solution: bool = False,
-              offset_fun: Union[fem.Function, None] = None):
+    def solve(
+        self,
+        u: Union[fem.Function, PETSc.Vec],  # type: ignore
+        write_solution: bool = False,
+        offset_fun: Union[fem.Function, None] = None,
+    ):
         """
         Solve non-linear problem into function u.
         Returns the number of iterations and if the solver converged
@@ -127,10 +151,12 @@ class NewtonSolver():
         """Get the residual vector"""
         return self._b
 
-    def set_jacobian(self,
-                     func: Callable[  # type: ignore
-                         [PETSc.Vec, PETSc.Mat, List[npt.NDArray[default_scalar_type]]],
-                         None]):
+    def set_jacobian(
+        self,
+        func: Callable[  # type: ignore
+            [PETSc.Vec, PETSc.Mat, List[npt.NDArray[default_scalar_type]]], None
+        ],
+    ):
         """
         Set the function for computing the Jacobian
         Args:
@@ -141,10 +167,12 @@ class NewtonSolver():
     def set_petsc_matrix(self, a_mat: PETSc.Mat):  # type: ignore
         self._A = a_mat
 
-    def set_residual(self,
-                     func: Callable[  # type: ignore
-                         [PETSc.Vec, PETSc.Vec, List[npt.NDArray[default_scalar_type]]],
-                         None]):
+    def set_residual(
+        self,
+        func: Callable[  # type: ignore
+            [PETSc.Vec, PETSc.Vec, List[npt.NDArray[default_scalar_type]]], None
+        ],
+    ):
         """
         Set the function for computing the residual
         Args:
@@ -152,10 +180,13 @@ class NewtonSolver():
         """
         self._compute_residual = func
 
-    def set_preconditioner(self,
-                           func: Callable[  # type: ignore
-                               [PETSc.Vec, PETSc.Mat, List[npt.NDArray[default_scalar_type]]], None],
-                           P: PETSc.Mat):  # type: ignore
+    def set_preconditioner(
+        self,
+        func: Callable[  # type: ignore
+            [PETSc.Vec, PETSc.Mat, List[npt.NDArray[default_scalar_type]]], None
+        ],
+        P: PETSc.Mat,  # type: ignore
+    ):
         """
         Set the function for computing the preconditioner matrix
         Args:
@@ -165,8 +196,7 @@ class NewtonSolver():
         self._compute_preconditioner = func
         self._P = P
 
-    def set_coefficients(self,
-                         func: Callable[[PETSc.Vec, List[npt.NDArray[default_scalar_type]]], None]):  # type: ignore
+    def set_coefficients(self, func: Callable[[PETSc.Vec, List[npt.NDArray[default_scalar_type]]], None]):  # type: ignore
         """
         Set the function for computing the coefficients needed for assembly
         Args:
@@ -219,13 +249,24 @@ class NewtonSolver():
         except ZeroDivisionError:
             relative_residual = numpy.inf
         if self.comm.rank == 0:
-            print(f"Newton Iteration {self.iteration}: r (abs) {residual} (atol={self.atol})",
-                  flush=True, end=" ")
+            print(
+                f"Newton Iteration {self.iteration}: r (abs) {residual} (atol={self.atol})",
+                flush=True,
+                end=" ",
+            )
             print(f"r (rel) {relative_residual} (rtol={self.rtol})", flush=True, end=" ")
             # Petsc KSP converged reason:
             # https://petsc.org/main/docs/manualpages/KSP/KSPConvergedReason/
-            print(f"Krylov iterations: {self.krylov_solver.getIterationNumber()}", flush=True, end=" ")
-            print(f"converged: {self.krylov_solver.getConvergedReason()}", flush=True, end=" ")
+            print(
+                f"Krylov iterations: {self.krylov_solver.getIterationNumber()}",
+                flush=True,
+                end=" ",
+            )
+            print(
+                f"converged: {self.krylov_solver.getConvergedReason()}",
+                flush=True,
+                end=" ",
+            )
             print(f"relaxation: {self.relaxation_parameter}")
         return residual, relative_residual < self.rtol and residual < self.atol
 
@@ -235,9 +276,12 @@ class NewtonSolver():
         """
         x.axpy(-self.relaxation_parameter, dx)
 
-    def _solve(self, x: Union[PETSc.Vec, fem.Function],  # type: ignore
-               write_solution: bool = False,
-               u: Union[fem.Function, None] = None) -> Tuple[int, int]:
+    def _solve(
+        self,
+        x: Union[PETSc.Vec, fem.Function],  # type: ignore
+        write_solution: bool = False,
+        u: Union[fem.Function, None] = None,
+    ) -> Tuple[int, int]:
         t = common.Timer("~Contact: Newton (Newton solver)")
         try:
             x_vec = x.vector
@@ -281,7 +325,7 @@ class NewtonSolver():
         res_old = self._b.norm(PETSc.NormType.NORM_2)  # type: ignore
         if self.convergence_criterion == ConvergenceCriterion.residual:
             self.residual, newton_converged = self._check_convergence(self.b)
-        elif (self.convergence_criterion == ConvergenceCriterion.incremental):
+        elif self.convergence_criterion == ConvergenceCriterion.incremental:
             # We need to do at least one Newton step with the ||dx||-stopping criterion
             newton_converged = False
         else:
@@ -299,7 +343,6 @@ class NewtonSolver():
 
         # Start iterations
         while not newton_converged and self.iteration < self.max_it:
-
             x_copy.array_w[:] = x_vec.array_r[:]
             self.relaxation_parameter = 1.0
             try:
@@ -389,13 +432,18 @@ class NewtonSolver():
             vtx.close()
         if newton_converged:
             if self.comm.rank == 0:
-                print(f"Newton solver finished in {self.iteration} iterations and ",
-                      f" {self.krylov_iterations} linear solver iterations", flush=True)
+                print(
+                    f"Newton solver finished in {self.iteration} iterations and ",
+                    f" {self.krylov_iterations} linear solver iterations",
+                    flush=True,
+                )
         else:
             if self.error_on_nonconvergence:
                 if self.iteration == self.max_it:
-                    raise RuntimeError("Newton solver did not converge because maximum number ",
-                                       f"of iterations ({self.max_it}) was reached")
+                    raise RuntimeError(
+                        "Newton solver did not converge because maximum number ",
+                        f"of iterations ({self.max_it}) was reached",
+                    )
                 else:
                     raise RuntimeError("Newton solver did not converge")
             else:

@@ -6,35 +6,48 @@ import argparse
 import sys
 
 from mpi4py import MPI
-
-import numpy as np
+from petsc4py.PETSc import InsertMode, ScatterMode  # type: ignore
 
 import dolfinx.fem as _fem
+import numpy as np
 import ufl
 from dolfinx import default_scalar_type, log
-from dolfinx.common import timed, Timer, TimingType, list_timings, timing
-from dolfinx.graph import adjacencylist
-from dolfinx.io import XDMFFile, VTXWriter
+from dolfinx.common import Timer, TimingType, list_timings, timed, timing
 from dolfinx.fem.petsc import assemble_matrix, assemble_vector, create_vector
+from dolfinx.graph import adjacencylist
+from dolfinx.io import VTXWriter, XDMFFile
 from dolfinx.mesh import GhostMode, meshtags
-from dolfinx_contact.helpers import (epsilon, lame_parameters, sigma_func,
-                                     weak_dirichlet, rigid_motions_nullspace_subdomains)
-from dolfinx_contact.parallel_mesh_ghosting import create_contact_mesh
-from dolfinx_contact.general_contact.contact_problem import ContactProblem, FrictionLaw
-from dolfinx_contact.newton_solver import NewtonSolver
 from dolfinx_contact.cpp import ContactMode
-from petsc4py.PETSc import InsertMode, ScatterMode  # type: ignore
+from dolfinx_contact.general_contact.contact_problem import ContactProblem, FrictionLaw
+from dolfinx_contact.helpers import (
+    epsilon,
+    lame_parameters,
+    rigid_motions_nullspace_subdomains,
+    sigma_func,
+    weak_dirichlet,
+)
+from dolfinx_contact.newton_solver import NewtonSolver
+from dolfinx_contact.parallel_mesh_ghosting import create_contact_mesh
 
 if __name__ == "__main__":
     desc = "Nitsche's method for two elastic bodies using custom assemblers"
-    parser = argparse.ArgumentParser(description=desc,
-                                     formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser = argparse.ArgumentParser(description=desc, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
-    parser.add_argument("--quadrature", default=5, type=int, dest="q_degree",
-                        help="Quadrature degree used for contact integrals")
+    parser.add_argument(
+        "--quadrature",
+        default=5,
+        type=int,
+        dest="q_degree",
+        help="Quadrature degree used for contact integrals",
+    )
 
-    parser.add_argument("--time_steps", default=1, type=np.int32, dest="time_steps",
-                        help="Number of pseudo time steps")
+    parser.add_argument(
+        "--time_steps",
+        default=1,
+        type=np.int32,
+        dest="time_steps",
+        help="Number of pseudo time steps",
+    )
     timer = Timer("~Contact: - all")
     # Parse input arguments or set to defualt values
     args = parser.parse_args()
@@ -81,10 +94,9 @@ if __name__ == "__main__":
     # Call function that repartitions mesh for parallel computation
     if mesh.comm.size > 1:
         with Timer("~Contact: Add ghosts"):
-            mesh, facet_marker, domain_marker = create_contact_mesh(
-                mesh, facet_marker, domain_marker, [6, 7])
+            mesh, facet_marker, domain_marker = create_contact_mesh(mesh, facet_marker, domain_marker, [6, 7])
 
-    V = _fem.functionspace(mesh, ("Lagrange", 1, (mesh.geometry.dim, )))
+    V = _fem.functionspace(mesh, ("Lagrange", 1, (mesh.geometry.dim,)))
 
     def _torque(x, alpha):
         values = np.zeros((mesh.geometry.dim, x.shape[1]))
@@ -94,7 +106,7 @@ if __name__ == "__main__":
         return values
 
     # Functions for Dirichlet and Neuman boundaries, body force
-    g = _fem.Constant(mesh, default_scalar_type((0, 0, 0)))      # zero dirichlet
+    g = _fem.Constant(mesh, default_scalar_type((0, 0, 0)))  # zero dirichlet
     t = _fem.Function(V)
     t.interpolate(lambda x: _torque(x, 1.0))  # traction
     f_val = (2.0, 0.0, 0)
@@ -149,8 +161,7 @@ if __name__ == "__main__":
 
     # compiler options to improve performance
     cffi_options = ["-Ofast", "-march=native"]
-    jit_options = {"cffi_extra_compile_args": cffi_options,
-                   "cffi_libraries": ["m"]}
+    jit_options = {"cffi_extra_compile_args": cffi_options, "cffi_libraries": ["m"]}
     # compiled forms for rhs and tangen system
     F_compiled = _fem.form(F, jit_options=jit_options)
     J_compiled = _fem.form(J, jit_options=jit_options)
@@ -168,12 +179,14 @@ if __name__ == "__main__":
     # Solver options
     ksp_tol = 1e-10
     newton_tol = 1e-7
-    newton_options = {"relaxation_parameter": 1.0,
-                      "atol": newton_tol,
-                      "rtol": newton_tol,
-                      "convergence_criterion": "residual",
-                      "max_it": 50,
-                      "error_on_nonconvergence": False}
+    newton_options = {
+        "relaxation_parameter": 1.0,
+        "atol": newton_tol,
+        "rtol": newton_tol,
+        "convergence_criterion": "residual",
+        "max_it": 50,
+        "error_on_nonconvergence": False,
+    }
 
     # In order to use an LU solver for debugging purposes on small scale problems
     # use the following PETSc options: {"ksp_type": "preonly", "pc_type": "lu"}
@@ -184,7 +197,7 @@ if __name__ == "__main__":
         "ksp_atol": ksp_tol,
         "pc_type": "gamg",
         "pc_mg_levels": 3,
-        "pc_mg_cycles": 1,   # 1 is v, 2 is w
+        "pc_mg_cycles": 1,  # 1 is v, 2 is w
         "mg_levels_ksp_type": "chebyshev",
         "mg_levels_pc_type": "jacobi",
         "pc_gamg_type": "agg",
@@ -192,12 +205,12 @@ if __name__ == "__main__":
         "pc_gamg_agg_nsmooths": 1,
         "pc_gamg_threshold": 1e-3,
         "pc_gamg_square_graph": 2,
-        "pc_gamg_reuse_interpolation": False
+        "pc_gamg_reuse_interpolation": False,
     }
 
     # Solve contact problem using Nitsche's method
     problem_parameters = {"gamma": np.float64(E * gamma), "theta": np.float64(theta)}
-    V0 = _fem.FunctionSpace(mesh, ("DG", 0))
+    V0 = _fem.functionspace(mesh, ("DG", 0))
     mu0 = _fem.Function(V0)
     lmbda0 = _fem.Function(V0)
     mu0.interpolate(lambda x: np.full((1, x.shape[1]), mu))
@@ -211,8 +224,13 @@ if __name__ == "__main__":
     # create contact solver
     search_mode = [ContactMode.ClosestPoint for _ in range(len(contact_pairs))]
     contact_problem = ContactProblem([facet_marker], surfaces, contact_pairs, mesh, args.q_degree, search_mode)
-    contact_problem.generate_contact_data(FrictionLaw.Frictionless, V, {"u": u, "du": du, "mu": mu0,
-                                                                        "lambda": lmbda0}, E * gamma, theta)
+    contact_problem.generate_contact_data(
+        FrictionLaw.Frictionless,
+        V,
+        {"u": u, "du": du, "mu": mu0, "lambda": lmbda0},
+        E * gamma,
+        theta,
+    )
 
     # define functions for newton solver
     def compute_coefficients(x, coeffs):
@@ -222,16 +240,14 @@ if __name__ == "__main__":
     @timed("~Contact: Assemble residual")
     def compute_residual(x, b, coeffs):
         b.zeroEntries()
-        b.ghostUpdate(addv=InsertMode.INSERT,
-                      mode=ScatterMode.FORWARD)
+        b.ghostUpdate(addv=InsertMode.INSERT, mode=ScatterMode.FORWARD)
         with Timer("~~Contact: Contact contributions (in assemble vector)"):
             contact_problem.assemble_vector(b, V)
         with Timer("~~Contact: Standard contributions (in assemble vector)"):
             assemble_vector(b, F_compiled)
 
         # Apply boundary condition
-        b.ghostUpdate(addv=InsertMode.ADD,
-                      mode=ScatterMode.REVERSE)
+        b.ghostUpdate(addv=InsertMode.ADD, mode=ScatterMode.REVERSE)
 
     @timed("~Contact: Assemble matrix")
     def compute_jacobian_matrix(x, a_mat, coeffs):
@@ -243,6 +259,7 @@ if __name__ == "__main__":
         a_mat.assemble()
 
         # create vector and matrix
+
     A = contact_problem.create_matrix(J_compiled)
     b = create_vector(F_compiled)
 
@@ -254,8 +271,7 @@ if __name__ == "__main__":
     newton_solver.set_coefficients(compute_coefficients)
 
     # Set rigid motion nullspace
-    null_space = rigid_motions_nullspace_subdomains(V, domain_marker, np.unique(
-        domain_marker.values), num_domains=2)
+    null_space = rigid_motions_nullspace_subdomains(V, domain_marker, np.unique(domain_marker.values), num_domains=2)
     newton_solver.A.setNearNullSpace(null_space)
 
     # Set Newton solver options
@@ -301,10 +317,19 @@ if __name__ == "__main__":
     if mesh.comm.rank == 0:
         print("-" * 25, file=outfile)
         print(f"Newton options {newton_options}", file=outfile)
-        print(f"num_dofs: {u.function_space.dofmap.index_map_bs*u.function_space.dofmap.index_map.size_global}"
-              + f", {mesh.topology.cell_types[0]}", file=outfile)
-        print(f"Newton solver {timing('~Contact: Newton (Newton solver)')[1]}", file=outfile)
-        print(f"Krylov solver {timing('~Contact: Newton (Krylov solver)')[1]}", file=outfile)
+        print(
+            f"num_dofs: {u.function_space.dofmap.index_map_bs*u.function_space.dofmap.index_map.size_global}"
+            + f", {mesh.topology.cell_types[0]}",
+            file=outfile,
+        )
+        print(
+            f"Newton solver {timing('~Contact: Newton (Newton solver)')[1]}",
+            file=outfile,
+        )
+        print(
+            f"Krylov solver {timing('~Contact: Newton (Krylov solver)')[1]}",
+            file=outfile,
+        )
         print(f"Newton time: {newton_time}", file=outfile)
         print(f"Newton iterations {num_newton_its}, ", file=outfile)
         print(f"Krylov iterations {num_krylov_its},", file=outfile)

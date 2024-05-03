@@ -7,17 +7,19 @@
 # to surface 1 in Pi(x) and point inwards. The normalised version (Pi(x) - x)||Pi(x)-x|| should therefore
 # be the same as the outward unit normal in the point Pi(x) with the opposite sign.
 
-import numpy as np
-import pytest
+import os
 
-import dolfinx.fem as _fem
+from mpi4py import MPI
+
 import dolfinx_contact
 import dolfinx_contact.cpp
+import numpy as np
+import pytest
 from dolfinx.graph import adjacencylist
 from dolfinx.io import XDMFFile
 from dolfinx.mesh import locate_entities_boundary, meshtags
 from dolfinx_contact.meshing import convert_mesh, create_box_mesh_2D, create_box_mesh_3D
-import os
+
 os.system("mkdir -p meshes")
 
 
@@ -25,7 +27,6 @@ os.system("mkdir -p meshes")
 @pytest.mark.parametrize("surf", [0, 1])
 @pytest.mark.parametrize("dim", [2, 3])
 def test_projection(q_deg, surf, dim):
-
     # Create mesh
     if dim == 2:
         fname = "meshes/box_2D"
@@ -89,9 +90,18 @@ def test_projection(q_deg, surf, dim):
     data = np.array([surface_0_val, surface_1_val], dtype=np.int32)
     offsets = np.array([0, 2], dtype=np.int32)
     surfaces = adjacencylist(data, offsets)
-    search_mode = [dolfinx_contact.cpp.ContactMode.ClosestPoint, dolfinx_contact.cpp.ContactMode.ClosestPoint]
-    contact = dolfinx_contact.cpp.Contact([facet_marker._cpp_object], surfaces, [(0, 1), (1, 0)],
-                                          mesh._cpp_object, search_mode, quadrature_degree=q_deg)
+    search_mode = [
+        dolfinx_contact.cpp.ContactMode.ClosestPoint,
+        dolfinx_contact.cpp.ContactMode.ClosestPoint,
+    ]
+    contact = dolfinx_contact.cpp.Contact(
+        [facet_marker._cpp_object],
+        surfaces,
+        [(0, 1), (1, 0)],
+        mesh._cpp_object,
+        search_mode,
+        quadrature_degree=q_deg,
+    )
     contact.create_distance_map(surf)
     gap = contact.pack_gap(surf)
     normals = contact.pack_ny(surf)
@@ -100,8 +110,8 @@ def test_projection(q_deg, surf, dim):
     n_dot = np.zeros((gap.shape[0], gap.shape[1] // gdim))
     for facet in range(gap.shape[0]):
         for q in range(gap.shape[1] // gdim):
-            g = gap[facet, q * gdim:(q + 1) * gdim]
-            n = -normals[facet, q * gdim:(q + 1) * gdim]
+            g = gap[facet, q * gdim : (q + 1) * gdim]
+            n = -normals[facet, q * gdim : (q + 1) * gdim]
             n_norm = np.linalg.norm(n)
             g_norm = np.linalg.norm(g)
             for i in range(gdim):

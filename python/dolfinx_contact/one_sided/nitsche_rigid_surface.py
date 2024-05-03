@@ -6,8 +6,6 @@ from typing import Dict, Tuple
 
 from petsc4py import PETSc as _PETSc
 
-import numpy as np
-
 import dolfinx.common as _common
 import dolfinx.cpp as _cpp
 import dolfinx.fem as _fem
@@ -15,17 +13,33 @@ import dolfinx.geometry as _geometry
 import dolfinx.log as _log
 import dolfinx.mesh as _mesh
 import dolfinx.nls as _nls
-import dolfinx_contact.cpp
+import numpy as np
 import ufl
 from dolfinx.graph import adjacencylist
-from dolfinx_contact.helpers import R_minus, epsilon, lame_parameters, rigid_motions_nullspace, sigma_func
+
+import dolfinx_contact.cpp
+from dolfinx_contact.helpers import (
+    R_minus,
+    epsilon,
+    lame_parameters,
+    rigid_motions_nullspace,
+    sigma_func,
+)
 
 
-def nitsche_rigid_surface(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTags, int, int, int, int],
-                          physical_parameters: dict = {}, nitsche_parameters: Dict[str, float] = {},
-                          vertical_displacement: float = -0.1, nitsche_bc: bool = False, quadrature_degree: int = 5,
-                          form_compiler_options: Dict = {}, jit_options: Dict = {}, petsc_options: Dict = {},
-                          newton_options: Dict = {}):
+def nitsche_rigid_surface(
+    mesh: _mesh.Mesh,
+    mesh_data: Tuple[_mesh.MeshTags, int, int, int, int],
+    physical_parameters: dict = {},
+    nitsche_parameters: Dict[str, float] = {},
+    vertical_displacement: float = -0.1,
+    nitsche_bc: bool = False,
+    quadrature_degree: int = 5,
+    form_compiler_options: Dict = {},
+    jit_options: Dict = {},
+    petsc_options: Dict = {},
+    newton_options: Dict = {},
+):
     """
     Use custom kernel to compute the one sided contact problem with a mesh coming into contact
     with a rigid surface (meshed) with constant normal n_2.
@@ -87,13 +101,18 @@ def nitsche_rigid_surface(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTags, int
     gamma = nitsche_parameters.get("gamma", 10)
 
     # Unpack mesh data
-    (facet_marker, dirichlet_value_elastic, contact_value_elastic, contact_value_rigid,
-     dirichlet_value_rigid) = mesh_data
+    (
+        facet_marker,
+        dirichlet_value_elastic,
+        contact_value_elastic,
+        contact_value_rigid,
+        dirichlet_value_rigid,
+    ) = mesh_data
     assert facet_marker.dim == mesh.topology.dim - 1
     gdim = mesh.geometry.dim
 
     # Setup function space and functions used in Jacobian and residual formulation
-    V = _fem.functionspace(mesh, ("Lagrange", 1, (mesh.geometry.dim, )))
+    V = _fem.functionspace(mesh, ("Lagrange", 1, (mesh.geometry.dim,)))
     u = _fem.Function(V)
     v = ufl.TestFunction(V)
     du = ufl.TrialFunction(V)
@@ -114,23 +133,31 @@ def nitsche_rigid_surface(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTags, int
         disp_vec = np.zeros(gdim)
         disp_vec[gdim - 1] = vertical_displacement
         u_D = ufl.as_vector(disp_vec)
-        F += - ufl.inner(sigma(u) * n, v) * ds(dirichlet_value_elastic)\
-             - theta * ufl.inner(sigma(v) * n, u - u_D) * \
-            ds(dirichlet_value_elastic) + E * gamma / h * ufl.inner(u - u_D, v) * ds(dirichlet_value_elastic)
+        F += (
+            -ufl.inner(sigma(u) * n, v) * ds(dirichlet_value_elastic)
+            - theta * ufl.inner(sigma(v) * n, u - u_D) * ds(dirichlet_value_elastic)
+            + E * gamma / h * ufl.inner(u - u_D, v) * ds(dirichlet_value_elastic)
+        )
 
-        J += - ufl.inner(sigma(du) * n, v) * ds(dirichlet_value_elastic)\
-            - theta * ufl.inner(sigma(v) * n, du) * \
-            ds(dirichlet_value_elastic) + E * gamma / h * ufl.inner(du, v) * ds(dirichlet_value_elastic)
+        J += (
+            -ufl.inner(sigma(du) * n, v) * ds(dirichlet_value_elastic)
+            - theta * ufl.inner(sigma(v) * n, du) * ds(dirichlet_value_elastic)
+            + E * gamma / h * ufl.inner(du, v) * ds(dirichlet_value_elastic)
+        )
 
         # Nitsche bc for rigid plane
         disp_plane = np.zeros(gdim)
         u_D_plane = ufl.as_vector(disp_plane)
-        F += - ufl.inner(sigma(u) * n, v) * ds(dirichlet_value_rigid)\
-             - theta * ufl.inner(sigma(v) * n, u - u_D_plane) * \
-            ds(dirichlet_value_rigid) + E * gamma / h * ufl.inner(u - u_D_plane, v) * ds(dirichlet_value_rigid)
-        J += - ufl.inner(sigma(du) * n, v) * ds(dirichlet_value_rigid)\
-            - theta * ufl.inner(sigma(v) * n, du) * \
-            ds(dirichlet_value_rigid) + E * gamma / h * ufl.inner(du, v) * ds(dirichlet_value_rigid)
+        F += (
+            -ufl.inner(sigma(u) * n, v) * ds(dirichlet_value_rigid)
+            - theta * ufl.inner(sigma(v) * n, u - u_D_plane) * ds(dirichlet_value_rigid)
+            + E * gamma / h * ufl.inner(u - u_D_plane, v) * ds(dirichlet_value_rigid)
+        )
+        J += (
+            -ufl.inner(sigma(du) * n, v) * ds(dirichlet_value_rigid)
+            - theta * ufl.inner(sigma(v) * n, du) * ds(dirichlet_value_rigid)
+            + E * gamma / h * ufl.inner(du, v) * ds(dirichlet_value_rigid)
+        )
         bcs = []
     else:
         # strong Dirichlet boundary conditions
@@ -138,18 +165,17 @@ def nitsche_rigid_surface(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTags, int
             values = np.zeros((mesh.geometry.dim, x.shape[1]))
             values[mesh.geometry.dim - 1] = vertical_displacement
             return values
+
         tdim = mesh.topology.dim
         u_D = _fem.Function(V)
         u_D.interpolate(_u_D)
         u_D.name = "u_D"
         u_D.x.scatter_forward()
-        dirichlet_dofs = _fem.locate_dofs_topological(
-            V, tdim - 1, facet_marker.find(dirichlet_value_elastic))
+        dirichlet_dofs = _fem.locate_dofs_topological(V, tdim - 1, facet_marker.find(dirichlet_value_elastic))
         bc = _fem.dirichletbc(u_D, dirichlet_dofs)
         bcs = [bc]
         # Dirichlet boundary conditions for rigid plane
-        dirichlet_dofs_plane = _fem.locate_dofs_topological(
-            V, tdim - 1, facet_marker.find(dirichlet_value_rigid))
+        dirichlet_dofs_plane = _fem.locate_dofs_topological(V, tdim - 1, facet_marker.find(dirichlet_value_rigid))
         u_D_plane = _fem.Function(V)
         with u_D_plane.vector.localForm() as loc:
             loc.set(0)
@@ -163,8 +189,14 @@ def nitsche_rigid_surface(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTags, int
     surfaces = adjacencylist(data, offsets)
     # Ensures that we find closest facet to midpoint of facet by setting quadrature degree to 1
     search_mode = [dolfinx_contact.cpp.ContactMode.ClosestPoint]
-    contact = dolfinx_contact.cpp.Contact([facet_marker._cpp_object], surfaces, [(0, 1)],
-                                          mesh._cpp_object, search_mode, quadrature_degree=1)
+    contact = dolfinx_contact.cpp.Contact(
+        [facet_marker._cpp_object],
+        surfaces,
+        [(0, 1)],
+        mesh._cpp_object,
+        search_mode,
+        quadrature_degree=1,
+    )
 
     # Create gap function
     gdim = mesh.geometry.dim
@@ -185,8 +217,9 @@ def nitsche_rigid_surface(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTags, int
             facet = facets[i]
             # Compute distance between point and closest facet
             index = np.argwhere(np.array(contact_facets) == facet)[0, 0]
-            facet_geometry = _cpp.mesh.entities_to_geometry(mesh._cpp_object, fdim,
-                                                            np.asarray([facet], dtype=np.int32), False)
+            facet_geometry = _cpp.mesh.entities_to_geometry(
+                mesh._cpp_object, fdim, np.asarray([facet], dtype=np.int32), False
+            )
             coords0 = mesh_geometry[facet_geometry][0]
             R = np.linalg.norm(_cpp.geometry.compute_distance_gjk(coords0, xi))
             # If point on a facet in contact surface (i.e., if distance between point and closest
@@ -194,11 +227,12 @@ def nitsche_rigid_surface(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTags, int
             # compute distance vector
             if np.isclose(R, 0):
                 facet_2 = lookup.links(index)[0]
-                facet2_geometry = _cpp.mesh.entities_to_geometry(mesh._cpp_object, fdim,
-                                                                 np.asarray([facet_2], dtype=np.int32), False)
+                facet2_geometry = _cpp.mesh.entities_to_geometry(
+                    mesh._cpp_object, fdim, np.asarray([facet_2], dtype=np.int32), False
+                )
                 coords = mesh_geometry[facet2_geometry][0]
                 dist_vec = _cpp.geometry.compute_distance_gjk(coords, xi)
-                dist_vec_array[: gdim, i] = dist_vec[: gdim]
+                dist_vec_array[:gdim, i] = dist_vec[:gdim]
         return dist_vec_array
 
     # interpolate gap function
@@ -219,12 +253,24 @@ def nitsche_rigid_surface(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTags, int
     # # Derivation of one sided Nitsche with gap function
     gamma = gamma * E / h
     F = F - theta / gamma * sigma_n(u) * sigma_n(v) * ds(contact_value_elastic)
-    F += 1 / gamma * R_minus(sigma_n(u) + gamma * (ufl.dot(g_vec, n_2) - ufl.dot(u, n_2))) * \
-        (theta * sigma_n(v) - gamma * ufl.dot(v, n_2)) * ds(contact_value_elastic)
+    F += (
+        1
+        / gamma
+        * R_minus(sigma_n(u) + gamma * (ufl.dot(g_vec, n_2) - ufl.dot(u, n_2)))
+        * (theta * sigma_n(v) - gamma * ufl.dot(v, n_2))
+        * ds(contact_value_elastic)
+    )
     q = sigma_n(u) + gamma * (ufl.dot(g_vec, n_2) - ufl.dot(u, n_2))
     J = J - theta / gamma * sigma_n(du) * sigma_n(v) * ds(contact_value_elastic)
-    J += 1 / gamma * 0.5 * (1 - ufl.sign(q)) * (sigma_n(du) - gamma * ufl.dot(du, n_2)) * \
-        (theta * sigma_n(v) - gamma * ufl.dot(v, n_2)) * ds(contact_value_elastic)
+    J += (
+        1
+        / gamma
+        * 0.5
+        * (1 - ufl.sign(q))
+        * (sigma_n(du) - gamma * ufl.dot(du, n_2))
+        * (theta * sigma_n(v) - gamma * ufl.dot(v, n_2))
+        * ds(contact_value_elastic)
+    )
 
     # Setup non-linear problem and Newton-solver
     problem = _fem.petsc.NonlinearProblem(F, u, bcs, J=J)
@@ -247,6 +293,7 @@ def nitsche_rigid_surface(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTags, int
         values = np.zeros((gdim, x.shape[1]))
         values[-1] = -0.01
         return values
+
     u.interpolate(_u_initial)
 
     # Define solver and options

@@ -6,29 +6,40 @@ from typing import Dict, Optional, Tuple
 
 from petsc4py import PETSc as _PETSc
 
-import numpy as np
-
 import dolfinx.common as _common
 import dolfinx.fem as _fem
 import dolfinx.log as _log
 import dolfinx.mesh as dmesh
+import numpy as np
 import ufl
-
 from dolfinx import default_scalar_type
 from dolfinx.nls.petsc import NewtonSolver
-from dolfinx_contact.helpers import R_minus, epsilon, lame_parameters, rigid_motions_nullspace, sigma_func
+
+from dolfinx_contact.helpers import (
+    R_minus,
+    epsilon,
+    lame_parameters,
+    rigid_motions_nullspace,
+    sigma_func,
+)
 
 __all__ = ["nitsche_ufl"]
 
 
-def nitsche_ufl(mesh: dmesh.Mesh, mesh_data: Tuple[dmesh.MeshTags, int, int],
-                physical_parameters: Optional[Dict] = None,
-                nitsche_parameters: Optional[Dict[str, float]] = None,
-                plane_loc: float = 0.0, vertical_displacement: float = -0.1,
-                nitsche_bc: bool = True, quadrature_degree: int = 5,
-                form_compiler_options: Optional[Dict] = None,
-                jit_options: Optional[Dict] = None, petsc_options: Optional[Dict] = None,
-                newton_options: Optional[Dict] = None) -> _fem.Function:
+def nitsche_ufl(
+    mesh: dmesh.Mesh,
+    mesh_data: Tuple[dmesh.MeshTags, int, int],
+    physical_parameters: Optional[Dict] = None,
+    nitsche_parameters: Optional[Dict[str, float]] = None,
+    plane_loc: float = 0.0,
+    vertical_displacement: float = -0.1,
+    nitsche_bc: bool = True,
+    quadrature_degree: int = 5,
+    form_compiler_options: Optional[Dict] = None,
+    jit_options: Optional[Dict] = None,
+    petsc_options: Optional[Dict] = None,
+    newton_options: Optional[Dict] = None,
+) -> _fem.Function:
     """
     Use UFL to compute the one sided contact problem with a mesh coming into contact
     with a rigid surface (not meshed).
@@ -112,15 +123,20 @@ def nitsche_ufl(mesh: dmesh.Mesh, mesh_data: Tuple[dmesh.MeshTags, int, int],
     x = ufl.SpatialCoordinate(mesh)
     gap = x[mesh.geometry.dim - 1] + plane_loc
 
-    V = _fem.functionspace(mesh, ("Lagrange", 1, (mesh.geometry.dim, )))
+    V = _fem.functionspace(mesh, ("Lagrange", 1, (mesh.geometry.dim,)))
     u = _fem.Function(V)
     v = ufl.TestFunction(V)
 
     metadata = {"quadrature_degree": quadrature_degree}
     dx = ufl.Measure("dx", domain=mesh)
-    ds = ufl.Measure("ds", domain=mesh, metadata=metadata,
-                     subdomain_data=facet_marker)
-    zero = np.array([0., ] * mesh.geometry.dim, dtype=default_scalar_type)
+    ds = ufl.Measure("ds", domain=mesh, metadata=metadata, subdomain_data=facet_marker)
+    zero = np.array(
+        [
+            0.0,
+        ]
+        * mesh.geometry.dim,
+        dtype=default_scalar_type,
+    )
     a = ufl.inner(sigma(u), epsilon(v)) * dx
     L = ufl.inner(_fem.Constant(mesh, zero), v) * dx
 
@@ -130,16 +146,29 @@ def nitsche_ufl(mesh: dmesh.Mesh, mesh_data: Tuple[dmesh.MeshTags, int, int],
     def sigma_n(v):
         # NOTE: Different normals, see summary paper
         return ufl.dot(sigma(v) * n, n_2)
+
     F = a - theta / gamma_scaled * sigma_n(u) * sigma_n(v) * ds(bottom_value) - L
-    F += 1 / gamma_scaled * R_minus(sigma_n(u) + gamma_scaled * (gap - ufl.dot(u, n_2))) * \
-        (theta * sigma_n(v) - gamma_scaled * ufl.dot(v, n_2)) * ds(bottom_value)
+    F += (
+        1
+        / gamma_scaled
+        * R_minus(sigma_n(u) + gamma_scaled * (gap - ufl.dot(u, n_2)))
+        * (theta * sigma_n(v) - gamma_scaled * ufl.dot(v, n_2))
+        * ds(bottom_value)
+    )
 
     # Compute corresponding Jacobian
     du = ufl.TrialFunction(V)
     q = sigma_n(u) + gamma_scaled * (gap - ufl.dot(u, n_2))
     J = ufl.inner(sigma(du), epsilon(v)) * ufl.dx - theta / gamma_scaled * sigma_n(du) * sigma_n(v) * ds(bottom_value)
-    J += 1 / gamma_scaled * 0.5 * (1 - ufl.sign(q)) * (sigma_n(du) - gamma_scaled * ufl.dot(du, n_2)) * \
-        (theta * sigma_n(v) - gamma_scaled * ufl.dot(v, n_2)) * ds(bottom_value)
+    J += (
+        1
+        / gamma_scaled
+        * 0.5
+        * (1 - ufl.sign(q))
+        * (sigma_n(du) - gamma_scaled * ufl.dot(du, n_2))
+        * (theta * sigma_n(v) - gamma_scaled * ufl.dot(v, n_2))
+        * ds(bottom_value)
+    )
 
     assert mesh.geometry.dim == mesh.topology.dim
 
@@ -149,26 +178,30 @@ def nitsche_ufl(mesh: dmesh.Mesh, mesh_data: Tuple[dmesh.MeshTags, int, int],
         disp_vec = np.zeros(mesh.geometry.dim, dtype=default_scalar_type)
         disp_vec[mesh.geometry.dim - 1] = vertical_displacement
         u_D = ufl.as_vector(disp_vec)
-        F += - ufl.inner(sigma(u) * n, v) * ds(top_value)\
-            - theta * ufl.inner(sigma(v) * n, u - u_D) * \
-            ds(top_value) + gamma_scaled / h * ufl.inner(u - u_D, v) * ds(top_value)
+        F += (
+            -ufl.inner(sigma(u) * n, v) * ds(top_value)
+            - theta * ufl.inner(sigma(v) * n, u - u_D) * ds(top_value)
+            + gamma_scaled / h * ufl.inner(u - u_D, v) * ds(top_value)
+        )
         bcs = []
-        J += - ufl.inner(sigma(du) * n, v) * ds(top_value)\
-            - theta * ufl.inner(sigma(v) * n, du) * \
-            ds(top_value) + gamma_scaled / h * ufl.inner(du, v) * ds(top_value)
+        J += (
+            -ufl.inner(sigma(du) * n, v) * ds(top_value)
+            - theta * ufl.inner(sigma(v) * n, du) * ds(top_value)
+            + gamma_scaled / h * ufl.inner(du, v) * ds(top_value)
+        )
     else:
         # strong Dirichlet boundary conditions
         def _u_D(x):
             values = np.zeros((mesh.geometry.dim, x.shape[1]), dtype=default_scalar_type)
             values[mesh.geometry.dim - 1] = vertical_displacement
             return values
+
         u_D = _fem.Function(V)
         u_D.interpolate(_u_D)
         u_D.name = "u_D"
         u_D.x.scatter_forward()
         tdim = mesh.topology.dim
-        dirichlet_dofs = _fem.locate_dofs_topological(
-            V, tdim - 1, facet_marker.find(top_value))
+        dirichlet_dofs = _fem.locate_dofs_topological(V, tdim - 1, facet_marker.find(top_value))
         bc = _fem.dirichletbc(u_D, dirichlet_dofs)
         bcs = [bc]
 
@@ -181,8 +214,14 @@ def nitsche_ufl(mesh: dmesh.Mesh, mesh_data: Tuple[dmesh.MeshTags, int, int],
 
     # setattr(_fem.petsc.NonlinearProblem, "form", form)
 
-    problem = _fem.petsc.NonlinearProblem(F, u, bcs, J=J, jit_options=jit_options,
-                                          form_compiler_options=form_compiler_options)
+    problem = _fem.petsc.NonlinearProblem(
+        F,
+        u,
+        bcs,
+        J=J,
+        jit_options=jit_options,
+        form_compiler_options=form_compiler_options,
+    )
 
     # DEBUG: Write each step of Newton iterations
     # problem.i = 0

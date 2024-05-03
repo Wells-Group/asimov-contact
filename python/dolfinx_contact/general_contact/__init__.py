@@ -4,5 +4,4 @@
 
 from .contact_problem import ContactProblem, FrictionLaw
 
-
 __all__ = ["ContactProblem", "FrictionLaw"]

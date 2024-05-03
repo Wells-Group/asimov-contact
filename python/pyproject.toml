@@ -12,7 +12,7 @@ build-backend = "scikit_build_core.build"
 
 [project]
 name = "dolfinx_contact"
-version = "0.7.0.dev0"
+version = "0.8.0.dev0"
 description = 'Contact custom assemblers using DOLFINx and Basix'
 readme = "README.md"
 requires-python = ">=3.8.0"
@@ -46,17 +46,42 @@ junit_family = "xunit2"
 ignore_missing_imports = true
 
 
-[tool.isort]
-line_length = 120
-src_paths = ["demos", "asimov-contact", "tests"]
-known_first_party = ["dolfinx_contact", "basix", "dolfinx", "ffcx", "ufl"]
-known_third_party = ["gmsh", "numba", "numpy", "pytest", "pyvista"]
-known_mpi = ["mpi4py", "petsc4py"]
-sections = [
-      "FUTURE",
-      "STDLIB",
-      "MPI",
-      "THIRDPARTY",
-      "FIRSTPARTY",
-      "LOCALFOLDER",
+[tool.ruff]
+src = ["demos", "asimov-contact"]
+line-length = 120
+indent-width = 4
+
+[tool.ruff.lint]
+select = [
+      # Pyflakes
+      "F",
+      # Pycodestyle
+      "E",
+      "W",
+      # isort
+      "I001",
 ]
+
+
+[tool.ruff.lint.isort]
+known-first-party = ["dolfinx_mpc"]
+known-third-party = [
+      "basix",
+      "dolfinx",
+      "ffcx",
+      "ufl",
+      "gmsh",
+      "numpy",
+      "pytest",
+]
+section-order = [
+      "future",
+      "standard-library",
+      "mpi",
+      "third-party",
+      "first-party",
+      "local-folder",
+]
+
+[tool.ruff.lint.isort.sections]
+"mpi" = ["mpi4py", "petsc4py"]

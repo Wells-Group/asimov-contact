@@ -1,27 +1,55 @@
 # Copyright (C) 2023 Sarah Roggendorf
 #
 # SPDX-License-Identifier:    MIT
-import dolfinx
-from matplotlib import pyplot as plt
-from dolfinx.io import VTXWriter
-from dolfinx.fem import form, Function, FunctionSpace
-from dolfinx.fem.petsc import assemble_matrix, assemble_vector
-from dolfinx.mesh import create_submesh
-import numpy as np
-import dolfinx_contact
 import petsc4py.PETSc as PETSc
+
+import dolfinx
+import numpy as np
 import ufl
+from dolfinx.fem import Function, FunctionSpace, form
+from dolfinx.fem.petsc import assemble_matrix, assemble_vector
+from dolfinx.io import VTXWriter
+from dolfinx.mesh import create_submesh
+from matplotlib import pyplot as plt
+
+import dolfinx_contact
 
 
 class ContactWriter:
-    __slots__ = ["vtx", "contact", "u", "contact_pairs", "material",
-                 "projection_coordinates", "mesh", "facet_list", "facet_mesh",
-                 "msh_to_fm", "pn", "pt", "a_form", "L", "L2", "p_f", "pt_f", "p_hertz",
-                 "t_hertz"]
+    __slots__ = [
+        "vtx",
+        "contact",
+        "u",
+        "contact_pairs",
+        "material",
+        "projection_coordinates",
+        "mesh",
+        "facet_list",
+        "facet_mesh",
+        "msh_to_fm",
+        "pn",
+        "pt",
+        "a_form",
+        "L",
+        "L2",
+        "p_f",
+        "pt_f",
+        "p_hertz",
+        "t_hertz",
+    ]
 
-    def __init__(self, mesh, contact, u, contact_pairs,
-                 material, order, simplex,
-                 projection_coordinates, fname):
+    def __init__(
+        self,
+        mesh,
+        contact,
+        u,
+        contact_pairs,
+        material,
+        order,
+        simplex,
+        projection_coordinates,
+        fname,
+    ):
         self.contact = contact
         self.u = u
         self.contact_pairs = contact_pairs
@@ -43,26 +71,34 @@ class ContactWriter:
 
         self.facet_mesh = facet_mesh
         # Create msh to submsh entity map
-        num_facets = mesh.topology.index_map(tdim - 1).size_local + \
-            mesh.topology.index_map(tdim - 1).num_ghosts
+        num_facets = mesh.topology.index_map(tdim - 1).size_local + mesh.topology.index_map(tdim - 1).num_ghosts
         msh_to_fm = np.full(num_facets, -1)
         msh_to_fm[fm_to_msh] = np.arange(len(fm_to_msh))
         self.msh_to_fm = msh_to_fm
 
         # Use quadrature element
         if tdim == 2:
-            quadr_element = ufl.FiniteElement("Quadrature", ufl.Cell(
-                "interval", geometric_dimension=facet_mesh.geometry.dim),
-                degree=contact.q_deg, quad_scheme="default")
+            quadr_element = ufl.FiniteElement(
+                "Quadrature",
+                ufl.Cell("interval", geometric_dimension=facet_mesh.geometry.dim),
+                degree=contact.q_deg,
+                quad_scheme="default",
+            )
         else:
             if simplex:
-                quadr_element = ufl.FiniteElement("Quadrature", ufl.Cell(
-                    "triangle", geometric_dimension=facet_mesh.geometry.dim),
-                    contact.q_deg, quad_scheme="default")
+                quadr_element = ufl.FiniteElement(
+                    "Quadrature",
+                    ufl.Cell("triangle", geometric_dimension=facet_mesh.geometry.dim),
+                    contact.q_deg,
+                    quad_scheme="default",
+                )
             else:
-                quadr_element = ufl.FiniteElement("Quadrature", ufl.Cell(
-                    "quadrilateral", geometric_dimension=facet_mesh.geometry.dim),
-                    contact.q_deg, quad_scheme="default")
+                quadr_element = ufl.FiniteElement(
+                    "Quadrature",
+                    ufl.Cell("quadrilateral", geometric_dimension=facet_mesh.geometry.dim),
+                    contact.q_deg,
+                    quad_scheme="default",
+                )
 
         quadr_space = FunctionSpace(facet_mesh, quadr_element)
         interpolation_space = FunctionSpace(facet_mesh, ("DG", max(order - 1, 1)))
@@ -86,15 +122,21 @@ class ContactWriter:
         self.p_hertz.name = "Hertz: Normal"
         self.t_hertz.name = "Hertz: Tangential"
 
-        self.vtx = VTXWriter(self.facet_mesh.comm, f"{fname}_surface_forces.bp", [
-                             self.p_f, self.pt_f, self.p_hertz, self.t_hertz], "bp4")
+        self.vtx = VTXWriter(
+            self.facet_mesh.comm,
+            f"{fname}_surface_forces.bp",
+            [self.p_f, self.pt_f, self.p_hertz, self.t_hertz],
+            "bp4",
+        )
 
     def project(self):
         tdim = self.mesh.topology.dim
         for i in range(len(self.contact_pairs)):
-            fgeom = dolfinx_contact.cpp.entities_to_geometry_dofs(self.facet_mesh._cpp_object, tdim - 1,
-                                                                  np.array(self.msh_to_fm[self.facet_list[i]],
-                                                                           dtype=np.int32))
+            fgeom = dolfinx_contact.cpp.entities_to_geometry_dofs(
+                self.facet_mesh._cpp_object,
+                tdim - 1,
+                np.array(self.msh_to_fm[self.facet_list[i]], dtype=np.int32),
+            )
             fgeom = fgeom.array
             vali = self.projection_coordinates[i][1]
             xi = self.projection_coordinates[i][0]
@@ -122,12 +164,22 @@ class ContactWriter:
             n_contact = normals[i]
             n_x = self.contact.pack_nx(i)
             grad_u = dolfinx_contact.cpp.pack_gradient_quadrature(
-                self.u._cpp_object, self.contact.q_deg, self.contact.entities[i])
+                self.u._cpp_object, self.contact.q_deg, self.contact.entities[i]
+            )
             num_facets = self.contact.entities[i].shape[0]
             num_q_points = n_x.shape[1] // gdim
             # this assumes mu, lmbda are constant for each body
-            sign = np.array(dolfinx_contact.cpp.compute_contact_forces(
-                grad_u, n_x, num_q_points, num_facets, gdim, self.material[i][0, 0], self.material[i][0, 1]))
+            sign = np.array(
+                dolfinx_contact.cpp.compute_contact_forces(
+                    grad_u,
+                    n_x,
+                    num_q_points,
+                    num_facets,
+                    gdim,
+                    self.material[i][0, 0],
+                    self.material[i][0, 1],
+                )
+            )
             sign = sign.reshape(num_facets, num_q_points, gdim)
             n_contact = n_contact.reshape(num_facets, num_q_points, gdim)
             pn = np.sum(sign * n_contact, axis=2)
@@ -139,9 +191,17 @@ class ContactWriter:
 
         num_q_points = np.int32(len(forces[0][0]) / len(self.contact.entities[0]))
         for j in range(len(self.contact_pairs)):
-            dofs = np.array(np.hstack([range(self.msh_to_fm[self.facet_list[j]][i] * num_q_points,
-                            num_q_points * (self.msh_to_fm[self.facet_list[j]][i] + 1))
-                for i in range(len(self.contact.entities[j]))]))
+            dofs = np.array(
+                np.hstack(
+                    [
+                        range(
+                            self.msh_to_fm[self.facet_list[j]][i] * num_q_points,
+                            num_q_points * (self.msh_to_fm[self.facet_list[j]][i] + 1),
+                        )
+                        for i in range(len(self.contact.entities[j]))
+                    ]
+                )
+            )
             self.pn.x.array[dofs] = forces[j][0][:]
             self.pt.x.array[dofs] = forces[j][1][:]
 
@@ -213,13 +273,13 @@ def plot_gap(mesh, contact, gaps, entities, num_pairs):
             qp = contact.qp_phys(i, j)
             num_qp = qp.shape[0]
             for q in range(num_qp):
-                g = gaps[i][j, q * gdim:(q + 1) * gdim]
+                g = gaps[i][j, q * gdim : (q + 1) * gdim]
                 x = [qp[q, 0], qp[q, 0] + g[0]]
                 y = [qp[q, 1], qp[q, 1] + g[1]]
                 max_x = max(x[0], x[1], max_x)
                 min_x = min(x[0], x[1], min_x)
                 plt.plot(x, y)
-        plt.gca().set_aspect('equal', adjustable='box')
+        plt.gca().set_aspect("equal", adjustable="box")
         # plt.xlim(min_x, max_x)
         rank = mesh.comm.rank
         plt.savefig(f"gap_{i}_{rank}.png")

@@ -99,11 +99,12 @@ jobs:
           python3 -m pip -v install -r ./python/build-requirements.txt
           python3 -m pip -v install --config-settings=build-dir="build-${{ matrix.run_mode }}" --config-settings=install.strip=false  --config-settings=cmake.build-type="${{ matrix.run_mode }}" --no-build-isolation -e ./python/ 
 
-      - name: Flake8 code
+      - name: Check formatting
         if: always()
         run: |
-          python3 -m pip install flake8
-          python3 -m flake8 python/
+          python3 -m pip install ruff
+          ruff format --check
+          ruff check
 
       - name: Run mypy checks
         run: |

@@ -6,22 +6,35 @@ from typing import Dict, Tuple
 
 from petsc4py import PETSc as _PETSc
 
-import numpy as np
-
 import dolfinx.common as _common
 import dolfinx.fem as _fem
 import dolfinx.mesh as dmesh
+import numpy as np
 import ufl
 from dolfinx import default_scalar_type
 from dolfinx.fem.petsc import create_matrix
-from dolfinx_contact.helpers import (NonlinearPDE_SNESProblem, epsilon, lame_parameters, rigid_motions_nullspace,
-                                     sigma_func)
+
+from dolfinx_contact.helpers import (
+    NonlinearPDE_SNESProblem,
+    epsilon,
+    lame_parameters,
+    rigid_motions_nullspace,
+    sigma_func,
+)
 
 
-def snes_solver(mesh: dmesh.Mesh, mesh_data: Tuple[dmesh.MeshTags, int, int],
-                physical_parameters: dict = {}, plane_loc: float = 0.0, vertical_displacement: float = -0.1,
-                quadrature_degree: int = 5, form_compiler_options: Dict = {},
-                jit_options: Dict = {}, petsc_options: Dict = {}, snes_options: Dict = {}) -> _fem.Function:
+def snes_solver(
+    mesh: dmesh.Mesh,
+    mesh_data: Tuple[dmesh.MeshTags, int, int],
+    physical_parameters: dict = {},
+    plane_loc: float = 0.0,
+    vertical_displacement: float = -0.1,
+    quadrature_degree: int = 5,
+    form_compiler_options: Dict = {},
+    jit_options: Dict = {},
+    petsc_options: Dict = {},
+    snes_options: Dict = {},
+) -> _fem.Function:
     """
     Solving contact problem against a rigid plane with gap -g from y=0 using PETSc SNES solver
 
@@ -74,7 +87,7 @@ def snes_solver(mesh: dmesh.Mesh, mesh_data: Tuple[dmesh.MeshTags, int, int],
     assert facet_marker.dim == mesh.topology.dim - 1
 
     # function space and problem parameters
-    V = _fem.functionspace(mesh, ("Lagrange", 1, (mesh.geometry.dim, )))  # function space
+    V = _fem.functionspace(mesh, ("Lagrange", 1, (mesh.geometry.dim,)))  # function space
 
     # Functions for penalty term. Not used at the moment.
     # def gap(u): # Definition of gap function
@@ -87,10 +100,15 @@ def snes_solver(mesh: dmesh.Mesh, mesh_data: Tuple[dmesh.MeshTags, int, int],
     u = _fem.Function(V)
     v = ufl.TestFunction(V)
     dx = ufl.Measure("dx", domain=mesh)
-    zero = np.array([0, ] * mesh.geometry.dim, dtype=default_scalar_type)
+    zero = np.array(
+        [
+            0,
+        ]
+        * mesh.geometry.dim,
+        dtype=default_scalar_type,
+    )
 
-    F = ufl.inner(sigma(u), epsilon(v)) * dx - \
-        ufl.inner(_fem.Constant(mesh, zero), v) * dx
+    F = ufl.inner(sigma(u), epsilon(v)) * dx - ufl.inner(_fem.Constant(mesh, zero), v) * dx
 
     # Stored strain energy density (linear elasticity model)    # penalty = 0
     # psi = 1/2*ufl.inner(sigma(u), epsilon(u))
@@ -118,8 +136,7 @@ def snes_solver(mesh: dmesh.Mesh, mesh_data: Tuple[dmesh.MeshTags, int, int],
     # bcs = [bc]
 
     # create nonlinear problem
-    problem = NonlinearPDE_SNESProblem(F, u, bc, jit_options=jit_options,
-                                       form_compiler_options=form_compiler_options)
+    problem = NonlinearPDE_SNESProblem(F, u, bc, jit_options=jit_options, form_compiler_options=form_compiler_options)
 
     # Inequality constraints (contact constraints)
     # The displacement u must be such that the current configuration x+u

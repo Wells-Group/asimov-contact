@@ -30,17 +30,16 @@ def jagged_curve(npoints, t, r0, r1, xmax):
     xvals = [0.0]
     yvals = [0.0]
 
-    while (xvals[-1] < xmax):
+    while xvals[-1] < xmax:
         ylast = yvals[-1]
         xlast = xvals[-1]
         xp = dx
         ds = 4 * dx
-        while (ds > 2 * dx):
+        while ds > 2 * dx:
             x = xlast + xp
-            y = r0(x) * np.arctan(t * np.sin(np.pi * x)
-                                  / (1 - t * np.cos(np.pi * x))) / t + r1(x) * x
+            y = r0(x) * np.arctan(t * np.sin(np.pi * x) / (1 - t * np.cos(np.pi * x))) / t + r1(x) * x
 
-            ds = np.sqrt((y - ylast)**2 + (x - xlast)**2)
+            ds = np.sqrt((y - ylast) ** 2 + (x - xlast) ** 2)
             xp *= 0.8
 
         xvals += [x]
@@ -85,12 +84,12 @@ def create_christmas_tree_mesh_3D(filename: str, res=0.2, split=1, n1=101, n2=51
         volume1 = model.occ.addVolume([sloop1])
         model.occ.synchronize()
         model.addPhysicalGroup(3, [volume1], tag=1)
-        tree_inner = surfaces1[len(x) + len(xb) - 2:] + surfaces1[:len(x) - 1]
-        tree_bottom = surfaces1[len(x) - 1:len(x) + len(xb) - 2]
+        tree_inner = surfaces1[len(x) + len(xb) - 2 :] + surfaces1[: len(x) - 1]
+        tree_bottom = surfaces1[len(x) - 1 : len(x) + len(xb) - 2]
         num_surfaces = len(tree_inner) // split
         for i in range(split - 1):
-            model.addPhysicalGroup(2, tree_inner[i * num_surfaces:(i + 1) * num_surfaces], tag=5 + i + 1)
-        model.addPhysicalGroup(2, tree_inner[(split - 1) * num_surfaces:], tag=5 + split)
+            model.addPhysicalGroup(2, tree_inner[i * num_surfaces : (i + 1) * num_surfaces], tag=5 + i + 1)
+        model.addPhysicalGroup(2, tree_inner[(split - 1) * num_surfaces :], tag=5 + split)
         model.addPhysicalGroup(2, tree_bottom, tag=3)
         model.addPhysicalGroup(2, [surface1, surface2], tag=5)
 
@@ -126,8 +125,8 @@ def create_christmas_tree_mesh_3D(filename: str, res=0.2, split=1, n1=101, n2=51
         volume2 = model.occ.addVolume([sloop2])
         model.occ.synchronize()
         model.addPhysicalGroup(3, [volume2], tag=2)
-        tree_outer = surfaces2[len(xh) + 1:len(xh) + 2 * len(x)]
-        box = surfaces2[:len(xh)] + surfaces2[1 + len(xh) + 2 * len(x):]
+        tree_outer = surfaces2[len(xh) + 1 : len(xh) + 2 * len(x)]
+        box = surfaces2[: len(xh)] + surfaces2[1 + len(xh) + 2 * len(x) :]
         model.addPhysicalGroup(2, box, tag=4)
         for i in range(split):
             if i == 0:
@@ -172,12 +171,12 @@ def create_christmas_tree_mesh(filename: str, res=0.2, split=1):
         surface = model.occ.addPlaneSurface([curve1])
         model.occ.synchronize()
         model.addPhysicalGroup(2, [surface], tag=1)
-        tree_inner = lines1[len(x) + len(xb) - 2:] + lines1[:len(x) - 1]
-        tree_bottom = lines1[len(x) - 1:len(x) + len(xb) - 2]
+        tree_inner = lines1[len(x) + len(xb) - 2 :] + lines1[: len(x) - 1]
+        tree_bottom = lines1[len(x) - 1 : len(x) + len(xb) - 2]
         num_lines = len(tree_inner) // split
         for i in range(split - 1):
-            model.addPhysicalGroup(1, tree_inner[i * num_lines:(i + 1) * num_lines], tag=4 + i + 1)
-        model.addPhysicalGroup(1, tree_inner[(split - 1) * num_lines:], tag=4 + split)
+            model.addPhysicalGroup(1, tree_inner[i * num_lines : (i + 1) * num_lines], tag=4 + i + 1)
+        model.addPhysicalGroup(1, tree_inner[(split - 1) * num_lines :], tag=4 + split)
         model.addPhysicalGroup(1, tree_bottom, tag=3)
 
         dx = 0.01
@@ -200,8 +199,8 @@ def create_christmas_tree_mesh(filename: str, res=0.2, split=1):
         _, lines2, curve2 = create_closed_curve(model, (xv, yv))
         surface2 = model.occ.addPlaneSurface([curve1, curve2])
         model.occ.synchronize()
-        tree_outer = lines2[len(xh) + 1:len(xh) + 2 * len(x)]
-        box = lines2[:len(xh) + 1] + lines2[len(xh) + 2 * len(x):]
+        tree_outer = lines2[len(xh) + 1 : len(xh) + 2 * len(x)]
+        box = lines2[: len(xh) + 1] + lines2[len(xh) + 2 * len(x) :]
 
         model.addPhysicalGroup(2, [surface2], tag=2)
         model.addPhysicalGroup(1, box, tag=4)

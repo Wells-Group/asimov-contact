@@ -9,18 +9,30 @@ from mpi4py import MPI
 
 import numpy as np
 import pytest
-
 import ufl
 from dolfinx.fem import DirichletBC, Function, assemble_scalar, form, functionspace
 from dolfinx.fem.petsc import LinearProblem, NonlinearProblem
 from dolfinx.io import XDMFFile
-from dolfinx.mesh import CellType, GhostMode, create_rectangle, locate_entities_boundary, meshtags
+from dolfinx.mesh import (
+    CellType,
+    GhostMode,
+    create_rectangle,
+    locate_entities_boundary,
+    meshtags,
+)
 from dolfinx.nls.petsc import NewtonSolver
 from dolfinx_contact.helpers import epsilon, lame_parameters, sigma_func
 
 
-def solve_manufactured(nx: int, ny: int, theta: float, gamma: float,
-                       strain: bool, linear_solver: bool, L: float = 10):
+def solve_manufactured(
+    nx: int,
+    ny: int,
+    theta: float,
+    gamma: float,
+    strain: bool,
+    linear_solver: bool,
+    L: float = 10,
+):
     """
     Solve the manufactured problem
     u = [(nu + 1) / E * x[1]**4, (nu + 1) / E * x[0]**4]
@@ -29,8 +41,13 @@ def solve_manufactured(nx: int, ny: int, theta: float, gamma: float,
     (strong/Nitsche) Dirichlet condition at (0,y) and Neumann conditions everywhere else.
     """
 
-    mesh = create_rectangle(MPI.COMM_WORLD, [np.array([0, -1]), np.array([L, 1])],
-                            [nx, ny], CellType.triangle, ghost_mode=GhostMode.none)
+    mesh = create_rectangle(
+        MPI.COMM_WORLD,
+        [np.array([0, -1]), np.array([L, 1])],
+        [nx, ny],
+        CellType.triangle,
+        ghost_mode=GhostMode.none,
+    )
 
     def left(x):
         return np.isclose(x[0], 0)
@@ -45,7 +62,7 @@ def solve_manufactured(nx: int, ny: int, theta: float, gamma: float,
     sorted = np.argsort(left_facets)
     facet_marker = meshtags(mesh, tdim - 1, left_facets[sorted], left_values[sorted])
 
-    V = functionspace(mesh, ("Lagrange", 1, (mesh.geometry.dim, )))
+    V = functionspace(mesh, ("Lagrange", 1, (mesh.geometry.dim,)))
     n = ufl.FacetNormal(mesh)
     E = 1500
     nu = 0.25
@@ -58,7 +75,7 @@ def solve_manufactured(nx: int, ny: int, theta: float, gamma: float,
     # Problem specific body force and traction
     # https://doi.org/10.4208/aamm.2014.m548 (Chapter 5.1)
     x = ufl.SpatialCoordinate(mesh)
-    u_ex = (nu + 1) / E * ufl.as_vector((x[1]**4, x[0]**4))
+    u_ex = (nu + 1) / E * ufl.as_vector((x[1] ** 4, x[0] ** 4))
 
     # Use UFL to derive source and traction
     sigma = sigma_func(mu, lmbda)
@@ -70,8 +87,8 @@ def solve_manufactured(nx: int, ny: int, theta: float, gamma: float,
 
     def _u_ex(x):
         values = np.zeros((mesh.geometry.dim, x.shape[1]))
-        values[0] = (nu + 1) / E * x[1]**4
-        values[1] = (nu + 1) / E * x[0]**4
+        values[0] = (nu + 1) / E * x[1] ** 4
+        values[1] = (nu + 1) / E * x[0] ** 4
         return values
 
     u_D.interpolate(_u_ex)
@@ -87,14 +104,20 @@ def solve_manufactured(nx: int, ny: int, theta: float, gamma: float,
     # Nitsche for Dirichlet, theta-scheme.
     # https://doi.org/10.1016/j.cma.2018.05.024
     n = ufl.FacetNormal(mesh)
-    F += -ufl.inner(sigma(u) * n, v) * ds(left_marker)\
-        - theta * ufl.inner(sigma(v) * n, u - u_D) * ds(left_marker)\
+    F += (
+        -ufl.inner(sigma(u) * n, v) * ds(left_marker)
+        - theta * ufl.inner(sigma(v) * n, u - u_D) * ds(left_marker)
         + gamma / h * ufl.inner(u - u_D, v) * ds(left_marker)
+    )
     bcs: List[DirichletBC] = []
 
     if linear_solver:
-        linear_problem = LinearProblem(ufl.lhs(F), ufl.rhs(F), bcs=bcs,
-                                       petsc_options={"ksp_type": "preonly", "pc_type": "lu"})
+        linear_problem = LinearProblem(
+            ufl.lhs(F),
+            ufl.rhs(F),
+            bcs=bcs,
+            petsc_options={"ksp_type": "preonly", "pc_type": "lu"},
+        )
         u = linear_problem.solve()
         u.name = "uh"
     else:
@@ -109,7 +132,7 @@ def solve_manufactured(nx: int, ny: int, theta: float, gamma: float,
 
         # Solve non-linear problem
         n, converged = solver.solve(u)
-        assert (converged)
+        assert converged
         print(f"Number of interations: {n:d}")
     u.x.scatter_forward()
 
@@ -120,7 +143,7 @@ def solve_manufactured(nx: int, ny: int, theta: float, gamma: float,
         xdmf.write_function(u)
 
     # Error computation:
-    error = form((u - u_D)**2 * dx)
+    error = form((u - u_D) ** 2 * dx)
     E_L2 = np.sqrt(mesh.comm.allreduce(assemble_scalar(error), op=MPI.SUM))
     if mesh.comm.rank == 0:
         print(f"{nx} {ny}: L2-error={E_L2:.2e}")

@@ -35,13 +35,19 @@ __all__ = ["nitsche_rigid_surface_custom"]
 kt = Kernel
 
 
-def nitsche_rigid_surface_custom(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTags, int, int, int, int],
-                                 physical_parameters: Optional[dict] = None,
-                                 nitsche_parameters: Optional[Dict[str, float]] = None,
-                                 vertical_displacement: float = -0.1, nitsche_bc: bool = True,
-                                 quadrature_degree: int = 5, form_compiler_options: Optional[Dict] = None,
-                                 jit_options: Optional[Dict] = None, petsc_options: Optional[Dict] = None,
-                                 newton_options: Optional[Dict] = None):
+def nitsche_rigid_surface_custom(
+    mesh: _mesh.Mesh,
+    mesh_data: Tuple[_mesh.MeshTags, int, int, int, int],
+    physical_parameters: Optional[dict] = None,
+    nitsche_parameters: Optional[Dict[str, float]] = None,
+    vertical_displacement: float = -0.1,
+    nitsche_bc: bool = True,
+    quadrature_degree: int = 5,
+    form_compiler_options: Optional[Dict] = None,
+    jit_options: Optional[Dict] = None,
+    petsc_options: Optional[Dict] = None,
+    newton_options: Optional[Dict] = None,
+):
     """
     Use custom kernel to compute the one sided contact problem with a mesh coming into contact
     with a rigid surface (meshed).
@@ -116,13 +122,18 @@ def nitsche_rigid_surface_custom(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTa
     gamma = nitsche_parameters.get("gamma", 10)
 
     # Unpack mesh data
-    (facet_marker, dirichlet_value_elastic, contact_value_elastic, contact_value_rigid,
-     dirichlet_value_rigid) = mesh_data
+    (
+        facet_marker,
+        dirichlet_value_elastic,
+        contact_value_elastic,
+        contact_value_rigid,
+        dirichlet_value_rigid,
+    ) = mesh_data
     assert facet_marker.dim == mesh.topology.dim - 1
     gdim = mesh.geometry.dim
 
     # Setup function space and functions used in Jacobian and residual formulation
-    V = _fem.functionspace(mesh, ("Lagrange", 1, (mesh.geometry.dim, )))
+    V = _fem.functionspace(mesh, ("Lagrange", 1, (mesh.geometry.dim,)))
     u = _fem.Function(V)
     du = ufl.TrialFunction(V)
     u = _fem.Function(V)
@@ -143,30 +154,42 @@ def nitsche_rigid_surface_custom(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTa
         disp_vec = np.zeros(gdim)
         disp_vec[gdim - 1] = vertical_displacement
         u_D = ufl.as_vector(disp_vec)
-        F += - ufl.inner(sigma(u) * n, v) * ds(dirichlet_value_elastic)\
-             - theta * ufl.inner(sigma(v) * n, u - u_D) * \
-            ds(dirichlet_value_elastic) + E * gamma / h * ufl.inner(u - u_D, v) * ds(dirichlet_value_elastic)
+        F += (
+            -ufl.inner(sigma(u) * n, v) * ds(dirichlet_value_elastic)
+            - theta * ufl.inner(sigma(v) * n, u - u_D) * ds(dirichlet_value_elastic)
+            + E * gamma / h * ufl.inner(u - u_D, v) * ds(dirichlet_value_elastic)
+        )
 
-        J += - ufl.inner(sigma(du) * n, v) * ds(dirichlet_value_elastic)\
-            - theta * ufl.inner(sigma(v) * n, du) * \
-            ds(dirichlet_value_elastic) + E * gamma / h * ufl.inner(du, v) * ds(dirichlet_value_elastic)
+        J += (
+            -ufl.inner(sigma(du) * n, v) * ds(dirichlet_value_elastic)
+            - theta * ufl.inner(sigma(v) * n, du) * ds(dirichlet_value_elastic)
+            + E * gamma / h * ufl.inner(du, v) * ds(dirichlet_value_elastic)
+        )
 
         # Nitsche bc for rigid plane
         disp_plane = np.zeros(gdim)
         u_D_plane = ufl.as_vector(disp_plane)
-        F += - ufl.inner(sigma(u) * n, v) * ds(dirichlet_value_rigid)\
-             - theta * ufl.inner(sigma(v) * n, u - u_D_plane) * \
-            ds(dirichlet_value_rigid) + E * gamma / h * ufl.inner(u - u_D_plane, v) * ds(dirichlet_value_rigid)
-        J += - ufl.inner(sigma(du) * n, v) * ds(dirichlet_value_rigid)\
-            - theta * ufl.inner(sigma(v) * n, du) * \
-            ds(dirichlet_value_rigid) + E * gamma / h * ufl.inner(du, v) * ds(dirichlet_value_rigid)
+        F += (
+            -ufl.inner(sigma(u) * n, v) * ds(dirichlet_value_rigid)
+            - theta * ufl.inner(sigma(v) * n, u - u_D_plane) * ds(dirichlet_value_rigid)
+            + E * gamma / h * ufl.inner(u - u_D_plane, v) * ds(dirichlet_value_rigid)
+        )
+        J += (
+            -ufl.inner(sigma(du) * n, v) * ds(dirichlet_value_rigid)
+            - theta * ufl.inner(sigma(v) * n, du) * ds(dirichlet_value_rigid)
+            + E * gamma / h * ufl.inner(du, v) * ds(dirichlet_value_rigid)
+        )
     else:
         print("Dirichlet bc not implemented in custom assemblers yet.")
 
     # Custom assembly of contact boundary conditions
     _log.set_log_level(_log.LogLevel.OFF)  # avoid large amounts of output
-    q_rule = dolfinx_contact.QuadratureRule(mesh.topology.cell_type, quadrature_degree,
-                                            mesh.topology.dim - 1, basix.QuadratureType.Default)
+    q_rule = dolfinx_contact.QuadratureRule(
+        mesh.topology.cell_type,
+        quadrature_degree,
+        mesh.topology.dim - 1,
+        basix.QuadratureType.Default,
+    )
     consts = np.array([gamma * E, theta])
 
     # Compute coefficients for mu and lambda as DG-0 functions
@@ -183,23 +206,32 @@ def nitsche_rigid_surface_custom(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTa
     integral_entities = integral_entities[:num_local, :]
 
     # Pack mu and lambda on facets
-    coeffs = np.hstack([pack_coefficient_quadrature(mu2._cpp_object, 0, integral_entities),
-                        pack_coefficient_quadrature(lmbda2._cpp_object, 0, integral_entities)])
+    coeffs = np.hstack(
+        [
+            pack_coefficient_quadrature(mu2._cpp_object, 0, integral_entities),
+            pack_coefficient_quadrature(lmbda2._cpp_object, 0, integral_entities),
+        ]
+    )
     # Pack celldiameter on facets
     surface_cells = np.unique(integral_entities[:, 0])
     h_int = _fem.Function(V2)
     expr = _fem.Expression(h, V2.element.interpolation_points())
     h_int.interpolate(expr, surface_cells)
-    h_facets = pack_coefficient_quadrature(
-        h_int._cpp_object, 0, integral_entities)
+    h_facets = pack_coefficient_quadrature(h_int._cpp_object, 0, integral_entities)
 
     # Create contact class
     data = np.array([contact_value_elastic, contact_value_rigid], dtype=np.int32)
     offsets = np.array([0, 2], dtype=np.int32)
     surfaces = adjacencylist(data, offsets)
     search_mode = [ContactMode.ClosestPoint]
-    contact = Contact([facet_marker._cpp_object], surfaces, [(0, 1)],
-                      mesh._cpp_object, search_mode, quadrature_degree=quadrature_degree)
+    contact = Contact(
+        [facet_marker._cpp_object],
+        surfaces,
+        [(0, 1)],
+        mesh._cpp_object,
+        search_mode,
+        quadrature_degree=quadrature_degree,
+    )
 
     # Compute gap and normals
     contact.create_distance_map(0)
@@ -215,8 +247,14 @@ def nitsche_rigid_surface_custom(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTa
     kernel_J = generate_rigid_surface_kernel(V._cpp_object, kt.Jac, q_rule, False)
 
     # NOTE: HACK to make "one-sided" contact work with assemble_matrix/assemble_vector
-    contact_assembler = Contact([facet_marker._cpp_object], surfaces, [(0, 1)], mesh._cpp_object,
-                                search_mode, quadrature_degree=quadrature_degree)
+    contact_assembler = Contact(
+        [facet_marker._cpp_object],
+        surfaces,
+        [(0, 1)],
+        mesh._cpp_object,
+        search_mode,
+        quadrature_degree=quadrature_degree,
+    )
 
     # Pack coefficients to get numpy array of correct size for Newton solver
     u_packed = pack_coefficient_quadrature(u._cpp_object, quadrature_degree, integral_entities)
@@ -231,13 +269,12 @@ def nitsche_rigid_surface_custom(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTa
         """
         size_local = V.dofmap.index_map.size_local
         bs = V.dofmap.index_map_bs
-        u.x.array[:size_local * bs] = x.array_r[:size_local * bs]
+        u.x.array[: size_local * bs] = x.array_r[: size_local * bs]
         u_packed = pack_coefficient_quadrature(u._cpp_object, quadrature_degree, integral_entities)
-        grad_u_packed = pack_gradient_quadrature(
-            u._cpp_object, quadrature_degree, integral_entities)
-        solver_coeffs[0][:, offset:offset + u_packed.shape[1]] = u_packed
+        grad_u_packed = pack_gradient_quadrature(u._cpp_object, quadrature_degree, integral_entities)
+        solver_coeffs[0][:, offset : offset + u_packed.shape[1]] = u_packed
         end = offset + u_packed.shape[1] + grad_u_packed.shape[1]
-        solver_coeffs[0][:, offset + u_packed.shape[1]:end] = grad_u_packed
+        solver_coeffs[0][:, offset + u_packed.shape[1] : end] = grad_u_packed
 
     def compute_residual(x, b, coeffs):
         """
@@ -286,6 +323,7 @@ def nitsche_rigid_surface_custom(mesh: _mesh.Mesh, mesh_data: Tuple[_mesh.MeshTa
         values = np.zeros((gdim, x.shape[1]))
         values[-1] = -vertical_displacement
         return values
+
     u.interpolate(_u_initial)
 
     dofs_global = V.dofmap.index_map_bs * V.dofmap.index_map.size_global

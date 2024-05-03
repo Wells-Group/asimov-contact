@@ -3,25 +3,46 @@
 # SPDX-License-Identifier:    MIT
 #
 from mpi4py import MPI
+from petsc4py.PETSc import InsertMode, ScatterMode  # type: ignore
 
 import numpy as np
-
 from basix.ufl import element
 from dolfinx import default_scalar_type
-from dolfinx.fem import (Constant, dirichletbc, Function, form,
-                         functionspace, locate_dofs_topological)
-from dolfinx.fem.petsc import set_bc, apply_lifting, assemble_matrix, assemble_vector, create_vector
+from dolfinx.fem import (
+    Constant,
+    Function,
+    dirichletbc,
+    form,
+    functionspace,
+    locate_dofs_topological,
+)
+from dolfinx.fem.petsc import (
+    apply_lifting,
+    assemble_matrix,
+    assemble_vector,
+    create_vector,
+    set_bc,
+)
 from dolfinx.graph import adjacencylist
 from dolfinx.io import XDMFFile
 from dolfinx.mesh import create_mesh
-from petsc4py.PETSc import InsertMode, ScatterMode  # type: ignore
-from ufl import (derivative, grad, Identity, inner, Mesh, Measure,
-                 replace, sym, TrialFunction, TestFunction, tr)
-
+from dolfinx_contact.cpp import ContactMode
+from dolfinx_contact.general_contact.contact_problem import ContactProblem, FrictionLaw
 from dolfinx_contact.helpers import rigid_motions_nullspace_subdomains
 from dolfinx_contact.newton_solver import NewtonSolver
-from dolfinx_contact.general_contact.contact_problem import ContactProblem, FrictionLaw
-from dolfinx_contact.cpp import ContactMode
+from ufl import (
+    Identity,
+    Measure,
+    Mesh,
+    TestFunction,
+    TrialFunction,
+    derivative,
+    grad,
+    inner,
+    replace,
+    sym,
+    tr,
+)
 
 # read mesh from file
 fname = "cont-blocks_sk24_fnx"
@@ -29,8 +50,7 @@ with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
     cell_type, cell_degree = xdmf.read_cell_type(name="volume markers")
     topo = xdmf.read_topology_data(name="volume markers")
     x = xdmf.read_geometry_data(name="geometry")
-    domain = Mesh(element("Lagrange", cell_type.name,
-                  cell_degree, shape=(x.shape[1],)))
+    domain = Mesh(element("Lagrange", cell_type.name, cell_degree, shape=(x.shape[1],)))
     mesh = create_mesh(MPI.COMM_WORLD, topo, x, domain)
     tdim = mesh.topology.dim
     domain_marker = xdmf.read_meshtags(mesh, name="volume markers")
@@ -81,7 +101,7 @@ def epsilon(v):
 
 
 def sigma(v):
-    return (2.0 * mu * epsilon(v) + lmbda * tr(epsilon(v)) * Identity(len(v)))
+    return 2.0 * mu * epsilon(v) + lmbda * tr(epsilon(v)) * Identity(len(v))
 
 
 F = inner(sigma(u), epsilon(v)) * dx
@@ -91,19 +111,16 @@ J = derivative(F, du, w)
 
 # compiler options to improve performance
 cffi_options = ["-Ofast", "-march=native"]
-jit_options = {"cffi_extra_compile_args": cffi_options,
-               "cffi_libraries": ["m"]}
+jit_options = {"cffi_extra_compile_args": cffi_options, "cffi_libraries": ["m"]}
 # compiled forms for rhs and tangen system
 F_compiled = form(F, jit_options=jit_options)
 J_compiled = form(J, jit_options=jit_options)
 
 # boundary conditions
-g = Constant(mesh, default_scalar_type((0, 0, 0)))     # zero Dirichlet
-dofs_g = locate_dofs_topological(
-    V, tdim - 1, facet_marker.find(dirichlet_bdy_2))
+g = Constant(mesh, default_scalar_type((0, 0, 0)))  # zero Dirichlet
+dofs_g = locate_dofs_topological(V, tdim - 1, facet_marker.find(dirichlet_bdy_2))
 d = Constant(mesh, default_scalar_type((0, -0.2, 0)))  # vertical displacement
-dofs_d = locate_dofs_topological(
-    V, tdim - 1, facet_marker.find(dirichlet_bdy_1))
+dofs_d = locate_dofs_topological(V, tdim - 1, facet_marker.find(dirichlet_bdy_1))
 bcs = [dirichletbc(d, dofs_d, V), dirichletbc(g, dofs_g, V)]
 
 # Nitsche parameters
@@ -128,12 +145,14 @@ ksp_tol = 1e-10
 newton_tol = 1e-7
 
 # non-linear solver options
-newton_options = {"relaxation_parameter": 1.0,
-                  "atol": newton_tol,
-                  "rtol": newton_tol,
-                  "convergence_criterion": "residual",
-                  "max_it": 200,
-                  "error_on_nonconvergence": True}
+newton_options = {
+    "relaxation_parameter": 1.0,
+    "atol": newton_tol,
+    "rtol": newton_tol,
+    "convergence_criterion": "residual",
+    "max_it": 200,
+    "error_on_nonconvergence": True,
+}
 
 # linear solver options
 petsc_options = {
@@ -143,7 +162,7 @@ petsc_options = {
     "ksp_atol": ksp_tol,
     "pc_type": "gamg",
     "pc_mg_levels": 3,
-    "pc_mg_cycles": 1,   # 1 is v, 2 is w
+    "pc_mg_cycles": 1,  # 1 is v, 2 is w
     "mg_levels_ksp_type": "chebyshev",
     "mg_levels_pc_type": "jacobi",
     "pc_gamg_type": "agg",
@@ -152,13 +171,18 @@ petsc_options = {
     "pc_gamg_threshold": 1e-3,
     "pc_gamg_square_graph": 2,
     "pc_gamg_reuse_interpolation": False,
-    "ksp_norm_type": "unpreconditioned"
+    "ksp_norm_type": "unpreconditioned",
 }
 
 # create contact solver
 contact_problem = ContactProblem([facet_marker], surfaces, contact_pairs, mesh, 5, search_mode)
-contact_problem.generate_contact_data(FrictionLaw.Frictionless, V, {"u": u, "du": du, "mu": mu_dg,
-                                      "lambda": lmbda_dg}, gamma, theta)
+contact_problem.generate_contact_data(
+    FrictionLaw.Frictionless,
+    V,
+    {"u": u, "du": du, "mu": mu_dg, "lambda": lmbda_dg},
+    gamma,
+    theta,
+)
 # create vector and matrix
 a_mat = contact_problem.create_matrix(J_compiled)
 b = create_vector(F_compiled)
@@ -172,8 +196,7 @@ def compute_coefficients(x, coeffs):
 
 def compute_residual(x, b, coeffs):
     b.zeroEntries()
-    b.ghostUpdate(addv=InsertMode.INSERT,
-                  mode=ScatterMode.FORWARD)
+    b.ghostUpdate(addv=InsertMode.INSERT, mode=ScatterMode.FORWARD)
     contact_problem.assemble_vector(b, V)
     assemble_vector(b, F_compiled)
     apply_lifting(b, [J_compiled], bcs=[bcs], x0=[x], scale=-1.0)
@@ -196,8 +219,12 @@ newton_solver.set_jacobian(compute_jacobian_matrix)
 newton_solver.set_coefficients(compute_coefficients)
 
 # Set rigid motion nullspace
-null_space = rigid_motions_nullspace_subdomains(V, domain_marker, np.unique(
-    domain_marker.values), num_domains=len(np.unique(domain_marker.values)))
+null_space = rigid_motions_nullspace_subdomains(
+    V,
+    domain_marker,
+    np.unique(domain_marker.values),
+    num_domains=len(np.unique(domain_marker.values)),
+)
 newton_solver.A.setNearNullSpace(null_space)
 
 # Set Newton solver options
