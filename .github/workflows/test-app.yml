@@ -55,7 +55,7 @@ jobs:
         uses: jorgensd/actions/install-dolfinx@v0.3.0
         with:
           petsc_arch: ${{ env.PETSC_ARCH }}
-          dolfinx:  garth/nls-ref-count-fix
+          dolfinx: main
           ffcx: main
           ufl: main
           basix: main
