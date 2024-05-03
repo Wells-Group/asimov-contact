@@ -112,7 +112,7 @@ def create_functionspaces(ct, gap, delta, disp):
         el = basix.ufl.element("Lagrange", mesh.topology.cell_name(), 1, (mesh.geometry.dim,))
     else:
         el = basix.ufl.element("Lagrange", mesh.topology.cell_name(), 1)
-    V = _fem.FunctionSpace(mesh, el)
+    V = _fem.functionspace(mesh, el)
     with XDMFFile(mesh.comm, "test_mesh.xdmf", "w") as xdmf:
         xdmf.write_mesh(mesh)
     return V

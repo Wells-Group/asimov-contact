@@ -587,7 +587,7 @@ def test_contact_kernels(ct, gap, quadrature_degree, theta, frictionlaw, search)
     mesh_ufl, mesh_custom = create_meshes(ct, gap)
     gdim = mesh_ufl.geometry.dim
     V_ufl = _fem.functionspace(mesh_ufl, ("DG", 1, (gdim,)))
-    V_custom = _fem.FunctionSpace(mesh_custom, ("Lagrange", 1, (gdim,)))
+    V_custom = _fem.functionspace(mesh_custom, ("Lagrange", 1, (gdim,)))
     tdim = mesh_ufl.topology.dim
 
     TOL = 1e-7
@@ -824,7 +824,7 @@ def test_meshtie_kernels(ct, gap, quadrature_degree, theta, problem):
 
     if problem == Problem.Poisson:
         V_ufl = _fem.functionspace(mesh_ufl, ("DG", 1))
-        V_custom = _fem.FunctionSpace(mesh_custom, ("Lagrange", 1))
+        V_custom = _fem.functionspace(mesh_custom, ("Lagrange", 1))
 
         def _u0(x):
             return np.sin(x[0]) + 1
@@ -836,7 +836,7 @@ def test_meshtie_kernels(ct, gap, quadrature_degree, theta, problem):
             return np.sin(x[tdim - 1] + gap) + 2
     else:
         V_ufl = _fem.functionspace(mesh_ufl, ("DG", 1, (gdim,)))
-        V_custom = _fem.FunctionSpace(mesh_custom, ("Lagrange", 1, (gdim,)))
+        V_custom = _fem.functionspace(mesh_custom, ("Lagrange", 1, (gdim,)))
 
         def _u0(x):
             values = np.zeros((gdim, x.shape[1]))
@@ -919,7 +919,7 @@ def test_meshtie_kernels(ct, gap, quadrature_degree, theta, problem):
     _fem.petsc.assemble_matrix(A0, J0)
     A0.assemble()
 
-    V0 = _fem.FunctionSpace(mesh_custom, ("DG", 0))
+    V0 = _fem.functionspace(mesh_custom, ("DG", 0))
     kdt_custom = _fem.Function(V0)
     kdt_custom.interpolate(lambda x: np.full((1, x.shape[1]), kdt))
     lmbda_custom = _fem.Function(V0)
