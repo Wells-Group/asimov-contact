@@ -270,12 +270,22 @@ int main(int argc, char* argv[])
     double theta = 1;
 
     // DG function space used for parameters
-    auto V0 = std::make_shared<fem::FunctionSpace<U>>(fem::create_functionspace(
-        functionspace_form_thermo_elasticity_J, "mu", mesh));
+    auto ct = mesh->topology()->cell_type();
+    auto element_mu = basix::create_element<double>(
+        basix::element::family::P, dolfinx::mesh::cell_type_to_basix_type(ct),
+        0, basix::element::lagrange_variant::unset,
+        basix::element::dpc_variant::unset, true);
+    auto element = basix::create_element<double>(
+        basix::element::family::P, dolfinx::mesh::cell_type_to_basix_type(ct),
+        1, basix::element::lagrange_variant::unset,
+        basix::element::dpc_variant::unset, false);
+
+    auto V0 = std::make_shared<fem::FunctionSpace<U>>(
+        fem::create_functionspace(mesh, element_mu));
 
     // Thermal Problem
-    auto Q = std::make_shared<fem::FunctionSpace<U>>(fem::create_functionspace(
-        functionspace_form_thermo_elasticity_a_therm, "r", mesh));
+    auto Q = std::make_shared<fem::FunctionSpace<U>>(
+        fem::create_functionspace(mesh, element));
 
     double kdt_val = 0.1;
     auto kdt = std::make_shared<fem::Function<T>>(V0);
@@ -348,7 +358,7 @@ int main(int argc, char* argv[])
     // Thermo-elastic problem
     // Create function space
     auto V = std::make_shared<fem::FunctionSpace<U>>(fem::create_functionspace(
-        functionspace_form_thermo_elasticity_J, "w", mesh));
+        mesh, element, {(std::size_t)mesh->geometry().dim()}));
 
     // Problem parameters
     double E = 1E4;

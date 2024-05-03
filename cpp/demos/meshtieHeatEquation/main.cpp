@@ -46,10 +46,19 @@ int main(int argc, char* argv[])
     auto mesh = std::make_shared<dolfinx::mesh::Mesh<U>>(mesh_new);
 
     // Create function spaces
-    auto Q = std::make_shared<fem::FunctionSpace<U>>(fem::create_functionspace(
-        functionspace_form_heat_equation_a_therm, "q", mesh));
-    auto V0 = std::make_shared<fem::FunctionSpace<U>>(fem::create_functionspace(
-        functionspace_form_heat_equation_a_therm, "kdt", mesh));
+    auto ct = mesh->topology()->cell_type();
+    auto element_DG = basix::create_element<double>(
+        basix::element::family::P, dolfinx::mesh::cell_type_to_basix_type(ct),
+        0, basix::element::lagrange_variant::unset,
+        basix::element::dpc_variant::unset, true);
+    auto element = basix::create_element<double>(
+        basix::element::family::P, dolfinx::mesh::cell_type_to_basix_type(ct),
+        1, basix::element::lagrange_variant::unset,
+        basix::element::dpc_variant::unset, false);
+    auto Q = std::make_shared<fem::FunctionSpace<U>>(
+        fem::create_functionspace(mesh, element));
+    auto V0 = std::make_shared<fem::FunctionSpace<U>>(
+        fem::create_functionspace(mesh, element_DG));
 
     // Nitsche parameters
     double gamma = 10;
@@ -142,8 +151,8 @@ int main(int argc, char* argv[])
     // time stepping loop
     std::size_t time_steps = 40;
     for (std::size_t k = 0; k < time_steps; ++k)
-    { 
-        
+    {
+
       // Assemble vector
       b_therm.set(0.0);
       meshties.assemble_vector(b_therm.mutable_array(), Q,

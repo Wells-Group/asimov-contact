@@ -111,7 +111,8 @@ public:
       loguru::g_stderr_verbosity = loguru::Verbosity_OFF;
 
       // Generate input data for custom kernel
-      _meshties->update_kernel_data({{"u", _u}}, dolfinx_contact::Problem::Elasticity);
+      _meshties->update_kernel_data({{"u", _u}},
+                                    dolfinx_contact::Problem::Elasticity);
 
       // Assemble b
       std::span<T> b(_b.mutable_array());
@@ -221,15 +222,26 @@ int main(int argc, char* argv[])
     const std::int32_t contact_bdry_2 = 6;  // bottom contact interface
     loguru::g_stderr_verbosity = loguru::Verbosity_OFF;
     auto [mesh_new, facet1, domain1] = dolfinx_contact::create_contact_mesh(
-        *mesh_init, facet1_init, domain1_init,
-        {contact_bdry_1, contact_bdry_2}, 10.0);
+        *mesh_init, facet1_init, domain1_init, {contact_bdry_1, contact_bdry_2},
+        10.0);
 
     auto mesh = std::make_shared<dolfinx::mesh::Mesh<U>>(mesh_new);
     // Create function spaces
-    auto V = std::make_shared<fem::FunctionSpace<U>>(fem::create_functionspace(
-        functionspace_form_linear_elasticity_J, "w", mesh));
-    auto V0 = std::make_shared<fem::FunctionSpace<U>>(fem::create_functionspace(
-        functionspace_form_linear_elasticity_J, "mu", mesh));
+    auto ct = mesh->topology()->cell_type();
+    auto element_mu = basix::create_element<double>(
+        basix::element::family::P, dolfinx::mesh::cell_type_to_basix_type(ct),
+        0, basix::element::lagrange_variant::unset,
+        basix::element::dpc_variant::unset, true);
+    auto element = basix::create_element<double>(
+        basix::element::family::P, dolfinx::mesh::cell_type_to_basix_type(ct),
+        1, basix::element::lagrange_variant::unset,
+        basix::element::dpc_variant::unset, false);
+
+    auto V = std::make_shared<fem::FunctionSpace<double>>(
+        fem::create_functionspace(mesh, element,
+                                  {(std::size_t)mesh->geometry().dim()}));
+    auto V0 = std::make_shared<fem::FunctionSpace<double>>(
+        fem::create_functionspace(mesh, element_mu));
 
     // Problem parameters (material & Nitsche)
     double E = 1E4;
@@ -279,10 +291,19 @@ int main(int argc, char* argv[])
     auto J = std::make_shared<fem::Form<T>>(
         fem::create_form<T>(*form_linear_elasticity_J, {V, V},
                             {{"mu", mu}, {"lmbda", lmbda}}, {}, {}));
+    std::vector<std::pair<std::int32_t, std::span<const std::int32_t>>>
+        integration_domain;
+    std::transform(
+        facet_domains.begin(), facet_domains.end(),
+        std::back_inserter(integration_domain),
+        [](auto& domain)
+            -> std::pair<std::int32_t, std::span<const std::int32_t>> {
+          return {domain.first, std::span<const std::int32_t>(domain.second)};
+        });
     auto F = std::make_shared<fem::Form<T>>(fem::create_form<T>(
         *form_linear_elasticity_F, {V},
         {{"u", u}, {"mu", mu}, {"lmbda", lmbda}}, {},
-        {{dolfinx::fem::IntegralType::exterior_facet, facet_domains}}));
+        {{dolfinx::fem::IntegralType::exterior_facet, integration_domain}}));
 
     // Define boundary conditions
     // bottom fixed, top displaced in y-diretion by -0.2
