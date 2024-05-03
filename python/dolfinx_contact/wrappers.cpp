@@ -23,6 +23,7 @@
 #include <nanobind/nanobind.h>
 #include <nanobind/ndarray.h>
 #include <nanobind/stl/array.h>
+#include <nanobind/stl/map.h>
 #include <nanobind/stl/pair.h>
 #include <nanobind/stl/shared_ptr.h>
 #include <nanobind/stl/string.h>
@@ -390,8 +391,8 @@ NB_MODULE(cpp, m)
           "Get packed coefficients")
       .def("generate_kernel_data",
            &dolfinx_contact::MeshTie::generate_kernel_data,
-           nb::arg("problem_type"), nb::arg("functionspace"),
-           nb::arg("coefficients"), nb::arg("gamma"), nb::arg("theta"))
+           nb::arg("problem_type"), nb::arg("V"), nb::arg("coefficients"),
+           nb::arg("gamma"), nb::arg("theta"))
       .def("update_kernel_data", &dolfinx_contact::MeshTie::update_kernel_data)
       .def("generate_meshtie_data_matrix_only",
            &dolfinx_contact::MeshTie::generate_meshtie_data_matrix_only)
@@ -420,11 +421,10 @@ NB_MODULE(cpp, m)
              std::string type)
           {
             Mat A = self.create_petsc_matrix(a, type);
-            PyObject* obj = PyPetscMat_New(A);
-            PetscObjectDereference((PetscObject)A);
-            return nb::borrow(obj);
+            return A;
           },
-          nb::arg("a"), nb::arg("type") = std::string(),
+          nb::rv_policy::take_ownership, nb::arg("a"),
+          nb::arg("type") = std::string(),
           "Create a PETSc Mat for tying disconnected meshes.");
   m.def(
       "pack_coefficient_quadrature",
