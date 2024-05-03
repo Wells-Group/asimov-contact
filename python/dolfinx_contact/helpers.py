@@ -307,38 +307,44 @@ def rigid_motions_nullspace_subdomains(
     dim = 3 if gdim == 2 else 6
 
     # Create list of vectors for null space
-    nullspace_basis = [_x.vector.copy() for i in range(dim * num_domains)]
+    nullspace_basis = [
+        _la.vector(V.dofmap.index_map, bs=V.dofmap.index_map_bs, dtype=PETSc.ScalarType)  # type: ignore
+        for i in range(dim*num_domains)
+    ]
+    basis = [b.array for b in nullspace_basis]
 
-    with ExitStack() as stack:
-        vec_local = [stack.enter_context(x.localForm()) for x in nullspace_basis]
-        basis = [numpy.asarray(x) for x in vec_local]
-        for j, tag in enumerate(tags):
-            cells = mt.find(tag)
-            dofs_block = numpy.unique(numpy.hstack([V.dofmap.cell_dofs(cell) for cell in cells]))
-            dofs = [gdim * dofs_block + i for i in range(gdim)]
+    for j, tag in enumerate(tags):
+        cells = mt.find(tag)
+        dofs_block = numpy.unique(numpy.hstack([V.dofmap.cell_dofs(cell) for cell in cells]))
+        dofs = [gdim * dofs_block + i for i in range(gdim)]
 
-            # Build translational null space basis
-            for i in range(gdim):
-                basis[j * dim + i][dofs[i]] = 1.0
+        # Build translational null space basis
+        for i in range(gdim):
+            basis[j * dim + i][dofs[i]] = 1.0
 
-            # Build rotational null space basis
-            x = V.tabulate_dof_coordinates()
-            x0, x1, x2 = x[dofs_block, 0], x[dofs_block, 1], x[dofs_block, 2]
-            if gdim == 2:
-                basis[j * dim + 2][dofs[0]] = -x1
-                basis[j * dim + 2][dofs[1]] = x0
-            elif gdim == 3:
-                basis[j * dim + 3][dofs[0]] = -x1
-                basis[j * dim + 3][dofs[1]] = x0
+        # Build rotational null space basis
+        x = V.tabulate_dof_coordinates()
+        x0, x1, x2 = x[dofs_block, 0], x[dofs_block, 1], x[dofs_block, 2]
+        if gdim == 2:
+            basis[j * dim + 2][dofs[0]] = -x1
+            basis[j * dim + 2][dofs[1]] = x0
+        elif gdim == 3:
+            basis[j * dim + 3][dofs[0]] = -x1
+            basis[j * dim + 3][dofs[1]] = x0
 
-                basis[j * dim + 4][dofs[0]] = x2
-                basis[j * dim + 4][dofs[2]] = -x0
-                basis[j * dim + 5][dofs[2]] = x1
-                basis[j * dim + 5][dofs[1]] = -x2
-
-        _la.orthonormalize(nullspace_basis)
-        assert _la.is_orthonormal(nullspace_basis)
-    return PETSc.NullSpace().create(vectors=nullspace_basis)  # type: ignore
+            basis[j * dim + 4][dofs[0]] = x2
+            basis[j * dim + 4][dofs[2]] = -x0
+            basis[j * dim + 5][dofs[2]] = x1
+            basis[j * dim + 5][dofs[1]] = -x2
+    [b.scatter_forward() for b in nullspace_basis]
+    _la.orthonormalize(nullspace_basis)
+    assert _la.is_orthonormal(nullspace_basis)
+    local_size = V.dofmap.index_map.size_local * V.dofmap.index_map_bs
+    basis_petsc = [
+        PETSc.Vec().createWithArray(x[:local_size], bsize=gdim, comm=V.mesh.comm)  # type: ignore
+        for x in basis
+    ]
+    return PETSc.NullSpace().create(vectors=basis_petsc)  # type: ignore
 
 
 def weak_dirichlet(F: ufl.Form, u: Function, f: Union[Function, Constant], sigma, gamma, theta, ds):

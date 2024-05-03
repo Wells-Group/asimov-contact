@@ -467,7 +467,6 @@ if __name__ == "__main__":
     w = ufl.TrialFunction(V)
     dx = ufl.Measure("dx", domain=mesh, subdomain_data=domain_marker)
     ds = ufl.Measure("ds", domain=mesh, subdomain_data=facet_marker)
-
     # Compute lame parameters
     E = args.E
     nu = args.nu

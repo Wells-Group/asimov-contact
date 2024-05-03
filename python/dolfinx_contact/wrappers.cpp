@@ -152,10 +152,8 @@ NB_MODULE(cpp, m)
             dolfinx::fem::Form<PetscScalar>& a,
                std::string type) {
     Mat A = self.create_petsc_matrix(a, type);
-    PyObject* obj = PyPetscMat_New(A);
-    PetscObjectDereference((PetscObject)A);
-    return nb::borrow(obj);
-               },
+    return A;
+               },nb::rv_policy::take_ownership,
            nb::arg("a"),
             nb::arg("type") = std::string(),
             "Create a PETSc Mat for two-sided contact.")
@@ -224,6 +222,8 @@ NB_MODULE(cpp, m)
     const dolfinx_contact::SubMesh& submesh = self.submesh();
     return submesh.mesh();
              })
+        .def("mesh",
+           &dolfinx_contact::Contact::mesh)
         .def("copy_to_submesh",
             [] (dolfinx_contact::Contact& self,
             std::shared_ptr<dolfinx::fem::Function<PetscScalar>> u,
