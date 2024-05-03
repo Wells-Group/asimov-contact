@@ -143,7 +143,7 @@ def compare_test_fn(fn_space, test_fn, grad_test_fn, q_indices, link, x_ref, cel
                 expr2 = _fem.Expression(ufl.grad(v), x_ref)
             else:
                 expr2 = _fem.Expression(ufl.grad(v.sub(k)), x_ref)
-            expr_vals2 = expr2.eval(mesh, np.asarray([cell],dtype=np.int32))
+            expr_vals2 = expr2.eval(mesh, np.asarray([cell], dtype=np.int32))
             # compare values of test functions
             offset = link * num_q_points * len(dofs) * bs + i * num_q_points * bs
             assert np.allclose(expr_vals[0][q_indices * bs + k], test_fn[offset + q_indices * bs + k])
