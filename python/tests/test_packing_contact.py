@@ -109,9 +109,9 @@ def create_functionspaces(ct, gap, delta, disp):
     domain = ufl.Mesh(el)
     mesh = create_mesh(MPI.COMM_WORLD, cells, x, domain)
     if disp:
-        el = ufl.VectorElement("Lagrange", mesh.ufl_cell(), 1)
+        el = basix.ufl.element("Lagrange", mesh.topology.cell_name(), 1, (mesh.geometry.dim, ))
     else:
-        el = ufl.FiniteElement("Lagrange", mesh.ufl_cell(), 1)
+        el = basix.ufl.element("Lagrange", mesh.topology.cell_name(), 1)
     V = _fem.FunctionSpace(mesh, el)
     with XDMFFile(mesh.comm, "test_mesh.xdmf", "w") as xdmf:
         xdmf.write_mesh(mesh)
