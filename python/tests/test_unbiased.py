@@ -511,7 +511,7 @@ def create_meshes(ct, gap):
     else:
         raise ValueError(f"Unsupported mesh type {ct}")
     gdim = x_ufl.shape[1]
-    coord_el = element("Lagrange", cell_type.name, 1, shape=(gdim,), gdim=gdim)
+    coord_el = element("Lagrange", cell_type.name, 1, shape=(gdim,))
     domain = ufl.Mesh(coord_el)
     mesh_ufl = create_mesh(MPI.COMM_WORLD, cells_ufl, x_ufl, domain)
     domain_custom = ufl.Mesh(coord_el)

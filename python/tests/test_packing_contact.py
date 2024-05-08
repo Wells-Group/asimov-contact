@@ -29,7 +29,7 @@ def create_functionspaces(ct, gap, delta, disp):
             point[1] -= gap
         x_3 = np.array([x_2[0].copy() + [1.6, 0], x_2[2].copy() + [1.6, 0]])
         x = np.vstack([x_1, x_2, x_3])
-        cells = np.array([[0, 1, 2, 3], [4, 5, 6, 7], [5, 8, 7, 9]], dtype=np.int32)
+        cells = np.array([[0, 1, 2, 3], [4, 5, 6, 7], [5, 8, 7, 9]], dtype=np.int64)
     elif cell_type == CellType.triangle:
         x = np.array(
             [
@@ -43,7 +43,7 @@ def create_functionspaces(ct, gap, delta, disp):
         )
         for point in x:
             point[2] = 3 * point[0] + 2 * point[1]  # plane given by z = 3x +2y
-        cells = np.array([[0, 1, 2], [3, 4, 5]], dtype=np.int32)
+        cells = np.array([[0, 1, 2], [3, 4, 5]], dtype=np.int64)
     elif cell_type == CellType.tetrahedron:
         x = np.array(
             [
@@ -57,7 +57,7 @@ def create_functionspaces(ct, gap, delta, disp):
                 [0.8 + delta, 1.2, -1.6 - gap],
             ]
         )
-        cells = np.array([[0, 1, 2, 3], [4, 5, 6, 7]], dtype=np.int32)
+        cells = np.array([[0, 1, 2, 3], [4, 5, 6, 7]], dtype=np.int64)
     elif cell_type == CellType.hexahedron:
         x_1 = np.array(
             [
@@ -101,7 +101,7 @@ def create_functionspaces(ct, gap, delta, disp):
                 [8, 9, 10, 11, 12, 13, 14, 15],
                 [9, 16, 10, 17, 13, 18, 15, 19],
             ],
-            dtype=np.int32,
+            dtype=np.int64,
         )
     else:
         raise ValueError(f"Unsupported mesh type {ct}")
@@ -143,7 +143,7 @@ def compare_test_fn(fn_space, test_fn, grad_test_fn, q_indices, link, x_ref, cel
                 expr2 = _fem.Expression(ufl.grad(v), x_ref)
             else:
                 expr2 = _fem.Expression(ufl.grad(v.sub(k)), x_ref)
-            expr_vals2 = expr2.eval(mesh, np.asarray([cell], dtype=np.int32))
+            expr_vals2 = expr2.eval(mesh, cell)
             # compare values of test functions
             offset = link * num_q_points * len(dofs) * bs + i * num_q_points * bs
             assert np.allclose(expr_vals[0][q_indices * bs + k], test_fn[offset + q_indices * bs + k])
@@ -201,7 +201,7 @@ def compare_u(fn_space, u, u_opposite, grad_u_opposite, q_indices, x_ref, cell):
             expr = _fem.Expression(ufl.grad(u), x_ref[q_indices, :])
         else:
             expr = _fem.Expression(ufl.grad(u.sub(k)), x_ref[q_indices, :])
-        expr_vals = expr.eval(mesh, [cell]).reshape(-1)
+        expr_vals = expr.eval(mesh, cell).reshape(-1)
 
         # extract jacobian from surf_der and gradient from u_opposite and expr_vals
         for i, q in enumerate(q_indices):

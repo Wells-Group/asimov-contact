@@ -30,7 +30,6 @@ def test_pack_u():
     cells = np.array([[0, 1, 2], [4, 5, 6], [1, 3, 2], [5, 6, 7]], dtype=np.int64)
 
     domain = ufl.Mesh(basix.ufl.element("Lagrange", "triangle", 1, shape=(points.shape[1],)))
-    cells = graph.adjacencylist(cells)
     part = msh.create_cell_partitioner(msh.GhostMode.none)
     mesh = msh.create_mesh(MPI.COMM_WORLD, cells, points, domain, part)
 
@@ -44,7 +43,6 @@ def test_pack_u():
     V = fem.functionspace(mesh, ("Lagrange", 1, (mesh.geometry.dim,)))
     u = fem.Function(V)
     u.interpolate(f)
-
     # Mark two facets on each side of gap
     mesh.topology.create_connectivity(2, 1)
     s0 = msh.locate_entities_boundary(mesh, 1, lambda x: np.isclose(x[1], 1))
