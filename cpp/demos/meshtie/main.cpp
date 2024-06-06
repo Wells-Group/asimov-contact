@@ -26,6 +26,7 @@ using U = typename dolfinx::scalar_value_type_t<T>;
 int main(int argc, char* argv[])
 {
 
+  char * filename = argv[1];
   init_logging(argc, argv);
   PetscInitialize(&argc, &argv, nullptr, nullptr);
   // Set the logging thread name to show the process rank
@@ -35,7 +36,7 @@ int main(int argc, char* argv[])
   loguru::set_thread_name(thread_name.c_str());
   {
     auto [mesh_init, domain1_init, facet1_init] = dolfinx_contact::read_mesh(
-        "../meshes/box_3D.xdmf", "mesh", "mesh", "cell_marker", "facet_marker");
+        filename, "mesh", "mesh", "cell_marker", "facet_marker");
 
 
     const std::int32_t contact_bdry_1 = 6; // top contact interface
