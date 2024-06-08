@@ -108,7 +108,7 @@ jobs:
           ./build-dir/meshtieNewton/demo_meshtie_newton
           mpirun -np 2 ./build-dir/meshtieNewton/demo_meshtie_newton
 
-      - name: Install contact
+      - name: Install contact (Python)
         id: python-contact
         run: |
           pip -v install -r ./python/build-requirements.txt
