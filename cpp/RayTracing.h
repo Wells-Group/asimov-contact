@@ -51,8 +51,7 @@ void compute_tangents(std::span<const double, gdim> n,
 {
 
   // Compute local maximum and create iteration array
-  auto max_el = std::max_element(n.begin(), n.end(),
-                                 [](double a, double b)
+  auto max_el = std::max_element(n.begin(), n.end(), [](double a, double b)
                                  { return std::norm(a) < std::norm(b); });
   auto max_pos = std::distance(n.begin(), max_el);
   std::size_t c = 0;
@@ -526,8 +525,9 @@ compute_ray(const dolfinx::mesh::Mesh<double>& mesh,
       break;
     }
   }
+
   if (status < 0)
-    LOG(WARNING) << "No ray through the facets have been found";
+    spdlog::warn("No ray through the facets have been found");
 
   std::array<double, gdim> x;
   std::array<double, tdim> X;

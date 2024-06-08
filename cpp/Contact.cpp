@@ -1113,8 +1113,8 @@ void dolfinx_contact::Contact::assemble_matrix(
       = *std::max_element(_max_links.begin(), _max_links.end());
   if (max_links == 0)
   {
-    LOG(WARNING)
-        << "No links between interfaces, compute_linked_cell will be skipped";
+    spdlog::warn(
+        "No links between interfaces, compute_linked_cell will be skipped");
   }
 
   const std::array<int, 2>& contact_pair = _contact_pairs[pair];
@@ -1247,9 +1247,10 @@ void dolfinx_contact::Contact::assemble_vector(
       = *std::max_element(_max_links.begin(), _max_links.end());
   if (max_links == 0)
   {
-    LOG(WARNING)
-        << "No links between interfaces, compute_linked_cell will be skipped";
+    spdlog::warn(
+        "No links between interfaces, compute_linked_cell will be skipped");
   }
+
   // Data structures used in assembly
   std::vector<double> coordinate_dofs(3 * num_dofs_g);
   std::vector<std::vector<PetscScalar>> bes(
