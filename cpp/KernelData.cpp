@@ -7,13 +7,13 @@
 #include "KernelData.h"
 
 dolfinx_contact::KernelData::KernelData(
-    std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V,
+    const dolfinx::fem::FunctionSpace<double>& V,
     std::shared_ptr<const dolfinx_contact::QuadratureRule> q_rule,
     const std::vector<std::size_t>& cstrides)
     : _qp_offsets(q_rule->offset()), _q_weights(q_rule->weights())
 {
   // Extract mesh
-  std::shared_ptr<const dolfinx::mesh::Mesh<double>> mesh = V->mesh();
+  std::shared_ptr<const dolfinx::mesh::Mesh<double>> mesh = V.mesh();
   assert(mesh);
   // Get mesh info
   const dolfinx::mesh::Geometry<double>& geometry = mesh->geometry();
@@ -33,8 +33,8 @@ dolfinx_contact::KernelData::KernelData(
 
   // Extract function space data (assuming same test and trial space)
   std::shared_ptr<const dolfinx::fem::FiniteElement<double>> element
-      = V->element();
-  std::shared_ptr<const dolfinx::fem::DofMap> dofmap = V->dofmap();
+      = V.element();
+  std::shared_ptr<const dolfinx::fem::DofMap> dofmap = V.dofmap();
   _ndofs_cell = dofmap->element_dof_layout().num_dofs();
   _bs = dofmap->bs();
 
@@ -46,7 +46,7 @@ dolfinx_contact::KernelData::KernelData(
                                 "elements requiring dof transformations.");
   }
 
-  if (V->value_size() / _bs != 1)
+  if (V.value_size() / _bs != 1)
   {
     throw std::invalid_argument(
         "Contact kernel not supported for spaces with value size!=1");
@@ -62,7 +62,7 @@ dolfinx_contact::KernelData::KernelData(
   // Tabulate Coordinate element (first derivative to compute Jacobian)
   _c_basis_shape = cmap.tabulate_shape(1, _q_weights.size());
   _c_basis_values = std::vector<double>(std::reduce(
-      _c_basis_shape.begin(), _c_basis_shape.end(), 1, std::multiplies{}));
+    _c_basis_shape.begin(), _c_basis_shape.end(), 1, std::multiplies{}));
   cmap.tabulate(1, q_points, {num_quadrature_pts, _tdim}, _c_basis_values);
 
   // Create offsets from cstrides

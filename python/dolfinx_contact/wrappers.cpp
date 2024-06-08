@@ -228,12 +228,12 @@ NB_MODULE(cpp, m)
            })
       .def("mesh", &dolfinx_contact::Contact::mesh)
       .def("copy_to_submesh",
-           [](dolfinx_contact::Contact& self,
-              std::shared_ptr<dolfinx::fem::Function<scalar_t>> u,
-              std::shared_ptr<dolfinx::fem::Function<scalar_t>> u_sub)
+           [](const dolfinx_contact::Contact& self,
+              const dolfinx::fem::Function<scalar_t>& u,
+              dolfinx::fem::Function<scalar_t>& u_sub)
            {
              dolfinx_contact::SubMesh submesh = self.submesh();
-             submesh.copy_function(*u, *u_sub);
+             submesh.copy_function(u, u_sub);
            })
       .def("coefficients_size", &dolfinx_contact::Contact::coefficients_size,
            nb::arg("meshtie"), nb::arg("V"))
@@ -242,7 +242,7 @@ NB_MODULE(cpp, m)
       .def("set_search_radius", &dolfinx_contact::Contact::set_search_radius)
       .def("generate_kernel",
            [](dolfinx_contact::Contact& self, dolfinx_contact::Kernel type,
-              std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V) {
+              const dolfinx::fem::FunctionSpace<double>& V) {
              return contact_wrappers::KernelWrapper<T>(
                  self.generate_kernel(type, V));
            })
@@ -251,7 +251,7 @@ NB_MODULE(cpp, m)
               contact_wrappers::KernelWrapper<T>& kernel,
               nb::ndarray<const scalar_t, nb::numpy> coeffs,
               nb::ndarray<const scalar_t, nb::numpy> constants,
-              std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V)
+              const dolfinx::fem::FunctionSpace<double>& V)
            {
              auto ker = kernel.get();
              self.assemble_matrix(
@@ -267,7 +267,7 @@ NB_MODULE(cpp, m)
               contact_wrappers::KernelWrapper<T>& kernel,
               nb::ndarray<const scalar_t, nb::numpy> coeffs,
               nb::ndarray<const scalar_t, nb::numpy> constants,
-              std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V)
+              const dolfinx::fem::FunctionSpace<double>& V)
            {
              auto ker = kernel.get();
              self.assemble_vector(
@@ -277,7 +277,7 @@ NB_MODULE(cpp, m)
            })
       .def("pack_test_functions",
            [](dolfinx_contact::Contact& self, int origin_meshtag,
-              std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V)
+              const dolfinx::fem::FunctionSpace<double>& V)
            {
              auto [coeffs, cstride]
                  = self.pack_test_functions(origin_meshtag, V);
@@ -287,7 +287,7 @@ NB_MODULE(cpp, m)
            })
       .def("pack_grad_test_functions",
            [](dolfinx_contact::Contact& self, int origin_meshtag,
-              std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V)
+              const dolfinx::fem::FunctionSpace<double>& V)
            {
              auto [coeffs, cstride]
                  = self.pack_grad_test_functions(origin_meshtag, V);
@@ -350,7 +350,7 @@ NB_MODULE(cpp, m)
 
   m.def(
       "generate_rigid_surface_kernel",
-      [](std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V,
+      [](const dolfinx::fem::FunctionSpace<double>& V,
          dolfinx_contact::Kernel type, dolfinx_contact::QuadratureRule& q_rule,
          bool constant_normal)
       {
@@ -402,7 +402,7 @@ NB_MODULE(cpp, m)
            &dolfinx_contact::MeshTie::generate_poisson_data_matrix_only)
       .def("assemble_matrix",
            [](dolfinx_contact::MeshTie& self, Mat A,
-              std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V,
+              const dolfinx::fem::FunctionSpace<double>& V,
               dolfinx_contact::Problem problemtype)
            {
              self.assemble_matrix(
@@ -412,7 +412,7 @@ NB_MODULE(cpp, m)
       .def("assemble_vector",
            [](dolfinx_contact::MeshTie& self,
               nb::ndarray<scalar_t, nb::ndim<1>, nb::c_contig> b,
-              std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V,
+              const dolfinx::fem::FunctionSpace<double>& V,
               dolfinx_contact::Problem problemtype) {
              self.assemble_vector(std::span(b.data(), b.size()), V,
                                   problemtype);
@@ -487,11 +487,11 @@ NB_MODULE(cpp, m)
               {std::size_t(active_facets.size() / 2), (std::size_t)1});
         });
   m.def("update_geometry", [](const dolfinx::fem::Function<scalar_t>& u,
-                              std::shared_ptr<dolfinx::mesh::Mesh<double>> mesh)
+                              dolfinx::mesh::Mesh<double>& mesh)
         { dolfinx_contact::update_geometry(u, mesh); });
 
   m.def("compute_active_entities",
-        [](std::shared_ptr<const dolfinx::mesh::Mesh<double>> mesh,
+        [](const dolfinx::mesh::Mesh<double>& mesh,
            nb::ndarray<const std::int32_t, nb::ndim<1>, nb::c_contig> entities,
            dolfinx::fem::IntegralType integral)
         {
@@ -526,7 +526,7 @@ NB_MODULE(cpp, m)
 
   m.def(
       "find_candidate_surface_segment",
-      [](std::shared_ptr<const dolfinx::mesh::Mesh<double>> mesh,
+      [](const dolfinx::mesh::Mesh<double>& mesh,
          const std::vector<std::int32_t>& quadrature_facets,
          const std::vector<std::int32_t>& candidate_facets, double radius)
       {

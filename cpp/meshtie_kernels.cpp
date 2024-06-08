@@ -8,18 +8,17 @@
 
 dolfinx_contact::kernel_fn<PetscScalar>
 dolfinx_contact::generate_meshtie_kernel(
-    dolfinx_contact::Kernel type,
-    std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V,
+    dolfinx_contact::Kernel type, const dolfinx::fem::FunctionSpace<double>& V,
     std::shared_ptr<const dolfinx_contact::QuadratureRule> quadrature_rule,
     const std::vector<std::size_t>& cstrides)
 {
-  std::shared_ptr<const dolfinx::mesh::Mesh<double>> mesh = V->mesh();
+  std::shared_ptr<const dolfinx::mesh::Mesh<double>> mesh = V.mesh();
   assert(mesh);
   const std::size_t gdim = mesh->geometry().dim(); // geometrical dimension
-  const std::size_t bs = V->dofmap()->bs();
+  const std::size_t bs = V.dofmap()->bs();
   // NOTE: Assuming same number of quadrature points on each cell
   dolfinx_contact::error::check_cell_type(mesh->topology()->cell_type());
-  const std::size_t ndofs_cell = V->dofmap()->element_dof_layout().num_dofs();
+  const std::size_t ndofs_cell = V.dofmap()->element_dof_layout().num_dofs();
 
   auto kd = dolfinx_contact::KernelData(V, quadrature_rule, cstrides);
   /// @brief Assemble kernel for RHS gluing two objects with Nitsche
@@ -443,15 +442,14 @@ dolfinx_contact::generate_meshtie_kernel(
 
 dolfinx_contact::kernel_fn<PetscScalar>
 dolfinx_contact::generate_poisson_kernel(
-    dolfinx_contact::Kernel type,
-    std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V,
+    dolfinx_contact::Kernel type, const dolfinx::fem::FunctionSpace<double>& V,
     std::shared_ptr<const dolfinx_contact::QuadratureRule> quadrature_rule,
     const std::vector<std::size_t>& cstrides)
 {
-  std::shared_ptr<const dolfinx::mesh::Mesh<double>> mesh = V->mesh();
+  std::shared_ptr<const dolfinx::mesh::Mesh<double>> mesh = V.mesh();
   assert(mesh);
   const std::size_t gdim = mesh->geometry().dim(); // geometrical dimension
-  if (V->dofmap()->bs() != 1)
+  if (V.dofmap()->bs() != 1)
   {
     throw std::invalid_argument(
         "This kernel is expecting a variable with bs=1");
@@ -459,7 +457,7 @@ dolfinx_contact::generate_poisson_kernel(
 
   // NOTE: Assuming same number of quadrature points on each cell
   dolfinx_contact::error::check_cell_type(mesh->topology()->cell_type());
-  const std::size_t ndofs_cell = V->dofmap()->element_dof_layout().num_dofs();
+  const std::size_t ndofs_cell = V.dofmap()->element_dof_layout().num_dofs();
 
   auto kd = dolfinx_contact::KernelData(V, quadrature_rule, cstrides);
   /// @brief Assemble kernel for RHS gluing two objects with Nitsche

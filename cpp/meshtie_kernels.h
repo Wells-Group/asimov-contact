@@ -33,11 +33,11 @@ namespace dolfinx_contact
 /// @note The vector valued coefficents `test_fn`, `grad(test_fn)`, `u`,
 /// @note  All other coefficients are packed at quadrature points.
 /// `u_opposite`, `grad(u_opposite)` have dimension `bs == gdim`.
-kernel_fn<PetscScalar> generate_meshtie_kernel(
-    dolfinx_contact::Kernel type,
-    std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V,
-    std::shared_ptr<const QuadratureRule> quadrature_rule,
-    const std::vector<std::size_t>& cstrides);
+kernel_fn<PetscScalar>
+generate_meshtie_kernel(dolfinx_contact::Kernel type,
+                        const dolfinx::fem::FunctionSpace<double>& V,
+                        std::shared_ptr<const QuadratureRule> quadrature_rule,
+                        const std::vector<std::size_t>& cstrides);
 
 /// @brief Generate meshtie kernel for poisson
 ///
@@ -56,8 +56,9 @@ kernel_fn<PetscScalar> generate_meshtie_kernel(
 /// @note The scalar valued coefficient `h` iis expected to be DG-0
 /// functions, with a single value per facet.
 /// @note All other coefficients are packed at quadrature points.
-kernel_fn<PetscScalar> generate_poisson_kernel(
-    Kernel type, std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V,
-    std::shared_ptr<const QuadratureRule> quadrature_rule,
-    const std::vector<std::size_t>& cstrides);
+kernel_fn<PetscScalar>
+generate_poisson_kernel(Kernel type,
+                        const dolfinx::fem::FunctionSpace<double>& V,
+                        std::shared_ptr<const QuadratureRule> quadrature_rule,
+                        const std::vector<std::size_t>& cstrides);
 } // namespace dolfinx_contact

@@ -36,7 +36,7 @@ public:
   ///@param[in] q_rule The quadrature rules
   ///@param[in] cstrides The strides for individual coeffcients used in the
   /// kernel
-  KernelData(std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V,
+  KernelData(const dolfinx::fem::FunctionSpace<double>& V,
              std::shared_ptr<const QuadratureRule> q_rule,
              const std::vector<std::size_t>& cstrides);
 
@@ -116,8 +116,8 @@ public:
   /// @param[in, out] detJ_scratch - Working memory to compute determinants
   /// @param[in] coords - the coordinates of the facet
   /// @return absolute value of determinant of J_tot
-  double update_jacobian(std::size_t q, const std::size_t facet_index,
-                         double detJ, mdspan2_t J, mdspan2_t K, mdspan2_t J_tot,
+  double update_jacobian(std::size_t q, std::size_t facet_index, double detJ,
+                         mdspan2_t J, mdspan2_t K, mdspan2_t J_tot,
                          std::span<double> detJ_scratch,
                          cmdspan2_t coords) const
   {
@@ -145,8 +145,8 @@ public:
   /// @param[in,out] detJ_scratch - Working memory, min size (2*gdim*tdim)
   /// @param[in] coords - the coordinates of the facet
   /// @return absolute value of determinant of J_tot
-  double compute_first_facet_jacobian(const std::size_t facet_index,
-                                      mdspan2_t J, mdspan2_t K, mdspan2_t J_tot,
+  double compute_first_facet_jacobian(std::size_t facet_index, mdspan2_t J,
+                                      mdspan2_t K, mdspan2_t J_tot,
                                       std::span<double> detJ_scratch,
                                       cmdspan2_t coords) const;
 
@@ -155,7 +155,7 @@ public:
   /// @param[in] K The inverse Jacobian
   /// @param[in] local_index The facet index local to the cell
   void update_normal(std::span<double> n, cmdspan2_t K,
-                     const std::size_t local_index) const;
+                     std::size_t local_index) const;
 
   /// Return quadrature weights for the i-th facet
   std::span<const double> weights(std::size_t i) const;

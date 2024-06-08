@@ -29,10 +29,11 @@ namespace dolfinx_contact
 /// @param[in] cell The index of the cell
 /// @param[in] cell_info The cell info
 void transformed_push_forward(
-    const dolfinx::fem::FiniteElement<double>* element, cmdspan4_t reference_basis,
-    std::vector<double>& element_basisb, mdspan3_t basis_values, cmdspan2_t J,
-    cmdspan2_t K, double detJ, std::size_t basis_offset, std::size_t q,
-    std::int32_t cell, std::span<const std::uint32_t> cell_info);
+    const dolfinx::fem::FiniteElement<double>* element,
+    cmdspan4_t reference_basis, std::vector<double>& element_basisb,
+    mdspan3_t basis_values, cmdspan2_t J, cmdspan2_t K, double detJ,
+    std::size_t basis_offset, std::size_t q, std::int32_t cell,
+    std::span<const std::uint32_t> cell_info);
 /// @brief Pack a coefficient at quadrature points.
 ///
 /// Prepare a coefficient (dolfinx::fem::Function) for assembly with custom
@@ -56,7 +57,7 @@ void transformed_push_forward(
 /// @returns c The packed coefficients and the number of coeffs per entity
 std::pair<std::vector<PetscScalar>, int> pack_coefficient_quadrature(
     std::shared_ptr<const dolfinx::fem::Function<PetscScalar>> coeff,
-    const int q_degree, std::span<const std::int32_t> active_entities,
+    int q_degree, std::span<const std::int32_t> active_entities,
     dolfinx::fem::IntegralType integral);
 
 /// @brief Pack the gradient of a coefficient at quadrature points.
@@ -83,7 +84,7 @@ std::pair<std::vector<PetscScalar>, int> pack_coefficient_quadrature(
 /// @returns c The packed coefficients and the number of coeffs per entity
 std::pair<std::vector<PetscScalar>, int> pack_gradient_quadrature(
     std::shared_ptr<const dolfinx::fem::Function<PetscScalar>> coeff,
-    const int q_degree, std::span<const std::int32_t> active_entities,
+    int q_degree, std::span<const std::int32_t> active_entities,
     dolfinx::fem::IntegralType integral);
 
 /// Prepare circumradii of triangle/tetrahedron for assembly with custom
@@ -95,5 +96,5 @@ std::pair<std::vector<PetscScalar>, int> pack_gradient_quadrature(
 /// @note Circumradius is constant and therefore the cstride is 1
 std::vector<PetscScalar>
 pack_circumradius(const dolfinx::mesh::Mesh<double>& mesh,
-                  const std::span<const std::int32_t>& active_facets);
+                  std::span<const std::int32_t> active_facets);
 } // namespace dolfinx_contact

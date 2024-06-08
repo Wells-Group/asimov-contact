@@ -124,7 +124,7 @@ dolfinx_contact::Contact::Contact(
       int index = surfaces->offsets()[s] + int(i);
       auto [cell_facet_pairs, num_local]
           = dolfinx_contact::compute_active_entities(
-              mesh, facets, dolfinx::fem::IntegralType::exterior_facet);
+              *mesh, facets, dolfinx::fem::IntegralType::exterior_facet);
       all_facet_pairs.insert(all_facet_pairs.end(),
                              std::begin(cell_facet_pairs),
                              std::end(cell_facet_pairs));
@@ -416,8 +416,7 @@ dolfinx_contact::Contact::pack_nx(int pair) const
 //------------------------------------------------------------------------------------------------
 dolfinx_contact::kernel_fn<PetscScalar>
 dolfinx_contact::Contact::generate_kernel(
-    Kernel type,
-    std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V) const
+    Kernel type, const dolfinx::fem::FunctionSpace<double>& V) const
 {
   std::size_t max_links
       = *std::max_element(_max_links.begin(), _max_links.end());
@@ -600,8 +599,7 @@ dolfinx_contact::Contact::pack_gap(int pair) const
 //------------------------------------------------------------------------------------------------
 std::pair<std::vector<PetscScalar>, int>
 dolfinx_contact::Contact::pack_test_functions(
-    int pair,
-    std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V) const
+    int pair, const dolfinx::fem::FunctionSpace<double>& V) const
 {
   auto [quadrature_mt, candidate_mt] = _contact_pairs[pair];
 
@@ -779,7 +777,8 @@ void dolfinx_contact::Contact::crop_invalid_points(std::size_t pair,
 //------------------------------------------------------------------------------------------------
 std::pair<std::vector<PetscScalar>, int>
 dolfinx_contact::Contact::pack_u_contact(
-    int pair, std::shared_ptr<dolfinx::fem::Function<PetscScalar>> u) const
+    int pair,
+    std::shared_ptr<const dolfinx::fem::Function<PetscScalar>> u) const
 {
   dolfinx::common::Timer t("Pack contact u");
   auto [quadrature_mt, candidate_mt] = _contact_pairs[pair];
@@ -796,7 +795,7 @@ dolfinx_contact::Contact::pack_u_contact(
 
   // copy u onto submesh
   auto V_sub = std::make_shared<dolfinx::fem::FunctionSpace<double>>(
-      _submesh.create_functionspace(u->function_space()));
+      _submesh.create_functionspace(*u->function_space()));
   std::shared_ptr<const dolfinx::fem::FiniteElement<double>> element
       = V_sub->element();
   auto topology = candidate_mesh->topology();
@@ -1097,9 +1096,9 @@ void dolfinx_contact::Contact::assemble_matrix(
     const dolfinx_contact::kernel_fn<PetscScalar>& kernel,
     const std::span<const PetscScalar> coeffs, int cstride,
     const std::span<const PetscScalar>& constants,
-    std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V)
+    const dolfinx::fem::FunctionSpace<double>& V)
 {
-  std::shared_ptr<const dolfinx::mesh::Mesh<double>> mesh = V->mesh();
+  std::shared_ptr<const dolfinx::mesh::Mesh<double>> mesh = V.mesh();
   assert(mesh);
 
   // Extract geometry data
@@ -1113,14 +1112,14 @@ void dolfinx_contact::Contact::assemble_matrix(
   const dolfinx::fem::CoordinateElement<double>& cmap = geometry.cmap();
   const std::size_t num_dofs_g = cmap.dim();
 
-  if (V->element()->needs_dof_transformations())
+  if (V.element()->needs_dof_transformations())
   {
     throw std::invalid_argument(
         "Function-space requiring dof-transformations is not supported.");
   }
 
   // Extract function space data (assuming same test and trial space)
-  std::shared_ptr<const dolfinx::fem::DofMap> dofmap = V->dofmap();
+  std::shared_ptr<const dolfinx::fem::DofMap> dofmap = V.dofmap();
   const std::size_t ndofs_cell = dofmap->cell_dofs(0).size();
   const int bs = dofmap->bs();
   const std::size_t max_links
@@ -1215,17 +1214,17 @@ void dolfinx_contact::Contact::assemble_vector(
     const dolfinx_contact::kernel_fn<PetscScalar>& kernel,
     const std::span<const PetscScalar>& coeffs, int cstride,
     const std::span<const PetscScalar>& constants,
-    std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V)
+    const dolfinx::fem::FunctionSpace<double>& V)
 {
   /// Check that we support the function space
-  if (V->element()->needs_dof_transformations())
+  if (V.element()->needs_dof_transformations())
   {
     throw std::invalid_argument(
         "Function-space requiring dof-transformations is not supported.");
   }
 
   // Extract mesh
-  std::shared_ptr<const dolfinx::mesh::Mesh<double>> mesh = V->mesh();
+  std::shared_ptr<const dolfinx::mesh::Mesh<double>> mesh = V.mesh();
   assert(mesh);
   const dolfinx::mesh::Geometry<double>& geometry = mesh->geometry();
   const int gdim = geometry.dim(); // geometrical dimension
@@ -1241,7 +1240,7 @@ void dolfinx_contact::Contact::assemble_vector(
   const std::size_t num_dofs_g = cmap.dim();
 
   // Extract function space data (assuming same test and trial space)
-  std::shared_ptr<const dolfinx::fem::DofMap> dofmap = V->dofmap();
+  std::shared_ptr<const dolfinx::fem::DofMap> dofmap = V.dofmap();
   const std::size_t ndofs_cell = dofmap->cell_dofs(0).size();
   const int bs = dofmap->bs();
 
@@ -1331,17 +1330,16 @@ void dolfinx_contact::Contact::assemble_vector(
 //-----------------------------------------------------------------------------------------------
 std::pair<std::vector<PetscScalar>, int>
 dolfinx_contact::Contact::pack_grad_test_functions(
-    int pair,
-    std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V) const
+    int pair, const dolfinx::fem::FunctionSpace<double>& V) const
 {
   auto [quadrature_mt, candidate_mt] = _contact_pairs[pair];
   // Mesh info
-  std::shared_ptr<const dolfinx::mesh::Mesh<double>> mesh = V->mesh(); // mesh
+  std::shared_ptr<const dolfinx::mesh::Mesh<double>> mesh = V.mesh(); // mesh
   assert(mesh);
   const std::size_t gdim = mesh->geometry().dim();
   const std::size_t tdim = mesh->topology()->dim();
   std::span<const std::int32_t> parent_cells = _submesh.parent_cells();
-  std::shared_ptr<const fem::FiniteElement<double>> element = V->element();
+  std::shared_ptr<const fem::FiniteElement<double>> element = V.element();
   assert(element);
   const int bs_element = element->block_size();
   const std::size_t ndofs
@@ -1423,7 +1421,7 @@ dolfinx_contact::Contact::pack_grad_test_functions(
 
       // Compute values of basis functions for all y = Pi(x) in qp
       std::array<std::size_t, 4> b_shape
-          = evaluate_basis_shape(*V, indices.size(), 1);
+          = evaluate_basis_shape(V, indices.size(), 1);
       if (b_shape[3] != 1)
         throw std::invalid_argument(
             "pack_grad_test_functions assumes values size 1");
@@ -1431,7 +1429,7 @@ dolfinx_contact::Contact::pack_grad_test_functions(
           std::reduce(b_shape.cbegin(), b_shape.cend(), 1, std::multiplies{}));
       cells.resize(indices.size());
       std::fill(cells.begin(), cells.end(), linked_cell);
-      evaluate_basis_functions(*V, x_c, cells, basis_valuesb, 1);
+      evaluate_basis_functions(V, x_c, cells, basis_valuesb, 1);
       cmdspan4_t basis_values(basis_valuesb.data(), b_shape);
       // Insert basis function values into c
       for (std::size_t k = 0; k < ndofs; k++)
@@ -1451,7 +1449,8 @@ dolfinx_contact::Contact::pack_grad_test_functions(
 //-----------------------------------------------------------------------------------------------
 std::pair<std::vector<PetscScalar>, int>
 dolfinx_contact::Contact::pack_grad_u_contact(
-    int pair, std::shared_ptr<dolfinx::fem::Function<PetscScalar>> u) const
+    int pair,
+    std::shared_ptr<const dolfinx::fem::Function<PetscScalar>> u) const
 {
   auto [quadrature_mt, candidate_mt] = _contact_pairs[pair];
 
@@ -1555,7 +1554,7 @@ dolfinx_contact::Contact::pack_grad_u_contact(
 }
 //-----------------------------------------------------------------------------------------------
 void dolfinx_contact::Contact::update_submesh_geometry(
-    dolfinx::fem::Function<PetscScalar>& u)
+    const dolfinx::fem::Function<PetscScalar>& u)
 {
   _submesh.update_geometry(u);
 }

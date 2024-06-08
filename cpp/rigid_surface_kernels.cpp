@@ -16,12 +16,11 @@
 
 dolfinx_contact::kernel_fn<PetscScalar>
 dolfinx_contact::generate_rigid_surface_kernel(
-    std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V,
-    dolfinx_contact::Kernel type,
+    const dolfinx::fem::FunctionSpace<double>& V, dolfinx_contact::Kernel type,
     dolfinx_contact::QuadratureRule& quadrature_rule, bool constant_normal)
 {
 
-  auto mesh = V->mesh();
+  auto mesh = V.mesh();
   assert(mesh);
 
   // Get mesh info

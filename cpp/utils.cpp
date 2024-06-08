@@ -184,8 +184,8 @@ void dolfinx_contact::pull_back(
 
 //-----------------------------------------------------------------------------
 std::pair<std::vector<std::int32_t>, std::vector<std::int32_t>>
-dolfinx_contact::sort_cells(const std::span<const std::int32_t>& cells,
-                            const std::span<std::int32_t>& perm)
+dolfinx_contact::sort_cells(std::span<const std::int32_t> cells,
+                            std::span<std::int32_t> perm)
 {
   assert(perm.size() == cells.size());
 
@@ -216,7 +216,7 @@ dolfinx_contact::sort_cells(const std::span<const std::int32_t>& cells,
 //-------------------------------------------------------------------------------------
 void dolfinx_contact::update_geometry(
     const dolfinx::fem::Function<PetscScalar>& u,
-    std::shared_ptr<dolfinx::mesh::Mesh<double>> mesh)
+    dolfinx::mesh::Mesh<double>& mesh)
 {
   std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V
       = u.function_space();
@@ -224,16 +224,16 @@ void dolfinx_contact::update_geometry(
   std::shared_ptr<const dolfinx::fem::DofMap> dofmap = V->dofmap();
   assert(dofmap);
   // Check that mesh to be updated and underlying mesh of u are the same
-  assert(mesh == V->mesh());
+  assert(&mesh == V->mesh().get());
 
   // The Function and the mesh must have identical element_dof_layouts
   // (up to the block size)
   assert(dofmap->element_dof_layout()
-         == mesh->geometry().cmap().create_dof_layout());
+         == mesh.geometry().cmap().create_dof_layout());
 
-  const int tdim = mesh->topology()->dim();
+  const int tdim = mesh.topology()->dim();
   std::shared_ptr<const dolfinx::common::IndexMap> cell_map
-      = mesh->topology()->index_map(tdim);
+      = mesh.topology()->index_map(tdim);
   assert(cell_map);
   const std::int32_t num_cells
       = cell_map->size_local() + cell_map->num_ghosts();
@@ -242,10 +242,10 @@ void dolfinx_contact::update_geometry(
   MDSPAN_IMPL_STANDARD_NAMESPACE::mdspan<
       const std::int32_t,
       MDSPAN_IMPL_STANDARD_NAMESPACE::dextents<std::size_t, 2>>
-      dofmap_x = mesh->geometry().dofmap();
+      dofmap_x = mesh.geometry().dofmap();
   const int bs = dofmap->bs();
   const auto& u_data = u.x()->array();
-  std::span<double> coords = mesh->geometry().x();
+  std::span<double> coords = mesh.geometry().x();
   std::vector<double> dx(coords.size());
   for (std::int32_t c = 0; c < num_cells; ++c)
   {
@@ -343,8 +343,8 @@ dolfinx_contact::d_alpha_ball_projection(std::array<double, 3> x, double alpha,
 }
 //-------------------------------------------------------------------------------------
 std::array<std::size_t, 4> dolfinx_contact::evaluate_basis_shape(
-    const dolfinx::fem::FunctionSpace<double>& V, const std::size_t num_points,
-    const std::size_t num_derivatives)
+    const dolfinx::fem::FunctionSpace<double>& V, std::size_t num_points,
+    std::size_t num_derivatives)
 {
   // Get element
   assert(V.element());
@@ -352,9 +352,9 @@ std::array<std::size_t, 4> dolfinx_contact::evaluate_basis_shape(
   std::shared_ptr<const dolfinx::fem::FiniteElement<double>> element
       = V.element();
   assert(element);
-  const int bs_element = element->block_size();
-  const std::size_t value_size = V.value_size() / bs_element;
-  const std::size_t space_dimension = element->space_dimension() / bs_element;
+  int bs_element = element->block_size();
+  std::size_t value_size = V.value_size() / bs_element;
+  std::size_t space_dimension = element->space_dimension() / bs_element;
   return {num_derivatives * gdim + 1, num_points, space_dimension, value_size};
 }
 //-----------------------------------------------------------------------------
@@ -665,12 +665,12 @@ dolfinx_contact::get_update_normal(
 /// @return list of active entities sorted by cell and size_local
 std::pair<std::vector<std::int32_t>, std::size_t>
 dolfinx_contact::compute_active_entities(
-    std::shared_ptr<const dolfinx::mesh::Mesh<double>> mesh,
+    const dolfinx::mesh::Mesh<double>& mesh,
     std::span<const std::int32_t> entities, dolfinx::fem::IntegralType integral)
 {
 
-  int tdim = mesh->topology()->dim();
-  const int size_local = mesh->topology()->index_map(tdim)->size_local();
+  int tdim = mesh.topology()->dim();
+  const int size_local = mesh.topology()->index_map(tdim)->size_local();
   switch (integral)
   {
   case dolfinx::fem::IntegralType::cell:
@@ -690,7 +690,7 @@ dolfinx_contact::compute_active_entities(
     std::vector<std::int32_t> cells(entities.size());
     std::vector<std::int32_t> facets(entities.size());
 
-    auto topology = mesh->topology();
+    auto topology = mesh.topology();
     auto f_to_c = topology->connectivity(tdim - 1, tdim);
     assert(f_to_c);
     auto c_to_f = topology->connectivity(tdim, tdim - 1);
@@ -871,10 +871,9 @@ std::vector<std::size_t> dolfinx_contact::find_candidate_facets(
 }
 //-------------------------------------------------------------------------------------
 std::vector<std::int32_t> dolfinx_contact::find_candidate_surface_segment(
-    std::shared_ptr<const dolfinx::mesh::Mesh<double>> mesh,
+    const dolfinx::mesh::Mesh<double>& mesh,
     const std::vector<std::int32_t>& quadrature_facets,
-    const std::vector<std::int32_t>& candidate_facets,
-    const double radius = -1.)
+    const std::vector<std::int32_t>& candidate_facets, double radius)
 {
   if (radius < 0)
   {
@@ -883,9 +882,9 @@ std::vector<std::int32_t> dolfinx_contact::find_candidate_surface_segment(
   }
   // Find midpoints of quadrature and candidate facets
   std::vector<double> quadrature_midpoints = dolfinx::mesh::compute_midpoints(
-      *mesh, mesh->topology()->dim() - 1, quadrature_facets);
+      mesh, mesh.topology()->dim() - 1, quadrature_facets);
   std::vector<double> candidate_midpoints = dolfinx::mesh::compute_midpoints(
-      *mesh, mesh->topology()->dim() - 1, candidate_facets);
+      mesh, mesh.topology()->dim() - 1, candidate_facets);
 
   double r2 = radius * radius; // radius squared
   double dist; // used for squared distance between two midpoints
@@ -983,7 +982,7 @@ dolfinx_contact::compute_distance_map(
     const dolfinx::mesh::Mesh<double>& candidate_mesh,
     std::span<const std::int32_t> candidate_facets,
     const dolfinx_contact::QuadratureRule& q_rule,
-    dolfinx_contact::ContactMode mode, const double radius)
+    dolfinx_contact::ContactMode mode, double radius)
 {
   dolfinx::common::Timer t("~Contact: compute distance map");
   const dolfinx::mesh::Geometry<double>& geometry = quadrature_mesh.geometry();
@@ -1117,6 +1116,7 @@ dolfinx_contact::compute_distance_map(
 
   throw std::runtime_error("Unsupported contact mode");
 }
+
 MatNullSpace dolfinx_contact::build_nullspace_multibody(
     const dolfinx::fem::FunctionSpace<double>& V,
     const dolfinx::mesh::MeshTags<std::int32_t>& mt,

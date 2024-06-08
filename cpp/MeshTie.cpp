@@ -8,7 +8,7 @@
 
 void dolfinx_contact::MeshTie::generate_kernel_data(
     dolfinx_contact::Problem problem_type,
-    std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V,
+    const dolfinx::fem::FunctionSpace<double>& V,
     const std::map<std::string,
                    std::shared_ptr<dolfinx::fem::Function<double>>>&
         coefficients,
@@ -20,19 +20,15 @@ void dolfinx_contact::MeshTie::generate_kernel_data(
 
     using enum dolfinx_contact::Problem;
   case Elasticity:
-
     if (auto it = coefficients.find("mu"); it != coefficients.end())
       coeff_list.push_back(it->second);
     else
-    {
       throw std::invalid_argument("Lame parameter mu not provided.");
-    }
     if (auto it = coefficients.find("lambda"); it != coefficients.end())
       coeff_list.push_back(it->second);
     else
-    {
       throw std::invalid_argument("Lame parameter lambda not provided.");
-    }
+
     dolfinx_contact::MeshTie::generate_meshtie_data_matrix_only(
         problem_type, V, coeff_list, gamma, theta);
     if (auto it = coefficients.find("u"); it != coefficients.end())
@@ -44,9 +40,7 @@ void dolfinx_contact::MeshTie::generate_kernel_data(
     if (auto it = coefficients.find("kdt"); it != coefficients.end())
       coeff_list.push_back(it->second);
     else
-    {
       throw std::invalid_argument("kdt not provided.");
-    }
     dolfinx_contact::MeshTie::generate_poisson_data_matrix_only(
         V, coeff_list[0], gamma, theta);
     if (auto it = coefficients.find("T"); it != coefficients.end())
@@ -68,9 +62,8 @@ void dolfinx_contact::MeshTie::generate_kernel_data(
     if (auto it = coefficients.find("alpha"); it != coefficients.end())
       coeff_list.push_back(it->second);
     else
-    {
       throw std::invalid_argument("Thermal expansion coefficient.");
-    }
+
     dolfinx_contact::MeshTie::generate_meshtie_data_matrix_only(
         problem_type, V, coeff_list, gamma, theta);
     if (auto it = coefficients.find("u"); it != coefficients.end())
@@ -83,17 +76,17 @@ void dolfinx_contact::MeshTie::generate_kernel_data(
 
 void dolfinx_contact::MeshTie::generate_meshtie_data_matrix_only(
     dolfinx_contact::Problem problem_type,
-    std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V,
+    const dolfinx::fem::FunctionSpace<double>& V,
     std::vector<std::shared_ptr<dolfinx::fem::Function<double>>> coeffs,
     double gamma, double theta)
 {
   // mesh data
-  std::shared_ptr<const dolfinx::mesh::Mesh<double>> mesh = V->mesh();
+  std::shared_ptr<const dolfinx::mesh::Mesh<double>> mesh = V.mesh();
   const std::size_t gdim = mesh->geometry().dim(); // geometrical dimension
   int tdim = mesh->topology()->dim();              // topological dimension
 
   // Extract function space data (assuming same test and trial space)
-  std::shared_ptr<const dolfinx::fem::DofMap> dofmap = V->dofmap();
+  std::shared_ptr<const dolfinx::fem::DofMap> dofmap = V.dofmap();
   const std::size_t ndofs_cell = dofmap->cell_dofs(0).size();
   const std::size_t bs = dofmap->bs();
   const std::size_t num_q_points
@@ -282,7 +275,7 @@ void dolfinx_contact::MeshTie::update_kernel_data(
 }
 
 void dolfinx_contact::MeshTie::update_function_data(
-    std::shared_ptr<dolfinx::fem::Function<double>> u,
+    std::shared_ptr<const dolfinx::fem::Function<double>> u,
     std::vector<std::vector<double>>& coeffs, std::size_t offset0,
     std::size_t offset1, std::size_t coeff_size)
 {
@@ -296,8 +289,10 @@ void dolfinx_contact::MeshTie::update_function_data(
   {
     // retrieve indices of connected surfaces
     const std::array<int, 2>& pair = Contact::contact_pair(i);
+
     // retrieve integration facets
     std::span<const std::int32_t> entities = Contact::active_entities(pair[0]);
+
     // number of facets own by process
     std::size_t num_facets = Contact::local_facets(pair[0]);
     auto [u_p, c_u] = pack_coefficient_quadrature(u, _q_deg, entities, it); // u
@@ -314,6 +309,7 @@ void dolfinx_contact::MeshTie::update_function_data(
     }
   }
 }
+
 void dolfinx_contact::MeshTie::update_gradient_data(
     std::shared_ptr<dolfinx::fem::Function<double>> u,
     std::vector<std::vector<double>>& coeffs, std::size_t offset0,
@@ -352,17 +348,17 @@ void dolfinx_contact::MeshTie::update_gradient_data(
 }
 
 void dolfinx_contact::MeshTie::generate_poisson_data_matrix_only(
-    std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V,
+    const dolfinx::fem::FunctionSpace<double>& V,
     std::shared_ptr<dolfinx::fem::Function<double>> kdt, double gamma,
     double theta)
 {
   // mesh data
-  std::shared_ptr<const dolfinx::mesh::Mesh<double>> mesh = V->mesh();
+  std::shared_ptr<const dolfinx::mesh::Mesh<double>> mesh = V.mesh();
   const std::size_t gdim = mesh->geometry().dim(); // geometrical dimension
   int tdim = mesh->topology()->dim();              // topological dimension
 
   // Extract function space data (assuming same test and trial space)
-  std::shared_ptr<const dolfinx::fem::DofMap> dofmap = V->dofmap();
+  std::shared_ptr<const dolfinx::fem::DofMap> dofmap = V.dofmap();
   const std::size_t ndofs_cell = dofmap->cell_dofs(0).size();
   const std::size_t num_q_points
       = dolfinx_contact::Contact::quadrature_rule()->offset()[1]
@@ -439,8 +435,7 @@ void dolfinx_contact::MeshTie::generate_poisson_data_matrix_only(
 }
 
 void dolfinx_contact::MeshTie::assemble_vector(
-    std::span<PetscScalar> b,
-    std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V,
+    std::span<PetscScalar> b, const dolfinx::fem::FunctionSpace<double>& V,
     dolfinx_contact::Problem problem_type)
 {
   switch (problem_type)
@@ -469,8 +464,7 @@ void dolfinx_contact::MeshTie::assemble_vector(
 }
 
 void dolfinx_contact::MeshTie::assemble_matrix(
-    const mat_set_fn& mat_set,
-    std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V,
+    const mat_set_fn& mat_set, const dolfinx::fem::FunctionSpace<double>& V,
     dolfinx_contact::Problem problem_type)
 {
   switch (problem_type)

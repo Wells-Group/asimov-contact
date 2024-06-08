@@ -149,12 +149,11 @@ public:
   /// facets
   /// @param[in] cstride Number of coefficients per facet
   /// @param[in] constants used in the variational form
-  void
-  assemble_matrix(const mat_set_fn& mat_set, int pair,
-                  const kernel_fn<PetscScalar>& kernel,
-                  const std::span<const PetscScalar> coeffs, int cstride,
-                  const std::span<const PetscScalar>& constants,
-                  std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V);
+  void assemble_matrix(const mat_set_fn& mat_set, int pair,
+                       const kernel_fn<PetscScalar>& kernel,
+                       const std::span<const PetscScalar> coeffs, int cstride,
+                       const std::span<const PetscScalar>& constants,
+                       const dolfinx::fem::FunctionSpace<double>& V);
 
   /// Assemble vector over exterior facet (for contact facets)
   /// @param[in] b The vector
@@ -164,12 +163,11 @@ public:
   /// facets
   /// @param[in] cstride Number of coefficients per facet
   /// @param[in] constants used in the variational form
-  void
-  assemble_vector(std::span<PetscScalar> b, int pair,
-                  const kernel_fn<PetscScalar>& kernel,
-                  const std::span<const PetscScalar>& coeffs, int cstride,
-                  const std::span<const PetscScalar>& constants,
-                  std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V);
+  void assemble_vector(std::span<PetscScalar> b, int pair,
+                       const kernel_fn<PetscScalar>& kernel,
+                       const std::span<const PetscScalar>& coeffs, int cstride,
+                       const std::span<const PetscScalar>& constants,
+                       const dolfinx::fem::FunctionSpace<double>& V);
 
   /// @brief Generate contact kernel
   ///
@@ -187,9 +185,9 @@ public:
   /// packed at quadrature points. The coefficient `u` is packed at dofs.
   /// @note The vector valued coefficents `gap`, `test_fn`, `u`, `u_opposite`
   /// has dimension `bs == gdim`.
-  kernel_fn<PetscScalar> generate_kernel(
-      Kernel type,
-      std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V) const;
+  kernel_fn<PetscScalar>
+  generate_kernel(Kernel type,
+                  const dolfinx::fem::FunctionSpace<double>& V) const;
 
   /// Compute push forward of quadrature points _qp_ref_facet to the
   /// physical facet for each facet in _facet_"origin_meshtag" Creates and
@@ -226,18 +224,18 @@ public:
   /// @param[in] pair index of contact pair
   /// @param[in] gap gap packed on facets per quadrature point
   /// @param[out] c - test functions packed on facets.
-  std::pair<std::vector<PetscScalar>, int> pack_test_functions(
-      int pair,
-      std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V) const;
+  std::pair<std::vector<PetscScalar>, int>
+  pack_test_functions(int pair,
+                      const dolfinx::fem::FunctionSpace<double>& V) const;
 
   /// @todo Function signature are args docs look wrong
   /// Compute gradient of test functions on opposite surface (initial
   /// configuration) at quadrature points of facets
   /// @param[in] pair index of contact pair
   /// @param[out] c - test functions packed on facets.
-  std::pair<std::vector<PetscScalar>, int> pack_grad_test_functions(
-      int pair,
-      std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V) const;
+  std::pair<std::vector<PetscScalar>, int>
+  pack_grad_test_functions(int pair,
+                           const dolfinx::fem::FunctionSpace<double>& V) const;
 
   /// Remove points from facet map with a distance larger than tol
   /// in the surface or if the angle of distance vector and opposite surface is
@@ -255,9 +253,9 @@ public:
   /// @param[in] pair index of contact pair
   /// @param[in] gap packed on facets per quadrature point
   /// @param[out] c - test functions packed on facets.
-  std::pair<std::vector<PetscScalar>, int>
-  pack_u_contact(int pair,
-                 std::shared_ptr<dolfinx::fem::Function<PetscScalar>> u) const;
+  std::pair<std::vector<PetscScalar>, int> pack_u_contact(
+      int pair,
+      std::shared_ptr<const dolfinx::fem::Function<PetscScalar>> u) const;
 
   /// @todo Function signature are args docs look wrong
   /// Compute gradient of function on opposite surface at quadrature
@@ -265,7 +263,8 @@ public:
   /// @param[in] pair index of contact pair
   /// @param[out] u test functions packed on facets.
   std::pair<std::vector<PetscScalar>, int> pack_grad_u_contact(
-      int pair, std::shared_ptr<dolfinx::fem::Function<PetscScalar>> u) const;
+      int pair,
+      std::shared_ptr<const dolfinx::fem::Function<PetscScalar>> u) const;
 
   /// Compute outward surface normal at x
   /// @param[in] pair index of contact pair
@@ -291,7 +290,7 @@ public:
   /// This function updates the submesh geometry for all submeshes using
   /// a function given on the parent mesh
   /// @param[in] u displacement
-  void update_submesh_geometry(dolfinx::fem::Function<PetscScalar>& u);
+  void update_submesh_geometry(const dolfinx::fem::Function<PetscScalar>& u);
 
   /// Return number of quadrature points per facet
   /// Assumes all facets are identical

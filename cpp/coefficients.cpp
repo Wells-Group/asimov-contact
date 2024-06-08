@@ -24,6 +24,7 @@ void dolfinx_contact::transformed_push_forward(
                            int)>
       transformation = element->dof_transformation_fn<PetscScalar>(
           dolfinx::fem::doftransform::standard);
+
   // Get push forward function
   auto push_forward_fn
       = element->basix_element()
@@ -31,6 +32,7 @@ void dolfinx_contact::transformed_push_forward(
                     dolfinx_contact::cmdspan2_t, dolfinx_contact::cmdspan2_t>();
   mdspan2_t element_basis(element_basisb.data(), basis_values.extent(1),
                           basis_values.extent(2));
+
   // Copy basis values prior to calling transformation
   for (std::size_t j = 0; j < element_basis.extent(0); ++j)
     for (std::size_t k = 0; k < element_basis.extent(1); ++k)
@@ -46,10 +48,11 @@ void dolfinx_contact::transformed_push_forward(
       MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent);
   push_forward_fn(_u, element_basis, J, detJ, K);
 }
+
 std::pair<std::vector<PetscScalar>, int>
 dolfinx_contact::pack_coefficient_quadrature(
     std::shared_ptr<const dolfinx::fem::Function<PetscScalar>> coeff,
-    const int q_degree, std::span<const std::int32_t> active_entities,
+    int q_degree, std::span<const std::int32_t> active_entities,
     dolfinx::fem::IntegralType integral)
 {
 
@@ -76,8 +79,10 @@ dolfinx_contact::pack_coefficient_quadrature(
   default:
     throw std::invalid_argument("Unsupported integral type.");
   }
+
   // Create quadrature rule
-  QuadratureRule q_rule(cell_type, q_degree, (int)entity_dim, basix::quadrature::type::Default);
+  QuadratureRule q_rule(cell_type, q_degree, (int)entity_dim,
+                        basix::quadrature::type::Default);
 
   // Get element information
   const dolfinx::fem::FiniteElement<double>* element
@@ -318,7 +323,7 @@ dolfinx_contact::pack_coefficient_quadrature(
 std::pair<std::vector<PetscScalar>, int>
 dolfinx_contact::pack_gradient_quadrature(
     std::shared_ptr<const dolfinx::fem::Function<PetscScalar>> coeff,
-    const int q_degree, std::span<const std::int32_t> active_entities,
+    int q_degree, std::span<const std::int32_t> active_entities,
     dolfinx::fem::IntegralType integral)
 {
 
@@ -347,7 +352,8 @@ dolfinx_contact::pack_gradient_quadrature(
   }
 
   // Create quadrature rule
-  QuadratureRule q_rule(cell_type, q_degree, (int)entity_dim, basix::quadrature::type::Default);
+  QuadratureRule q_rule(cell_type, q_degree, (int)entity_dim,
+                        basix::quadrature::type::Default);
 
   // Get element information
   const dolfinx::fem::FiniteElement<double>* element
@@ -546,9 +552,9 @@ dolfinx_contact::pack_gradient_quadrature(
 }
 
 //-----------------------------------------------------------------------------
-std::vector<PetscScalar> dolfinx_contact::pack_circumradius(
-    const dolfinx::mesh::Mesh<double>& mesh,
-    const std::span<const std::int32_t>& active_facets)
+std::vector<PetscScalar>
+dolfinx_contact::pack_circumradius(const dolfinx::mesh::Mesh<double>& mesh,
+                                   std::span<const std::int32_t> active_facets)
 {
   const dolfinx::mesh::Geometry<double>& geometry = mesh.geometry();
 
