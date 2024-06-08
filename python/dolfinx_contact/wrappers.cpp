@@ -112,239 +112,259 @@ NB_MODULE(cpp, m)
            });
 
   // Contact
-  nb::class_<dolfinx_contact::Contact>(m, "Contact","Contact object")
-        .def(nb::init<const std::vector<
-                          std::shared_ptr<dolfinx::mesh::MeshTags<std::int32_t>>>&,
-                      std::shared_ptr<
-                          const dolfinx::graph::AdjacencyList<std::int32_t>>,
-                      const std::vector<std::array<int, 2>>&,
-            std::shared_ptr<dolfinx::mesh::Mesh<double>>,
-             std::vector<dolfinx_contact::ContactMode>,const int>(),
-             nb::arg("markers"), nb::arg("surfaces"),
-             nb::arg("contact_pairs"), nb::arg("mesh"),
-             nb::arg("search_method"), nb::arg("quadrature_degree") = 3)
-        .def("create_distance_map",
-
-             [](dolfinx_contact::Contact& self, int pair)
-             {
-    self.create_distance_map(pair);
-    return;
-             })
-        .def("pack_gap_plane",
-             [](dolfinx_contact::Contact& self, int origin_meshtag, double g)
-             {
-    auto [coeffs, cstride] = self.pack_gap_plane(origin_meshtag, g);
-    int shape0 = cstride == 0 ? 0 : coeffs.size() / cstride;
-    return dolfinx_wrappers::as_nbarray(
-        std::move(coeffs), {(std::size_t)shape0, (std::size_t)cstride});
-             })
-        .def("pack_gap",
-             [](dolfinx_contact::Contact& self, int origin_meshtag)
-             {
-    auto [coeffs, cstride] = self.pack_gap(origin_meshtag);
-    int shape0 = cstride == 0 ? 0 : coeffs.size() / cstride;
-    return dolfinx_wrappers::as_nbarray(
-        std::move(coeffs), {(std::size_t)shape0, (std::size_t)cstride});
-             })
-        .def(
-            "create_matrix",
-            [](dolfinx_contact::Contact& self,
-            dolfinx::fem::Form<PetscScalar>& a,
-               std::string type) {
-    Mat A = self.create_petsc_matrix(a, type);
-    return A;
-               },nb::rv_policy::take_ownership,
-           nb::arg("a"),
-            nb::arg("type") = std::string(),
-            "Create a PETSc Mat for two-sided contact.")
-        .def("qp_phys",
-             [](dolfinx_contact::Contact& self, int origin_meshtag, int
-             facet)
-             {
-    auto [qp, qp_shape] = self.qp_phys(origin_meshtag);
-    dolfinx_contact::cmdspan3_t qp_span(qp.data(), qp_shape);
-    std::vector<double> qp_vec(qp_shape[1] * qp_shape[2]);
-    for (std::size_t i = 0; i < qp_shape[1]; ++i)
-      for (std::size_t j = 0; j < qp_shape[2]; ++j)
-        qp_vec[i * qp_shape[2] + j] = qp_span(facet, i, j);
-
-    return dolfinx_wrappers::as_nbarray(std::move(qp_vec),
-                                        {qp_shape[1], qp_shape[2]});
-             }, "Get quadrature points for the jth facet of the ith contact pair")
-        .def("active_entities",
-             [](dolfinx_contact::Contact& self, int s)
-             {
-    std::span<const std::int32_t> active_entities = self.active_entities(s);
-    return nb::ndarray<const std::int32_t, nb::numpy>(
-        active_entities.data(), {active_entities.size() / 2, 2}, nb::handle());
-  })
-        .def("facet_map",
-             [](dolfinx_contact::Contact& self, int pair)
-             {
-    // This exposes facet_map() to Python but replaces the facet indices
-    // on the submesh with the facet indices in the parent mesh This is
-    // only exposed for testing (in particular.
-    // nitsche_rigid_surface.py/demo_nitsche_rigid_surface_ufl.py)
-    //  auto contact_pair = self.contact_pair(pair);
-    std::shared_ptr<const dolfinx::mesh::Mesh<double>> mesh = self.mesh();
-    const int tdim = mesh->topology()->dim(); // topological dimension
-
-    const int fdim = tdim - 1; // topological dimension of facet
-    auto c_to_f = mesh->topology()->connectivity(tdim, fdim);
-    assert(c_to_f);
-    std::shared_ptr<const dolfinx::graph::AdjacencyList<std::int32_t>>
-        submesh_map = self.facet_map(pair);
-    const std::vector<int>& offsets = submesh_map->offsets();
-    const std::vector<std::int32_t>& old_data = submesh_map->array();
-    std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> facet_map
-        = self.submesh().facet_map();
-    std::span<const std::int32_t> parent_cells = self.submesh().parent_cells();
-    std::vector<std::int32_t> data(old_data.size());
-    std::transform(old_data.cbegin(), old_data.cend(), data.begin(),
-                   [&facet_map, &parent_cells, &c_to_f](auto submesh_facet)
-                   {
-                     if (submesh_facet < 0)
-                       return -1;
-                     else
-                     {
-                       auto facet_pair = facet_map->links(submesh_facet);
-                       assert(facet_pair.size() == 2);
-                       auto cell_parent = parent_cells[facet_pair.front()];
-                       return c_to_f->links(cell_parent)[facet_pair.back()];
-                     }
-                   });
-    return std::make_shared<dolfinx::graph::AdjacencyList<std::int32_t>>(
-        std::move(data), std::move(offsets));
-             })
-        .def("submesh",
-             [](dolfinx_contact::Contact& self)
-             {
-    const dolfinx_contact::SubMesh& submesh = self.submesh();
-    return submesh.mesh();
-             })
-        .def("mesh",
-           &dolfinx_contact::Contact::mesh)
-        .def("copy_to_submesh",
-            [] (dolfinx_contact::Contact& self,
-            std::shared_ptr<dolfinx::fem::Function<PetscScalar>> u,
-            std::shared_ptr<dolfinx::fem::Function<PetscScalar>> u_sub){
-    dolfinx_contact::SubMesh submesh = self.submesh();
-    submesh.copy_function(*u, *u_sub);
-            })
-        .def("coefficients_size",
-        &dolfinx_contact::Contact::coefficients_size,
-             nb::arg("meshtie"), nb::arg("V"))
-        .def("set_quadrature_rule",
-             &dolfinx_contact::Contact::set_quadrature_rule)
-        .def("set_search_radius",
-             &dolfinx_contact::Contact::set_search_radius)
-        .def("generate_kernel",
-             [](dolfinx_contact::Contact& self, dolfinx_contact::Kernel type,
-               std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V)
-             {
-    return contact_wrappers::KernelWrapper(self.generate_kernel(type, V));
-             })
-
-        .def("assemble_matrix",
+  nb::
+      class_<dolfinx_contact::Contact>(m, "Contact", "Contact object")
+          .def(nb::init<const std::vector<std::shared_ptr<
+                            dolfinx::mesh::MeshTags<std::int32_t>>>&,
+                        std::shared_ptr<
+                            const dolfinx::graph::AdjacencyList<std::int32_t>>,
+                        const std::vector<std::array<int, 2>>&,
+                        std::shared_ptr<dolfinx::mesh::Mesh<double>>,
+                        std::vector<dolfinx_contact::ContactMode>, const int>(),
+               nb::arg("markers"), nb::arg("surfaces"),
+               nb::arg("contact_pairs"), nb::arg("mesh"),
+               nb::arg("search_method"), nb::arg("quadrature_degree") = 3)
+          .def("create_distance_map",
+               [](dolfinx_contact::Contact& self, int pair)
+               {
+                 self.create_distance_map(pair);
+                 return;
+               })
+          .def("pack_gap_plane",
+               [](dolfinx_contact::Contact& self, int origin_meshtag, double g)
+               {
+                 auto [coeffs, cstride]
+                     = self.pack_gap_plane(origin_meshtag, g);
+                 int shape0 = cstride == 0 ? 0 : coeffs.size() / cstride;
+                 return dolfinx_wrappers::as_nbarray(
+                     std::move(coeffs),
+                     {(std::size_t)shape0, (std::size_t)cstride});
+               })
+          .def("pack_gap",
+               [](dolfinx_contact::Contact& self, int origin_meshtag)
+               {
+                 auto [coeffs, cstride] = self.pack_gap(origin_meshtag);
+                 int shape0 = cstride == 0 ? 0 : coeffs.size() / cstride;
+                 return dolfinx_wrappers::as_nbarray(
+                     std::move(coeffs),
+                     {(std::size_t)shape0, (std::size_t)cstride});
+               })
+          .def(
+              "create_matrix",
               [](dolfinx_contact::Contact& self,
-              Mat A,
-                int origin_meshtag, contact_wrappers::KernelWrapper& kernel,
-                const nb::ndarray<PetscScalar, nb::numpy>& coeffs,
-                const nb::ndarray<PetscScalar, nb::numpy>& constants,
-                  std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V
-                )
-             {
-    auto ker = kernel.get();
-    self.assemble_matrix(
-        dolfinx::la::petsc::Matrix::set_block_fn(A, ADD_VALUES),
-        origin_meshtag, ker, std::span<const PetscScalar>(coeffs.data(),
-        coeffs.size()), coeffs.shape(1), std::span(constants.data(),
-        constants.shape(0)), V);
-              }
-              )
-        .def("assemble_vector",
-             [](dolfinx_contact::Contact& self,
-               nb::ndarray<PetscScalar, nb::numpy>& b,
-                int origin_meshtag, contact_wrappers::KernelWrapper& kernel,
-                const nb::ndarray<PetscScalar, nb::numpy>& coeffs,
-                const nb::ndarray<PetscScalar, nb::numpy>& constants,
+                 dolfinx::fem::Form<PetscScalar>& a, std::string type)
+              {
+                Mat A = self.create_petsc_matrix(a, type);
+                return A;
+              },
+              nb::rv_policy::take_ownership, nb::arg("a"),
+              nb::arg("type") = std::string(),
+              "Create a PETSc Mat for two-sided contact.")
+          .def(
+              "qp_phys",
+              [](dolfinx_contact::Contact& self, int origin_meshtag, int facet)
+              {
+                auto [qp, qp_shape] = self.qp_phys(origin_meshtag);
+                dolfinx_contact::cmdspan3_t qp_span(qp.data(), qp_shape);
+                std::vector<double> qp_vec(qp_shape[1] * qp_shape[2]);
+                for (std::size_t i = 0; i < qp_shape[1]; ++i)
+                  for (std::size_t j = 0; j < qp_shape[2]; ++j)
+                    qp_vec[i * qp_shape[2] + j] = qp_span(facet, i, j);
+
+                return dolfinx_wrappers::as_nbarray(std::move(qp_vec),
+                                                    {qp_shape[1], qp_shape[2]});
+              },
+              "Get quadrature points for the jth facet of the ith contact pair")
+          .def("active_entities",
+               [](dolfinx_contact::Contact& self, int s)
+               {
+                 std::span<const std::int32_t> active_entities
+                     = self.active_entities(s);
+                 return nb::ndarray<const std::int32_t, nb::numpy>(
+                     active_entities.data(), {active_entities.size() / 2, 2},
+                     nb::handle());
+               })
+          .def("facet_map",
+               [](dolfinx_contact::Contact& self, int pair)
+               {
+                 // This exposes facet_map() to Python but replaces the
+                 // facet indices on the submesh with the facet indices in
+                 // the parent mesh This is only exposed for testing (in
+                 // particular.
+                 // nitsche_rigid_surface.py/demo_nitsche_rigid_surface_ufl.py)
+                 //  auto contact_pair = self.contact_pair(pair);
+                 std::shared_ptr<const dolfinx::mesh::Mesh<double>> mesh
+                     = self.mesh();
+                 const int tdim
+                     = mesh->topology()->dim(); // topological dimension
+
+                 const int fdim = tdim - 1; // topological dimension of facet
+                 auto c_to_f = mesh->topology()->connectivity(tdim, fdim);
+                 assert(c_to_f);
+                 std::shared_ptr<
+                     const dolfinx::graph::AdjacencyList<std::int32_t>>
+                     submesh_map = self.facet_map(pair);
+                 const std::vector<int>& offsets = submesh_map->offsets();
+                 const std::vector<std::int32_t>& old_data
+                     = submesh_map->array();
+                 std::shared_ptr<const dolfinx::graph::AdjacencyList<int>>
+                     facet_map = self.submesh().facet_map();
+                 std::span<const std::int32_t> parent_cells
+                     = self.submesh().parent_cells();
+                 std::vector<std::int32_t> data(old_data.size());
+                 std::transform(
+                     old_data.cbegin(), old_data.cend(), data.begin(),
+                     [&facet_map, &parent_cells, &c_to_f](auto submesh_facet)
+                     {
+                       if (submesh_facet < 0)
+                         return -1;
+                       else
+                       {
+                         auto facet_pair = facet_map->links(submesh_facet);
+                         assert(facet_pair.size() == 2);
+                         auto cell_parent = parent_cells[facet_pair.front()];
+                         return c_to_f->links(cell_parent)[facet_pair.back()];
+                       }
+                     });
+                 return std::make_shared<
+                     dolfinx::graph::AdjacencyList<std::int32_t>>(
+                     std::move(data), std::move(offsets));
+               })
+          .def("submesh",
+               [](dolfinx_contact::Contact& self)
+               {
+                 const dolfinx_contact::SubMesh& submesh = self.submesh();
+                 return submesh.mesh();
+               })
+          .def("mesh", &dolfinx_contact::Contact::mesh)
+          .def("copy_to_submesh",
+               [](dolfinx_contact::Contact& self,
+                  std::shared_ptr<dolfinx::fem::Function<PetscScalar>> u,
+                  std::shared_ptr<dolfinx::fem::Function<PetscScalar>> u_sub)
+               {
+                 dolfinx_contact::SubMesh submesh = self.submesh();
+                 submesh.copy_function(*u, *u_sub);
+               })
+          .def("coefficients_size",
+               &dolfinx_contact::Contact::coefficients_size, nb::arg("meshtie"),
+               nb::arg("V"))
+          .def("set_quadrature_rule", &dolfinx_contact::
+                                          Contact::set_quadrature_rule)
+          .def("set_search_radius",
+               &dolfinx_contact::Contact::set_search_radius)
+          .def("generate_kernel",
+               [](dolfinx_contact::Contact& self, dolfinx_contact::Kernel type,
                   std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V)
-             {
-    auto ker = kernel.get();
-    self.assemble_vector(std::span(b.data(), b.size()), origin_meshtag, ker,
-                         std::span(coeffs.data(), coeffs.size()),
-                         coeffs.shape(1),
-                         std::span(constants.data(), constants.size()),
-                         V);
-             })
-        .def("pack_test_functions",
-             [](dolfinx_contact::Contact& self, int origin_meshtag,   std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V)
-             {
-    auto [coeffs, cstride] = self.pack_test_functions(origin_meshtag, V);
-    int shape0 = cstride == 0 ? 0 : coeffs.size() / cstride;
-    return dolfinx_wrappers::as_nbarray(
-        std::move(coeffs), {(std::size_t)shape0, (std::size_t)cstride});
-             })
-        .def(
-            "pack_grad_test_functions",
-            [](dolfinx_contact::Contact& self, int origin_meshtag,  std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V)
-            {
-    auto [coeffs, cstride] = self.pack_grad_test_functions(origin_meshtag,V);
-    int shape0 = cstride == 0 ? 0 : coeffs.size() / cstride;
-    return dolfinx_wrappers::as_nbarray(
-        std::move(coeffs), {(std::size_t)shape0, (std::size_t)cstride});
-            })
-        .def("pack_ny",
-             [](dolfinx_contact::Contact& self, int origin_meshtag)
-             {
-    auto [coeffs, cstride] = self.pack_ny(origin_meshtag);
-    int shape0 = cstride == 0 ? 0 : coeffs.size() / cstride;
-    return dolfinx_wrappers::as_nbarray(
-        std::move(coeffs), {(std::size_t)shape0, (std::size_t)cstride});
-             })
-        .def("pack_nx",
-             [](dolfinx_contact::Contact& self, int origin_meshtag)
-             {
-    auto [coeffs, cstride] = self.pack_nx(origin_meshtag);
-    int shape0 = cstride == 0 ? 0 : coeffs.size() / cstride;
-    return dolfinx_wrappers::as_nbarray(
-        std::move(coeffs), {(std::size_t)shape0, (std::size_t)cstride});
-             })
-        .def(
-            "pack_u_contact",
-            [](dolfinx_contact::Contact& self, int origin_meshtag,
-               std::shared_ptr<dolfinx::fem::Function<PetscScalar>> u)
-            {
-    auto [coeffs, cstride] = self.pack_u_contact(origin_meshtag, u);
-    int shape0 = cstride == 0 ? 0 : coeffs.size() / cstride;
-    return dolfinx_wrappers::as_nbarray(
-        std::move(coeffs), {(std::size_t)shape0, (std::size_t)cstride});
-            },
-            nb::arg("origin_meshtag"), nb::arg("u"))
-        .def(
-            "pack_grad_u_contact",
-            [](dolfinx_contact::Contact& self, int origin_meshtag,
-               std::shared_ptr<dolfinx::fem::Function<PetscScalar>> u)
-            {
-    auto [coeffs, cstride] = self.pack_grad_u_contact(origin_meshtag, u);
-    int shape0 = cstride == 0 ? 0 : coeffs.size() / cstride;
-    return dolfinx_wrappers::as_nbarray(
-        std::move(coeffs), {(std::size_t)shape0, (std::size_t)cstride});
-            })
-  .def("update_submesh_geometry",
-       &dolfinx_contact::Contact::update_submesh_geometry)
-      .def("crop_invalid_points",
-           [](dolfinx_contact::Contact& self, int pair,
-              nb::ndarray<const PetscScalar, nb::numpy>& gap,
-              nb::ndarray<const PetscScalar, nb::numpy>& n_y,
-              double tol)
-           {
-             return self.crop_invalid_points(
-                 pair, std::span(gap.data(), gap.size()),
-                 std::span(n_y.data(), n_y.size()), tol);
-           })
-  .def("max_links",
-       [](dolfinx_contact::Contact& self) { return self.max_links(); });
+               {
+                 return contact_wrappers::KernelWrapper(
+                     self.generate_kernel(type, V));
+               })
+          .def("assemble_matrix",
+               [](dolfinx_contact::Contact& self, Mat A,
+                  int origin_meshtag, contact_wrappers::KernelWrapper& kernel,
+                  const nb::ndarray<PetscScalar, nb::numpy>& coeffs,
+                  const nb::ndarray<PetscScalar, nb::numpy>& constants,
+                  std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V)
+               {
+                 auto ker = kernel.get();
+                 self.assemble_matrix(
+                     dolfinx::la::petsc::Matrix::set_block_fn(A, ADD_VALUES),
+                     origin_meshtag, ker,
+                     std::span<const PetscScalar>(coeffs.data(), coeffs.size()),
+                     coeffs.shape(1),
+                     std::span(constants.data(), constants.shape(0)), V);
+               })
+          .def("assemble_vector",
+               [](dolfinx_contact::Contact& self,
+                  nb::ndarray<PetscScalar, nb::numpy>& b,
+                  int origin_meshtag, contact_wrappers::KernelWrapper& kernel,
+                  const nb::ndarray<PetscScalar, nb::numpy>& coeffs,
+                  const nb::ndarray<PetscScalar, nb::numpy>& constants,
+                  std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V)
+               {
+                 auto ker = kernel.get();
+                 self.assemble_vector(
+                     std::span(b.data(), b.size()), origin_meshtag, ker,
+                     std::span(coeffs.data(), coeffs.size()), coeffs.shape(1),
+                     std::span(constants.data(), constants.size()), V);
+               })
+          .def("pack_test_functions",
+               [](dolfinx_contact::Contact& self, int origin_meshtag,
+                  std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V)
+               {
+                 auto [coeffs, cstride]
+                     = self.pack_test_functions(origin_meshtag, V);
+                 int shape0 = cstride == 0 ? 0 : coeffs.size() / cstride;
+                 return dolfinx_wrappers::as_nbarray(
+                     std::move(coeffs),
+                     {(std::size_t)shape0, (std::size_t)cstride});
+               })
+          .def("pack_grad_test_functions",
+               [](dolfinx_contact::Contact& self, int origin_meshtag,
+                  std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V)
+               {
+                 auto [coeffs, cstride]
+                     = self.pack_grad_test_functions(origin_meshtag, V);
+                 int shape0 = cstride == 0 ? 0 : coeffs.size() / cstride;
+                 return dolfinx_wrappers::as_nbarray(
+                     std::move(coeffs),
+                     {(std::size_t)shape0, (std::size_t)cstride});
+               })
+          .def("pack_nxx",
+               [](dolfinx_contact::Contact& self, int origin_meshtag)
+               {
+                 auto [coeffs, cstride] = self.pack_nx(origin_meshtag);
+                 std::size_t shape0
+                     = cstride == 0 ? 0 : coeffs.size() / cstride;
+                 return dolfinx_wrappers::as_nbarray(
+                     std::move(coeffs), {shape0, (std::size_t)cstride});
+               })
+          .def("pack_nyy",
+               [](dolfinx_contact::Contact& self, int origin_meshtag)
+               {
+                 auto [coeffs, cstride] = self.pack_ny(origin_meshtag);
+                 std::size_t shape0
+                     = cstride == 0 ? 0 : coeffs.size() / cstride;
+                 return dolfinx_wrappers::as_nbarray(
+                     std::move(coeffs), {shape0, (std::size_t)cstride});
+               })
+          .def(
+              "pack_u_contact",
+              [](dolfinx_contact::Contact& self, int origin_meshtag,
+                 std::shared_ptr<dolfinx::fem::Function<PetscScalar>> u)
+              {
+                auto [coeffs, cstride] = self.pack_u_contact(origin_meshtag, u);
+                int shape0 = cstride == 0 ? 0 : coeffs.size() / cstride;
+                return dolfinx_wrappers::as_nbarray(
+                    std::move(coeffs),
+                    {(std::size_t)shape0, (std::size_t)cstride});
+              },
+              nb::arg("origin_meshtag"), nb::arg("u"))
+          .def("pack_grad_u_contact",
+               [](dolfinx_contact::Contact& self, int origin_meshtag,
+                  std::shared_ptr<dolfinx::fem::Function<PetscScalar>> u)
+               {
+                 auto [coeffs, cstride]
+                     = self.pack_grad_u_contact(origin_meshtag, u);
+                 int shape0 = cstride == 0 ? 0 : coeffs.size() / cstride;
+                 return dolfinx_wrappers::as_nbarray(
+                     std::move(coeffs),
+                     {(std::size_t)shape0, (std::size_t)cstride});
+               })
+          .def("update_submesh_geometry",
+               &dolfinx_contact::Contact::update_submesh_geometry)
+          .def("crop_invalid_points",
+               [](dolfinx_contact::Contact& self, int pair,
+                  nb::ndarray<const PetscScalar, nb::numpy>& gap,
+                  nb::ndarray<const PetscScalar, nb::numpy>& n_y, double tol)
+               {
+                 return self.crop_invalid_points(
+                     pair, std::span(gap.data(), gap.size()),
+                     std::span(n_y.data(), n_y.size()), tol);
+               })
+          .def("max_links",
+               [](dolfinx_contact::Contact& self) { return self.max_links(); });
+
   m.def(
       "generate_rigid_surface_kernel",
       [](std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V,
@@ -443,7 +463,6 @@ NB_MODULE(cpp, m)
         }
         else if (entities.ndim() == 2)
         {
-
           auto [coeffs, cstride] = dolfinx_contact::pack_coefficient_quadrature(
               coeff, q, e_span, dolfinx::fem::IntegralType::exterior_facet);
           int shape0 = cstride == 0 ? 0 : coeffs.size() / cstride;
@@ -459,11 +478,10 @@ NB_MODULE(cpp, m)
         [](std::shared_ptr<const dolfinx::fem::Function<PetscScalar>> coeff,
            int q, nb::ndarray<const std::int32_t, nb::c_contig>& entities)
         {
-          auto e_span
-              = std::span<const std::int32_t>(entities.data(), entities.size());
+          std::span<const std::int32_t> e_span(entities.data(),
+                                               entities.size());
           if (entities.ndim() == 1)
           {
-
             auto [coeffs, cstride] = dolfinx_contact::pack_gradient_quadrature(
                 coeff, q, e_span, dolfinx::fem::IntegralType::cell);
             int shape0 = cstride == 0 ? 0 : coeffs.size() / cstride;
@@ -472,7 +490,6 @@ NB_MODULE(cpp, m)
           }
           else if (entities.ndim() == 2)
           {
-
             auto [coeffs, cstride] = dolfinx_contact::pack_gradient_quadrature(
                 coeff, q, e_span, dolfinx::fem::IntegralType::exterior_facet);
             int shape0 = cstride == 0 ? 0 : coeffs.size() / cstride;
@@ -480,9 +497,7 @@ NB_MODULE(cpp, m)
                 std::move(coeffs), {(std::size_t)shape0, (std::size_t)cstride});
           }
           else
-          {
             throw std::invalid_argument("Unsupported entities");
-          }
         });
 
   m.def("pack_circumradius",
@@ -528,7 +543,6 @@ NB_MODULE(cpp, m)
                                              {shape[0], shape[1]}),
                 num_local);
           }
-
           default:
             throw std::invalid_argument(
                 "Integral type not supported. Note that this function "
@@ -604,7 +618,6 @@ NB_MODULE(cpp, m)
                               dolfinx_wrappers::as_nbarray(std::move(x)),
                               dolfinx_wrappers::as_nbarray(std::move(X)));
       },
-
       nb::arg("mesh"), nb::arg("point"), nb::arg("tangents"), nb::arg("cells"),
       nb::arg("max_iter") = 25, nb::arg("tol") = 1e-8);
 

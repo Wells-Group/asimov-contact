@@ -375,7 +375,6 @@ dolfinx_contact::Contact::pack_nx(int pair)
   // Loop over quadrature points
   for (std::size_t i = 0; i < quadrature_facets.size(); i += 2)
   {
-
     // Copy coordinate dofs of candidate cell
     // Get cell geometry (coordinate dofs)
     auto x_dofs = MDSPAN_IMPL_STANDARD_NAMESPACE::submdspan(
@@ -409,6 +408,7 @@ dolfinx_contact::Contact::pack_nx(int pair)
               MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent));
     }
   }
+
   return {std::move(normals), cstride};
 }
 //------------------------------------------------------------------------------------------------
