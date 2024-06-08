@@ -97,6 +97,8 @@ jobs:
           cmake -G Ninja .
           ninja
           #
+          cp meshes/* .
+          #
           ./meshtie/demo_meshtie
           mpirun -np 2 ./meshtie/demo_meshtie
           #
