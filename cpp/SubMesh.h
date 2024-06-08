@@ -75,7 +75,7 @@ public:
   ///@param[in, out] u_sub - function into which the function values are to be
   /// copied
   void copy_function(dolfinx::fem::Function<PetscScalar>& u_parent,
-                     dolfinx::fem::Function<PetscScalar>& u_sub);
+                     dolfinx::fem::Function<PetscScalar>& u_sub) const;
 
   /// @brief Adds perturbation u to mesh
   /// @param[in] u: The function to perturb the mesh with. The function must be

@@ -154,7 +154,7 @@ dolfinx_contact::SubMesh::create_functionspace(
 //-----------------------------------------------------------------------------------------------
 void dolfinx_contact::SubMesh::copy_function(
     dolfinx::fem::Function<PetscScalar>& u_parent,
-    dolfinx::fem::Function<PetscScalar>& u_sub)
+    dolfinx::fem::Function<PetscScalar>& u_sub) const
 {
   // retrieve function space on submesh
   std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V_sub

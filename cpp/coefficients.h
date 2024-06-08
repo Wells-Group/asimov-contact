@@ -13,7 +13,6 @@
 
 namespace dolfinx_contact
 {
-
 /// @brief Apply dof transformations to basis functions and push forward to
 /// physical space
 /// @param[in] element The finite element

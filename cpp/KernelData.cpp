@@ -131,3 +131,4 @@ dolfinx_contact::cmdspan3_t dolfinx_contact::KernelData::ref_jacobians() const
 {
   return dolfinx_contact::cmdspan3_t(_ref_jacobians.data(), _jac_shape);
 }
+//-----------------------------------------------------------------------------

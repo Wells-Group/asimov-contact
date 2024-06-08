@@ -142,7 +142,7 @@ dolfinx_contact::Contact::Contact(
 }
 //------------------------------------------------------------------------------------------------
 std::pair<std::vector<double>, std::array<std::size_t, 3>>
-dolfinx_contact::Contact::qp_phys(int surface)
+dolfinx_contact::Contact::qp_phys(int surface) const
 {
   const std::size_t num_facets = _local_facets[surface];
   const std::size_t num_q_points
@@ -153,7 +153,8 @@ dolfinx_contact::Contact::qp_phys(int surface)
 }
 //------------------------------------------------------------------------------------------------
 std::size_t dolfinx_contact::Contact::coefficients_size(
-    bool meshtie, std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V)
+    bool meshtie,
+    std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V) const
 {
   // mesh data
   const std::size_t gdim = _mesh->geometry().dim(); // geometrical dimension
@@ -208,9 +209,9 @@ std::size_t dolfinx_contact::Contact::coefficients_size(
     return std::accumulate(cstrides.cbegin(), cstrides.cend(), 0);
   };
 }
-
+//------------------------------------------------------------------------------------------------
 Mat dolfinx_contact::Contact::create_petsc_matrix(
-    const dolfinx::fem::Form<PetscScalar>& a, const std::string& type)
+    const dolfinx::fem::Form<PetscScalar>& a, const std::string& type) const
 {
 
   // Build standard sparsity pattern
@@ -311,7 +312,7 @@ void dolfinx_contact::Contact::create_distance_map(int pair)
 }
 //------------------------------------------------------------------------------------------------
 std::pair<std::vector<PetscScalar>, int>
-dolfinx_contact::Contact::pack_nx(int pair)
+dolfinx_contact::Contact::pack_nx(int pair) const
 {
   auto [quadrature_mt, candidate_mt] = _contact_pairs[pair];
   const std::shared_ptr<const dolfinx::mesh::Mesh<double>>& quadrature_mesh
@@ -415,7 +416,8 @@ dolfinx_contact::Contact::pack_nx(int pair)
 //------------------------------------------------------------------------------------------------
 dolfinx_contact::kernel_fn<PetscScalar>
 dolfinx_contact::Contact::generate_kernel(
-    Kernel type, std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V)
+    Kernel type,
+    std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V) const
 {
   std::size_t max_links
       = *std::max_element(_max_links.begin(), _max_links.end());
@@ -475,7 +477,7 @@ void dolfinx_contact::Contact::max_links(int pair)
 }
 //------------------------------------------------------------------------------------------------
 std::pair<std::vector<PetscScalar>, int>
-dolfinx_contact::Contact::pack_gap(int pair)
+dolfinx_contact::Contact::pack_gap(int pair) const
 {
   // FIXME: This function should take in the quadrature points
   // (push_forward_quadrature) of the relevant facet, and the reference
@@ -522,8 +524,8 @@ dolfinx_contact::Contact::pack_gap(int pair)
   std::array<std::size_t, 2> shape = _reference_contact_shape[pair];
 
   const int q_gdim = quadrature_mesh->geometry().dim();
-  mdspan3_t qp_span(_qp_phys[quadrature_mt].data(), num_facets, num_q_point,
-                    q_gdim);
+  cmdspan3_t qp_span(_qp_phys[quadrature_mt].data(), num_facets, num_q_point,
+                     q_gdim);
 
   // Get information about submesh geometry and topology
   std::span<const double> x_g = geometry.x();
@@ -598,7 +600,8 @@ dolfinx_contact::Contact::pack_gap(int pair)
 //------------------------------------------------------------------------------------------------
 std::pair<std::vector<PetscScalar>, int>
 dolfinx_contact::Contact::pack_test_functions(
-    int pair, std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V)
+    int pair,
+    std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V) const
 {
   auto [quadrature_mt, candidate_mt] = _contact_pairs[pair];
 
@@ -776,7 +779,7 @@ void dolfinx_contact::Contact::crop_invalid_points(std::size_t pair,
 //------------------------------------------------------------------------------------------------
 std::pair<std::vector<PetscScalar>, int>
 dolfinx_contact::Contact::pack_u_contact(
-    int pair, std::shared_ptr<dolfinx::fem::Function<PetscScalar>> u)
+    int pair, std::shared_ptr<dolfinx::fem::Function<PetscScalar>> u) const
 {
   dolfinx::common::Timer t("Pack contact u");
   auto [quadrature_mt, candidate_mt] = _contact_pairs[pair];
@@ -930,8 +933,8 @@ dolfinx_contact::Contact::pack_gap_plane(int pair, double g)
   // FIXME: This does not work for prism meshes
   std::size_t num_q_point
       = _quadrature_rule->offset()[1] - _quadrature_rule->offset()[0];
-  mdspan3_t qp_span(_qp_phys[quadrature_mt].data(), num_facets, num_q_point,
-                    gdim);
+  cmdspan3_t qp_span(_qp_phys[quadrature_mt].data(), num_facets, num_q_point,
+                     gdim);
   std::vector<PetscScalar> c(num_facets * num_q_point * gdim, 0.0);
   const int cstride = (int)num_q_point * gdim;
   for (std::size_t i = 0; i < num_facets; i++)
@@ -944,13 +947,12 @@ dolfinx_contact::Contact::pack_gap_plane(int pair, double g)
   return {std::move(c), cstride};
 }
 //------------------------------------------------------------------------------------------------
-
 std::pair<std::vector<PetscScalar>, int>
-dolfinx_contact::Contact::pack_ny(int pair)
+dolfinx_contact::Contact::pack_ny(int pair) const
 {
   // FIXME: This function should take in the quadrature points
-  // (push_forward_quadrature) of the relevant facet, and the reference points
-  // on the other surface (output of distance map)
+  // (push_forward_quadrature) of the relevant facet, and the reference
+  // points on the other surface (output of distance map)
   auto [quadrature_mt, candidate_mt] = _contact_pairs[pair];
 
   // Get mesh info for candidate side
@@ -1329,7 +1331,8 @@ void dolfinx_contact::Contact::assemble_vector(
 //-----------------------------------------------------------------------------------------------
 std::pair<std::vector<PetscScalar>, int>
 dolfinx_contact::Contact::pack_grad_test_functions(
-    int pair, std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V)
+    int pair,
+    std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V) const
 {
   auto [quadrature_mt, candidate_mt] = _contact_pairs[pair];
   // Mesh info
@@ -1352,8 +1355,8 @@ dolfinx_contact::Contact::pack_grad_test_functions(
   const std::size_t num_q_points
       = _quadrature_rule->offset()[1] - _quadrature_rule->offset()[0];
   std::vector<double> q_points(std::size_t(num_q_points) * std::size_t(gdim));
-  mdspan3_t qp_span(_qp_phys[quadrature_mt].data(), num_facets, num_q_points,
-                    gdim);
+  cmdspan3_t qp_span(_qp_phys[quadrature_mt].data(), num_facets, num_q_points,
+                     gdim);
 
   std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> facet_map
       = _submesh.facet_map();
@@ -1448,7 +1451,7 @@ dolfinx_contact::Contact::pack_grad_test_functions(
 //-----------------------------------------------------------------------------------------------
 std::pair<std::vector<PetscScalar>, int>
 dolfinx_contact::Contact::pack_grad_u_contact(
-    int pair, std::shared_ptr<dolfinx::fem::Function<PetscScalar>> u)
+    int pair, std::shared_ptr<dolfinx::fem::Function<PetscScalar>> u) const
 {
   auto [quadrature_mt, candidate_mt] = _contact_pairs[pair];
 
@@ -1556,9 +1559,9 @@ void dolfinx_contact::Contact::update_submesh_geometry(
 {
   _submesh.update_geometry(u);
 }
-
 //-----------------------------------------------------------------------------------------------
 std::size_t dolfinx_contact::Contact::num_q_points() const
 {
   return _quadrature_rule->offset()[1] - _quadrature_rule->offset()[0];
 }
+//-----------------------------------------------------------------------------------------------
