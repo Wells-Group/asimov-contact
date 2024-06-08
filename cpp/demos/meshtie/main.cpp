@@ -37,7 +37,7 @@ int main(int argc, char* argv[])
   spdlog::set_pattern(fmt);
   {
     auto [mesh_init, domain1_init, facet1_init] = dolfinx_contact::read_mesh(
-        "../meshes/box_3D.xdmf", "mesh", "mesh", "cell_marker", "facet_marker");
+        "box_3D.xdmf", "mesh", "mesh", "cell_marker", "facet_marker");
 
     const std::int32_t contact_bdry_1 = 6;  // top contact interface
     const std::int32_t contact_bdry_2 = 13; // bottom contact interface

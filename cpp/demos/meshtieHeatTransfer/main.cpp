@@ -231,7 +231,7 @@ int main(int argc, char* argv[])
 
     // Read in mesh
     auto [mesh_init, domain1_init, facet1_init]
-        = dolfinx_contact::read_mesh("../meshes/cont-blocks_sk24_fnx.xdmf");
+        = dolfinx_contact::read_mesh("cont-blocks_sk24_fnx.xdmf");
 
     // Add necessary ghosts
     const std::int32_t contact_bdry_1 = 12; // top contact interface

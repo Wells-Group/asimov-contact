@@ -30,5 +30,16 @@ add_custom_command(
 
 add_executable(${PROJECT_NAME} main.cpp ${ufl_file}.c)
 
+# Copy mesh files into binary directory
+function(copy_meshes_to_target_dir target)
+  add_custom_command(
+        TARGET ${target} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+            "$<TARGET_PROPERTY:${target},SOURCE_DIR>/../meshes"
+            "$<TARGET_PROPERTY:${target},BINARY_DIR>"
+    )
+endfunction()
+copy_meshes_to_target_dir(${PROJECT_NAME})
+
 target_link_libraries(${PROJECT_NAME} PRIVATE dolfinx)
 target_link_libraries(${PROJECT_NAME} PRIVATE dolfinx_contact)

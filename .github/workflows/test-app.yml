@@ -98,7 +98,7 @@ jobs:
           ninja
           #
           ./meshtie/demo_meshtie
-          mpirun -np 2 .meshtie/demo_meshtie
+          mpirun -np 2 ./meshtie/demo_meshtie
           #
           ./meshtieHeatEquation/demo_meshtie_heat
           mpirun -np 2 ./meshtieHeatEquation/demo_meshtie_heat

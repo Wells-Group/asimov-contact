@@ -216,7 +216,7 @@ int main(int argc, char* argv[])
   spdlog::set_pattern(fmt);
   {
     auto [mesh_init, domain1_init, facet1_init]
-        = dolfinx_contact::read_mesh("../meshes/cont-blocks_sk24_fnx.xdmf");
+        = dolfinx_contact::read_mesh("cont-blocks_sk24_fnx.xdmf");
 
     const std::int32_t contact_bdry_1 = 12; // top contact interface
     const std::int32_t contact_bdry_2 = 6;  // bottom contact interface
