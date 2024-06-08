@@ -12,7 +12,6 @@
 
 namespace dolfinx_contact
 {
-
 /// Generate one-sided contact kernels
 ///
 /// @param[in] V The function space of the trial/test function

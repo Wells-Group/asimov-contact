@@ -61,7 +61,6 @@ enum class Problem
   ThermoElasticity
 };
 
-//------------------------------------------------------------------------------
 /// Read a mesh
 /// @param[in] filename The file name
 /// @param[in] topo_name Optional, grid name/marker name for extracting topology
@@ -69,7 +68,6 @@ enum class Problem
 /// @param[in] volume_markers Optional, name of the volume markers
 /// @param[in] facet_markers Optional, name of the facet markers
 /// @return The tuple (mesh, domain tags, facet tags)
-//------------------------------------------------------------------------------
 std::tuple<std::shared_ptr<dolfinx::mesh::Mesh<U>>,
            dolfinx::mesh::MeshTags<std::int32_t>,
            dolfinx::mesh::MeshTags<std::int32_t>>
@@ -99,7 +97,6 @@ using kernel_fn
 /// @param[in] x: points on physical element
 /// @param[in] coordinate_dofs: geometry coordinates of cell
 /// @param[in] cmap: the coordinate element
-//-----------------------------------------------------------------------------
 void pull_back(mdspan3_t J, mdspan3_t K, std::span<double> detJ,
                std::span<double> X, cmdspan2_t x, cmdspan2_t coordinate_dofs,
                const dolfinx::fem::CoordinateElement<double>& cmap);
@@ -109,14 +106,14 @@ void pull_back(mdspan3_t J, mdspan3_t K, std::span<double> detJ,
 /// @param[out] pair(unique_cells, offsets): unique_cells is a vector of
 /// sorted cells with all duplicates deleted, offsets contains the start and
 /// end for each unique value in the sorted vector with all duplicates
-// Example: cells = [5, 7, 6, 5]
-//          unique_cells = [5, 6, 7]
-//          offsets = [0, 2, 3, 4]
-//          perm = [0, 3, 2, 1]
-// Then given a cell and its index ("i") in unique_cells, one can recover the
-// indices for its occurance in cells with perm[k], where
-// offsets[i]<=k<offsets[i+1]. In the example if i = 0, then perm[k] = 0 or
-// perm[k] = 3.
+/// Example: cells = [5, 7, 6, 5]
+///          unique_cells = [5, 6, 7]
+///          offsets = [0, 2, 3, 4]
+///          perm = [0, 3, 2, 1]
+/// Then given a cell and its index ("i") in unique_cells, one can recover the
+/// indices for its occurance in cells with perm[k], where
+/// offsets[i]<=k<offsets[i+1]. In the example if i = 0, then perm[k] = 0 or
+/// perm[k] = 3.
 std::pair<std::vector<std::int32_t>, std::vector<std::int32_t>>
 sort_cells(const std::span<const std::int32_t>& cells,
            const std::span<std::int32_t>& perm);

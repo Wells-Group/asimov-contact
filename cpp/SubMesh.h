@@ -19,7 +19,7 @@ namespace dolfinx_contact
 class SubMesh
 {
 public:
-  // empty constructor
+  // Default empty constructor
   SubMesh() = default;
 
   // submesh constructor

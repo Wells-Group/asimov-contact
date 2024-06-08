@@ -10,7 +10,7 @@ import dolfinx_contact
 import numpy as np
 import pytest
 import ufl
-from dolfinx import fem, graph
+from dolfinx import fem
 from dolfinx import mesh as msh
 from dolfinx.graph import adjacencylist
 
