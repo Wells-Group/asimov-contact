@@ -88,7 +88,6 @@ set_target_properties(dolfinx_contact PROPERTIES
 # Add version to definitions (public)
 target_compile_definitions(dolfinx_contact PUBLIC DOLFINX_CONTACT_VERSION="${DOLFINX_CONTACT_VERSION}")
 
-
 #------------------------------------------------------------------------------
 # Install dolfinx library and header files
 install(TARGETS dolfinx_contact
