@@ -10,8 +10,9 @@
 #pragma once
 
 #include "QuadratureRule.h"
-#include <cmath>
+#include <array>
 #include <span>
+#include <vector>
 
 namespace dolfinx_contact
 {

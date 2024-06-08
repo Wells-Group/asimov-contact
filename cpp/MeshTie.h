@@ -4,6 +4,8 @@
 //
 // SPDX-License-Identifier:    MIT
 
+#pragma once
+
 #include "Contact.h"
 #include "coefficients.h"
 #include "utils.h"

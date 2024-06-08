@@ -83,12 +83,13 @@ jobs:
       - name: Install contact library (C++)
         id: cpp-contact
         run: |
+          export VERBOS-1
           cmake -G Ninja -DCMAKE_BUILD_TYPE=${{ matrix.run_mode }} -DCMAKE_CXX_FLAGS="${CONTACT_CMAKE_CXX_FLAGS}" -B build-contact -S cpp/
           ninja -C build-contact install
-          cmake -G Ninja -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_FLAGS="${CONTACT_CMAKE_CXX_FLAGS}" -B build-contact -S cpp/
-          ninja -C build-contact install
-          m pip -v install -r ./python/build-requirements.txt
-          pip -v install --config-settings=build-dir="build-debug-contact" --config-settings=cmake.build-type="Debug" --config-settings=install.strip=false --no-build-isolation ./python/
+          # cmake -G Ninja -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_FLAGS="${CONTACT_CMAKE_CXX_FLAGS}" -B build-contact -S cpp/
+          # ninja -C build-contact install
+          # m pip -v install -r ./python/build-requirements.txt
+          # pip -v install --config-settings=build-dir="build-debug-contact" --config-settings=cmake.build-type="Debug" --config-settings=install.strip=false --no-build-isolation ./python/
 
       - name: Run demos (C++)
         run: |

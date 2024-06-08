@@ -5,6 +5,7 @@
 // SPDX-License-Identifier:    MIT
 
 #pragma once
+
 #include "KernelData.h"
 #include "QuadratureRule.h"
 #include "elasticity.h"

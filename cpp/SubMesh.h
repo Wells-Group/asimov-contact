@@ -5,6 +5,7 @@
 // SPDX-License-Identifier:    MIT
 
 #pragma once
+
 #include <dolfinx.h>
 #include <dolfinx/common/sort.h>
 #include <dolfinx/fem/DofMap.h>

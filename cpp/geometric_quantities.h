@@ -5,6 +5,7 @@
 // SPDX-License-Identifier:    MIT
 
 #pragma once
+
 #include "QuadratureRule.h"
 #include <dolfinx/fem/CoordinateElement.h>
 #include <dolfinx/fem/FiniteElement.h>

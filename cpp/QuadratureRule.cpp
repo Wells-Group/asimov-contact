@@ -12,6 +12,7 @@
 #include <dolfinx/common/math.h>
 #include <dolfinx/mesh/cell_types.h>
 #include <dolfinx/mesh/utils.h>
+
 using namespace dolfinx_contact;
 
 dolfinx_contact::QuadratureRule::QuadratureRule(dolfinx::mesh::CellType ct,

@@ -12,7 +12,6 @@
 #include <dolfinx/graph/AdjacencyList.h>
 #include <dolfinx/mesh/utils.h>
 #include <mpi.h>
-#include <set>
 
 namespace
 {

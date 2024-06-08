@@ -4,6 +4,8 @@
 //
 // SPDX-License-Identifier:    MIT
 
+#pragma once
+
 #include <dolfinx/graph/AdjacencyList.h>
 #include <span>
 #include <vector>

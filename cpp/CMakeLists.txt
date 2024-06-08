@@ -1,5 +1,5 @@
 # Top level CMakeLists for custom assemblers
-cmake_minimum_required(VERSION 3.10)
+cmake_minimum_required(VERSION 3.21)
 
 # Set project name and version number
 project(DOLFINX_CONTACT VERSION 0.8.0.0)
@@ -48,10 +48,13 @@ add_library(dolfinx_contact)
 
 target_link_libraries(dolfinx_contact PUBLIC Basix::basix)
 target_link_libraries(dolfinx_contact PUBLIC dolfinx)
-target_link_libraries(dolfinx_contact PUBLIC m)
+target_link_libraries(dolfinx_contact PRIVATE m)
 
 include(GNUInstallDirs)
-install(FILES Contact.h MeshTie.h contact_kernels.h rigid_surface_kernels.h error_handling.h utils.h coefficients.h elasticity.h geometric_quantities.h meshtie_kernels.h parallel_mesh_ghosting.h point_cloud.h SubMesh.h QuadratureRule.h RayTracing.h KernelData.h DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/dolfinx_contact COMPONENT Development)
+install(FILES Contact.h MeshTie.h contact_kernels.h rigid_surface_kernels.h error_handling.h utils.h coefficients.h
+              elasticity.h geometric_quantities.h meshtie_kernels.h parallel_mesh_ghosting.h point_cloud.h SubMesh.h
+              QuadratureRule.h RayTracing.h KernelData.h
+              DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/dolfinx_contact COMPONENT Development)
 
 target_sources(dolfinx_contact PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/utils.cpp
