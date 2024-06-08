@@ -478,12 +478,15 @@ if __name__ == "__main__":
     # Create variational form without contact contributions
     F = ufl.inner(sigma(u), epsilon(v)) * dx
 
+    mesh.topology.create_connectivity(tdim, tdim)
+
     # Nitsche parameters
     gamma = args.gamma
     theta = args.theta
     gdim = mesh.geometry.dim
     bcs = []
     bc_fns = []
+
     for k in range(displacement.shape[0]):
         d = displacement[k, :]
         tag = dirichlet_vals[k]

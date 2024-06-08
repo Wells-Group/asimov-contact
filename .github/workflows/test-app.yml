@@ -182,7 +182,7 @@ jobs:
         run: |
           cd python/tests
           mkdir -p meshes
-          python -m pytest . -vs
+          python -m pytest -vs -n auto.
 
       - name: Run unbiased demos in parallel
         working-directory: ./python/demos
