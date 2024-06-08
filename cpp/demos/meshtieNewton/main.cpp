@@ -71,7 +71,7 @@ public:
 
     // initialise the input data for integration kernels
     _meshties->generate_kernel_data(
-        dolfinx_contact::Problem::Elasticity, L->function_spaces()[0],
+        dolfinx_contact::Problem::Elasticity, *L->function_spaces()[0],
         {{"u", u}, {"mu", mu}, {"lambda", lmbda}}, gamma, theta);
 
     // build near null space preventing rigid body motion of individual
@@ -118,7 +118,7 @@ public:
       std::span<T> b(_b.mutable_array());
       std::fill(b.begin(), b.end(), 0.0);
       _meshties->assemble_vector(
-          b, _l->function_spaces()[0],
+          b, *_l->function_spaces()[0],
           dolfinx_contact::Problem::Elasticity); // custom kernel for mesh tying
       fem::assemble_vector<T>(b, *_l);           // standard assembly
 
@@ -158,7 +158,7 @@ public:
 
       // custom assembly for mesh tying
       _meshties->assemble_matrix(la::petsc::Matrix::set_block_fn(A, ADD_VALUES),
-                                 _j->function_spaces()[0],
+                                 *_j->function_spaces()[0],
                                  dolfinx_contact::Problem::Elasticity);
       MatAssemblyBegin(A, MAT_FLUSH_ASSEMBLY);
       MatAssemblyEnd(A, MAT_FLUSH_ASSEMBLY);

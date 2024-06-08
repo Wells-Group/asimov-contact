@@ -79,7 +79,7 @@ public:
 
     // initialise the input data for integration kernels
     _meshties->generate_kernel_data(
-        dolfinx_contact::Problem::ThermoElasticity, L->function_spaces()[0],
+        dolfinx_contact::Problem::ThermoElasticity, *L->function_spaces()[0],
         {{"u", u}, {"T", T0}, {"mu", mu}, {"lambda", lmbda}, {"alpha", alpha}},
         gamma, theta);
 
@@ -126,7 +126,7 @@ public:
       std::span<T> b(_b.mutable_array());
       std::fill(b.begin(), b.end(), 0.0);
       _meshties->assemble_vector(
-          b, _l->function_spaces()[0],
+          b, *_l->function_spaces()[0],
           dolfinx_contact::Problem::ThermoElasticity); // custom kernel for mesh
                                                        // tying
       fem::assemble_vector<T>(b, *_l);                 // standard assembly
@@ -167,7 +167,7 @@ public:
 
       // custom assembly for mesh tying
       _meshties->assemble_matrix(la::petsc::Matrix::set_block_fn(A, ADD_VALUES),
-                                 _j->function_spaces()[0],
+                                 *_j->function_spaces()[0],
                                  dolfinx_contact::Problem::ThermoElasticity);
       MatAssemblyBegin(A, MAT_FLUSH_ASSEMBLY);
       MatAssemblyEnd(A, MAT_FLUSH_ASSEMBLY);
@@ -321,7 +321,7 @@ int main(int argc, char* argv[])
         1.0, bdofs_therm, Q);
 
     // Data for meshtie integration kernels
-    meshties->generate_kernel_data(dolfinx_contact::Problem::Poisson, Q,
+    meshties->generate_kernel_data(dolfinx_contact::Problem::Poisson, *Q,
                                    {{"kdt", kdt}, {"T", T0}}, gamma, theta);
 
     // Create matrix and vector
@@ -496,7 +496,7 @@ int main(int argc, char* argv[])
 
       // Assemble vector
       b_therm.set(0.0);
-      meshties->assemble_vector(b_therm.mutable_array(), Q,
+      meshties->assemble_vector(b_therm.mutable_array(), *Q,
                                 dolfinx_contact::Problem::Poisson);
       dolfinx::fem::assemble_vector(b_therm.mutable_array(), *L_therm);
       dolfinx::fem::apply_lifting<T, U>(b_therm.mutable_array(), {a_therm},
@@ -508,7 +508,7 @@ int main(int argc, char* argv[])
       MatZeroEntries(A_therm.mat());
       meshties->assemble_matrix(
           la::petsc::Matrix::set_block_fn(A_therm.mat(), ADD_VALUES),
-          a_therm->function_spaces()[0], dolfinx_contact::Problem::Poisson);
+          *a_therm->function_spaces()[0], dolfinx_contact::Problem::Poisson);
       MatAssemblyBegin(A_therm.mat(), MAT_FLUSH_ASSEMBLY);
       MatAssemblyEnd(A_therm.mat(), MAT_FLUSH_ASSEMBLY);
       dolfinx::fem::assemble_matrix(
