@@ -180,6 +180,7 @@ jobs:
 
       - name: Run tests
         run: |
+          pip install pytest pytest-xdist
           cd python/tests
           mkdir -p meshes
           python -m pytest -vs -n auto.
