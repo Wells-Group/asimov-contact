@@ -169,7 +169,7 @@ def test_vector_surface_kernel(dim, kernel_type, P, Q):
         mesh.topology.cell_type,
         2 * P + Q + 1,
         mesh.topology.dim - 1,
-        basix.QuadratureType.Default,
+        basix.QuadratureType.default,
     )
     coeffs = np.hstack([mu_packed, lmbda_packed, h_facets, g_vec, u_packed, grad_u_packed])
 
@@ -295,7 +295,7 @@ def test_matrix_surface_kernel(dim, kernel_type, P, Q):
         mesh.topology.cell_type,
         2 * P + Q + 1,
         mesh.topology.dim - 1,
-        basix.QuadratureType.Default,
+        basix.QuadratureType.default,
     )
     consts = np.array([gamma, theta])
     consts = np.hstack((consts, n_vec))

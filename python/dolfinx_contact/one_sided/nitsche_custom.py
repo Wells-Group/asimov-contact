@@ -154,7 +154,7 @@ def nitsche_custom(
         mesh.topology.cell_type,
         quadrature_degree,
         mesh.topology.dim - 1,
-        basix.QuadratureType.Default,
+        basix.QuadratureType.default,
     )
     consts = np.array([E * gamma, theta])
     consts = np.hstack((consts, n_vec))

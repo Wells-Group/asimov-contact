@@ -188,7 +188,7 @@ def nitsche_rigid_surface_custom(
         mesh.topology.cell_type,
         quadrature_degree,
         mesh.topology.dim - 1,
-        basix.QuadratureType.Default,
+        basix.QuadratureType.default,
     )
     consts = np.array([gamma * E, theta])
 

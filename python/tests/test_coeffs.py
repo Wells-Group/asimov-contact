@@ -61,7 +61,7 @@ def test_pack_coeff_at_quadrature(ct, quadrature_degree, space, degree):
     quadrature_points, _ = basix.make_quadrature(
         basix.cell.string_to_type(to_string(ct)),
         quadrature_degree,
-        basix.QuadratureType.Default,
+        basix.QuadratureType.default,
     )
 
     # Use Expression to verify packing
@@ -118,7 +118,7 @@ def test_pack_coeff_on_facet(quadrature_degree, space, degree):
 
     # Create quadrature points for integration on facets
     ct = mesh.topology.cell_type
-    q_rule = dolfinx_contact.QuadratureRule(ct, quadrature_degree, fdim, basix.QuadratureType.Default)
+    q_rule = dolfinx_contact.QuadratureRule(ct, quadrature_degree, fdim, basix.QuadratureType.default)
 
     # Compute coefficients at quadrature points using Expression
     q_points = q_rule.points()
@@ -171,7 +171,7 @@ def test_sub_coeff(quadrature_degree, degree):
 
     # Use prepare quadrature points and geometry for eval
     quadrature_points, wts = basix.make_quadrature(
-        basix.CellType.tetrahedron, quadrature_degree, basix.QuadratureType.Default
+        basix.CellType.tetrahedron, quadrature_degree, basix.QuadratureType.default
     )
     num_sub_spaces = V.num_sub_spaces
     for i in range(num_sub_spaces):
@@ -211,7 +211,7 @@ def test_sub_coeff_grad(quadrature_degree, degree):
 
     # Use prepare quadrature points and geometry for eval
     quadrature_points, wts = basix.make_quadrature(
-        basix.CellType.tetrahedron, quadrature_degree, basix.QuadratureType.Default
+        basix.CellType.tetrahedron, quadrature_degree, basix.QuadratureType.default
     )
     num_sub_spaces = V.num_sub_spaces
     for i in range(num_sub_spaces):

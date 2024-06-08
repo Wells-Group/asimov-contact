@@ -178,7 +178,7 @@ def test_contact_kernel(theta, gamma, dim, gap):
             mesh.topology.cell_type,
             q_deg,
             mesh.topology.dim - 1,
-            basix.QuadratureType.Default,
+            basix.QuadratureType.default,
         )
         consts = np.array([gamma * E, theta])
         consts = np.hstack((consts, n_vec))
