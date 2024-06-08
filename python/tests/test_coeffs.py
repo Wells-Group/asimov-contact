@@ -59,7 +59,7 @@ def test_pack_coeff_at_quadrature(ct, quadrature_degree, space, degree):
 
     # Use prepare quadrature points and geometry for eval
     quadrature_points, _ = basix.make_quadrature(
-        basix.cell.string_to_type(to_string(ct)),
+        basix.CellType[to_string(ct)],
         quadrature_degree,
         basix.QuadratureType.default,
     )
