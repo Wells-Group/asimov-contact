@@ -94,22 +94,22 @@ jobs:
       - name: Run demos (C++)
         run: |
           cd cpp/demos/
-          cmake -G Ninja -B build-dir
-          ninja -C build-dir
+          cmake -G Ninja .
+          ninja
           #
-          ./build-dir/meshtie/demo_meshtie
-          mpirun -np 2 ./build-dir/meshtie/demo_meshtie
+          ./meshtie/demo_meshtie
+          mpirun -np 2 .meshtie/demo_meshtie
           #
-          ./build-dir/meshtieHeatEquation/demo_meshtie_heat
-          mpirun -np 2 ./build-dir/meshtieHeatEquation/demo_meshtie_heat
+          ./meshtieHeatEquation/demo_meshtie_heat
+          mpirun -np 2 ./meshtieHeatEquation/demo_meshtie_heat
           #
-          ./build-dir/meshtieHeatTransfer/demo_meshtie_heattransfer
-          mpirun -np 2 ./build-dir/meshtieHeatTransfer/demo_meshtie_heattransfer
+          ./meshtieHeatTransfer/demo_meshtie_heattransfer
+          mpirun -np 2 ./meshtieHeatTransfer/demo_meshtie_heattransfer
           #
-          ./build-dir/meshtieNewton/demo_meshtie_newton
-          mpirun -np 2 ./build-dir/meshtieNewton/demo_meshtie_newton
+          ./meshtieNewton/demo_meshtie_newton
+          mpirun -np 2 ./meshtieNewton/demo_meshtie_newton
 
-      - name: Install contact (Python)
+      - name: Install contact library (Python)
         id: python-contact
         run: |
           pip -v install -r ./python/build-requirements.txt
