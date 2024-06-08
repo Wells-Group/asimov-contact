@@ -8,12 +8,13 @@
 #include "error_handling.h"
 #include "utils.h"
 #include <dolfinx/common/log.h>
+
 using namespace dolfinx_contact;
 
 namespace
 {
-
-/// Tabulate the coordinate element basis functions at quadrature points
+/// Tabulate the coordinate element basis functions at quadrature
+/// points.
 ///
 /// @param[in] cmap The coordinate element
 /// @param[in] q_rule The quadrature rule
