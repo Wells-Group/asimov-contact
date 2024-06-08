@@ -310,7 +310,7 @@ NB_MODULE(cpp, m)
                      std::move(coeffs),
                      {(std::size_t)shape0, (std::size_t)cstride});
                })
-          .def("pack_nxx",
+          .def("pack_nx",
                [](dolfinx_contact::Contact& self, int origin_meshtag)
                {
                  auto [coeffs, cstride] = self.pack_nx(origin_meshtag);
@@ -319,7 +319,7 @@ NB_MODULE(cpp, m)
                  return dolfinx_wrappers::as_nbarray(
                      std::move(coeffs), {shape0, (std::size_t)cstride});
                })
-          .def("pack_nyy",
+          .def("pack_ny",
                [](dolfinx_contact::Contact& self, int origin_meshtag)
                {
                  auto [coeffs, cstride] = self.pack_ny(origin_meshtag);

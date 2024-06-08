@@ -2,17 +2,19 @@
 #
 # SPDX-License-Identifier:    MIT
 #
-# This tests the custom assembly for the unbiased Nitsche formulation in a special case
-# that can be expressed using ufl:
-# We consider a very simple test case made up of two disconnected elements with a constant
-# gap in x[tdim-1]-direction. The contact surfaces are made up of exactly one edge
-# from each element that are perfectly aligned such that the quadrature points only
-# differ in the x[tdim-1]-direction by the given gap.
-# For comparison, we consider a DG function space on a mesh that is constructed by
-# removing the gap between the elements and merging the edges making up the contact
-# surface into one. This allows us to use DG-functions and ufl to formulate the contact
-# terms in the variational form by suitably adjusting the deformation u and using the given
-# constant gap.
+# This tests the custom assembly for the unbiased Nitsche formulation in
+# a special case that can be expressed using ufl:
+#
+# We consider a very simple test case made up of two disconnected
+# elements with a constant gap in x[tdim-1]-direction. The contact
+# surfaces are made up of exactly one edge from each element that are
+# perfectly aligned such that the quadrature points only differ in the
+# x[tdim-1]-direction by the given gap. For comparison, we consider a DG
+# function space on a mesh that is constructed by removing the gap
+# between the elements and merging the edges making up the contact
+# surface into one. This allows us to use DG-functions and ufl to
+# formulate the contact terms in the variational form by suitably
+# adjusting the deformation u and using the given constant gap.
 
 
 from mpi4py import MPI
@@ -53,7 +55,8 @@ kt = Kernel
 
 
 def DG_rhs_plus(u0, v0, h, n, gamma, theta, sigma, gap, dS):
-    # This version of the ufl form agrees with the formulation in https://doi.org/10.1007/s00211-018-0950-x
+    # This version of the ufl form agrees with the formulation in
+    # https://doi.org/10.1007/s00211-018-0950-x
     def Pn_g(u, a, b):
         return ufl.dot(u(a) - u(b), -n(b)) - gap - (h(a) / gamma) * ufl.dot(sigma(u(a)) * n(a), -n(b))
 
@@ -84,7 +87,8 @@ def DG_rhs_plus(u0, v0, h, n, gamma, theta, sigma, gap, dS):
 
 
 def DG_rhs_minus(u0, v0, h, n, gamma, theta, sigma, gap, dS):
-    # This version of the ufl form agrees with its one-sided equivalent in nitsche_ufl.py
+    # This version of the ufl form agrees with its one-sided equivalent
+    # in nitsche_ufl.py
     def Pn_g(u, a, b):
         return ufl.dot(sigma(u(a)) * n(a), -n(b)) + (gamma / h(a)) * (gap - ufl.dot(u(a) - u(b), -n(b)))
 
@@ -115,7 +119,8 @@ def DG_rhs_minus(u0, v0, h, n, gamma, theta, sigma, gap, dS):
 
 
 def DG_jac_plus(u0, v0, w0, h, n, gamma, theta, sigma, gap, dS):
-    # This version of the ufl form agrees with the formulation in https://doi.org/10.1007/s00211-018-0950-x
+    # This version of the ufl form agrees with the formulation in
+    # https://doi.org/10.1007/s00211-018-0950-x
     def Pn_g(u, a, b):
         return ufl.dot(u(a) - u(b), -n(b)) - gap - (h(a) / gamma) * ufl.dot(sigma(u(a)) * n(a), -n(b))
 
@@ -156,7 +161,8 @@ def DG_jac_plus(u0, v0, w0, h, n, gamma, theta, sigma, gap, dS):
 
 
 def DG_jac_minus(u0, v0, w0, h, n, gamma, theta, sigma, gap, dS):
-    # This version of the ufl form agrees with its one-sided equivalent in nitsche_ufl.py
+    # This version of the ufl form agrees with its one-sided equivalent
+    # in nitsche_ufl.py
     def Pn_g(u, a, b):
         return ufl.dot(sigma(u(a)) * n(a), -n(b)) + (gamma / h(a)) * (gap - ufl.dot(u(a) - u(b), -n(b)))
 
@@ -197,9 +203,7 @@ def DG_jac_minus(u0, v0, w0, h, n, gamma, theta, sigma, gap, dS):
 
 
 def DG_rhs_tresca(u0, v0, h, n, gamma, theta, sigma, fric, dS, gdim):
-    """
-    UFL version of the Tresca friction term for the unbiased Nitsche formulation
-    """
+    """UFL version of the Tresca friction term for the unbiased Nitsche formulation."""
 
     def pt_g(u, a, b, c):
         return tangential_proj(u(a) - u(b) - h(a) * c * sigma(u(a)) * n(a), -n(b))
@@ -230,9 +234,7 @@ def DG_rhs_tresca(u0, v0, h, n, gamma, theta, sigma, fric, dS, gdim):
 
 
 def DG_jac_tresca(u0, v0, w0, h, n, gamma, theta, sigma, fric, dS, gdim):
-    """
-    UFL version of the Jacobian for the Tresca friction term for the unbiased Nitsche formulation
-    """
+    """UFL version of the Jacobian for the Tresca friction term for the unbiased Nitsche formulation."""
 
     def pt_g(u, a, b, c):
         return tangential_proj(u(a) - u(b) - h(a) * c * sigma(u(a)) * n(a), -n(b))
@@ -269,9 +271,7 @@ def DG_jac_tresca(u0, v0, w0, h, n, gamma, theta, sigma, fric, dS, gdim):
 
 
 def DG_rhs_coulomb(u0, v0, h, n, gamma, theta, sigma, gap, fric, dS, gdim):
-    """
-    UFL version of the Coulomb friction term for the unbiased Nitsche formulation
-    """
+    """UFL version of the Coulomb friction term for the unbiased Nitsche formulation."""
 
     def Pn_g(u, a, b):
         return ufl.dot(u(a) - u(b), -n(b)) - gap - (h(a) / gamma) * ufl.dot(sigma(u(a)) * n(a), -n(b))
@@ -307,9 +307,7 @@ def DG_rhs_coulomb(u0, v0, h, n, gamma, theta, sigma, gap, fric, dS, gdim):
 
 
 def DG_jac_coulomb(u0, v0, w0, h, n, gamma, theta, sigma, gap, fric, dS, gdim):
-    """
-    UFL version of the Jacobian for the Coulomb friction term for the unbiased Nitsche formulation
-    """
+    """UFL version of the Jacobian for the Coulomb friction term for the unbiased Nitsche formulation,"""
 
     def Pn_g(u, a, b):
         return ufl.dot(u(a) - u(b), -n(b)) - gap - (h(a) / gamma) * ufl.dot(sigma(u(a)) * n(a), -n(b))
@@ -386,12 +384,14 @@ def compute_dof_permutations_all(V_dg, V_cg, gap):
     """The meshes used for the two different formulations are
     created independently of each other. Therefore we need to
     determine how to map the dofs from one mesh to the other in
-    order to compare the results"""
+    order to compare the results.
+    """
     mesh_dg = V_dg.mesh
     mesh_cg = V_cg.mesh
     bs = V_cg.dofmap.index_map_bs
     tdim = mesh_dg.topology.dim
     mesh_dg.topology.create_connectivity(tdim - 1, tdim)
+    mesh_dg.topology.create_connectivity(tdim, tdim)
 
     mesh_cg.topology.create_connectivity(tdim - 1, tdim)
     mesh_cg.topology.create_connectivity(tdim, tdim - 1)
@@ -402,7 +402,7 @@ def compute_dof_permutations_all(V_dg, V_cg, gap):
     # and modify coordinates by gap if necessary
     num_cells = mesh_dg.topology.index_map(tdim).size_local
     for cell in range(num_cells):
-        midpoint = compute_midpoints(mesh_dg, tdim, [cell])[0]
+        midpoint = compute_midpoints(mesh_dg, tdim, np.array([cell]))[0]
         if midpoint[tdim - 1] <= 0:
             # coordinates of corresponding dofs need to be adjusted by gap
             dofs_dg1 = V_dg.dofmap.cell_dofs(cell)
@@ -419,9 +419,10 @@ def compute_dof_permutations_all(V_dg, V_cg, gap):
 
 
 def create_meshes(ct, gap):
-    """This is a helper function to create the two element function spaces
-    both for custom assembly and the DG formulation for
-    quads, triangles, hexes and tetrahedra"""
+    """This is a helper function to create the two element function
+    spaces both for custom assembly and the DG formulation for quads,
+    triangles, hexes and tetrahedra.
+    """
     cell_type = to_type(ct)
     if cell_type == CellType.quadrilateral:
         x_ufl = np.array([[0, 0], [0.8, 0], [0.1, 1.3], [0.7, 1.2], [-0.1, -1.2], [0.8, -1.1]])
@@ -528,6 +529,7 @@ def locate_contact_facets_custom(V, gap):
 
     # locate facets
     tdim = mesh.topology.dim
+    mesh.topology.create_connectivity(tdim, tdim)
     facets1 = locate_entities_boundary(mesh, tdim - 1, lambda x: np.isclose(x[tdim - 1], 0))
     facets2 = locate_entities_boundary(mesh, tdim - 1, lambda x: np.isclose(x[tdim - 1], -gap))
 
@@ -564,7 +566,15 @@ def create_facet_markers(mesh, facets_cg):
     return meshtags(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
 
 
-@pytest.mark.parametrize("ct", ["triangle", "quadrilateral", "tetrahedron", "hexahedron"])
+@pytest.mark.parametrize(
+    "ct",
+    [
+        "triangle",
+        "quadrilateral",
+        "tetrahedron",
+        "hexahedron",
+    ],
+)
 @pytest.mark.parametrize("gap", [0.5, -0.5])
 @pytest.mark.parametrize("quadrature_degree", [1, 5])
 @pytest.mark.parametrize("theta", [1, 0, -1])
@@ -661,8 +671,8 @@ def test_contact_kernels(ct, gap, quadrature_degree, theta, frictionlaw, search)
     w1 = ufl.TrialFunction(V_custom)
     u = _fem.Function(V_custom)
 
-    u1.interpolate(_u0, cells[0])
-    u1.interpolate(_u2, cells[1])
+    u1.interpolate(_u0, np.array(cells[0]))
+    u1.interpolate(_u2, np.array(cells[1]))
     u1.x.scatter_forward()
 
     # Dummy form for creating vector/matrix
