@@ -883,8 +883,8 @@ def test_meshtie_kernels(ct, gap, quadrature_degree, theta, problem):
     v1 = ufl.TestFunction(V_custom)
     w1 = ufl.TrialFunction(V_custom)
 
-    u1.interpolate(_u0, cells[0])
-    u1.interpolate(_u2, cells[1])
+    u1.interpolate(_u0, np.array(cells[0]))
+    u1.interpolate(_u2, np.array(cells[1]))
     u1.x.scatter_forward()
 
     n = ufl.FacetNormal(mesh_ufl)
@@ -907,8 +907,8 @@ def test_meshtie_kernels(ct, gap, quadrature_degree, theta, problem):
         T1 = _fem.Function(Q_custom)
         T0.interpolate(lambda x: np.sin(x[0]) + 1, cells_ufl_0)
         T0.interpolate(lambda x: np.sin(x[tdim - 1]) + 2, cells_ufl_1)
-        T1.interpolate(lambda x: np.sin(x[0]) + 1, cells[0])
-        T1.interpolate(lambda x: np.sin(x[tdim - 1] + gap) + 2, cells[1])
+        T1.interpolate(lambda x: np.sin(x[0]) + 1, np.array(cells[0]))
+        T1.interpolate(lambda x: np.sin(x[tdim - 1] + gap) + 2, np.array(cells[1]))
 
         def sigma_T(w, T):
             return sigma(w) - alpha * (3 * lmbda + 2 * mu) * T * ufl.Identity(gdim)
