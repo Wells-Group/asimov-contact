@@ -219,13 +219,14 @@ int main(int argc, char* argv[])
 
   // const std::size_t time_steps = 40;
   init_logging(argc, argv);
-
   PetscInitialize(&argc, &argv, nullptr, nullptr);
+
   // Set the logging thread name to show the process rank
   int mpi_rank;
   MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank);
-  std::string thread_name = "RANK " + std::to_string(mpi_rank);
-  loguru::set_thread_name(thread_name.c_str());
+  std::string fmt = "[%Y-%m-%d %H:%M:%S.%e] [RANK " + std::to_string(mpi_rank)
+                    + "] [%l] %v";
+  spdlog::set_pattern(fmt);
   {
 
     // Read in mesh

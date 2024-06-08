@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.19)
 
-set(PROJECT_NAME demo_meshtie)
+set(PROJECT_NAME demo_meshtie_newton)
 project(${PROJECT_NAME})
 
 set(CMAKE_CXX_STANDARD 20)

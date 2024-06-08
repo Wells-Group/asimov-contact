@@ -35,7 +35,6 @@ int main(int argc, char* argv[])
   std::string fmt = "[%Y-%m-%d %H:%M:%S.%e] [RANK " + std::to_string(mpi_rank)
                     + "] [%l] %v";
   spdlog::set_pattern(fmt);
-
   {
     auto [mesh_init, domain1_init, facet1_init] = dolfinx_contact::read_mesh(
         "../meshes/box_3D.xdmf", "mesh", "mesh", "cell_marker", "facet_marker");
@@ -82,9 +81,7 @@ int main(int argc, char* argv[])
         {
           std::vector<T> _f;
           for (std::size_t p = 0; p < x.extent(1); ++p)
-          {
             _f.push_back(lmbda_val);
-          }
           return {_f, {_f.size()}};
         });
 
@@ -95,9 +92,7 @@ int main(int argc, char* argv[])
         {
           std::vector<T> _f;
           for (std::size_t p = 0; p < x.extent(1); ++p)
-          {
             _f.push_back(mu_val);
-          }
           return {_f, {_f.size()}};
         });
 
@@ -113,9 +108,7 @@ int main(int argc, char* argv[])
               double, MDSPAN_IMPL_STANDARD_NAMESPACE::dextents<std::size_t, 2>>
               _f(fdata.data(), bs, x.extent(1));
           for (std::size_t p = 0; p < x.extent(1); ++p)
-          {
             _f(1, p) = 0.5;
-          }
           return {std::move(fdata), {bs, x.extent(1)}};
         });
 
@@ -131,25 +124,30 @@ int main(int argc, char* argv[])
               double, MDSPAN_IMPL_STANDARD_NAMESPACE::dextents<std::size_t, 2>>
               _f(fdata.data(), bs, x.extent(1));
           for (std::size_t p = 0; p < x.extent(1); ++p)
-          {
             _f(1, p) = 0.5;
-          }
           return {std::move(fdata), {bs, x.extent(1)}};
         });
 
-    // create integration domains for integrating over specific surfaces
-    auto facet_domains = fem::compute_integration_domains(
-        fem::IntegralType::exterior_facet, *facet1.topology(), facet1.indices(),
-        facet1.dim(), facet1.values());
+    // Create integration domains for integrating over specific surfaces
     std::vector<std::pair<std::int32_t, std::span<const std::int32_t>>>
         integration_domain;
-    std::transform(
-        facet_domains.begin(), facet_domains.end(),
-        std::back_inserter(integration_domain),
-        [](auto& domain)
-            -> std::pair<std::int32_t, std::span<const std::int32_t>> {
-          return {domain.first, std::span<const std::int32_t>(domain.second)};
-        });
+    std::vector<std::vector<std::int32_t>> facet_domains;
+    {
+      // Get unique values in facet1 MeshTags
+      std::vector ids(facet1.values().begin(), facet1.values().end());
+      std::sort(ids.begin(), ids.end());
+      ids.erase(std::unique(ids.begin(), ids.end()), ids.end());
+
+      // Pack (domain id, indices) pairs
+      for (auto id : ids)
+      {
+        facet_domains.push_back(fem::compute_integration_domains(
+            fem::IntegralType::exterior_facet, *facet1.topology(),
+            facet1.find(id), facet1.dim()));
+        integration_domain.emplace_back(id, facet_domains.back());
+      }
+    }
+
     // Define variational forms
     auto J = std::make_shared<fem::Form<T>>(
         fem::create_form<T>(*form_linear_elasticity_J, {V, V},
