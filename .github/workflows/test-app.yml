@@ -116,6 +116,7 @@ jobs:
         run: |
           pip -v install -r ./python/build-requirements.txt
           pip -v install --config-settings=build-dir="build-${{ matrix.run_mode }}" --config-settings=install.strip=false --config-settings=cmake.build-type="${{ matrix.run_mode }}" --no-build-isolation ./python/
+          pip install scipy
 
       - name: Check formatting
         if: always()
@@ -126,7 +127,7 @@ jobs:
 
       - name: Run mypy checks
         run: |
-          pip3 install mypy
+          pip install mypy
           cd python
           mypy . --exclude=build
 
