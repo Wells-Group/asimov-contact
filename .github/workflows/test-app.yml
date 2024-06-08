@@ -23,16 +23,7 @@ jobs:
         petsc_mode: ["real"]
         petsc_precision: ["64"]
         petsc_int: ["32"]
-        CXX: [g++]
-        CC: [cc]
-        # exclude:
-        #   - CC: cc
-        #     CXX: clang++
-        #   - CC: clang
-        #     CXX: c++
     env:
-      CC: ${{ matrix.CC }}
-      CXX: ${{ matrix.CXX }}
       PETSC_ARCH: linux-gnu-${{ matrix.petsc_mode }}${{ matrix.petsc_precision}}-${{ matrix.petsc_int }}
       # OMPI_ALLOW_RUN_AS_ROOT: 1
       # OMPI_ALLOW_RUN_AS_ROOT_CONFIRM: 1
@@ -45,12 +36,6 @@ jobs:
       CONTACT_CMAKE_CXX_FLAGS: "-Wall -Werror -pedantic -O2 -g -Wno-array-bounds -Wno-stringop-overflow"
     steps:
       - uses: actions/checkout@v4
-
-      # - name: Install clang
-      #   if: ${{ matrix.CC }} == "clang"
-      #   run: |
-      #     apt-get update
-      #     apt-get install -y clang
 
       - name: Get DOLFINx
         if: github.event_name != 'workflow_dispatch'
