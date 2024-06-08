@@ -40,7 +40,6 @@ using namespace nb::literals;
 
 NB_MODULE(cpp, m)
 {
-
   // Create module for C++ wrappers
   m.doc() = "DOLFINX Contact Python interface";
 #ifdef VERSION_INFO
@@ -168,6 +167,7 @@ NB_MODULE(cpp, m)
     for (std::size_t i = 0; i < qp_shape[1]; ++i)
       for (std::size_t j = 0; j < qp_shape[2]; ++j)
         qp_vec[i * qp_shape[2] + j] = qp_span(facet, i, j);
+
     return dolfinx_wrappers::as_nbarray(std::move(qp_vec),
                                         {qp_shape[1], qp_shape[2]});
              }, "Get quadrature points for the jth facet of the ith contact pair")
@@ -176,15 +176,14 @@ NB_MODULE(cpp, m)
              {
     std::span<const std::int32_t> active_entities = self.active_entities(s);
     return nb::ndarray<const std::int32_t, nb::numpy>(
-        active_entities.data(), {active_entities.size() / 2, 2});
+        active_entities.data(), {active_entities.size() / 2, 2}, nb::handle());
   })
         .def("facet_map",
              [](dolfinx_contact::Contact& self, int pair)
              {
-    // This exposes facet_map() to Python but replaces the
-    // facet indices on the submesh with the facet indices in
-    // the parent mesh This is only exposed for testing (in
-    // particular
+    // This exposes facet_map() to Python but replaces the facet indices
+    // on the submesh with the facet indices in the parent mesh This is
+    // only exposed for testing (in particular.
     // nitsche_rigid_surface.py/demo_nitsche_rigid_surface_ufl.py)
     //  auto contact_pair = self.contact_pair(pair);
     std::shared_ptr<const dolfinx::mesh::Mesh<double>> mesh = self.mesh();
@@ -247,7 +246,7 @@ NB_MODULE(cpp, m)
              })
 
         .def("assemble_matrix",
-              [](dolfinx_contact::Contact& self, 
+              [](dolfinx_contact::Contact& self,
               Mat A,
                 int origin_meshtag, contact_wrappers::KernelWrapper& kernel,
                 const nb::ndarray<PetscScalar, nb::numpy>& coeffs,
