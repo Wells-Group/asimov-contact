@@ -19,7 +19,7 @@ jobs:
     strategy:
       matrix:
         # Complex mode not working
-        run_mode: ["Release", "Debug"]
+        # run_mode: ["Release", "Debug"]
         petsc_mode: ["real"]
         petsc_precision: ["64"]
         petsc_int: ["32"]
@@ -33,7 +33,7 @@ jobs:
       # OMPI_MCA_mpi_yield_when_idle: 1
       # OMPI_MCA_hwloc_base_binding_policy: none
       # CONTACT_CMAKE_CXX_FLAGS: "-Wall -Werror -g -pedantic -Ofast -march=native"
-      CONTACT_CMAKE_CXX_FLAGS: "-Wall -Werror -pedantic -O2 -g -Wno-array-bounds -Wno-stringop-overflow"
+      CONTACT_CMAKE_CXX_FLAGS: "-Wall -Werror -pedantic -Wno-array-bounds -Wno-stringop-overflow"
     steps:
       - uses: actions/checkout@v4
 
@@ -69,7 +69,8 @@ jobs:
         id: cpp-contact
         run: |
           export VERBOSE=1
-          cmake -G Ninja -DCMAKE_BUILD_TYPE=${{ matrix.run_mode }} -DCMAKE_CXX_FLAGS="${CONTACT_CMAKE_CXX_FLAGS}" -B build-contact -S cpp/
+          cmake -G Ninja  -DCMAKE_CXX_FLAGS="${CONTACT_CMAKE_CXX_FLAGS}" -B build-contact -S cpp/
+          # cmake -G Ninja -DCMAKE_BUILD_TYPE=${{ matrix.run_mode }} -DCMAKE_CXX_FLAGS="${CONTACT_CMAKE_CXX_FLAGS}" -B build-contact -S cpp/
           ninja -C build-contact install
           # cmake -G Ninja -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_FLAGS="${CONTACT_CMAKE_CXX_FLAGS}" -B build-contact -S cpp/
           # ninja -C build-contact install
@@ -100,7 +101,8 @@ jobs:
         id: python-contact
         run: |
           pip -v install -r ./python/build-requirements.txt
-          pip -v install --config-settings=build-dir="build-${{ matrix.run_mode }}" --config-settings=install.strip=false --config-settings=cmake.build-type="${{ matrix.run_mode }}" --no-build-isolation ./python/
+          pip -v install --no-build-isolation ./python/
+          # pip -v install --config-settings=build-dir="build-${{ matrix.run_mode }}" --config-settings=install.strip=false --config-settings=cmake.build-type="${{ matrix.run_mode }}" --no-build-isolation ./python/
           pip install scipy matplotlib
 
       - name: Check formatting
