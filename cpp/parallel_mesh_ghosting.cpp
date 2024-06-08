@@ -43,7 +43,6 @@ copy_to_all(MPI_Comm comm, const std::vector<std::int64_t>& indices,
 
   return {std::move(all_indices), std::move(all_values)};
 };
-
 } // namespace
 
 std::tuple<dolfinx::mesh::Mesh<double>, dolfinx::mesh::MeshTags<std::int32_t>,
@@ -205,6 +204,12 @@ dolfinx_contact::create_contact_mesh(
       mesh.comm(), x, xshape, partitioner);
   trepart.stop();
 
+  // Recreate facets
+  new_mesh.topology()->create_entities(tdim - 1);
+  new_mesh.topology()->create_connectivity(tdim - 1, tdim);
+  new_mesh.topology()->create_connectivity(tdim, 0);
+  new_mesh.topology()->create_connectivity(0, tdim);
+
   spdlog::warn("Remap markers on new mesh");
 
   dolfinx::common::Timer tremap(
@@ -213,16 +218,12 @@ dolfinx_contact::create_contact_mesh(
   // This is rather messy, we need to map vertices to geometric nodes
   // then back to original index
   auto global_remap = new_mesh.geometry().input_global_indices();
-  int nv = new_mesh.topology()->index_map(0)->size_local()
-           + new_mesh.topology()->index_map(0)->num_ghosts();
+  std::int32_t nv = new_mesh.topology()->index_map(0)->size_local()
+                    + new_mesh.topology()->index_map(0)->num_ghosts();
   std::vector<std::int32_t> nvrange(nv);
   std::iota(nvrange.begin(), nvrange.end(), 0);
-  auto vert_to_geom = entities_to_geometry(new_mesh, 0, nvrange, false);
-
-  // Recreate facets
-  new_mesh.topology()->create_entities(tdim - 1);
-  new_mesh.topology()->create_connectivity(tdim - 1, tdim);
-  new_mesh.topology()->create_connectivity(tdim, 0);
+  std::vector<std::int32_t> vert_to_geom
+      = dolfinx::mesh::entities_to_geometry(new_mesh, 0, nvrange, false);
 
   // Create a list of all facet - vertices(original global index)
   auto fv_new = new_mesh.topology()->connectivity(tdim - 1, 0);
