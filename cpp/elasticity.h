@@ -4,12 +4,14 @@
 //
 // SPDX-License-Identifier:    MIT
 
-// This file contains helper functions that are useful for writing elasticity
-// kernels
+// This file contains helper functions that are useful for writing
+// elasticity kernels
+
+#pragma once
 
 #include "QuadratureRule.h"
-#include <span>
 #include <cmath>
+#include <span>
 
 namespace dolfinx_contact
 {
@@ -88,10 +90,13 @@ void compute_sigma_n_opp(mdspan4_t sig_n_opp, std::span<const double> grad_v,
 /// @param[in] gdim         The geometrical dimension of the mesh
 /// @param[in] mu           The first Lame parameter
 /// @param[in] lmbda        The second Lame parameter
-/// @return vector containing surface pressure values for each quadrature point on each facet
-std::vector<double>compute_contact_forces(
-    std::span<const double> grad_u, std::span<const double> n_x, const std::size_t num_q_points,
-    std::size_t num_facets, const std::size_t gdim, const double mu,
-    const double lmbda);
+/// @return vector containing surface pressure values for each quadrature point
+/// on each facet
+std::vector<double> compute_contact_forces(std::span<const double> grad_u,
+                                           std::span<const double> n_x,
+                                           const std::size_t num_q_points,
+                                           std::size_t num_facets,
+                                           const std::size_t gdim,
+                                           const double mu, const double lmbda);
 
 } // namespace dolfinx_contact

@@ -4,16 +4,14 @@
 //
 // SPDX-License-Identifier:    MIT
 
+#include "parallel_mesh_ghosting.h"
+#include "point_cloud.h"
 #include <dolfinx/common/MPI.h>
 #include <dolfinx/common/Timer.h>
 #include <dolfinx/common/log.h>
 #include <dolfinx/graph/AdjacencyList.h>
 #include <dolfinx/mesh/utils.h>
 #include <mpi.h>
-
-#include "parallel_mesh_ghosting.h"
-#include "point_cloud.h"
-
 #include <set>
 
 namespace

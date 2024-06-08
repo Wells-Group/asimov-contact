@@ -131,9 +131,8 @@ std::array<double, 3> dolfinx_contact::push_forward_facet_normal(
   {
     // For non-affine geometries we have to compute the point in the reference
     // cell, which is a nonlinear operation.
-    dolfinx_contact::pull_back_nonaffine(X.subspan(0, tdim), work_array,
-                                         x.subspan(0, gdim), cmap,
-                                         coordinate_dofs);
+    pull_back_nonaffine(X.subspan(0, tdim), work_array, x.subspan(0, gdim),
+                        cmap, coordinate_dofs);
 
     cmap.tabulate(1, X.subspan(0, tdim), {1, tdim}, basis_span);
     std::fill(work_array.begin(), std::next(work_array.begin(), gdim * tdim),

@@ -13,7 +13,6 @@
 
 namespace dolfinx_contact
 {
-
 class MeshTie : public Contact
 {
 public:
@@ -33,8 +32,9 @@ public:
       const std::vector<std::array<int, 2>>& connected_pairs,
       std::shared_ptr<dolfinx::mesh::Mesh<double>> mesh, const int q_deg = 3)
       : Contact::Contact(markers, surfaces, connected_pairs, mesh,
-                        std::vector<ContactMode>(connected_pairs.size(),
-                        ContactMode::ClosestPoint), q_deg)
+                         std::vector<ContactMode>(connected_pairs.size(),
+                                                  ContactMode::ClosestPoint),
+                         q_deg)
   {
     // Find closest points
     for (int i = 0; i < (int)connected_pairs.size(); ++i)
@@ -108,7 +108,7 @@ public:
       const std::map<std::string,
                      std::shared_ptr<dolfinx::fem::Function<double>>>&
           coefficients,
-      dolfinx_contact::Problem problem_type);
+      Problem problem_type);
 
   /// Update funciton value data for vector assembly based on state
   /// @param[in] u - the function

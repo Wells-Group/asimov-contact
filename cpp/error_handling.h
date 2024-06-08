@@ -5,11 +5,12 @@
 // SPDX-License-Identifier:    MIT
 
 #pragma once
+
 #include <dolfinx/mesh/cell_types.h>
 #include <exception>
+
 namespace dolfinx_contact::error
 {
-
 // Cells not supported in DOLFINx_contact
 constexpr std::array<dolfinx::mesh::CellType, 3> unsupported_cells
     = {dolfinx::mesh::CellType::prism, dolfinx::mesh::CellType::pyramid,

@@ -9,6 +9,7 @@
 #include "geometric_quantities.h"
 #include <basix/quadrature.h>
 #include <dolfinx/mesh/cell_types.h>
+
 using namespace dolfinx_contact;
 
 void dolfinx_contact::transformed_push_forward(

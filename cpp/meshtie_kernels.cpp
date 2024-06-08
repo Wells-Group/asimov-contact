@@ -5,6 +5,7 @@
 // SPDX-License-Identifier:    MIT
 
 #include "meshtie_kernels.h"
+
 dolfinx_contact::kernel_fn<PetscScalar>
 dolfinx_contact::generate_meshtie_kernel(
     dolfinx_contact::Kernel type,

@@ -32,9 +32,10 @@ std::tuple<dolfinx::mesh::Mesh<double>, dolfinx::mesh::MeshTags<std::int32_t>,
 
   /// @brief Lexical matching of input markers with local entities.
   ///
-  /// From the input markers in (in_indices, in_values) find any matching
-  /// entities in local_indices, and copy the values across. Entities are
-  /// represented by their vertex indices (dim vertices per entity).
+  /// From the input markers in (in_indices, in_values) find any
+  /// matching entities in local_indices, and copy the values across.
+  /// Entities are represented by their vertex indices (dim vertices per
+  /// entity).
   /// @param dim Number of vertices per entity
   /// @param local_indices Local entites as vertex indices, flattened
   /// @param in_indices Input entities as vertex indices, flattened

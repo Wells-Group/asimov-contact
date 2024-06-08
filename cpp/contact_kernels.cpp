@@ -5,6 +5,7 @@
 // SPDX-License-Identifier:    MIT
 
 #include "contact_kernels.h"
+
 dolfinx_contact::kernel_fn<PetscScalar>
 dolfinx_contact::generate_contact_kernel(
     dolfinx_contact::Kernel type,
@@ -1101,6 +1102,7 @@ dolfinx_contact::generate_contact_kernel(
       std::size_t offset_u_opp = kd.offsets(6) + q * bs;
       for (std::size_t j = 0; j < bs; ++j)
         jump_un += -c[offset_u_opp + j] * n_surf[j];
+
       // compute relative velocity of surfaces for friction computation
       for (std::size_t j = 0; j < bs; ++j)
       {
@@ -1108,10 +1110,10 @@ dolfinx_contact::generate_contact_kernel(
                    - jump_un * n_surf[j]
                    - (gap - jump_un) * (n_old[j] - ndotn * n_surf[j]);
       }
+
       for (std::size_t j = 0; j < bs; ++j)
-      {
         Pt_u[j] = v_rel[j] - gamma * (sig_n_u[j] - sign_u * n_surf[j]);
-      }
+
       double Pn_u = R_plus((jump_un - gap) - gamma * sign_u);
       std::array<double, 9> Pt_u_proj
           = d_ball_projection(Pt_u, fric * Pn_u, bs);
@@ -1253,6 +1255,7 @@ dolfinx_contact::generate_contact_kernel(
       }
     }
   };
+
   switch (type)
   {
   case Kernel::Rhs:

@@ -5,10 +5,12 @@
 // SPDX-License-Identifier:    MIT
 
 #pragma once
+
 #include "QuadratureRule.h"
 #include <dolfinx/fem/Function.h>
 #include <dolfinx/fem/petsc.h>
 #include <variant>
+
 namespace dolfinx_contact
 {
 

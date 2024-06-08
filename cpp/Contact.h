@@ -31,7 +31,6 @@ using mat_set_fn = const std::function<int(
 
 namespace dolfinx_contact
 {
-
 class Contact
 {
 public:
@@ -276,8 +275,9 @@ public:
   /// Gap = x - g_vec
   /// @param[in] pair - index of contact pair
   /// @param[in] g - defines location of plane
-  /// @param[out] c - gap packed on facets. c[i, gdim * k+ j] contains the
-  /// jth component of the Gap on the ith facet at kth quadrature point
+  /// @param[out] c - gap packed on facets. c[i, gdim * k+ j] contains
+  /// the jth component of the Gap on the ith facet at kth quadrature
+  /// point
   std::pair<std::vector<PetscScalar>, int> pack_gap_plane(int pair, double g);
 
   /// This function updates the submesh geometry for all submeshes using

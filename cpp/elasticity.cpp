@@ -3,6 +3,7 @@
 // This file is part of DOLFINx_CONTACT
 //
 // SPDX-License-Identifier:    MIT
+
 #include "elasticity.h"
 
 //-----------------------------------------------------------------------------
@@ -40,7 +41,6 @@ void dolfinx_contact::compute_normal_strain_basis(
     }
   }
 }
-
 //-----------------------------------------------------------------------------
 void dolfinx_contact::compute_sigma_n_basis(mdspan3_t sig_n, cmdspan2_t K,
                                             s_cmdspan3_t dphi,
@@ -84,7 +84,6 @@ void dolfinx_contact::compute_sigma_n_basis(mdspan3_t sig_n, cmdspan2_t K,
     }
   }
 }
-
 //-----------------------------------------------------------------------------
 void dolfinx_contact::compute_sigma_n_u(std::span<double> sig_n_u,
                                         std::span<const double> grad_u,
@@ -97,7 +96,6 @@ void dolfinx_contact::compute_sigma_n_u(std::span<double> sig_n_u,
       sig_n_u[i] += mu * (grad_u[j * gdim + i] + grad_u[i * gdim + j]) * n[j]
                     + lmbda * grad_u[j * gdim + j] * n[i];
 }
-
 //-----------------------------------------------------------------------------
 void dolfinx_contact::compute_sigma_n_opp(mdspan4_t sig_n_opp,
                                           std::span<const double> grad_v,
@@ -137,15 +135,13 @@ void dolfinx_contact::compute_sigma_n_opp(mdspan4_t sig_n_opp,
       }
     }
 }
-
+//-----------------------------------------------------------------------------
 std::vector<double> dolfinx_contact::compute_contact_forces(
     std::span<const double> grad_u, std::span<const double> n_x,
-   const std::size_t num_q_points,
-    std::size_t num_facets, const std::size_t gdim, const double mu,
-    const double lmbda)
+    const std::size_t num_q_points, std::size_t num_facets,
+    const std::size_t gdim, const double mu, const double lmbda)
 {
   std::vector<double> sig_n_u(gdim);
-  
   std::vector<double> sign(num_facets * num_q_points * gdim, 0.0);
   for (std::size_t f = 0; f < num_facets; ++f)
   {
@@ -161,10 +157,10 @@ std::vector<double> dolfinx_contact::compute_contact_forces(
 
       for (std::size_t j = 0; j < gdim; ++j)
       {
-        sign[f * num_q_points  * gdim + q * gdim + j] = sig_n_u[j];
+        sign[f * num_q_points * gdim + q * gdim + j] = sig_n_u[j];
       }
-
-  }
+    }
   }
   return sign;
 }
+//-----------------------------------------------------------------------------
