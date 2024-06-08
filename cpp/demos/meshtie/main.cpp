@@ -28,18 +28,21 @@ int main(int argc, char* argv[])
 
   init_logging(argc, argv);
   PetscInitialize(&argc, &argv, nullptr, nullptr);
+
   // Set the logging thread name to show the process rank
   int mpi_rank;
   MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank);
-  std::string thread_name = "RANK " + std::to_string(mpi_rank);
-  loguru::set_thread_name(thread_name.c_str());
+  std::string fmt = "[%Y-%m-%d %H:%M:%S.%e] [RANK " + std::to_string(mpi_rank)
+                    + "] [%l] %v";
+  spdlog::set_pattern(fmt);
+
   {
     auto [mesh_init, domain1_init, facet1_init] = dolfinx_contact::read_mesh(
         "../meshes/box_3D.xdmf", "mesh", "mesh", "cell_marker", "facet_marker");
 
     const std::int32_t contact_bdry_1 = 6;  // top contact interface
     const std::int32_t contact_bdry_2 = 13; // bottom contact interface
-    loguru::g_stderr_verbosity = loguru::Verbosity_OFF;
+    // loguru::g_stderr_verbosity = loguru::Verbosity_OFF;
     auto [mesh_new, facet1, domain1] = dolfinx_contact::create_contact_mesh(
         *mesh_init, facet1_init, domain1_init, {contact_bdry_1, contact_bdry_2},
         10.0);
@@ -252,7 +255,7 @@ int main(int argc, char* argv[])
 
     // Update ghost values before output
     u->x()->scatter_fwd();
-    loguru::g_stderr_verbosity = loguru::Verbosity_OFF;
+    // loguru::g_stderr_verbosity = loguru::Verbosity_OFF;
     dolfinx::io::XDMFFile file2(mesh->comm(), "result.xdmf", "w");
     file2.write_mesh(*mesh);
     file2.write_function(*u, 0.0);

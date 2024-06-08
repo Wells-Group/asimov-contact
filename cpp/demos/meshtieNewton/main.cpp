@@ -108,7 +108,7 @@ public:
     return [&](const Vec x, Vec bin)
     {
       // Avoid long log output
-      loguru::g_stderr_verbosity = loguru::Verbosity_OFF;
+      // loguru::g_stderr_verbosity = loguru::Verbosity_OFF;
 
       // Generate input data for custom kernel
       _meshties->update_kernel_data({{"u", _u}},
@@ -141,7 +141,7 @@ public:
       VecRestoreArrayRead(x, &array);
 
       // log level INFO ensures Newton steps are logged
-      loguru::g_stderr_verbosity = loguru::Verbosity_INFO;
+      // loguru::g_stderr_verbosity = loguru::Verbosity_INFO;
     };
   }
 
@@ -151,7 +151,7 @@ public:
     return [&](const Vec, Mat A)
     {
       // Avoid long log output
-      loguru::g_stderr_verbosity = loguru::Verbosity_OFF;
+      // loguru::g_stderr_verbosity = loguru::Verbosity_OFF;
 
       // Set matrix to 0
       MatZeroEntries(A);
@@ -177,7 +177,7 @@ public:
       MatAssemblyEnd(A, MAT_FINAL_ASSEMBLY);
 
       // log level INFO ensures Newton steps are logged
-      loguru::g_stderr_verbosity = loguru::Verbosity_INFO;
+      // loguru::g_stderr_verbosity = loguru::Verbosity_INFO;
     };
   }
 
@@ -220,7 +220,7 @@ int main(int argc, char* argv[])
 
     const std::int32_t contact_bdry_1 = 12; // top contact interface
     const std::int32_t contact_bdry_2 = 6;  // bottom contact interface
-    loguru::g_stderr_verbosity = loguru::Verbosity_OFF;
+    // loguru::g_stderr_verbosity = loguru::Verbosity_OFF;
     auto [mesh_new, facet1, domain1] = dolfinx_contact::create_contact_mesh(
         *mesh_init, facet1_init, domain1_init, {contact_bdry_1, contact_bdry_2},
         10.0);
@@ -343,7 +343,7 @@ int main(int argc, char* argv[])
                                   gamma, theta);
 
     // loglevel INFO shows NewtonSolver output
-    loguru::g_stderr_verbosity = loguru::Verbosity_INFO;
+    // loguru::g_stderr_verbosity = loguru::Verbosity_INFO;
 
     // create Newton Solver
     dolfinx::nls::petsc::NewtonSolver newton_solver(mesh->comm());
@@ -386,7 +386,7 @@ int main(int argc, char* argv[])
     // solve non-linear problem
     newton_solver.solve(_u.vec());
 
-    loguru::g_stderr_verbosity = loguru::Verbosity_OFF;
+    // loguru::g_stderr_verbosity = loguru::Verbosity_OFF;
     // write solution to file
     dolfinx::io::XDMFFile file(mesh->comm(), "result.xdmf", "w");
     file.write_mesh(*mesh);

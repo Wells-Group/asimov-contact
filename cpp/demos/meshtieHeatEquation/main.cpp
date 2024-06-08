@@ -39,7 +39,7 @@ int main(int argc, char* argv[])
 
     const std::int32_t contact_bdry_1 = 6;  // top contact interface
     const std::int32_t contact_bdry_2 = 12; // bottom contact interface
-    loguru::g_stderr_verbosity = loguru::Verbosity_OFF;
+    // loguru::g_stderr_verbosity = loguru::Verbosity_OFF;
     auto [mesh_new, facet1, domain1] = dolfinx_contact::create_contact_mesh(
         *mesh_init, facet1_init, domain1_init, {contact_bdry_1, contact_bdry_2},
         10.0);

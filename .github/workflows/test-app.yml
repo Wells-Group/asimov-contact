@@ -87,8 +87,8 @@ jobs:
           ninja -C build-contact install
           cmake -G Ninja -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_FLAGS="${CONTACT_CMAKE_CXX_FLAGS}" -B build-contact -S cpp/
           ninja -C build-contact install
-          python3 -m pip -v install -r ./python/build-requirements.txt
-          python3 -m pip -v install --config-settings=build-dir="build-debug-contact" --config-settings=cmake.build-type="Debug"  --config-settings=install.strip=false --no-build-isolation -e ./python/
+          m pip -v install -r ./python/build-requirements.txt
+          pip -v install --config-settings=build-dir="build-debug-contact" --config-settings=cmake.build-type="Debug" --config-settings=install.strip=false --no-build-isolation ./python/
 
       - name: Run demos (C++)
         run: |
@@ -116,13 +116,13 @@ jobs:
       - name: Install contact
         id: python-contact
         run: |
-          python3 -m pip -v install -r ./python/build-requirements.txt
-          python3 -m pip -v install --config-settings=build-dir="build-${{ matrix.run_mode }}" --config-settings=install.strip=false  --config-settings=cmake.build-type="${{ matrix.run_mode }}" --no-build-isolation -e ./python/
+          pip -v install -r ./python/build-requirements.txt
+          pip -v install --config-settings=build-dir="build-${{ matrix.run_mode }}" --config-settings=install.strip=false --config-settings=cmake.build-type="${{ matrix.run_mode }}" --no-build-isolation ./python/
 
       - name: Check formatting
         if: always()
         run: |
-          python3 -m pip install ruff
+          pip install ruff
           ruff format --check
           ruff check
 
@@ -130,7 +130,7 @@ jobs:
         run: |
           pip3 install mypy
           cd python
-          python3 -m mypy . --exclude=build
+          mypy . --exclude=build
 
       - name: Create output folders
         id: output-creation
@@ -142,62 +142,62 @@ jobs:
       - name: Run SNES demos
         working-directory: ./python/demos
         run: |
-          python3 compare_custom_snes_one_sided.py
-          python3 compare_nitsche_snes.py
+          python compare_custom_snes_one_sided.py
+          python compare_nitsche_snes.py
 
       - name: Run rigid surface demos
         working-directory: ./python/demos
         run: |
-          python3 demo_nitsche_rigid_surface_ufl.py
-          python3 demo_nitsche_rigid_surface_custom.py
-          python3 nitsche_euler_bernoulli.py
+          python demo_nitsche_rigid_surface_ufl.py
+          python demo_nitsche_rigid_surface_custom.py
+          python nitsche_euler_bernoulli.py
 
       - name: Run unbiased demos
         working-directory: ./python/demos
         run: |
-          python3 demo_nitsche_unbiased.py --problem=1
-          python3 demo_nitsche_unbiased.py --problem=2 --friction=0.1
-          python3 demo_nitsche_unbiased.py --problem=3
-          python3 demo_nitsche_unbiased.py --problem=3 --3D --friction=0.1 --coulomb
+          python demo_nitsche_unbiased.py --problem=1
+          python demo_nitsche_unbiased.py --problem=2 --friction=0.1
+          python demo_nitsche_unbiased.py --problem=3
+          python demo_nitsche_unbiased.py --problem=3 --3D --friction=0.1 --coulomb
 
       - name: Run meshties demos
         working-directory: ./python/demos
         run: |
-          python3 demo_nitsche_meshties.py
-          python3 meshtie_convergence.py --3D
-          python3 meshtie_convergence.py --simplex --3D
-          python3 meshtie_convergence.py
-          python3 meshtie_convergence.py --simplex --runs=4
+          python demo_nitsche_meshties.py
+          python meshtie_convergence.py --3D
+          python meshtie_convergence.py --simplex --3D
+          python meshtie_convergence.py
+          python meshtie_convergence.py --simplex --runs=4
 
       - name: Run Oxford demo
         working-directory: ./python/demos/oxford
         run:
-          python3 blocks_nitsche.py
+          python blocks_nitsche.py
           cd ../meshtie_demos
-          python3 blocks_nitsche_meshtie.py
-          python3 poisson_convergence.py --simplex --runs=4
-          python3 poisson_convergence.py --3D
-          python3 demo_poisson.py
+          python blocks_nitsche_meshtie.py
+          python poisson_convergence.py --simplex --runs=4
+          python poisson_convergence.py --3D
+          python demo_poisson.py
 
       - name: Run tests
         run: |
           cd python/tests
           mkdir -p meshes
-          python3 -m pytest . -vs
+          python -m pytest . -vs
 
       - name: Run unbiased demos in parallel
         working-directory: ./python/demos
         run: |
-          mpirun -np 2 python3 demo_nitsche_unbiased.py --problem=1
-          mpirun -np 2 python3 demo_nitsche_unbiased.py --problem=2 --friction=0.1
-          mpirun -np 2 python3 demo_nitsche_unbiased.py --problem=3
-          mpirun -np 2 python3 demo_nitsche_unbiased.py --problem=3 --3D --friction=0.1 --coulomb
+          mpirun -np 2 python demo_nitsche_unbiased.py --problem=1
+          mpirun -np 2 python demo_nitsche_unbiased.py --problem=2 --friction=0.1
+          mpirun -np 2 python demo_nitsche_unbiased.py --problem=3
+          mpirun -np 2 python demo_nitsche_unbiased.py --problem=3 --3D --friction=0.1 --coulomb
 
       - name: Run meshties demos in parallel
         working-directory: ./python/demos
         run: |
-          mpirun -np 2 python3 demo_nitsche_meshties.py
-          mpirun -np 2 python3 meshtie_convergence.py --3D
-          mpirun -np 2 python3 meshtie_convergence.py --simplex --3D
-          mpirun -np 2 python3 meshtie_convergence.py
-          mpirun -np 2 python3 meshtie_convergence.py --simplex --runs=4
+          mpirun -np 2 python demo_nitsche_meshties.py
+          mpirun -np 2 python meshtie_convergence.py --3D
+          mpirun -np 2 python meshtie_convergence.py --simplex --3D
+          mpirun -np 2 python meshtie_convergence.py
+          mpirun -np 2 python meshtie_convergence.py --simplex --runs=4
