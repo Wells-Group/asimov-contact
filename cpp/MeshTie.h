@@ -29,8 +29,7 @@ public:
   /// @param[in] q_deg The quadrature degree.
   MeshTie(const std::vector<
               std::shared_ptr<dolfinx::mesh::MeshTags<std::int32_t>>>& markers,
-          std::shared_ptr<const dolfinx::graph::AdjacencyList<std::int32_t>>
-              surfaces,
+          const dolfinx::graph::AdjacencyList<std::int32_t>& surfaces,
           const std::vector<std::array<int, 2>>& connected_pairs,
           std::shared_ptr<dolfinx::mesh::Mesh<double>> mesh, int q_deg = 3)
       : Contact::Contact(markers, surfaces, connected_pairs, mesh,
@@ -70,10 +69,9 @@ public:
     _q_deg = q_deg;
   };
 
-  std::size_t offset_elasticity(
-      std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V);
-  std::size_t
-  offset_poisson(std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V);
+  std::size_t offset_elasticity(const dolfinx::fem::FunctionSpace<double>& V);
+
+  std::size_t offset_poisson(const dolfinx::fem::FunctionSpace<double>& V);
 
   /// Generate the input data for the custom integration kernel
   /// @param[in] problem_type specifies the type of the equation, e.g,

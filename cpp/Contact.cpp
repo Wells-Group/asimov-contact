@@ -77,14 +77,14 @@ void compute_linked_cells(
 dolfinx_contact::Contact::Contact(
     const std::vector<std::shared_ptr<dolfinx::mesh::MeshTags<std::int32_t>>>&
         markers,
-    std::shared_ptr<const dolfinx::graph::AdjacencyList<std::int32_t>> surfaces,
+    const dolfinx::graph::AdjacencyList<std::int32_t>& surfaces,
     const std::vector<std::array<int, 2>>& contact_pairs,
-    std::shared_ptr<dolfinx::mesh::Mesh<double>> mesh,
+    std::shared_ptr<const dolfinx::mesh::Mesh<double>> mesh,
     const std::vector<ContactMode>& mode, const int q_deg)
-    : _surfaces(surfaces->array()), _contact_pairs(contact_pairs), _mesh(mesh),
+    : _surfaces(surfaces.array()), _contact_pairs(contact_pairs), _mesh(mesh),
       _mode(mode)
 {
-  std::size_t num_surfaces = surfaces->array().size();
+  std::size_t num_surfaces = surfaces.array().size();
   assert(_mesh);
   auto topology = mesh->topology();
   const int tdim = topology->dim(); // topological dimension
@@ -116,11 +116,11 @@ dolfinx_contact::Contact::Contact(
   for (std::size_t s = 0; s < markers.size(); ++s)
   {
     std::shared_ptr<dolfinx::mesh::MeshTags<int>> marker = markers[s];
-    std::span<const int> links = surfaces->links(int(s));
+    std::span<const int> links = surfaces.links(int(s));
     for (std::size_t i = 0; i < links.size(); ++i)
     {
       std::vector<std::int32_t> facets = marker->find(links[i]);
-      int index = surfaces->offsets()[s] + int(i);
+      int index = surfaces.offsets()[s] + int(i);
       auto [cell_facet_pairs, num_local]
           = dolfinx_contact::compute_active_entities(
               *mesh, facets, dolfinx::fem::IntegralType::exterior_facet);

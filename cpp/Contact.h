@@ -48,10 +48,9 @@ public:
   /// @param[in] q_deg The quadrature degree.
   Contact(const std::vector<
               std::shared_ptr<dolfinx::mesh::MeshTags<std::int32_t>>>& markers,
-          std::shared_ptr<const dolfinx::graph::AdjacencyList<std::int32_t>>
-              surfaces,
+          const dolfinx::graph::AdjacencyList<std::int32_t>& surfaces,
           const std::vector<std::array<int, 2>>& contact_pairs,
-          std::shared_ptr<dolfinx::mesh::Mesh<double>> mesh,
+          std::shared_ptr<const dolfinx::mesh::Mesh<double>> mesh,
           const std::vector<ContactMode>& mode, const int q_deg = 3);
 
   /// Return meshtag value for surface with index surface
@@ -298,7 +297,8 @@ private:
 
   // store index of candidate_surface for each quadrature_surface
   std::vector<std::array<int, 2>> _contact_pairs;
-  std::shared_ptr<dolfinx::mesh::Mesh<double>> _mesh; // mesh
+
+  std::shared_ptr<const dolfinx::mesh::Mesh<double>> _mesh;
 
   // _facets_maps[i] = adjacency list of closest facet on candidate surface
   // for every quadrature point in _qp_phys[i] (quadrature points on every
