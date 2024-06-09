@@ -252,6 +252,7 @@ class ContactProblem(dolfinx_contact.cpp.Contact):
                 self._num_q_points.append(normals.shape[1] // gdim)
                 offset0 = 4
                 offset1 = offset0 + self._num_q_points[i] * gdim
+                print("S:", self.pack_gap(i).shape, offset0, offset1)
                 self.coeffs[i][:, offset0:offset1] = self.pack_gap(i)
                 offset0 = offset1
                 offset1 = offset0 + self._num_q_points[i] * gdim

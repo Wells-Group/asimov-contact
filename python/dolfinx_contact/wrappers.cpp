@@ -249,8 +249,8 @@ NB_MODULE(cpp, m)
       .def("assemble_matrix",
            [](dolfinx_contact::Contact& self, Mat A, int origin_meshtag,
               contact_wrappers::KernelWrapper<T>& kernel,
-              nb::ndarray<const scalar_t, nb::numpy> coeffs,
-              nb::ndarray<const scalar_t, nb::numpy> constants,
+              nb::ndarray<const scalar_t, nb::ndim<2>, nb::c_contig> coeffs,
+              nb::ndarray<const scalar_t, nb::ndim<2>, nb::c_contig> constants,
               const dolfinx::fem::FunctionSpace<double>& V)
            {
              auto ker = kernel.get();
@@ -263,10 +263,10 @@ NB_MODULE(cpp, m)
            })
       .def("assemble_vector",
            [](dolfinx_contact::Contact& self,
-              nb::ndarray<scalar_t, nb::numpy> b, int origin_meshtag,
-              contact_wrappers::KernelWrapper<T>& kernel,
-              nb::ndarray<const scalar_t, nb::numpy> coeffs,
-              nb::ndarray<const scalar_t, nb::numpy> constants,
+              nb::ndarray<scalar_t, nb::ndim<1>, nb::c_contig> b,
+              int origin_meshtag, contact_wrappers::KernelWrapper<T>& kernel,
+              nb::ndarray<const scalar_t, nb::ndim<2>, nb::c_contig> coeffs,
+              nb::ndarray<const scalar_t, nb::ndim<2>, nb::c_contig> constants,
               const dolfinx::fem::FunctionSpace<double>& V)
            {
              auto ker = kernel.get();
@@ -338,8 +338,9 @@ NB_MODULE(cpp, m)
            &dolfinx_contact::Contact::update_submesh_geometry)
       .def("crop_invalid_points",
            [](dolfinx_contact::Contact& self, int pair,
-              nb::ndarray<const scalar_t, nb::numpy> gap,
-              nb::ndarray<const scalar_t, nb::numpy> n_y, double tol)
+              nb::ndarray<const scalar_t, nb::ndim<1>, nb::c_contig> gap,
+              nb::ndarray<const scalar_t, nb::ndim<1>, nb::c_contig> n_y,
+              double tol)
            {
              return self.crop_invalid_points(
                  pair, std::span(gap.data(), gap.size()),
@@ -427,7 +428,7 @@ NB_MODULE(cpp, m)
   m.def(
       "pack_coefficient_quadrature",
       [](std::shared_ptr<const dolfinx::fem::Function<scalar_t>> coeff, int q,
-         nb::ndarray<const std::int32_t, nb::c_contig> entities)
+         nb::ndarray<const std::int32_t, nb::ndim<1>, nb::c_contig> entities)
       {
         std::span<const std::int32_t> e_span(entities.data(), entities.size());
         if (entities.ndim() == 1)
@@ -451,7 +452,7 @@ NB_MODULE(cpp, m)
       });
   m.def("pack_gradient_quadrature",
         [](std::shared_ptr<const dolfinx::fem::Function<scalar_t>> coeff, int q,
-           nb::ndarray<const std::int32_t, nb::c_contig> entities)
+           nb::ndarray<const std::int32_t, nb::ndim<1>, nb::c_contig> entities)
         {
           std::span<const std::int32_t> e_span(entities.data(),
                                                entities.size());
@@ -477,7 +478,8 @@ NB_MODULE(cpp, m)
 
   m.def("pack_circumradius",
         [](const dolfinx::mesh::Mesh<double>& mesh,
-           nb::ndarray<const std::int32_t, nb::numpy> active_facets)
+           nb::ndarray<const std::int32_t, nb::ndim<2>, nb::c_contig>
+               active_facets)
         {
           std::span<const std::int32_t> e_span(active_facets.data(),
                                                active_facets.size());
@@ -536,16 +538,19 @@ NB_MODULE(cpp, m)
       nb::arg("mesh"), nb::arg("quadrature_facets"),
       nb::arg("candidate_facets"), nb::arg("radius") = -1.0);
 
-  m.def("point_cloud_pairs",
-        [](nb::ndarray<const double, nb::numpy> points, double r)
-        {
-          return dolfinx_contact::point_cloud_pairs(
-              std::span(points.data(), points.size()), r);
-        });
+  m.def(
+      "point_cloud_pairs",
+      [](nb::ndarray<const double, nb::ndim<2>, nb::c_contig> points, double r)
+      {
+        return dolfinx_contact::point_cloud_pairs(
+            std::span(points.data(), points.size()), r);
+      });
 
   m.def("compute_ghost_cell_destinations",
         [](const dolfinx::mesh::Mesh<double>& mesh,
-           nb::ndarray<const std::int32_t, nb::numpy> marker_subset, double r)
+           nb::ndarray<const std::int32_t, nb::ndim<1>, nb::c_contig>
+               marker_subset,
+           double r)
         {
           return dolfinx_contact::compute_ghost_cell_destinations(
               mesh, std::span(marker_subset.data(), marker_subset.size()), r);
@@ -558,10 +563,10 @@ NB_MODULE(cpp, m)
   m.def(
       "raytracing",
       [](const dolfinx::mesh::Mesh<double>& mesh,
-         nb::ndarray<const double, nb::numpy> point,
-         nb::ndarray<const double, nb::numpy> normal,
-         nb::ndarray<const std::int32_t, nb::numpy> cells, int max_iter,
-         double tol)
+         nb::ndarray<const double, nb::ndim<2>, nb::c_contig> point,
+         nb::ndarray<const double, nb::ndim<2>, nb::c_contig> normal,
+         nb::ndarray<const std::int32_t, nb::ndim<1>, nb::c_contig> cells,
+         int max_iter, double tol)
       {
         std::span<const std::int32_t> facet_span(cells.data(), cells.size());
         std::size_t gdim = mesh.geometry().dim();
