@@ -155,7 +155,7 @@ def create_dolfinx_mesh(
         ufl_domain,
     )
     msh.name = "Grid"
-    msh.topology.create_entities(tdim-1)
+    msh.topology.create_entities(tdim - 1)
     entities, values = distribute_entity_data(msh, tdim - 1, marked_facets, facet_values)
 
     msh.topology.create_connectivity(tdim - 1, 0)
