@@ -8,9 +8,9 @@
 
 dolfinx_contact::KernelData::KernelData(
     const dolfinx::fem::FunctionSpace<double>& V,
-    std::shared_ptr<const dolfinx_contact::QuadratureRule> q_rule,
+    const dolfinx_contact::QuadratureRule& q_rule,
     const std::vector<std::size_t>& cstrides)
-    : _qp_offsets(q_rule->offset()), _q_weights(q_rule->weights())
+    : _qp_offsets(q_rule.offset()), _q_weights(q_rule.weights())
 {
   // Extract mesh
   std::shared_ptr<const dolfinx::mesh::Mesh<double>> mesh = V.mesh();
@@ -28,7 +28,7 @@ dolfinx_contact::KernelData::KernelData(
 
   dolfinx_contact::error::check_cell_type(topology->cell_type());
   // Create quadrature points on reference facet
-  const std::vector<double>& q_points = q_rule->points();
+  const std::vector<double>& q_points = q_rule.points();
   const std::size_t num_quadrature_pts = _q_weights.size();
 
   // Extract function space data (assuming same test and trial space)
@@ -62,7 +62,7 @@ dolfinx_contact::KernelData::KernelData(
   // Tabulate Coordinate element (first derivative to compute Jacobian)
   _c_basis_shape = cmap.tabulate_shape(1, _q_weights.size());
   _c_basis_values = std::vector<double>(std::reduce(
-    _c_basis_shape.begin(), _c_basis_shape.end(), 1, std::multiplies{}));
+      _c_basis_shape.begin(), _c_basis_shape.end(), 1, std::multiplies{}));
   cmap.tabulate(1, q_points, {num_quadrature_pts, _tdim}, _c_basis_values);
 
   // Create offsets from cstrides

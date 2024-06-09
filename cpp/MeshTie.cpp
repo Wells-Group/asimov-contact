@@ -90,8 +90,8 @@ void dolfinx_contact::MeshTie::generate_meshtie_data_matrix_only(
   const std::size_t ndofs_cell = dofmap->cell_dofs(0).size();
   const std::size_t bs = dofmap->bs();
   const std::size_t num_q_points
-      = dolfinx_contact::Contact::quadrature_rule()->offset()[1]
-        - dolfinx_contact::Contact::quadrature_rule()->offset()[0];
+      = dolfinx_contact::Contact::quadrature_rule().offset()[1]
+        - dolfinx_contact::Contact::quadrature_rule().offset()[0];
 
   const std::size_t max_links = dolfinx_contact::Contact::max_links();
   // Coefficient offsets
@@ -360,8 +360,8 @@ void dolfinx_contact::MeshTie::generate_poisson_data_matrix_only(
   std::shared_ptr<const dolfinx::fem::DofMap> dofmap = V.dofmap();
   const std::size_t ndofs_cell = dofmap->cell_dofs(0).size();
   const std::size_t num_q_points
-      = dolfinx_contact::Contact::quadrature_rule()->offset()[1]
-        - dolfinx_contact::Contact::quadrature_rule()->offset()[0];
+      = dolfinx_contact::Contact::quadrature_rule().offset()[1]
+        - dolfinx_contact::Contact::quadrature_rule().offset()[0];
 
   const std::size_t max_links = dolfinx_contact::Contact::max_links();
   // Coefficient offsets

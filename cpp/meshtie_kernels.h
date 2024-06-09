@@ -36,7 +36,7 @@ namespace dolfinx_contact
 kernel_fn<PetscScalar>
 generate_meshtie_kernel(dolfinx_contact::Kernel type,
                         const dolfinx::fem::FunctionSpace<double>& V,
-                        std::shared_ptr<const QuadratureRule> quadrature_rule,
+                        const QuadratureRule& quadrature_rule,
                         const std::vector<std::size_t>& cstrides);
 
 /// @brief Generate meshtie kernel for poisson
@@ -59,6 +59,6 @@ generate_meshtie_kernel(dolfinx_contact::Kernel type,
 kernel_fn<PetscScalar>
 generate_poisson_kernel(Kernel type,
                         const dolfinx::fem::FunctionSpace<double>& V,
-                        std::shared_ptr<const QuadratureRule> quadrature_rule,
+                        const QuadratureRule& quadrature_rule,
                         const std::vector<std::size_t>& cstrides);
 } // namespace dolfinx_contact

@@ -81,10 +81,7 @@ public:
   }
 
   // return quadrature rule
-  std::shared_ptr<const QuadratureRule> quadrature_rule() const
-  {
-    return _quadrature_rule;
-  }
+  const QuadratureRule& quadrature_rule() const { return *_quadrature_rule; }
 
   std::size_t max_links() const
   {

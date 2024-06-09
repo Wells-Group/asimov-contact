@@ -9,7 +9,7 @@
 dolfinx_contact::kernel_fn<PetscScalar>
 dolfinx_contact::generate_meshtie_kernel(
     dolfinx_contact::Kernel type, const dolfinx::fem::FunctionSpace<double>& V,
-    std::shared_ptr<const dolfinx_contact::QuadratureRule> quadrature_rule,
+    const dolfinx_contact::QuadratureRule& quadrature_rule,
     const std::vector<std::size_t>& cstrides)
 {
   std::shared_ptr<const dolfinx::mesh::Mesh<double>> mesh = V.mesh();
@@ -443,7 +443,7 @@ dolfinx_contact::generate_meshtie_kernel(
 dolfinx_contact::kernel_fn<PetscScalar>
 dolfinx_contact::generate_poisson_kernel(
     dolfinx_contact::Kernel type, const dolfinx::fem::FunctionSpace<double>& V,
-    std::shared_ptr<const dolfinx_contact::QuadratureRule> quadrature_rule,
+    const dolfinx_contact::QuadratureRule& quadrature_rule,
     const std::vector<std::size_t>& cstrides)
 {
   std::shared_ptr<const dolfinx::mesh::Mesh<double>> mesh = V.mesh();

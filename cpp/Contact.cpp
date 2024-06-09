@@ -20,19 +20,19 @@ namespace
 /// @param[in] q_rule The quadrature rule
 std::pair<std::vector<double>, std::array<std::size_t, 4>>
 tabulate(const dolfinx::fem::CoordinateElement<double>& cmap,
-         std::shared_ptr<const dolfinx_contact::QuadratureRule> q_rule)
+         const dolfinx_contact::QuadratureRule& q_rule)
 {
 
   // Create quadrature points on reference facet
-  const std::vector<double>& q_weights = q_rule->weights();
-  const std::vector<double>& q_points = q_rule->points();
-  assert(q_weights.size() == (std::size_t)q_rule->offset().back());
+  const std::vector<double>& q_weights = q_rule.weights();
+  const std::vector<double>& q_points = q_rule.points();
+  assert(q_weights.size() == (std::size_t)q_rule.offset().back());
   // Tabulate Coordinate element (first derivative to compute Jacobian)
   std::array<std::size_t, 4> cmap_shape
       = cmap.tabulate_shape(0, q_weights.size());
   std::vector<double> cmap_basis(
       std::reduce(cmap_shape.begin(), cmap_shape.end(), 1, std::multiplies{}));
-  cmap.tabulate(0, q_points, {q_weights.size(), q_rule->tdim()}, cmap_basis);
+  cmap.tabulate(0, q_points, {q_weights.size(), q_rule.tdim()}, cmap_basis);
   return {cmap_basis, cmap_shape};
 }
 
@@ -48,8 +48,7 @@ tabulate(const dolfinx::fem::CoordinateElement<double>& cmap,
 void compute_linked_cells(
     std::vector<std::int32_t>& linked_cells,
     const std::span<const std::int32_t>& submesh_facets,
-    const std::shared_ptr<const dolfinx::graph::AdjacencyList<std::int32_t>>&
-        sub_to_parent,
+    const dolfinx::graph::AdjacencyList<std::int32_t>& sub_to_parent,
     const std::span<const std::int32_t>& parent_cells)
 {
   linked_cells.resize(0);
@@ -61,7 +60,7 @@ void compute_linked_cells(
                   if (facet >= 0)
                   {
                     // Extract (cell, facet) pair from submesh
-                    auto facet_pair = sub_to_parent->links(facet);
+                    auto facet_pair = sub_to_parent.links(facet);
                     assert(facet_pair.size() == 2);
                     linked_cells.push_back(parent_cells[facet_pair[0]]);
                   }
@@ -300,7 +299,7 @@ void dolfinx_contact::Contact::create_distance_map(int pair)
   const dolfinx::fem::CoordinateElement<double>& cmap
       = candidate_mesh->geometry().cmap();
   std::tie(_reference_basis, _reference_shape)
-      = tabulate(cmap, _quadrature_rule);
+      = tabulate(cmap, *_quadrature_rule);
 
   // NOTE: This function should be moved somwhere else, or return the actual
   // points such that we compuld send them in to compute_distance_map.
@@ -420,9 +419,8 @@ dolfinx_contact::Contact::generate_kernel(
 {
   std::size_t max_links
       = *std::max_element(_max_links.begin(), _max_links.end());
-  return generate_contact_kernel(type, V, _quadrature_rule, max_links);
+  return generate_contact_kernel(type, V, *_quadrature_rule, max_links);
 }
-
 //------------------------------------------------------------------------------------------------
 void dolfinx_contact::Contact::create_q_phys(int origin_meshtag)
 {
@@ -922,7 +920,7 @@ dolfinx_contact::Contact::pack_gap_plane(int pair, double g)
   const dolfinx::fem::CoordinateElement<double>& cmap
       = _mesh->geometry().cmap();
   std::tie(_reference_basis, _reference_shape)
-      = tabulate(cmap, _quadrature_rule);
+      = tabulate(cmap, *_quadrature_rule);
 
   // Compute quadrature points on physical facet _qp_phys_"quadrature_mt"
   create_q_phys(quadrature_mt);
@@ -1165,13 +1163,14 @@ void dolfinx_contact::Contact::assemble_matrix(
       assert(map);
       auto connected_facets = map->links((int)i / 2);
       q_indices.reserve(connected_facets.size());
+
       // NOTE: Should probably be pre-computed
       for (std::size_t j = 0; j < connected_facets.size(); ++j)
         if (connected_facets[j] >= 0)
           q_indices.push_back(j);
 
       // Compute the unique set of cells linked to the current facet
-      compute_linked_cells(linked_cells, connected_facets, facet_map,
+      compute_linked_cells(linked_cells, connected_facets, *facet_map,
                            parent_cells);
     }
 
@@ -1296,7 +1295,7 @@ void dolfinx_contact::Contact::assemble_vector(
         if (connected_facets[j] >= 0)
           q_indices.push_back(j);
 
-      compute_linked_cells(linked_cells, connected_facets, facet_map,
+      compute_linked_cells(linked_cells, connected_facets, *facet_map,
                            parent_cells);
     }
 

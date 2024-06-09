@@ -9,7 +9,7 @@
 dolfinx_contact::kernel_fn<PetscScalar>
 dolfinx_contact::generate_contact_kernel(
     dolfinx_contact::Kernel type, const dolfinx::fem::FunctionSpace<double>& V,
-    std::shared_ptr<const dolfinx_contact::QuadratureRule> quadrature_rule,
+    const dolfinx_contact::QuadratureRule& quadrature_rule,
     std::size_t max_links)
 {
   std::shared_ptr<const dolfinx::mesh::Mesh<double>> mesh = V.mesh();
@@ -17,7 +17,7 @@ dolfinx_contact::generate_contact_kernel(
   const std::size_t gdim = mesh->geometry().dim(); // geometrical dimension
   const std::size_t bs = V.dofmap()->bs();
   // FIXME: This will not work for prism meshes
-  const std::vector<std::size_t>& qp_offsets = quadrature_rule->offset();
+  const std::vector<std::size_t>& qp_offsets = quadrature_rule.offset();
   const std::size_t num_q_points = qp_offsets[1] - qp_offsets[0];
   const std::size_t ndofs_cell = V.dofmap()->element_dof_layout().num_dofs();
 

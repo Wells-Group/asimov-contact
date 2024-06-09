@@ -42,9 +42,7 @@ dolfinx_contact::generate_rigid_surface_kernel(
                                        gdim * gdim * num_qp_per_entity,
                                        gdim * num_qp_per_entity};
 
-  dolfinx_contact::KernelData kd(
-      V, std::make_shared<dolfinx_contact::QuadratureRule>(quadrature_rule),
-      cstrides);
+  dolfinx_contact::KernelData kd(V, quadrature_rule, cstrides);
 
   /// @brief Kernel for contact with rigid surface (RHS).
   ////
