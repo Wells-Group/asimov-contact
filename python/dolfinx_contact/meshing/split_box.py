@@ -155,7 +155,9 @@ def create_dolfinx_mesh(
         ufl_domain,
     )
     msh.name = "Grid"
+    msh.topology.create_entities(tdim-1)
     entities, values = distribute_entity_data(msh, tdim - 1, marked_facets, facet_values)
+
     msh.topology.create_connectivity(tdim - 1, 0)
     mt = meshtags_from_entities(msh, tdim - 1, adjacencylist(entities), values)
     mt.name = "contact_facets"
@@ -588,15 +590,14 @@ def create_split_box_3D(
         cells = np.vstack([cells, cells2 + x.shape[0]])
         x = np.vstack([x, x2])
         cell_id, num_nodes = MPI.COMM_WORLD.bcast([cell_id, cells.shape[1]], root=0)
-
+        num_facet_nodes = MPI.COMM_WORLD.bcast(marked_facets.shape[1], root=0)
     else:
         cell_id, num_nodes = MPI.COMM_WORLD.bcast([None, None], root=0)
         cells, x = np.empty([0, num_nodes], dtype=np.int64), np.empty([0, 3])
         cell_data = np.empty((0,), dtype=np.int32)
-        marked_facets, facet_values = (
-            np.empty((0, 3), dtype=np.int64),
-            np.empty((0,), dtype=np.int32),
-        )
 
+        num_facet_nodes = MPI.COMM_WORLD.bcast(None, root=0)
+        marked_facets = np.empty((0, num_facet_nodes), dtype=np.int32)
+        facet_values = np.empty((0,), dtype=np.int32)
     ufl_domain = ufl_mesh(cell_id, 3, np.float64)
     create_dolfinx_mesh(filename, x[:, :3], cells, cell_data, marked_facets, facet_values, ufl_domain, 3)
