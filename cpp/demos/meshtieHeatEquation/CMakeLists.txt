@@ -4,8 +4,6 @@ set(PROJECT_NAME demo_meshtie_heat)
 project(${PROJECT_NAME})
 
 set(CMAKE_CXX_STANDARD 20)
-set(CMAKE_CXX_FLAGS "-Ofast -march=native ${CMAKE_CXX_FLAGS} -Wall")
-set(CMAKE_C_FLAGS "-Ofast -march=native ${CMAKE_C_FLAGS} -Wall")
 
 find_package(DOLFINX REQUIRED)
 find_package(Basix REQUIRED)
