@@ -249,14 +249,15 @@ def create_unsplit_box_2d(
 
         cell_id, x, cells, cell_data, marked_facets, facet_values = retrieve_mesh_data(model, "box", gdim=2)
         cell_id, num_nodes = MPI.COMM_WORLD.bcast([cell_id, cells.shape[1]], root=0)
+        num_facet_nodes = MPI.COMM_WORLD.bcast(marked_facets.shape[1], root=0)
     else:
         cell_id, num_nodes = MPI.COMM_WORLD.bcast([None, None], root=0)
         cells, x = np.empty([0, num_nodes], dtype=np.int64), np.empty([0, 3])
         cell_data = np.empty((0,), dtype=np.int32)
-        marked_facets, facet_values = (
-            np.empty((0, 3), dtype=np.int64),
-            np.empty((0,), dtype=np.int32),
-        )
+
+        num_facet_nodes = MPI.COMM_WORLD.bcast(None, root=0)
+        marked_facets = np.empty((0, num_facet_nodes), dtype=np.int32)
+        facet_values = np.empty((0,), dtype=np.int32)
 
     ufl_domain = ufl_mesh(cell_id, 2, np.float64)
     create_dolfinx_mesh(filename, x[:, :2], cells, cell_data, marked_facets, facet_values, ufl_domain, 2)
@@ -362,14 +363,15 @@ def create_unsplit_box_3d(
 
         cell_id, x, cells, cell_data, marked_facets, facet_values = retrieve_mesh_data(model, "box", gdim=3)
         cell_id, num_nodes = MPI.COMM_WORLD.bcast([cell_id, cells.shape[1]], root=0)
+        num_facet_nodes = MPI.COMM_WORLD.bcast(marked_facets.shape[1], root=0)
     else:
         cell_id, num_nodes = MPI.COMM_WORLD.bcast([None, None], root=0)
         cells, x = np.empty([0, num_nodes], dtype=np.int64), np.empty([0, 3])
         cell_data = np.empty((0,), dtype=np.int32)
-        marked_facets, facet_values = (
-            np.empty((0, 3), dtype=np.int64),
-            np.empty((0,), dtype=np.int32),
-        )
+
+        num_facet_nodes = MPI.COMM_WORLD.bcast(None, root=0)
+        marked_facets = np.empty((0, num_facet_nodes), dtype=np.int32)
+        facet_values = np.empty((0,), dtype=np.int32)
 
     ufl_domain = ufl_mesh(cell_id, 3, np.float64)
     create_dolfinx_mesh(fname, x[:, :3], cells, cell_data, marked_facets, facet_values, ufl_domain, 3)
@@ -520,14 +522,15 @@ def create_split_box_2D(
         cell_data = np.hstack([cell_data, cell_data2])
         cells = np.vstack([cells, cells2 + x.shape[0]])
         x = np.vstack([x, x2])
+        num_facet_nodes = MPI.COMM_WORLD.bcast(marked_facets.shape[1], root=0)
     else:
         cell_id, num_nodes = MPI.COMM_WORLD.bcast([None, None], root=0)
         cells, x = np.empty([0, num_nodes], dtype=np.int64), np.empty([0, 3])
         cell_data = np.empty((0,), dtype=np.int32)
-        marked_facets, facet_values = (
-            np.empty((0, 3), dtype=np.int64),
-            np.empty((0,), dtype=np.int32),
-        )
+
+        num_facet_nodes = MPI.COMM_WORLD.bcast(None, root=0)
+        marked_facets = np.empty((0, num_facet_nodes), dtype=np.int32)
+        facet_values = np.empty((0,), dtype=np.int32)
 
     ufl_domain = ufl_mesh(cell_id, 2, np.float64)
     create_dolfinx_mesh(filename, x[:, :2], cells, cell_data, marked_facets, facet_values, ufl_domain, 2)
