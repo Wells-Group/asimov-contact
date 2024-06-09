@@ -565,9 +565,9 @@ NB_MODULE(cpp, m)
   m.def(
       "raytracing",
       [](const dolfinx::mesh::Mesh<double>& mesh,
-         nb::ndarray<const double, nb::ndim<2>, nb::c_contig> point,
-         nb::ndarray<const double, nb::ndim<2>, nb::c_contig> normal,
-         nb::ndarray<const std::int32_t, nb::ndim<1>, nb::c_contig> cells,
+         nb::ndarray<const double, nb::ndim<1>, nb::c_contig> point,
+         nb::ndarray<const double, nb::ndim<1>, nb::c_contig> normal,
+         nb::ndarray<const std::int32_t, nb::ndim<2>, nb::c_contig> cells,
          int max_iter, double tol)
       {
         std::span<const std::int32_t> facet_span(cells.data(), cells.size());
@@ -584,7 +584,7 @@ NB_MODULE(cpp, m)
           throw std::invalid_argument(
               "Input normal has to have dimension gdim");
         }
-        auto _normal = std::span<const double>(normal.data(), normal.size());
+        std::span<const double> _normal(normal.data(), normal.size());
         std::tuple<int, std::int32_t, std::vector<double>, std::vector<double>>
             output = dolfinx_contact::raytracing(mesh, _point, _normal,
                                                  facet_span, max_iter, tol);
@@ -592,7 +592,6 @@ NB_MODULE(cpp, m)
         auto x = std::get<2>(output);
         auto X = std::get<3>(output);
         std::int32_t idx = std::get<1>(output);
-
         return nb::make_tuple(status, idx,
                               dolfinx_wrappers::as_nbarray(std::move(x)),
                               dolfinx_wrappers::as_nbarray(std::move(X)));
