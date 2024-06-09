@@ -142,6 +142,8 @@ NB_MODULE(cpp, m)
              return dolfinx_wrappers::as_nbarray(
                  std::move(coeffs), {shape0, (std::size_t)cstride});
            })
+      .def("local_facets", &dolfinx_contact::Contact::local_facets)
+      .def("contact_pair", &dolfinx_contact::Contact::contact_pair)
       .def(
           "create_matrix",
           [](dolfinx_contact::Contact& self, dolfinx::fem::Form<scalar_t>& a,

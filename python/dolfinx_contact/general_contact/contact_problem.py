@@ -130,8 +130,9 @@ class ContactProblem(dolfinx_contact.cpp.Contact):
                 )
                 offset0 = offset1
                 offset1 = offset0 + self._num_q_points[i] * gdim
-                # Pack du on contacting surface
-                self.coeffs[i][:, offset0:offset1] = self.pack_u_contact(i, du._cpp_object)[:, :]
+                # Pack du on contacting surface (local facet only)
+                num_local_facets = self.local_facets(self.contact_pair(i)[0])
+                self.coeffs[i][:num_local_facets, offset0:offset1] = self.pack_u_contact(i, du._cpp_object)[:, :]
 
     def pack_normals(self, i: int):
         """
@@ -252,16 +253,17 @@ class ContactProblem(dolfinx_contact.cpp.Contact):
                 self._num_q_points.append(normals.shape[1] // gdim)
                 offset0 = 4
                 offset1 = offset0 + self._num_q_points[i] * gdim
-                print("S:", self.pack_gap(i).shape, offset0, offset1)
-                self.coeffs[i][:, offset0:offset1] = self.pack_gap(i)
+                # GAP and normals are only packed for owned facets
+                num_local_facets = self.local_facets(self.contact_pair(i)[0])
+                self.coeffs[i][:num_local_facets, offset0:offset1] = self.pack_gap(i)
                 offset0 = offset1
                 offset1 = offset0 + self._num_q_points[i] * gdim
-                self.coeffs[i][:, offset0:offset1] = normals[:, :]
+                self.coeffs[i][:num_local_facets, offset0:offset1] = normals[:, :]
                 offset0 = offset1
                 offset1 = offset0 + self._num_q_points[i] * gdim * max_links * ndofs_cell
-                self.coeffs[i][:, offset0:offset1] = self.pack_test_functions(i, function_space._cpp_object)
+                self.coeffs[i][:num_local_facets, offset0:offset1] = self.pack_test_functions(i, function_space._cpp_object)
                 if new_model:
-                    self.coeffs[i][:, -normals.shape[1] :] = normals[:, :]
+                    self.coeffs[i][:num_local_facets, -normals.shape[1] :] = normals[:, :]
 
         # pack grad u
         # This is to track grad_u if several load steps are used
@@ -311,13 +313,14 @@ class ContactProblem(dolfinx_contact.cpp.Contact):
             for i in range(num_pairs):
                 offset0 = 4
                 offset1 = offset0 + self._num_q_points[i] * gdim
-                self.coeffs[i][:, offset0:offset1] = self.pack_gap(i)
+                num_local_facets = self.local_facets(self.contact_pair(i)[0])
+                self.coeffs[i][:num_local_facets, offset0:offset1] = self.pack_gap(i)
                 offset0 = offset1
                 offset1 = offset0 + self._num_q_points[i] * gdim
-                self.coeffs[i][:, offset0:offset1] = self.pack_normals(i)[:, :]
+                self.coeffs[i][:num_local_facets, offset0:offset1] = self.pack_normals(i)[:, :]
                 offset0 = offset1
                 offset1 = offset0 + self._num_q_points[i] * gdim * max_links * ndofs_cell
-                self.coeffs[i][:, offset0:offset1] = self.pack_test_functions(i, u.function_space._cpp_object)
+                self.coeffs[i][:num_local_facets, offset0:offset1] = self.pack_test_functions(i, u.function_space._cpp_object)
 
         # pack grad u
         self._grad_u = []

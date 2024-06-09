@@ -593,8 +593,7 @@ dolfinx_contact::Contact::pack_gap(int pair) const
         c[offset + q * gdim + k] = coordb[k] - qp_span(i, q, k);
     }
   }
-
-  return {std::move(c), cstride};
+  return {c, cstride};
 }
 //------------------------------------------------------------------------------------------------
 std::pair<std::vector<PetscScalar>, int>

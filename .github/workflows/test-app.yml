@@ -169,6 +169,7 @@ jobs:
 
       - name: Run unbiased demos in parallel
         working-directory: ./python/demos
+        # FIXME: --problem 1 fails in parallel (3 proc) on my machine
         run: |
           mpirun -np 2 python demo_nitsche_unbiased.py --problem=1
           mpirun -np 2 python demo_nitsche_unbiased.py --problem=2 --friction=0.1
