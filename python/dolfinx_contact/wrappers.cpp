@@ -111,7 +111,7 @@ NB_MODULE(cpp, m)
   nb::class_<dolfinx_contact::Contact>(m, "Contact", "Contact object")
       .def(
           nb::init<const std::vector<
-                       std::shared_ptr<dolfinx::mesh::MeshTags<std::int32_t>>>&,
+                       std::shared_ptr<const dolfinx::mesh::MeshTags<std::int32_t>>>&,
                    const dolfinx::graph::AdjacencyList<std::int32_t>&,
                    const std::vector<std::array<int, 2>>&,
                    std::shared_ptr<const dolfinx::mesh::Mesh<double>>,
@@ -374,13 +374,15 @@ NB_MODULE(cpp, m)
 
   // Contact
   nb::class_<dolfinx_contact::MeshTie>(m, "MeshTie", "meshtie object")
-      .def(nb::init<std::vector<
-                        std::shared_ptr<dolfinx::mesh::MeshTags<std::int32_t>>>,
-                    const dolfinx::graph::AdjacencyList<std::int32_t>&,
-                    std::vector<std::array<int, 2>>,
-                    std::shared_ptr<dolfinx::mesh::Mesh<double>>, const int>(),
-           nb::arg("markers"), nb::arg("surfaces"), nb::arg("contact_pairs"),
-           nb::arg("V"), nb::arg("quadrature_degree") = 3)
+      .def(
+          nb::init<
+              std::vector<
+                  std::shared_ptr<const dolfinx::mesh::MeshTags<std::int32_t>>>,
+              const dolfinx::graph::AdjacencyList<std::int32_t>&,
+              std::vector<std::array<int, 2>>,
+              std::shared_ptr<const dolfinx::mesh::Mesh<double>>, const int>(),
+          nb::arg("markers"), nb::arg("surfaces"), nb::arg("contact_pairs"),
+          nb::arg("V"), nb::arg("quadrature_degree") = 3)
       .def(
           "coeffs",
           [](dolfinx_contact::MeshTie& self, int pair)

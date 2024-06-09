@@ -75,8 +75,8 @@ void compute_linked_cells(
 } // namespace
 
 dolfinx_contact::Contact::Contact(
-    const std::vector<std::shared_ptr<dolfinx::mesh::MeshTags<std::int32_t>>>&
-        markers,
+    const std::vector<
+        std::shared_ptr<const dolfinx::mesh::MeshTags<std::int32_t>>>& markers,
     const dolfinx::graph::AdjacencyList<std::int32_t>& surfaces,
     const std::vector<std::array<int, 2>>& contact_pairs,
     std::shared_ptr<const dolfinx::mesh::Mesh<double>> mesh,
@@ -115,7 +115,7 @@ dolfinx_contact::Contact::Contact(
   offsets.push_back(0);
   for (std::size_t s = 0; s < markers.size(); ++s)
   {
-    std::shared_ptr<dolfinx::mesh::MeshTags<int>> marker = markers[s];
+    std::shared_ptr<const dolfinx::mesh::MeshTags<int>> marker = markers[s];
     std::span<const int> links = surfaces.links(int(s));
     for (std::size_t i = 0; i < links.size(); ++i)
     {
@@ -139,7 +139,7 @@ dolfinx_contact::Contact::Contact(
   _quadrature_rule = std::make_shared<QuadratureRule>(
       topology->cell_type(), q_deg, fdim, basix::quadrature::type::Default);
 }
-//------------------------------------------------------------------------------------------------
+//----------------------------------------------------------------------------
 std::pair<std::vector<double>, std::array<std::size_t, 3>>
 dolfinx_contact::Contact::qp_phys(int surface) const
 {
@@ -150,16 +150,15 @@ dolfinx_contact::Contact::qp_phys(int surface) const
   std::array<std::size_t, 3> shape = {num_facets, num_q_points, gdim};
   return {_qp_phys[surface], shape};
 }
-//------------------------------------------------------------------------------------------------
+//-----------------------------------------------------------------------------
 std::size_t dolfinx_contact::Contact::coefficients_size(
-    bool meshtie,
-    std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V) const
+    bool meshtie, const dolfinx::fem::FunctionSpace<double>& V) const
 {
   // mesh data
   const std::size_t gdim = _mesh->geometry().dim(); // geometrical dimension
 
   // Extract function space data (assuming same test and trial space)
-  std::shared_ptr<const dolfinx::fem::DofMap> dofmap = V->dofmap();
+  std::shared_ptr<const dolfinx::fem::DofMap> dofmap = V.dofmap();
   const std::size_t ndofs_cell = dofmap->cell_dofs(0).size();
   const std::size_t bs = dofmap->bs();
 

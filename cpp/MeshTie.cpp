@@ -6,15 +6,16 @@
 
 #include "MeshTie.h"
 
+//-----------------------------------------------------------------------------
 void dolfinx_contact::MeshTie::generate_kernel_data(
     dolfinx_contact::Problem problem_type,
     const dolfinx::fem::FunctionSpace<double>& V,
     const std::map<std::string,
-                   std::shared_ptr<dolfinx::fem::Function<double>>>&
+                   std::shared_ptr<const dolfinx::fem::Function<double>>>&
         coefficients,
     double gamma, double theta)
 {
-  std::vector<std::shared_ptr<dolfinx::fem::Function<double>>> coeff_list;
+  std::vector<std::shared_ptr<const dolfinx::fem::Function<double>>> coeff_list;
   switch (problem_type)
   {
 
@@ -32,9 +33,7 @@ void dolfinx_contact::MeshTie::generate_kernel_data(
     dolfinx_contact::MeshTie::generate_meshtie_data_matrix_only(
         problem_type, V, coeff_list, gamma, theta);
     if (auto it = coefficients.find("u"); it != coefficients.end())
-    {
       update_kernel_data(coefficients, problem_type);
-    }
     break;
   case Poisson:
     if (auto it = coefficients.find("kdt"); it != coefficients.end())
@@ -73,11 +72,11 @@ void dolfinx_contact::MeshTie::generate_kernel_data(
     throw std::invalid_argument("Problem type not implemented");
   }
 }
-
+//-----------------------------------------------------------------------------
 void dolfinx_contact::MeshTie::generate_meshtie_data_matrix_only(
     dolfinx_contact::Problem problem_type,
     const dolfinx::fem::FunctionSpace<double>& V,
-    std::vector<std::shared_ptr<dolfinx::fem::Function<double>>> coeffs,
+    std::vector<std::shared_ptr<const dolfinx::fem::Function<double>>> coeffs,
     double gamma, double theta)
 {
   // mesh data
@@ -186,9 +185,10 @@ void dolfinx_contact::MeshTie::generate_meshtie_data_matrix_only(
     }
   }
 }
+//-----------------------------------------------------------------------------
 void dolfinx_contact::MeshTie::update_kernel_data(
     const std::map<std::string,
-                   std::shared_ptr<dolfinx::fem::Function<double>>>&
+                   std::shared_ptr<const dolfinx::fem::Function<double>>>&
         coefficients,
     dolfinx_contact::Problem problem_type)
 {
@@ -201,7 +201,7 @@ void dolfinx_contact::MeshTie::update_kernel_data(
   std::size_t offset0 = 0;
   std::size_t offset1 = 0;
 
-  std::vector<std::shared_ptr<dolfinx::fem::Function<double>>> coeff_list;
+  std::vector<std::shared_ptr<const dolfinx::fem::Function<double>>> coeff_list;
   switch (problem_type)
   {
     using enum dolfinx_contact::Problem;
@@ -273,7 +273,7 @@ void dolfinx_contact::MeshTie::update_kernel_data(
     throw std::invalid_argument("Problem type not implemented");
   }
 }
-
+//-----------------------------------------------------------------------------
 void dolfinx_contact::MeshTie::update_function_data(
     const dolfinx::fem::Function<double>& u,
     std::vector<std::vector<double>>& coeffs, std::size_t offset0,
@@ -309,7 +309,7 @@ void dolfinx_contact::MeshTie::update_function_data(
     }
   }
 }
-
+//-----------------------------------------------------------------------------
 void dolfinx_contact::MeshTie::update_gradient_data(
     const dolfinx::fem::Function<double>& u,
     std::vector<std::vector<double>>& coeffs, std::size_t offset0,
@@ -346,7 +346,7 @@ void dolfinx_contact::MeshTie::update_gradient_data(
     }
   }
 }
-
+//-----------------------------------------------------------------------------
 void dolfinx_contact::MeshTie::generate_poisson_data_matrix_only(
     const dolfinx::fem::FunctionSpace<double>& V,
     const dolfinx::fem::Function<double>& kdt, double gamma, double theta)
@@ -432,7 +432,7 @@ void dolfinx_contact::MeshTie::generate_poisson_data_matrix_only(
     }
   }
 }
-
+//-----------------------------------------------------------------------------
 void dolfinx_contact::MeshTie::assemble_vector(
     std::span<PetscScalar> b, const dolfinx::fem::FunctionSpace<double>& V,
     dolfinx_contact::Problem problem_type)
@@ -461,7 +461,7 @@ void dolfinx_contact::MeshTie::assemble_vector(
     throw std::invalid_argument("Problem type not implemented");
   }
 }
-
+//-----------------------------------------------------------------------------
 void dolfinx_contact::MeshTie::assemble_matrix(
     const mat_set_fn& mat_set, const dolfinx::fem::FunctionSpace<double>& V,
     dolfinx_contact::Problem problem_type)
@@ -488,10 +488,11 @@ void dolfinx_contact::MeshTie::assemble_matrix(
     throw std::invalid_argument("Problem type not implemented");
   }
 }
-
+//-----------------------------------------------------------------------------
 std::pair<std::vector<double>, std::size_t>
 dolfinx_contact::MeshTie::coeffs(int pair)
 {
   std::vector<double>& coeffs = _coeffs[pair];
   return {coeffs, _cstride};
 }
+//-----------------------------------------------------------------------------

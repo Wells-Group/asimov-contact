@@ -27,11 +27,12 @@ public:
   /// surface in surfaces->array() as a pair of connected surfaces
   /// @param[in] V The functions space
   /// @param[in] q_deg The quadrature degree.
-  MeshTie(const std::vector<
-              std::shared_ptr<dolfinx::mesh::MeshTags<std::int32_t>>>& markers,
+  MeshTie(const std::vector<std::shared_ptr<
+              const dolfinx::mesh::MeshTags<std::int32_t>>>& markers,
           const dolfinx::graph::AdjacencyList<std::int32_t>& surfaces,
           const std::vector<std::array<int, 2>>& connected_pairs,
-          std::shared_ptr<dolfinx::mesh::Mesh<double>> mesh, int q_deg = 3)
+          std::shared_ptr<const dolfinx::mesh::Mesh<double>> mesh,
+          int q_deg = 3)
       : Contact::Contact(markers, surfaces, connected_pairs, mesh,
                          std::vector<ContactMode>(connected_pairs.size(),
                                                   ContactMode::ClosestPoint),
@@ -83,7 +84,7 @@ public:
   void generate_kernel_data(
       Problem problem_type, const dolfinx::fem::FunctionSpace<double>& V,
       const std::map<std::string,
-                     std::shared_ptr<dolfinx::fem::Function<double>>>&
+                     std::shared_ptr<const dolfinx::fem::Function<double>>>&
           coefficients,
       double gamma, double theta);
 
@@ -95,7 +96,7 @@ public:
   void generate_meshtie_data_matrix_only(
       dolfinx_contact::Problem problem_type,
       const dolfinx::fem::FunctionSpace<double>& V,
-      std::vector<std::shared_ptr<dolfinx::fem::Function<double>>> coeffs,
+      std::vector<std::shared_ptr<const dolfinx::fem::Function<double>>> coeffs,
       double gamma, double theta);
 
   /// Update data for vector assembly based on state
@@ -105,7 +106,7 @@ public:
   /// @param[in] problem_type - the type of equation, e.g. elasticity
   void update_kernel_data(
       const std::map<std::string,
-                     std::shared_ptr<dolfinx::fem::Function<double>>>&
+                     std::shared_ptr<const dolfinx::fem::Function<double>>>&
           coefficients,
       Problem problem_type);
 

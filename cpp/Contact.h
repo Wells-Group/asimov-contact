@@ -46,8 +46,8 @@ public:
   /// @param[in] V The functions space
   /// @param[in] mode Contact detection algorithm for each pair
   /// @param[in] q_deg The quadrature degree.
-  Contact(const std::vector<
-              std::shared_ptr<dolfinx::mesh::MeshTags<std::int32_t>>>& markers,
+  Contact(const std::vector<std::shared_ptr<
+              const dolfinx::mesh::MeshTags<std::int32_t>>>& markers,
           const dolfinx::graph::AdjacencyList<std::int32_t>& surfaces,
           const std::vector<std::array<int, 2>>& contact_pairs,
           std::shared_ptr<const dolfinx::mesh::Mesh<double>> mesh,
@@ -92,9 +92,9 @@ public:
   /// return size of coefficients vector per facet on s
   /// @param[in] meshtie - Type of constraint,meshtie if true, unbiased contact
   /// if false
-  std::size_t coefficients_size(
-      bool meshtie,
-      std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V) const;
+  std::size_t
+  coefficients_size(bool meshtie,
+                    const dolfinx::fem::FunctionSpace<double>& V) const;
 
   /// return distance map (adjacency map mapping quadrature points on surface
   /// to closest facet on other surface)
