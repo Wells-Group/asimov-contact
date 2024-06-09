@@ -92,7 +92,8 @@ dolfinx_contact::KernelData::KernelData(
 double dolfinx_contact::KernelData::compute_first_facet_jacobian(
     const std::size_t facet_index, dolfinx_contact::mdspan2_t J,
     dolfinx_contact::mdspan2_t K, dolfinx_contact::mdspan2_t J_tot,
-    std::span<double> detJ_scratch, dolfinx_contact::cmdspan2_t coords) const
+    std::span<double> detJ_scratch,
+    dolfinx_contact::mdspan_t<const double, 2> coords) const
 {
   dolfinx_contact::cmdspan4_t full_basis(_c_basis_values.data(),
                                          _c_basis_shape);
@@ -112,12 +113,13 @@ double dolfinx_contact::KernelData::compute_first_facet_jacobian(
 }
 //-----------------------------------------------------------------------------
 void dolfinx_contact::KernelData::update_normal(
-    std::span<double> n, dolfinx_contact::cmdspan2_t K,
+    std::span<double> n, dolfinx_contact::mdspan_t<const double, 2> K,
     const std::size_t local_index) const
 {
-  return _update_normal(
-      n, K, dolfinx_contact::cmdspan2_t(_facet_normals.data(), _normals_shape),
-      local_index);
+  return _update_normal(n, K,
+                        dolfinx_contact::mdspan_t<const double, 2>(
+                            _facet_normals.data(), _normals_shape),
+                        local_index);
 }
 //-----------------------------------------------------------------------------
 std::span<const double>

@@ -87,7 +87,8 @@ NB_MODULE(cpp, m)
       .def("points",
            [](dolfinx_contact::QuadratureRule& self, int i)
            {
-             dolfinx_contact::cmdspan2_t points_i = self.points(i);
+             dolfinx_contact::mdspan_t<const double, 2> points_i
+                 = self.points(i);
              std::array<std::size_t, 2> shape
                  = {points_i.extent(0), points_i.extent(1)};
              std::vector<double> _points(shape[0] * shape[1]);

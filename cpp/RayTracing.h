@@ -273,7 +273,7 @@ int raytracing_cell(
   auto dphi = MDSPAN_IMPL_STANDARD_NAMESPACE::submdspan(
       basis, std::pair{1, tdim + 1}, 0,
       MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent, 0);
-  cmdspan2_t coords(coordinate_dofs.data(), cmap.dim(), gdim);
+  mdspan_t<const double, 2> coords(coordinate_dofs.data(), cmap.dim(), gdim);
   mdspan2_t _xk(x_k.data(), 1, gdim);
   for (int k = 0; k < max_iter; ++k)
   {
@@ -500,7 +500,7 @@ compute_ray(const dolfinx::mesh::Mesh<double>& mesh,
               std::span<const double, tdim - 1> xi, std::span<double, tdim> X)
     {
       const std::vector<int>& facet = facets[facet_index];
-      dolfinx_contact::cmdspan2_t x(xb.data(), x_shape);
+      dolfinx_contact::mdspan_t<const double, 2> x(xb.data(), x_shape);
       for (std::size_t i = 0; i < tdim; ++i)
       {
         X[i] = x(facet.front(), i);

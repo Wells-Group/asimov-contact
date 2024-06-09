@@ -75,8 +75,8 @@ dolfinx_contact::generate_rigid_surface_kernel(
     const std::size_t ndofs_cell = kd.ndofs_cell();
 
     // Reshape coordinate dofs to two-dimensional array
-    dolfinx_contact::cmdspan2_t coord(coordinate_dofs, kd.num_coordinate_dofs(),
-                                      3);
+    dolfinx_contact::mdspan_t<const double, 2> coord(
+        coordinate_dofs, kd.num_coordinate_dofs(), 3);
 
     // Compute Jacobian and determinant at first quadrature point
     std::array<double, 9> Jb;
@@ -234,8 +234,8 @@ dolfinx_contact::generate_rigid_surface_kernel(
     const std::uint32_t ndofs_cell = kd.ndofs_cell();
 
     // Reshape coordinate dofs to two-dimensional array
-    dolfinx_contact::cmdspan2_t coord(coordinate_dofs, kd.num_coordinate_dofs(),
-                                      3);
+    dolfinx_contact::mdspan_t<const double, 2> coord(
+        coordinate_dofs, kd.num_coordinate_dofs(), 3);
 
     // Compute Jacobian and determinant at first quadrature point
     std::array<double, 9> Jb;

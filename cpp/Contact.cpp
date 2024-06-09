@@ -361,11 +361,12 @@ dolfinx_contact::Contact::pack_nx(int pair) const
       = dolfinx::mesh::cell_type_to_basix_type(topology->cell_type());
   auto [facet_normalsb, n_shape]
       = basix::cell::facet_outward_normals<double>(cell_type);
-  cmdspan2_t facet_normals(facet_normalsb.data(), n_shape);
+  mdspan_t<const double, 2> facet_normals(facet_normalsb.data(), n_shape);
 
   // Working memory for loop
   std::vector<double> coordinate_dofsb(num_dofs_g * gdim);
-  cmdspan2_t coordinate_dofs(coordinate_dofsb.data(), num_dofs_g, gdim);
+  mdspan_t<const double, 2> coordinate_dofs(coordinate_dofsb.data(), num_dofs_g,
+                                            gdim);
   std::array<double, 9> Jb;
   std::array<double, 9> Kb;
   mdspan2_t J(Jb.data(), gdim, tdim);
@@ -532,7 +533,8 @@ dolfinx_contact::Contact::pack_gap(int pair) const
   const int tdim = topology->dim();
 
   std::vector<double> coordinate_dofsb(num_dofs_g * gdim);
-  cmdspan2_t coordinate_dofs(coordinate_dofsb.data(), num_dofs_g, gdim);
+  mdspan_t<const double, 2> coordinate_dofs(coordinate_dofsb.data(), num_dofs_g,
+                                            gdim);
   std::array<double, 3> coordb;
   mdspan2_t coord(coordb.data(), 1, gdim);
 
@@ -1021,11 +1023,12 @@ dolfinx_contact::Contact::pack_ny(int pair) const
       candidate_mesh->topology()->cell_type());
   auto [facet_normalsb, n_shape]
       = basix::cell::facet_outward_normals<double>(cell_type);
-  cmdspan2_t facet_normals(facet_normalsb.data(), n_shape);
+  mdspan_t<const double, 2> facet_normals(facet_normalsb.data(), n_shape);
 
   // Working memory for loop
   std::vector<double> coordinate_dofsb(num_dofs_g * gdim);
-  cmdspan2_t coordinate_dofs(coordinate_dofsb.data(), num_dofs_g, gdim);
+  mdspan_t<const double, 2> coordinate_dofs(coordinate_dofsb.data(), num_dofs_g,
+                                            gdim);
   std::array<double, 9> Jb;
   std::array<double, 9> Kb;
   mdspan2_t J(Jb.data(), gdim, tdim);

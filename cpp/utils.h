@@ -98,7 +98,8 @@ using kernel_fn
 /// @param[in] coordinate_dofs: geometry coordinates of cell
 /// @param[in] cmap: the coordinate element
 void pull_back(mdspan3_t J, mdspan3_t K, std::span<double> detJ,
-               std::span<double> X, cmdspan2_t x, cmdspan2_t coordinate_dofs,
+               std::span<double> X, mdspan_t<const double, 2> x,
+               mdspan_t<const double, 2> coordinate_dofs,
                const dolfinx::fem::CoordinateElement<double>& cmap);
 
 /// @param[in] cells: the cells to be sorted
@@ -211,8 +212,9 @@ void evaluate_basis_functions(const dolfinx::fem::FunctionSpace<double>& V,
 /// @param[in] coords - the coordinates of the facet
 /// @return absolute value of determinant of J_tot
 double compute_facet_jacobian(mdspan2_t J, mdspan2_t K, mdspan2_t J_tot,
-                              std::span<double> detJ_scratch, cmdspan2_t J_f,
-                              s_cmdspan2_t dphi, cmdspan2_t coords);
+                              std::span<double> detJ_scratch,
+                              mdspan_t<const double, 2> J_f, s_cmdspan2_t dphi,
+                              mdspan_t<const double, 2> coords);
 
 /// @brief Convenience function to update Jacobians
 ///
@@ -221,7 +223,8 @@ double compute_facet_jacobian(mdspan2_t J, mdspan2_t K, mdspan2_t J_tot,
 /// (J*J_f) is computed.
 /// @param[in] cmap The coordinate element
 std::function<double(double, mdspan2_t, mdspan2_t, mdspan2_t, std::span<double>,
-                     cmdspan2_t, s_cmdspan2_t, cmdspan2_t)>
+                     mdspan_t<const double, 2>, s_cmdspan2_t,
+                     mdspan_t<const double, 2>)>
 get_update_jacobian_dependencies(
     const dolfinx::fem::CoordinateElement<double>& cmap);
 
@@ -231,8 +234,8 @@ get_update_jacobian_dependencies(
 /// For non-affine geometries, a function updating the physical facet normal is
 /// returned.
 /// @param[in] cmap The coordinate element
-std::function<void(std::span<double>, cmdspan2_t, cmdspan2_t,
-                   const std::size_t)>
+std::function<void(std::span<double>, mdspan_t<const double, 2>,
+                   mdspan_t<const double, 2>, const std::size_t)>
 get_update_normal(const dolfinx::fem::CoordinateElement<double>& cmap);
 
 /// @brief Convert local entity indices to integration entities
@@ -478,7 +481,8 @@ compute_projection_map(const dolfinx::mesh::Mesh<double>& mesh,
         MDSPAN_IMPL_STANDARD_NAMESPACE::dextents<std::size_t, 2>>
         x_dofmap = mesh.geometry().dofmap();
     std::vector<double> coordinate_dofsb(num_dofs_g * gdim);
-    cmdspan2_t coordinate_dofs(coordinate_dofsb.data(), num_dofs_g, gdim);
+    mdspan_t<const double, 2> coordinate_dofs(coordinate_dofsb.data(),
+                                              num_dofs_g, gdim);
     auto f_to_c = mesh.topology()->connectivity(tdim - 1, tdim);
     if (!f_to_c)
       throw std::runtime_error("Missing facet to cell connectivity");
@@ -506,8 +510,8 @@ compute_projection_map(const dolfinx::mesh::Mesh<double>& mesh,
       // in a single cell at the same time
       // Pull back coordinates
       std::fill(Jb.begin(), Jb.end(), 0);
-      pull_back(J, K, detJ, X, cmdspan2_t(x.data(), 1, gdim), coordinate_dofs,
-                cmap);
+      pull_back(J, K, detJ, X, mdspan_t<const double, 2>(x.data(), 1, gdim),
+                coordinate_dofs, cmap);
       // Copy into output
       std::copy_n(X.begin(), tdim, std::next(candidate_X.begin(), i * tdim));
     }
@@ -593,7 +597,8 @@ compute_raytracing_map(const dolfinx::mesh::Mesh<double>& quadrature_mesh,
       q_dofmap = geom_q.dofmap();
   const std::size_t num_nodes_q = cmap_q.dim();
   std::vector<double> coordinate_dofs_qb(num_nodes_q * gdim);
-  cmdspan2_t coordinate_dofs_q(coordinate_dofs_qb.data(), num_nodes_q, gdim);
+  mdspan_t<const double, 2> coordinate_dofs_q(coordinate_dofs_qb.data(),
+                                              num_nodes_q, gdim);
   auto [reference_normals, rn_shape]
       = basix::cell::facet_outward_normals<double>(
           dolfinx::mesh::cell_type_to_basix_type(top_q->cell_type()));
@@ -743,7 +748,7 @@ compute_raytracing_map(const dolfinx::mesh::Mesh<double>& quadrature_mesh,
                                 std::span<double, tdim> X)
         {
           const std::vector<int>& facet = bfacets[facet_index_c];
-          dolfinx_contact::cmdspan2_t x(xb.data(), x_shape);
+          dolfinx_contact::mdspan_t<const double, 2> x(xb.data(), x_shape);
           const int f0 = facet.front();
           for (std::size_t i = 0; i < tdim; ++i)
           {

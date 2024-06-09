@@ -34,7 +34,8 @@ dolfinx_contact::QuadratureRule::QuadratureRule(dolfinx::mesh::CellType ct,
     std::vector<double>& q_weights = quadrature.back();
     std::size_t num_points = q_weights.size();
     std::size_t pt_shape = quadrature.front().size() / num_points;
-    cmdspan2_t qp(quadrature.front().data(), num_points, pt_shape);
+    mdspan_t<const double, 2> qp(quadrature.front().data(), num_points,
+                                 pt_shape);
 
     _points = std::vector<double>(num_points * _num_sub_entities * _tdim);
     _entity_offset = std::vector<std::size_t>(_num_sub_entities + 1, 0);
@@ -91,7 +92,7 @@ dolfinx_contact::QuadratureRule::QuadratureRule(dolfinx::mesh::CellType ct,
 
       auto [sub_geomb, sub_geom_shape]
           = basix::cell::sub_entity_geometry<double>(b_ct, dim, i);
-      cmdspan2_t coords(sub_geomb.data(), sub_geom_shape);
+      mdspan_t<const double, 2> coords(sub_geomb.data(), sub_geom_shape);
 
       // Push forward quadrature point from reference entity to reference
       // entity on cell
@@ -132,10 +133,10 @@ std::size_t QuadratureRule::num_points(int i) const
   return _entity_offset[i + 1] - _entity_offset[i];
 }
 //-----------------------------------------------------------------------------------------------
-cmdspan2_t QuadratureRule::points(int i) const
+mdspan_t<const double, 2> QuadratureRule::points(int i) const
 {
   assert(i < _num_sub_entities);
-  cmdspan2_t all_points(_points.data(), _weights.size(), _tdim);
+  mdspan_t<const double, 2> all_points(_points.data(), _weights.size(), _tdim);
   return MDSPAN_IMPL_STANDARD_NAMESPACE::submdspan(
       all_points, std::pair(_entity_offset[i], _entity_offset[i + 1]),
       MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent);

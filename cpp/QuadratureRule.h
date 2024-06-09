@@ -21,8 +21,6 @@ using mdspan_t = MDSPAN_IMPL_STANDARD_NAMESPACE::mdspan<
 
 using mdspan2_t = MDSPAN_IMPL_STANDARD_NAMESPACE::mdspan<
     double, MDSPAN_IMPL_STANDARD_NAMESPACE::dextents<std::size_t, 2>>;
-using cmdspan2_t = MDSPAN_IMPL_STANDARD_NAMESPACE::mdspan<
-    const double, MDSPAN_IMPL_STANDARD_NAMESPACE::dextents<std::size_t, 2>>;
 using mdspan3_t = MDSPAN_IMPL_STANDARD_NAMESPACE::mdspan<
     double, MDSPAN_IMPL_STANDARD_NAMESPACE::dextents<std::size_t, 3>>;
 using mdspan4_t = MDSPAN_IMPL_STANDARD_NAMESPACE::mdspan<
@@ -34,9 +32,6 @@ using s_cmdspan2_t = MDSPAN_IMPL_STANDARD_NAMESPACE::mdspan<
     stdex::layout_stride>;
 using s_cmdspan3_t = MDSPAN_IMPL_STANDARD_NAMESPACE::mdspan<
     const double, MDSPAN_IMPL_STANDARD_NAMESPACE::dextents<std::size_t, 3>,
-    stdex::layout_stride>;
-using s_cmdspan4_t = MDSPAN_IMPL_STANDARD_NAMESPACE::mdspan<
-    const double, MDSPAN_IMPL_STANDARD_NAMESPACE::dextents<std::size_t, 4>,
     stdex::layout_stride>;
 
 class QuadratureRule
@@ -85,7 +80,7 @@ public:
 
   /// Return the quadrature points for the ith entity
   /// @param[in] i The local entity index
-  cmdspan2_t points(int i) const;
+  mdspan_t<const double, 2> points(int i) const;
 
   /// Return the quadrature weights for the ith entity
   /// @param[in] i The local entity index

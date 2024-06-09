@@ -21,7 +21,7 @@ void dolfinx_contact::pull_back_nonaffine(
     std::span<double> X, std::span<double> work_array,
     std::span<const double> x,
     const dolfinx::fem::CoordinateElement<double>& cmap,
-    cmdspan2_t cell_geometry, double tol, const int max_it)
+    mdspan_t<const double, 2> cell_geometry, double tol, const int max_it)
 {
   assert((std::size_t)cmap.dim() == cell_geometry.extent(0));
   // Temporary data structures for Newton iteration
@@ -95,9 +95,10 @@ void dolfinx_contact::pull_back_nonaffine(
 
 std::array<double, 3> dolfinx_contact::push_forward_facet_normal(
     std::span<double> work_array, std::span<const double> x, std::size_t gdim,
-    std::size_t tdim, cmdspan2_t coordinate_dofs, const std::size_t facet_index,
+    std::size_t tdim, mdspan_t<const double, 2> coordinate_dofs,
+    const std::size_t facet_index,
     const dolfinx::fem::CoordinateElement<double>& cmap,
-    cmdspan2_t reference_normals)
+    mdspan_t<const double, 2> reference_normals)
 {
   const std::array<std::size_t, 4> c_shape = cmap.tabulate_shape(1, 1);
   const std::size_t basis_size
@@ -156,7 +157,8 @@ std::array<double, 3> dolfinx_contact::push_forward_facet_normal(
 //-----------------------------------------------------------------------------
 double
 dolfinx_contact::compute_circumradius(const dolfinx::mesh::Mesh<double>& mesh,
-                                      double detJ, cmdspan2_t coordinate_dofs)
+                                      double detJ,
+                                      mdspan_t<const double, 2> coordinate_dofs)
 {
   const dolfinx::mesh::CellType cell_type = mesh.topology()->cell_type();
   const int gdim = mesh.geometry().dim();

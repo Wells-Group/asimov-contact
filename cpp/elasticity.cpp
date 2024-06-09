@@ -8,7 +8,7 @@
 
 //-----------------------------------------------------------------------------
 void dolfinx_contact::compute_normal_strain_basis(
-    mdspan2_t epsn, mdspan2_t tr, dolfinx_contact::cmdspan2_t K,
+    mdspan2_t epsn, mdspan2_t tr, dolfinx_contact::mdspan_t<const double, 2> K,
     dolfinx_contact::s_cmdspan3_t dphi, std::array<double, 3> n_surf,
     std::span<const double> n_phys, std::size_t q_pos)
 {
@@ -42,11 +42,9 @@ void dolfinx_contact::compute_normal_strain_basis(
   }
 }
 //-----------------------------------------------------------------------------
-void dolfinx_contact::compute_sigma_n_basis(mdspan3_t sig_n, cmdspan2_t K,
-                                            s_cmdspan3_t dphi,
-                                            std::span<const double> n,
-                                            double mu, double lmbda,
-                                            std::size_t q_pos)
+void dolfinx_contact::compute_sigma_n_basis(
+    mdspan3_t sig_n, mdspan_t<const double, 2> K, s_cmdspan3_t dphi,
+    std::span<const double> n, double mu, double lmbda, std::size_t q_pos)
 {
   const std::size_t ndofs_cell = sig_n.extent(0);
   const std::size_t bs = K.extent(1);

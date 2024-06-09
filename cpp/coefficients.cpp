@@ -15,9 +15,9 @@ using namespace dolfinx_contact;
 void dolfinx_contact::transformed_push_forward(
     const dolfinx::fem::FiniteElement<double>* element,
     cmdspan4_t reference_basis, std::vector<double>& element_basisb,
-    mdspan3_t basis_values, cmdspan2_t J, cmdspan2_t K, double detJ,
-    std::size_t basis_offset, std::size_t q, std::int32_t cell,
-    std::span<const std::uint32_t> cell_info)
+    mdspan3_t basis_values, mdspan_t<const double, 2> J,
+    mdspan_t<const double, 2> K, double detJ, std::size_t basis_offset,
+    std::size_t q, std::int32_t cell, std::span<const std::uint32_t> cell_info)
 {
   const std::function<void(const std::span<PetscScalar>&,
                            const std::span<const std::uint32_t>&, std::int32_t,
@@ -28,8 +28,10 @@ void dolfinx_contact::transformed_push_forward(
   // Get push forward function
   auto push_forward_fn
       = element->basix_element()
-            .map_fn<dolfinx_contact::mdspan2_t, dolfinx_contact::cmdspan2_t,
-                    dolfinx_contact::cmdspan2_t, dolfinx_contact::cmdspan2_t>();
+            .map_fn<dolfinx_contact::mdspan2_t,
+                    dolfinx_contact::mdspan_t<const double, 2>,
+                    dolfinx_contact::mdspan_t<const double, 2>,
+                    dolfinx_contact::mdspan_t<const double, 2>>();
   mdspan2_t element_basis(element_basisb.data(), basis_values.extent(1),
                           basis_values.extent(2));
 

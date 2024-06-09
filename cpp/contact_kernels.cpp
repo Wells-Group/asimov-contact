@@ -72,7 +72,8 @@ dolfinx_contact::generate_contact_kernel(
     const std::uint32_t tdim = kd.tdim();
 
     // NOTE: DOLFINx has 3D input coordinate dofs
-    cmdspan2_t coord(coordinate_dofs, kd.num_coordinate_dofs(), 3);
+    mdspan_t<const double, 2> coord(coordinate_dofs, kd.num_coordinate_dofs(),
+                                    3);
 
     // Create data structures for jacobians
     // We allocate more memory than required, but its better for the compiler
@@ -221,7 +222,8 @@ dolfinx_contact::generate_contact_kernel(
     const std::uint32_t tdim = kd.tdim();
 
     // NOTE: DOLFINx has 3D input coordinate dofs
-    cmdspan2_t coord(coordinate_dofs, kd.num_coordinate_dofs(), 3);
+    mdspan_t<const double, 2> coord(coordinate_dofs, kd.num_coordinate_dofs(),
+                                    3);
 
     // Create data structures for jacobians
     // We allocate more memory than required, but its better for the compiler
@@ -387,7 +389,8 @@ dolfinx_contact::generate_contact_kernel(
     const std::uint32_t tdim = kd.tdim();
 
     // NOTE: DOLFINx has 3D input coordinate dofs
-    cmdspan2_t coord(coordinate_dofs, kd.num_coordinate_dofs(), 3);
+    mdspan_t<const double, 2> coord(coordinate_dofs, kd.num_coordinate_dofs(),
+                                    3);
 
     // Create data structures for jacobians
     // We allocate more memory than required, but its better for the compiler
@@ -571,7 +574,8 @@ dolfinx_contact::generate_contact_kernel(
     const std::uint32_t tdim = kd.tdim();
 
     // NOTE: DOLFINx has 3D input coordinate dofs
-    cmdspan2_t coord(coordinate_dofs, kd.num_coordinate_dofs(), 3);
+    mdspan_t<const double, 2> coord(coordinate_dofs, kd.num_coordinate_dofs(),
+                                    3);
 
     // Create data structures for jacobians
     // We allocate more memory than required, but its better for the compiler
@@ -802,7 +806,8 @@ dolfinx_contact::generate_contact_kernel(
     const std::uint32_t tdim = kd.tdim();
 
     // NOTE: DOLFINx has 3D input coordinate dofs
-    cmdspan2_t coord(coordinate_dofs, kd.num_coordinate_dofs(), 3);
+    mdspan_t<const double, 2> coord(coordinate_dofs, kd.num_coordinate_dofs(),
+                                    3);
 
     // Create data structures for jacobians
     // We allocate more memory than required, but its better for the compiler
@@ -999,7 +1004,8 @@ dolfinx_contact::generate_contact_kernel(
     const std::uint32_t tdim = kd.tdim();
 
     // NOTE: DOLFINx has 3D input coordinate dofs
-    cmdspan2_t coord(coordinate_dofs, kd.num_coordinate_dofs(), 3);
+    mdspan_t<const double, 2> coord(coordinate_dofs, kd.num_coordinate_dofs(),
+                                    3);
 
     // Create data structures for jacobians
     // We allocate more memory than required, but its better for the compiler

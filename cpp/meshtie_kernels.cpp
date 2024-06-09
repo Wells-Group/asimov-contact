@@ -44,7 +44,8 @@ dolfinx_contact::generate_meshtie_kernel(
     auto tdim = std::size_t(kd.tdim());
 
     // NOTE: DOLFINx has 3D input coordinate dofs
-    cmdspan2_t coord(coordinate_dofs, kd.num_coordinate_dofs(), 3);
+    mdspan_t<const double, 2> coord(coordinate_dofs, kd.num_coordinate_dofs(),
+                                    3);
 
     // Create data structures for jacobians
     // We allocate more memory than required, but its better for the compiler
@@ -186,7 +187,8 @@ dolfinx_contact::generate_meshtie_kernel(
     auto tdim = std::size_t(kd.tdim());
 
     // NOTE: DOLFINx has 3D input coordinate dofs
-    cmdspan2_t coord(coordinate_dofs, kd.num_coordinate_dofs(), 3);
+    mdspan_t<const double, 2> coord(coordinate_dofs, kd.num_coordinate_dofs(),
+                                    3);
 
     // Create data structures for jacobians
     // We allocate more memory than required, but its better for the compiler
@@ -286,7 +288,8 @@ dolfinx_contact::generate_meshtie_kernel(
     // Retrieve some data from kd
     auto tdim = std::size_t(kd.tdim());
     // NOTE: DOLFINx has 3D input coordinate dofs
-    cmdspan2_t coord(coordinate_dofs, kd.num_coordinate_dofs(), 3);
+    mdspan_t<const double, 2> coord(coordinate_dofs, kd.num_coordinate_dofs(),
+                                    3);
 
     // Create data structures for jacobians
     // We allocate more memory than required, but its better for the compiler
@@ -483,7 +486,8 @@ dolfinx_contact::generate_poisson_kernel(
     auto tdim = std::size_t(kd.tdim());
 
     // NOTE: DOLFINx has 3D input coordinate dofs
-    cmdspan2_t coord(coordinate_dofs, kd.num_coordinate_dofs(), 3);
+    mdspan_t<const double, 2> coord(coordinate_dofs, kd.num_coordinate_dofs(),
+                                    3);
 
     // Create data structures for jacobians
     // We allocate more memory than required, but its better for the compiler
@@ -609,7 +613,8 @@ dolfinx_contact::generate_poisson_kernel(
     // Retrieve some data from kd
     auto tdim = std::size_t(kd.tdim());
     // NOTE: DOLFINx has 3D input coordinate dofs
-    cmdspan2_t coord(coordinate_dofs, kd.num_coordinate_dofs(), 3);
+    mdspan_t<const double, 2> coord(coordinate_dofs, kd.num_coordinate_dofs(),
+                                    3);
 
     // Create data structures for jacobians
     // We allocate more memory than required, but its better for the compiler

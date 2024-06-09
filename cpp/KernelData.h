@@ -20,12 +20,13 @@
 
 namespace dolfinx_contact
 {
-using jac_fn = std::function<double(double, mdspan2_t, mdspan2_t, mdspan2_t,
-                                    std::span<double>, cmdspan2_t, s_cmdspan2_t,
-                                    cmdspan2_t)>;
+using jac_fn = std::function<double(
+    double, mdspan2_t, mdspan2_t, mdspan2_t, std::span<double>,
+    mdspan_t<const double, 2>, s_cmdspan2_t, mdspan_t<const double, 2>)>;
 
-using normal_fn = std::function<void(std::span<double>, cmdspan2_t, cmdspan2_t,
-                                     const std::size_t)>;
+using normal_fn
+    = std::function<void(std::span<double>, mdspan_t<const double, 2>,
+                         mdspan_t<const double, 2>, const std::size_t)>;
 
 class KernelData
 {
@@ -100,9 +101,9 @@ public:
   const std::vector<std::size_t>& offsets_array() const { return _offsets; }
 
   // Return reference facet normals
-  cmdspan2_t facet_normals() const
+  mdspan_t<const double, 2> facet_normals() const
   {
-    return cmdspan2_t(_facet_normals.data(), _normals_shape);
+    return mdspan_t<const double, 2>(_facet_normals.data(), _normals_shape);
   }
 
   /// Compute the following jacobians on a given facet:
@@ -119,7 +120,7 @@ public:
   double update_jacobian(std::size_t q, std::size_t facet_index, double detJ,
                          mdspan2_t J, mdspan2_t K, mdspan2_t J_tot,
                          std::span<double> detJ_scratch,
-                         cmdspan2_t coords) const
+                         mdspan_t<const double, 2> coords) const
   {
     cmdspan4_t full_basis(_c_basis_values.data(), _c_basis_shape);
     const std::size_t q_pos = _qp_offsets[facet_index] + q;
@@ -148,13 +149,13 @@ public:
   double compute_first_facet_jacobian(std::size_t facet_index, mdspan2_t J,
                                       mdspan2_t K, mdspan2_t J_tot,
                                       std::span<double> detJ_scratch,
-                                      cmdspan2_t coords) const;
+                                      mdspan_t<const double, 2> coords) const;
 
   /// update normal
   /// @param[in, out] n The facet normal
   /// @param[in] K The inverse Jacobian
   /// @param[in] local_index The facet index local to the cell
-  void update_normal(std::span<double> n, cmdspan2_t K,
+  void update_normal(std::span<double> n, mdspan_t<const double, 2> K,
                      std::size_t local_index) const;
 
   /// Return quadrature weights for the i-th facet
