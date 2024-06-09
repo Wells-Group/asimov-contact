@@ -251,8 +251,8 @@ NB_MODULE(cpp, m)
       .def("assemble_matrix",
            [](dolfinx_contact::Contact& self, Mat A, int origin_meshtag,
               contact_wrappers::KernelWrapper<T>& kernel,
-              nb::ndarray<const scalar_t, nb::ndim<2>, nb::c_contig> coeffs,
-              nb::ndarray<const scalar_t, nb::ndim<2>, nb::c_contig> constants,
+              nb::ndarray<const scalar_t, nb::c_contig> coeffs,
+              nb::ndarray<const scalar_t, nb::c_contig> constants,
               const dolfinx::fem::FunctionSpace<double>& V)
            {
              auto ker = kernel.get();
@@ -267,8 +267,8 @@ NB_MODULE(cpp, m)
            [](dolfinx_contact::Contact& self,
               nb::ndarray<scalar_t, nb::ndim<1>, nb::c_contig> b,
               int origin_meshtag, contact_wrappers::KernelWrapper<T>& kernel,
-              nb::ndarray<const scalar_t, nb::ndim<2>, nb::c_contig> coeffs,
-              nb::ndarray<const scalar_t, nb::ndim<2>, nb::c_contig> constants,
+              nb::ndarray<const scalar_t, nb::c_contig> coeffs,
+              nb::ndarray<const scalar_t, nb::c_contig> constants,
               const dolfinx::fem::FunctionSpace<double>& V)
            {
              auto ker = kernel.get();
@@ -430,7 +430,7 @@ NB_MODULE(cpp, m)
   m.def(
       "pack_coefficient_quadrature",
       [](std::shared_ptr<const dolfinx::fem::Function<scalar_t>> coeff, int q,
-         nb::ndarray<const std::int32_t, nb::ndim<1>, nb::c_contig> entities)
+         nb::ndarray<const std::int32_t, nb::c_contig> entities)
       {
         std::span<const std::int32_t> e_span(entities.data(), entities.size());
         if (entities.ndim() == 1)
@@ -454,7 +454,7 @@ NB_MODULE(cpp, m)
       });
   m.def("pack_gradient_quadrature",
         [](std::shared_ptr<const dolfinx::fem::Function<scalar_t>> coeff, int q,
-           nb::ndarray<const std::int32_t, nb::ndim<1>, nb::c_contig> entities)
+           nb::ndarray<const std::int32_t, nb::c_contig> entities)
         {
           std::span<const std::int32_t> e_span(entities.data(),
                                                entities.size());
