@@ -3,40 +3,69 @@
 # SPDX-License-Identifier:    MIT
 
 import argparse
-import numpy as np
-import ufl
-from dolfinx import default_scalar_type
-from dolfinx.io import XDMFFile, VTXWriter
-from dolfinx.fem import (Constant, dirichletbc, Function, FunctionSpace,
-                         VectorFunctionSpace, locate_dofs_topological,
-                         form, assemble_scalar)
-from dolfinx.fem.petsc import (assemble_matrix, assemble_vector, apply_lifting, create_vector, set_bc)
-from dolfinx.graph import adjacencylist
+
 from mpi4py import MPI
 from petsc4py.PETSc import InsertMode, ScatterMode  # type: ignore
 
-from dolfinx_contact.helpers import (epsilon, sigma_func, lame_parameters, rigid_motions_nullspace_subdomains)
-from dolfinx_contact.meshing import (convert_mesh,
-                                     sliding_wedges)
-from dolfinx_contact.newton_solver import NewtonSolver
+import numpy as np
+import ufl
+from dolfinx import default_scalar_type
+from dolfinx.fem import (
+    Constant,
+    Function,
+    assemble_scalar,
+    dirichletbc,
+    form,
+    functionspace,
+    locate_dofs_topological,
+)
+from dolfinx.fem.petsc import (
+    apply_lifting,
+    assemble_matrix,
+    assemble_vector,
+    create_vector,
+    set_bc,
+)
+from dolfinx.graph import adjacencylist
+from dolfinx.io import VTXWriter, XDMFFile
 from dolfinx_contact.cpp import ContactMode
-
-
 from dolfinx_contact.general_contact.contact_problem import ContactProblem, FrictionLaw
+from dolfinx_contact.helpers import (
+    epsilon,
+    lame_parameters,
+    rigid_motions_nullspace_subdomains,
+    sigma_func,
+)
+from dolfinx_contact.meshing import convert_mesh, sliding_wedges
+from dolfinx_contact.newton_solver import NewtonSolver
 
 if __name__ == "__main__":
     desc = "Friction example with two elastic cylinders for verifying correctness of code"
-    parser = argparse.ArgumentParser(description=desc,
-                                     formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument("--quadrature", default=5, type=int, dest="q_degree",
-                        help="Quadrature degree used for contact integrals")
-    parser.add_argument("--order", default=1, type=int, dest="order",
-                        help="Order of mesh geometry", choices=[1, 2])
+    parser = argparse.ArgumentParser(description=desc, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument(
+        "--quadrature",
+        default=5,
+        type=int,
+        dest="q_degree",
+        help="Quadrature degree used for contact integrals",
+    )
+    parser.add_argument(
+        "--order",
+        default=1,
+        type=int,
+        dest="order",
+        help="Order of mesh geometry",
+        choices=[1, 2],
+    )
     _simplex = parser.add_mutually_exclusive_group(required=False)
-    _simplex.add_argument('--simplex', dest='simplex', action='store_true',
-                          help="Use triangle/tet mesh", default=False)
-    parser.add_argument("--res", default=0.1, type=np.float64, dest="res",
-                        help="Mesh resolution")
+    _simplex.add_argument(
+        "--simplex",
+        dest="simplex",
+        action="store_true",
+        help="Use triangle/tet mesh",
+        default=False,
+    )
+    parser.add_argument("--res", default=0.1, type=np.float64, dest="res", help="Mesh resolution")
 
     # Parse input arguments or set to defualt values
     args = parser.parse_args()
@@ -74,7 +103,7 @@ if __name__ == "__main__":
     dirichlet_bdy_1 = 9
     dirichlet_bdy_2 = 3
 
-    V = VectorFunctionSpace(mesh, ("CG", args.order))
+    V = functionspace(mesh, ("CG", args.order, (mesh.geometry.dim,)))
     # boundary conditions
     t = Constant(mesh, default_scalar_type((0.3, 0.0)))
 
@@ -83,12 +112,14 @@ if __name__ == "__main__":
 
     g0 = Constant(mesh, default_scalar_type(0.0))
     g1 = Constant(mesh, default_scalar_type((0, 0)))
-    bcs = [dirichletbc(g0, dirichlet_dofs_1, V.sub(1)),
-           dirichletbc(g1, dirichlet_dofs_2, V)]
+    bcs = [
+        dirichletbc(g0, dirichlet_dofs_1, V.sub(1)),
+        dirichletbc(g1, dirichlet_dofs_2, V),
+    ]
     bc_fns = [g0, g1]
 
     # DG-0 funciton for material
-    V0 = FunctionSpace(mesh, ("DG", 0))
+    V0 = functionspace(mesh, ("DG", 0))
     mu_dg = Function(V0)
     lmbda_dg = Function(V0)
     fric_dg = Function(V0)
@@ -123,8 +154,7 @@ if __name__ == "__main__":
 
     # compiler options to improve performance
     cffi_options = ["-Ofast", "-march=native"]
-    jit_options = {"cffi_extra_compile_args": cffi_options,
-                   "cffi_libraries": ["m"]}
+    jit_options = {"cffi_extra_compile_args": cffi_options, "cffi_libraries": ["m"]}
     # compiled forms for rhs and tangen system
     F_compiled = form(F, jit_options=jit_options)
     J_compiled = form(J, jit_options=jit_options)
@@ -134,12 +164,14 @@ if __name__ == "__main__":
     # Solver options
     ksp_tol = 1e-10
     newton_tol = 1e-7
-    newton_options = {"relaxation_parameter": 1.0,
-                      "atol": newton_tol,
-                      "rtol": newton_tol,
-                      "convergence_criterion": "residual",
-                      "max_it": 50,
-                      "error_on_nonconvergence": True}
+    newton_options = {
+        "relaxation_parameter": 1.0,
+        "atol": newton_tol,
+        "rtol": newton_tol,
+        "convergence_criterion": "residual",
+        "max_it": 50,
+        "error_on_nonconvergence": True,
+    }
 
     petsc_options = {
         "matptap_via": "scalable",
@@ -148,7 +180,7 @@ if __name__ == "__main__":
         "ksp_atol": ksp_tol,
         "pc_type": "gamg",
         "pc_mg_levels": 3,
-        "pc_mg_cycles": 1,   # 1 is v, 2 is w
+        "pc_mg_cycles": 1,  # 1 is v, 2 is w
         "mg_levels_ksp_type": "chebyshev",
         "mg_levels_pc_type": "jacobi",
         "pc_gamg_type": "agg",
@@ -158,7 +190,7 @@ if __name__ == "__main__":
         "pc_gamg_square_graph": 2,
         "pc_gamg_reuse_interpolation": False,
         "ksp_initial_guess_nonzero": False,
-        "ksp_norm_type": "unpreconditioned"
+        "ksp_norm_type": "unpreconditioned",
     }
 
     def _pressure(x):
@@ -167,8 +199,13 @@ if __name__ == "__main__":
 
     # Solve contact problem using Nitsche's method
     contact_problem = ContactProblem([facet_marker], surfaces, contact, mesh, args.q_degree, search_mode)
-    contact_problem.generate_contact_data(FrictionLaw.Coulomb, V, {"u": u, "du": du, "mu": mu_dg,
-                                                                   "lambda": lmbda_dg, "fric": fric_dg}, E * 10, -1)
+    contact_problem.generate_contact_data(
+        FrictionLaw.Coulomb,
+        V,
+        {"u": u, "du": du, "mu": mu_dg, "lambda": lmbda_dg, "fric": fric_dg},
+        E * 10,
+        -1,
+    )
 
     # define functions for newton solver
     def compute_coefficients(x, coeffs):
@@ -177,17 +214,14 @@ if __name__ == "__main__":
 
     def compute_residual(x, b, coeffs):
         b.zeroEntries()
-        b.ghostUpdate(addv=InsertMode.INSERT,
-                      mode=ScatterMode.FORWARD)
+        b.ghostUpdate(addv=InsertMode.INSERT, mode=ScatterMode.FORWARD)
         contact_problem.assemble_vector(b, V)
         assemble_vector(b, F_compiled)
 
         # Apply boundary condition
         if len(bcs) > 0:
-            apply_lifting(
-                b, [J_compiled], bcs=[bcs], x0=[x], scale=-1.0)
-        b.ghostUpdate(addv=InsertMode.ADD,
-                      mode=ScatterMode.REVERSE)
+            apply_lifting(b, [J_compiled], bcs=[bcs], x0=[x], scale=-1.0)
+        b.ghostUpdate(addv=InsertMode.ADD, mode=ScatterMode.REVERSE)
         if len(bcs) > 0:
             set_bc(b, bcs, x, -1.0)
 
@@ -209,8 +243,7 @@ if __name__ == "__main__":
     newton_solver.set_coefficients(compute_coefficients)
 
     # Set rigid motion nullspace
-    null_space = rigid_motions_nullspace_subdomains(V, domain_marker, np.unique(
-        domain_marker.values), num_domains=2)
+    null_space = rigid_motions_nullspace_subdomains(V, domain_marker, np.unique(domain_marker.values), num_domains=2)
     newton_solver.A.setNearNullSpace(null_space)
 
     # Set Newton solver options
@@ -230,8 +263,7 @@ if __name__ == "__main__":
     n = ufl.FacetNormal(mesh)
     metadata = {"quadrature_degree": 2}
 
-    ds = ufl.Measure("ds", domain=mesh, metadata=metadata,
-                     subdomain_data=facet_marker)
+    ds = ufl.Measure("ds", domain=mesh, metadata=metadata, subdomain_data=facet_marker)
     ex = Constant(mesh, default_scalar_type((1.0, 0.0)))
     ey = Constant(mesh, default_scalar_type((0.0, 1.0)))
     Rx_1form = form(ufl.inner(sigma(u) * n, ex) * ds(contact_bdy_1))
@@ -243,4 +275,9 @@ if __name__ == "__main__":
     R_x2 = mesh.comm.allreduce(assemble_scalar(Rx_2form), op=MPI.SUM)
     R_y2 = mesh.comm.allreduce(assemble_scalar(Ry_2form), op=MPI.SUM)
 
-    print("Rx/Ry", abs(R_x1) / abs(R_y1), abs(R_x2) / abs(R_y2), (fric + np.tan(angle)) / (1 - fric * np.tan(angle)))
+    print(
+        "Rx/Ry",
+        abs(R_x1) / abs(R_y1),
+        abs(R_x2) / abs(R_y2),
+        (fric + np.tan(angle)) / (1 - fric * np.tan(angle)),
+    )

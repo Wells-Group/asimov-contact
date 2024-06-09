@@ -4,16 +4,18 @@
 //
 // SPDX-License-Identifier:    MIT
 
+#pragma once
+
 #include "Contact.h"
 #include "coefficients.h"
 #include "utils.h"
 #include <dolfinx/fem/Form.h>
 #include <dolfinx/fem/Function.h>
 #include <dolfinx/mesh/utils.h>
+#include <map>
 
 namespace dolfinx_contact
 {
-
 class MeshTie : public Contact
 {
 public:
@@ -25,22 +27,22 @@ public:
   /// surface in surfaces->array() as a pair of connected surfaces
   /// @param[in] V The functions space
   /// @param[in] q_deg The quadrature degree.
-  MeshTie(
-      const std::vector<std::shared_ptr<dolfinx::mesh::MeshTags<std::int32_t>>>&
-          markers,
-      std::shared_ptr<const dolfinx::graph::AdjacencyList<std::int32_t>>
-          surfaces,
-      const std::vector<std::array<int, 2>>& connected_pairs,
-      std::shared_ptr<dolfinx::mesh::Mesh<double>> mesh, const int q_deg = 3)
+  MeshTie(const std::vector<
+              std::shared_ptr<dolfinx::mesh::MeshTags<std::int32_t>>>& markers,
+          std::shared_ptr<const dolfinx::graph::AdjacencyList<std::int32_t>>
+              surfaces,
+          const std::vector<std::array<int, 2>>& connected_pairs,
+          std::shared_ptr<dolfinx::mesh::Mesh<double>> mesh, int q_deg = 3)
       : Contact::Contact(markers, surfaces, connected_pairs, mesh,
-                        std::vector<ContactMode>(connected_pairs.size(),
-                        ContactMode::ClosestPoint), q_deg)
+                         std::vector<ContactMode>(connected_pairs.size(),
+                                                  ContactMode::ClosestPoint),
+                         q_deg)
   {
     // Find closest points
     for (int i = 0; i < (int)connected_pairs.size(); ++i)
     {
       Contact::create_distance_map(i);
-      const std::array<int, 2>& pair = Contact::contact_pair(i);
+      std::array<int, 2> pair = Contact::contact_pair(i);
       std::size_t num_facets = Contact::local_facets(pair[0]);
       if (num_facets > 0)
       {
@@ -81,8 +83,7 @@ public:
   /// @param[in] gamma Nitsche parameter
   /// @param[in] theta determines version of Nitsche's method
   void generate_kernel_data(
-      Problem problem_type,
-      std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V,
+      Problem problem_type, const dolfinx::fem::FunctionSpace<double>& V,
       const std::map<std::string,
                      std::shared_ptr<dolfinx::fem::Function<double>>>&
           coefficients,
@@ -95,7 +96,7 @@ public:
   /// @param[in] theta - Nitsche parameter
   void generate_meshtie_data_matrix_only(
       dolfinx_contact::Problem problem_type,
-      std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V,
+      const dolfinx::fem::FunctionSpace<double>& V,
       std::vector<std::shared_ptr<dolfinx::fem::Function<double>>> coeffs,
       double gamma, double theta);
 
@@ -108,7 +109,7 @@ public:
       const std::map<std::string,
                      std::shared_ptr<dolfinx::fem::Function<double>>>&
           coefficients,
-      dolfinx_contact::Problem problem_type);
+      Problem problem_type);
 
   /// Update funciton value data for vector assembly based on state
   /// @param[in] u - the function
@@ -118,10 +119,11 @@ public:
   /// @param[in] offset1 - position within coeffs where data on contacting
   /// surface should be added
   /// @param[in] coeff_size - total size of the coefficient array per facet
-  void update_function_data(std::shared_ptr<dolfinx::fem::Function<double>> u,
-                            std::vector<std::vector<double>>& coeffs,
-                            std::size_t offset0, std::size_t offset1,
-                            std::size_t coeff_size);
+  void
+  update_function_data(std::shared_ptr<const dolfinx::fem::Function<double>> u,
+                       std::vector<std::vector<double>>& coeffs,
+                       std::size_t offset0, std::size_t offset1,
+                       std::size_t coeff_size);
 
   /// Update gradient value data for vector assembly based on state
   /// @param[in] u - the function
@@ -142,7 +144,7 @@ public:
   /// @param[in] gamma - Nitsche penalty parameter
   /// @param[in] theta - Nitsche parameter
   void generate_poisson_data_matrix_only(
-      std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V,
+      const dolfinx::fem::FunctionSpace<double>& V,
       std::shared_ptr<dolfinx::fem::Function<double>> kdt, double gamma,
       double theta);
 
@@ -151,20 +153,18 @@ public:
   /// @param[in] b - the vector to assemble into
   /// @param[in] V - the associated FunctionSpace
   /// @param[in] problem_type - the type of equation, e.g. elasticity
-  void
-  assemble_vector(std::span<PetscScalar> b,
-                  std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V,
-                  Problem problem_type);
+  void assemble_vector(std::span<PetscScalar> b,
+                       const dolfinx::fem::FunctionSpace<double>& V,
+                       Problem problem_type);
 
   using Contact::assemble_matrix;
   /// Assemble matrix
   /// @param[in] mat_set function for setting matrix entries
   /// @param[in] V function space for Trial/Test functions
   /// @param[in] problem_type - the type of equation, e.g. elasticity
-  void
-  assemble_matrix(const mat_set_fn& mat_set,
-                  std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V,
-                  Problem problem_type);
+  void assemble_matrix(const mat_set_fn& mat_set,
+                       const dolfinx::fem::FunctionSpace<double>& V,
+                       Problem problem_type);
 
   /// Return data generated with generate_meshtie_data
   /// @param[in] pair - the index of the pair of connected surfaces

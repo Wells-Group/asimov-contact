@@ -7,8 +7,20 @@
 # ====================================================
 
 from basix.ufl import element
-from ufl import (Coefficient, ds, dx, FunctionSpace, grad, Identity,
-                 inner, Mesh, sym, TestFunction, tr, TrialFunction)
+from ufl import (
+    Coefficient,
+    ds,
+    dx,
+    FunctionSpace,
+    grad,
+    Identity,
+    inner,
+    Mesh,
+    sym,
+    TestFunction,
+    tr,
+    TrialFunction,
+)
 
 
 # tags for boundaries (see mesh file)
@@ -17,7 +29,7 @@ contact_bdy_1 = 6  # top contact interface
 contact_bdy_2 = 13  # bottom contact interface
 
 e = element("Lagrange", "tetrahedron", 1, shape=(3,))
-e0 = element("DG", "tetrahedron", 0)
+e0 = element("Discontinuous Lagrange", "tetrahedron", 0)
 coord_element = element("Lagrange", "tetrahedron", 1, shape=(3,))
 mesh = Mesh(coord_element)
 V = FunctionSpace(mesh, e)
@@ -34,7 +46,7 @@ def epsilon(z):
 
 
 def sigma(z):
-    return (2.0 * mu * epsilon(z) + lmbda * tr(epsilon(z)) * Identity(len(z)))
+    return 2.0 * mu * epsilon(z) + lmbda * tr(epsilon(z)) * Identity(len(z))
 
 
 # Bilinear form

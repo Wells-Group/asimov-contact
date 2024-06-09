@@ -2,163 +2,277 @@
 #
 # SPDX-License-Identifier:    MIT
 #
-# This tests the custom assembly for the unbiased Nitsche formulation in a special case
-# that can be expressed using ufl:
-# We consider a very simple test case made up of two disconnected elements with a constant
-# gap in x[tdim-1]-direction. The contact surfaces are made up of exactly one edge
-# from each element that are perfectly aligned such that the quadrature points only
-# differ in the x[tdim-1]-direction by the given gap.
-# For comparison, we consider a DG function space on a mesh that is constructed by
-# removing the gap between the elements and merging the edges making up the contact
-# surface into one. This allows us to use DG-functions and ufl to formulate the contact
-# terms in the variational form by suitably adjusting the deformation u and using the given
-# constant gap.
+# This tests the custom assembly for the unbiased Nitsche formulation in
+# a special case that can be expressed using ufl:
+#
+# We consider a very simple test case made up of two disconnected
+# elements with a constant gap in x[tdim-1]-direction. The contact
+# surfaces are made up of exactly one edge from each element that are
+# perfectly aligned such that the quadrature points only differ in the
+# x[tdim-1]-direction by the given gap. For comparison, we consider a DG
+# function space on a mesh that is constructed by removing the gap
+# between the elements and merging the edges making up the contact
+# surface into one. This allows us to use DG-functions and ufl to
+# formulate the contact terms in the variational form by suitably
+# adjusting the deformation u and using the given constant gap.
 
 
+from mpi4py import MPI
+
+import dolfinx.fem as _fem
 import numpy as np
-import scipy
 import pytest
+import scipy
 import ufl
 from basix.ufl import element
 from dolfinx.cpp.mesh import to_type
-import dolfinx.fem as _fem
 from dolfinx.graph import adjacencylist
-from dolfinx.mesh import (CellType, locate_entities_boundary, locate_entities, create_mesh,
-                          compute_midpoints, meshtags)
-from mpi4py import MPI
-
+from dolfinx.mesh import (
+    CellType,
+    compute_midpoints,
+    create_mesh,
+    locate_entities,
+    locate_entities_boundary,
+    meshtags,
+)
+from dolfinx_contact.cpp import ContactMode, Kernel, MeshTie, Problem
 from dolfinx_contact.general_contact.contact_problem import ContactProblem, FrictionLaw
-from dolfinx_contact.cpp import (ContactMode, MeshTie, Problem, Kernel)
-from dolfinx_contact.helpers import (R_minus, dR_minus, R_plus, dR_plus, epsilon,
-                                     lame_parameters, sigma_func, tangential_proj,
-                                     ball_projection, d_ball_projection,
-                                     d_alpha_ball_projection)
+from dolfinx_contact.helpers import (
+    R_minus,
+    R_plus,
+    ball_projection,
+    d_alpha_ball_projection,
+    d_ball_projection,
+    dR_minus,
+    dR_plus,
+    epsilon,
+    lame_parameters,
+    sigma_func,
+    tangential_proj,
+)
 
 kt = Kernel
 
 
 def DG_rhs_plus(u0, v0, h, n, gamma, theta, sigma, gap, dS):
-    # This version of the ufl form agrees with the formulation in https://doi.org/10.1007/s00211-018-0950-x
+    # This version of the ufl form agrees with the formulation in
+    # https://doi.org/10.1007/s00211-018-0950-x
     def Pn_g(u, a, b):
         return ufl.dot(u(a) - u(b), -n(b)) - gap - (h(a) / gamma) * ufl.dot(sigma(u(a)) * n(a), -n(b))
 
     def Pn_gtheta(v, a, b):
         return ufl.dot(v(a) - v(b), -n(b)) - theta * (h(a) / gamma) * ufl.dot(sigma(v(a)) * n(a), -n(b))
 
-    F = 0.5 * (gamma / h('+')) * R_plus(Pn_g(u0, '+', '-')) * \
-        Pn_gtheta(v0, '+', '-') * dS - 0.5 * (h('+') / gamma) * theta * ufl.dot(sigma(u0('+')) * n('+'), -n('-')) * \
-        ufl.dot(sigma(v0('+')) * n('+'), -n('-')) * dS
+    F = (
+        0.5 * (gamma / h("+")) * R_plus(Pn_g(u0, "+", "-")) * Pn_gtheta(v0, "+", "-") * dS
+        - 0.5
+        * (h("+") / gamma)
+        * theta
+        * ufl.dot(sigma(u0("+")) * n("+"), -n("-"))
+        * ufl.dot(sigma(v0("+")) * n("+"), -n("-"))
+        * dS
+    )
 
-    F += 0.5 * (gamma / h('-')) * R_plus(Pn_g(u0, '-', '+')) * \
-        Pn_gtheta(v0, '-', '+') * dS - 0.5 * (h('-') / gamma) * theta * ufl.dot(sigma(u0('-')) * n('-'), -n('+')) * \
-        ufl.dot(sigma(v0('-')) * n('-'), -n('+')) * dS
+    F += (
+        0.5 * (gamma / h("-")) * R_plus(Pn_g(u0, "-", "+")) * Pn_gtheta(v0, "-", "+") * dS
+        - 0.5
+        * (h("-") / gamma)
+        * theta
+        * ufl.dot(sigma(u0("-")) * n("-"), -n("+"))
+        * ufl.dot(sigma(v0("-")) * n("-"), -n("+"))
+        * dS
+    )
 
     return F
 
 
 def DG_rhs_minus(u0, v0, h, n, gamma, theta, sigma, gap, dS):
-    # This version of the ufl form agrees with its one-sided equivalent in nitsche_ufl.py
+    # This version of the ufl form agrees with its one-sided equivalent
+    # in nitsche_ufl.py
     def Pn_g(u, a, b):
         return ufl.dot(sigma(u(a)) * n(a), -n(b)) + (gamma / h(a)) * (gap - ufl.dot(u(a) - u(b), -n(b)))
 
     def Pn_gtheta(v, a, b):
         return theta * ufl.dot(sigma(v(a)) * n(a), -n(b)) - (gamma / h(a)) * ufl.dot(v(a) - v(b), -n(b))
 
-    F = 0.5 * (h('+') / gamma) * R_minus(Pn_g(u0, '+', '-')) * \
-        Pn_gtheta(v0, '+', '-') * dS - 0.5 * (h('+') / gamma) * theta * ufl.dot(sigma(u0('+')) * n('+'), -n('-')) * \
-        ufl.dot(sigma(v0('+')) * n('+'), -n('-')) * dS
+    F = (
+        0.5 * (h("+") / gamma) * R_minus(Pn_g(u0, "+", "-")) * Pn_gtheta(v0, "+", "-") * dS
+        - 0.5
+        * (h("+") / gamma)
+        * theta
+        * ufl.dot(sigma(u0("+")) * n("+"), -n("-"))
+        * ufl.dot(sigma(v0("+")) * n("+"), -n("-"))
+        * dS
+    )
 
-    F += 0.5 * (h('-') / gamma) * R_minus(Pn_g(u0, '-', '+')) * \
-        Pn_gtheta(v0, '-', '+') * dS - 0.5 * (h('-') / gamma) * theta * ufl.dot(sigma(u0('-')) * n('-'), -n('+')) * \
-        ufl.dot(sigma(v0('-')) * n('-'), -n('+')) * dS
+    F += (
+        0.5 * (h("-") / gamma) * R_minus(Pn_g(u0, "-", "+")) * Pn_gtheta(v0, "-", "+") * dS
+        - 0.5
+        * (h("-") / gamma)
+        * theta
+        * ufl.dot(sigma(u0("-")) * n("-"), -n("+"))
+        * ufl.dot(sigma(v0("-")) * n("-"), -n("+"))
+        * dS
+    )
 
     return F
 
 
 def DG_jac_plus(u0, v0, w0, h, n, gamma, theta, sigma, gap, dS):
-    # This version of the ufl form agrees with the formulation in https://doi.org/10.1007/s00211-018-0950-x
+    # This version of the ufl form agrees with the formulation in
+    # https://doi.org/10.1007/s00211-018-0950-x
     def Pn_g(u, a, b):
         return ufl.dot(u(a) - u(b), -n(b)) - gap - (h(a) / gamma) * ufl.dot(sigma(u(a)) * n(a), -n(b))
 
     def Pn_gtheta(v, a, b, t):
         return ufl.dot(v(a) - v(b), -n(b)) - t * (h(a) / gamma) * ufl.dot(sigma(v(a)) * n(a), -n(b))
 
-    J = 0.5 * (gamma / h('+')) * dR_plus(Pn_g(u0, '+', '-')) * \
-        Pn_gtheta(w0, '+', '-', 1.0) * Pn_gtheta(v0, '+', '-', theta) * dS\
-        - 0.5 * (h('+') / gamma) * theta * ufl.dot(sigma(w0('+')) * n('+'), -n('-')) * \
-        ufl.dot(sigma(v0('+')) * n('+'), -n('-')) * dS
+    J = (
+        0.5
+        * (gamma / h("+"))
+        * dR_plus(Pn_g(u0, "+", "-"))
+        * Pn_gtheta(w0, "+", "-", 1.0)
+        * Pn_gtheta(v0, "+", "-", theta)
+        * dS
+        - 0.5
+        * (h("+") / gamma)
+        * theta
+        * ufl.dot(sigma(w0("+")) * n("+"), -n("-"))
+        * ufl.dot(sigma(v0("+")) * n("+"), -n("-"))
+        * dS
+    )
 
-    J += 0.5 * (gamma / h('-')) * dR_plus(Pn_g(u0, '-', '+')) * \
-        Pn_gtheta(w0, '-', '+', 1.0) * Pn_gtheta(v0, '-', '+', theta) * dS\
-        - 0.5 * (h('-') / gamma) * theta * ufl.dot(sigma(w0('-')) * n('-'), -n('+')) * \
-        ufl.dot(sigma(v0('-')) * n('-'), -n('+')) * dS
+    J += (
+        0.5
+        * (gamma / h("-"))
+        * dR_plus(Pn_g(u0, "-", "+"))
+        * Pn_gtheta(w0, "-", "+", 1.0)
+        * Pn_gtheta(v0, "-", "+", theta)
+        * dS
+        - 0.5
+        * (h("-") / gamma)
+        * theta
+        * ufl.dot(sigma(w0("-")) * n("-"), -n("+"))
+        * ufl.dot(sigma(v0("-")) * n("-"), -n("+"))
+        * dS
+    )
 
     return J
 
 
 def DG_jac_minus(u0, v0, w0, h, n, gamma, theta, sigma, gap, dS):
-    # This version of the ufl form agrees with its one-sided equivalent in nitsche_ufl.py
+    # This version of the ufl form agrees with its one-sided equivalent
+    # in nitsche_ufl.py
     def Pn_g(u, a, b):
         return ufl.dot(sigma(u(a)) * n(a), -n(b)) + (gamma / h(a)) * (gap - ufl.dot(u(a) - u(b), -n(b)))
 
     def Pn_gtheta(v, a, b, t):
         return t * ufl.dot(sigma(v(a)) * n(a), -n(b)) - (gamma / h(a)) * ufl.dot(v(a) - v(b), -n(b))
 
-    J = 0.5 * (h('+') / gamma) * dR_minus(Pn_g(u0, '+', '-')) * \
-        Pn_gtheta(w0, '+', '-', 1.0) * Pn_gtheta(v0, '+', '-', theta) * dS\
-        - 0.5 * (h('+') / gamma) * theta * ufl.dot(sigma(w0('+')) * n('+'), -n('-')) * \
-        ufl.dot(sigma(v0('+')) * n('+'), -n('-')) * dS
+    J = (
+        0.5
+        * (h("+") / gamma)
+        * dR_minus(Pn_g(u0, "+", "-"))
+        * Pn_gtheta(w0, "+", "-", 1.0)
+        * Pn_gtheta(v0, "+", "-", theta)
+        * dS
+        - 0.5
+        * (h("+") / gamma)
+        * theta
+        * ufl.dot(sigma(w0("+")) * n("+"), -n("-"))
+        * ufl.dot(sigma(v0("+")) * n("+"), -n("-"))
+        * dS
+    )
 
-    J += 0.5 * (h('-') / gamma) * dR_minus(Pn_g(u0, '-', '+')) * \
-        Pn_gtheta(w0, '-', '+', 1.0) * Pn_gtheta(v0, '-', '+', theta) * dS\
-        - 0.5 * (h('-') / gamma) * theta * ufl.dot(sigma(w0('-')) * n('-'), -n('+')) * \
-        ufl.dot(sigma(v0('-')) * n('-'), -n('+')) * dS
+    J += (
+        0.5
+        * (h("-") / gamma)
+        * dR_minus(Pn_g(u0, "-", "+"))
+        * Pn_gtheta(w0, "-", "+", 1.0)
+        * Pn_gtheta(v0, "-", "+", theta)
+        * dS
+        - 0.5
+        * (h("-") / gamma)
+        * theta
+        * ufl.dot(sigma(w0("-")) * n("-"), -n("+"))
+        * ufl.dot(sigma(v0("-")) * n("-"), -n("+"))
+        * dS
+    )
 
     return J
 
 
 def DG_rhs_tresca(u0, v0, h, n, gamma, theta, sigma, fric, dS, gdim):
-    """
-    UFL version of the Tresca friction term for the unbiased Nitsche formulation
-    """
+    """UFL version of the Tresca friction term for the unbiased Nitsche formulation."""
+
     def pt_g(u, a, b, c):
         return tangential_proj(u(a) - u(b) - h(a) * c * sigma(u(a)) * n(a), -n(b))
 
     def pt_sig(u, a, b):
         return tangential_proj(sigma(u(a)) * n(a), -n(b))
 
-    return 0.5 * gamma / h('+') * ufl.dot(ball_projection(pt_g(u0, '+', '-', 1. / gamma), fric * h('+') / gamma, gdim),
-                                          pt_g(v0, '+', '-', theta / gamma)) * dS\
-        + 0.5 * gamma / h('-') * ufl.dot(ball_projection(pt_g(u0, '-', '+', 1. / gamma), fric * h('-') / gamma, gdim),
-                                         pt_g(v0, '-', '+', theta / gamma)) * dS\
-        - 0.5 * (h('+') / gamma) * theta * ufl.dot(pt_sig(u0, '+', '-'), pt_sig(v0, '+', '-')) * dS\
-        - 0.5 * (h('-') / gamma) * theta * ufl.dot(pt_sig(u0, '-', '+'), pt_sig(v0, '-', '+')) * dS
+    return (
+        0.5
+        * gamma
+        / h("+")
+        * ufl.dot(
+            ball_projection(pt_g(u0, "+", "-", 1.0 / gamma), fric * h("+") / gamma, gdim),
+            pt_g(v0, "+", "-", theta / gamma),
+        )
+        * dS
+        + 0.5
+        * gamma
+        / h("-")
+        * ufl.dot(
+            ball_projection(pt_g(u0, "-", "+", 1.0 / gamma), fric * h("-") / gamma, gdim),
+            pt_g(v0, "-", "+", theta / gamma),
+        )
+        * dS
+        - 0.5 * (h("+") / gamma) * theta * ufl.dot(pt_sig(u0, "+", "-"), pt_sig(v0, "+", "-")) * dS
+        - 0.5 * (h("-") / gamma) * theta * ufl.dot(pt_sig(u0, "-", "+"), pt_sig(v0, "-", "+")) * dS
+    )
 
 
 def DG_jac_tresca(u0, v0, w0, h, n, gamma, theta, sigma, fric, dS, gdim):
-    """
-    UFL version of the Jacobian for the Tresca friction term for the unbiased Nitsche formulation
-    """
+    """UFL version of the Jacobian for the Tresca friction term for the unbiased Nitsche formulation."""
+
     def pt_g(u, a, b, c):
         return tangential_proj(u(a) - u(b) - h(a) * c * sigma(u(a)) * n(a), -n(b))
 
     def pt_sig(u, a, b):
         return tangential_proj(sigma(u(a)) * n(a), -n(b))
 
-    J = 0.5 * gamma / h('+') * ufl.dot(d_ball_projection(pt_g(u0, '+', '-', 1. / gamma), fric * h('+') / gamma, gdim)
-                                       * pt_g(w0, '+', '-', 1. / gamma), pt_g(v0, '+', '-', theta / gamma)) * dS\
-        - 0.5 * (h('+') / gamma) * theta * ufl.dot(pt_sig(w0, '+', '-'), pt_sig(v0, '+', '-')) * dS
-    J += 0.5 * gamma / h('-') * ufl.dot(d_ball_projection(pt_g(u0, '-', '+', 1. / gamma), fric * h('-') / gamma, gdim)
-                                        * pt_g(w0, '-', '+', 1. / gamma), pt_g(v0, '-', '+', theta / gamma)) * dS\
-        - 0.5 * (h('-') / gamma) * theta * ufl.dot(pt_sig(w0, '-', '+'), pt_sig(v0, '-', '+')) * dS
+    J = (
+        0.5
+        * gamma
+        / h("+")
+        * ufl.dot(
+            d_ball_projection(pt_g(u0, "+", "-", 1.0 / gamma), fric * h("+") / gamma, gdim)
+            * pt_g(w0, "+", "-", 1.0 / gamma),
+            pt_g(v0, "+", "-", theta / gamma),
+        )
+        * dS
+        - 0.5 * (h("+") / gamma) * theta * ufl.dot(pt_sig(w0, "+", "-"), pt_sig(v0, "+", "-")) * dS
+    )
+    J += (
+        0.5
+        * gamma
+        / h("-")
+        * ufl.dot(
+            d_ball_projection(pt_g(u0, "-", "+", 1.0 / gamma), fric * h("-") / gamma, gdim)
+            * pt_g(w0, "-", "+", 1.0 / gamma),
+            pt_g(v0, "-", "+", theta / gamma),
+        )
+        * dS
+        - 0.5 * (h("-") / gamma) * theta * ufl.dot(pt_sig(w0, "-", "+"), pt_sig(v0, "-", "+")) * dS
+    )
 
     return J
 
 
 def DG_rhs_coulomb(u0, v0, h, n, gamma, theta, sigma, gap, fric, dS, gdim):
-    """
-    UFL version of the Coulomb friction term for the unbiased Nitsche formulation
-    """
+    """UFL version of the Coulomb friction term for the unbiased Nitsche formulation."""
+
     def Pn_g(u, a, b):
         return ufl.dot(u(a) - u(b), -n(b)) - gap - (h(a) / gamma) * ufl.dot(sigma(u(a)) * n(a), -n(b))
 
@@ -168,22 +282,33 @@ def DG_rhs_coulomb(u0, v0, h, n, gamma, theta, sigma, gap, fric, dS, gdim):
     def pt_sig(u, a, b):
         return tangential_proj(sigma(u(a)) * n(a), -n(b))
 
-    Pn_u_plus = R_plus(Pn_g(u0, '+', '-'))
-    Pn_u_minus = R_plus(Pn_g(u0, '-', '+'))
-    return 0.5 * gamma / h('+') * ufl.dot(ball_projection(pt_g(u0, '+', '-', 1. / gamma),
-                                                          Pn_u_plus * fric, gdim),
-                                          pt_g(v0, '+', '-', theta / gamma)) * dS\
-        + 0.5 * gamma / h('-') * ufl.dot(ball_projection(pt_g(u0, '-', '+', 1. / gamma),
-                                                         Pn_u_minus * fric, gdim),
-                                         pt_g(v0, '-', '+', theta / gamma)) * dS\
-        - 0.5 * (h('+') / gamma) * theta * ufl.dot(pt_sig(u0, '+', '-'), pt_sig(v0, '+', '-')) * dS\
-        - 0.5 * (h('-') / gamma) * theta * ufl.dot(pt_sig(u0, '-', '+'), pt_sig(v0, '-', '+')) * dS
+    Pn_u_plus = R_plus(Pn_g(u0, "+", "-"))
+    Pn_u_minus = R_plus(Pn_g(u0, "-", "+"))
+    return (
+        0.5
+        * gamma
+        / h("+")
+        * ufl.dot(
+            ball_projection(pt_g(u0, "+", "-", 1.0 / gamma), Pn_u_plus * fric, gdim),
+            pt_g(v0, "+", "-", theta / gamma),
+        )
+        * dS
+        + 0.5
+        * gamma
+        / h("-")
+        * ufl.dot(
+            ball_projection(pt_g(u0, "-", "+", 1.0 / gamma), Pn_u_minus * fric, gdim),
+            pt_g(v0, "-", "+", theta / gamma),
+        )
+        * dS
+        - 0.5 * (h("+") / gamma) * theta * ufl.dot(pt_sig(u0, "+", "-"), pt_sig(v0, "+", "-")) * dS
+        - 0.5 * (h("-") / gamma) * theta * ufl.dot(pt_sig(u0, "-", "+"), pt_sig(v0, "-", "+")) * dS
+    )
 
 
 def DG_jac_coulomb(u0, v0, w0, h, n, gamma, theta, sigma, gap, fric, dS, gdim):
-    """
-    UFL version of the Jacobian for the Coulomb friction term for the unbiased Nitsche formulation
-    """
+    """UFL version of the Jacobian for the Coulomb friction term for the unbiased Nitsche formulation,"""
+
     def Pn_g(u, a, b):
         return ufl.dot(u(a) - u(b), -n(b)) - gap - (h(a) / gamma) * ufl.dot(sigma(u(a)) * n(a), -n(b))
 
@@ -196,39 +321,77 @@ def DG_jac_coulomb(u0, v0, w0, h, n, gamma, theta, sigma, gap, fric, dS, gdim):
     def pt_sig(u, a, b):
         return tangential_proj(sigma(u(a)) * n(a), -n(b))
 
-    Pn_u_plus = R_plus(Pn_g(u0, '+', '-'))
-    Pn_u_minus = R_plus(Pn_g(u0, '-', '+'))
+    Pn_u_plus = R_plus(Pn_g(u0, "+", "-"))
+    Pn_u_minus = R_plus(Pn_g(u0, "-", "+"))
 
-    J = 0.5 * gamma / h('+') * ufl.dot(d_ball_projection(pt_g(u0, '+', '-', 1. / gamma),
-                                                         Pn_u_plus * fric, gdim)
-                                       * pt_g(w0, '+', '-', 1. / gamma), pt_g(v0, '+', '-', theta / gamma)) * dS\
-        - 0.5 * (h('+') / gamma) * theta * ufl.dot(pt_sig(w0, '+', '-'), pt_sig(v0, '+', '-')) * dS
-    J += 0.5 * gamma / h('-') * ufl.dot(d_ball_projection(pt_g(u0, '-', '+', 1. / gamma),
-                                                          Pn_u_minus * fric, gdim)
-                                        * pt_g(w0, '-', '+', 1. / gamma), pt_g(v0, '-', '+', theta / gamma)) * dS\
-        - 0.5 * (h('-') / gamma) * theta * ufl.dot(pt_sig(w0, '-', '+'), pt_sig(v0, '-', '+')) * dS
+    J = (
+        0.5
+        * gamma
+        / h("+")
+        * ufl.dot(
+            d_ball_projection(pt_g(u0, "+", "-", 1.0 / gamma), Pn_u_plus * fric, gdim)
+            * pt_g(w0, "+", "-", 1.0 / gamma),
+            pt_g(v0, "+", "-", theta / gamma),
+        )
+        * dS
+        - 0.5 * (h("+") / gamma) * theta * ufl.dot(pt_sig(w0, "+", "-"), pt_sig(v0, "+", "-")) * dS
+    )
+    J += (
+        0.5
+        * gamma
+        / h("-")
+        * ufl.dot(
+            d_ball_projection(pt_g(u0, "-", "+", 1.0 / gamma), Pn_u_minus * fric, gdim)
+            * pt_g(w0, "-", "+", 1.0 / gamma),
+            pt_g(v0, "-", "+", theta / gamma),
+        )
+        * dS
+        - 0.5 * (h("-") / gamma) * theta * ufl.dot(pt_sig(w0, "-", "+"), pt_sig(v0, "-", "+")) * dS
+    )
 
-    d_alpha_plus = d_alpha_ball_projection(pt_g(u0, '+', '-', 1. / gamma), Pn_u_plus * fric,
-                                           dR_plus(Pn_g(u0, '+', '-')) * fric, gdim)
-    d_alpha_minus = d_alpha_ball_projection(pt_g(u0, '-', '+', 1. / gamma), Pn_u_plus * fric,
-                                            dR_plus(Pn_g(u0, '-', '+')) * fric, gdim)
-    J += 0.5 * gamma / h('+') * Pn_gtheta(w0, '+', '-', 1.0) * \
-        ufl.dot(d_alpha_plus, pt_g(v0, '+', '-', theta / gamma)) * dS
-    J += 0.5 * gamma / h('-') * Pn_gtheta(w0, '-', '+', 1.0) * \
-        ufl.dot(d_alpha_minus, pt_g(v0, '-', '+', theta / gamma)) * dS
+    d_alpha_plus = d_alpha_ball_projection(
+        pt_g(u0, "+", "-", 1.0 / gamma),
+        Pn_u_plus * fric,
+        dR_plus(Pn_g(u0, "+", "-")) * fric,
+        gdim,
+    )
+    d_alpha_minus = d_alpha_ball_projection(
+        pt_g(u0, "-", "+", 1.0 / gamma),
+        Pn_u_plus * fric,
+        dR_plus(Pn_g(u0, "-", "+")) * fric,
+        gdim,
+    )
+    J += (
+        0.5
+        * gamma
+        / h("+")
+        * Pn_gtheta(w0, "+", "-", 1.0)
+        * ufl.dot(d_alpha_plus, pt_g(v0, "+", "-", theta / gamma))
+        * dS
+    )
+    J += (
+        0.5
+        * gamma
+        / h("-")
+        * Pn_gtheta(w0, "-", "+", 1.0)
+        * ufl.dot(d_alpha_minus, pt_g(v0, "-", "+", theta / gamma))
+        * dS
+    )
     return J
 
 
 def compute_dof_permutations_all(V_dg, V_cg, gap):
-    '''The meshes used for the two different formulations are
-       created independently of each other. Therefore we need to
-       determine how to map the dofs from one mesh to the other in
-       order to compare the results'''
+    """The meshes used for the two different formulations are
+    created independently of each other. Therefore we need to
+    determine how to map the dofs from one mesh to the other in
+    order to compare the results.
+    """
     mesh_dg = V_dg.mesh
     mesh_cg = V_cg.mesh
     bs = V_cg.dofmap.index_map_bs
     tdim = mesh_dg.topology.dim
     mesh_dg.topology.create_connectivity(tdim - 1, tdim)
+    mesh_dg.topology.create_connectivity(tdim, tdim)
 
     mesh_cg.topology.create_connectivity(tdim - 1, tdim)
     mesh_cg.topology.create_connectivity(tdim, tdim - 1)
@@ -239,7 +402,7 @@ def compute_dof_permutations_all(V_dg, V_cg, gap):
     # and modify coordinates by gap if necessary
     num_cells = mesh_dg.topology.index_map(tdim).size_local
     for cell in range(num_cells):
-        midpoint = compute_midpoints(mesh_dg, tdim, [cell])[0]
+        midpoint = compute_midpoints(mesh_dg, tdim, np.array([cell]))[0]
         if midpoint[tdim - 1] <= 0:
             # coordinates of corresponding dofs need to be adjusted by gap
             dofs_dg1 = V_dg.dofmap.cell_dofs(cell)
@@ -256,69 +419,119 @@ def compute_dof_permutations_all(V_dg, V_cg, gap):
 
 
 def create_meshes(ct, gap):
-    ''' This is a helper function to create the two element function spaces
-        both for custom assembly and the DG formulation for
-        quads, triangles, hexes and tetrahedra'''
+    """This is a helper function to create the two element function
+    spaces both for custom assembly and the DG formulation for quads,
+    triangles, hexes and tetrahedra.
+    """
     cell_type = to_type(ct)
     if cell_type == CellType.quadrilateral:
-        x_ufl = np.array([[0, 0], [0.8, 0], [0.1, 1.3], [
-                         0.7, 1.2], [-0.1, -1.2], [0.8, -1.1]])
-        x_custom = np.array([[0, 0], [0.8, 0], [0.1, 1.3], [0.7, 1.2], [0, -gap],
-                             [0.8, -gap], [-0.1, -1.2 - gap], [0.8, -1.1 - gap]])
+        x_ufl = np.array([[0, 0], [0.8, 0], [0.1, 1.3], [0.7, 1.2], [-0.1, -1.2], [0.8, -1.1]])
+        x_custom = np.array(
+            [
+                [0, 0],
+                [0.8, 0],
+                [0.1, 1.3],
+                [0.7, 1.2],
+                [0, -gap],
+                [0.8, -gap],
+                [-0.1, -1.2 - gap],
+                [0.8, -1.1 - gap],
+            ]
+        )
         cells_ufl = np.array([[0, 1, 2, 3], [4, 5, 0, 1]], dtype=np.int32)
         cells_custom = np.array([[0, 1, 2, 3], [4, 5, 6, 7]], dtype=np.int32)
     elif cell_type == CellType.triangle:
-        x_ufl = np.array(
-            [[0, 0, 0], [0.8, 0, 0], [0.3, 1.3, 0.0], [0.4, -1.2, 0.0]])
-        x_custom = np.array([[0, 0, 0], [0.8, 0, 0], [0.3, 1.3, 0.0], [
-            0, -gap, 0], [0.8, -gap, 0], [0.4, -1.2 - gap, 0.0]])
+        x_ufl = np.array([[0, 0, 0], [0.8, 0, 0], [0.3, 1.3, 0.0], [0.4, -1.2, 0.0]])
+        x_custom = np.array(
+            [
+                [0, 0, 0],
+                [0.8, 0, 0],
+                [0.3, 1.3, 0.0],
+                [0, -gap, 0],
+                [0.8, -gap, 0],
+                [0.4, -1.2 - gap, 0.0],
+            ]
+        )
         cells_ufl = np.array([[0, 1, 2], [0, 1, 3]], dtype=np.int32)
         cells_custom = np.array([[0, 1, 2], [3, 4, 5]], dtype=np.int32)
     elif cell_type == CellType.tetrahedron:
-        x_ufl = np.array([[0, 0, 0], [1.1, 0, 0], [0.3, 1.0, 0], [
-                         1, 1.2, 1.5], [0.8, 1.2, -1.6]])
-        x_custom = np.array([[0, 0, 0], [1.1, 0, 0], [0.3, 1.0, 0], [1, 1.2, 1.5], [
-            0, 0, -gap], [1.1, 0, -gap], [0.3, 1.0, -gap], [0.8, 1.2, -1.6 - gap]])
+        x_ufl = np.array([[0, 0, 0], [1.1, 0, 0], [0.3, 1.0, 0], [1, 1.2, 1.5], [0.8, 1.2, -1.6]])
+        x_custom = np.array(
+            [
+                [0, 0, 0],
+                [1.1, 0, 0],
+                [0.3, 1.0, 0],
+                [1, 1.2, 1.5],
+                [0, 0, -gap],
+                [1.1, 0, -gap],
+                [0.3, 1.0, -gap],
+                [0.8, 1.2, -1.6 - gap],
+            ]
+        )
         cells_ufl = np.array([[0, 1, 2, 3], [0, 1, 2, 4]], dtype=np.int32)
         cells_custom = np.array([[0, 1, 2, 3], [4, 5, 6, 7]], dtype=np.int32)
     elif cell_type == CellType.hexahedron:
-        x_ufl = np.array([[0, 0, 0], [1.1, 0, 0], [0.1, 1, 0], [1, 1.2, 0],
-                          [0, 0, 1.2], [1.0, 0, 1], [0, 1, 1], [1, 1, 1],
-                          [0, 0, -1.2], [1.0, 0, -1.3], [0, 1, -1], [1, 1, -1]])
-        x_custom = np.array([[0, 0, 0], [1.1, 0, 0], [0.1, 1, 0], [1, 1.2, 0],
-                             [0, 0, 1.2], [1.0, 0, 1], [0, 1, 1], [1, 1, 1],
-                             [0, 0, -1.2 - gap], [1.0, 0, -1.3 - gap],
-                             [0, 1, -1 - gap], [1, 1, -1 - gap],
-                             [0, 0, -gap], [1.1, 0, -gap], [0.1, 1, -gap], [1, 1.2, -gap]])
-        cells_ufl = np.array(
-            [[0, 1, 2, 3, 4, 5, 6, 7], [8, 9, 10, 11, 0, 1, 2, 3]], dtype=np.int32)
-        cells_custom = np.array(
-            [[0, 1, 2, 3, 4, 5, 6, 7], [8, 9, 10, 11, 12, 13, 14, 15]], dtype=np.int32)
+        x_ufl = np.array(
+            [
+                [0, 0, 0],
+                [1.1, 0, 0],
+                [0.1, 1, 0],
+                [1, 1.2, 0],
+                [0, 0, 1.2],
+                [1.0, 0, 1],
+                [0, 1, 1],
+                [1, 1, 1],
+                [0, 0, -1.2],
+                [1.0, 0, -1.3],
+                [0, 1, -1],
+                [1, 1, -1],
+            ]
+        )
+        x_custom = np.array(
+            [
+                [0, 0, 0],
+                [1.1, 0, 0],
+                [0.1, 1, 0],
+                [1, 1.2, 0],
+                [0, 0, 1.2],
+                [1.0, 0, 1],
+                [0, 1, 1],
+                [1, 1, 1],
+                [0, 0, -1.2 - gap],
+                [1.0, 0, -1.3 - gap],
+                [0, 1, -1 - gap],
+                [1, 1, -1 - gap],
+                [0, 0, -gap],
+                [1.1, 0, -gap],
+                [0.1, 1, -gap],
+                [1, 1.2, -gap],
+            ]
+        )
+        cells_ufl = np.array([[0, 1, 2, 3, 4, 5, 6, 7], [8, 9, 10, 11, 0, 1, 2, 3]], dtype=np.int32)
+        cells_custom = np.array([[0, 1, 2, 3, 4, 5, 6, 7], [8, 9, 10, 11, 12, 13, 14, 15]], dtype=np.int32)
     else:
         raise ValueError(f"Unsupported mesh type {ct}")
     gdim = x_ufl.shape[1]
-    coord_el = element("Lagrange", cell_type.name, 1, shape=(gdim,), gdim=gdim)
+    coord_el = element("Lagrange", cell_type.name, 1, shape=(gdim,))
     domain = ufl.Mesh(coord_el)
     mesh_ufl = create_mesh(MPI.COMM_WORLD, cells_ufl, x_ufl, domain)
     domain_custom = ufl.Mesh(coord_el)
-    mesh_custom = create_mesh(
-        MPI.COMM_WORLD, cells_custom, x_custom, domain_custom)
+    mesh_custom = create_mesh(MPI.COMM_WORLD, cells_custom, x_custom, domain_custom)
 
     return mesh_ufl, mesh_custom
 
 
 def locate_contact_facets_custom(V, gap):
-    '''This function locates the contact facets for custom assembly and ensures
-       that the correct facet is chosen if the gap is zero'''
+    """This function locates the contact facets for custom assembly and ensures
+    that the correct facet is chosen if the gap is zero"""
     # Retrieve mesh
     mesh = V.mesh
 
     # locate facets
     tdim = mesh.topology.dim
-    facets1 = locate_entities_boundary(
-        mesh, tdim - 1, lambda x: np.isclose(x[tdim - 1], 0))
-    facets2 = locate_entities_boundary(
-        mesh, tdim - 1, lambda x: np.isclose(x[tdim - 1], -gap))
+    mesh.topology.create_connectivity(tdim, tdim)
+    facets1 = locate_entities_boundary(mesh, tdim - 1, lambda x: np.isclose(x[tdim - 1], 0))
+    facets2 = locate_entities_boundary(mesh, tdim - 1, lambda x: np.isclose(x[tdim - 1], -gap))
 
     # choose correct facet if gap is zero
     mesh.topology.create_connectivity(tdim - 1, tdim)
@@ -327,14 +540,14 @@ def locate_contact_facets_custom(V, gap):
     contact_facets1 = []
     for facet in facets1:
         cell = f_to_c.links(facet)[0]
-        cell_midpoints = compute_midpoints(mesh, tdim, [cell])
+        cell_midpoints = compute_midpoints(mesh, tdim, np.asarray([cell], dtype=np.int32))
         if cell_midpoints[0][tdim - 1] > 0:
             contact_facets1.append(facet)
             cells[0].append(cell)
     contact_facets2 = []
     for facet in facets2:
         cell = f_to_c.links(facet)[0]
-        cell_midpoints = compute_midpoints(mesh, tdim, [cell])
+        cell_midpoints = compute_midpoints(mesh, tdim, np.asarray([cell], dtype=np.int32))
         if cell_midpoints[0][tdim - 1] < -gap:
             contact_facets2.append(facet)
             cells[1].append(cell)
@@ -353,14 +566,21 @@ def create_facet_markers(mesh, facets_cg):
     return meshtags(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
 
 
-@pytest.mark.parametrize("ct", ["triangle", "quadrilateral", "tetrahedron", "hexahedron"])
+@pytest.mark.parametrize(
+    "ct",
+    [
+        "triangle",
+        "quadrilateral",
+        "tetrahedron",
+        "hexahedron",
+    ],
+)
 @pytest.mark.parametrize("gap", [0.5, -0.5])
 @pytest.mark.parametrize("quadrature_degree", [1, 5])
 @pytest.mark.parametrize("theta", [1, 0, -1])
 @pytest.mark.parametrize("frictionlaw", [FrictionLaw.Frictionless, FrictionLaw.Coulomb, FrictionLaw.Tresca])
 @pytest.mark.parametrize("search", [ContactMode.Raytracing, ContactMode.ClosestPoint])
 def test_contact_kernels(ct, gap, quadrature_degree, theta, frictionlaw, search):
-
     # Compute lame parameters
     plane_strain = False
     E = 1e3
@@ -377,14 +597,12 @@ def test_contact_kernels(ct, gap, quadrature_degree, theta, frictionlaw, search)
     mesh_ufl, mesh_custom = create_meshes(ct, gap)
     gdim = mesh_ufl.geometry.dim
     V_ufl = _fem.functionspace(mesh_ufl, ("DG", 1, (gdim,)))
-    V_custom = _fem.FunctionSpace(mesh_custom, ("Lagrange", 1, (gdim,)))
+    V_custom = _fem.functionspace(mesh_custom, ("Lagrange", 1, (gdim,)))
     tdim = mesh_ufl.topology.dim
 
     TOL = 1e-7
-    cells_ufl_0 = locate_entities(
-        mesh_ufl, tdim, lambda x: x[tdim - 1] > 0 - TOL)
-    cells_ufl_1 = locate_entities(
-        mesh_ufl, tdim, lambda x: x[tdim - 1] < 0 + TOL)
+    cells_ufl_0 = locate_entities(mesh_ufl, tdim, lambda x: x[tdim - 1] > 0 - TOL)
+    cells_ufl_1 = locate_entities(mesh_ufl, tdim, lambda x: x[tdim - 1] < 0 + TOL)
 
     def _u0(x):
         values = np.zeros((gdim, x.shape[1]))
@@ -401,8 +619,7 @@ def test_contact_kernels(ct, gap, quadrature_degree, theta, frictionlaw, search)
     def _u2(x):
         values = np.zeros((gdim, x.shape[1]))
         for i in range(tdim):
-            values[i] = np.sin(x[i] + gap) + 2 if i == tdim - \
-                1 else np.sin(x[i]) + 2
+            values[i] = np.sin(x[i] + gap) + 2 if i == tdim - 1 else np.sin(x[i]) + 2
         return values
 
     # DG ufl 'contact'
@@ -425,16 +642,12 @@ def test_contact_kernels(ct, gap, quadrature_degree, theta, frictionlaw, search)
     F0 = DG_rhs_plus(u0, v0, h, n, gamma_scaled, theta, sigma, gap, dS)
     J0 = DG_jac_plus(u0, v0, w0, h, n, gamma_scaled, theta, sigma, gap, dS)
     if frictionlaw == FrictionLaw.Tresca:
-        F0 += DG_rhs_tresca(u0, v0, h, n, gamma_scaled,
-                            theta, sigma, 0.1, dS, gdim)
+        F0 += DG_rhs_tresca(u0, v0, h, n, gamma_scaled, theta, sigma, 0.1, dS, gdim)
 
-        J0 += DG_jac_tresca(u0, v0, w0, h, n, gamma_scaled,
-                            theta, sigma, 0.1, dS, gdim)
+        J0 += DG_jac_tresca(u0, v0, w0, h, n, gamma_scaled, theta, sigma, 0.1, dS, gdim)
     elif frictionlaw == FrictionLaw.Coulomb:
-        F0 += DG_rhs_coulomb(u0, v0, h, n, gamma_scaled,
-                             theta, sigma, gap, 0.1, dS, gdim)
-        J0 += DG_jac_coulomb(u0, v0, w0, h, n, gamma_scaled,
-                             theta, sigma, gap, 0.1, dS, gdim)
+        F0 += DG_rhs_coulomb(u0, v0, h, n, gamma_scaled, theta, sigma, gap, 0.1, dS, gdim)
+        J0 += DG_jac_coulomb(u0, v0, w0, h, n, gamma_scaled, theta, sigma, gap, 0.1, dS, gdim)
 
     # rhs vector
     F0 = _fem.form(F0)
@@ -458,8 +671,8 @@ def test_contact_kernels(ct, gap, quadrature_degree, theta, frictionlaw, search)
     w1 = ufl.TrialFunction(V_custom)
     u = _fem.Function(V_custom)
 
-    u1.interpolate(_u0, cells[0])
-    u1.interpolate(_u2, cells[1])
+    u1.interpolate(_u0, np.array(cells[0]))
+    u1.interpolate(_u2, np.array(cells[1]))
     u1.x.scatter_forward()
 
     # Dummy form for creating vector/matrix
@@ -479,16 +692,25 @@ def test_contact_kernels(ct, gap, quadrature_degree, theta, frictionlaw, search)
     data = np.array([0, 1], dtype=np.int32)
     offsets = np.array([0, 2], dtype=np.int32)
     surfaces = adjacencylist(data, offsets)
-    contact_problem = ContactProblem([facet_marker], surfaces, [(0, 1), (1, 0)],
-                                     mesh_custom, quadrature_degree, [search, search])
-    contact_problem.generate_contact_data(frictionlaw, V_custom, {"u": u, "du": u1, "mu": mu0,
-                                                                  "lambda": lmbda0, "fric": fric},
-                                          E * gamma, theta)
+    contact_problem = ContactProblem(
+        [facet_marker],
+        surfaces,
+        [(0, 1), (1, 0)],
+        mesh_custom,
+        quadrature_degree,
+        [search, search],
+    )
+    contact_problem.generate_contact_data(
+        frictionlaw,
+        V_custom,
+        {"u": u, "du": u1, "mu": mu0, "lambda": lmbda0, "fric": fric},
+        E * gamma,
+        theta,
+    )
 
     # compiler options to improve performance
     cffi_options = ["-Ofast", "-march=native"]
-    jit_options = {"cffi_extra_compile_args": cffi_options,
-                   "cffi_libraries": ["m"]}
+    jit_options = {"cffi_extra_compile_args": cffi_options, "cffi_libraries": ["m"]}
     # Generate residual data structures
     F_custom = _fem.form(F_custom, jit_options=jit_options)
     b1 = _fem.petsc.create_vector(F_custom)
@@ -533,8 +755,7 @@ def test_contact_kernels(ct, gap, quadrature_degree, theta, frictionlaw, search)
         assert np.allclose(b1.array, b2.array[ind_dg])
 
         # Contact terms formulated using ufl consistent with nitsche_ufl.py
-        J2 = DG_jac_minus(u0, v0, w0, h, n, gamma_scaled,
-                          theta, sigma, gap, dS)
+        J2 = DG_jac_minus(u0, v0, w0, h, n, gamma_scaled, theta, sigma, gap, dS)
         J2 = _fem.form(J2)
         A2 = _fem.petsc.create_matrix(J2)
         A2.zeroEntries()
@@ -542,38 +763,43 @@ def test_contact_kernels(ct, gap, quadrature_degree, theta, frictionlaw, search)
         A2.assemble()
 
         ci, cj, cv = A2.getValuesCSR()
-        C_sp = scipy.sparse.csr_matrix(
-            (cv, cj, ci), shape=A2.getSize()).todense()
+        C_sp = scipy.sparse.csr_matrix((cv, cj, ci), shape=A2.getSize()).todense()
         assert np.allclose(C_sp[ind_dg, :][:, ind_dg], B_sp)
 
 
 def poisson_dg(u0, v0, h, n, kdt, gamma, theta, dS):
-    F = gamma / h('+') * ufl.inner(ufl.jump(u0), ufl.jump(v0)) * dS + \
-        gamma / h('-') * ufl.inner(ufl.jump(u0), ufl.jump(v0)) * dS -\
-        ufl.inner(ufl.avg(ufl.grad(u0)), n('+')) * ufl.jump(v0) * dS +\
-        ufl.inner(ufl.avg(ufl.grad(u0)), n('-')) * ufl.jump(v0) * dS -\
-        theta * ufl.inner(ufl.avg(ufl.grad(v0)), n('+')) * ufl.jump(u0) * dS +\
-        theta * ufl.inner(ufl.avg(ufl.grad(v0)), n('-')) * ufl.jump(u0) * dS
+    F = (
+        gamma / h("+") * ufl.inner(ufl.jump(u0), ufl.jump(v0)) * dS
+        + gamma / h("-") * ufl.inner(ufl.jump(u0), ufl.jump(v0)) * dS
+        - ufl.inner(ufl.avg(ufl.grad(u0)), n("+")) * ufl.jump(v0) * dS
+        + ufl.inner(ufl.avg(ufl.grad(u0)), n("-")) * ufl.jump(v0) * dS
+        - theta * ufl.inner(ufl.avg(ufl.grad(v0)), n("+")) * ufl.jump(u0) * dS
+        + theta * ufl.inner(ufl.avg(ufl.grad(v0)), n("-")) * ufl.jump(u0) * dS
+    )
     return 0.5 * kdt * F
 
 
 def tied_dg(u0, v0, h, n, gamma, theta, sigma, dS):
-    F = gamma / h('+') * ufl.inner(ufl.jump(u0), ufl.jump(v0)) * dS + \
-        gamma / h('-') * ufl.inner(ufl.jump(u0), ufl.jump(v0)) * dS -\
-        ufl.inner(ufl.avg(sigma(u0)) * n('+'), ufl.jump(v0)) * dS +\
-        ufl.inner(ufl.avg(sigma(u0)) * n('-'), ufl.jump(v0)) * dS -\
-        theta * ufl.inner(ufl.avg(sigma(v0)) * n('+'), ufl.jump(u0)) * dS +\
-        theta * ufl.inner(ufl.avg(sigma(v0)) * n('-'), ufl.jump(u0)) * dS
+    F = (
+        gamma / h("+") * ufl.inner(ufl.jump(u0), ufl.jump(v0)) * dS
+        + gamma / h("-") * ufl.inner(ufl.jump(u0), ufl.jump(v0)) * dS
+        - ufl.inner(ufl.avg(sigma(u0)) * n("+"), ufl.jump(v0)) * dS
+        + ufl.inner(ufl.avg(sigma(u0)) * n("-"), ufl.jump(v0)) * dS
+        - theta * ufl.inner(ufl.avg(sigma(v0)) * n("+"), ufl.jump(u0)) * dS
+        + theta * ufl.inner(ufl.avg(sigma(v0)) * n("-"), ufl.jump(u0)) * dS
+    )
     return 0.5 * F
 
 
 def tied_dg_T(u0, v0, T0, h, n, gamma, theta, sigma, sigma_T, dS):
-    F = gamma / h('+') * ufl.inner(ufl.jump(u0), ufl.jump(v0)) * dS + \
-        gamma / h('-') * ufl.inner(ufl.jump(u0), ufl.jump(v0)) * dS -\
-        ufl.inner(ufl.avg(sigma_T(u0, T0)) * n('+'), ufl.jump(v0)) * dS +\
-        ufl.inner(ufl.avg(sigma_T(u0, T0)) * n('-'), ufl.jump(v0)) * dS -\
-        theta * ufl.inner(ufl.avg(sigma(v0)) * n('+'), ufl.jump(u0)) * dS +\
-        theta * ufl.inner(ufl.avg(sigma(v0)) * n('-'), ufl.jump(u0)) * dS
+    F = (
+        gamma / h("+") * ufl.inner(ufl.jump(u0), ufl.jump(v0)) * dS
+        + gamma / h("-") * ufl.inner(ufl.jump(u0), ufl.jump(v0)) * dS
+        - ufl.inner(ufl.avg(sigma_T(u0, T0)) * n("+"), ufl.jump(v0)) * dS
+        + ufl.inner(ufl.avg(sigma_T(u0, T0)) * n("-"), ufl.jump(v0)) * dS
+        - theta * ufl.inner(ufl.avg(sigma(v0)) * n("+"), ufl.jump(u0)) * dS
+        + theta * ufl.inner(ufl.avg(sigma(v0)) * n("-"), ufl.jump(u0)) * dS
+    )
     return 0.5 * F
 
 
@@ -583,7 +809,6 @@ def tied_dg_T(u0, v0, T0, h, n, gamma, theta, sigma, sigma_T, dS):
 @pytest.mark.parametrize("theta", [1, 0, -1])
 @pytest.mark.parametrize("problem", [Problem.Poisson, Problem.Elasticity, Problem.ThermoElasticity])
 def test_meshtie_kernels(ct, gap, quadrature_degree, theta, problem):
-
     # Problem parameters
     kdt = 5
     plane_strain = False
@@ -604,14 +829,12 @@ def test_meshtie_kernels(ct, gap, quadrature_degree, theta, problem):
     gdim = mesh_ufl.geometry.dim
     tdim = mesh_ufl.topology.dim
     TOL = 1e-7
-    cells_ufl_0 = locate_entities(
-        mesh_ufl, tdim, lambda x: x[tdim - 1] > 0 - TOL)
-    cells_ufl_1 = locate_entities(
-        mesh_ufl, tdim, lambda x: x[tdim - 1] < 0 + TOL)
+    cells_ufl_0 = locate_entities(mesh_ufl, tdim, lambda x: x[tdim - 1] > 0 - TOL)
+    cells_ufl_1 = locate_entities(mesh_ufl, tdim, lambda x: x[tdim - 1] < 0 + TOL)
 
     if problem == Problem.Poisson:
         V_ufl = _fem.functionspace(mesh_ufl, ("DG", 1))
-        V_custom = _fem.FunctionSpace(mesh_custom, ("Lagrange", 1))
+        V_custom = _fem.functionspace(mesh_custom, ("Lagrange", 1))
 
         def _u0(x):
             return np.sin(x[0]) + 1
@@ -623,7 +846,7 @@ def test_meshtie_kernels(ct, gap, quadrature_degree, theta, problem):
             return np.sin(x[tdim - 1] + gap) + 2
     else:
         V_ufl = _fem.functionspace(mesh_ufl, ("DG", 1, (gdim,)))
-        V_custom = _fem.FunctionSpace(mesh_custom, ("Lagrange", 1, (gdim,)))
+        V_custom = _fem.functionspace(mesh_custom, ("Lagrange", 1, (gdim,)))
 
         def _u0(x):
             values = np.zeros((gdim, x.shape[1]))
@@ -640,9 +863,9 @@ def test_meshtie_kernels(ct, gap, quadrature_degree, theta, problem):
         def _u2(x):
             values = np.zeros((gdim, x.shape[1]))
             for i in range(tdim):
-                values[i] = np.sin(x[i] + gap) + 2 if i == tdim - \
-                    1 else np.sin(x[i]) + 2
+                values[i] = np.sin(x[i] + gap) + 2 if i == tdim - 1 else np.sin(x[i]) + 2
             return values
+
     # DG ufl 'contact'
     u0 = _fem.Function(V_ufl)
     u0.interpolate(_u0, cells_ufl_0)
@@ -660,8 +883,8 @@ def test_meshtie_kernels(ct, gap, quadrature_degree, theta, problem):
     v1 = ufl.TestFunction(V_custom)
     w1 = ufl.TrialFunction(V_custom)
 
-    u1.interpolate(_u0, cells[0])
-    u1.interpolate(_u2, cells[1])
+    u1.interpolate(_u0, np.array(cells[0]))
+    u1.interpolate(_u2, np.array(cells[1]))
     u1.x.scatter_forward()
 
     n = ufl.FacetNormal(mesh_ufl)
@@ -684,11 +907,12 @@ def test_meshtie_kernels(ct, gap, quadrature_degree, theta, problem):
         T1 = _fem.Function(Q_custom)
         T0.interpolate(lambda x: np.sin(x[0]) + 1, cells_ufl_0)
         T0.interpolate(lambda x: np.sin(x[tdim - 1]) + 2, cells_ufl_1)
-        T1.interpolate(lambda x: np.sin(x[0]) + 1, cells[0])
-        T1.interpolate(lambda x: np.sin(x[tdim - 1] + gap) + 2, cells[1])
+        T1.interpolate(lambda x: np.sin(x[0]) + 1, np.array(cells[0]))
+        T1.interpolate(lambda x: np.sin(x[tdim - 1] + gap) + 2, np.array(cells[1]))
 
         def sigma_T(w, T):
             return sigma(w) - alpha * (3 * lmbda + 2 * mu) * T * ufl.Identity(gdim)
+
         F0 = tied_dg_T(u0, v0, T0, h, n, gamma * E, theta, sigma, sigma_T, dS)
         J0 = tied_dg(w0, v0, h, n, gamma * E, theta, sigma, dS)
 
@@ -705,7 +929,7 @@ def test_meshtie_kernels(ct, gap, quadrature_degree, theta, problem):
     _fem.petsc.assemble_matrix(A0, J0)
     A0.assemble()
 
-    V0 = _fem.FunctionSpace(mesh_custom, ("DG", 0))
+    V0 = _fem.functionspace(mesh_custom, ("DG", 0))
     kdt_custom = _fem.Function(V0)
     kdt_custom.interpolate(lambda x: np.full((1, x.shape[1]), kdt))
     lmbda_custom = _fem.Function(V0)
@@ -718,12 +942,20 @@ def test_meshtie_kernels(ct, gap, quadrature_degree, theta, problem):
     if problem == Problem.Poisson:
         coeffs = {"T": u1._cpp_object, "kdt": kdt_custom._cpp_object}
     elif problem == Problem.Elasticity:
-        coeffs = {"u": u1._cpp_object, "mu": mu_custom._cpp_object, "lambda": lmbda_custom._cpp_object}
+        coeffs = {
+            "u": u1._cpp_object,
+            "mu": mu_custom._cpp_object,
+            "lambda": lmbda_custom._cpp_object,
+        }
         gamma = gamma * E
     else:
-        coeffs = {"u": u1._cpp_object, "T": T1._cpp_object,
-                  "mu": mu_custom._cpp_object, "lambda": lmbda_custom._cpp_object,
-                  "alpha": alpha_custom._cpp_object}
+        coeffs = {
+            "u": u1._cpp_object,
+            "T": T1._cpp_object,
+            "mu": mu_custom._cpp_object,
+            "lambda": lmbda_custom._cpp_object,
+            "alpha": alpha_custom._cpp_object,
+        }
         gamma = gamma * E
 
     # Dummy form for creating vector/matrix
@@ -738,8 +970,13 @@ def test_meshtie_kernels(ct, gap, quadrature_degree, theta, problem):
     offsets = np.array([0, 2], dtype=np.int32)
     surfaces = adjacencylist(data, offsets)
     # initialise meshties
-    meshties = MeshTie([facet_marker._cpp_object], surfaces, [(0, 1), (1, 0)],
-                       mesh_custom._cpp_object, quadrature_degree=quadrature_degree)
+    meshties = MeshTie(
+        [facet_marker._cpp_object],
+        surfaces,
+        [(0, 1), (1, 0)],
+        mesh_custom._cpp_object,
+        quadrature_degree=quadrature_degree,
+    )
     meshties.generate_kernel_data(problem, V_custom._cpp_object, coeffs, gamma, theta)
 
     # Generate residual data structures

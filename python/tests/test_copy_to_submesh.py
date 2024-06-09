@@ -1,19 +1,21 @@
 # Copyright (C) 2023 Sarah Roggendorf
 #
 # SPDX-License-Identifier:    MIT
+from mpi4py import MPI
+
 import numpy as np
 import pytest
-
-from dolfinx.fem import Function, VectorFunctionSpace
+from dolfinx.fem import Function, functionspace
 from dolfinx.graph import adjacencylist
 from dolfinx.io import XDMFFile
-from dolfinx.mesh import locate_entities_boundary, meshtags, Mesh
-from dolfinx_contact.meshing import (convert_mesh,
-                                     create_cylinder_cylinder_mesh,
-                                     create_circle_plane_mesh,
-                                     create_sphere_plane_mesh)
-from dolfinx_contact.cpp import ContactMode, Contact
-from mpi4py import MPI
+from dolfinx.mesh import Mesh, locate_entities_boundary, meshtags
+from dolfinx_contact.cpp import Contact, ContactMode
+from dolfinx_contact.meshing import (
+    convert_mesh,
+    create_circle_plane_mesh,
+    create_cylinder_cylinder_mesh,
+    create_sphere_plane_mesh,
+)
 
 
 @pytest.mark.parametrize("order", [1, 2])
@@ -25,8 +27,15 @@ def test_copy_to_submesh(order, res, simplex, dim):
     if dim == 3:
         if simplex:
             fname = f"{mesh_dir}/sphere3D"
-            create_sphere_plane_mesh(filename=f"{fname}.msh", res=res, order=order,
-                                     r=0.25, height=0.25, length=1.0, width=1.0)
+            create_sphere_plane_mesh(
+                filename=f"{fname}.msh",
+                res=res,
+                order=order,
+                r=0.25,
+                height=0.25,
+                length=1.0,
+                width=1.0,
+            )
             convert_mesh(fname, f"{fname}.xdmf", gdim=3)
             with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
                 mesh = xdmf.read_mesh()
@@ -69,14 +78,28 @@ def test_copy_to_submesh(order, res, simplex, dim):
             val1 = np.full(len(contact_facets_1), contact_bdy_1, dtype=np.int32)
             val2 = np.full(len(contact_facets_2), contact_bdy_2, dtype=np.int32)
             val3 = np.full(len(dirchlet_facets_2), dirichlet_bdy_2, dtype=np.int32)
-            indices = np.concatenate([dirichlet_facets_1, contact_facets_1, contact_facets_2, dirchlet_facets_2])
+            indices = np.concatenate(
+                [
+                    dirichlet_facets_1,
+                    contact_facets_1,
+                    contact_facets_2,
+                    dirchlet_facets_2,
+                ]
+            )
             values = np.hstack([val0, val1, val2, val3])
             sorted_facets = np.argsort(indices)
             facet_marker = meshtags(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
     else:
         fname = f"{mesh_dir}/hertz2D_simplex" if simplex else f"{mesh_dir}/hertz2D_quads"
-        create_circle_plane_mesh(filename=f"{fname}.msh", res=res, order=order,
-                                 quads=not simplex, r=0.25, height=0.25, length=1.0)
+        create_circle_plane_mesh(
+            filename=f"{fname}.msh",
+            res=res,
+            order=order,
+            quads=not simplex,
+            r=0.25,
+            height=0.25,
+            length=1.0,
+        )
         convert_mesh(fname, f"{fname}.xdmf", gdim=2)
         with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
             mesh = xdmf.read_mesh()
@@ -90,24 +113,30 @@ def test_copy_to_submesh(order, res, simplex, dim):
         tdim = mesh.topology.dim
         vals = x[:tdim, :]
         return vals
-    V = VectorFunctionSpace(mesh, ("Lagrange", order))
+
+    V = functionspace(mesh, ("Lagrange", order, (mesh.geometry.dim,)))
     contact_pairs = [(0, 1), (1, 0)]
     data = np.array([contact_bdy_1, contact_bdy_2], dtype=np.int32)
     offsets = np.array([0, 2], dtype=np.int32)
     contact_surfaces = adjacencylist(data, offsets)
     search_method = [ContactMode.ClosestPoint, ContactMode.Raytracing]
-    contact = Contact([facet_marker._cpp_object], contact_surfaces, contact_pairs,
-                      mesh._cpp_object, quadrature_degree=3,
-                      search_method=search_method)
+    contact = Contact(
+        [facet_marker._cpp_object],
+        contact_surfaces,
+        contact_pairs,
+        mesh._cpp_object,
+        quadrature_degree=3,
+        search_method=search_method,
+    )
 
     u = Function(V)
     u.interpolate(_test_fun)
     submesh_cpp = contact.submesh()
     ufl_domain = mesh.ufl_domain()
     submesh = Mesh(submesh_cpp, ufl_domain)
-    V_sub = VectorFunctionSpace(submesh, ("Lagrange", order))
+    V_sub = functionspace(submesh, ("Lagrange", order, (mesh.geometry.dim,)))
     u_sub = Function(V_sub)
     contact.copy_to_submesh(u._cpp_object, u_sub._cpp_object)
     u_exact = Function(V_sub)
     u_exact.interpolate(_test_fun)
-    assert (np.allclose(u_sub.x.array[:], u_exact.x.array[:]))
+    assert np.allclose(u_sub.x.array[:], u_exact.x.array[:])

@@ -14,160 +14,173 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    container: ghcr.io/fenics/test-env:v0.7.2-openmpi
+    container: ghcr.io/fenics/test-env:current-mpich
+
     strategy:
       matrix:
         # Complex mode not working
-        run_mode: ["Release", "Debug"]
-        petsc_mode: [real]
-        CXX: [c++]
-        CC: [cc]
-        # exclude:
-        #   - CC: cc
-        #     CXX: clang++
-        #   - CC: clang
-        #     CXX: c++
+        # run_mode: ["Release", "Debug"]
+        petsc_mode: ["real"]
+        petsc_precision: ["64"]
+        petsc_int: ["32"]
     env:
-      CC: ${{ matrix.CC }}
-      CXX: ${{ matrix.CXX }}
-      PETSC_ARCH: linux-gnu-real64-32
-      OMPI_ALLOW_RUN_AS_ROOT: 1
-      OMPI_ALLOW_RUN_AS_ROOT_CONFIRM: 1
-      OMPI_MCA_rmaps_base_oversubscribe: 1
-      OMPI_MCA_plm: isolated
-      OMPI_MCA_btl_vader_single_copy_mechanism: none
-      OMPI_MCA_mpi_yield_when_idle: 1
-      OMPI_MCA_hwloc_base_binding_policy: none
-      CONTACT_CMAKE_CXX_FLAGS: "-Wall -Werror -g -pedantic -Ofast -march=native"
+      PETSC_ARCH: linux-gnu-${{ matrix.petsc_mode }}${{ matrix.petsc_precision}}-${{ matrix.petsc_int }}
+      # OMPI_ALLOW_RUN_AS_ROOT: 1
+      # OMPI_ALLOW_RUN_AS_ROOT_CONFIRM: 1
+      # OMPI_MCA_rmaps_base_oversubscribe: 1
+      # OMPI_MCA_plm: isolated
+      # OMPI_MCA_btl_vader_single_copy_mechanism: none
+      # OMPI_MCA_mpi_yield_when_idle: 1
+      # OMPI_MCA_hwloc_base_binding_policy: none
+      # CONTACT_CMAKE_CXX_FLAGS: "-Wall -Werror -g -pedantic -Ofast -march=native"
+      CONTACT_CMAKE_CXX_FLAGS: "-Wall -Werror -pedantic -Wno-array-bounds -Wno-stringop-overflow"
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
-      # - name: Install clang
-      #   if: ${{ matrix.CC }} == "clang"
-      #   run: |
-      #     apt-get update
-      #     apt-get install -y clang
-
-      - name: Get Basix and install
-        uses: actions/checkout@v3
-        with:
-          path: ./basix
-          repository: FEniCS/basix
-          ref: v0.7.0
-
-      - name: Install FEniCS Python components (dolfinx)
-        run: |
-          cmake -G Ninja -DCMAKE_BUILD_TYPE=Release -B build-basix -S ./basix/cpp
-          cmake --build build-basix
-          cmake --install build-basix
-          python3 -m pip install ./basix/python
-          python3 -m pip install git+https://github.com/FEniCS/ufl.git@2023.2.0
-          python3 -m pip install git+https://github.com/FEniCS/ffcx.git@v0.7.0
-      
-      - name: Install dolfinx
-        uses: actions/checkout@v3
+      - name: Get DOLFINx
+        if: github.event_name != 'workflow_dispatch'
+        uses: actions/checkout@v4
         with:
           path: ./dolfinx
           repository: FEniCS/dolfinx
-          ref: v0.7.2
-   
+          ref: main
 
-      - name: Configure C++ (dolfinx)
-        run: cmake -G Ninja -DCMAKE_BUILD_TYPE=Release -B build-dolfinx -S ./dolfinx/cpp/
-
-      - name: Build and install C++ library (dolfinx)
+      - name: Install DOLFINx
         run: |
-          cmake --build build-dolfinx
-          cmake --install build-dolfinx
+          pip install git+https://github.com/FEniCS/ufl.git
+          pip install git+https://github.com/FEniCS/basix.git
+          pip install git+https://github.com/FEniCS/ffcx.git
 
-      - name: Build Python interface (dolfinx)
-        run: python3 -m pip -v install ./dolfinx/python/
+          cmake -G Ninja -DCMAKE_BUILD_TYPE=Developer -B build -S dolfinx/cpp/
+          cmake --build build
+          cmake --install build
+          pip install -r dolfinx/python/build-requirements.txt # TO REMOVE
+          pip -v install --check-build-dependencies --no-build-isolation dolfinx/python/
 
+      # uses: jorgensd/actions/install-dolfinx@v0.3.0
+        # with:
+        #   petsc_arch: ${{ env.PETSC_ARCH }}
+        #   dolfinx: main
+        #   ffcx: main
+        #   ufl: main
+        #   basix: main
 
-      - name: Install contact (C++)
+      - name: Install contact library (C++)
+        id: cpp-contact
         run: |
-          cmake -G Ninja -DCMAKE_BUILD_TYPE=${{ matrix.run_mode }} -DCMAKE_CXX_FLAGS="${CONTACT_CMAKE_CXX_FLAGS}" -B build-contact -S cpp/
+          export VERBOSE=1
+          cmake -G Ninja  -DCMAKE_CXX_FLAGS="${CONTACT_CMAKE_CXX_FLAGS}" -B build-contact -S cpp/
           ninja -C build-contact install
 
       - name: Run demos (C++)
         run: |
-          cd cpp/demos/meshtie
-          cmake -G Ninja -B build-dir
-          ninja -C build-dir
-          ./build-dir/demo_meshtie
-          mpirun -np 2 ./build-dir/demo_meshtie
-          cd ../meshtieNewton
-          cmake -G Ninja -B build-dir
-          ninja -C build-dir
-          ./build-dir/demo_meshtie
-          mpirun -np 2 ./build-dir/demo_meshtie
-          cd ../meshtieHeatTransfer
-          cmake -G Ninja -B build-dir
-          ninja -C build-dir
-          ./build-dir/demo_meshtie
-          mpirun -np 2 ./build-dir/demo_meshtie
-          cd ../meshtieHeatEquation
-          cmake -G Ninja -B build-dir
-          ninja -C build-dir
-          ./build-dir/demo_meshtie
-          mpirun -np 2 ./build-dir/demo_meshtie
+          cd cpp/demos/
+          cmake -G Ninja .
+          ninja
+          #
+          cp meshes/* .
+          #
+          ./meshtie/demo_meshtie
+          mpirun -np 2 ./meshtie/demo_meshtie
+          #
+          ./meshtieHeatEquation/demo_meshtie_heat
+          mpirun -np 2 ./meshtieHeatEquation/demo_meshtie_heat
+          #
+          ./meshtieHeatTransfer/demo_meshtie_heattransfer
+          mpirun -np 2 ./meshtieHeatTransfer/demo_meshtie_heattransfer
+          #
+          ./meshtieNewton/demo_meshtie_newton
+          mpirun -np 2 ./meshtieNewton/demo_meshtie_newton
 
-      - name: Install contact
-        run: BUILD_TYPE="Debug" python3 -m pip -v install python/
+      - name: Install contact library (Python)
+        id: python-contact
+        run: |
+          pip -v install -r ./python/build-requirements.txt
+          pip -v install --no-build-isolation python/
+          pip install scipy matplotlib
 
-      - name: Flake8 code
-        run: flake8 python/
+      - name: Check formatting
+        if: always()
+        run: |
+          pip install ruff
+          ruff format --check
+          ruff check
 
       - name: Run mypy checks
         run: |
-          pip3 install mypy
+          pip install mypy
           cd python
-          python3 -m mypy . --exclude=build
+          mypy . --exclude=build
 
-      - name: Run demos
+      - name: Create output folders
+        id: output-creation
+        working-directory: ./python/demos
         run: |
-          cd python/demos
-          mkdir -p results
-          mkdir -p meshes
-          python3 compare_custom_snes_one_sided.py
-          python3 compare_nitsche_snes.py
-          python3 demo_nitsche_rigid_surface_ufl.py
-          python3 demo_nitsche_rigid_surface_custom.py
-          python3 nitsche_euler_bernoulli.py
-          python3 demo_nitsche_unbiased.py --problem=1
-          python3 demo_nitsche_unbiased.py --problem=2 --friction=0.1
-          python3 demo_nitsche_unbiased.py --problem=3
-          python3 demo_nitsche_unbiased.py --problem=3 --3D --friction=0.1 --coulomb
-          python3 demo_nitsche_meshties.py
-          python3 meshtie_convergence.py --3D
-          python3 meshtie_convergence.py --simplex --3D
-          python3 meshtie_convergence.py
-          python3 meshtie_convergence.py --simplex --runs=4
-          cd oxford
-          python3 blocks_nitsche.py
+            mkdir -p results
+            mkdir -p meshes
+
+      - name: Run SNES demos
+        working-directory: ./python/demos
+        run: |
+          python compare_custom_snes_one_sided.py
+          python compare_nitsche_snes.py
+
+      - name: Run rigid surface demos
+        working-directory: ./python/demos
+        run: |
+          python demo_nitsche_rigid_surface_ufl.py
+          python demo_nitsche_rigid_surface_custom.py
+          python nitsche_euler_bernoulli.py
+
+      # - name: Run unbiased demos
+      #   working-directory: ./python/demos
+      #   run: |
+      #     python demo_nitsche_unbiased.py --problem=1
+      #     python demo_nitsche_unbiased.py --problem=2 --friction=0.1
+      #     python demo_nitsche_unbiased.py --problem=3
+      #     python demo_nitsche_unbiased.py --problem=3 --3D --friction=0.1 --coulomb
+
+      - name: Run meshties demos
+        working-directory: ./python/demos
+        run: |
+          python demo_nitsche_meshties.py
+          python meshtie_convergence.py --3D
+          python meshtie_convergence.py --simplex --3D
+          python meshtie_convergence.py
+          python meshtie_convergence.py --simplex --runs=4
+
+      - name: Run Oxford demo
+        working-directory: ./python/demos/oxford
+        run:
+          python blocks_nitsche.py
           cd ../meshtie_demos
-          python3 blocks_nitsche_meshtie.py
-          python3 poisson_convergence.py --simplex --runs=4
-          python3 poisson_convergence.py --3D
-          python3 demo_poisson.py
+          python blocks_nitsche_meshtie.py
+          python poisson_convergence.py --simplex --runs=4
+          python poisson_convergence.py --3D
+          python demo_poisson.py
 
       - name: Run tests
         run: |
+          pip install pytest pytest-xdist
           cd python/tests
           mkdir -p meshes
-          python3 -m pytest . -vs
+          python -m pytest .
+          # python -m pytest -n auto .
 
-      - name: Run demos parallel
+      - name: Run unbiased demos in parallel
+        working-directory: ./python/demos
+        # FIXME: --problem 1 fails in parallel (3 proc) on my machine
         run: |
-          cd python/demos
-          mkdir -p results
-          mkdir -p meshes
-          mpirun -np 2 python3 demo_nitsche_unbiased.py --problem=1
-          mpirun -np 2 python3 demo_nitsche_unbiased.py --problem=2 --friction=0.1
-          mpirun -np 2 python3 demo_nitsche_unbiased.py --problem=3
-          mpirun -np 2 python3 demo_nitsche_unbiased.py --problem=3 --3D --friction=0.1 --coulomb
-          mpirun -np 2 python3 demo_nitsche_meshties.py
-          mpirun -np 2 python3 meshtie_convergence.py --3D
-          mpirun -np 2 python3 meshtie_convergence.py --simplex --3D
-          mpirun -np 2 python3 meshtie_convergence.py
-          mpirun -np 2 python3 meshtie_convergence.py --simplex --runs=4
+          mpirun -np 2 python demo_nitsche_unbiased.py --problem=1
+          mpirun -np 2 python demo_nitsche_unbiased.py --problem=2 --friction=0.1
+          mpirun -np 2 python demo_nitsche_unbiased.py --problem=3
+          mpirun -np 2 python demo_nitsche_unbiased.py --problem=3 --3D --friction=0.1 --coulomb
+
+      - name: Run meshties demos in parallel
+        working-directory: ./python/demos
+        run: |
+          mpirun -np 2 python demo_nitsche_meshties.py
+          mpirun -np 2 python meshtie_convergence.py --3D
+          mpirun -np 2 python meshtie_convergence.py --simplex --3D
+          mpirun -np 2 python meshtie_convergence.py
+          mpirun -np 2 python meshtie_convergence.py --simplex --runs=4

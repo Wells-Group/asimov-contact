@@ -12,6 +12,7 @@
 #include <dolfinx/common/math.h>
 #include <dolfinx/mesh/cell_types.h>
 #include <dolfinx/mesh/utils.h>
+
 using namespace dolfinx_contact;
 
 dolfinx_contact::QuadratureRule::QuadratureRule(dolfinx::mesh::CellType ct,
@@ -84,8 +85,9 @@ dolfinx_contact::QuadratureRule::QuadratureRule(dolfinx::mesh::CellType ct,
                               reference_entity_b);
 
       cmdspan4_t basis_full(reference_entity_b.data(), e_tab_shape);
-      auto phi = stdex::submdspan(basis_full, 0, MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent,
-                                  MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent, 0);
+      auto phi = MDSPAN_IMPL_STANDARD_NAMESPACE::submdspan(
+          basis_full, 0, MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent,
+          MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent, 0);
 
       auto [sub_geomb, sub_geom_shape]
           = basix::cell::sub_entity_geometry<double>(b_ct, dim, i);
@@ -134,9 +136,9 @@ cmdspan2_t QuadratureRule::points(int i) const
 {
   assert(i < _num_sub_entities);
   cmdspan2_t all_points(_points.data(), _weights.size(), _tdim);
-  return stdex::submdspan(all_points,
-                          std::pair(_entity_offset[i], _entity_offset[i + 1]),
-                          MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent);
+  return MDSPAN_IMPL_STANDARD_NAMESPACE::submdspan(
+      all_points, std::pair(_entity_offset[i], _entity_offset[i + 1]),
+      MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent);
 }
 //-----------------------------------------------------------------------------------------------
 std::span<const double> QuadratureRule::weights(int i) const

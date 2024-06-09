@@ -130,29 +130,31 @@ dolfinx_contact::SubMesh::SubMesh(
 //------------------------------------------------------------------------------------------------
 dolfinx::fem::FunctionSpace<double>
 dolfinx_contact::SubMesh::create_functionspace(
-    std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V_parent) const
+    const dolfinx::fem::FunctionSpace<double>& V_parent) const
 {
   // get element and element_dof_layout from parent mesh
   std::shared_ptr<const dolfinx::fem::FiniteElement<double>> element
-      = V_parent->element();
+      = V_parent.element();
   const dolfinx::fem::ElementDofLayout& element_dof_layout
-      = V_parent->dofmap()->element_dof_layout();
+      = V_parent.dofmap()->element_dof_layout();
   // use parent mesh data and submesh comm/topology to create new dofmap
   std::function<void(const std::span<std::int32_t>&, std::uint32_t)>
       unpermute_dofs = nullptr;
   if (element->needs_dof_permutations())
-    unpermute_dofs = element->get_dof_permutation_function(true, true);
+    unpermute_dofs = element->dof_permutation_fn(true, true);
   auto dofmap = std::make_shared<dolfinx::fem::DofMap>(
       dolfinx::fem::create_dofmap(_mesh->comm(), element_dof_layout,
                                   *_mesh->topology(), unpermute_dofs, nullptr));
   // create and return function space
-  return dolfinx::fem::FunctionSpace(_mesh, element, dofmap);
+  const auto& vs = V_parent.value_shape();
+  std::vector _value_shape(vs.data(), vs.data() + vs.size());
+  return dolfinx::fem::FunctionSpace(_mesh, element, dofmap, _value_shape);
 }
 
 //-----------------------------------------------------------------------------------------------
 void dolfinx_contact::SubMesh::copy_function(
-    dolfinx::fem::Function<PetscScalar>& u_parent,
-    dolfinx::fem::Function<PetscScalar>& u_sub)
+    const dolfinx::fem::Function<PetscScalar>& u_parent,
+    dolfinx::fem::Function<PetscScalar>& u_sub) const
 {
   // retrieve function space on submesh
   std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V_sub
@@ -194,7 +196,7 @@ void dolfinx_contact::SubMesh::copy_function(
 
 //-----------------------------------------------------------------------------------------------
 void dolfinx_contact::SubMesh::update_geometry(
-    dolfinx::fem::Function<PetscScalar>& u)
+    const dolfinx::fem::Function<PetscScalar>& u)
 {
   // Recover original geometry from parent mesh
   std::shared_ptr<const dolfinx::mesh::Mesh<double>> parent_mesh
@@ -212,13 +214,12 @@ void dolfinx_contact::SubMesh::update_geometry(
   std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V_parent
       = u.function_space();
   auto V_sub = std::make_shared<dolfinx::fem::FunctionSpace<double>>(
-      create_functionspace(V_parent));
+      create_functionspace(*V_parent));
   auto u_sub = dolfinx::fem::Function<PetscScalar>(V_sub);
   copy_function(u, u_sub);
-  dolfinx_contact::update_geometry(u_sub, _mesh);
+  dolfinx_contact::update_geometry(u_sub, *_mesh);
 }
 //-----------------------------------------------------------------------------------------------
-
 std::vector<std::int32_t> dolfinx_contact::SubMesh::get_submesh_tuples(
     std::span<const std::int32_t> facets) const
 {

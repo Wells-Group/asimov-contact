@@ -5,10 +5,9 @@
 // SPDX-License-Identifier:    MIT
 
 #include "point_cloud.h"
-#include <dolfinx/graph/AdjacencyList.h>
-
 #include <algorithm>
 #include <array>
+#include <dolfinx/graph/AdjacencyList.h>
 #include <vector>
 
 dolfinx::graph::AdjacencyList<std::int32_t>

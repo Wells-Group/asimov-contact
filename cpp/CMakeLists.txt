@@ -1,8 +1,8 @@
 # Top level CMakeLists for custom assemblers
-cmake_minimum_required(VERSION 3.10)
+cmake_minimum_required(VERSION 3.21)
 
 # Set project name and version number
-project(DOLFINX_CONTACT VERSION 0.7.0.0)
+project(DOLFINX_CONTACT VERSION 0.8.0.0)
 
 #------------------------------------------------------------------------------
 # Set CMake options, see `cmake --help-policy CMP00xx`
@@ -38,22 +38,23 @@ add_feature_info(CMAKE_INSTALL_RPATH_USE_LINK_PATH CMAKE_INSTALL_RPATH_USE_LINK_
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_CURRENT_SOURCE_DIR})
 
 # Find packages
-find_package(DOLFINX 0.7.0.0 REQUIRED)
-find_package(Basix 0.7.0.0 REQUIRED)
+find_package(DOLFINX 0.8.0.0 REQUIRED)
+find_package(Basix 0.8.0.0 REQUIRED)
 
 feature_summary(WHAT ALL)
 
 # Installation of DOLFIN_CONTACT library
-add_library(dolfinx_contact "")
+add_library(dolfinx_contact)
 
-# Basix
 target_link_libraries(dolfinx_contact PUBLIC Basix::basix)
-
-# DOLFINx
 target_link_libraries(dolfinx_contact PUBLIC dolfinx)
+target_link_libraries(dolfinx_contact PRIVATE m)
 
 include(GNUInstallDirs)
-install(FILES Contact.h MeshTie.h contact_kernels.h rigid_surface_kernels.h error_handling.h utils.h coefficients.h elasticity.h geometric_quantities.h meshtie_kernels.h parallel_mesh_ghosting.h point_cloud.h SubMesh.h QuadratureRule.h RayTracing.h KernelData.h DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/dolfinx_contact COMPONENT Development)
+install(FILES Contact.h MeshTie.h contact_kernels.h rigid_surface_kernels.h error_handling.h utils.h coefficients.h
+              elasticity.h geometric_quantities.h meshtie_kernels.h parallel_mesh_ghosting.h point_cloud.h SubMesh.h
+              QuadratureRule.h RayTracing.h KernelData.h
+              DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/dolfinx_contact COMPONENT Development)
 
 target_sources(dolfinx_contact PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/utils.cpp
@@ -87,7 +88,6 @@ set_target_properties(dolfinx_contact PROPERTIES
 
 # Add version to definitions (public)
 target_compile_definitions(dolfinx_contact PUBLIC DOLFINX_CONTACT_VERSION="${DOLFINX_CONTACT_VERSION}")
-
 
 #------------------------------------------------------------------------------
 # Install dolfinx library and header files

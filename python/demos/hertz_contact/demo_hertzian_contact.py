@@ -4,34 +4,44 @@
 
 import argparse
 
+from mpi4py import MPI
+from petsc4py.PETSc import InsertMode, ScatterMode  # type: ignore
+
 import numpy as np
 import numpy.typing as npt
 import ufl
-from petsc4py.PETSc import InsertMode, ScatterMode  # type: ignore
 from dolfinx import default_scalar_type
 from dolfinx.common import Timer, timed
-from dolfinx.io import XDMFFile, VTXWriter
-from dolfinx.fem import (Constant, dirichletbc, form, Function, FunctionSpace,
-                         VectorFunctionSpace, locate_dofs_topological)
-from dolfinx.fem.petsc import apply_lifting, assemble_matrix, assemble_vector, create_vector, set_bc
-from dolfinx.graph import adjacencylist
+from dolfinx.fem import (
+    Constant,
+    Function,
+    dirichletbc,
+    form,
+    functionspace,
+    locate_dofs_topological,
+)
+from dolfinx.fem.petsc import (
+    apply_lifting,
+    assemble_matrix,
+    assemble_vector,
+    create_vector,
+    set_bc,
+)
 from dolfinx.geometry import bb_tree, compute_closest_entity
+from dolfinx.graph import adjacencylist
+from dolfinx.io import VTXWriter, XDMFFile
 from dolfinx.mesh import Mesh
-
-from mpi4py import MPI
-
-from dolfinx_contact.helpers import (epsilon, sigma_func, lame_parameters)
-from dolfinx_contact.meshing import (convert_mesh,
-                                     create_circle_plane_mesh,
-                                     create_halfdisk_plane_mesh,
-                                     create_halfsphere_box_mesh)
 from dolfinx_contact.cpp import ContactMode
-from dolfinx_contact.output import ContactWriter
-
-
 from dolfinx_contact.general_contact.contact_problem import ContactProblem, FrictionLaw
+from dolfinx_contact.helpers import epsilon, lame_parameters, rigid_motions_nullspace_subdomains, sigma_func
+from dolfinx_contact.meshing import (
+    convert_mesh,
+    create_circle_plane_mesh,
+    create_halfdisk_plane_mesh,
+    create_halfsphere_box_mesh,
+)
 from dolfinx_contact.newton_solver import NewtonSolver
-from dolfinx_contact.helpers import rigid_motions_nullspace_subdomains
+from dolfinx_contact.output import ContactWriter
 
 
 def closest_node_in_mesh(mesh: Mesh, point: npt.NDArray[np.float64]) -> npt.NDArray[np.int32]:
@@ -43,26 +53,49 @@ def closest_node_in_mesh(mesh: Mesh, point: npt.NDArray[np.float64]) -> npt.NDAr
 
 if __name__ == "__main__":
     desc = "Example for verifying correctness of code"
-    parser = argparse.ArgumentParser(description=desc,
-                                     formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument("--quadrature", default=5, type=int, dest="q_degree",
-                        help="Quadrature degree used for contact integrals")
-    parser.add_argument("--order", default=1, type=int, dest="order",
-                        help="Order of mesh geometry", choices=[1, 2])
+    parser = argparse.ArgumentParser(description=desc, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument(
+        "--quadrature",
+        default=5,
+        type=int,
+        dest="q_degree",
+        help="Quadrature degree used for contact integrals",
+    )
+    parser.add_argument(
+        "--order",
+        default=1,
+        type=int,
+        dest="order",
+        help="Order of mesh geometry",
+        choices=[1, 2],
+    )
     _3D = parser.add_mutually_exclusive_group(required=False)
-    _3D.add_argument('--3D', dest='threed', action='store_true',
-                     help="Use 3D mesh", default=False)
+    _3D.add_argument("--3D", dest="threed", action="store_true", help="Use 3D mesh", default=False)
     _simplex = parser.add_mutually_exclusive_group(required=False)
-    _simplex.add_argument('--simplex', dest='simplex', action='store_true',
-                          help="Use triangle/tet mesh", default=False)
-    parser.add_argument("--res", default=0.1, type=np.float64, dest="res",
-                        help="Mesh resolution")
-    parser.add_argument("--problem", default=1, type=int, dest="problem",
-                        help="Which problem to solve: 1. Volume force, 2. Surface force",
-                        choices=[1, 2])
+    _simplex.add_argument(
+        "--simplex",
+        dest="simplex",
+        action="store_true",
+        help="Use triangle/tet mesh",
+        default=False,
+    )
+    parser.add_argument("--res", default=0.1, type=np.float64, dest="res", help="Mesh resolution")
+    parser.add_argument(
+        "--problem",
+        default=1,
+        type=int,
+        dest="problem",
+        help="Which problem to solve: 1. Volume force, 2. Surface force",
+        choices=[1, 2],
+    )
     _chouly = parser.add_mutually_exclusive_group(required=False)
-    _chouly.add_argument('--chouly', dest='chouly', action='store_true',
-                         help="Use parameters from Chouly paper", default=False)
+    _chouly.add_argument(
+        "--chouly",
+        dest="chouly",
+        action="store_true",
+        help="Use parameters from Chouly paper",
+        default=False,
+    )
     # Parse input arguments or set to defualt values
     args = parser.parse_args()
     threed = args.threed
@@ -77,7 +110,7 @@ if __name__ == "__main__":
         L = 1.0
         H = 1.0
         if threed:
-            load = 4 * 0.25 * np.pi * R**3 / 3.
+            load = 4 * 0.25 * np.pi * R**3 / 3.0
         else:
             load = 0.25 * np.pi * R**2
         E1 = 2.5
@@ -109,8 +142,16 @@ if __name__ == "__main__":
         if problem == 1:
             outname = "../results/hertz1_3D_simplex"
             fname = f"{mesh_dir}/hertz1_3D_simplex"
-            create_halfsphere_box_mesh(filename=f"{fname}.msh", res=args.res,
-                                       order=args.order, r=R, height=H, length=L, width=L, gap=gap)
+            create_halfsphere_box_mesh(
+                filename=f"{fname}.msh",
+                res=args.res,
+                order=args.order,
+                r=R,
+                height=H,
+                length=L,
+                width=L,
+                gap=gap,
+            )
             neumann_bdy = 2
             contact_bdy_1 = 1
             contact_bdy_2 = 8
@@ -118,8 +159,16 @@ if __name__ == "__main__":
         else:
             outname = "../results/hertz2_3D_simplex"
             fname = f"{mesh_dir}/hertz2_3D_simplex"
-            create_halfsphere_box_mesh(filename=f"{fname}.msh", res=args.res,
-                                       order=args.order, r=R, height=H, length=L, width=L, gap=gap)
+            create_halfsphere_box_mesh(
+                filename=f"{fname}.msh",
+                res=args.res,
+                order=args.order,
+                r=R,
+                height=H,
+                length=L,
+                width=L,
+                gap=gap,
+            )
             neumann_bdy = 2
             contact_bdy_1 = 1
             contact_bdy_2 = 8
@@ -133,7 +182,7 @@ if __name__ == "__main__":
             mesh.topology.create_connectivity(tdim - 1, tdim)
             facet_marker = xdmf.read_meshtags(mesh, name="facet_marker")
 
-        V = VectorFunctionSpace(mesh, ("CG", args.order))
+        V = functionspace(mesh, ("CG", args.order, (mesh.geometry.dim,)))
 
         node1 = closest_node_in_mesh(mesh, np.array([0.0, 0.0, 0.0], dtype=np.float64))
         node2 = closest_node_in_mesh(mesh, np.array([0.0, 0.0, -R / 2.0], dtype=np.float64))
@@ -145,9 +194,11 @@ if __name__ == "__main__":
 
         g0 = Constant(mesh, default_scalar_type(0.0))
         g = Constant(mesh, default_scalar_type((0.0, 0.0, 0.0)))
-        bcs = [dirichletbc(g0, dirichlet_dofs1, V.sub(0)),
-               dirichletbc(g0, dirichlet_dofs2, V.sub(1)),
-               dirichletbc(g, dirichlet_dofs3, V)]
+        bcs = [
+            dirichletbc(g0, dirichlet_dofs1, V.sub(0)),
+            dirichletbc(g0, dirichlet_dofs2, V.sub(1)),
+            dirichletbc(g, dirichlet_dofs3, V),
+        ]
         bc_fns = [g0, g]
 
         if problem == 1:
@@ -166,7 +217,7 @@ if __name__ == "__main__":
         def _pressure(x, p0, a):
             vals = np.zeros(x.shape[1])
             for i in range(x.shape[1]):
-                rsquared = x[0][i]**2 + x[1][i]**2
+                rsquared = x[0][i] ** 2 + x[1][i] ** 2
                 if rsquared < a**2:
                     vals[i] = p0 * np.sqrt(1 - rsquared / a**2)
             return vals
@@ -182,8 +233,16 @@ if __name__ == "__main__":
         else:
             outname = "../results/hertz2_2D_simplex_RR" if simplex else "../results/hertz2_2D_quads_RR"
             fname = f"{mesh_dir}/hertz2_2D_simplex" if simplex else f"{mesh_dir}/hertz2_2D_quads"
-            create_halfdisk_plane_mesh(filename=f"{fname}.msh", res=args.res,
-                                       order=args.order, quads=not simplex, r=R, height=H, length=L, gap=gap)
+            create_halfdisk_plane_mesh(
+                filename=f"{fname}.msh",
+                res=args.res,
+                order=args.order,
+                quads=not simplex,
+                r=R,
+                height=H,
+                length=L,
+                gap=gap,
+            )
             contact_bdy_1 = 7
             contact_bdy_2 = 6
             dirichlet_bdy = 4
@@ -197,7 +256,7 @@ if __name__ == "__main__":
             mesh.topology.create_connectivity(tdim - 1, tdim)
             facet_marker = xdmf.read_meshtags(mesh, name="facet_marker")
 
-        V = VectorFunctionSpace(mesh, ("CG", args.order))
+        V = functionspace(mesh, ("CG", args.order, (mesh.geometry.dim,)))
 
         node1 = closest_node_in_mesh(mesh, np.array([0.0, -R / 2.5, 0.0], dtype=np.float64))
         node2 = closest_node_in_mesh(mesh, np.array([0.0, -R / 5.0, 0.0], dtype=np.float64))
@@ -207,8 +266,10 @@ if __name__ == "__main__":
 
         g0 = Constant(mesh, default_scalar_type(0.0))
         g = Constant(mesh, default_scalar_type((0, 0)))
-        bcs = [dirichletbc(g0, dirichlet_dofs1, V.sub(0)),
-               dirichletbc(g, dirichlet_dofs2, V)]
+        bcs = [
+            dirichletbc(g0, dirichlet_dofs1, V.sub(0)),
+            dirichletbc(g, dirichlet_dofs2, V),
+        ]
         bc_fns = [g0, g]
 
         if problem == 1:
@@ -227,18 +288,20 @@ if __name__ == "__main__":
             vals = np.zeros(x.shape[1])
             for i in range(x.shape[1]):
                 if abs(x[0][i]) < a:
-                    vals[i] = p0 * np.sqrt(1 - x[0][i]**2 / a**2)
+                    vals[i] = p0 * np.sqrt(1 - x[0][i] ** 2 / a**2)
             return vals
 
     # Solver options
     ksp_tol = 1e-12
     newton_tol = 1e-7
-    newton_options = {"relaxation_parameter": 1.0,
-                      "atol": newton_tol,
-                      "rtol": newton_tol,
-                      "convergence_criterion": "residual",
-                      "max_it": 200,
-                      "error_on_nonconvergence": True}
+    newton_options = {
+        "relaxation_parameter": 1.0,
+        "atol": newton_tol,
+        "rtol": newton_tol,
+        "convergence_criterion": "residual",
+        "max_it": 200,
+        "error_on_nonconvergence": True,
+    }
 
     # for debugging use petsc_options = {"ksp_type": "preonly", "pc_type": "lu"}
     petsc_options = {
@@ -248,7 +311,7 @@ if __name__ == "__main__":
         "ksp_atol": ksp_tol,
         "pc_type": "gamg",
         "pc_mg_levels": 3,
-        "pc_mg_cycles": 1,   # 1 is v, 2 is w
+        "pc_mg_cycles": 1,  # 1 is v, 2 is w
         "mg_levels_ksp_type": "chebyshev",
         "mg_levels_pc_type": "jacobi",
         "pc_gamg_type": "agg",
@@ -258,11 +321,11 @@ if __name__ == "__main__":
         "pc_gamg_square_graph": 2,
         "pc_gamg_reuse_interpolation": False,
         "ksp_initial_guess_nonzero": False,
-        "ksp_norm_type": "unpreconditioned"
+        "ksp_norm_type": "unpreconditioned",
     }
 
     # DG-0 funciton for material
-    V0 = FunctionSpace(mesh, ("DG", 0))
+    V0 = functionspace(mesh, ("DG", 0))
     mu = Function(V0)
     lmbda = Function(V0)
     disk_cells = domain_marker.find(1)
@@ -300,8 +363,7 @@ if __name__ == "__main__":
 
     # compiler options to improve performance
     cffi_options = ["-Ofast", "-march=native"]
-    jit_options = {"cffi_extra_compile_args": cffi_options,
-                   "cffi_libraries": ["m"]}
+    jit_options = {"cffi_extra_compile_args": cffi_options, "cffi_libraries": ["m"]}
     # compiled forms for rhs and tangen system
     F_compiled = form(F, jit_options=jit_options)
     J_compiled = form(J, jit_options=jit_options)
@@ -315,12 +377,18 @@ if __name__ == "__main__":
         values = np.zeros((mesh.geometry.dim, x.shape[1]))
         values[-1] = -H / 100 - gap
         return values
+
     search_mode = [ContactMode.ClosestPoint, ContactMode.ClosestPoint]
 
     # create contact solver
     contact_problem = ContactProblem([facet_marker], surfaces, contact, mesh, args.q_degree, search_mode)
-    contact_problem.generate_contact_data(FrictionLaw.Frictionless, V, {"u": u, "du": du, "mu": mu,
-                                                                        "lambda": lmbda}, gamma, theta)
+    contact_problem.generate_contact_data(
+        FrictionLaw.Frictionless,
+        V,
+        {"u": u, "du": du, "mu": mu, "lambda": lmbda},
+        gamma,
+        theta,
+    )
     solver_outfile = None
     du.interpolate(_u_initial, disk_cells)
 
@@ -336,8 +404,7 @@ if __name__ == "__main__":
     @timed("~Contact: Assemble residual")
     def compute_residual(x, b, coeffs):
         b.zeroEntries()
-        b.ghostUpdate(addv=InsertMode.INSERT,
-                      mode=ScatterMode.FORWARD)
+        b.ghostUpdate(addv=InsertMode.INSERT, mode=ScatterMode.FORWARD)
         with Timer("~~Contact: Contact contributions (in assemble vector)"):
             contact_problem.assemble_vector(b, V)
         with Timer("~~Contact: Standard contributions (in assemble vector)"):
@@ -345,10 +412,8 @@ if __name__ == "__main__":
 
         # Apply boundary condition
         if len(bcs) > 0:
-            apply_lifting(
-                b, [J_compiled], bcs=[bcs], x0=[x], scale=-1.0)
-        b.ghostUpdate(addv=InsertMode.ADD,
-                      mode=ScatterMode.REVERSE)
+            apply_lifting(b, [J_compiled], bcs=[bcs], x0=[x], scale=-1.0)
+        b.ghostUpdate(addv=InsertMode.ADD, mode=ScatterMode.REVERSE)
         if len(bcs) > 0:
             set_bc(b, bcs, x, -1.0)
 
@@ -369,8 +434,12 @@ if __name__ == "__main__":
     newton_solver.set_coefficients(compute_coefficients)
 
     # Set rigid motion nullspace
-    null_space = rigid_motions_nullspace_subdomains(V, domain_marker, np.unique(
-        domain_marker.values), num_domains=len(np.unique(domain_marker.values)))
+    null_space = rigid_motions_nullspace_subdomains(
+        V,
+        domain_marker,
+        np.unique(domain_marker.values),
+        num_domains=len(np.unique(domain_marker.values)),
+    )
     newton_solver.A.setNearNullSpace(null_space)
 
     # Set Newton solver options
@@ -380,11 +449,17 @@ if __name__ == "__main__":
     newton_solver.set_krylov_options(petsc_options)
 
     if not threed:
-        writer = ContactWriter(mesh, contact_problem, u, contact,
-                               contact_problem.coeffs,
-                               args.order, simplex,
-                               [(tdim - 1, 0), (tdim - 1, -R)],
-                               f'{outname}_{steps}_step')
+        writer = ContactWriter(
+            mesh,
+            contact_problem,
+            u,
+            contact,
+            contact_problem.coeffs,
+            args.order,
+            simplex,
+            [(tdim - 1, 0), (tdim - 1, -R)],
+            f"{outname}_{steps}_step",
+        )
     # initialise vtx writer
     vtx = VTXWriter(mesh.comm, f"{outname}_{steps}_step.bp", [u], "bp4")
     vtx.write(0)
@@ -399,8 +474,11 @@ if __name__ == "__main__":
         a = 2 * np.sqrt(R * load * (i + 1) / (steps * np.pi * Estar))
         p0 = 2 * load * (i + 1) / (steps * np.pi * a)
         if not threed:
-            writer.write(i + 1, lambda x, pi=p0, ai=a: _pressure(x, pi, ai),
-                         lambda x: np.zeros(x.shape[1]))
+            writer.write(
+                i + 1,
+                lambda x, pi=p0, ai=a: _pressure(x, pi, ai),
+                lambda x: np.zeros(x.shape[1]),
+            )
         contact_problem.update_contact_detection(u)
         A = contact_problem.create_matrix(J_compiled)
         A.setNearNullSpace(null_space)

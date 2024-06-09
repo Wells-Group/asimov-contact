@@ -1,11 +1,9 @@
 cmake_minimum_required(VERSION 3.19)
 
-set(PROJECT_NAME demo_meshtie)
+set(PROJECT_NAME demo_meshtie_heattransfer)
 project(${PROJECT_NAME})
 
 set(CMAKE_CXX_STANDARD 20)
-set(CMAKE_CXX_FLAGS "-Ofast -march=native ${CMAKE_CXX_FLAGS} -Wall")
-set(CMAKE_C_FLAGS "-Ofast -march=native ${CMAKE_C_FLAGS} -Wall")
 
 find_package(DOLFINX REQUIRED)
 find_package(Basix REQUIRED)
@@ -27,8 +25,18 @@ add_custom_command(
   COMMENT "Compiling ${ufl_file}.py"
 )
 
-
 add_executable(${PROJECT_NAME} main.cpp ${ufl_file}.c)
+
+# Copy mesh files into binary directory
+function(copy_meshes_to_target_dir target)
+  add_custom_command(
+        TARGET ${target} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+            "$<TARGET_PROPERTY:${target},SOURCE_DIR>/../meshes"
+            "$<TARGET_PROPERTY:${target},BINARY_DIR>"
+    )
+endfunction()
+copy_meshes_to_target_dir(${PROJECT_NAME})
 
 target_link_libraries(${PROJECT_NAME} PRIVATE dolfinx)
 target_link_libraries(${PROJECT_NAME} PRIVATE dolfinx_contact)

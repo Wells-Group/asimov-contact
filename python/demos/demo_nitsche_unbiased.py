@@ -5,91 +5,191 @@
 import argparse
 import sys
 
-import numpy as np
-import ufl
-from dolfinx import default_scalar_type, log
-from dolfinx.common import timed, Timer, TimingType, list_timings, timing
-from dolfinx.fem import (Constant, dirichletbc, form, Function, Expression, FunctionSpace,
-                         VectorFunctionSpace, locate_dofs_topological)
-from dolfinx.fem.petsc import create_vector, assemble_vector, assemble_matrix, set_bc, apply_lifting
-from dolfinx.graph import adjacencylist
-from dolfinx.io import XDMFFile, VTXWriter
-from dolfinx.mesh import locate_entities_boundary, GhostMode, meshtags
 from mpi4py import MPI
 from petsc4py.PETSc import InsertMode, ScatterMode  # type: ignore
 
-from dolfinx_contact.helpers import (epsilon, lame_parameters, sigma_func,
-                                     weak_dirichlet)
-from dolfinx_contact.meshing import (convert_mesh, create_box_mesh_2D,
-                                     create_box_mesh_3D,
-                                     create_circle_circle_mesh,
-                                     create_circle_plane_mesh,
-                                     create_cylinder_cylinder_mesh,
-                                     create_sphere_plane_mesh)
-from dolfinx_contact.general_contact.contact_problem import ContactProblem, FrictionLaw
-from dolfinx_contact.parallel_mesh_ghosting import create_contact_mesh
-from dolfinx_contact.helpers import rigid_motions_nullspace_subdomains
-from dolfinx_contact.newton_solver import NewtonSolver
+import numpy as np
+import ufl
+from dolfinx import default_scalar_type, log
+from dolfinx.common import Timer, TimingType, list_timings, timed, timing
+from dolfinx.fem import (
+    Constant,
+    Expression,
+    Function,
+    dirichletbc,
+    form,
+    functionspace,
+    locate_dofs_topological,
+)
+from dolfinx.fem.petsc import (
+    apply_lifting,
+    assemble_matrix,
+    assemble_vector,
+    create_vector,
+    set_bc,
+)
+from dolfinx.graph import adjacencylist
+from dolfinx.io import VTXWriter, XDMFFile
+from dolfinx.mesh import GhostMode, locate_entities_boundary, meshtags
 from dolfinx_contact.cpp import ContactMode
+from dolfinx_contact.general_contact.contact_problem import ContactProblem, FrictionLaw
+from dolfinx_contact.helpers import (
+    epsilon,
+    lame_parameters,
+    rigid_motions_nullspace_subdomains,
+    sigma_func,
+    weak_dirichlet,
+)
+from dolfinx_contact.meshing import (
+    convert_mesh,
+    create_box_mesh_2D,
+    create_box_mesh_3D,
+    create_circle_circle_mesh,
+    create_circle_plane_mesh,
+    create_cylinder_cylinder_mesh,
+    create_sphere_plane_mesh,
+)
+from dolfinx_contact.newton_solver import NewtonSolver
+from dolfinx_contact.parallel_mesh_ghosting import create_contact_mesh
 
 if __name__ == "__main__":
     desc = "Nitsche's method for two elastic bodies using custom assemblers"
-    parser = argparse.ArgumentParser(description=desc,
-                                     formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument("--theta", default=1., type=float, dest="theta",
-                        help="Theta parameter for Nitsche, 1 symmetric, -1 skew symmetric, 0 Penalty-like",
-                        choices=[1., -1., 0.])
-    parser.add_argument("--gamma", default=10, type=float, dest="gamma",
-                        help="Coercivity/Stabilization parameter for Nitsche condition")
-    parser.add_argument("--quadrature", default=5, type=int, dest="q_degree",
-                        help="Quadrature degree used for contact integrals")
-    parser.add_argument("--problem", default=1, type=int, dest="problem",
-                        help="Which problem to solve: 1. Flat surfaces, 2. One curved surface, 3. Two curved surfaces",
-                        choices=[1, 2, 3])
-    parser.add_argument("--order", default=1, type=int, dest="order",
-                        help="Order of mesh geometry", choices=[1, 2, 3])
+    parser = argparse.ArgumentParser(description=desc, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument(
+        "--theta",
+        default=1.0,
+        type=float,
+        dest="theta",
+        help="Theta parameter for Nitsche, 1 symmetric, -1 skew symmetric, 0 Penalty-like",
+        choices=[1.0, -1.0, 0.0],
+    )
+    parser.add_argument(
+        "--gamma",
+        default=10,
+        type=float,
+        dest="gamma",
+        help="Coercivity/Stabilization parameter for Nitsche condition",
+    )
+    parser.add_argument(
+        "--quadrature",
+        default=5,
+        type=int,
+        dest="q_degree",
+        help="Quadrature degree used for contact integrals",
+    )
+    parser.add_argument(
+        "--problem",
+        default=1,
+        type=int,
+        dest="problem",
+        help="Which problem to solve: 1. Flat surfaces, 2. One curved surface, 3. Two curved surfaces",
+        choices=[1, 2, 3],
+    )
+    parser.add_argument(
+        "--order",
+        default=1,
+        type=int,
+        dest="order",
+        help="Order of mesh geometry",
+        choices=[1, 2, 3],
+    )
     _3D = parser.add_mutually_exclusive_group(required=False)
-    _3D.add_argument('--3D', dest='threed', action='store_true',
-                     help="Use 3D mesh", default=False)
+    _3D.add_argument("--3D", dest="threed", action="store_true", help="Use 3D mesh", default=False)
     _timing = parser.add_mutually_exclusive_group(required=False)
-    _timing.add_argument('--timing', dest='timing', action='store_true',
-                         help="List timings", default=False)
+    _timing.add_argument(
+        "--timing",
+        dest="timing",
+        action="store_true",
+        help="List timings",
+        default=False,
+    )
     _ksp = parser.add_mutually_exclusive_group(required=False)
-    _ksp.add_argument('--ksp-view', dest='ksp', action='store_true',
-                      help="List ksp options", default=False)
+    _ksp.add_argument(
+        "--ksp-view",
+        dest="ksp",
+        action="store_true",
+        help="List ksp options",
+        default=False,
+    )
     _simplex = parser.add_mutually_exclusive_group(required=False)
-    _simplex.add_argument('--simplex', dest='simplex', action='store_true',
-                          help="Use triangle/tet mesh", default=False)
+    _simplex.add_argument(
+        "--simplex",
+        dest="simplex",
+        action="store_true",
+        help="Use triangle/tet mesh",
+        default=False,
+    )
     _strain = parser.add_mutually_exclusive_group(required=False)
-    _strain.add_argument('--strain', dest='plane_strain', action='store_true',
-                         help="Use plane strain formulation", default=False)
-    parser.add_argument("--E", default=1e3, type=np.float64, dest="E",
-                        help="Youngs modulus of material")
+    _strain.add_argument(
+        "--strain",
+        dest="plane_strain",
+        action="store_true",
+        help="Use plane strain formulation",
+        default=False,
+    )
+    parser.add_argument("--E", default=1e3, type=np.float64, dest="E", help="Youngs modulus of material")
     parser.add_argument("--nu", default=0.1, type=np.float64, dest="nu", help="Poisson's ratio")
-    parser.add_argument("--disp", default=0.2, type=np.float64, dest="disp",
-                        help="Displacement BC in negative y direction")
-    parser.add_argument("--radius", default=0.5, type=np.float64, dest="radius",
-                        help="Search radius for ray-tracing")
-    parser.add_argument("--load_steps", default=1, type=np.int32, dest="nload_steps",
-                        help="Number of steps for gradual loading")
-    parser.add_argument("--res", default=0.1, type=np.float64, dest="res",
-                        help="Mesh resolution")
-    parser.add_argument("--friction", default=0.0, type=np.float64, dest="fric",
-                        help="Friction coefficient for Tresca friction")
-    parser.add_argument("--outfile", type=str, default=None, required=False,
-                        help="File for appending results", dest="outfile")
+    parser.add_argument(
+        "--disp",
+        default=0.2,
+        type=np.float64,
+        dest="disp",
+        help="Displacement BC in negative y direction",
+    )
+    parser.add_argument(
+        "--radius",
+        default=0.5,
+        type=np.float64,
+        dest="radius",
+        help="Search radius for ray-tracing",
+    )
+    parser.add_argument(
+        "--load_steps",
+        default=1,
+        type=np.int32,
+        dest="nload_steps",
+        help="Number of steps for gradual loading",
+    )
+    parser.add_argument("--res", default=0.1, type=np.float64, dest="res", help="Mesh resolution")
+    parser.add_argument(
+        "--friction",
+        default=0.0,
+        type=np.float64,
+        dest="fric",
+        help="Friction coefficient for Tresca friction",
+    )
+    parser.add_argument(
+        "--outfile",
+        type=str,
+        default=None,
+        required=False,
+        help="File for appending results",
+        dest="outfile",
+    )
     _lifting = parser.add_mutually_exclusive_group(required=False)
-    _lifting.add_argument('--lifting', dest='lifting', action='store_true',
-                          help="Apply lifting (strong enforcement of Dirichlet condition",
-                          default=False)
+    _lifting.add_argument(
+        "--lifting",
+        dest="lifting",
+        action="store_true",
+        help="Apply lifting (strong enforcement of Dirichlet condition",
+        default=False,
+    )
     _raytracing = parser.add_mutually_exclusive_group(required=False)
-    _raytracing.add_argument('--raytracing', dest='raytracing', action='store_true',
-                             help="Use raytracing for contact search.",
-                             default=False)
+    _raytracing.add_argument(
+        "--raytracing",
+        dest="raytracing",
+        action="store_true",
+        help="Use raytracing for contact search.",
+        default=False,
+    )
     _coulomb = parser.add_mutually_exclusive_group(required=False)
-    _coulomb.add_argument('--coulomb', dest='coulomb', action='store_true',
-                          help="Use coulomb friction kernel. This requires --friction=[nonzero float value].",
-                          default=False)
+    _coulomb.add_argument(
+        "--coulomb",
+        dest="coulomb",
+        action="store_true",
+        help="Use coulomb friction kernel. This requires --friction=[nonzero float value].",
+        default=False,
+    )
 
     # Parse input arguments or set to defualt values
     args = parser.parse_args()
@@ -130,18 +230,14 @@ if __name__ == "__main__":
             dirichlet_bdy_2 = 4
             # Create meshtag for top and bottom markers
             top_facets1 = locate_entities_boundary(mesh, tdim - 1, lambda x: np.isclose(x[2], 0.5))
-            bottom_facets1 = locate_entities_boundary(
-                mesh, tdim - 1, lambda x: np.isclose(x[2], 0.0))
+            bottom_facets1 = locate_entities_boundary(mesh, tdim - 1, lambda x: np.isclose(x[2], 0.0))
             top_facets2 = locate_entities_boundary(mesh, tdim - 1, lambda x: np.isclose(x[2], -0.1))
-            bottom_facets2 = locate_entities_boundary(
-                mesh, tdim - 1, lambda x: np.isclose(x[2], -0.6))
+            bottom_facets2 = locate_entities_boundary(mesh, tdim - 1, lambda x: np.isclose(x[2], -0.6))
             top_values = np.full(len(top_facets1), dirichlet_bdy_1, dtype=np.int32)
-            bottom_values = np.full(
-                len(bottom_facets1), contact_bdy_1, dtype=np.int32)
+            bottom_values = np.full(len(bottom_facets1), contact_bdy_1, dtype=np.int32)
 
             surface_values = np.full(len(top_facets2), contact_bdy_2, dtype=np.int32)
-            sbottom_values = np.full(
-                len(bottom_facets2), dirichlet_bdy_2, dtype=np.int32)
+            sbottom_values = np.full(len(bottom_facets2), dirichlet_bdy_2, dtype=np.int32)
             indices = np.concatenate([top_facets1, bottom_facets1, top_facets2, bottom_facets2])
             values = np.hstack([top_values, bottom_values, surface_values, sbottom_values])
             sorted_facets = np.argsort(indices)
@@ -200,7 +296,14 @@ if __name__ == "__main__":
             val1 = np.full(len(contact_facets_1), contact_bdy_1, dtype=np.int32)
             val2 = np.full(len(contact_facets_2), contact_bdy_2, dtype=np.int32)
             val3 = np.full(len(dirchlet_facets_2), dirichlet_bdy_2, dtype=np.int32)
-            indices = np.concatenate([dirichlet_facets_1, contact_facets_1, contact_facets_2, dirchlet_facets_2])
+            indices = np.concatenate(
+                [
+                    dirichlet_facets_1,
+                    contact_facets_1,
+                    contact_facets_2,
+                    dirchlet_facets_2,
+                ]
+            )
             values = np.hstack([val0, val1, val2, val3])
             sorted_facets = np.argsort(indices)
             facet_marker = meshtags(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
@@ -210,8 +313,12 @@ if __name__ == "__main__":
         if problem == 1:
             outname = "results/problem1_2D_simplex" if simplex else "results/problem1_2D_quads"
             fname = f"{mesh_dir}/box_2D"
-            create_box_mesh_2D(filename=f"{fname}.msh", quads=not simplex, res=args.res,
-                               order=args.order)
+            create_box_mesh_2D(
+                filename=f"{fname}.msh",
+                quads=not simplex,
+                res=args.res,
+                order=args.order,
+            )
             convert_mesh(fname, f"{fname}.xdmf", gdim=2)
             with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
                 mesh = xdmf.read_mesh(ghost_mode=GhostMode.none)
@@ -227,8 +334,16 @@ if __name__ == "__main__":
         elif problem == 2:
             outname = "results/problem2_2D_simplex" if simplex else "results/problem2_2D_quads"
             fname = f"{mesh_dir}/problem2_2D_simplex" if simplex else f"{mesh_dir}/problem2_2D_quads"
-            create_circle_plane_mesh(filename=f"{fname}.msh", quads=not simplex,
-                                     res=args.res, order=args.order, r=0.3, gap=0.1, height=0.1, length=1.0)
+            create_circle_plane_mesh(
+                filename=f"{fname}.msh",
+                quads=not simplex,
+                res=args.res,
+                order=args.order,
+                r=0.3,
+                gap=0.1,
+                height=0.1,
+                length=1.0,
+            )
             convert_mesh(fname, f"{fname}.xdmf", gdim=2)
 
             with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
@@ -244,7 +359,12 @@ if __name__ == "__main__":
         elif problem == 3:
             outname = "results/problem3_2D_simplex" if simplex else "results/problem3_2D_quads"
             fname = f"{mesh_dir}/two_disks"
-            create_circle_circle_mesh(filename=f"{fname}.msh", quads=(not simplex), res=args.res, order=args.order)
+            create_circle_circle_mesh(
+                filename=f"{fname}.msh",
+                quads=(not simplex),
+                res=args.res,
+                order=args.order,
+            )
             convert_mesh(fname, f"{fname}.xdmf", gdim=2)
 
             with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
@@ -287,7 +407,8 @@ if __name__ == "__main__":
 
     if mesh.comm.size > 1:
         mesh, facet_marker, domain_marker = create_contact_mesh(
-            mesh, facet_marker, domain_marker, [contact_bdy_1, contact_bdy_2], 2.0)
+            mesh, facet_marker, domain_marker, [contact_bdy_1, contact_bdy_2], 2.0
+        )
 
     ncells = mesh.topology.index_map(tdim).size_local
     indices = np.array(range(ncells), dtype=np.int32)
@@ -304,12 +425,14 @@ if __name__ == "__main__":
     # Solver options
     ksp_tol = 1e-10
     newton_tol = 1e-7
-    newton_options = {"relaxation_parameter": 1,
-                      "atol": newton_tol,
-                      "rtol": newton_tol,
-                      "convergence_criterion": "residual",
-                      "max_it": 200,
-                      "error_on_nonconvergence": True}
+    newton_options = {
+        "relaxation_parameter": 1,
+        "atol": newton_tol,
+        "rtol": newton_tol,
+        "convergence_criterion": "residual",
+        "max_it": 200,
+        "error_on_nonconvergence": True,
+    }
     # petsc_options = {"ksp_type": "preonly", "pc_type": "lu"}
     petsc_options = {
         "matptap_via": "scalable",
@@ -318,7 +441,7 @@ if __name__ == "__main__":
         "ksp_atol": ksp_tol,
         "pc_type": "gamg",
         "pc_mg_levels": 3,
-        "pc_mg_cycles": 1,   # 1 is v, 2 is w
+        "pc_mg_cycles": 1,  # 1 is v, 2 is w
         "mg_levels_ksp_type": "chebyshev",
         "mg_levels_pc_type": "jacobi",
         "pc_gamg_type": "agg",
@@ -327,7 +450,7 @@ if __name__ == "__main__":
         "pc_gamg_threshold": 0.015,
         "pc_gamg_square_graph": 2,
         "pc_gamg_reuse_interpolation": True,
-        "ksp_norm_type": "unpreconditioned"
+        "ksp_norm_type": "unpreconditioned",
     }
     # Pack mesh data for Nitsche solver
     dirichlet_vals = [dirichlet_bdy_1, dirichlet_bdy_2]
@@ -337,14 +460,13 @@ if __name__ == "__main__":
     surfaces = adjacencylist(data, offsets)
 
     # Function, TestFunction, TrialFunction and measures
-    V = VectorFunctionSpace(mesh, ("Lagrange", args.order))
+    V = functionspace(mesh, ("Lagrange", args.order, (mesh.geometry.dim,)))
     u = Function(V)
     du = Function(V)
     v = ufl.TestFunction(V)
     w = ufl.TrialFunction(V)
     dx = ufl.Measure("dx", domain=mesh, subdomain_data=domain_marker)
     ds = ufl.Measure("ds", domain=mesh, subdomain_data=facet_marker)
-
     # Compute lame parameters
     E = args.E
     nu = args.nu
@@ -356,12 +478,15 @@ if __name__ == "__main__":
     # Create variational form without contact contributions
     F = ufl.inner(sigma(u), epsilon(v)) * dx
 
+    mesh.topology.create_connectivity(tdim, tdim)
+
     # Nitsche parameters
     gamma = args.gamma
     theta = args.theta
     gdim = mesh.geometry.dim
     bcs = []
     bc_fns = []
+
     for k in range(displacement.shape[0]):
         d = displacement[k, :]
         tag = dirichlet_vals[k]
@@ -378,8 +503,7 @@ if __name__ == "__main__":
 
     # compiler options to improve performance
     cffi_options = ["-Ofast", "-march=native"]
-    jit_options = {"cffi_extra_compile_args": cffi_options,
-                   "cffi_libraries": ["m"]}
+    jit_options = {"cffi_extra_compile_args": cffi_options, "cffi_libraries": ["m"]}
     # compiled forms for rhs and tangen system
     F_compiled = form(F, jit_options=jit_options)
     J_compiled = form(J, jit_options=jit_options)
@@ -391,7 +515,7 @@ if __name__ == "__main__":
 
     solver_outfile = args.outfile if args.ksp else None
 
-    V0 = FunctionSpace(mesh, ("DG", 0))
+    V0 = functionspace(mesh, ("DG", 0))
     mu0 = Function(V0)
     lmbda0 = Function(V0)
     fric = Function(V0)
@@ -410,23 +534,26 @@ if __name__ == "__main__":
         friction_law = FrictionLaw.Coulomb
     else:
         friction_law = FrictionLaw.Tresca
-    contact_problem.generate_contact_data(friction_law, V, {"u": u, "du": du, "mu": mu0,
-                                                            "lambda": lmbda0, "fric": fric},
-                                          E * gamma * args.order**2, theta)
+    contact_problem.generate_contact_data(
+        friction_law,
+        V,
+        {"u": u, "du": du, "mu": mu0, "lambda": lmbda0, "fric": fric},
+        E * gamma * args.order**2,
+        theta,
+    )
 
     # define functions for newton solver
     def compute_coefficients(x, coeffs):
         size_local = V.dofmap.index_map.size_local
         bs = V.dofmap.index_map_bs
-        du.x.array[:size_local * bs] = x.array_r[:size_local * bs]
+        du.x.array[: size_local * bs] = x.array_r[: size_local * bs]
         du.x.scatter_forward()
         contact_problem.update_contact_data(du)
 
     @timed("~Contact: Assemble residual")
     def compute_residual(x, b, coeffs):
         b.zeroEntries()
-        b.ghostUpdate(addv=InsertMode.INSERT,
-                      mode=ScatterMode.FORWARD)
+        b.ghostUpdate(addv=InsertMode.INSERT, mode=ScatterMode.FORWARD)
         with Timer("~~Contact: Contact contributions (in assemble vector)"):
             contact_problem.assemble_vector(b, V)
         with Timer("~~Contact: Standard contributions (in assemble vector)"):
@@ -434,10 +561,8 @@ if __name__ == "__main__":
 
         # Apply boundary condition
         if len(bcs) > 0:
-            apply_lifting(
-                b, [J_compiled], bcs=[bcs], x0=[x], scale=-1.0)
-        b.ghostUpdate(addv=InsertMode.ADD,
-                      mode=ScatterMode.REVERSE)
+            apply_lifting(b, [J_compiled], bcs=[bcs], x0=[x], scale=-1.0)
+        b.ghostUpdate(addv=InsertMode.ADD, mode=ScatterMode.REVERSE)
         if len(bcs) > 0:
             set_bc(b, bcs, x, -1.0)
 
@@ -462,8 +587,12 @@ if __name__ == "__main__":
     newton_solver.set_coefficients(compute_coefficients)
 
     # Set rigid motion nullspace
-    null_space = rigid_motions_nullspace_subdomains(V, domain_marker, np.unique(
-        domain_marker.values), num_domains=len(np.unique(domain_marker.values)))
+    null_space = rigid_motions_nullspace_subdomains(
+        V,
+        domain_marker,
+        np.unique(domain_marker.values),
+        num_domains=len(np.unique(domain_marker.values)),
+    )
     newton_solver.A.setNearNullSpace(null_space)
 
     # Set Newton solver options
@@ -500,7 +629,7 @@ if __name__ == "__main__":
 
     sigma_dev = sigma(u) - (1 / 3) * ufl.tr(sigma(u)) * ufl.Identity(len(u))
     sigma_vm = ufl.sqrt((3 / 2) * ufl.inner(sigma_dev, sigma_dev))
-    W = FunctionSpace(mesh, ("Discontinuous Lagrange", args.order - 1))
+    W = functionspace(mesh, ("Discontinuous Lagrange", args.order - 1))
     sigma_vm_expr = Expression(sigma_vm, W.element.interpolation_points())
     sigma_vm_h = Function(W)
     sigma_vm_h.interpolate(sigma_vm_expr)
@@ -528,10 +657,19 @@ if __name__ == "__main__":
     if mesh.comm.rank == 0:
         print("-" * 25, file=outfile)
         print(f"Newton options {newton_options}", file=outfile)
-        print(f"num_dofs: {u.function_space.dofmap.index_map_bs*u.function_space.dofmap.index_map.size_global}"
-              + f", {mesh.topology.cell_types[0]}", file=outfile)
-        print(f"Newton solver {timing('~Contact: Newton (Newton solver)')[1]}", file=outfile)
-        print(f"Krylov solver {timing('~Contact: Newton (Krylov solver)')[1]}", file=outfile)
+        print(
+            f"num_dofs: {u.function_space.dofmap.index_map_bs*u.function_space.dofmap.index_map.size_global}"
+            + f", {mesh.topology.cell_type}",
+            file=outfile,
+        )
+        print(
+            f"Newton solver {timing('~Contact: Newton (Newton solver)')[1]}",
+            file=outfile,
+        )
+        print(
+            f"Krylov solver {timing('~Contact: Newton (Krylov solver)')[1]}",
+            file=outfile,
+        )
         print(f"Newton time: {newton_time}", file=outfile)
         print(f"Newton iterations {num_newton_its}, {sum(num_newton_its)}", file=outfile)
         print(f"Krylov iterations {num_krylov_its}, {sum(num_krylov_its)}", file=outfile)

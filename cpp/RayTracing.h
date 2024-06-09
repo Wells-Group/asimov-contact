@@ -16,11 +16,12 @@ namespace dolfinx_contact
 {
 namespace stdex = std::experimental;
 template <std::size_t A, std::size_t B>
-using AB_span = stdex::mdspan<double, stdex::extents<std::size_t, A, B>>;
+using AB_span
+    = MDSPAN_IMPL_STANDARD_NAMESPACE::mdspan<double,
+                                             stdex::extents<std::size_t, A, B>>;
 
 namespace impl
 {
-
 /// Normalize a set of vectors by its length
 /// @tparam The number of vectors
 /// @tparam The length of the vectors
@@ -49,8 +50,7 @@ void compute_tangents(std::span<const double, gdim> n,
 {
 
   // Compute local maximum and create iteration array
-  auto max_el = std::max_element(n.begin(), n.end(),
-                                 [](double a, double b)
+  auto max_el = std::max_element(n.begin(), n.end(), [](double a, double b)
                                  { return std::norm(a) < std::norm(b); });
   auto max_pos = std::distance(n.begin(), max_el);
   std::size_t c = 0;
@@ -100,7 +100,6 @@ public:
   /// point Point of origin of ray, size gdim
   NewtonStorage()
   {
-
     std::array<std::size_t, 12> distribution = {tdim * (tdim - 1),
                                                 tdim,
                                                 gdim,
@@ -199,37 +198,40 @@ private:
   std::array<std::size_t, 13> _offsets;
 };
 
-/// @brief Compute the solution to the ray tracing problem for a single cell
+/// @brief Compute the solution to the ray tracing problem for a single
+/// cell.
 ///
-/// The implementation solves dot(\Phi(\xi, \eta)-p, t_i)=0, i=1,..,, tdim-1
-/// where \Phi(\xi,\eta) is the parameterized mapping from the reference
-/// facet to the physical facet, p the point of origin of the ray, and t_i
-/// is the ith tangents defining the ray. For more details, see
-/// DOI: 10.1016/j.compstruc.2015.02.027 (eq 14).
+/// The implementation solves dot(\Phi(\xi, \eta)-p, t_i)=0, i=1,..,,
+/// tdim-1 where \Phi(\xi,\eta) is the parameterized mapping from the
+/// reference facet to the physical facet, p the point of origin of the
+/// ray, and t_i is the ith tangents defining the ray. For more details,
+/// see DOI: 10.1016/j.compstruc.2015.02.027 (eq 14).
 ///
 /// @note The problem is solved using Newton's method
 ///
-/// @param[in,out] storage Structure holding all memory required for
-/// the newton iteration.
-/// @note It is expected that the variables tangents, point, xi is filled with
-/// appropriate input values
+/// @tparam tdim The topological dimension of the cell
+/// @tparam gdim The geometrical dimension of the cell
+///
+/// @param[in,out] storage Structure holding all memory required for the
+/// newton iteration.
+/// @note It is expected that the variables tangents, point, xi is
+/// filled with appropriate input values
 /// @note All other variables of the class is updated.
-/// @param[in, out] basis_values Work_array for basis evaluation. Should have
-/// the length given by `cmap.tabulate_shape(1,1)`
-/// @param[in] max_iter Maximum number of iterations for the Newton solver
+/// @param[in, out] basis_values Work_array for basis evaluation. Should
+/// have the length given by `cmap.tabulate_shape(1,1)`
+/// @param[in] max_iter Maximum number of iterations for the Newton
+/// solver
 /// @param[in] tol The tolerance for termination of the Newton solver
 /// @param[in] cmap The coordinate element
 /// @param[in] cell_type The cell type of the mesh
-/// @param[in] coordinate_dofs The cell geometry, shape (num_dofs_g, gdim).
-/// Flattened row-major
-/// @param[in] reference_map Function mapping from reference parameters (xi,
-/// eta) to the physical element
-/// @tparam tdim The topological dimension of the cell
-/// @tparam gdim The geometrical dimension of the cell
+/// @param[in] coordinate_dofs The cell geometry, shape (num_dofs_g,
+/// gdim). Flattened row-major
+/// @param[in] reference_map Function mapping from reference parameters
+/// (xi, eta) to the physical element
 template <std::size_t tdim, std::size_t gdim>
 int raytracing_cell(
     NewtonStorage<tdim, gdim>& storage, std::span<double> basis_values,
-    const std::array<std::size_t, 4>& basis_shape, int max_iter, double tol,
+    std::array<std::size_t, 4> basis_shape, int max_iter, double tol,
     const dolfinx::fem::CoordinateElement<double>& cmap,
     dolfinx::mesh::CellType cell_type, std::span<const double> coordinate_dofs,
     const std::function<void(std::span<const double, tdim - 1>,
@@ -268,8 +270,9 @@ int raytracing_cell(
                                  std::multiplies{}))
          == basis_values.size());
   cmdspan4_t basis(basis_values.data(), basis_shape);
-  auto dphi = stdex::submdspan(basis, std::pair{1, tdim + 1}, 0,
-                               MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent, 0);
+  auto dphi = MDSPAN_IMPL_STANDARD_NAMESPACE::submdspan(
+      basis, std::pair{1, tdim + 1}, 0,
+      MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent, 0);
   cmdspan2_t coords(coordinate_dofs.data(), cmap.dim(), gdim);
   mdspan2_t _xk(x_k.data(), 1, gdim);
   for (int k = 0; k < max_iter; ++k)
@@ -283,7 +286,9 @@ int raytracing_cell(
     // Push forward reference coordinate
     dolfinx::fem::CoordinateElement<double>::push_forward(
         _xk, coords,
-        stdex::submdspan(basis, 0, MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent, MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent, 0));
+        MDSPAN_IMPL_STANDARD_NAMESPACE::submdspan(
+            basis, 0, MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent,
+            MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent, 0));
 
     // Compute residual at current iteration
     std::fill(Gk.begin(), Gk.end(), 0);
@@ -296,6 +301,7 @@ int raytracing_cell(
       for (std::size_t j = 0; j < tdim; ++j)
         J(i, j) = 0;
     dolfinx::fem::CoordinateElement<double>::compute_jacobian(dphi, coords, J);
+
     /// Compute dGk/dxi
     for (std::size_t i = 0; i < gdim; ++i)
       for (std::size_t j = 0; j < tdim - 1; ++j)
@@ -305,6 +311,7 @@ int raytracing_cell(
     for (std::size_t i = 0; i < gdim - 1; ++i)
       for (std::size_t j = 0; j < tdim - 1; ++j)
         dGk(i, j) = 0;
+
     for (std::size_t i = 0; i < gdim - 1; ++i)
       for (std::size_t j = 0; j < tdim - 1; ++j)
         for (std::size_t l = 0; l < gdim; ++l)
@@ -319,9 +326,8 @@ int raytracing_cell(
       det_dGk = std::sqrt(ATA);
     }
     else
-    {
       det_dGk = dolfinx::math::det(dGk);
-    }
+
     // Terminate if dGk/dxi is not invertible
     if (std::abs(det_dGk) < tol)
     {
@@ -331,13 +337,9 @@ int raytracing_cell(
 
     // Invert dGk/dxi
     if constexpr (gdim == tdim)
-    {
       dolfinx::math::inv(dGk, dGk_inv);
-    }
     else
-    {
       dolfinx::math::pinv(dGk, dGk_inv);
-    }
 
     // Compute dxi
     std::fill(dxi_k.begin(), dxi_k.end(), 0);
@@ -378,15 +380,11 @@ int raytracing_cell(
     break;
   case dolfinx::mesh::CellType::triangle:
     if ((xi_k[0] < -tol) or (xi_k[0] > 1 + tol))
-    {
       status = -3;
-    }
     break;
   case dolfinx::mesh::CellType::quadrilateral:
     if ((xi_k[0] < -tol) or (xi_k[0] > 1 + tol))
-    {
       status = -3;
-    }
     break;
   default:
     throw std::invalid_argument("Unsupported cell type");
@@ -394,25 +392,25 @@ int raytracing_cell(
   return status;
 }
 
-/// @brief Compute the first intersection between a ray and a set of facets in
-/// the mesh templated for the topological dimension.
+/// @brief Compute the first intersection between a ray and a set of
+/// facets in the mesh templated for the topological dimension.
 ///
 /// @param[in] mesh The mesh
 /// @param[in] point The point of origin for the ray
-/// @param[in] tangents The tangents of the ray. Each row corresponds to a
-/// tangent.
-/// @param[in] cells List of tuples (cell, facet), where the cell index is
-/// local to process and the facet index is local to the cell. Data is flattened
-/// row-major.
-/// @param[in] max_iter The maximum number of iterations to use for Newton's
-/// method
+/// @param[in] tangents The tangents of the ray. Each row corresponds to
+/// a tangent.
+/// @param[in] cells List of tuples (cell, facet), where the cell index
+/// is local to process and the facet index is local to the cell. Data
+/// is flattened row-major.
+/// @param[in] max_iter The maximum number of iterations to use for
+/// Newton's method
 /// @param[in] tol The tolerance for convergence in Newton's method
-/// @returns A quadruplet (status, cell_idx, point, reference_point), where x is
-/// the convergence status, cell_idx is which entry in the input list the ray
-/// goes through and point, reference_point is the collision point in global and
-/// reference coordinates resprectively.
-/// @note The convergence status is >0 if converging, -1 if the facet is if
-/// the maximum number of iterations are reached, -2 if the facet is
+/// @returns A quadruplet (status, cell_idx, point, reference_point),
+/// where x is the convergence status, cell_idx is which entry in the
+/// input list the ray goes through and point, reference_point is the
+/// collision point in global and reference coordinates respectively.
+/// @note The convergence status is >0 if converging, -1 if the facet is
+/// if the maximum number of iterations are reached, -2 if the facet is
 /// parallel with the tangent, -3 if the Newton solver finds a solution
 /// outside the element.
 /// @tparam tdim The topological dimension of the cell
@@ -426,17 +424,18 @@ compute_ray(const dolfinx::mesh::Mesh<double>& mesh,
             const double tol = 1e-8)
 {
   int status = -1;
-  dolfinx::mesh::CellType cell_type = mesh.topology()->cell_types()[0];
+  dolfinx::mesh::CellType cell_type = mesh.topology()->cell_type();
   if ((mesh.topology()->dim() != tdim) or (mesh.geometry().dim() != gdim))
     throw std::invalid_argument("Invalid topological or geometrical dimension");
 
-  const dolfinx::fem::CoordinateElement<double>& cmap
-      = mesh.geometry().cmaps()[0];
+  const dolfinx::fem::CoordinateElement<double>& cmap = mesh.geometry().cmap();
 
   // Get cell coordinates/geometry
   const dolfinx::mesh::Geometry<double>& geometry = mesh.geometry();
-  stdex::mdspan<const std::int32_t, MDSPAN_IMPL_STANDARD_NAMESPACE::dextents<std::size_t, 2>> x_dofmap
-      = geometry.dofmap();
+  MDSPAN_IMPL_STANDARD_NAMESPACE::mdspan<
+      const std::int32_t,
+      MDSPAN_IMPL_STANDARD_NAMESPACE::dextents<std::size_t, 2>>
+      x_dofmap = geometry.dofmap();
   std::span<const double> x_g = geometry.x();
   const std::size_t num_dofs_g = cmap.dim();
   std::vector<double> coordinate_dofs(num_dofs_g * gdim);
@@ -478,7 +477,8 @@ compute_ray(const dolfinx::mesh::Mesh<double>& mesh,
   {
 
     // Get cell geometry
-    auto x_dofs = stdex::submdspan(x_dofmap, cells[c], MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent);
+    auto x_dofs = MDSPAN_IMPL_STANDARD_NAMESPACE::submdspan(
+        x_dofmap, cells[c], MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent);
     for (std::size_t j = 0; j < x_dofs.size(); ++j)
     {
       std::copy_n(std::next(x_g.begin(), 3 * x_dofs[j]), gdim,
@@ -519,8 +519,9 @@ compute_ray(const dolfinx::mesh::Mesh<double>& mesh,
       break;
     }
   }
+
   if (status < 0)
-    LOG(WARNING) << "No ray through the facets have been found";
+    spdlog::warn("No ray through the facets have been found");
 
   std::array<double, gdim> x;
   std::array<double, tdim> X;
@@ -534,24 +535,24 @@ compute_ray(const dolfinx::mesh::Mesh<double>& mesh,
   return output;
 }
 
-/// @brief Compute the first intersection between a ray and a set of facets in
-/// the mesh.
+/// @brief Compute the first intersection between a ray and a set of
+/// facets in the mesh.
 ///
 /// @param[in] mesh The mesh
 /// @param[in] point The point of origin for the ray
 /// @param[in] normal The vector defining the direction of the ray
-/// @param[in] cells List of tuples (cell, facet), where the cell index is
-/// local to process and the facet index is local to the cell cell. Data is
-/// flattened row-major.
-/// @param[in] max_iter The maximum number of iterations to use for Newton's
-/// method
+/// @param[in] cells List of tuples (cell, facet), where the cell index
+/// is local to process and the facet index is local to the cell cell.
+/// Data is flattened row-major.
+/// @param[in] max_iter The maximum number of iterations to use for
+/// Newton's method
 /// @param[in] tol The tolerance for convergence in Newton's method
 /// @returns A quadruplet (status, cell_idx, x, X), where status is the
-/// convergence status, cell_idx is which entry in the input list the ray
-/// goes through and x, X is the collision point in global and reference
-/// coordinates, respectively.
-/// @note The convergence status is >0 if converging, -1 if the facet is if
-/// the maximum number of iterations are reached, -2 if the facet is
+/// convergence status, cell_idx is which entry in the input list the
+/// ray goes through and x, X is the collision point in global and
+/// reference coordinates, respectively.
+/// @note The convergence status is >0 if converging, -1 if the facet is
+/// if the maximum number of iterations are reached, -2 if the facet is
 /// parallel with the tangent, -3 if the Newton solver finds a solution
 /// outside the element.
 std::tuple<int, std::int32_t, std::vector<double>, std::vector<double>>

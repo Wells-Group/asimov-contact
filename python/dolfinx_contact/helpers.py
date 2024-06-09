@@ -6,19 +6,34 @@
 from contextlib import ExitStack
 from typing import Union
 
-from dolfinx.fem import Constant, form, Function, FunctionSpace, FunctionSpaceBase
-from dolfinx.fem.petsc import apply_lifting, assemble_matrix, assemble_vector, set_bc
+from petsc4py import PETSc
+
 import dolfinx.la as _la
-from dolfinx import cpp
-from dolfinx.mesh import MeshTags
 import numpy
 import scipy.sparse
 import ufl
-from petsc4py import PETSc
+from dolfinx import cpp
+from dolfinx.fem import Constant, Function, FunctionSpace, form, functionspace
+from dolfinx.fem.petsc import apply_lifting, assemble_matrix, assemble_vector, set_bc
+from dolfinx.mesh import MeshTags
 
-__all__ = ["compare_matrices", "lame_parameters", "epsilon", "sigma_func", "R_minus", "dR_minus", "R_plus",
-           "dR_plus", "ball_projection", "d_ball_projection", "tangential_proj", "NonlinearPDE_SNESProblem",
-           "rigid_motions_nullspace", "rigid_motions_nullspace_subdomains", "weak_dirichlet"]
+__all__ = [
+    "compare_matrices",
+    "lame_parameters",
+    "epsilon",
+    "sigma_func",
+    "R_minus",
+    "dR_minus",
+    "R_plus",
+    "dR_plus",
+    "ball_projection",
+    "d_ball_projection",
+    "tangential_proj",
+    "NonlinearPDE_SNESProblem",
+    "rigid_motions_nullspace",
+    "rigid_motions_nullspace_subdomains",
+    "weak_dirichlet",
+]
 
 
 def compare_matrices(a: PETSc.Mat, b: PETSc.Mat, atol: float = 1e-12):  # type: ignore
@@ -41,16 +56,21 @@ def lame_parameters(plane_strain: bool = False):
     Returns the Lame parameters for plane stress or plane strain.
     Return type is lambda functions
     """
+
     def mu(E, nu):
         return E / (2 * (1 + nu))
 
     if plane_strain:
+
         def lmbda(E, nu):
             return E * nu / ((1 + nu) * (1 - 2 * nu))
+
         return mu, lmbda
     else:
+
         def lmbda(E, nu):
             return E * nu / ((1 + nu) * (1 - nu))
+
         return mu, lmbda
 
 
@@ -80,7 +100,7 @@ def R_plus(x):
     """
     Positive restriction of variable (x if x>0 else 0)
     """
-    return 0.5 * (x + numpy.abs(x))
+    return 0.5 * (x + abs(x))
 
 
 def dR_plus(x):
@@ -94,7 +114,7 @@ def ball_projection(x, s, dim):
     """
     Ball projection, project a vector quantity x onto a ball of radius r  if |x|>r
     """
-    abs_x = ufl.sqrt(sum([x[i]**2 for i in range(dim)]))
+    abs_x = ufl.sqrt(sum([x[i] ** 2 for i in range(dim)]))
     return ufl.conditional(ufl.le(abs_x, s), x, s * x / abs_x)
 
 
@@ -102,17 +122,24 @@ def d_ball_projection(x, s, dim):
     """
     Derivative of ball projection, project a vector quantity x onto a ball of radius r  if |x|>r
     """
-    abs_x = ufl.sqrt(sum([x[i]**2 for i in range(dim)]))
-    return ufl.conditional(ufl.le(abs_x, s), ufl.Identity(dim),
-                           (s / abs_x) * (ufl.Identity(dim) - ufl.outer(x / abs_x, x / abs_x)))
+    abs_x = ufl.sqrt(sum([x[i] ** 2 for i in range(dim)]))
+    return ufl.conditional(
+        ufl.le(abs_x, s),
+        ufl.Identity(dim),
+        (s / abs_x) * (ufl.Identity(dim) - ufl.outer(x / abs_x, x / abs_x)),
+    )
 
 
 def d_alpha_ball_projection(x, alpha, d_alpha, dim):
     """
     Derivative term of ball projection for x-dependent radius
     """
-    abs_x = ufl.sqrt(sum([x[i]**2 for i in range(dim)]))
-    return ufl.conditional(ufl.le(abs_x, alpha), ufl.as_vector(tuple(0 for _ in range(dim))), d_alpha * x / abs_x)
+    abs_x = ufl.sqrt(sum([x[i] ** 2 for i in range(dim)]))
+    return ufl.conditional(
+        ufl.le(abs_x, alpha),
+        ufl.as_vector(tuple(0 for _ in range(dim))),
+        d_alpha * x / abs_x,
+    )
 
 
 def tangential_proj(u, n):
@@ -128,11 +155,12 @@ class NonlinearPDE_SNESProblem:
         V = u.function_space
         du = ufl.TrialFunction(V)
 
-        self.L = form(F, form_compiler_options=form_compiler_options,
-                      jit_options=jit_options)
-        self.a = form(ufl.derivative(F, u, du),
-                      form_compiler_options=form_compiler_options,
-                      jit_options=jit_options)
+        self.L = form(F, form_compiler_options=form_compiler_options, jit_options=jit_options)
+        self.a = form(
+            ufl.derivative(F, u, du),
+            form_compiler_options=form_compiler_options,
+            jit_options=jit_options,
+        )
         self.bc = bc
         self._F, self._J = None, None
         self.u = u
@@ -141,8 +169,7 @@ class NonlinearPDE_SNESProblem:
         """Assemble residual vector."""
         x.ghostUpdate(addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD)
         x.copy(self.u.vector)
-        self.u.vector.ghostUpdate(
-            addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD)
+        self.u.vector.ghostUpdate(addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD)
         with F.localForm() as f_local:
             f_local.set(0.0)
         assemble_vector(F, self.L)
@@ -157,7 +184,7 @@ class NonlinearPDE_SNESProblem:
         J.assemble()
 
 
-def rigid_motions_nullspace(V: FunctionSpaceBase):
+def rigid_motions_nullspace(V: FunctionSpace):
     """
     Function to build nullspace for 2D/3D elasticity.
 
@@ -175,42 +202,50 @@ def rigid_motions_nullspace(V: FunctionSpaceBase):
     dim = 3 if gdim == 2 else 6
 
     # Create list of vectors for null space
-    nullspace_basis = [_x.vector.copy() for i in range(dim)]
+    nullspace_basis = [
+        _la.vector(V.dofmap.index_map, bs=V.dofmap.index_map_bs, dtype=PETSc.ScalarType)  # type: ignore
+        for i in range(dim)
+    ]
 
-    with ExitStack() as stack:
-        vec_local = [stack.enter_context(x.localForm()) for x in nullspace_basis]
-        basis = [numpy.asarray(x) for x in vec_local]
+    basis = [b.array for b in nullspace_basis]
+    dofs = [V.sub(i).dofmap.list.flatten() for i in range(gdim)]
 
-        dofs = [V.sub(i).dofmap.list.flatten() for i in range(gdim)]
+    # Build translational null space basis
+    for i in range(gdim):
+        basis[i][dofs[i]] = 1.0
 
-        # Build translational null space basis
-        for i in range(gdim):
-            basis[i][dofs[i]] = 1.0
+    # Build rotational null space basis
+    x = V.tabulate_dof_coordinates()
+    dofs_block = V.dofmap.list.flatten()
+    x0, x1, x2 = x[dofs_block, 0], x[dofs_block, 1], x[dofs_block, 2]
+    if gdim == 2:
+        basis[2][dofs[0]] = -x1
+        basis[2][dofs[1]] = x0
+    elif gdim == 3:
+        basis[3][dofs[0]] = -x1
+        basis[3][dofs[1]] = x0
 
-        # Build rotational null space basis
-        x = V.tabulate_dof_coordinates()
-        dofs_block = V.dofmap.list.flatten()
-        x0, x1, x2 = x[dofs_block, 0], x[dofs_block, 1], x[dofs_block, 2]
-        if gdim == 2:
-            basis[2][dofs[0]] = -x1
-            basis[2][dofs[1]] = x0
-        elif gdim == 3:
-            basis[3][dofs[0]] = -x1
-            basis[3][dofs[1]] = x0
-
-            basis[4][dofs[0]] = x2
-            basis[4][dofs[2]] = -x0
-            basis[5][dofs[2]] = x1
-            basis[5][dofs[1]] = -x2
+        basis[4][dofs[0]] = x2
+        basis[4][dofs[2]] = -x0
+        basis[5][dofs[2]] = x1
+        basis[5][dofs[1]] = -x2
 
     _la.orthonormalize(nullspace_basis)
     assert _la.is_orthonormal(nullspace_basis)
-    return PETSc.NullSpace().create(vectors=nullspace_basis)  # type: ignore
+    local_size = V.dofmap.index_map.size_local * V.dofmap.index_map_bs
+    basis_petsc = [
+        PETSc.Vec().createWithArray(x[:local_size], bsize=gdim, comm=V.mesh.comm)  # type: ignore
+        for x in basis
+    ]
+    return PETSc.NullSpace().create(comm=V.mesh.comm, vectors=basis_petsc)  # type: ignore
 
 
-def near_nullspace_subdomains(V: FunctionSpaceBase, mt: MeshTags,
-                              tags: numpy.typing.NDArray[numpy.int32],
-                              num_domains=2):
+def near_nullspace_subdomains(
+    V: FunctionSpace,
+    mt: MeshTags,
+    tags: numpy.typing.NDArray[numpy.int32],
+    num_domains=2,
+):
     """
     Function to build nullspace for 2D/3D elasticity.
 
@@ -244,9 +279,12 @@ def near_nullspace_subdomains(V: FunctionSpaceBase, mt: MeshTags,
     return PETSc.NullSpace().create(vectors=nullspace_basis)  # type: ignore
 
 
-def rigid_motions_nullspace_subdomains(V: FunctionSpaceBase, mt: MeshTags,
-                                       tags: numpy.typing.NDArray[numpy.int32],
-                                       num_domains=2):
+def rigid_motions_nullspace_subdomains(
+    V: FunctionSpace,
+    mt: MeshTags,
+    tags: numpy.typing.NDArray[numpy.int32],
+    num_domains=2,
+):
     """
     Function to build nullspace for 2D/3D elasticity.
 
@@ -269,53 +307,61 @@ def rigid_motions_nullspace_subdomains(V: FunctionSpaceBase, mt: MeshTags,
     dim = 3 if gdim == 2 else 6
 
     # Create list of vectors for null space
-    nullspace_basis = [_x.vector.copy() for i in range(dim * num_domains)]
+    nullspace_basis = [
+        _la.vector(V.dofmap.index_map, bs=V.dofmap.index_map_bs, dtype=PETSc.ScalarType)  # type: ignore
+        for i in range(dim * num_domains)
+    ]
+    basis = [b.array for b in nullspace_basis]
 
-    with ExitStack() as stack:
-        vec_local = [stack.enter_context(x.localForm()) for x in nullspace_basis]
-        basis = [numpy.asarray(x) for x in vec_local]
-        for j, tag in enumerate(tags):
-            cells = mt.find(tag)
-            dofs_block = numpy.unique(numpy.hstack([V.dofmap.cell_dofs(cell) for cell in cells]))
-            dofs = [gdim * dofs_block + i for i in range(gdim)]
+    for j, tag in enumerate(tags):
+        cells = mt.find(tag)
+        dofs_block = numpy.unique(numpy.hstack([V.dofmap.cell_dofs(cell) for cell in cells]))
+        dofs = [gdim * dofs_block + i for i in range(gdim)]
 
-            # Build translational null space basis
-            for i in range(gdim):
-                basis[j * dim + i][dofs[i]] = 1.0
+        # Build translational null space basis
+        for i in range(gdim):
+            basis[j * dim + i][dofs[i]] = 1.0
 
-            # Build rotational null space basis
-            x = V.tabulate_dof_coordinates()
-            x0, x1, x2 = x[dofs_block, 0], x[dofs_block, 1], x[dofs_block, 2]
-            if gdim == 2:
-                basis[j * dim + 2][dofs[0]] = -x1
-                basis[j * dim + 2][dofs[1]] = x0
-            elif gdim == 3:
-                basis[j * dim + 3][dofs[0]] = -x1
-                basis[j * dim + 3][dofs[1]] = x0
+        # Build rotational null space basis
+        x = V.tabulate_dof_coordinates()
+        x0, x1, x2 = x[dofs_block, 0], x[dofs_block, 1], x[dofs_block, 2]
+        if gdim == 2:
+            basis[j * dim + 2][dofs[0]] = -x1
+            basis[j * dim + 2][dofs[1]] = x0
+        elif gdim == 3:
+            basis[j * dim + 3][dofs[0]] = -x1
+            basis[j * dim + 3][dofs[1]] = x0
 
-                basis[j * dim + 4][dofs[0]] = x2
-                basis[j * dim + 4][dofs[2]] = -x0
-                basis[j * dim + 5][dofs[2]] = x1
-                basis[j * dim + 5][dofs[1]] = -x2
+            basis[j * dim + 4][dofs[0]] = x2
+            basis[j * dim + 4][dofs[2]] = -x0
+            basis[j * dim + 5][dofs[2]] = x1
+            basis[j * dim + 5][dofs[1]] = -x2
+    for b in nullspace_basis:
+        b.scatter_forward()
+    _la.orthonormalize(nullspace_basis)
+    assert _la.is_orthonormal(nullspace_basis)
+    local_size = V.dofmap.index_map.size_local * V.dofmap.index_map_bs
+    basis_petsc = [
+        PETSc.Vec().createWithArray(x[:local_size], bsize=gdim, comm=V.mesh.comm)  # type: ignore
+        for x in basis
+    ]
+    return PETSc.NullSpace().create(vectors=basis_petsc)  # type: ignore
 
-        _la.orthonormalize(nullspace_basis)
-        assert _la.is_orthonormal(nullspace_basis)
-    return PETSc.NullSpace().create(vectors=nullspace_basis)  # type: ignore
 
-
-def weak_dirichlet(F: ufl.Form, u: Function,
-                   f: Union[Function, Constant], sigma, gamma, theta, ds):
+def weak_dirichlet(F: ufl.Form, u: Function, f: Union[Function, Constant], sigma, gamma, theta, ds):
     V = u.function_space
     v = F.arguments()[0]
     mesh = V.mesh
-    V2 = FunctionSpace(mesh, ("DG", 0))
+    V2 = functionspace(mesh, ("DG", 0))
     tdim = mesh.topology.dim
     ncells = mesh.topology.index_map(tdim).size_local
     h = Function(V2)
     h_vals = cpp.mesh.h(mesh._cpp_object, mesh.topology.dim, numpy.arange(0, ncells, dtype=numpy.int32))
     h.x.array[:ncells] = h_vals[:]
     n = ufl.FacetNormal(mesh)
-    F += - ufl.inner(sigma(u) * n, v) * ds\
-        - theta * ufl.inner(sigma(v) * n, u - f) * \
-        ds + gamma / h * ufl.inner(u - f, v) * ds
+    F += (
+        -ufl.inner(sigma(u) * n, v) * ds
+        - theta * ufl.inner(sigma(v) * n, u - f) * ds
+        + gamma / h * ufl.inner(u - f, v) * ds
+    )
     return F

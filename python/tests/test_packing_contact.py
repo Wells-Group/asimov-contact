@@ -2,23 +2,24 @@
 #
 # SPDX-License-Identifier:   MIT
 
+from mpi4py import MPI
+
+import basix.ufl
+import dolfinx.fem as _fem
+import dolfinx_contact
+import dolfinx_contact.cpp
 import numpy as np
 import pytest
 import ufl
 from dolfinx.cpp.mesh import to_type
-from dolfinx.io import XDMFFile
-import dolfinx.fem as _fem
 from dolfinx.graph import adjacencylist
-from dolfinx.mesh import (CellType, create_mesh, locate_entities_boundary, meshtags)
-from mpi4py import MPI
-
-import dolfinx_contact
-import dolfinx_contact.cpp
+from dolfinx.io import XDMFFile
+from dolfinx.mesh import CellType, create_mesh, locate_entities_boundary, meshtags
 
 
 def create_functionspaces(ct, gap, delta, disp):
-    ''' This is a helper function to create the two element function spaces
-        for custom assembly using quads, triangles, hexes and tetrahedra'''
+    """This is a helper function to create the two element function spaces
+    for custom assembly using quads, triangles, hexes and tetrahedra"""
     cell_type = to_type(ct)
     if cell_type == CellType.quadrilateral:
         x_1 = np.array([[0, 0], [0.8, 0], [0.1, 1.3], [0.7, 1.2]])
@@ -28,42 +29,90 @@ def create_functionspaces(ct, gap, delta, disp):
             point[1] -= gap
         x_3 = np.array([x_2[0].copy() + [1.6, 0], x_2[2].copy() + [1.6, 0]])
         x = np.vstack([x_1, x_2, x_3])
-        cells = np.array([[0, 1, 2, 3], [4, 5, 6, 7], [5, 8, 7, 9]], dtype=np.int32)
+        cells = np.array([[0, 1, 2, 3], [4, 5, 6, 7], [5, 8, 7, 9]], dtype=np.int64)
     elif cell_type == CellType.triangle:
-        x = np.array([[0, 0, 0], [0.8, 0, 0], [0.3, 1.3, 0.0], [
-            0 + delta, -gap, 0], [0.8 + delta, -gap, 0], [0.4 + delta, -1.2 - gap, 0.0]])
+        x = np.array(
+            [
+                [0, 0, 0],
+                [0.8, 0, 0],
+                [0.3, 1.3, 0.0],
+                [0 + delta, -gap, 0],
+                [0.8 + delta, -gap, 0],
+                [0.4 + delta, -1.2 - gap, 0.0],
+            ]
+        )
         for point in x:
             point[2] = 3 * point[0] + 2 * point[1]  # plane given by z = 3x +2y
-        cells = np.array([[0, 1, 2], [3, 4, 5]], dtype=np.int32)
+        cells = np.array([[0, 1, 2], [3, 4, 5]], dtype=np.int64)
     elif cell_type == CellType.tetrahedron:
-        x = np.array([[0, 0, 0], [1.1, 0, 0], [0.3, 1.0, 0], [1, 1.2, 1.5], [
-            0 + delta, 0, -gap], [1.1 + delta, 0, -gap], [0.3 + delta, 1.0, -gap], [0.8 + delta, 1.2, -1.6 - gap]])
-        cells = np.array([[0, 1, 2, 3], [4, 5, 6, 7]], dtype=np.int32)
+        x = np.array(
+            [
+                [0, 0, 0],
+                [1.1, 0, 0],
+                [0.3, 1.0, 0],
+                [1, 1.2, 1.5],
+                [0 + delta, 0, -gap],
+                [1.1 + delta, 0, -gap],
+                [0.3 + delta, 1.0, -gap],
+                [0.8 + delta, 1.2, -1.6 - gap],
+            ]
+        )
+        cells = np.array([[0, 1, 2, 3], [4, 5, 6, 7]], dtype=np.int64)
     elif cell_type == CellType.hexahedron:
-
-        x_1 = np.array([[0, 0, 0], [1.1, 0, 0], [0.1, 1, 0], [1, 1.2, 0],
-                        [0, 0, 1.2], [1.0, 0, 1], [0, 1, 1], [1, 1, 1]])
-        x_2 = np.array([[0, 0, -1.2], [1.0, 0, -1.3], [0.1, 1, -1], [1, 1, -1],
-                        [0, 0, 0], [1.1, 0, 0], [0.1, 1, 0], [1, 1.2, 0]])
+        x_1 = np.array(
+            [
+                [0, 0, 0],
+                [1.1, 0, 0],
+                [0.1, 1, 0],
+                [1, 1.2, 0],
+                [0, 0, 1.2],
+                [1.0, 0, 1],
+                [0, 1, 1],
+                [1, 1, 1],
+            ]
+        )
+        x_2 = np.array(
+            [
+                [0, 0, -1.2],
+                [1.0, 0, -1.3],
+                [0.1, 1, -1],
+                [1, 1, -1],
+                [0, 0, 0],
+                [1.1, 0, 0],
+                [0.1, 1, 0],
+                [1, 1.2, 0],
+            ]
+        )
         for point in x_2:
             point[0] += delta
             point[2] -= gap
-        x_3 = np.array([x_2[0].copy() + [2.0, 0, 0], x_2[2].copy() + [2.0, 0, 0],
-                       x_2[4].copy() + [2.0, 0, 0], x_2[6].copy() + [2.0, 0, 0]])
+        x_3 = np.array(
+            [
+                x_2[0].copy() + [2.0, 0, 0],
+                x_2[2].copy() + [2.0, 0, 0],
+                x_2[4].copy() + [2.0, 0, 0],
+                x_2[6].copy() + [2.0, 0, 0],
+            ]
+        )
         x = np.vstack([x_1, x_2, x_3])
-        cells = np.array([[0, 1, 2, 3, 4, 5, 6, 7], [8, 9, 10, 11, 12, 13, 14, 15],
-                          [9, 16, 10, 17, 13, 18, 15, 19]], dtype=np.int32)
+        cells = np.array(
+            [
+                [0, 1, 2, 3, 4, 5, 6, 7],
+                [8, 9, 10, 11, 12, 13, 14, 15],
+                [9, 16, 10, 17, 13, 18, 15, 19],
+            ],
+            dtype=np.int64,
+        )
     else:
         raise ValueError(f"Unsupported mesh type {ct}")
-
-    cell = ufl.Cell(ct, geometric_dimension=x.shape[1])
-    domain = ufl.Mesh(ufl.VectorElement("Lagrange", cell, 1))
+    el = basix.ufl.element("Lagrange", ct, 1, shape=(x.shape[1],))
+    domain = ufl.Mesh(el)
     mesh = create_mesh(MPI.COMM_WORLD, cells, x, domain)
     if disp:
-        el = ufl.VectorElement("Lagrange", mesh.ufl_cell(), 1)
+        el = basix.ufl.element("Lagrange", mesh.topology.cell_name(), 1, shape=(mesh.geometry.dim,))
     else:
-        el = ufl.FiniteElement("Lagrange", mesh.ufl_cell(), 1)
-    V = _fem.FunctionSpace(mesh, el)
+        el = basix.ufl.element("Lagrange", mesh.topology.cell_name(), 1)
+    V = _fem.functionspace(mesh, el)
     with XDMFFile(mesh.comm, "test_mesh.xdmf", "w") as xdmf:
         xdmf.write_mesh(mesh)
     return V
@@ -77,7 +126,7 @@ def compare_test_fn(fn_space, test_fn, grad_test_fn, q_indices, link, x_ref, cel
     dofs = fn_space.dofmap.cell_dofs(cell)
 
     num_q_points = x_ref.shape[0]
-
+    cell_arr = np.array(cell, dtype=np.int32)
     for i, dof in enumerate(dofs):
         for k in range(bs):
             # Create fem function that is identical with desired test function
@@ -87,14 +136,14 @@ def compare_test_fn(fn_space, test_fn, grad_test_fn, q_indices, link, x_ref, cel
 
             # Create expression vor evaluating test function and evaluate
             expr = _fem.Expression(v, x_ref)
-            expr_vals = expr.eval(mesh, [cell])
+            expr_vals = expr.eval(mesh, cell_arr)
 
             # Create expression vor evaluating derivative of test function and evaluate
             if bs == 1:
                 expr2 = _fem.Expression(ufl.grad(v), x_ref)
             else:
                 expr2 = _fem.Expression(ufl.grad(v.sub(k)), x_ref)
-            expr_vals2 = expr2.eval(mesh, [cell])
+            expr_vals2 = expr2.eval(mesh, cell)
             # compare values of test functions
             offset = link * num_q_points * len(dofs) * bs + i * num_q_points * bs
             assert np.allclose(expr_vals[0][q_indices * bs + k], test_fn[offset + q_indices * bs + k])
@@ -135,25 +184,24 @@ def compare_u(fn_space, u, u_opposite, grad_u_opposite, q_indices, x_ref, cell):
 
     # use expression to evaluate u
     expr = _fem.Expression(u, x_ref[q_indices, :])
-    expr_vals = expr.eval(mesh, [cell]).reshape(-1)
+    expr_vals = expr.eval(mesh, np.array(cell, dtype=np.int32))
 
     # extract values from u_opposite
     vals = np.zeros(len(q_indices) * bs)
     for i, q in enumerate(q_indices):
-        vals[i * bs:(i + 1) * bs] = u_opposite[q * bs:(q + 1) * bs]
+        vals[i * bs : (i + 1) * bs] = u_opposite[q * bs : (q + 1) * bs]
 
     # compare expression and packed u
     assert np.allclose(expr_vals, vals)
-
+    # cell_arr = np.array(cell, dtype=np.int32).reshape(-1)
     # loop over block
     for k in range(bs):
-
         # use expression to evaluate gradient
         if bs == 1:
             expr = _fem.Expression(ufl.grad(u), x_ref[q_indices, :])
         else:
             expr = _fem.Expression(ufl.grad(u.sub(k)), x_ref[q_indices, :])
-        expr_vals = expr.eval(mesh, [cell]).reshape(-1)
+        expr_vals = expr.eval(mesh, cell).reshape(-1)
 
         # extract jacobian from surf_der and gradient from u_opposite and expr_vals
         for i, q in enumerate(q_indices):
@@ -178,7 +226,6 @@ def compare_u(fn_space, u, u_opposite, grad_u_opposite, q_indices, x_ref, cell):
 @pytest.mark.parametrize("surface", [0, 1])
 @pytest.mark.parametrize("disp", [True, False])
 def test_packing(ct, gap, q_deg, delta, surface, disp):
-
     # Create function space
     V = create_functionspaces(ct, gap, delta, disp)
 
@@ -186,7 +233,7 @@ def test_packing(ct, gap, q_deg, delta, surface, disp):
     mesh = V.mesh
     tdim = mesh.topology.dim
     gdim = mesh.geometry.dim
-    cmap = mesh.geometry.cmaps[0]
+    cmap = mesh.geometry.cmap
     geometry_dofmap = mesh.geometry.dofmap
 
     # locate facets
@@ -203,12 +250,14 @@ def test_packing(ct, gap, q_deg, delta, surface, disp):
     facet_marker = meshtags(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
 
     if disp:
+
         def func(x):
             vals = np.zeros((gdim, x.shape[1]))
-            vals[0] = x[0]**2
+            vals[0] = x[0] ** 2
             vals[1] = 0.23 * x[1]
             return vals
     else:
+
         def func(x):
             vals = np.zeros((1, x.shape[1]))
             vals[0] = np.sin(x[0])
@@ -226,8 +275,14 @@ def test_packing(ct, gap, q_deg, delta, surface, disp):
     offsets = np.array([0, 2], dtype=np.int32)
     surfaces = adjacencylist(data, offsets)
     search_mode = [dolfinx_contact.cpp.ContactMode.ClosestPoint]
-    contact = dolfinx_contact.cpp.Contact([facet_marker._cpp_object], surfaces, [
-                                          (s, o)], mesh._cpp_object, search_mode, quadrature_degree=q_deg)
+    contact = dolfinx_contact.cpp.Contact(
+        [facet_marker._cpp_object],
+        surfaces,
+        [(s, o)],
+        mesh._cpp_object,
+        search_mode,
+        quadrature_degree=q_deg,
+    )
     if disp:
         contact.update_submesh_geometry(u._cpp_object)
     contact.create_distance_map(0)
@@ -250,14 +305,12 @@ def test_packing(ct, gap, q_deg, delta, surface, disp):
 
     # loop over facets in surface
     for f in range(len(s_facets)):
-
         # Compute evaluation points
         qp_phys = contact.qp_phys(s, f)
         num_q_points = qp_phys.shape[0]
         points = np.zeros((num_q_points, gdim))
 
-        points[:, :gdim] = qp_phys[:, :gdim] + \
-            gap[f].reshape((num_q_points, gdim))
+        points[:, :gdim] = qp_phys[:, :gdim] + gap[f].reshape((num_q_points, gdim))
         if disp:
             points[:, :gdim] = points[:, :gdim] - u_packed[f].reshape((num_q_points, gdim))
 
@@ -267,7 +320,6 @@ def test_packing(ct, gap, q_deg, delta, surface, disp):
 
         # loop over unique connected facets
         for link, facet_o in enumerate(unique_facets):
-
             # retrieve cell index and cell dofs for facet_o
             cell = f_to_c.links(facet_o)
 

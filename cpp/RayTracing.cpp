@@ -6,6 +6,7 @@
 // SPDX-License-Identifier:    MIT
 
 #include "RayTracing.h"
+
 //------------------------------------------------------------------------------------------------
 std::tuple<int, std::int32_t, std::vector<double>, std::vector<double>>
 dolfinx_contact::raytracing(const dolfinx::mesh::Mesh<double>& mesh,

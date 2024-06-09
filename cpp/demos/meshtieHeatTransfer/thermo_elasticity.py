@@ -7,8 +7,22 @@
 # ====================================================
 
 from basix.ufl import element
-from ufl import (Constant, Coefficient, derivative, dx, FunctionSpace, grad, Identity,
-                 inner, rhs, lhs, Mesh, sym, TestFunction, tr, TrialFunction)
+from ufl import (
+    Coefficient,
+    derivative,
+    dx,
+    FunctionSpace,
+    grad,
+    Identity,
+    inner,
+    rhs,
+    lhs,
+    Mesh,
+    sym,
+    TestFunction,
+    tr,
+    TrialFunction,
+)
 
 # Mesh
 coord_element = element("Lagrange", "tetrahedron", 1, shape=(3,))
@@ -54,7 +68,9 @@ def epsilon(z):
 
 
 def sigma(z, T):
-    return (2.0 * mu * epsilon(z) + (lmbda * tr(epsilon(z)) - alpha * (3 * lmbda + 2 * mu) * T) * Identity(len(z)))
+    return 2.0 * mu * epsilon(z) + (
+        lmbda * tr(epsilon(z)) - alpha * (3 * lmbda + 2 * mu) * T
+    ) * Identity(len(z))
 
 
 # Linear form

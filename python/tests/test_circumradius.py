@@ -2,15 +2,15 @@
 #
 # SPDX-License-Identifier:   MIT
 
-import numpy as np
-import pytest
-from ufl import Circumradius, TestFunction, TrialFunction, Measure
-from dolfinx.fem import Function, functionspace, IntegralType
-from dolfinx.fem.petsc import LinearProblem
-from dolfinx.mesh import create_unit_cube, create_unit_square, locate_entities_boundary
 from mpi4py import MPI
 
 import dolfinx_contact.cpp
+import numpy as np
+import pytest
+from dolfinx.fem import Function, IntegralType, functionspace
+from dolfinx.fem.petsc import LinearProblem
+from dolfinx.mesh import create_unit_cube, create_unit_square, locate_entities_boundary
+from ufl import Circumradius, Measure, TestFunction, TrialFunction
 
 
 @pytest.mark.parametrize("dim", [2, 3])
@@ -26,9 +26,20 @@ def test_circumradius(dim):
     V = functionspace(mesh, ("Lagrange", 1, (mesh.geometry.dim,)))
     u = Function(V)
     if dim == 3:
-        u.interpolate(lambda x: (0.1 * (x[1] > 0.5), 0.1 * np.sin(2 * np.pi * x[2]), np.zeros(x.shape[1])))
+        u.interpolate(
+            lambda x: (
+                0.1 * (x[1] > 0.5),
+                0.1 * np.sin(2 * np.pi * x[2]),
+                np.zeros(x.shape[1]),
+            )
+        )
     else:
-        u.interpolate(lambda x: (0.1 * np.cos(x[1]) * (x[0] > 0.2), 0.1 * x[1] + 0.1 * np.sin(2 * np.pi * x[0])))
+        u.interpolate(
+            lambda x: (
+                0.1 * np.cos(x[1]) * (x[0] > 0.2),
+                0.1 * x[1] + 0.1 * np.sin(2 * np.pi * x[0]),
+            )
+        )
     dolfinx_contact.update_geometry(u._cpp_object, mesh._cpp_object)
 
     mesh.topology.create_connectivity(dim - 1, dim)
@@ -36,8 +47,7 @@ def test_circumradius(dim):
 
     # Find facets on boundary to integrate over
 
-    facets = locate_entities_boundary(
-        mesh, mesh.topology.dim - 1, lambda x: np.full(x.shape[1], True, dtype=bool))
+    facets = locate_entities_boundary(mesh, mesh.topology.dim - 1, lambda x: np.full(x.shape[1], True, dtype=bool))
 
     sorted = np.argsort(facets)
     facets = facets[sorted]
@@ -58,8 +68,9 @@ def test_circumradius(dim):
         h2[i] = uh.vector[cell]
         cells.append(cell)
 
-    active_facets, num_local = dolfinx_contact.cpp.compute_active_entities(mesh._cpp_object, facets,
-                                                                           IntegralType.exterior_facet)
+    active_facets, num_local = dolfinx_contact.cpp.compute_active_entities(
+        mesh._cpp_object, facets, IntegralType.exterior_facet
+    )
     active_facets = active_facets[:num_local, :]
     h = dolfinx_contact.pack_circumradius(mesh._cpp_object, active_facets).reshape(-1)
 

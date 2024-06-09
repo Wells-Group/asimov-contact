@@ -30,17 +30,11 @@ dolfinx_contact::read_mesh(const std::string& filename,
 
   // Read geometry and topology
   auto [x, xshape] = file.read_geometry_data(geo_name);
-  auto [cells, cshape] = file.read_topology_data(topo_name);
-  std::vector<std::int32_t> offset(cshape[0] + 1, 0);
-  for (std::size_t i = 0; i < cshape[0]; ++i)
-    offset[i + 1] = offset[i] + (std::int32_t)cshape[1];
+  [[maybe_unused]] auto [cells, cshape] = file.read_topology_data(topo_name);
 
-  // Create mesh from geometry and topology data
-  dolfinx::graph::AdjacencyList<std::int64_t> cells_adj(std::move(cells),
-                                                        std::move(offset));
   const std::vector<U>& _x = std::get<std::vector<U>>(x);
   auto mesh = std::make_shared<dolfinx::mesh::Mesh<U>>(
-      dolfinx::mesh::create_mesh(MPI_COMM_WORLD, cells_adj, {cmap}, _x, xshape,
+      dolfinx::mesh::create_mesh(MPI_COMM_WORLD, cells, cmap, _x, xshape,
                                  dolfinx::mesh::GhostMode::none));
 
   // Create connectivities needed for reading meshtags
@@ -92,13 +86,14 @@ void dolfinx_contact::pull_back(
     std::vector<double> data(
         std::reduce(c_shape.cbegin(), c_shape.cend(), 1, std::multiplies{}));
     std::array<double, 3> X0;
+    std::fill(X0.begin(), X0.end(), 0);
     cmap.tabulate(1, std::span(X0.data(), tdim), {1, tdim}, data);
     dolfinx_contact::cmdspan4_t c_basis(data.data(), c_shape);
 
     namespace stdex = std::experimental;
-    auto dphi0
-        = stdex::submdspan(c_basis, std::pair{1, tdim + 1}, 0,
-                           MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent, 0);
+    auto dphi0 = MDSPAN_IMPL_STANDARD_NAMESPACE::submdspan(
+        c_basis, std::pair{1, tdim + 1}, 0,
+        MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent, 0);
 
     // Only zero out first Jacobian as it is used to fill in the others
     for (std::size_t j = 0; j < J.extent(1); ++j)
@@ -106,9 +101,9 @@ void dolfinx_contact::pull_back(
         J(0, j, k) = 0;
 
     // Compute Jacobian at origin of reference element
-    auto J0
-        = stdex::submdspan(J, 0, MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent,
-                           MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent);
+    auto J0 = MDSPAN_IMPL_STANDARD_NAMESPACE::submdspan(
+        J, 0, MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent,
+        MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent);
     dolfinx::fem::CoordinateElement<double>::compute_jacobian(
         dphi0, coordinate_dofs, J0);
 
@@ -116,9 +111,9 @@ void dolfinx_contact::pull_back(
       for (std::size_t k = 0; k < K.extent(2); ++k)
         K(0, j, k) = 0;
     // Compute inverse Jacobian
-    auto K0
-        = stdex::submdspan(K, 0, MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent,
-                           MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent);
+    auto K0 = MDSPAN_IMPL_STANDARD_NAMESPACE::submdspan(
+        K, 0, MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent,
+        MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent);
     dolfinx::fem::CoordinateElement<double>::compute_jacobian_inverse(J0, K0);
 
     // Compute determinant
@@ -170,17 +165,17 @@ void dolfinx_contact::pull_back(
       for (std::size_t j = 0; j < J.extent(1); ++j)
         for (std::size_t k = 0; k < J.extent(2); ++k)
           J(p, j, k) = 0;
-      auto _J
-          = stdex::submdspan(J, p, MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent,
-                             MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent);
-      auto dphi
-          = stdex::submdspan(c_basis, std::pair{1, tdim + 1}, p,
-                             MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent, 0);
+      auto _J = MDSPAN_IMPL_STANDARD_NAMESPACE::submdspan(
+          J, p, MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent,
+          MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent);
+      auto dphi = MDSPAN_IMPL_STANDARD_NAMESPACE::submdspan(
+          c_basis, std::pair{1, tdim + 1}, p,
+          MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent, 0);
       dolfinx::fem::CoordinateElement<double>::compute_jacobian(
           dphi, coordinate_dofs, _J);
-      auto _K
-          = stdex::submdspan(K, p, MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent,
-                             MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent);
+      auto _K = MDSPAN_IMPL_STANDARD_NAMESPACE::submdspan(
+          K, p, MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent,
+          MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent);
       dolfinx::fem::CoordinateElement<double>::compute_jacobian_inverse(_J, _K);
       detJ[p] = dolfinx::fem::CoordinateElement<
           double>::compute_jacobian_determinant(_J, detJ_scratch);
@@ -190,8 +185,8 @@ void dolfinx_contact::pull_back(
 
 //-----------------------------------------------------------------------------
 std::pair<std::vector<std::int32_t>, std::vector<std::int32_t>>
-dolfinx_contact::sort_cells(const std::span<const std::int32_t>& cells,
-                            const std::span<std::int32_t>& perm)
+dolfinx_contact::sort_cells(std::span<const std::int32_t> cells,
+                            std::span<std::int32_t> perm)
 {
   assert(perm.size() == cells.size());
 
@@ -222,7 +217,7 @@ dolfinx_contact::sort_cells(const std::span<const std::int32_t>& cells,
 //-------------------------------------------------------------------------------------
 void dolfinx_contact::update_geometry(
     const dolfinx::fem::Function<PetscScalar>& u,
-    std::shared_ptr<dolfinx::mesh::Mesh<double>> mesh)
+    dolfinx::mesh::Mesh<double>& mesh)
 {
   std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V
       = u.function_space();
@@ -230,33 +225,34 @@ void dolfinx_contact::update_geometry(
   std::shared_ptr<const dolfinx::fem::DofMap> dofmap = V->dofmap();
   assert(dofmap);
   // Check that mesh to be updated and underlying mesh of u are the same
-  assert(mesh == V->mesh());
+  assert(&mesh == V->mesh().get());
 
   // The Function and the mesh must have identical element_dof_layouts
   // (up to the block size)
   assert(dofmap->element_dof_layout()
-         == mesh->geometry().cmaps()[0].create_dof_layout());
+         == mesh.geometry().cmap().create_dof_layout());
 
-  const int tdim = mesh->topology()->dim();
+  const int tdim = mesh.topology()->dim();
   std::shared_ptr<const dolfinx::common::IndexMap> cell_map
-      = mesh->topology()->index_map(tdim);
+      = mesh.topology()->index_map(tdim);
   assert(cell_map);
   const std::int32_t num_cells
       = cell_map->size_local() + cell_map->num_ghosts();
 
   // Get dof array and retrieve u at the mesh dofs
-  stdex::mdspan<const std::int32_t,
-                MDSPAN_IMPL_STANDARD_NAMESPACE::dextents<std::size_t, 2>>
-      dofmap_x = mesh->geometry().dofmap();
+  MDSPAN_IMPL_STANDARD_NAMESPACE::mdspan<
+      const std::int32_t,
+      MDSPAN_IMPL_STANDARD_NAMESPACE::dextents<std::size_t, 2>>
+      dofmap_x = mesh.geometry().dofmap();
   const int bs = dofmap->bs();
   const auto& u_data = u.x()->array();
-  std::span<double> coords = mesh->geometry().x();
+  std::span<double> coords = mesh.geometry().x();
   std::vector<double> dx(coords.size());
   for (std::int32_t c = 0; c < num_cells; ++c)
   {
     const std::span<const int> dofs = dofmap->cell_dofs(c);
-    auto dofs_x = stdex::submdspan(dofmap_x, c,
-                                   MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent);
+    auto dofs_x = MDSPAN_IMPL_STANDARD_NAMESPACE::submdspan(
+        dofmap_x, c, MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent);
     for (std::size_t i = 0; i < dofs.size(); ++i)
       for (int j = 0; j < bs; ++j)
       {
@@ -348,8 +344,8 @@ dolfinx_contact::d_alpha_ball_projection(std::array<double, 3> x, double alpha,
 }
 //-------------------------------------------------------------------------------------
 std::array<std::size_t, 4> dolfinx_contact::evaluate_basis_shape(
-    const dolfinx::fem::FunctionSpace<double>& V, const std::size_t num_points,
-    const std::size_t num_derivatives)
+    const dolfinx::fem::FunctionSpace<double>& V, std::size_t num_points,
+    std::size_t num_derivatives)
 {
   // Get element
   assert(V.element());
@@ -357,9 +353,9 @@ std::array<std::size_t, 4> dolfinx_contact::evaluate_basis_shape(
   std::shared_ptr<const dolfinx::fem::FiniteElement<double>> element
       = V.element();
   assert(element);
-  const int bs_element = element->block_size();
-  const std::size_t value_size = element->value_size() / bs_element;
-  const std::size_t space_dimension = element->space_dimension() / bs_element;
+  int bs_element = element->block_size();
+  std::size_t value_size = V.value_size() / bs_element;
+  std::size_t space_dimension = element->space_dimension() / bs_element;
   return {num_derivatives * gdim + 1, num_points, space_dimension, value_size};
 }
 //-----------------------------------------------------------------------------
@@ -394,10 +390,11 @@ void dolfinx_contact::evaluate_basis_functions(
 
   // Get geometry data
   std::span<const double> x_g = geometry.x();
-  stdex::mdspan<const std::int32_t,
-                MDSPAN_IMPL_STANDARD_NAMESPACE::dextents<std::size_t, 2>>
+  MDSPAN_IMPL_STANDARD_NAMESPACE::mdspan<
+      const std::int32_t,
+      MDSPAN_IMPL_STANDARD_NAMESPACE::dextents<std::size_t, 2>>
       x_dofmap = geometry.dofmap();
-  const dolfinx::fem::CoordinateElement<double>& cmap = geometry.cmaps()[0];
+  const dolfinx::fem::CoordinateElement<double>& cmap = geometry.cmap();
   const std::size_t num_dofs_g = cmap.dim();
 
   // Get element
@@ -471,25 +468,21 @@ void dolfinx_contact::evaluate_basis_functions(
   dolfinx_contact::mdspan4_t basis_span(basis_values.data(), shape);
   std::fill(basis_values.begin(), basis_values.end(), 0);
 
-  using xu_t
-      = stdex::mdspan<double,
-                      MDSPAN_IMPL_STANDARD_NAMESPACE::dextents<std::size_t, 2>>;
-  using xU_t
-      = stdex::mdspan<const double,
-                      MDSPAN_IMPL_STANDARD_NAMESPACE::dextents<std::size_t, 2>>;
-  using xJ_t
-      = stdex::mdspan<const double,
-                      MDSPAN_IMPL_STANDARD_NAMESPACE::dextents<std::size_t, 2>>;
-  using xK_t
-      = stdex::mdspan<const double,
-                      MDSPAN_IMPL_STANDARD_NAMESPACE::dextents<std::size_t, 2>>;
+  using xu_t = MDSPAN_IMPL_STANDARD_NAMESPACE::mdspan<
+      double, MDSPAN_IMPL_STANDARD_NAMESPACE::dextents<std::size_t, 2>>;
+  using xU_t = MDSPAN_IMPL_STANDARD_NAMESPACE::mdspan<
+      const double, MDSPAN_IMPL_STANDARD_NAMESPACE::dextents<std::size_t, 2>>;
+  using xJ_t = MDSPAN_IMPL_STANDARD_NAMESPACE::mdspan<
+      const double, MDSPAN_IMPL_STANDARD_NAMESPACE::dextents<std::size_t, 2>>;
+  using xK_t = MDSPAN_IMPL_STANDARD_NAMESPACE::mdspan<
+      const double, MDSPAN_IMPL_STANDARD_NAMESPACE::dextents<std::size_t, 2>>;
   auto push_forward_fn
       = element->basix_element().map_fn<xu_t, xU_t, xJ_t, xK_t>();
   const std::function<void(const std::span<double>&,
                            const std::span<const std::uint32_t>&, std::int32_t,
                            int)>
-      apply_dof_transformation
-      = element->get_dof_transformation_function<double>();
+      apply_dof_transformation = element->dof_transformation_fn<double>(
+          dolfinx::fem::doftransform::standard);
   const std::size_t num_basis_values = space_dimension * reference_value_size;
 
   for (std::size_t p = 0; p < cells.size(); ++p)
@@ -499,7 +492,7 @@ void dolfinx_contact::evaluate_basis_functions(
     if (cell_index < 0)
       continue;
     // Get cell geometry (coordinate dofs)
-    auto x_dofs2 = stdex::submdspan(
+    auto x_dofs2 = MDSPAN_IMPL_STANDARD_NAMESPACE::submdspan(
         x_dofmap, cell_index, MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent);
     for (std::size_t j = 0; j < num_dofs_g; ++j)
     {
@@ -509,9 +502,9 @@ void dolfinx_contact::evaluate_basis_functions(
     }
 
     std::fill(Jb.begin(), Jb.end(), 0);
-    auto dphi_q
-        = stdex::submdspan(c_basis, std::pair{1, std::size_t(tdim + 1)}, p,
-                           MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent, 0);
+    auto dphi_q = MDSPAN_IMPL_STANDARD_NAMESPACE::submdspan(
+        c_basis, std::pair{1, std::size_t(tdim + 1)}, p,
+        MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent, 0);
     dolfinx::fem::CoordinateElement<double>::compute_jacobian(
         dphi_q, coordinate_dofs, J);
     dolfinx::fem::CoordinateElement<double>::compute_jacobian_inverse(J, K);
@@ -531,34 +524,35 @@ void dolfinx_contact::evaluate_basis_functions(
           cell_info, cell_index, (int)reference_value_size);
 
       // Push basis forward to physical element
-      auto _U = stdex::submdspan(basis_reference_values, j, p,
-                                 MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent,
-                                 MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent);
+      auto _U = MDSPAN_IMPL_STANDARD_NAMESPACE::submdspan(
+          basis_reference_values, j, p,
+          MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent,
+          MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent);
 
       if (j == 0)
       {
-        auto _u = stdex::submdspan(basis_span, j, p,
-                                   MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent,
-                                   MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent);
+        auto _u = MDSPAN_IMPL_STANDARD_NAMESPACE::submdspan(
+            basis_span, j, p, MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent,
+            MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent);
         push_forward_fn(_u, _U, J, detJ, K);
       }
       else
       {
-        auto _u = stdex::submdspan(temp, j, p,
-                                   MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent,
-                                   MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent);
+        auto _u = MDSPAN_IMPL_STANDARD_NAMESPACE::submdspan(
+            temp, j, p, MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent,
+            MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent);
         push_forward_fn(_u, _U, J, detJ, K);
       }
     }
 
     for (std::size_t k = 0; k < gdim * num_derivatives; ++k)
     {
-      auto du = stdex::submdspan(basis_span, k + 1, p,
-                                 MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent,
-                                 MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent);
+      auto du = MDSPAN_IMPL_STANDARD_NAMESPACE::submdspan(
+          basis_span, k + 1, p, MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent,
+          MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent);
       for (std::size_t j = 0; j < num_derivatives * tdim; ++j)
       {
-        auto du_temp = stdex::submdspan(
+        auto du_temp = MDSPAN_IMPL_STANDARD_NAMESPACE::submdspan(
             temp, j + 1, p, MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent,
             MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent);
         for (std::size_t m = 0; m < du.extent(0); ++m)
@@ -576,7 +570,7 @@ double dolfinx_contact::compute_facet_jacobian(
     dolfinx_contact::cmdspan2_t coords)
 {
   std::size_t gdim = J.extent(0);
-  auto coordinate_dofs = stdex::submdspan(
+  auto coordinate_dofs = MDSPAN_IMPL_STANDARD_NAMESPACE::submdspan(
       coords, MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent, std::pair{0, gdim});
   for (std::size_t i = 0; i < J.extent(0); ++i)
     for (std::size_t j = 0; j < J.extent(1); ++j)
@@ -653,8 +647,8 @@ dolfinx_contact::get_update_normal(
               dolfinx_contact::cmdspan2_t n_ref, const std::size_t local_index)
     {
       std::fill(n.begin(), n.end(), 0);
-      auto n_f = stdex::submdspan(n_ref, local_index,
-                                  MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent);
+      auto n_f = MDSPAN_IMPL_STANDARD_NAMESPACE::submdspan(
+          n_ref, local_index, MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent);
       dolfinx_contact::physical_facet_normal(n, K, n_f);
     };
   }
@@ -672,12 +666,12 @@ dolfinx_contact::get_update_normal(
 /// @return list of active entities sorted by cell and size_local
 std::pair<std::vector<std::int32_t>, std::size_t>
 dolfinx_contact::compute_active_entities(
-    std::shared_ptr<const dolfinx::mesh::Mesh<double>> mesh,
+    const dolfinx::mesh::Mesh<double>& mesh,
     std::span<const std::int32_t> entities, dolfinx::fem::IntegralType integral)
 {
 
-  int tdim = mesh->topology()->dim();
-  const int size_local = mesh->topology()->index_map(tdim)->size_local();
+  int tdim = mesh.topology()->dim();
+  const int size_local = mesh.topology()->index_map(tdim)->size_local();
   switch (integral)
   {
   case dolfinx::fem::IntegralType::cell:
@@ -697,7 +691,7 @@ dolfinx_contact::compute_active_entities(
     std::vector<std::int32_t> cells(entities.size());
     std::vector<std::int32_t> facets(entities.size());
 
-    auto topology = mesh->topology();
+    auto topology = mesh.topology();
     auto f_to_c = topology->connectivity(tdim - 1, tdim);
     assert(f_to_c);
     auto c_to_f = topology->connectivity(tdim, tdim - 1);
@@ -749,11 +743,12 @@ dolfinx_contact::entities_to_geometry_dofs(
   // Get mesh geometry and topology data
   const dolfinx::mesh::Geometry<double>& geometry = mesh.geometry();
   const dolfinx::fem::ElementDofLayout layout
-      = geometry.cmaps()[0].create_dof_layout();
+      = geometry.cmap().create_dof_layout();
   // FIXME: What does this return for prisms?
   const std::size_t num_entity_dofs = layout.num_entity_closure_dofs(dim);
-  stdex::mdspan<const std::int32_t,
-                MDSPAN_IMPL_STANDARD_NAMESPACE::dextents<std::size_t, 2>>
+  MDSPAN_IMPL_STANDARD_NAMESPACE::mdspan<
+      const std::int32_t,
+      MDSPAN_IMPL_STANDARD_NAMESPACE::dextents<std::size_t, 2>>
       xdofs = geometry.dofmap();
 
   auto topology = mesh.topology();
@@ -792,8 +787,8 @@ dolfinx_contact::entities_to_geometry_dofs(
     const std::vector<std::int32_t>& entity_dofs
         = closure_dofs[dim][local_entity];
 
-    auto xc = stdex::submdspan(xdofs, cell,
-                               MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent);
+    auto xc = MDSPAN_IMPL_STANDARD_NAMESPACE::submdspan(
+        xdofs, cell, MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent);
     assert(num_entity_dofs <= xc.size());
     for (std::size_t j = 0; j < num_entity_dofs; ++j)
       geometry_indices[i * num_entity_dofs + j] = xc[entity_dofs[j]];
@@ -877,10 +872,9 @@ std::vector<std::size_t> dolfinx_contact::find_candidate_facets(
 }
 //-------------------------------------------------------------------------------------
 std::vector<std::int32_t> dolfinx_contact::find_candidate_surface_segment(
-    std::shared_ptr<const dolfinx::mesh::Mesh<double>> mesh,
+    const dolfinx::mesh::Mesh<double>& mesh,
     const std::vector<std::int32_t>& quadrature_facets,
-    const std::vector<std::int32_t>& candidate_facets,
-    const double radius = -1.)
+    const std::vector<std::int32_t>& candidate_facets, double radius)
 {
   if (radius < 0)
   {
@@ -889,9 +883,9 @@ std::vector<std::int32_t> dolfinx_contact::find_candidate_surface_segment(
   }
   // Find midpoints of quadrature and candidate facets
   std::vector<double> quadrature_midpoints = dolfinx::mesh::compute_midpoints(
-      *mesh, mesh->topology()->dim() - 1, quadrature_facets);
+      mesh, mesh.topology()->dim() - 1, quadrature_facets);
   std::vector<double> candidate_midpoints = dolfinx::mesh::compute_midpoints(
-      *mesh, mesh->topology()->dim() - 1, candidate_facets);
+      mesh, mesh.topology()->dim() - 1, candidate_facets);
 
   double r2 = radius * radius; // radius squared
   double dist; // used for squared distance between two midpoints
@@ -935,16 +929,17 @@ void dolfinx_contact::compute_physical_points(
   // Geometrical info
   const dolfinx::mesh::Geometry<double>& geometry = mesh.geometry();
   std::span<const double> mesh_geometry = geometry.x();
-  const dolfinx::fem::CoordinateElement<double>& cmap = geometry.cmaps()[0];
+  const dolfinx::fem::CoordinateElement<double>& cmap = geometry.cmap();
   const std::size_t num_dofs_g = cmap.dim();
-  stdex::mdspan<const std::int32_t,
-                MDSPAN_IMPL_STANDARD_NAMESPACE::dextents<std::size_t, 2>>
+  MDSPAN_IMPL_STANDARD_NAMESPACE::mdspan<
+      const std::int32_t,
+      MDSPAN_IMPL_STANDARD_NAMESPACE::dextents<std::size_t, 2>>
       x_dofmap = geometry.dofmap();
   const int gdim = geometry.dim();
 
   // Create storage for output quadrature points
   // NOTE: Assume that all facets have the same number of quadrature points
-  dolfinx_contact::error::check_cell_type(mesh.topology()->cell_types()[0]);
+  dolfinx_contact::error::check_cell_type(mesh.topology()->cell_type());
   std::size_t num_q_points = offsets[1] - offsets[0];
 
   dolfinx_contact::mdspan3_t all_qps(qp_phys.data(),
@@ -957,8 +952,8 @@ void dolfinx_contact::compute_physical_points(
                                               num_dofs_g, gdim);
   for (std::size_t i = 0; i < facets.size(); i += 2)
   {
-    auto x_dofs = stdex::submdspan(x_dofmap, facets[i],
-                                   MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent);
+    auto x_dofs = MDSPAN_IMPL_STANDARD_NAMESPACE::submdspan(
+        x_dofmap, facets[i], MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent);
     assert(x_dofs.size() == num_dofs_g);
     for (std::size_t j = 0; j < num_dofs_g; ++j)
     {
@@ -968,12 +963,12 @@ void dolfinx_contact::compute_physical_points(
     // push forward points on reference element
     const std::array<std::size_t, 2> range
         = {offsets[facets[i + 1]], offsets[facets[i + 1] + 1]};
-    auto phi_f = stdex::submdspan(
+    auto phi_f = MDSPAN_IMPL_STANDARD_NAMESPACE::submdspan(
         phi, (std::size_t)0, std::pair{range.front(), range.back()},
         MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent, (std::size_t)0);
-    auto qp = stdex::submdspan(all_qps, i / 2,
-                               MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent,
-                               MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent);
+    auto qp = MDSPAN_IMPL_STANDARD_NAMESPACE::submdspan(
+        all_qps, i / 2, MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent,
+        MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent);
     dolfinx::fem::CoordinateElement<double>::push_forward(qp, coordinate_dofs,
                                                           phi_f);
   }
@@ -988,15 +983,15 @@ dolfinx_contact::compute_distance_map(
     const dolfinx::mesh::Mesh<double>& candidate_mesh,
     std::span<const std::int32_t> candidate_facets,
     const dolfinx_contact::QuadratureRule& q_rule,
-    dolfinx_contact::ContactMode mode, const double radius)
+    dolfinx_contact::ContactMode mode, double radius)
 {
   dolfinx::common::Timer t("~Contact: compute distance map");
   const dolfinx::mesh::Geometry<double>& geometry = quadrature_mesh.geometry();
-  const dolfinx::fem::CoordinateElement<double>& cmap = geometry.cmaps()[0];
+  const dolfinx::fem::CoordinateElement<double>& cmap = geometry.cmap();
 
   const std::size_t gdim = geometry.dim();
   auto topology = quadrature_mesh.topology();
-  const dolfinx::mesh::CellType cell_type = topology->cell_types()[0];
+  const dolfinx::mesh::CellType cell_type = topology->cell_type();
   dolfinx_contact::error::check_cell_type(cell_type);
 
   const int tdim = topology->dim();
@@ -1122,6 +1117,7 @@ dolfinx_contact::compute_distance_map(
 
   throw std::runtime_error("Unsupported contact mode");
 }
+
 MatNullSpace dolfinx_contact::build_nullspace_multibody(
     const dolfinx::fem::FunctionSpace<double>& V,
     const dolfinx::mesh::MeshTags<std::int32_t>& mt,

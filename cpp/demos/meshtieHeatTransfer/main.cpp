@@ -79,7 +79,7 @@ public:
 
     // initialise the input data for integration kernels
     _meshties->generate_kernel_data(
-        dolfinx_contact::Problem::ThermoElasticity, L->function_spaces()[0],
+        dolfinx_contact::Problem::ThermoElasticity, *L->function_spaces()[0],
         {{"u", u}, {"T", T0}, {"mu", mu}, {"lambda", lmbda}, {"alpha", alpha}},
         gamma, theta);
 
@@ -116,7 +116,7 @@ public:
     return [&](const Vec x, Vec bin)
     {
       // Avoid long log output
-      loguru::g_stderr_verbosity = loguru::Verbosity_OFF;
+      // loguru::g_stderr_verbosity = loguru::Verbosity_OFF;
 
       // Generate input data for custom kernel
       _meshties->update_kernel_data({{"u", _u}, {"T", _T}},
@@ -126,7 +126,7 @@ public:
       std::span<T> b(_b.mutable_array());
       std::fill(b.begin(), b.end(), 0.0);
       _meshties->assemble_vector(
-          b, _l->function_spaces()[0],
+          b, *_l->function_spaces()[0],
           dolfinx_contact::Problem::ThermoElasticity); // custom kernel for mesh
                                                        // tying
       fem::assemble_vector<T>(b, *_l);                 // standard assembly
@@ -150,7 +150,7 @@ public:
       VecRestoreArrayRead(x, &array);
 
       // log level INFO ensures Newton steps are logged
-      loguru::g_stderr_verbosity = loguru::Verbosity_INFO;
+      // loguru::g_stderr_verbosity = loguru::Verbosity_INFO;
     };
   }
 
@@ -160,14 +160,14 @@ public:
     return [&](const Vec, Mat A)
     {
       // Avoid long log output
-      loguru::g_stderr_verbosity = loguru::Verbosity_OFF;
+      // loguru::g_stderr_verbosity = loguru::Verbosity_OFF;
 
       // Set matrix to 0
       MatZeroEntries(A);
 
       // custom assembly for mesh tying
       _meshties->assemble_matrix(la::petsc::Matrix::set_block_fn(A, ADD_VALUES),
-                                 _j->function_spaces()[0],
+                                 *_j->function_spaces()[0],
                                  dolfinx_contact::Problem::ThermoElasticity);
       MatAssemblyBegin(A, MAT_FLUSH_ASSEMBLY);
       MatAssemblyEnd(A, MAT_FLUSH_ASSEMBLY);
@@ -186,7 +186,7 @@ public:
       MatAssemblyEnd(A, MAT_FINAL_ASSEMBLY);
 
       // log level INFO ensures Newton steps are logged
-      loguru::g_stderr_verbosity = loguru::Verbosity_INFO;
+      // loguru::g_stderr_verbosity = loguru::Verbosity_INFO;
     };
   }
 
@@ -219,23 +219,24 @@ int main(int argc, char* argv[])
 
   // const std::size_t time_steps = 40;
   init_logging(argc, argv);
-
   PetscInitialize(&argc, &argv, nullptr, nullptr);
+
   // Set the logging thread name to show the process rank
   int mpi_rank;
   MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank);
-  std::string thread_name = "RANK " + std::to_string(mpi_rank);
-  loguru::set_thread_name(thread_name.c_str());
+  std::string fmt = "[%Y-%m-%d %H:%M:%S.%e] [RANK " + std::to_string(mpi_rank)
+                    + "] [%l] %v";
+  spdlog::set_pattern(fmt);
   {
 
     // Read in mesh
     auto [mesh_init, domain1_init, facet1_init]
-        = dolfinx_contact::read_mesh("../meshes/cont-blocks_sk24_fnx.xdmf");
+        = dolfinx_contact::read_mesh("cont-blocks_sk24_fnx.xdmf");
 
     // Add necessary ghosts
     const std::int32_t contact_bdry_1 = 12; // top contact interface
     const std::int32_t contact_bdry_2 = 6;  // bottom contact interface
-    loguru::g_stderr_verbosity = loguru::Verbosity_OFF;
+    // loguru::g_stderr_verbosity = loguru::Verbosity_OFF;
     auto [mesh_new, facet1, domain1] = dolfinx_contact::create_contact_mesh(
         *mesh_init, facet1_init, domain1_init, {contact_bdry_1, contact_bdry_2},
         10.0);
@@ -270,12 +271,22 @@ int main(int argc, char* argv[])
     double theta = 1;
 
     // DG function space used for parameters
-    auto V0 = std::make_shared<fem::FunctionSpace<U>>(fem::create_functionspace(
-        functionspace_form_thermo_elasticity_J, "mu", mesh));
+    auto ct = mesh->topology()->cell_type();
+    auto element_mu = basix::create_element<double>(
+        basix::element::family::P, dolfinx::mesh::cell_type_to_basix_type(ct),
+        0, basix::element::lagrange_variant::unset,
+        basix::element::dpc_variant::unset, true);
+    auto element = basix::create_element<double>(
+        basix::element::family::P, dolfinx::mesh::cell_type_to_basix_type(ct),
+        1, basix::element::lagrange_variant::unset,
+        basix::element::dpc_variant::unset, false);
+
+    auto V0 = std::make_shared<fem::FunctionSpace<U>>(
+        fem::create_functionspace(mesh, element_mu));
 
     // Thermal Problem
-    auto Q = std::make_shared<fem::FunctionSpace<U>>(fem::create_functionspace(
-        functionspace_form_thermo_elasticity_a_therm, "r", mesh));
+    auto Q = std::make_shared<fem::FunctionSpace<U>>(
+        fem::create_functionspace(mesh, element));
 
     double kdt_val = 0.1;
     auto kdt = std::make_shared<fem::Function<T>>(V0);
@@ -310,7 +321,7 @@ int main(int argc, char* argv[])
         1.0, bdofs_therm, Q);
 
     // Data for meshtie integration kernels
-    meshties->generate_kernel_data(dolfinx_contact::Problem::Poisson, Q,
+    meshties->generate_kernel_data(dolfinx_contact::Problem::Poisson, *Q,
                                    {{"kdt", kdt}, {"T", T0}}, gamma, theta);
 
     // Create matrix and vector
@@ -348,7 +359,7 @@ int main(int argc, char* argv[])
     // Thermo-elastic problem
     // Create function space
     auto V = std::make_shared<fem::FunctionSpace<U>>(fem::create_functionspace(
-        functionspace_form_thermo_elasticity_J, "w", mesh));
+        mesh, element, {(std::size_t)mesh->geometry().dim()}));
 
     // Problem parameters
     double E = 1E4;
@@ -434,7 +445,7 @@ int main(int argc, char* argv[])
         dolfinx::la::petsc::create_vector_wrap(*u->x()), false);
 
     // loglevel INFO shows NewtonSolver output
-    loguru::g_stderr_verbosity = loguru::Verbosity_INFO;
+    // loguru::g_stderr_verbosity = loguru::Verbosity_INFO;
 
     // create Newton Solver
     dolfinx::nls::petsc::NewtonSolver newton_solver(mesh->comm());
@@ -485,7 +496,7 @@ int main(int argc, char* argv[])
 
       // Assemble vector
       b_therm.set(0.0);
-      meshties->assemble_vector(b_therm.mutable_array(), Q,
+      meshties->assemble_vector(b_therm.mutable_array(), *Q,
                                 dolfinx_contact::Problem::Poisson);
       dolfinx::fem::assemble_vector(b_therm.mutable_array(), *L_therm);
       dolfinx::fem::apply_lifting<T, U>(b_therm.mutable_array(), {a_therm},
@@ -497,7 +508,7 @@ int main(int argc, char* argv[])
       MatZeroEntries(A_therm.mat());
       meshties->assemble_matrix(
           la::petsc::Matrix::set_block_fn(A_therm.mat(), ADD_VALUES),
-          a_therm->function_spaces()[0], dolfinx_contact::Problem::Poisson);
+          *a_therm->function_spaces()[0], dolfinx_contact::Problem::Poisson);
       MatAssemblyBegin(A_therm.mat(), MAT_FLUSH_ASSEMBLY);
       MatAssemblyEnd(A_therm.mat(), MAT_FLUSH_ASSEMBLY);
       dolfinx::fem::assemble_matrix(

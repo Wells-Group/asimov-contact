@@ -1,24 +1,35 @@
 # Copyright (C) 2023 Sarah Roggendorf
 #
 # SPDX-License-Identifier:    MIT
+from mpi4py import MPI
+from petsc4py.PETSc import InsertMode, ScatterMode  # type: ignore
+
 import dolfinx.fem as _fem
 import numpy as np
 import ufl
 from dolfinx import default_scalar_type, io, log
-from dolfinx.common import timed, Timer
-from dolfinx.fem import (Function, FunctionSpace)
-from dolfinx.fem.petsc import LinearProblem, assemble_vector, assemble_matrix, create_vector
+from dolfinx.common import Timer, timed
+from dolfinx.fem import Function
+from dolfinx.fem.petsc import (
+    LinearProblem,
+    assemble_matrix,
+    assemble_vector,
+    create_vector,
+)
 from dolfinx.graph import adjacencylist
 from dolfinx.io import XDMFFile
-from dolfinx_contact.helpers import (epsilon, lame_parameters, sigma_func,
-                                     weak_dirichlet, rigid_motions_nullspace_subdomains)
+from dolfinx_contact.cpp import ContactMode
+from dolfinx_contact.general_contact.contact_problem import ContactProblem, FrictionLaw
+from dolfinx_contact.helpers import (
+    epsilon,
+    lame_parameters,
+    rigid_motions_nullspace_subdomains,
+    sigma_func,
+    weak_dirichlet,
+)
 from dolfinx_contact.meshing import convert_mesh, create_christmas_tree_mesh
 from dolfinx_contact.newton_solver import NewtonSolver
 from dolfinx_contact.parallel_mesh_ghosting import create_contact_mesh
-from dolfinx_contact.general_contact.contact_problem import ContactProblem, FrictionLaw
-from dolfinx_contact.cpp import ContactMode
-from mpi4py import MPI
-from petsc4py.PETSc import InsertMode, ScatterMode  # type: ignore
 
 fname = "meshes/xmas_2D"
 create_christmas_tree_mesh(filename=fname, res=0.2)
@@ -34,7 +45,8 @@ contact_bdy_1 = 5
 contact_bdy_2 = 6
 if mesh.comm.size > 1:
     mesh, facet_marker, domain_marker = create_contact_mesh(
-        mesh, facet_marker, domain_marker, [contact_bdy_1, contact_bdy_2])
+        mesh, facet_marker, domain_marker, [contact_bdy_1, contact_bdy_2]
+    )
 
 # measures
 dx = ufl.Measure("dx", domain=mesh, subdomain_data=domain_marker)
@@ -42,7 +54,7 @@ ds = ufl.Measure("ds", domain=mesh, subdomain_data=facet_marker)
 
 
 # Thermal problem
-Q = _fem.FunctionSpace(mesh, ("CG", 1))
+Q = _fem.functionspace(mesh, ("Lagrange", 1))
 q, r = ufl.TrialFunction(Q), ufl.TestFunction(Q)
 T0 = _fem.Function(Q)
 kdt = 0.1
@@ -56,13 +68,18 @@ dofs = _fem.locate_dofs_topological(Q, entity_dim=tdim - 1, entities=facet_marke
 Tbc = _fem.dirichletbc(value=default_scalar_type((1.0)), dofs=dofs, V=Q)
 dofs2 = _fem.locate_dofs_topological(Q, entity_dim=tdim - 1, entities=facet_marker.find(4))
 Tbc2 = _fem.dirichletbc(value=default_scalar_type((0.0)), dofs=dofs2, V=Q)
-Tproblem = LinearProblem(a_therm, L_therm, bcs=[Tbc, Tbc2], petsc_options={
-    "ksp_type": "preonly", "pc_type": "lu"}, u=T0)
+Tproblem = LinearProblem(
+    a_therm,
+    L_therm,
+    bcs=[Tbc, Tbc2],
+    petsc_options={"ksp_type": "preonly", "pc_type": "lu"},
+    u=T0,
+)
 
 
 # Elasticity problem
-V = _fem.VectorFunctionSpace(mesh, ("Lagrange", 1))
-g = _fem.Constant(mesh, default_scalar_type((0, 0)))     # zero Dirichlet
+V = _fem.functionspace(mesh, ("Lagrange", 1, (mesh.geometry.dim,)))
+g = _fem.Constant(mesh, default_scalar_type((0, 0)))  # zero Dirichlet
 t = _fem.Constant(mesh, default_scalar_type((0.2, 0.5)))  # traction
 f = _fem.Constant(mesh, default_scalar_type((1.0, 0.5)))  # body force
 
@@ -86,7 +103,7 @@ nu = 0.2
 mu_func, lambda_func = lame_parameters(True)
 mu = mu_func(E, nu)
 lmbda = lambda_func(E, nu)
-V0 = FunctionSpace(mesh, ("DG", 0))
+V0 = _fem.functionspace(mesh, ("DG", 0))
 mu_dg = Function(V0)
 lmbda_dg = Function(V0)
 mu_dg.interpolate(lambda x: np.full((1, x.shape[1]), mu))
@@ -121,8 +138,7 @@ J = ufl.derivative(F, du, w)
 
 # compiler options to improve performance
 cffi_options = ["-Ofast", "-march=native"]
-jit_options = {"cffi_extra_compile_args": cffi_options,
-               "cffi_libraries": ["m"]}
+jit_options = {"cffi_extra_compile_args": cffi_options, "cffi_libraries": ["m"]}
 # compiled forms for rhs and tangen system
 F_compiled = _fem.form(F, jit_options=jit_options)
 J_compiled = _fem.form(J, jit_options=jit_options)
@@ -130,12 +146,14 @@ J_compiled = _fem.form(J, jit_options=jit_options)
 # Solver options
 ksp_tol = 1e-10
 newton_tol = 1e-6
-newton_options = {"relaxation_parameter": 1.0,
-                  "atol": newton_tol,
-                  "rtol": newton_tol,
-                  "convergence_criterion": "residual",
-                  "max_it": 50,
-                  "error_on_nonconvergence": False}
+newton_options = {
+    "relaxation_parameter": 1.0,
+    "atol": newton_tol,
+    "rtol": newton_tol,
+    "convergence_criterion": "residual",
+    "max_it": 50,
+    "error_on_nonconvergence": False,
+}
 
 # In order to use an LU solver for debugging purposes on small scale problems
 # use the following PETSc options: {"ksp_type": "preonly", "pc_type": "lu"}
@@ -146,7 +164,7 @@ petsc_options = {
     "ksp_atol": ksp_tol,
     "pc_type": "gamg",
     "pc_mg_levels": 3,
-    "pc_mg_cycles": 1,   # 1 is v, 2 is w
+    "pc_mg_cycles": 1,  # 1 is v, 2 is w
     "mg_levels_ksp_type": "chebyshev",
     "mg_levels_pc_type": "jacobi",
     "pc_gamg_type": "agg",
@@ -155,22 +173,31 @@ petsc_options = {
     "pc_gamg_threshold": 1e-3,
     "pc_gamg_square_graph": 2,
     "pc_gamg_reuse_interpolation": False,
-    "ksp_norm_type": "unpreconditioned"
+    "ksp_norm_type": "unpreconditioned",
 }
 
 
 # Solve contact problem using Nitsche's method
-problem_parameters = {"gamma": np.float64((1 - alpha) * E * gamma), "theta": np.float64(theta), "fric": np.float64(0.4)}
+problem_parameters = {
+    "gamma": np.float64((1 - alpha) * E * gamma),
+    "theta": np.float64(theta),
+    "fric": np.float64(0.4),
+}
 log.set_log_level(log.LogLevel.WARNING)
 size = mesh.comm.size
 outname = f"results/xmas_{tdim}D_{size}"
-u.name = 'displacement'
-T0.name = 'temperature'
+u.name = "displacement"
+T0.name = "temperature"
 
 search_mode = [ContactMode.ClosestPoint for _ in range(len(contact_pairs))]
 contact_problem = ContactProblem([facet_marker], surfaces, contact_pairs, mesh, 5, search_mode)
-contact_problem.generate_contact_data(FrictionLaw.Frictionless, V, {"u": u, "du": du, "mu": mu_dg,
-                                                                    "lambda": lmbda_dg}, E * gamma, theta)
+contact_problem.generate_contact_data(
+    FrictionLaw.Frictionless,
+    V,
+    {"u": u, "du": du, "mu": mu_dg, "lambda": lmbda_dg},
+    E * gamma,
+    theta,
+)
 # define functions for newton solver
 
 
@@ -182,14 +209,12 @@ def compute_coefficients(x, coeffs):
 @timed("~Contact: Assemble residual")
 def compute_residual(x, b, coeffs):
     b.zeroEntries()
-    b.ghostUpdate(addv=InsertMode.INSERT,
-                  mode=ScatterMode.FORWARD)
+    b.ghostUpdate(addv=InsertMode.INSERT, mode=ScatterMode.FORWARD)
     with Timer("~~Contact: Contact contributions (in assemble vector)"):
         contact_problem.assemble_vector(b, V)
     with Timer("~~Contact: Standard contributions (in assemble vector)"):
         assemble_vector(b, F_compiled)
-    b.ghostUpdate(addv=InsertMode.ADD,
-                  mode=ScatterMode.REVERSE)
+    b.ghostUpdate(addv=InsertMode.ADD, mode=ScatterMode.REVERSE)
 
 
 @timed("~Contact: Assemble matrix")
@@ -215,8 +240,7 @@ newton_solver.set_jacobian(compute_jacobian_matrix)
 newton_solver.set_coefficients(compute_coefficients)
 
 # Set rigid motion nullspace
-null_space = rigid_motions_nullspace_subdomains(V, domain_marker, np.unique(
-    domain_marker.values), num_domains=2)
+null_space = rigid_motions_nullspace_subdomains(V, domain_marker, np.unique(domain_marker.values), num_domains=2)
 newton_solver.A.setNearNullSpace(null_space)
 
 # Set Newton solver options
@@ -227,13 +251,12 @@ newton_solver.set_krylov_options(petsc_options)
 
 
 # initialise vtx write
-W = FunctionSpace(mesh, ("DG", 1))
+W = _fem.functionspace(mesh, ("DG", 1))
 sigma_vm_h = Function(W)
-sigma_dev = sigma(u, T0) - (1 / 3) * \
-    ufl.tr(sigma(u, T0)) * ufl.Identity(len(u))
+sigma_dev = sigma(u, T0) - (1 / 3) * ufl.tr(sigma(u, T0)) * ufl.Identity(len(u))
 sigma_vm = ufl.sqrt((3 / 2) * ufl.inner(sigma_dev, sigma_dev))
 gdim = mesh.geometry.dim
-W2 = _fem.functionspace(mesh, ("Discontinuous Lagrange", 1, (gdim, )))
+W2 = _fem.functionspace(mesh, ("Discontinuous Lagrange", 1, (gdim,)))
 u_dg = Function(W2)
 u_dg.interpolate(u)
 T_dg = Function(W)

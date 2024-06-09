@@ -5,6 +5,7 @@
 // SPDX-License-Identifier:    MIT
 
 #pragma once
+
 #include <dolfinx.h>
 #include <dolfinx/common/sort.h>
 #include <dolfinx/fem/DofMap.h>
@@ -19,16 +20,17 @@ namespace dolfinx_contact
 class SubMesh
 {
 public:
-  // empty constructor
+  // Default empty constructor
   SubMesh() = default;
 
   // submesh constructor
   // constructs a submesh consisting of the cells adjacent to a given set of
   // exterior facets
-  /// @param[in] mesh - the parent mesh
-  /// @param[in] facets - vector of pairs (cell, facet) of exterior facets,
-  /// where cell is the index of the cell local to the process and facet is
-  /// the facet index within the cell. The data is flattened row-major.
+  /// @param[in] mesh the parent mesh
+  // / @param[in] facets vector of pairs (cell, facet) of exterior
+  // facets, / where cell is the index of the cell local to the process
+  // and facet is / the facet index within the cell. The data is
+  // flattened row-major.
   SubMesh(std::shared_ptr<const dolfinx::mesh::Mesh<double>> mesh,
           std::span<const std::int32_t> facets);
 
@@ -66,21 +68,20 @@ public:
   /// @param[in] V_parent - the function space on the the parent mesh
   /// @return the function space on the submesh
   dolfinx::fem::FunctionSpace<double> create_functionspace(
-      std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V_parent)
-      const;
+      const dolfinx::fem::FunctionSpace<double>& V_parent) const;
 
   // Copy of a function on the parent mesh/ in the parent function space
   // to submesh/ function space on submesh
   ///@param[in] u_parent - function to be copied
   ///@param[in, out] u_sub - function into which the function values are to be
   /// copied
-  void copy_function(dolfinx::fem::Function<PetscScalar>& u_parent,
-                     dolfinx::fem::Function<PetscScalar>& u_sub);
+  void copy_function(const dolfinx::fem::Function<PetscScalar>& u_parent,
+                     dolfinx::fem::Function<PetscScalar>& u_sub) const;
 
   /// @brief Adds perturbation u to mesh
   /// @param[in] u: The function to perturb the mesh with. The function must be
   /// based on the same finite element as the mesh coordinate element.
-  void update_geometry(dolfinx::fem::Function<PetscScalar>& u);
+  void update_geometry(const dolfinx::fem::Function<PetscScalar>& u);
 
   /// Map parent facets (parent_cell, local_facet_index) to submesh (cell,
   /// local_facet_index) tuples

@@ -5,20 +5,20 @@
 // SPDX-License-Identifier:    MIT
 
 #include "meshtie_kernels.h"
+
 dolfinx_contact::kernel_fn<PetscScalar>
 dolfinx_contact::generate_meshtie_kernel(
-    dolfinx_contact::Kernel type,
-    std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V,
+    dolfinx_contact::Kernel type, const dolfinx::fem::FunctionSpace<double>& V,
     std::shared_ptr<const dolfinx_contact::QuadratureRule> quadrature_rule,
     const std::vector<std::size_t>& cstrides)
 {
-  std::shared_ptr<const dolfinx::mesh::Mesh<double>> mesh = V->mesh();
+  std::shared_ptr<const dolfinx::mesh::Mesh<double>> mesh = V.mesh();
   assert(mesh);
   const std::size_t gdim = mesh->geometry().dim(); // geometrical dimension
-  const std::size_t bs = V->dofmap()->bs();
+  const std::size_t bs = V.dofmap()->bs();
   // NOTE: Assuming same number of quadrature points on each cell
-  dolfinx_contact::error::check_cell_type(mesh->topology()->cell_types()[0]);
-  const std::size_t ndofs_cell = V->dofmap()->element_dof_layout().num_dofs();
+  dolfinx_contact::error::check_cell_type(mesh->topology()->cell_type());
+  const std::size_t ndofs_cell = V.dofmap()->element_dof_layout().num_dofs();
 
   auto kd = dolfinx_contact::KernelData(V, quadrature_rule, cstrides);
   /// @brief Assemble kernel for RHS gluing two objects with Nitsche
@@ -68,8 +68,9 @@ dolfinx_contact::generate_meshtie_kernel(
 
       dolfinx_contact::physical_facet_normal(
           std::span(n_phys.data(), gdim), K,
-          stdex::submdspan(kd.facet_normals(), facet_index,
-                           MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent));
+          MDSPAN_IMPL_STANDARD_NAMESPACE::submdspan(
+              kd.facet_normals(), facet_index,
+              MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent));
     }
 
     // Extract constants used inside quadrature loop
@@ -79,8 +80,8 @@ dolfinx_contact::generate_meshtie_kernel(
     double lmbda = c[1];
 
     // Extract reference to the tabulated basis function
-    cmdspan2_t phi = kd.phi();
-    cmdspan3_t dphi = kd.dphi();
+    s_cmdspan2_t phi = kd.phi();
+    s_cmdspan3_t dphi = kd.dphi();
 
     // Extract reference to quadrature weights for the local facet
     std::span<const double> weights = kd.weights(facet_index);
@@ -209,8 +210,9 @@ dolfinx_contact::generate_meshtie_kernel(
 
       dolfinx_contact::physical_facet_normal(
           std::span(n_phys.data(), gdim), K,
-          stdex::submdspan(kd.facet_normals(), facet_index,
-                           MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent));
+          MDSPAN_IMPL_STANDARD_NAMESPACE::submdspan(
+              kd.facet_normals(), facet_index,
+              MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent));
     }
 
     // Extract constants used inside quadrature loop
@@ -219,7 +221,7 @@ dolfinx_contact::generate_meshtie_kernel(
     double alpha = c[3] * (3 * lmbda + 2 * mu);
 
     // Extract reference to the tabulated basis function
-    cmdspan2_t phi = kd.phi();
+    s_cmdspan2_t phi = kd.phi();
 
     // Extract reference to quadrature weights for the local facet
     std::span<const double> weights = kd.weights(facet_index);
@@ -308,8 +310,9 @@ dolfinx_contact::generate_meshtie_kernel(
 
       dolfinx_contact::physical_facet_normal(
           std::span(n_phys.data(), gdim), K,
-          stdex::submdspan(kd.facet_normals(), facet_index,
-                           MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent));
+          MDSPAN_IMPL_STANDARD_NAMESPACE::submdspan(
+              kd.facet_normals(), facet_index,
+              MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent));
     }
 
     // Extract constants used inside quadrature loop
@@ -319,8 +322,8 @@ dolfinx_contact::generate_meshtie_kernel(
     double lmbda = c[1];
 
     // Extract reference to the tabulated basis function
-    cmdspan2_t phi = kd.phi();
-    cmdspan3_t dphi = kd.dphi();
+    s_cmdspan2_t phi = kd.phi();
+    s_cmdspan3_t dphi = kd.dphi();
 
     // Extract reference to quadrature weights for the local facet
     std::span<const double> weights = kd.weights(facet_index);
@@ -439,23 +442,22 @@ dolfinx_contact::generate_meshtie_kernel(
 
 dolfinx_contact::kernel_fn<PetscScalar>
 dolfinx_contact::generate_poisson_kernel(
-    dolfinx_contact::Kernel type,
-    std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V,
+    dolfinx_contact::Kernel type, const dolfinx::fem::FunctionSpace<double>& V,
     std::shared_ptr<const dolfinx_contact::QuadratureRule> quadrature_rule,
     const std::vector<std::size_t>& cstrides)
 {
-  std::shared_ptr<const dolfinx::mesh::Mesh<double>> mesh = V->mesh();
+  std::shared_ptr<const dolfinx::mesh::Mesh<double>> mesh = V.mesh();
   assert(mesh);
   const std::size_t gdim = mesh->geometry().dim(); // geometrical dimension
-  if (V->dofmap()->bs() != 1)
+  if (V.dofmap()->bs() != 1)
   {
     throw std::invalid_argument(
         "This kernel is expecting a variable with bs=1");
   }
 
   // NOTE: Assuming same number of quadrature points on each cell
-  dolfinx_contact::error::check_cell_type(mesh->topology()->cell_types()[0]);
-  const std::size_t ndofs_cell = V->dofmap()->element_dof_layout().num_dofs();
+  dolfinx_contact::error::check_cell_type(mesh->topology()->cell_type());
+  const std::size_t ndofs_cell = V.dofmap()->element_dof_layout().num_dofs();
 
   auto kd = dolfinx_contact::KernelData(V, quadrature_rule, cstrides);
   /// @brief Assemble kernel for RHS gluing two objects with Nitsche
@@ -505,8 +507,9 @@ dolfinx_contact::generate_poisson_kernel(
 
       dolfinx_contact::physical_facet_normal(
           std::span(n_phys.data(), gdim), K,
-          stdex::submdspan(kd.facet_normals(), facet_index,
-                           MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent));
+          MDSPAN_IMPL_STANDARD_NAMESPACE::submdspan(
+              kd.facet_normals(), facet_index,
+              MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent));
     }
 
     // Extract constants used inside quadrature loop
@@ -515,8 +518,8 @@ dolfinx_contact::generate_poisson_kernel(
     double kdt = c[1];
 
     // Extract reference to the tabulated basis function
-    cmdspan2_t phi = kd.phi();
-    cmdspan3_t dphi = kd.dphi();
+    s_cmdspan2_t phi = kd.phi();
+    s_cmdspan3_t dphi = kd.dphi();
 
     // Extract reference to quadrature weights for the local facet
     std::span<const double> weights = kd.weights(facet_index);
@@ -630,8 +633,9 @@ dolfinx_contact::generate_poisson_kernel(
 
       dolfinx_contact::physical_facet_normal(
           std::span(n_phys.data(), gdim), K,
-          stdex::submdspan(kd.facet_normals(), facet_index,
-                           MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent));
+          MDSPAN_IMPL_STANDARD_NAMESPACE::submdspan(
+              kd.facet_normals(), facet_index,
+              MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent));
     }
     // Extract constants used inside quadrature loop
     double gamma = w[0] / c[0]; // gamma/h
@@ -639,8 +643,8 @@ dolfinx_contact::generate_poisson_kernel(
     double kdt = c[1];
 
     // Extract reference to the tabulated basis function
-    cmdspan2_t phi = kd.phi();
-    cmdspan3_t dphi = kd.dphi();
+    s_cmdspan2_t phi = kd.phi();
+    s_cmdspan3_t dphi = kd.dphi();
 
     // Extract reference to quadrature weights for the local facet
     std::span<const double> weights = kd.weights(facet_index);

@@ -28,29 +28,45 @@ int main(int argc, char* argv[])
 
   init_logging(argc, argv);
   PetscInitialize(&argc, &argv, nullptr, nullptr);
+
   // Set the logging thread name to show the process rank
   int mpi_rank;
   MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank);
-  std::string thread_name = "RANK " + std::to_string(mpi_rank);
-  loguru::set_thread_name(thread_name.c_str());
+  std::string fmt = "[%Y-%m-%d %H:%M:%S.%e] [RANK " + std::to_string(mpi_rank)
+                    + "] [%l] %v";
+  spdlog::set_pattern(fmt);
   {
     auto [mesh_init, domain1_init, facet1_init] = dolfinx_contact::read_mesh(
-        "../meshes/box_3D.xdmf", "mesh", "mesh", "cell_marker", "facet_marker");
+        "box_3D.xdmf", "mesh", "mesh", "cell_marker", "facet_marker");
 
+    int tdim = mesh_init->topology()->dim();
+    mesh_init->topology_mutable()->create_connectivity(tdim - 1, tdim);
 
-    const std::int32_t contact_bdry_1 = 6; // top contact interface
-    const std::int32_t contact_bdry_2 = 13;  // bottom contact interface
-    loguru::g_stderr_verbosity = loguru::Verbosity_OFF;
+    const std::int32_t contact_bdry_1 = 6;  // top contact interface
+    const std::int32_t contact_bdry_2 = 13; // bottom contact interface
+    // loguru::g_stderr_verbosity = loguru::Verbosity_OFF;
     auto [mesh_new, facet1, domain1] = dolfinx_contact::create_contact_mesh(
-        *mesh_init, facet1_init, domain1_init,
-        {contact_bdry_1, contact_bdry_2}, 10.0);
+        *mesh_init, facet1_init, domain1_init, {contact_bdry_1, contact_bdry_2},
+        10.0);
     auto mesh = std::make_shared<dolfinx::mesh::Mesh<U>>(mesh_new);
 
     // Create function spaces
-    auto V = std::make_shared<fem::FunctionSpace<U>>(fem::create_functionspace(
-        functionspace_form_linear_elasticity_J, "w", mesh));
-    auto V0 = std::make_shared<fem::FunctionSpace<U>>(fem::create_functionspace(
-        functionspace_form_linear_elasticity_J, "mu", mesh));
+    auto ct = mesh->topology()->cell_type();
+
+    auto element_mu = basix::create_element<double>(
+        basix::element::family::P, dolfinx::mesh::cell_type_to_basix_type(ct),
+        0, basix::element::lagrange_variant::unset,
+        basix::element::dpc_variant::unset, true);
+    auto element = basix::create_element<double>(
+        basix::element::family::P, dolfinx::mesh::cell_type_to_basix_type(ct),
+        1, basix::element::lagrange_variant::unset,
+        basix::element::dpc_variant::unset, false);
+
+    auto V = std::make_shared<fem::FunctionSpace<double>>(
+        fem::create_functionspace(mesh, element,
+                                  {(std::size_t)mesh->geometry().dim()}));
+    auto V0 = std::make_shared<fem::FunctionSpace<double>>(
+        fem::create_functionspace(mesh, element_mu));
 
     double E = 1000;
     double nu = 0.1;
@@ -68,9 +84,7 @@ int main(int argc, char* argv[])
         {
           std::vector<T> _f;
           for (std::size_t p = 0; p < x.extent(1); ++p)
-          {
             _f.push_back(lmbda_val);
-          }
           return {_f, {_f.size()}};
         });
 
@@ -81,9 +95,7 @@ int main(int argc, char* argv[])
         {
           std::vector<T> _f;
           for (std::size_t p = 0; p < x.extent(1); ++p)
-          {
             _f.push_back(mu_val);
-          }
           return {_f, {_f.size()}};
         });
 
@@ -95,13 +107,11 @@ int main(int argc, char* argv[])
         {
           std::vector<T> fdata(bs * x.extent(1), 0.0);
           namespace stdex = std::experimental;
-          stdex::mdspan<
+          MDSPAN_IMPL_STANDARD_NAMESPACE::mdspan<
               double, MDSPAN_IMPL_STANDARD_NAMESPACE::dextents<std::size_t, 2>>
               _f(fdata.data(), bs, x.extent(1));
           for (std::size_t p = 0; p < x.extent(1); ++p)
-          {
             _f(1, p) = 0.5;
-          }
           return {std::move(fdata), {bs, x.extent(1)}};
         });
 
@@ -113,20 +123,33 @@ int main(int argc, char* argv[])
         {
           std::vector<T> fdata(bs * x.extent(1), 0.0);
           namespace stdex = std::experimental;
-          stdex::mdspan<
+          MDSPAN_IMPL_STANDARD_NAMESPACE::mdspan<
               double, MDSPAN_IMPL_STANDARD_NAMESPACE::dextents<std::size_t, 2>>
               _f(fdata.data(), bs, x.extent(1));
           for (std::size_t p = 0; p < x.extent(1); ++p)
-          {
             _f(1, p) = 0.5;
-          }
           return {std::move(fdata), {bs, x.extent(1)}};
         });
 
-    // create integration domains for integrating over specific surfaces
-    auto facet_domains = fem::compute_integration_domains(
-        fem::IntegralType::exterior_facet, *facet1.topology(), facet1.indices(),
-        facet1.dim(), facet1.values());
+    // Create integration domains for integrating over specific surfaces
+    std::vector<std::pair<std::int32_t, std::span<const std::int32_t>>>
+        integration_domain;
+    std::vector<std::vector<std::int32_t>> facet_domains;
+    {
+      // Get unique values in facet1 MeshTags
+      std::vector ids(facet1.values().begin(), facet1.values().end());
+      std::sort(ids.begin(), ids.end());
+      ids.erase(std::unique(ids.begin(), ids.end()), ids.end());
+
+      // Pack (domain id, indices) pairs
+      for (auto id : ids)
+      {
+        facet_domains.push_back(fem::compute_integration_domains(
+            fem::IntegralType::exterior_facet, *facet1.topology(),
+            facet1.find(id), facet1.dim()));
+        integration_domain.emplace_back(id, facet_domains.back());
+      }
+    }
 
     // Define variational forms
     auto J = std::make_shared<fem::Form<T>>(
@@ -134,7 +157,7 @@ int main(int argc, char* argv[])
                             {{"mu", mu}, {"lmbda", lmbda}}, {}, {}));
     auto F = std::make_shared<fem::Form<T>>(fem::create_form<T>(
         *form_linear_elasticity_F, {V}, {{"f", f}, {"t", t}}, {},
-        {{dolfinx::fem::IntegralType::exterior_facet, facet_domains}}));
+        {{dolfinx::fem::IntegralType::exterior_facet, integration_domain}}));
 
     // Define boundary conditions
     const std::int32_t dirichlet_bdy = 12; // bottom face
@@ -156,7 +179,7 @@ int main(int argc, char* argv[])
     auto meshties
         = dolfinx_contact::MeshTie(markers, contact_markers, pairs, mesh, 5);
 
-    meshties.generate_kernel_data(dolfinx_contact::Problem::Elasticity, V,
+    meshties.generate_kernel_data(dolfinx_contact::Problem::Elasticity, *V,
                                   {{"mu", mu}, {"lambda", lmbda}}, E * gamma,
                                   theta);
 
@@ -168,7 +191,7 @@ int main(int argc, char* argv[])
 
     // Assemble vector
     b.set(0.0);
-    meshties.assemble_vector(b.mutable_array(), V,
+    meshties.assemble_vector(b.mutable_array(), *V,
                              dolfinx_contact::Problem::Elasticity);
     dolfinx::fem::assemble_vector(b.mutable_array(), *F);
     dolfinx::fem::apply_lifting<T, U>(b.mutable_array(), {J}, {{bc}}, {},
@@ -180,7 +203,7 @@ int main(int argc, char* argv[])
     MatZeroEntries(A.mat());
     meshties.assemble_matrix(
         la::petsc::Matrix::set_block_fn(A.mat(), ADD_VALUES),
-        J->function_spaces()[0], dolfinx_contact::Problem::Elasticity);
+        *J->function_spaces()[0], dolfinx_contact::Problem::Elasticity);
     MatAssemblyBegin(A.mat(), MAT_FLUSH_ASSEMBLY);
     MatAssemblyEnd(A.mat(), MAT_FLUSH_ASSEMBLY);
     dolfinx::fem::assemble_matrix(
@@ -233,12 +256,13 @@ int main(int argc, char* argv[])
 
     // Update ghost values before output
     u->x()->scatter_fwd();
-    loguru::g_stderr_verbosity = loguru::Verbosity_OFF;
+    // loguru::g_stderr_verbosity = loguru::Verbosity_OFF;
     dolfinx::io::XDMFFile file2(mesh->comm(), "result.xdmf", "w");
     file2.write_mesh(*mesh);
     file2.write_function(*u, 0.0);
     file2.close();
   }
+
   PetscFinalize();
   return 0;
 }

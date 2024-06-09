@@ -5,6 +5,7 @@
 // SPDX-License-Identifier:    MIT
 
 #pragma once
+
 #include "QuadratureRule.h"
 #include <dolfinx/fem/CoordinateElement.h>
 #include <dolfinx/fem/FiniteElement.h>
@@ -12,17 +13,15 @@
 
 namespace dolfinx_contact
 {
-
-//-----------------------------------------------------------------------------
 /// @brief Compute facet normal on physical cell
 ///
 /// Computes the outward unit normal fora a point x located on
 /// the surface of the physical cell. Each point x has a corresponding facet
 /// index, relating to which local facet the point belongs to.
 /// @note: The normal is computed using a covariant Piola transform
-/// @param[in, out] work_array: Work array to avoid dynamic memory allocation,
-/// use: `dolfinx_contact::allocate_pull_back_nonaffine` to get sufficent
-/// memory.
+/// @param[in, out] work_array: Work array to avoid dynamic memory
+/// allocation, use: `dolfinx_contact::allocate_pull_back_nonaffine` to
+/// get sufficent memory.
 /// @param[in] x: The point on the facet of the physical cell, size gdim
 /// @param[in] gdim: The geometrical dimension of the cell
 /// @param[in] tdim: The topogical dimension of the cell
@@ -35,8 +34,8 @@ std::array<double, 3> push_forward_facet_normal(
     std::size_t tdim, cmdspan2_t coordinate_dofs, const std::size_t facet_index,
     const dolfinx::fem::CoordinateElement<double>& cmap, cmdspan2_t reference_normals);
 
-/// @brief Allocate memory for pull-back on a non affine cell for a single
-/// point.
+/// @brief Allocate memory for pull-back on a non affine cell for a
+/// single point.
 /// @param[in] cmap The coordinate element
 /// @param[in] gdim The geometrical dimension
 /// @param[in] tdim The topological dimension
@@ -45,12 +44,12 @@ std::vector<double>
 allocate_pull_back_nonaffine(const dolfinx::fem::CoordinateElement<double>& cmap,
                              int gdim, int tdim);
 
-/// @brief Pull back a single point of a non-affine cell to the reference
-/// cell.
+/// @brief Pull back a single point of a non-affine cell to the
+/// reference cell.
 ///
 /// Given a single cell and a point, pull it back to the reference
 /// element. To compute this pull back Newton's method is employed.
-
+///
 /// @param[in, out] X The point on the reference cell
 /// @param[in, out] work_array Work array of at least size
 /// 2*gdim*tdim+(tdim+1)*num_basis_functions + 9
@@ -65,8 +64,8 @@ void pull_back_nonaffine(std::span<double> X, std::span<double> work_array,
                          cmdspan2_t cell_geometry, double tol = 1e-8,
                          const int max_it = 10);
 
-/// Compute circumradius for a cell with given coordinates and determinant
-/// of Jacobian
+/// Compute circumradius for a cell with given coordinates and
+/// determinant of Jacobian
 /// @param[in] mesh The mesh
 /// @param[in] detJ The determinant of the Jacobian of the mapping to the
 /// reference cell
@@ -102,7 +101,4 @@ void physical_facet_normal(E&& physical_normal, F&& K, G&& reference_normal)
   std::for_each(physical_normal.begin(), physical_normal.end(),
                 [norm](auto& ni) { ni = ni / norm; });
 }
-
-//-----------------------------------------------------------------------------
-
 } // namespace dolfinx_contact

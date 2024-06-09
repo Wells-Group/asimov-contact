@@ -4,42 +4,69 @@
 
 import argparse
 
-import numpy as np
-import ufl
-from dolfinx import default_scalar_type
-from dolfinx.io import XDMFFile, VTXWriter
-from dolfinx.fem import (Constant, dirichletbc, form,
-                         Function, FunctionSpace,
-                         VectorFunctionSpace, locate_dofs_topological)
-from dolfinx.fem.petsc import set_bc, apply_lifting, assemble_matrix, assemble_vector, create_vector
-from dolfinx.graph import adjacencylist
-from dolfinx.mesh import locate_entities
 from mpi4py import MPI
 from petsc4py.PETSc import InsertMode, ScatterMode  # type: ignore
 
-from dolfinx_contact.helpers import (epsilon, sigma_func, lame_parameters,
-                                     rigid_motions_nullspace_subdomains)
-from dolfinx_contact.meshing import (convert_mesh,
-                                     create_quarter_disks_mesh)
-from dolfinx_contact.newton_solver import NewtonSolver
+import numpy as np
+import ufl
+from dolfinx import default_scalar_type
+from dolfinx.fem import (
+    Constant,
+    Function,
+    dirichletbc,
+    form,
+    functionspace,
+    locate_dofs_topological,
+)
+from dolfinx.fem.petsc import (
+    apply_lifting,
+    assemble_matrix,
+    assemble_vector,
+    create_vector,
+    set_bc,
+)
+from dolfinx.graph import adjacencylist
+from dolfinx.io import VTXWriter, XDMFFile
+from dolfinx.mesh import locate_entities
 from dolfinx_contact.cpp import ContactMode
-
 from dolfinx_contact.general_contact.contact_problem import ContactProblem, FrictionLaw
+from dolfinx_contact.helpers import (
+    epsilon,
+    lame_parameters,
+    rigid_motions_nullspace_subdomains,
+    sigma_func,
+)
+from dolfinx_contact.meshing import convert_mesh, create_quarter_disks_mesh
+from dolfinx_contact.newton_solver import NewtonSolver
 from dolfinx_contact.output import ContactWriter
 
 if __name__ == "__main__":
     desc = "Friction example with two elastic cylinders for verifying correctness of code"
-    parser = argparse.ArgumentParser(description=desc,
-                                     formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument("--quadrature", default=5, type=int, dest="q_degree",
-                        help="Quadrature degree used for contact integrals")
-    parser.add_argument("--order", default=1, type=int, dest="order",
-                        help="Order of mesh geometry", choices=[1, 2])
+    parser = argparse.ArgumentParser(description=desc, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument(
+        "--quadrature",
+        default=5,
+        type=int,
+        dest="q_degree",
+        help="Quadrature degree used for contact integrals",
+    )
+    parser.add_argument(
+        "--order",
+        default=1,
+        type=int,
+        dest="order",
+        help="Order of mesh geometry",
+        choices=[1, 2],
+    )
     _simplex = parser.add_mutually_exclusive_group(required=False)
-    _simplex.add_argument('--simplex', dest='simplex', action='store_true',
-                          help="Use triangle/tet mesh", default=False)
-    parser.add_argument("--res", default=0.06, type=np.float64, dest="res",
-                        help="Mesh resolution")
+    _simplex.add_argument(
+        "--simplex",
+        dest="simplex",
+        action="store_true",
+        help="Use triangle/tet mesh",
+        default=False,
+    )
+    parser.add_argument("--res", default=0.06, type=np.float64, dest="res", help="Mesh resolution")
 
     # Parse input arguments or set to defualt values
     args = parser.parse_args()
@@ -87,12 +114,14 @@ if __name__ == "__main__":
     # Solver options
     ksp_tol = 1e-10
     newton_tol = 1e-7
-    newton_options = {"relaxation_parameter": 1.0,
-                      "atol": newton_tol,
-                      "rtol": newton_tol,
-                      "convergence_criterion": "residual",
-                      "max_it": 200,
-                      "error_on_nonconvergence": True}
+    newton_options = {
+        "relaxation_parameter": 1.0,
+        "atol": newton_tol,
+        "rtol": newton_tol,
+        "convergence_criterion": "residual",
+        "max_it": 200,
+        "error_on_nonconvergence": True,
+    }
 
     petsc_options = {
         "matptap_via": "scalable",
@@ -101,7 +130,7 @@ if __name__ == "__main__":
         "ksp_atol": ksp_tol,
         "pc_type": "gamg",
         "pc_mg_levels": 3,
-        "pc_mg_cycles": 1,   # 1 is v, 2 is w
+        "pc_mg_cycles": 1,  # 1 is v, 2 is w
         "mg_levels_ksp_type": "chebyshev",
         "mg_levels_pc_type": "jacobi",
         "pc_gamg_type": "agg",
@@ -111,11 +140,11 @@ if __name__ == "__main__":
         "pc_gamg_square_graph": 2,
         "pc_gamg_reuse_interpolation": False,
         "ksp_initial_guess_nonzero": False,
-        "ksp_norm_type": "unpreconditioned"
+        "ksp_norm_type": "unpreconditioned",
     }
 
     # Step 1: frictionless contact
-    V = VectorFunctionSpace(mesh, ("CG", args.order))
+    V = functionspace(mesh, ("CG", args.order, (mesh.geometry.dim,)))
     # boundary conditions
     t = Constant(mesh, default_scalar_type((0.0, -p)))
     g = Constant(mesh, default_scalar_type((0.0)))
@@ -126,11 +155,13 @@ if __name__ == "__main__":
     dofs_top = locate_dofs_topological(V, 1, facet_marker.find(top))
 
     g_top = Constant(mesh, default_scalar_type((0.0, -0.1)))
-    bcs = [dirichletbc(g, dofs_symmetry, V.sub(0)),
-           dirichletbc(Constant(mesh, default_scalar_type((0.0, 0.0))), dofs_bottom, V)]
+    bcs = [
+        dirichletbc(g, dofs_symmetry, V.sub(0)),
+        dirichletbc(Constant(mesh, default_scalar_type((0.0, 0.0))), dofs_bottom, V),
+    ]
 
     # DG-0 funciton for material
-    V0 = FunctionSpace(mesh, ("DG", 0))
+    V0 = functionspace(mesh, ("DG", 0))
     mu_dg = Function(V0)
     lmbda_dg = Function(V0)
     mu_dg.interpolate(lambda x: np.full((1, x.shape[1]), mu))
@@ -163,8 +194,7 @@ if __name__ == "__main__":
 
     # compiler options to improve performance
     cffi_options = ["-Ofast", "-march=native"]
-    jit_options = {"cffi_extra_compile_args": cffi_options,
-                   "cffi_libraries": ["m"]}
+    jit_options = {"cffi_extra_compile_args": cffi_options, "cffi_libraries": ["m"]}
     # compiled forms for rhs and tangen system
     F_compiled = form(F, jit_options=jit_options)
     J_compiled = form(J, jit_options=jit_options)
@@ -180,17 +210,23 @@ if __name__ == "__main__":
         vals = np.zeros(x.shape[1])
         for i in range(x.shape[1]):
             if abs(x[0][i]) <= c:
-                vals[i] = fric_val * 4 * R * p / (np.pi * a**2) * (np.sqrt(a**2 - x[0]
-                                                                           [i]**2) - np.sqrt(c**2 - x[0][i]**2))
+                vals[i] = (
+                    fric_val
+                    * 4
+                    * R
+                    * p
+                    / (np.pi * a**2)
+                    * (np.sqrt(a**2 - x[0][i] ** 2) - np.sqrt(c**2 - x[0][i] ** 2))
+                )
             elif abs(x[0][i]) < a:
-                vals[i] = fric_val * 4 * R * p / (np.pi * a**2) * (np.sqrt(a**2 - x[0][i]**2))
+                vals[i] = fric_val * 4 * R * p / (np.pi * a**2) * (np.sqrt(a**2 - x[0][i] ** 2))
         return vals
 
     def _pressure(x, p0, a):
         vals = np.zeros(x.shape[1])
         for i in range(x.shape[1]):
             if abs(x[0][i]) < a:
-                vals[i] = p0 * np.sqrt(1 - x[0][i]**2 / a**2)
+                vals[i] = p0 * np.sqrt(1 - x[0][i] ** 2 / a**2)
         return vals
 
     top_cells = domain_marker.find(1)
@@ -201,8 +237,13 @@ if __name__ == "__main__":
     # Solve contact problem using Nitsche's method
     steps1 = 4
     contact_problem = ContactProblem([facet_marker], surfaces, contact_pairs, mesh, args.q_degree, search_mode)
-    contact_problem.generate_contact_data(FrictionLaw.Frictionless, V, {"u": u, "du": du, "mu": mu_dg,
-                                                                        "lambda": lmbda_dg}, E * 100 * args.order**2, 1)
+    contact_problem.generate_contact_data(
+        FrictionLaw.Frictionless,
+        V,
+        {"u": u, "du": du, "mu": mu_dg, "lambda": lmbda_dg},
+        E * 100 * args.order**2,
+        1,
+    )
 
     h = contact_problem.h_surfaces()[1]
     # create initial guess
@@ -221,17 +262,14 @@ if __name__ == "__main__":
 
     def compute_residual(x, b, coeffs):
         b.zeroEntries()
-        b.ghostUpdate(addv=InsertMode.INSERT,
-                      mode=ScatterMode.FORWARD)
+        b.ghostUpdate(addv=InsertMode.INSERT, mode=ScatterMode.FORWARD)
         contact_problem.assemble_vector(b, V)
         assemble_vector(b, F_compiled)
 
         # Apply boundary condition
         if len(bcs) > 0:
-            apply_lifting(
-                b, [J_compiled], bcs=[bcs], x0=[x], scale=-1.0)
-        b.ghostUpdate(addv=InsertMode.ADD,
-                      mode=ScatterMode.REVERSE)
+            apply_lifting(b, [J_compiled], bcs=[bcs], x0=[x], scale=-1.0)
+        b.ghostUpdate(addv=InsertMode.ADD, mode=ScatterMode.REVERSE)
         if len(bcs) > 0:
             set_bc(b, bcs, x, -1.0)
 
@@ -241,10 +279,17 @@ if __name__ == "__main__":
         assemble_matrix(a_mat, J_compiled, bcs=bcs)
         a_mat.assemble()
 
-    writer = ContactWriter(mesh, contact_problem, u, contact_pairs,
-                           contact_problem.coeffs, args.order, simplex,
-                           [(tdim - 1, 0), (tdim - 1, -R)],
-                           f"{outname}")
+    writer = ContactWriter(
+        mesh,
+        contact_problem,
+        u,
+        contact_pairs,
+        contact_problem.coeffs,
+        args.order,
+        simplex,
+        [(tdim - 1, 0), (tdim - 1, -R)],
+        f"{outname}",
+    )
     # initialise vtx writer
     vtx = VTXWriter(mesh.comm, f"{outname}.bp", [u], "bp4")
     vtx.write(0)
@@ -260,8 +305,7 @@ if __name__ == "__main__":
     newton_solver.set_coefficients(compute_coefficients)
 
     # Set rigid motion nullspace
-    null_space = rigid_motions_nullspace_subdomains(V, domain_marker, np.unique(
-        domain_marker.values), num_domains=2)
+    null_space = rigid_motions_nullspace_subdomains(V, domain_marker, np.unique(domain_marker.values), num_domains=2)
     newton_solver.A.setNearNullSpace(null_space)
 
     # Set Newton solver options
@@ -272,7 +316,6 @@ if __name__ == "__main__":
     newton_steps1 = []
 
     for i in range(steps1):
-
         val = -p * (i + 1) / steps1  # -0.2 / steps1  #
         t.value[1] = val
         print(f"Fricitionless part: Step {i+1} of {steps1}----------------------------------------------")
@@ -290,8 +333,11 @@ if __name__ == "__main__":
         print(pr, q)
         # print(val, 0)
         c = a * np.sqrt(1 - 0 / (fric_val * pr))
-        writer.write(i + 1, lambda x, pi=p0, ai=a: _pressure(x, pi, ai),
-                     lambda x, pi=pr, ai=a, ci=c: _tangent(x, pi, ai, ci))
+        writer.write(
+            i + 1,
+            lambda x, pi=p0, ai=a: _pressure(x, pi, ai),
+            lambda x, pi=pr, ai=a, ci=c: _tangent(x, pi, ai, ci),
+        )
         vtx.write(i + 1)
 
         contact_problem.update_contact_detection(u)
@@ -310,7 +356,7 @@ if __name__ == "__main__":
         "ksp_atol": ksp_tol,
         "pc_type": "gamg",
         "pc_mg_levels": 3,
-        "pc_mg_cycles": 1,   # 1 is v, 2 is w
+        "pc_mg_cycles": 1,  # 1 is v, 2 is w
         "mg_levels_ksp_type": "chebyshev",
         "mg_levels_pc_type": "jacobi",
         "pc_gamg_type": "agg",
@@ -320,19 +366,25 @@ if __name__ == "__main__":
         "pc_gamg_square_graph": 2,
         "pc_gamg_reuse_interpolation": False,
         "ksp_initial_guess_nonzero": False,
-        "ksp_norm_type": "unpreconditioned"
+        "ksp_norm_type": "unpreconditioned",
     }
 
     dofs_constraint = locate_dofs_topological(V.sub(1), 1, facet_marker.find(top))
     g_top = Constant(mesh, default_scalar_type((0.0, 0.0)))
-    bcs = [dirichletbc(Constant(mesh, default_scalar_type((0.0, 0.0))), dofs_bottom, V),
-           dirichletbc(Constant(mesh, default_scalar_type(0.0)), dofs_constraint, V.sub(1))]
+    bcs = [
+        dirichletbc(Constant(mesh, default_scalar_type((0.0, 0.0))), dofs_bottom, V),
+        dirichletbc(Constant(mesh, default_scalar_type(0.0)), dofs_constraint, V.sub(1)),
+    ]
 
     fric = Function(V0)
     fric.interpolate(lambda x: np.full((1, x.shape[1]), fric_val))
-    contact_problem.generate_contact_data(FrictionLaw.Coulomb, V, {"u": u, "du": du, "mu": mu_dg,
-                                                                   "lambda": lmbda_dg, "fric": fric},
-                                          E * 10 * args.order**2, 1)
+    contact_problem.generate_contact_data(
+        FrictionLaw.Coulomb,
+        V,
+        {"u": u, "du": du, "mu": mu_dg, "lambda": lmbda_dg, "fric": fric},
+        E * 10 * args.order**2,
+        1,
+    )
     newton_solver.update_krylov_solver(petsc_options)
     steps2 = 8
 
@@ -355,8 +407,11 @@ if __name__ == "__main__":
         p0 = 2 * load / (np.pi * a)
         print(pr, q)
         c = a * np.sqrt(1 - q / (fric_val * abs(pr)))
-        writer.write(steps1 + i + 1, lambda x, pi=p0, ai=a: _pressure(x, pi, ai),
-                     lambda x, pi=pr, ai=a, ci=c: _tangent(x, pi, ai, ci))
+        writer.write(
+            steps1 + i + 1,
+            lambda x, pi=p0, ai=a: _pressure(x, pi, ai),
+            lambda x, pi=pr, ai=a, ci=c: _tangent(x, pi, ai, ci),
+        )
         vtx.write(steps1 + 1 + i)
         contact_problem.update_contact_detection(u)
         A = contact_problem.create_matrix(J_compiled)

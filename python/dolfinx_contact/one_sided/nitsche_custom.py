@@ -9,24 +9,44 @@ import numpy as np
 import ufl
 from dolfinx import common as _common
 from dolfinx import fem as _fem
-from dolfinx.fem.petsc import create_matrix, create_vector
 from dolfinx import log as _log
 from dolfinx import mesh as dmesh
+from dolfinx.fem.petsc import create_matrix, create_vector
 from dolfinx.graph import adjacencylist
+
 import dolfinx_contact
-from dolfinx_contact.cpp import (Contact, ContactMode, generate_rigid_surface_kernel, pack_coefficient_quadrature,
-                                 pack_gradient_quadrature)
-from dolfinx_contact.helpers import (epsilon, lame_parameters,
-                                     rigid_motions_nullspace, sigma_func)
+import dolfinx_contact.cpp
+from dolfinx_contact.cpp import (
+    Contact,
+    ContactMode,
+    generate_rigid_surface_kernel,
+    pack_coefficient_quadrature,
+    pack_gradient_quadrature,
+)
+from dolfinx_contact.helpers import (
+    epsilon,
+    lame_parameters,
+    rigid_motions_nullspace,
+    sigma_func,
+)
 
 __all__ = ["nitsche_custom"]
 
 
-def nitsche_custom(mesh: dmesh.Mesh, mesh_data: Tuple[dmesh.MeshTags, int, int],
-                   physical_parameters: dict = {}, nitsche_parameters: Dict[str, float] = {},
-                   plane_loc: float = 0.0, vertical_displacement: float = -0.1,
-                   nitsche_bc: bool = True, quadrature_degree: int = 5, form_compiler_options: Dict = {},
-                   jit_options: Dict = {}, petsc_options: Dict = {}, newton_options: Dict = {}) -> _fem.Function:
+def nitsche_custom(
+    mesh: dmesh.Mesh,
+    mesh_data: Tuple[dmesh.MeshTags, int, int],
+    physical_parameters: dict = {},
+    nitsche_parameters: Dict[str, float] = {},
+    plane_loc: float = 0.0,
+    vertical_displacement: float = -0.1,
+    nitsche_bc: bool = True,
+    quadrature_degree: int = 5,
+    form_compiler_options: Dict = {},
+    jit_options: Dict = {},
+    petsc_options: Dict = {},
+    newton_options: Dict = {},
+) -> _fem.Function:
     """
     Use custom kernel to compute the one sided contact problem with a mesh coming into contact
     with a rigid surface (not meshed).
@@ -95,7 +115,7 @@ def nitsche_custom(mesh: dmesh.Mesh, mesh_data: Tuple[dmesh.MeshTags, int, int],
     n_vec[mesh.geometry.dim - 1] = 1
 
     # Setup function space and functions used in Jacobian and residual formulation
-    V = _fem.VectorFunctionSpace(mesh, ("Lagrange", 1))
+    V = _fem.functionspace(mesh, ("Lagrange", 1, (mesh.geometry.dim,)))
     u = _fem.Function(V)
     v = ufl.TestFunction(V)
     du = ufl.TrialFunction(V)
@@ -116,23 +136,31 @@ def nitsche_custom(mesh: dmesh.Mesh, mesh_data: Tuple[dmesh.MeshTags, int, int],
         disp_vec = np.zeros(mesh.geometry.dim)
         disp_vec[mesh.geometry.dim - 1] = vertical_displacement
         u_D = ufl.as_vector(disp_vec)
-        F += - ufl.inner(sigma(u) * n, v) * ds(dirichlet_value)\
-             - theta * ufl.inner(sigma(v) * n, u - u_D) * \
-            ds(dirichlet_value) + E * gamma / h * ufl.inner(u - u_D, v) * ds(dirichlet_value)
-        J += - ufl.inner(sigma(du) * n, v) * ds(dirichlet_value)\
-            - theta * ufl.inner(sigma(v) * n, du) * \
-            ds(dirichlet_value) + E * gamma / h * ufl.inner(du, v) * ds(dirichlet_value)
+        F += (
+            -ufl.inner(sigma(u) * n, v) * ds(dirichlet_value)
+            - theta * ufl.inner(sigma(v) * n, u - u_D) * ds(dirichlet_value)
+            + E * gamma / h * ufl.inner(u - u_D, v) * ds(dirichlet_value)
+        )
+        J += (
+            -ufl.inner(sigma(du) * n, v) * ds(dirichlet_value)
+            - theta * ufl.inner(sigma(v) * n, du) * ds(dirichlet_value)
+            + E * gamma / h * ufl.inner(du, v) * ds(dirichlet_value)
+        )
     else:
         raise RuntimeError("Dirichlet bc not implemented in custom assemblers yet.")
 
     # Custom assembly of contact boundary condition
-    q_rule = dolfinx_contact.QuadratureRule(mesh.topology.cell_types[0], quadrature_degree,
-                                            mesh.topology.dim - 1, basix.QuadratureType.Default)
+    q_rule = dolfinx_contact.QuadratureRule(
+        mesh.topology.cell_type,
+        quadrature_degree,
+        mesh.topology.dim - 1,
+        basix.QuadratureType.default,
+    )
     consts = np.array([E * gamma, theta])
     consts = np.hstack((consts, n_vec))
 
     # Compute coefficients for mu and lambda as DG-0 functions
-    V2 = _fem.FunctionSpace(mesh, ("DG", 0))
+    V2 = _fem.functionspace(mesh, ("Discontinuous Lagrange", 0))
     lmbda2 = _fem.Function(V2)
     lmbda2.interpolate(lambda x: np.full((1, x.shape[1]), lmbda))
     mu2 = _fem.Function(V2)
@@ -144,8 +172,12 @@ def nitsche_custom(mesh: dmesh.Mesh, mesh_data: Tuple[dmesh.MeshTags, int, int],
     integral_entities, num_local = dolfinx_contact.compute_active_entities(mesh._cpp_object, bottom_facets, integral)
     integral_entities = integral_entities[:num_local, :]
     # Pack mu and lambda on facets
-    coeffs = np.hstack([pack_coefficient_quadrature(mu2._cpp_object, 0, integral_entities),
-                        pack_coefficient_quadrature(lmbda2._cpp_object, 0, integral_entities)])
+    coeffs = np.hstack(
+        [
+            pack_coefficient_quadrature(mu2._cpp_object, 0, integral_entities),
+            pack_coefficient_quadrature(lmbda2._cpp_object, 0, integral_entities),
+        ]
+    )
     # Pack circumradius of facets
     h_facets = dolfinx_contact.pack_circumradius(mesh._cpp_object, integral_entities)
 
@@ -154,8 +186,14 @@ def nitsche_custom(mesh: dmesh.Mesh, mesh_data: Tuple[dmesh.MeshTags, int, int],
     offsets = np.array([0, 2], dtype=np.int32)
     surfaces = adjacencylist(data, offsets)
     search_mode = [ContactMode.ClosestPoint]
-    contact = Contact([facet_marker._cpp_object], surfaces, [(0, 1)],
-                      mesh._cpp_object, search_mode, quadrature_degree=quadrature_degree)
+    contact = Contact(
+        [facet_marker._cpp_object],
+        surfaces,
+        [(0, 1)],
+        mesh._cpp_object,
+        search_mode,
+        quadrature_degree=quadrature_degree,
+    )
     contact.create_distance_map(0)
 
     # Compute gap from contact boundary
@@ -169,16 +207,21 @@ def nitsche_custom(mesh: dmesh.Mesh, mesh_data: Tuple[dmesh.MeshTags, int, int],
     kernel_rhs = generate_rigid_surface_kernel(V._cpp_object, dolfinx_contact.Kernel.Rhs, q_rule)
     # NOTE: HACK to make "one-sided" contact work with assemble_matrix/assemble_vector
     search_mode = [ContactMode.ClosestPoint]
-    contact_assembler = Contact([facet_marker._cpp_object], surfaces, [(0, 1)],
-                                mesh._cpp_object, search_mode, quadrature_degree=quadrature_degree)
+    contact_assembler = Contact(
+        [facet_marker._cpp_object],
+        surfaces,
+        [(0, 1)],
+        mesh._cpp_object,
+        search_mode,
+        quadrature_degree=quadrature_degree,
+    )
 
     def assemble_residual(x, b, cf):
         size_local = V.dofmap.index_map.size_local
         bs = V.dofmap.index_map_bs
-        u.x.array[:size_local * bs] = x.array_r[:size_local * bs]
+        u.x.array[: size_local * bs] = x.array_r[: size_local * bs]
         u_packed = pack_coefficient_quadrature(u._cpp_object, quadrature_degree, integral_entities)
-        grad_u_packed = pack_gradient_quadrature(
-            u._cpp_object, quadrature_degree, integral_entities)
+        grad_u_packed = pack_gradient_quadrature(u._cpp_object, quadrature_degree, integral_entities)
         c = np.hstack([coeffs, u_packed, grad_u_packed])
         with b.localForm() as b_local:
             b_local.set(0.0)
@@ -192,7 +235,7 @@ def nitsche_custom(mesh: dmesh.Mesh, mesh_data: Tuple[dmesh.MeshTags, int, int],
     def assemble_jacobian(x, a_mat, cf):
         size_local = V.dofmap.index_map.size_local
         bs = V.dofmap.index_map_bs
-        u.x.array[:size_local * bs] = x.array_r[:size_local * bs]
+        u.x.array[: size_local * bs] = x.array_r[: size_local * bs]
         u_packed = pack_coefficient_quadrature(u._cpp_object, quadrature_degree, integral_entities)
         grad_u_packed = pack_gradient_quadrature(u._cpp_object, quadrature_degree, integral_entities)
         c = np.hstack([coeffs, u_packed, grad_u_packed])
@@ -204,6 +247,7 @@ def nitsche_custom(mesh: dmesh.Mesh, mesh_data: Tuple[dmesh.MeshTags, int, int],
     # Setup Newton-solver
     def update_cf(x, cf):
         pass
+
     a_mat = create_matrix(a_custom)
     b = create_vector(L_custom)
     solver = dolfinx_contact.NewtonSolver(mesh.comm, a_mat, b, [np.empty((0, 0))])

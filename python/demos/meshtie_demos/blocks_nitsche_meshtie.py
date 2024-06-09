@@ -2,36 +2,73 @@
 #
 # SPDX-License-Identifier:    MIT
 #
-import numpy as np
-
-from basix.ufl import element
-from dolfinx import default_scalar_type
-from dolfinx.fem import (Constant, dirichletbc, DirichletBC, form, Function,
-                         FunctionSpace,
-                         functionspace, locate_dofs_topological)
-from dolfinx.fem.forms import Form
-from dolfinx.fem.petsc import assemble_vector, apply_lifting, set_bc, assemble_matrix
-from dolfinx.graph import adjacencylist
-from dolfinx.io import XDMFFile
-from dolfinx import log
-from dolfinx.la import vector, create_petsc_vector_wrap
-from dolfinx.mesh import create_mesh
-from dolfinx.cpp.nls.petsc import NewtonSolver
 from mpi4py import MPI
 from petsc4py import PETSc
-from ufl import (derivative, grad, Identity, inner, Mesh,
-                 Measure, TestFunction, TrialFunction, tr, sym)
 
+import numpy as np
+from basix.ufl import element
+from dolfinx import default_scalar_type, log
+from dolfinx.cpp.nls.petsc import NewtonSolver
+from dolfinx.fem import (
+    Constant,
+    DirichletBC,
+    Function,
+    dirichletbc,
+    form,
+    functionspace,
+    locate_dofs_topological,
+)
+from dolfinx.fem.forms import Form
+from dolfinx.fem.petsc import apply_lifting, assemble_matrix, assemble_vector, set_bc
+from dolfinx.graph import adjacencylist
+from dolfinx.io import XDMFFile
+from dolfinx.la import create_petsc_vector_wrap, vector
+from dolfinx.mesh import create_mesh
 from dolfinx_contact.cpp import ContactMode, MeshTie, Problem
 from dolfinx_contact.helpers import rigid_motions_nullspace_subdomains
+from ufl import (
+    Identity,
+    Measure,
+    Mesh,
+    TestFunction,
+    TrialFunction,
+    derivative,
+    grad,
+    inner,
+    sym,
+    tr,
+)
 
 
 class MeshTieProblem:
-    __slots__ = ["_l", "_j", "_bcs", "_meshties", "_b", "_b_petsc", "_mat_a", "_u",
-                 "_lmbda", "_mu", "_gamma", "_theta"]
+    __slots__ = [
+        "_l",
+        "_j",
+        "_bcs",
+        "_meshties",
+        "_b",
+        "_b_petsc",
+        "_mat_a",
+        "_u",
+        "_lmbda",
+        "_mu",
+        "_gamma",
+        "_theta",
+    ]
 
-    def __init__(self, a: Form, j: Form, bcs: list[DirichletBC], meshties: MeshTie, subdomains,
-                 u: Function, lmbda: Function, mu: Function, gamma: np.float64, theta: np.float64):
+    def __init__(
+        self,
+        a: Form,
+        j: Form,
+        bcs: list[DirichletBC],
+        meshties: MeshTie,
+        subdomains,
+        u: Function,
+        lmbda: Function,
+        mu: Function,
+        gamma: np.float64,
+        theta: np.float64,
+    ):
         """
         Create a MeshTie problem
 
@@ -62,19 +99,23 @@ class MeshTieProblem:
 
         # Create PETSc rhs vector
         self._b = vector(
-            a.function_spaces[0].dofmap.index_map, a.function_spaces[0].dofmap.index_map_bs)
+            a.function_spaces[0].dofmap.index_map,
+            a.function_spaces[0].dofmap.index_map_bs,
+        )
         self._b_petsc = create_petsc_vector_wrap(self._b)
 
         # Initialise the input data for integration kernels
-        self._meshties.generate_kernel_data(Problem.Elasticity, a.function_spaces[0],
-                                            {"lambda": lmbda._cpp_object,
-                                                "mu": mu._cpp_object},
-                                            gamma, theta)
+        self._meshties.generate_kernel_data(
+            Problem.Elasticity,
+            a.function_spaces[0],
+            {"lambda": lmbda._cpp_object, "mu": mu._cpp_object},
+            gamma,
+            theta,
+        )
 
         # Build near null space preventing rigid body motion of individual components
         tags = np.unique(subdomains.values)
-        ns = rigid_motions_nullspace_subdomains(
-            u.function_space, subdomains, tags, len(tags))
+        ns = rigid_motions_nullspace_subdomains(u.function_space, subdomains, tags, len(tags))
         self._mat_a.setNearNullSpace(ns)
 
     def f(self, x, _b):
@@ -93,17 +134,13 @@ class MeshTieProblem:
 
         # Assemble residual vector
         self._b_petsc.zeroEntries()
-        self._b_petsc.ghostUpdate(
-            addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD)
-        self._meshties.assemble_vector(
-            self._b_petsc, self._l.function_spaces[0], Problem.Elasticity)  # custom kernel
+        self._b_petsc.ghostUpdate(addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD)
+        self._meshties.assemble_vector(self._b_petsc, self._l.function_spaces[0], Problem.Elasticity)  # custom kernel
         assemble_vector(self._b_petsc, self._l)  # standard kernels
 
         # Apply boundary condition
-        apply_lifting(self._b_petsc, [self._j], bcs=[
-                      self._bcs], x0=[x], scale=-1.0)
-        self._b_petsc.ghostUpdate(
-            addv=PETSc.InsertMode.ADD, mode=PETSc.ScatterMode.REVERSE)
+        apply_lifting(self._b_petsc, [self._j], bcs=[self._bcs], x0=[x], scale=-1.0)
+        self._b_petsc.ghostUpdate(addv=PETSc.InsertMode.ADD, mode=PETSc.ScatterMode.REVERSE)
         set_bc(self._b_petsc, self._bcs, x, -1.0)
 
         # Restore log level info for monitoring Newton solver
@@ -119,15 +156,15 @@ class MeshTieProblem:
         """
         log.set_log_level(log.LogLevel.OFF)
         self._mat_a.zeroEntries()
-        self._meshties.assemble_matrix(
-            self._mat_a, self._j.function_spaces[0], Problem.Elasticity)
+        self._meshties.assemble_matrix(self._mat_a, self._j.function_spaces[0], Problem.Elasticity)
         assemble_matrix(self._mat_a, self._j, self._bcs)
         self._mat_a.assemble()
         log.set_log_level(log.LogLevel.INFO)
 
-    def form(self,
-             x: PETSc.Vec  # type: ignore
-             ) -> None:
+    def form(
+        self,
+        x: PETSc.Vec,  # type: ignore
+    ) -> None:
         """This function is called before the residual or Jacobian is
         computed in the NewtonSolver. Used to update ghost values.
 
@@ -135,8 +172,10 @@ class MeshTieProblem:
            x: The vector containing the latest solution
 
         """
-        x.ghostUpdate(addv=PETSc.InsertMode.INSERT,    # type: ignore
-                      mode=PETSc.ScatterMode.FORWARD)  # type: ignore
+        x.ghostUpdate(
+            addv=PETSc.InsertMode.INSERT,  # type: ignore
+            mode=PETSc.ScatterMode.FORWARD,  # type: ignore
+        )
 
 
 # read mesh from file
@@ -146,8 +185,7 @@ with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
     cell_type, cell_degree = xdmf.read_cell_type(name=topo_name)
     topo = xdmf.read_topology_data(name=topo_name)
     x = xdmf.read_geometry_data(name="geometry")
-    domain = Mesh(element("Lagrange", cell_type.name,
-                  cell_degree, shape=(x.shape[1],)))
+    domain = Mesh(element("Lagrange", cell_type.name, cell_degree, shape=(x.shape[1],)))
     mesh = create_mesh(MPI.COMM_WORLD, topo, x, domain)
     tdim = mesh.topology.dim
     domain_marker = xdmf.read_meshtags(mesh, name=topo_name)
@@ -184,7 +222,7 @@ mu_val = E / (2 * (1 + nu))
 lmbda_val = E * nu / ((1 + nu) * (1 - 2 * nu))
 
 # DG functions for material parameters
-V0 = FunctionSpace(mesh, ("DG", 0))
+V0 = functionspace(mesh, ("DG", 0))
 mu = Function(V0)
 lmbda = Function(V0)
 mu.interpolate(lambda x: np.full((1, x.shape[1]), mu_val))
@@ -198,7 +236,7 @@ def epsilon(v):
 
 
 def sigma(v):
-    return (2.0 * mu * epsilon(v) + lmbda * tr(epsilon(v)) * Identity(len(v)))
+    return 2.0 * mu * epsilon(v) + lmbda * tr(epsilon(v)) * Identity(len(v))
 
 
 a = inner(sigma(u), epsilon(v)) * dx
@@ -209,12 +247,10 @@ theta = 1  # 1 - symmetric
 
 
 # boundary conditions
-g = Constant(mesh, default_scalar_type((0, 0, 0)))     # zero Dirichlet
-dofs_g = locate_dofs_topological(
-    V, tdim - 1, facet_marker.find(dirichlet_bdry_2))
+g = Constant(mesh, default_scalar_type((0, 0, 0)))  # zero Dirichlet
+dofs_g = locate_dofs_topological(V, tdim - 1, facet_marker.find(dirichlet_bdry_2))
 d = Constant(mesh, default_scalar_type((0, -0.2, 0)))  # vertical displacement
-dofs_d = locate_dofs_topological(
-    V, tdim - 1, facet_marker.find(dirichlet_bdry_1))
+dofs_d = locate_dofs_topological(V, tdim - 1, facet_marker.find(dirichlet_bdry_1))
 bcs = [dirichletbc(d, dofs_d, V), dirichletbc(g, dofs_g, V)]
 
 # contact surface data
@@ -230,8 +266,7 @@ contact_pairs = [(0, 1), (1, 0)]
 
 # compiler options to improve performance
 cffi_options = ["-Ofast", "-march=native"]
-jit_options = {"cffi_extra_compile_args": cffi_options,
-               "cffi_libraries": ["m"]}
+jit_options = {"cffi_extra_compile_args": cffi_options, "cffi_libraries": ["m"]}
 
 # Derive form for ufl part of Jacobian
 j = derivative(a, u, w)
@@ -243,10 +278,25 @@ j_compiled = form(j, jit_options=jit_options)
 search_mode = [ContactMode.ClosestPoint, ContactMode.ClosestPoint]
 
 # Initialise MeshTie class and generate MeshTie problem
-meshties = MeshTie([facet_marker._cpp_object], surfaces,
-                   contact_pairs, mesh._cpp_object, quadrature_degree=5)
-problem = MeshTieProblem(l_compiled, j_compiled, bcs, meshties, domain_marker,
-                         u, lmbda, mu, np.float64(gamma), np.float64(theta))
+meshties = MeshTie(
+    [facet_marker._cpp_object],
+    surfaces,
+    contact_pairs,
+    mesh._cpp_object,
+    quadrature_degree=5,
+)
+problem = MeshTieProblem(
+    l_compiled,
+    j_compiled,
+    bcs,
+    meshties,
+    domain_marker,
+    u,
+    lmbda,
+    mu,
+    np.float64(gamma),
+    np.float64(theta),
+)
 
 # Set up Newton sovler
 newton_solver = NewtonSolver(mesh.comm)
@@ -275,7 +325,7 @@ petsc_options = {
     "pc_gamg_agg_nsmooths": 1,
     "pc_gamg_threshold": 1e-3,
     "pc_gamg_square_graph": 2,
-    "ksp_norm_type": "unpreconditioned"
+    "ksp_norm_type": "unpreconditioned",
 }
 
 

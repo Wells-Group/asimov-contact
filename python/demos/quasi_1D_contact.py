@@ -4,38 +4,57 @@
 
 import argparse
 
+from mpi4py import MPI
+
 import numpy as np
 import ufl
 from dolfinx import default_scalar_type
-from dolfinx.io import XDMFFile
-from dolfinx.fem import (Constant, dirichletbc, Function, FunctionSpace, VectorFunctionSpace,
-                         locate_dofs_topological, form, assemble_scalar)
+from dolfinx.fem import (
+    Constant,
+    Function,
+    assemble_scalar,
+    dirichletbc,
+    form,
+    functionspace,
+    locate_dofs_topological,
+)
 from dolfinx.graph import adjacencylist
+from dolfinx.io import XDMFFile
 from dolfinx.mesh import locate_entities
-from mpi4py import MPI
-
-from dolfinx_contact.helpers import (epsilon, sigma_func, lame_parameters)
-from dolfinx_contact.meshing import (convert_mesh,
-                                     create_2d_rectangle_split)
 from dolfinx_contact.cpp import ContactMode
+from dolfinx_contact.helpers import epsilon, lame_parameters, sigma_func
+from dolfinx_contact.meshing import convert_mesh, create_2d_rectangle_split
 from dolfinx_contact.unbiased.nitsche_unbiased import nitsche_unbiased
 
 if __name__ == "__main__":
     desc = "Example for verifying correctness of code"
-    parser = argparse.ArgumentParser(description=desc,
-                                     formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument("--quadrature", default=5, type=int, dest="q_degree",
-                        help="Quadrature degree used for contact integrals")
-    parser.add_argument("--order", default=1, type=int, dest="order",
-                        help="Order of mesh geometry", choices=[1, 2])
+    parser = argparse.ArgumentParser(description=desc, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument(
+        "--quadrature",
+        default=5,
+        type=int,
+        dest="q_degree",
+        help="Quadrature degree used for contact integrals",
+    )
+    parser.add_argument(
+        "--order",
+        default=1,
+        type=int,
+        dest="order",
+        help="Order of mesh geometry",
+        choices=[1, 2],
+    )
     _3D = parser.add_mutually_exclusive_group(required=False)
-    _3D.add_argument('--3D', dest='threed', action='store_true',
-                     help="Use 3D mesh", default=False)
+    _3D.add_argument("--3D", dest="threed", action="store_true", help="Use 3D mesh", default=False)
     _simplex = parser.add_mutually_exclusive_group(required=False)
-    _simplex.add_argument('--simplex', dest='simplex', action='store_true',
-                          help="Use triangle/tet mesh", default=False)
-    parser.add_argument("--res", default=0.1, type=np.float64, dest="res",
-                        help="Mesh resolution")
+    _simplex.add_argument(
+        "--simplex",
+        dest="simplex",
+        action="store_true",
+        help="Use triangle/tet mesh",
+        default=False,
+    )
+    parser.add_argument("--res", default=0.1, type=np.float64, dest="res", help="Mesh resolution")
     # Parse input arguments or set to defualt values
     args = parser.parse_args()
     # Current formulation uses bilateral contact
@@ -46,7 +65,13 @@ if __name__ == "__main__":
     outname = "results/quasi_1D_simplex" if simplex else "results/quasi_1D_quads"
     fname = f"{mesh_dir}/quasi_1D_simplex" if simplex else f"{mesh_dir}/quasi_1D_quads"
     gap = 0.2
-    create_2d_rectangle_split(filename=f"{fname}.msh", res=args.res, order=args.order, quads=not simplex, gap=gap)
+    create_2d_rectangle_split(
+        filename=f"{fname}.msh",
+        res=args.res,
+        order=args.order,
+        quads=not simplex,
+        gap=gap,
+    )
     convert_mesh(fname, f"{fname}.xdmf", gdim=2)
 
     with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
@@ -63,31 +88,43 @@ if __name__ == "__main__":
 
     disp_x = 0.2
 
-    V = VectorFunctionSpace(mesh, ("CG", args.order))
+    V = functionspace(mesh, ("CG", args.order, (mesh.geometry.dim,)))
     dirichlet_dofs1 = locate_dofs_topological(V, mesh.topology.dim - 1, facet_marker.find(dirichlet_bdy_1))
     L = 0.5
     H = 0.5
-    dirichlet_nodes = locate_entities(mesh, 0, lambda x: np.logical_and(
-        np.isclose(x[1], 0.5 * H), np.logical_or(np.isclose(x[0], 2 * L + gap - args.res / 5),
-                                                 np.isclose(x[0], 2 * L + gap - args.res / 10))))
+    dirichlet_nodes = locate_entities(
+        mesh,
+        0,
+        lambda x: np.logical_and(
+            np.isclose(x[1], 0.5 * H),
+            np.logical_or(
+                np.isclose(x[0], 2 * L + gap - args.res / 5),
+                np.isclose(x[0], 2 * L + gap - args.res / 10),
+            ),
+        ),
+    )
 
     dirichlet_dofs2 = locate_dofs_topological(V.sub(1), 0, dirichlet_nodes)
 
     g0 = Constant(mesh, default_scalar_type((0, 0)))
     g1 = Constant(mesh, default_scalar_type(0.0))
-    bcs = [dirichletbc(g0, dirichlet_dofs1, V),
-           dirichletbc(g1, dirichlet_dofs2, V.sub(1))]
+    bcs = [
+        dirichletbc(g0, dirichlet_dofs1, V),
+        dirichletbc(g1, dirichlet_dofs2, V.sub(1)),
+    ]
     bc_fns = [g0, g1]
 
     # Solver options
     ksp_tol = 1e-10
     newton_tol = 1e-7
-    newton_options = {"relaxation_parameter": 1,
-                      "atol": newton_tol,
-                      "rtol": newton_tol,
-                      "convergence_criterion": "residual",
-                      "max_it": 50,
-                      "error_on_nonconvergence": True}
+    newton_options = {
+        "relaxation_parameter": 1,
+        "atol": newton_tol,
+        "rtol": newton_tol,
+        "convergence_criterion": "residual",
+        "max_it": 50,
+        "error_on_nonconvergence": True,
+    }
     petsc_options = {"ksp_type": "preonly", "pc_type": "lu"}
 
     # Pack mesh data for Nitsche solver
@@ -131,7 +168,7 @@ if __name__ == "__main__":
     F -= ufl.inner(f, v) * dx
 
     problem_parameters = {"gamma": np.float64(E * 1000), "theta": np.float64(-1)}
-    V0 = FunctionSpace(mesh, ("DG", 0))
+    V0 = functionspace(mesh, ("DG", 0))
     mu0 = Function(V0)
     lmbda0 = Function(V0)
     mu0.interpolate(lambda x: np.full((1, x.shape[1]), mu))
@@ -142,25 +179,31 @@ if __name__ == "__main__":
         values = np.zeros((mesh.geometry.dim, x.shape[1]))
         values[0] = -0.1 - gap
         return values
+
     u.interpolate(_u_initial, cells_right)
 
     search_mode = [ContactMode.ClosestPoint, ContactMode.ClosestPoint]
     # Solve contact problem using Nitsche's method
-    u, newton_its, krylov_iterations, solver_time = nitsche_unbiased(1, ufl_form=F,
-                                                                     u=u, rhs_fns=[f],
-                                                                     mu=mu0, lmbda=lmbda0,
-                                                                     markers=[domain_marker, facet_marker],
-                                                                     contact_data=(
-                                                                         surfaces, contact), bcs=bcs,
-                                                                     bc_fns=bc_fns,
-                                                                     problem_parameters=problem_parameters,
-                                                                     newton_options=newton_options,
-                                                                     petsc_options=petsc_options,
-                                                                     search_method=search_mode,
-                                                                     outfile=None,
-                                                                     fname=outname,
-                                                                     quadrature_degree=args.q_degree,
-                                                                     search_radius=np.float64(-1))
+    u, newton_its, krylov_iterations, solver_time = nitsche_unbiased(
+        1,
+        ufl_form=F,
+        u=u,
+        rhs_fns=[f],
+        mu=mu0,
+        lmbda=lmbda0,
+        markers=[domain_marker, facet_marker],
+        contact_data=(surfaces, contact),
+        bcs=bcs,
+        bc_fns=bc_fns,
+        problem_parameters=problem_parameters,
+        newton_options=newton_options,
+        petsc_options=petsc_options,
+        search_method=search_mode,
+        outfile=None,
+        fname=outname,
+        quadrature_degree=args.q_degree,
+        search_radius=np.float64(-1),
+    )
 
     def _exact1(x):
         values = np.zeros((mesh.geometry.dim, x.shape[1]))

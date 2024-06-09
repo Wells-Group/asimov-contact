@@ -36,8 +36,8 @@ public:
   ///@param[in] q_rule The quadrature rules
   ///@param[in] cstrides The strides for individual coeffcients used in the
   /// kernel
-  KernelData(std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V,
-             std::shared_ptr<const dolfinx_contact::QuadratureRule> q_rule,
+  KernelData(const dolfinx::fem::FunctionSpace<double>& V,
+             std::shared_ptr<const QuadratureRule> q_rule,
              const std::vector<std::size_t>& cstrides);
 
   // Return geometrical dimension
@@ -69,24 +69,29 @@ public:
   s_cmdspan2_t phi() const
   {
     cmdspan4_t full_basis(_basis_values.data(), _basis_shape);
-    return stdex::submdspan(full_basis, 0, MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent,
-                            MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent, 0);
+    return MDSPAN_IMPL_STANDARD_NAMESPACE::submdspan(
+        full_basis, 0, MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent,
+        MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent, 0);
   }
 
   // Return grad(_phi) at quadrature points for facet f
   s_cmdspan3_t dphi() const
   {
     cmdspan4_t full_basis(_basis_values.data(), _basis_shape);
-    return stdex::submdspan(full_basis, std::pair{1, (std::size_t)_tdim + 1},
-                            MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent, MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent, 0);
+    return MDSPAN_IMPL_STANDARD_NAMESPACE::submdspan(
+        full_basis, std::pair{1, (std::size_t)_tdim + 1},
+        MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent,
+        MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent, 0);
   }
 
   // Return gradient of coordinate bases at quadrature points for facet f
-  cmdspan3_t dphi_c() const
+  s_cmdspan3_t dphi_c() const
   {
     cmdspan4_t full_basis(_c_basis_values.data(), _c_basis_shape);
-    return stdex::submdspan(full_basis, std::pair{1, (std::size_t)_tdim + 1},
-                            MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent, MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent, 0);
+    return MDSPAN_IMPL_STANDARD_NAMESPACE::submdspan(
+        full_basis, std::pair{1, (std::size_t)_tdim + 1},
+        MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent,
+        MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent, 0);
   }
 
   // Return coefficient offsets of coefficient i
@@ -111,19 +116,21 @@ public:
   /// @param[in, out] detJ_scratch - Working memory to compute determinants
   /// @param[in] coords - the coordinates of the facet
   /// @return absolute value of determinant of J_tot
-  double update_jacobian(std::size_t q, const std::size_t facet_index,
-                         double detJ, mdspan2_t J, mdspan2_t K, mdspan2_t J_tot,
+  double update_jacobian(std::size_t q, std::size_t facet_index, double detJ,
+                         mdspan2_t J, mdspan2_t K, mdspan2_t J_tot,
                          std::span<double> detJ_scratch,
                          cmdspan2_t coords) const
   {
     cmdspan4_t full_basis(_c_basis_values.data(), _c_basis_shape);
     const std::size_t q_pos = _qp_offsets[facet_index] + q;
-    auto dphi_fc
-        = stdex::submdspan(full_basis, std::pair{1, (std::size_t)_tdim + 1},
-                           q_pos, MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent, 0);
+    auto dphi_fc = MDSPAN_IMPL_STANDARD_NAMESPACE::submdspan(
+        full_basis, std::pair{1, (std::size_t)_tdim + 1}, q_pos,
+        MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent, 0);
     cmdspan3_t ref_jacs(_ref_jacobians.data(), _jac_shape);
-    auto J_f = stdex::submdspan(ref_jacs, (std::size_t)facet_index,
-                                MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent, MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent);
+    auto J_f = MDSPAN_IMPL_STANDARD_NAMESPACE::submdspan(
+        ref_jacs, (std::size_t)facet_index,
+        MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent,
+        MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent);
     return _update_jacobian(detJ, J, K, J_tot, detJ_scratch, J_f, dphi_fc,
                             coords);
   }
@@ -138,8 +145,8 @@ public:
   /// @param[in,out] detJ_scratch - Working memory, min size (2*gdim*tdim)
   /// @param[in] coords - the coordinates of the facet
   /// @return absolute value of determinant of J_tot
-  double compute_first_facet_jacobian(const std::size_t facet_index,
-                                      mdspan2_t J, mdspan2_t K, mdspan2_t J_tot,
+  double compute_first_facet_jacobian(std::size_t facet_index, mdspan2_t J,
+                                      mdspan2_t K, mdspan2_t J_tot,
                                       std::span<double> detJ_scratch,
                                       cmdspan2_t coords) const;
 
@@ -148,7 +155,7 @@ public:
   /// @param[in] K The inverse Jacobian
   /// @param[in] local_index The facet index local to the cell
   void update_normal(std::span<double> n, cmdspan2_t K,
-                     const std::size_t local_index) const;
+                     std::size_t local_index) const;
 
   /// Return quadrature weights for the i-th facet
   std::span<const double> weights(std::size_t i) const;

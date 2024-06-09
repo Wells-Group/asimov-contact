@@ -28,28 +28,40 @@ int main(int argc, char* argv[])
 
   init_logging(argc, argv);
   PetscInitialize(&argc, &argv, nullptr, nullptr);
+
   // Set the logging thread name to show the process rank
   int mpi_rank;
   MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank);
-  std::string thread_name = "RANK " + std::to_string(mpi_rank);
-  loguru::set_thread_name(thread_name.c_str());
+  std::string fmt = "[%Y-%m-%d %H:%M:%S.%e] [RANK " + std::to_string(mpi_rank)
+                    + "] [%l] %v";
+  spdlog::set_pattern(fmt);
+
   {
     auto [mesh_init, domain1_init, facet1_init]
-        = dolfinx_contact::read_mesh("../meshes/cont-blocks_sk24_fnx.xdmf");
+        = dolfinx_contact::read_mesh("cont-blocks_sk24_fnx.xdmf");
 
     const std::int32_t contact_bdry_1 = 6;  // top contact interface
     const std::int32_t contact_bdry_2 = 12; // bottom contact interface
-    loguru::g_stderr_verbosity = loguru::Verbosity_OFF;
+    // loguru::g_stderr_verbosity = loguru::Verbosity_OFF;
     auto [mesh_new, facet1, domain1] = dolfinx_contact::create_contact_mesh(
         *mesh_init, facet1_init, domain1_init, {contact_bdry_1, contact_bdry_2},
         10.0);
     auto mesh = std::make_shared<dolfinx::mesh::Mesh<U>>(mesh_new);
 
     // Create function spaces
-    auto Q = std::make_shared<fem::FunctionSpace<U>>(fem::create_functionspace(
-        functionspace_form_heat_equation_a_therm, "q", mesh));
-    auto V0 = std::make_shared<fem::FunctionSpace<U>>(fem::create_functionspace(
-        functionspace_form_heat_equation_a_therm, "kdt", mesh));
+    auto ct = mesh->topology()->cell_type();
+    auto element_DG = basix::create_element<double>(
+        basix::element::family::P, dolfinx::mesh::cell_type_to_basix_type(ct),
+        0, basix::element::lagrange_variant::unset,
+        basix::element::dpc_variant::unset, true);
+    auto element = basix::create_element<double>(
+        basix::element::family::P, dolfinx::mesh::cell_type_to_basix_type(ct),
+        1, basix::element::lagrange_variant::unset,
+        basix::element::dpc_variant::unset, false);
+    auto Q = std::make_shared<fem::FunctionSpace<U>>(
+        fem::create_functionspace(mesh, element));
+    auto V0 = std::make_shared<fem::FunctionSpace<U>>(
+        fem::create_functionspace(mesh, element_DG));
 
     // Nitsche parameters
     double gamma = 10;
@@ -99,7 +111,7 @@ int main(int argc, char* argv[])
     auto meshties
         = dolfinx_contact::MeshTie(markers, contact_markers, pairs, mesh, 5);
 
-    meshties.generate_kernel_data(dolfinx_contact::Problem::Poisson, Q,
+    meshties.generate_kernel_data(dolfinx_contact::Problem::Poisson, *Q,
                                   {{"kdt", kdt}}, gamma, theta);
 
     // Create matrix and vector
@@ -142,11 +154,11 @@ int main(int argc, char* argv[])
     // time stepping loop
     std::size_t time_steps = 40;
     for (std::size_t k = 0; k < time_steps; ++k)
-    { 
-        
+    {
+
       // Assemble vector
       b_therm.set(0.0);
-      meshties.assemble_vector(b_therm.mutable_array(), Q,
+      meshties.assemble_vector(b_therm.mutable_array(), *Q,
                                dolfinx_contact::Problem::Poisson);
       dolfinx::fem::assemble_vector(b_therm.mutable_array(), *L_therm);
       dolfinx::fem::apply_lifting<T, U>(b_therm.mutable_array(), {a_therm},
@@ -158,7 +170,7 @@ int main(int argc, char* argv[])
       MatZeroEntries(A_therm.mat());
       meshties.assemble_matrix(
           la::petsc::Matrix::set_block_fn(A_therm.mat(), ADD_VALUES),
-          a_therm->function_spaces()[0], dolfinx_contact::Problem::Poisson);
+          *a_therm->function_spaces()[0], dolfinx_contact::Problem::Poisson);
       MatAssemblyBegin(A_therm.mat(), MAT_FLUSH_ASSEMBLY);
       MatAssemblyEnd(A_therm.mat(), MAT_FLUSH_ASSEMBLY);
       dolfinx::fem::assemble_matrix(

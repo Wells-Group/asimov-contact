@@ -5,32 +5,50 @@
 import argparse
 import os
 
-import numpy as np
-import ufl
-from dolfinx.fem import (Function, functionspace, dirichletbc,
-                         locate_dofs_topological)
-from dolfinx.fem.petsc import LinearProblem, NonlinearProblem
-from dolfinx.geometry import (bb_tree, compute_colliding_cells,
-                              compute_collisions_points)
-from dolfinx.io import XDMFFile
-from dolfinx.mesh import (CellType, GhostMode, create_rectangle,
-                          locate_entities_boundary, meshtags)
-from dolfinx.nls.petsc import NewtonSolver
 from mpi4py import MPI
 
+import numpy as np
+import ufl
+from dolfinx.fem import Function, dirichletbc, functionspace, locate_dofs_topological
+from dolfinx.fem.petsc import LinearProblem, NonlinearProblem
+from dolfinx.geometry import bb_tree, compute_colliding_cells, compute_collisions_points
+from dolfinx.io import XDMFFile
+from dolfinx.mesh import (
+    CellType,
+    GhostMode,
+    create_rectangle,
+    locate_entities_boundary,
+    meshtags,
+)
+from dolfinx.nls.petsc import NewtonSolver
 from dolfinx_contact.helpers import epsilon, lame_parameters, sigma_func
 
 
-def solve_euler_bernoulli(nx: int, ny: int, theta: float, gamma: float, linear_solver: bool,
-                          plane_strain: bool, nitsche: bool,
-                          L: float = 47, H: float = 2.73,
-                          E: float = 1e5, nu: float = 0.3, rho_g: float = 1e-2):
+def solve_euler_bernoulli(
+    nx: int,
+    ny: int,
+    theta: float,
+    gamma: float,
+    linear_solver: bool,
+    plane_strain: bool,
+    nitsche: bool,
+    L: float = 47,
+    H: float = 2.73,
+    E: float = 1e5,
+    nu: float = 0.3,
+    rho_g: float = 1e-2,
+):
     """
     Solve the Euler-Bernoulli equations for a (0,0)x(L,H) beam
     (https://en.wikipedia.org/wiki/Euler%E2%80%93Bernoulli_beam_theory#Cantilever_beams)
     """
-    mesh = create_rectangle(MPI.COMM_WORLD, [np.array([0, 0]), np.array([L, H])], [nx, ny],
-                            CellType.triangle, ghost_mode=GhostMode.none)
+    mesh = create_rectangle(
+        MPI.COMM_WORLD,
+        [np.array([0, 0]), np.array([L, H])],
+        [nx, ny],
+        CellType.triangle,
+        ghost_mode=GhostMode.none,
+    )
 
     def left(x):
         return np.isclose(x[0], 0)
@@ -73,23 +91,28 @@ def solve_euler_bernoulli(nx: int, ny: int, theta: float, gamma: float, linear_s
         # https://doi.org/10.1016/j.cma.2018.05.024
         u_D = ufl.as_vector((0, 0))
         n = ufl.FacetNormal(mesh)
-        F += -ufl.inner(sigma(u) * n, v) * ds(left_marker)\
-            - theta * ufl.inner(sigma(v) * n, u - u_D) * ds(left_marker)\
+        F += (
+            -ufl.inner(sigma(u) * n, v) * ds(left_marker)
+            - theta * ufl.inner(sigma(v) * n, u - u_D) * ds(left_marker)
             + E * gamma / h * ufl.inner(u - u_D, v) * ds(left_marker)
+        )
         bcs = []
     else:
         # Strong Dirichlet enforcement via lifting
         u_bc = Function(V)
         with u_bc.vector.localForm() as loc:
             loc.set(0)
-        bc = dirichletbc(u_bc, locate_dofs_topological(
-            V, mesh.topology.dim - 1, left_facets))
+        bc = dirichletbc(u_bc, locate_dofs_topological(V, mesh.topology.dim - 1, left_facets))
         bcs = [bc]
 
     # Solve as linear problem
     if linear_solver:
-        linear_problem = LinearProblem(ufl.lhs(F), ufl.rhs(F), bcs=bcs,
-                                       petsc_options={"ksp_type": "preonly", "pc_type": "lu"})
+        linear_problem = LinearProblem(
+            ufl.lhs(F),
+            ufl.rhs(F),
+            bcs=bcs,
+            petsc_options={"ksp_type": "preonly", "pc_type": "lu"},
+        )
         u = linear_problem.solve()
     else:
         # Create nonlinear problem and Newton solver
@@ -103,7 +126,7 @@ def solve_euler_bernoulli(nx: int, ny: int, theta: float, gamma: float, linear_s
 
         # Solve non-linear problem
         n, converged = solver.solve(u)
-        assert (converged)
+        assert converged
         print(f"Number of interations: {n:d}")
     u.x.scatter_forward()
 
@@ -134,31 +157,58 @@ def solve_euler_bernoulli(nx: int, ny: int, theta: float, gamma: float, linear_s
         # Second order moment of area for rectangular beam
         In = H**3 / (12)
         uz = (rho_g * L**4) / (8 * E * In)
-        print(f"-----{nx}x{ny}--Nitsche:{nitsche} (gamma: {gamma})----\n",
-              f"Maximal deflection: {u_at_point[mesh.geometry.dim-1]}\n",
-              f"Theoretical deflection: {-uz}\n",
-              f"Error: {100*abs((u_at_point[mesh.geometry.dim-1]+uz)/uz)} %", flush=True)
+        print(
+            f"-----{nx}x{ny}--Nitsche:{nitsche} (gamma: {gamma})----\n",
+            f"Maximal deflection: {u_at_point[mesh.geometry.dim-1]}\n",
+            f"Theoretical deflection: {-uz}\n",
+            f"Error: {100*abs((u_at_point[mesh.geometry.dim-1]+uz)/uz)} %",
+            flush=True,
+        )
 
 
 if __name__ == "__main__":
     desc = "Verification of Nitsche-Dirichlet boundary conditions for linear elasticity solving "
     desc += "the Euler-Bernoulli equiation"
-    parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-                                     description=desc)
-    parser.add_argument("--theta", default=1., type=float, dest="theta",
-                        help="Theta parameter for Nitsche, 1 symmetric, -1 skew symmetric, 0 Penalty-like",
-                        choices=[-1., 0., 1.])
-    parser.add_argument("--gamma", default=10, type=float, dest="gamma",
-                        help="Coercivity/Stabilization parameter for Nitsche condition")
+    parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter, description=desc)
+    parser.add_argument(
+        "--theta",
+        default=1.0,
+        type=float,
+        dest="theta",
+        help="Theta parameter for Nitsche, 1 symmetric, -1 skew symmetric, 0 Penalty-like",
+        choices=[-1.0, 0.0, 1.0],
+    )
+    parser.add_argument(
+        "--gamma",
+        default=10,
+        type=float,
+        dest="gamma",
+        help="Coercivity/Stabilization parameter for Nitsche condition",
+    )
     _solve = parser.add_mutually_exclusive_group(required=False)
-    _solve.add_argument('--linear', dest='linear_solver', action='store_true',
-                        help="Use linear solver", default=False)
+    _solve.add_argument(
+        "--linear",
+        dest="linear_solver",
+        action="store_true",
+        help="Use linear solver",
+        default=False,
+    )
     _strain = parser.add_mutually_exclusive_group(required=False)
-    _strain.add_argument('--strain', dest='plane_strain', action='store_true',
-                         help="Use plane strain formulation", default=False)
+    _strain.add_argument(
+        "--strain",
+        dest="plane_strain",
+        action="store_true",
+        help="Use plane strain formulation",
+        default=False,
+    )
     _dirichlet = parser.add_mutually_exclusive_group(required=False)
-    _dirichlet.add_argument('--dirichlet', dest='dirichlet', action='store_true',
-                            help="Use strong Dirichlet formulation", default=False)
+    _dirichlet.add_argument(
+        "--dirichlet",
+        dest="dirichlet",
+        action="store_true",
+        help="Use strong Dirichlet formulation",
+        default=False,
+    )
 
     args = parser.parse_args()
     theta = args.theta
@@ -169,6 +219,5 @@ if __name__ == "__main__":
     Nx = np.asarray([5 * 2**i for i in range(1, 8)], dtype=np.int32)
     Ny = np.asarray([2**i for i in range(1, 8)], dtype=np.int32)
     # FIXME: Add option for L, H, E, nu and rho_g
-    for (nx, ny) in zip(Nx, Ny):
-        solve_euler_bernoulli(nx, ny, theta, gamma,
-                              linear_solver, plane_strain, nitsche)
+    for nx, ny in zip(Nx, Ny):
+        solve_euler_bernoulli(nx, ny, theta, gamma, linear_solver, plane_strain, nitsche)

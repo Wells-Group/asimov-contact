@@ -7,8 +7,18 @@
 # ====================================================
 
 from basix.ufl import element
-from ufl import (Coefficient, dx, FunctionSpace, grad, lhs, rhs,
-                 inner, Mesh, TestFunction, TrialFunction)
+from ufl import (
+    Coefficient,
+    dx,
+    FunctionSpace,
+    grad,
+    lhs,
+    rhs,
+    inner,
+    Mesh,
+    TestFunction,
+    TrialFunction,
+)
 
 # Mesh and elements
 e = element("Lagrange", "tetrahedron", 1, shape=())

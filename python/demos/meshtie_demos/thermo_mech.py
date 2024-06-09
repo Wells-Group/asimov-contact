@@ -2,34 +2,90 @@
 #
 # SPDX-License-Identifier:    MIT
 
-import numpy as np
-
-from dolfinx import default_scalar_type
-from dolfinx import log
-from dolfinx.cpp.nls.petsc import NewtonSolver
-from dolfinx.io import VTXWriter, XDMFFile
-from dolfinx.fem import Constant, dirichletbc, DirichletBC, form, Form, functionspace, Function, locate_dofs_topological
-from dolfinx.fem.petsc import assemble_matrix, assemble_vector, apply_lifting, set_bc, create_vector
-from dolfinx.la import vector, create_petsc_vector_wrap
-from dolfinx.mesh import locate_entities_boundary
-from dolfinx.graph import adjacencylist
-from dolfinx_contact.cpp import MeshTie, Problem
-from dolfinx_contact.helpers import epsilon, lame_parameters, rigid_motions_nullspace_subdomains
-from dolfinx_contact.meshing import create_split_box_2D, horizontal_sine
-from dolfinx_contact.parallel_mesh_ghosting import create_contact_mesh
 from mpi4py import MPI
 from petsc4py import PETSc
-from ufl import (derivative, grad, inner, sym, tr, Identity,
-                 lhs, rhs, Measure, TrialFunction, TestFunction)
+
+import numpy as np
+from dolfinx import default_scalar_type, log
+from dolfinx.cpp.nls.petsc import NewtonSolver
+from dolfinx.fem import (
+    Constant,
+    DirichletBC,
+    Form,
+    Function,
+    dirichletbc,
+    form,
+    functionspace,
+    locate_dofs_topological,
+)
+from dolfinx.fem.petsc import (
+    apply_lifting,
+    assemble_matrix,
+    assemble_vector,
+    create_vector,
+    set_bc,
+)
+from dolfinx.graph import adjacencylist
+from dolfinx.io import VTXWriter, XDMFFile
+from dolfinx.la import create_petsc_vector_wrap, vector
+from dolfinx.mesh import locate_entities_boundary
+from dolfinx_contact.cpp import MeshTie, Problem
+from dolfinx_contact.helpers import (
+    epsilon,
+    lame_parameters,
+    rigid_motions_nullspace_subdomains,
+)
+from dolfinx_contact.meshing import create_split_box_2D, horizontal_sine
+from dolfinx_contact.parallel_mesh_ghosting import create_contact_mesh
+from ufl import (
+    Identity,
+    Measure,
+    TestFunction,
+    TrialFunction,
+    derivative,
+    grad,
+    inner,
+    lhs,
+    rhs,
+    sym,
+    tr,
+)
 
 
 class ThermoElasticProblem:
-    __slots__ = ["_l", "_j", "_bcs", "_meshties", "_b", "_b_petsc", "_mat_a", "_u", "_T",
-                 "_lmbda", "_mu", "_gamma", "_theta", "_alpha"]
+    __slots__ = [
+        "_l",
+        "_j",
+        "_bcs",
+        "_meshties",
+        "_b",
+        "_b_petsc",
+        "_mat_a",
+        "_u",
+        "_T",
+        "_lmbda",
+        "_mu",
+        "_gamma",
+        "_theta",
+        "_alpha",
+    ]
 
-    def __init__(self, a: Form, j: Form, bcs: list[DirichletBC], meshties: MeshTie, subdomains,
-                 u: Function, T: Function, lmbda: Function, mu: Function, alpha: Function,
-                 gamma: np.float64, theta: np.float64, num_domains: int = 2):
+    def __init__(
+        self,
+        a: Form,
+        j: Form,
+        bcs: list[DirichletBC],
+        meshties: MeshTie,
+        subdomains,
+        u: Function,
+        T: Function,
+        lmbda: Function,
+        mu: Function,
+        alpha: Function,
+        gamma: np.float64,
+        theta: np.float64,
+        num_domains: int = 2,
+    ):
         """
         Create a MeshTie problem
 
@@ -62,20 +118,27 @@ class ThermoElasticProblem:
 
         # Create PETSc rhs vector
         self._b = vector(
-            a.function_spaces[0].dofmap.index_map, a.function_spaces[0].dofmap.index_map_bs)
+            a.function_spaces[0].dofmap.index_map,
+            a.function_spaces[0].dofmap.index_map_bs,
+        )
         self._b_petsc = create_petsc_vector_wrap(self._b)
 
         # Initialise the input data for integration kernels
-        self._meshties.generate_kernel_data(Problem.ThermoElasticity, a.function_spaces[0],
-                                            {"lambda": lmbda._cpp_object,
-                                                "mu": mu._cpp_object,
-                                             "alpha": alpha._cpp_object},
-                                            gamma, theta)
+        self._meshties.generate_kernel_data(
+            Problem.ThermoElasticity,
+            a.function_spaces[0],
+            {
+                "lambda": lmbda._cpp_object,
+                "mu": mu._cpp_object,
+                "alpha": alpha._cpp_object,
+            },
+            gamma,
+            theta,
+        )
 
         # Build near null space preventing rigid body motion of individual components
         tags = np.unique(subdomains.values)
-        ns = rigid_motions_nullspace_subdomains(
-            u.function_space, subdomains, tags, num_domains)
+        ns = rigid_motions_nullspace_subdomains(u.function_space, subdomains, tags, num_domains)
         self._mat_a.setNearNullSpace(ns)
 
     def f(self, x, _b):
@@ -91,21 +154,21 @@ class ThermoElasticProblem:
 
         # Generate input data for custom kernel.
         self._meshties.update_kernel_data(
-            {"T": self._T._cpp_object, "u": self._u._cpp_object}, Problem.ThermoElasticity)
+            {"T": self._T._cpp_object, "u": self._u._cpp_object},
+            Problem.ThermoElasticity,
+        )
 
         # Assemble residual vector
         self._b_petsc.zeroEntries()
-        self._b_petsc.ghostUpdate(
-            addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD)
+        self._b_petsc.ghostUpdate(addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD)
         self._meshties.assemble_vector(
-            self._b_petsc, self._l.function_spaces[0], Problem.ThermoElasticity)  # custom kernel
+            self._b_petsc, self._l.function_spaces[0], Problem.ThermoElasticity
+        )  # custom kernel
         assemble_vector(self._b_petsc, self._l)  # standard kernels
 
         # Apply boundary condition
-        apply_lifting(self._b_petsc, [self._j], bcs=[
-                      self._bcs], x0=[x], scale=-1.0)
-        self._b_petsc.ghostUpdate(
-            addv=PETSc.InsertMode.ADD, mode=PETSc.ScatterMode.REVERSE)
+        apply_lifting(self._b_petsc, [self._j], bcs=[self._bcs], x0=[x], scale=-1.0)
+        self._b_petsc.ghostUpdate(addv=PETSc.InsertMode.ADD, mode=PETSc.ScatterMode.REVERSE)
         set_bc(self._b_petsc, self._bcs, x, -1.0)
 
         # Restore log level info for monitoring Newton solver
@@ -121,15 +184,15 @@ class ThermoElasticProblem:
         """
         log.set_log_level(log.LogLevel.OFF)
         self._mat_a.zeroEntries()
-        self._meshties.assemble_matrix(
-            self._mat_a, self._j.function_spaces[0], Problem.ThermoElasticity)
+        self._meshties.assemble_matrix(self._mat_a, self._j.function_spaces[0], Problem.ThermoElasticity)
         assemble_matrix(self._mat_a, self._j, self._bcs)
         self._mat_a.assemble()
         log.set_log_level(log.LogLevel.INFO)
 
-    def form(self,
-             x: PETSc.Vec  # type: ignore
-             ) -> None:
+    def form(
+        self,
+        x: PETSc.Vec,  # type: ignore
+    ) -> None:
         """This function is called before the residual or Jacobian is
         computed in the NewtonSolver. Used to update ghost values.
 
@@ -137,8 +200,10 @@ class ThermoElasticProblem:
            x: The vector containing the latest solution
 
         """
-        x.ghostUpdate(addv=PETSc.InsertMode.INSERT,    # type: ignore
-                      mode=PETSc.ScatterMode.FORWARD)  # type: ignore
+        x.ghostUpdate(
+            addv=PETSc.InsertMode.INSERT,  # type: ignore
+            mode=PETSc.ScatterMode.FORWARD,  # type: ignore
+        )
 
 
 L = 2.0
@@ -146,12 +211,24 @@ H = 2.0
 nx = 20
 ny = 20
 # parameter for surface approximation
-num_segments = (8 * np.ceil(5.0 / 1.2).astype(np.int32),
-                8 * np.ceil(5.0 / (1.2 * 0.7)).astype(np.int32))
+num_segments = (
+    8 * np.ceil(5.0 / 1.2).astype(np.int32),
+    8 * np.ceil(5.0 / (1.2 * 0.7)).astype(np.int32),
+)
 fname = "./meshes/split_box"
-create_split_box_2D(fname, res=0.1, L=1.0, H=1.0, domain_1=[0, 1, 5, 4], domain_2=[4, 5, 2, 3],
-                    x0=[0, 0.5], x1=[1.0, 0.7], curve_fun=horizontal_sine, num_segments=num_segments,
-                    quads=False)
+create_split_box_2D(
+    fname,
+    res=0.1,
+    L=1.0,
+    H=1.0,
+    domain_1=[0, 1, 5, 4],
+    domain_2=[4, 5, 2, 3],
+    x0=[0, 0.5],
+    x1=[1.0, 0.7],
+    curve_fun=horizontal_sine,
+    num_segments=num_segments,
+    quads=False,
+)
 
 # read in mesh and markers
 with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
@@ -165,13 +242,11 @@ with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
     facet_marker = xdmf.read_meshtags(mesh, name="contact_facets")
 
 if mesh.comm.size > 1:
-    mesh, facet_marker, domain_marker = create_contact_mesh(
-        mesh, facet_marker, domain_marker, [3, 4, 7, 8])
+    mesh, facet_marker, domain_marker = create_contact_mesh(mesh, facet_marker, domain_marker, [3, 4, 7, 8])
 
 # compiler options to improve performance
 cffi_options = ["-Ofast", "-march=native"]
-jit_options = {"cffi_extra_compile_args": cffi_options,
-               "cffi_libraries": ["m"]}
+jit_options = {"cffi_extra_compile_args": cffi_options, "cffi_libraries": ["m"]}
 
 # Linear solver options
 ksp_tol = 1e-10
@@ -187,7 +262,7 @@ petsc_options = {
     "pc_gamg_agg_nsmooths": 1,
     "pc_gamg_threshold": 1e-3,
     "pc_gamg_square_graph": 2,
-    "ksp_norm_type": "unpreconditioned"
+    "ksp_norm_type": "unpreconditioned",
 }
 
 # measures
@@ -208,25 +283,27 @@ therm = (q - T0) * r * dx + kdt * inner(grad(q), grad(r)) * dx
 a_therm, L_therm = lhs(therm), rhs(therm)
 T0.x.array[:] = 0
 
-dirichlet_facets = locate_entities_boundary(
-    mesh, tdim - 1, lambda x: np.isclose(x[1], 0))
+dirichlet_facets = locate_entities_boundary(mesh, tdim - 1, lambda x: np.isclose(x[1], 0))
 dofs = locate_dofs_topological(Q, tdim - 1, dirichlet_facets)
 Tbc = dirichletbc(value=default_scalar_type((1.0)), dofs=dofs, V=Q)
 
 # surface data for Nitsche
 gamma = 10
 theta = 1
-contact = [(0, 2), (0, 3), (1, 2), (1, 3),
-           (2, 0), (2, 1), (3, 0), (3, 1)]
+contact = [(0, 2), (0, 3), (1, 2), (1, 3), (2, 0), (2, 1), (3, 0), (3, 1)]
 data = np.array([3, 4, 7, 8], dtype=np.int32)
 offsets = np.array([0, 4], dtype=np.int32)
 surfaces = adjacencylist(data, offsets)
 
 # initialise meshties
-meshties = MeshTie([facet_marker._cpp_object], surfaces, contact,
-                   mesh._cpp_object, quadrature_degree=3)
-meshties.generate_kernel_data(Problem.Poisson, Q._cpp_object, {
-    "T": T0._cpp_object, "kdt": kdt_custom._cpp_object}, gamma, theta)
+meshties = MeshTie([facet_marker._cpp_object], surfaces, contact, mesh._cpp_object, quadrature_degree=3)
+meshties.generate_kernel_data(
+    Problem.Poisson,
+    Q._cpp_object,
+    {"T": T0._cpp_object, "kdt": kdt_custom._cpp_object},
+    gamma,
+    theta,
+)
 
 # Create matrix and vector
 a_therm = form(a_therm, jit_options=jit_options)
@@ -245,14 +322,18 @@ def assemble_mat_therm(A):
 
 def assemble_vec_therm(b):
     b.zeroEntries()
-    b.ghostUpdate(addv=PETSc.InsertMode.INSERT,    # type: ignore
-                  mode=PETSc.ScatterMode.FORWARD)  # type: ignore
+    b.ghostUpdate(
+        addv=PETSc.InsertMode.INSERT,  # type: ignore
+        mode=PETSc.ScatterMode.FORWARD,
+    )  # type: ignore
     assemble_vector(b, L_therm)
 
     # Apply boundary condition and scatter reverse
     apply_lifting(b, [a_therm], bcs=[[Tbc]], scale=1.0)
-    b.ghostUpdate(addv=PETSc.InsertMode.ADD,       # type: ignore
-                  mode=PETSc.ScatterMode.REVERSE)  # type: ignore
+    b.ghostUpdate(
+        addv=PETSc.InsertMode.ADD,  # type: ignore
+        mode=PETSc.ScatterMode.REVERSE,
+    )  # type: ignore
     set_bc(b, [Tbc])
 
 
@@ -267,12 +348,11 @@ for key in petsc_options:
 opts.prefixPop()
 ksp_therm.setFromOptions()
 ksp_therm.setOperators(mat_therm)
-ksp_therm.setMonitor(lambda _, its, rnorm: print(
-    f"Iteration: {its}, rel. residual: {rnorm}"))
+ksp_therm.setMonitor(lambda _, its, rnorm: print(f"Iteration: {its}, rel. residual: {rnorm}"))
 
 
 # Elasticity problem
-V = functionspace(mesh, ("Lagrange", 1, (gdim, )))
+V = functionspace(mesh, ("Lagrange", 1, (gdim,)))
 v, w = TestFunction(V), TrialFunction(V)
 u = Function(V)
 
@@ -302,8 +382,7 @@ def sigma(w, T):
 F = inner(sigma(u, T0), epsilon(v)) * dx
 J = derivative(F, u, w)
 # boundary conditions
-dirichlet_facets2 = locate_entities_boundary(
-    mesh, tdim - 1, lambda x: np.isclose(x[1], 1))
+dirichlet_facets2 = locate_entities_boundary(mesh, tdim - 1, lambda x: np.isclose(x[1], 1))
 g = Constant(mesh, default_scalar_type((0.0, 0.0)))
 dofs_e = locate_dofs_topological(V, tdim - 1, dirichlet_facets)
 dofs_e2 = locate_dofs_topological(V, tdim - 1, dirichlet_facets2)
@@ -313,8 +392,20 @@ bcs = [dirichletbc(g, dofs_e2, V)]
 F = form(F, jit_options=jit_options)
 J = form(J, jit_options=jit_options)
 
-elastic_problem = ThermoElasticProblem(F, J, bcs, meshties, domain_marker, u, T0, lmbda, mu, alpha_c,
-                                       np.float64(gamma * E), np.float64(theta))
+elastic_problem = ThermoElasticProblem(
+    F,
+    J,
+    bcs,
+    meshties,
+    domain_marker,
+    u,
+    T0,
+    lmbda,
+    mu,
+    alpha_c,
+    np.float64(gamma * E),
+    np.float64(theta),
+)
 
 # Set up Newton sovler
 newton_solver = NewtonSolver(mesh.comm)
@@ -341,8 +432,8 @@ opts.prefixPop()
 ksp.setFromOptions()
 
 time_steps = 40
-T0.name = 'temperature'
-u.name = 'displacement'
+T0.name = "temperature"
+u.name = "displacement"
 vtx = VTXWriter(mesh.comm, "results/thermo_mech.bp", [u, T0], "bp4")
 vtx.write(0)
 

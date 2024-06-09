@@ -2,19 +2,36 @@
 #
 # SPDX-License-Identifier:    MIT
 
-import gmsh
-import numpy as np
-from dolfinx.io import gmshio, XDMFFile
 from mpi4py import MPI
 
-__all__ = ["create_circle_plane_mesh", "create_circle_circle_mesh", "create_box_mesh_2D",
-           "create_box_mesh_3D", "create_sphere_plane_mesh", "create_sphere_sphere_mesh",
-           "create_cylinder_cylinder_mesh", "create_2d_rectangle_split", "create_quarter_disks_mesh",
-           "sliding_wedges"]
+import gmsh
+import numpy as np
+from dolfinx.io import XDMFFile, gmshio
+
+__all__ = [
+    "create_circle_plane_mesh",
+    "create_circle_circle_mesh",
+    "create_box_mesh_2D",
+    "create_box_mesh_3D",
+    "create_sphere_plane_mesh",
+    "create_sphere_sphere_mesh",
+    "create_cylinder_cylinder_mesh",
+    "create_2d_rectangle_split",
+    "create_quarter_disks_mesh",
+    "sliding_wedges",
+]
 
 
-def create_circle_plane_mesh(filename: str, quads: bool = False, res=0.1, order: int = 1,
-                             r: float = 0.25, height: float = 0.25, length: float = 1.0, gap: float = 0.01):
+def create_circle_plane_mesh(
+    filename: str,
+    quads: bool = False,
+    res=0.1,
+    order: int = 1,
+    r: float = 0.25,
+    height: float = 0.25,
+    length: float = 1.0,
+    gap: float = 0.01,
+):
     """
     Create a circular mesh, with center at (0.0,0.0,0) with radius r
     and a box [-length/2, length/2]x[-height-gap-r,-gap-r]
@@ -31,11 +48,12 @@ def create_circle_plane_mesh(filename: str, quads: bool = False, res=0.1, order:
         top_left = gmsh.model.occ.addPoint(-r * np.cos(angle), r * np.sin(angle), 0)
         top_right = gmsh.model.occ.addPoint(r * np.cos(angle), r * np.sin(angle), 0)
 
-        arcs = [gmsh.model.occ.addCircleArc(
-            left, c, top_left), gmsh.model.occ.addCircleArc(
-            top_left, c, top_right), gmsh.model.occ.addCircleArc(
-            top_right, c, right), gmsh.model.occ.addCircleArc(
-            right, c, left)]
+        arcs = [
+            gmsh.model.occ.addCircleArc(left, c, top_left),
+            gmsh.model.occ.addCircleArc(top_left, c, top_right),
+            gmsh.model.occ.addCircleArc(top_right, c, right),
+            gmsh.model.occ.addCircleArc(right, c, left),
+        ]
         curve = gmsh.model.occ.addCurveLoop(arcs)
         gmsh.model.occ.synchronize()
 
@@ -82,8 +100,16 @@ def create_circle_plane_mesh(filename: str, quads: bool = False, res=0.1, order:
     gmsh.finalize()
 
 
-def create_halfdisk_plane_mesh(filename: str, res=0.1, order: int = 1, quads=False,
-                               r=0.25, height=0.25, length=1.0, gap=0.01):
+def create_halfdisk_plane_mesh(
+    filename: str,
+    res=0.1,
+    order: int = 1,
+    quads=False,
+    r=0.25,
+    height=0.25,
+    length=1.0,
+    gap=0.01,
+):
     """
     Create a halfdisk, with center at (0.0,0.0,0), radius r and  y<=0.0
     and a box [-length/2, length/2]x[-height-gap-r,-gap-r]
@@ -231,7 +257,13 @@ def create_quarter_disks_mesh(filename: str, res=0.1, order: int = 1, quads=Fals
     gmsh.finalize()
 
 
-def sliding_wedges(filename: str, quads: bool = False, res: float = 0.1, order: int = 1, angle=np.pi / 12):
+def sliding_wedges(
+    filename: str,
+    quads: bool = False,
+    res: float = 0.1,
+    order: int = 1,
+    angle=np.pi / 12,
+):
     gmsh.initialize()
     if MPI.COMM_WORLD.rank == 0:
         bl = gmsh.model.occ.addPoint(0, 0, 0)
@@ -317,10 +349,11 @@ def create_circle_circle_mesh(filename: str, quads: bool = False, res: float = 0
         c = gmsh.model.occ.addPoint(center[0], center[1], center[2])
         # Add 4 points on circle (clockwise, starting in top left)
         angles = [angle, -angle, np.pi + angle, np.pi - angle]
-        c_points = [gmsh.model.occ.addPoint(center[0] + r * np.cos(angle), center[1]
-                                            + r * np.sin(angle), center[2]) for angle in angles]
-        arcs = [gmsh.model.occ.addCircleArc(
-            c_points[i - 1], c, c_points[i]) for i in range(len(c_points))]
+        c_points = [
+            gmsh.model.occ.addPoint(center[0] + r * np.cos(angle), center[1] + r * np.sin(angle), center[2])
+            for angle in angles
+        ]
+        arcs = [gmsh.model.occ.addCircleArc(c_points[i - 1], c, c_points[i]) for i in range(len(c_points))]
         curve = gmsh.model.occ.addCurveLoop(arcs)
         gmsh.model.occ.synchronize()
         surface = gmsh.model.occ.addPlaneSurface([curve])
@@ -328,10 +361,15 @@ def create_circle_circle_mesh(filename: str, quads: bool = False, res: float = 0
         center2 = [0.5, -0.5, 0]
         c2 = gmsh.model.occ.addPoint(center2[0], center2[1], center2[2])
         # Add 4 points on circle (clockwise, starting in top left)
-        c_points2 = [gmsh.model.occ.addPoint(center2[0] + 2 * r * np.cos(angle), center2[1]
-                                             + 2 * r * np.sin(angle), center2[2]) for angle in angles]
-        arcs2 = [gmsh.model.occ.addCircleArc(
-            c_points2[i - 1], c2, c_points2[i]) for i in range(len(c_points2))]
+        c_points2 = [
+            gmsh.model.occ.addPoint(
+                center2[0] + 2 * r * np.cos(angle),
+                center2[1] + 2 * r * np.sin(angle),
+                center2[2],
+            )
+            for angle in angles
+        ]
+        arcs2 = [gmsh.model.occ.addCircleArc(c_points2[i - 1], c2, c_points2[i]) for i in range(len(c_points2))]
         curve2 = gmsh.model.occ.addCurveLoop(arcs2)
         gmsh.model.occ.synchronize()
         surface2 = gmsh.model.occ.addPlaneSurface([curve2])
@@ -435,8 +473,15 @@ def create_box_mesh_2D(filename: str, quads: bool = False, res=0.1, order: int =
     gmsh.finalize()
 
 
-def create_box_mesh_3D(filename: str, simplex: bool = True, order: int = 1,
-                       res: float = 0.1, gap: float = 0.1, width: float = 0.5, offset: float = 0.2):
+def create_box_mesh_3D(
+    filename: str,
+    simplex: bool = True,
+    order: int = 1,
+    res: float = 0.1,
+    gap: float = 0.1,
+    width: float = 0.5,
+    offset: float = 0.2,
+):
     """
     Create two boxes lying directly over eachother with a gap in between"""
     length = 0.5
@@ -460,7 +505,7 @@ def create_box_mesh_3D(filename: str, simplex: bool = True, order: int = 1,
         volumes = model.getEntities(3)
 
         model.mesh.field.add("Box", 1)
-        model.mesh.field.setNumber(1, "VIn", res / 5.)
+        model.mesh.field.setNumber(1, "VIn", res / 5.0)
         model.mesh.field.setNumber(1, "VOut", res)
         model.mesh.field.setNumber(1, "XMin", 0)
         model.mesh.field.setNumber(1, "XMax", length)
@@ -492,8 +537,16 @@ def create_box_mesh_3D(filename: str, simplex: bool = True, order: int = 1,
     gmsh.finalize()
 
 
-def create_sphere_plane_mesh(filename: str, order: int = 1, res=0.05, r=0.25, height=0.25,
-                             length=1.0, width=1.0, gap=0.0):
+def create_sphere_plane_mesh(
+    filename: str,
+    order: int = 1,
+    res=0.05,
+    r=0.25,
+    height=0.25,
+    length=1.0,
+    width=1.0,
+    gap=0.0,
+):
     """
     Create a 3D sphere with center (0,0,0) an radius r
     with a box at [-length/2, length/2] x [ -width/2, width/2] x [-gap-height-r, -gap-r]
@@ -568,7 +621,8 @@ def create_sphere_sphere_mesh(filename: str, order: int = 1):
 
         # Create sphere 2 composed of of two volumes
         sphere_bottom2 = gmsh.model.occ.addSphere(
-            center[0], center[1], -center[2], 2 * r, angle1=-np.pi / 2, angle2=-angle)
+            center[0], center[1], -center[2], 2 * r, angle1=-np.pi / 2, angle2=-angle
+        )
         p1 = gmsh.model.occ.addPoint(center[0], center[1], -center[2] - 2 * r)
         sphere_top2 = gmsh.model.occ.addSphere(center[0], center[1], -center[2], 2 * r, angle1=-angle, angle2=np.pi / 2)
         out_vol_tags2, _ = gmsh.model.occ.fragment([(3, sphere_bottom2)], [(3, sphere_top2)])
@@ -628,16 +682,14 @@ def create_cylinder_cylinder_mesh(filename: str, order: int = 1, res=0.25, simpl
         Nl1 = int(1 / res)
         circle = model.occ.addDisk(*center1, r1, r1)
         model.occ.rotate([(2, circle)], 0, 0, 0, 1, 0, 0, np.pi / 2)
-        model.occ.extrude(
-            [(2, circle)], 0, l1, 0, numElements=[Nl1], recombine=not simplex)
+        model.occ.extrude([(2, circle)], 0, l1, 0, numElements=[Nl1], recombine=not simplex)
 
         center2 = (2, 0, -0.5)
         r2 = 0.5
         l2 = 1
         Nl2 = int(1 / res)
         circle2 = model.occ.addDisk(*center2, r2, r2)
-        model.occ.extrude(
-            [(2, circle2)], 0, 0, l2, numElements=[Nl2], recombine=not simplex)
+        model.occ.extrude([(2, circle2)], 0, 0, l2, numElements=[Nl2], recombine=not simplex)
 
         gmsh.model.mesh.field.add("Box", 1)
         gmsh.model.mesh.field.setNumber(1, "VIn", res)
@@ -735,8 +787,16 @@ def create_2d_rectangle_split(filename: str, quads: bool = False, res=0.1, order
     gmsh.finalize()
 
 
-def create_halfsphere_box_mesh(filename: str, order: int = 1, res=0.05, r=0.25,
-                               height=0.25, length=1.0, width=1.0, gap=0.0):
+def create_halfsphere_box_mesh(
+    filename: str,
+    order: int = 1,
+    res=0.05,
+    r=0.25,
+    height=0.25,
+    length=1.0,
+    width=1.0,
+    gap=0.0,
+):
     """
     Create a 3D half-sphere with center (0,0,0), radius r and z<=0.0
     with a box at [-length/2, length/2] x [ -width/2, width/2] x [-gap-height-r, -gap-r]

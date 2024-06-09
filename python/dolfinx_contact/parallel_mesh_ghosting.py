@@ -2,32 +2,41 @@
 #
 # SPDX-License-Identifier:    MIT
 
-from dolfinx import log
-from dolfinx.mesh import Mesh, MeshTags, meshtags, create_mesh
-from dolfinx.common import Timer
 import dolfinx
-from dolfinx.cpp.mesh import entities_to_geometry, cell_num_vertices, cell_entity_type, to_type
 import numpy as np
-from dolfinx_contact.cpp import compute_ghost_cell_destinations, lex_match
-from dolfinx_contact.cpp import create_contact_mesh_cpp
+from dolfinx import log
+from dolfinx.common import Timer
+from dolfinx.cpp.mesh import (
+    cell_entity_type,
+    cell_num_vertices,
+    entities_to_geometry,
+    to_type,
+)
+from dolfinx.mesh import Mesh, MeshTags, create_mesh, meshtags
+
+from dolfinx_contact.cpp import compute_ghost_cell_destinations, create_contact_mesh_cpp, lex_match
 
 __all__ = ["create_contact_mesh"]
 
 
 def create_contact_mesh(mesh, fmarker, dmarker, tags, R=0.2):
-
     log.log(log.LogLevel.WARNING, "Create Contact Mesh")
     timer = Timer("~Contact: Add ghosts: cells to ghost")
-    new_mesh, new_fmarker, new_dmarker = create_contact_mesh_cpp(mesh._cpp_object, fmarker._cpp_object,
-                                                                 dmarker._cpp_object, tags, R)
+    new_mesh, new_fmarker, new_dmarker = create_contact_mesh_cpp(
+        mesh._cpp_object, fmarker._cpp_object, dmarker._cpp_object, tags, R
+    )
 
     timer.stop()
-    return Mesh(new_mesh, mesh.ufl_domain()), MeshTags(new_fmarker), MeshTags(new_dmarker)
+    return (
+        Mesh(new_mesh, mesh.ufl_domain()),
+        MeshTags(new_fmarker),
+        MeshTags(new_dmarker),
+    )
 
 
 def create_contact_mesh_old(mesh, fmarker, dmarker, tags, R=0.2):
     tdim = mesh.topology.dim
-    num_cell_vertices = cell_num_vertices(mesh.topology.cell_types[0])
+    num_cell_vertices = cell_num_vertices(mesh.topology.cell_type)
     facet_type = cell_entity_type(to_type(str(mesh.ufl_cell())), tdim - 1, 0)
     num_facet_vertices = cell_num_vertices(facet_type)
 
@@ -93,7 +102,7 @@ def create_contact_mesh_old(mesh, fmarker, dmarker, tags, R=0.2):
 
     # Convert topology to global indexing, and restrict to non-ghost cells
     topo = mesh.topology.connectivity(tdim, 0).array
-    topo = mesh.topology.index_map(0).local_to_global(topo).reshape((-1, num_cell_vertices))
+    topo = np.asarray(mesh.topology.index_map(0).local_to_global(topo), dtype=np.int64).reshape((-1, num_cell_vertices))
     topo = topo[:ncells, :]
 
     # Cut off any ghost vertices
@@ -130,8 +139,12 @@ def create_contact_mesh_old(mesh, fmarker, dmarker, tags, R=0.2):
     log.log(log.LogLevel.WARNING, "Lex match facet markers")
 
     timer = Timer("~Contact: Add ghosts: Lex match facet markers")
-    new_fm_idx, new_fm_val = lex_match(fv_indices.shape[1], list(fv_indices.flatten()),
-                                       list(all_indices.flatten()), list(all_values))
+    new_fm_idx, new_fm_val = lex_match(
+        fv_indices.shape[1],
+        list(fv_indices.flatten()),
+        list(all_indices.flatten()),
+        list(all_values),
+    )
 
     # Sort new markers into order and make unique
     # new_fmarkers = np.array(new_fmarkers, dtype=np.int32)
@@ -150,8 +163,12 @@ def create_contact_mesh_old(mesh, fmarker, dmarker, tags, R=0.2):
     # Search for marked cells in list of all cells
     log.log(log.LogLevel.WARNING, "Lex match cell markers")
     timer = Timer("~Contact: Add ghosts: Lex match cell markers")
-    new_cm_idx, new_cm_val = lex_match(cv_indices.shape[1], list(cv_indices.flatten()),
-                                       list(all_cell_indices.flatten()), list(all_cell_values))
+    new_cm_idx, new_cm_val = lex_match(
+        cv_indices.shape[1],
+        list(cv_indices.flatten()),
+        list(all_cell_indices.flatten()),
+        list(all_cell_values),
+    )
 
     new_dmarker = meshtags(new_mesh, tdim, new_cm_idx, np.array(new_cm_val, dtype=np.int32))
 
