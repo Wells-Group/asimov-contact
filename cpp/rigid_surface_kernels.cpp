@@ -80,11 +80,11 @@ dolfinx_contact::generate_rigid_surface_kernel(
 
     // Compute Jacobian and determinant at first quadrature point
     std::array<double, 9> Jb;
-    dolfinx_contact::mdspan2_t J(Jb.data(), gdim, tdim);
+    dolfinx_contact::mdspan_t<double, 2> J(Jb.data(), gdim, tdim);
     std::array<double, 9> Kb;
-    dolfinx_contact::mdspan2_t K(Kb.data(), tdim, gdim);
+    dolfinx_contact::mdspan_t<double, 2> K(Kb.data(), tdim, gdim);
     std::array<double, 6> J_totb;
-    dolfinx_contact::mdspan2_t J_tot(J_totb.data(), gdim, tdim - 1);
+    dolfinx_contact::mdspan_t<double, 2> J_tot(J_totb.data(), gdim, tdim - 1);
     double detJ = 0;
     std::array<double, 18> detJ_scratch;
 
@@ -127,9 +127,9 @@ dolfinx_contact::generate_rigid_surface_kernel(
 
     // Temporary work arrays
     std::vector<double> epsnb(ndofs_cell * gdim);
-    dolfinx_contact::mdspan2_t epsn(epsnb.data(), ndofs_cell, gdim);
+    dolfinx_contact::mdspan_t<double, 2> epsn(epsnb.data(), ndofs_cell, gdim);
     std::vector<double> trb(ndofs_cell * gdim);
-    dolfinx_contact::mdspan2_t tr(trb.data(), ndofs_cell, gdim);
+    dolfinx_contact::mdspan_t<double, 2> tr(trb.data(), ndofs_cell, gdim);
     std::vector<double> sig_n_u(gdim);
 
     // Extract reference to the tabulated basis function
@@ -239,11 +239,11 @@ dolfinx_contact::generate_rigid_surface_kernel(
 
     // Compute Jacobian and determinant at first quadrature point
     std::array<double, 9> Jb;
-    dolfinx_contact::mdspan2_t J(Jb.data(), gdim, tdim);
+    dolfinx_contact::mdspan_t<double, 2> J(Jb.data(), gdim, tdim);
     std::array<double, 9> Kb;
-    dolfinx_contact::mdspan2_t K(Kb.data(), tdim, gdim);
+    dolfinx_contact::mdspan_t<double, 2> K(Kb.data(), tdim, gdim);
     std::array<double, 6> J_totb;
-    dolfinx_contact::mdspan2_t J_tot(J_totb.data(), gdim, tdim - 1);
+    dolfinx_contact::mdspan_t<double, 2> J_tot(J_totb.data(), gdim, tdim - 1);
     double detJ = 0;
     std::array<double, 18> detJ_scratch;
 
@@ -288,9 +288,9 @@ dolfinx_contact::generate_rigid_surface_kernel(
 
     // Temporary work arrays
     std::vector<double> epsnb(ndofs_cell * gdim);
-    dolfinx_contact::mdspan2_t epsn(epsnb.data(), ndofs_cell, gdim);
+    dolfinx_contact::mdspan_t<double, 2> epsn(epsnb.data(), ndofs_cell, gdim);
     std::vector<double> trb(ndofs_cell * gdim);
-    dolfinx_contact::mdspan2_t tr(trb.data(), ndofs_cell, gdim);
+    dolfinx_contact::mdspan_t<double, 2> tr(trb.data(), ndofs_cell, gdim);
     std::vector<double> sig_n_u(gdim);
 
     // Extract reference to the tabulated basis function

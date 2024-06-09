@@ -35,12 +35,13 @@ void dolfinx_contact::pull_back_nonaffine(
   // Use work-array for views
   std::fill(work_array.begin(), std::next(work_array.begin(), gdim * tdim + 9),
             0);
-  mdspan2_t J(work_array.data(), gdim, tdim);
+  mdspan_t<double, 2> J(work_array.data(), gdim, tdim);
   std::span<double, 3> Xk(work_array.data() + gdim * tdim, 3);
   std::span<double, 3> xk(work_array.data() + gdim * tdim + 3, 3);
   std::span<double, 3> dX(work_array.data() + gdim * tdim + 6, 3);
-  mdspan2_t K(work_array.data() + gdim * tdim + 9, tdim, gdim);
-  mdspan4_t basis_values(work_array.data() + 9 + 2 * gdim * tdim, c_shape);
+  mdspan_t<double, 2> K(work_array.data() + gdim * tdim + 9, tdim, gdim);
+  mdspan_t<double, 4> basis_values(work_array.data() + 9 + 2 * gdim * tdim,
+                                   c_shape);
   std::span basis_span(work_array.data() + 9 + 2 * gdim * tdim, basis_size);
 
   int k;
@@ -108,10 +109,11 @@ std::array<double, 3> dolfinx_contact::push_forward_facet_normal(
   // Use work-array for views
   std::fill(work_array.begin(), std::next(work_array.begin(), gdim * tdim + 9),
             0);
-  mdspan2_t J(work_array.data(), gdim, tdim);
+  mdspan_t<double, 2> J(work_array.data(), gdim, tdim);
   std::span<double, 3> X(work_array.data() + gdim * tdim, 3);
-  mdspan2_t K(work_array.data() + gdim * tdim + 3, tdim, gdim);
-  cmdspan4_t basis_values(work_array.data() + 3 + 2 * gdim * tdim, c_shape);
+  mdspan_t<double, 2> K(work_array.data() + gdim * tdim + 3, tdim, gdim);
+  mdspan_t<const double, 4> basis_values(
+      work_array.data() + 3 + 2 * gdim * tdim, c_shape);
   std::span<double> basis_span(work_array.data() + 3 + 2 * gdim * tdim,
                                basis_size);
   if (cmap.is_affine())

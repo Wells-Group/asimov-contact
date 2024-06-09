@@ -21,8 +21,9 @@
 namespace dolfinx_contact
 {
 using jac_fn = std::function<double(
-    double, mdspan2_t, mdspan2_t, mdspan2_t, std::span<double>,
-    mdspan_t<const double, 2>, s_cmdspan2_t, mdspan_t<const double, 2>)>;
+    double, mdspan_t<double, 2>, mdspan_t<double, 2>, mdspan_t<double, 2>,
+    std::span<double>, mdspan_t<const double, 2>, s_cmdspan2_t,
+    mdspan_t<const double, 2>)>;
 
 using normal_fn
     = std::function<void(std::span<double>, mdspan_t<const double, 2>,
@@ -69,7 +70,7 @@ public:
   // Return basis functions at quadrature points for facet f
   s_cmdspan2_t phi() const
   {
-    cmdspan4_t full_basis(_basis_values.data(), _basis_shape);
+    mdspan_t<const double, 4> full_basis(_basis_values.data(), _basis_shape);
     return MDSPAN_IMPL_STANDARD_NAMESPACE::submdspan(
         full_basis, 0, MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent,
         MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent, 0);
@@ -78,7 +79,7 @@ public:
   // Return grad(_phi) at quadrature points for facet f
   s_cmdspan3_t dphi() const
   {
-    cmdspan4_t full_basis(_basis_values.data(), _basis_shape);
+    mdspan_t<const double, 4> full_basis(_basis_values.data(), _basis_shape);
     return MDSPAN_IMPL_STANDARD_NAMESPACE::submdspan(
         full_basis, std::pair{1, (std::size_t)_tdim + 1},
         MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent,
@@ -88,7 +89,8 @@ public:
   // Return gradient of coordinate bases at quadrature points for facet f
   s_cmdspan3_t dphi_c() const
   {
-    cmdspan4_t full_basis(_c_basis_values.data(), _c_basis_shape);
+    mdspan_t<const double, 4> full_basis(_c_basis_values.data(),
+                                         _c_basis_shape);
     return MDSPAN_IMPL_STANDARD_NAMESPACE::submdspan(
         full_basis, std::pair{1, (std::size_t)_tdim + 1},
         MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent,
@@ -118,11 +120,13 @@ public:
   /// @param[in] coords - the coordinates of the facet
   /// @return absolute value of determinant of J_tot
   double update_jacobian(std::size_t q, std::size_t facet_index, double detJ,
-                         mdspan2_t J, mdspan2_t K, mdspan2_t J_tot,
+                         mdspan_t<double, 2> J, mdspan_t<double, 2> K,
+                         mdspan_t<double, 2> J_tot,
                          std::span<double> detJ_scratch,
                          mdspan_t<const double, 2> coords) const
   {
-    cmdspan4_t full_basis(_c_basis_values.data(), _c_basis_shape);
+    mdspan_t<const double, 4> full_basis(_c_basis_values.data(),
+                                         _c_basis_shape);
     const std::size_t q_pos = _qp_offsets[facet_index] + q;
     auto dphi_fc = MDSPAN_IMPL_STANDARD_NAMESPACE::submdspan(
         full_basis, std::pair{1, (std::size_t)_tdim + 1}, q_pos,
@@ -146,8 +150,10 @@ public:
   /// @param[in,out] detJ_scratch - Working memory, min size (2*gdim*tdim)
   /// @param[in] coords - the coordinates of the facet
   /// @return absolute value of determinant of J_tot
-  double compute_first_facet_jacobian(std::size_t facet_index, mdspan2_t J,
-                                      mdspan2_t K, mdspan2_t J_tot,
+  double compute_first_facet_jacobian(std::size_t facet_index,
+                                      mdspan_t<double, 2> J,
+                                      mdspan_t<double, 2> K,
+                                      mdspan_t<double, 2> J_tot,
                                       std::span<double> detJ_scratch,
                                       mdspan_t<const double, 2> coords) const;
 

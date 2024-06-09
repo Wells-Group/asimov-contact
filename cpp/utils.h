@@ -97,8 +97,9 @@ using kernel_fn
 /// @param[in] x: points on physical element
 /// @param[in] coordinate_dofs: geometry coordinates of cell
 /// @param[in] cmap: the coordinate element
-void pull_back(mdspan3_t J, mdspan3_t K, std::span<double> detJ,
-               std::span<double> X, mdspan_t<const double, 2> x,
+void pull_back(mdspan_t<double, 3> J, mdspan_t<double, 3> K,
+               std::span<double> detJ, std::span<double> X,
+               mdspan_t<const double, 2> x,
                mdspan_t<const double, 2> coordinate_dofs,
                const dolfinx::fem::CoordinateElement<double>& cmap);
 
@@ -211,7 +212,8 @@ void evaluate_basis_functions(const dolfinx::fem::FunctionSpace<double>& V,
 /// points
 /// @param[in] coords - the coordinates of the facet
 /// @return absolute value of determinant of J_tot
-double compute_facet_jacobian(mdspan2_t J, mdspan2_t K, mdspan2_t J_tot,
+double compute_facet_jacobian(mdspan_t<double, 2> J, mdspan_t<double, 2> K,
+                              mdspan_t<double, 2> J_tot,
                               std::span<double> detJ_scratch,
                               mdspan_t<const double, 2> J_f, s_cmdspan2_t dphi,
                               mdspan_t<const double, 2> coords);
@@ -222,7 +224,8 @@ double compute_facet_jacobian(mdspan2_t J, mdspan2_t K, mdspan2_t J_tot,
 /// For non-affine geometries, the Jacobian, it's inverse and the total Jacobian
 /// (J*J_f) is computed.
 /// @param[in] cmap The coordinate element
-std::function<double(double, mdspan2_t, mdspan2_t, mdspan2_t, std::span<double>,
+std::function<double(double, mdspan_t<double, 2>, mdspan_t<double, 2>,
+                     mdspan_t<double, 2>, std::span<double>,
                      mdspan_t<const double, 2>, s_cmdspan2_t,
                      mdspan_t<const double, 2>)>
 get_update_jacobian_dependencies(
@@ -314,7 +317,8 @@ std::vector<std::int32_t> find_candidate_surface_segment(
 void compute_physical_points(const dolfinx::mesh::Mesh<double>& mesh,
                              std::span<const std::int32_t> facets,
                              std::span<const std::size_t> offsets,
-                             cmdspan4_t phi, std::span<double> qp_phys);
+                             mdspan_t<const double, 4> phi,
+                             std::span<double> qp_phys);
 
 /// Compute the closest entity at every quadrature point on a subset of facets
 /// on one mesh, to a subset of facets on the other mesh.
@@ -468,9 +472,9 @@ compute_projection_map(const dolfinx::mesh::Mesh<double>& mesh,
     // Temporary data structures used in loop over each
     // quadrature point on each facet
     std::array<double, 9> Jb;
-    mdspan3_t J(Jb.data(), 1, gdim, tdim);
+    mdspan_t<double, 3> J(Jb.data(), 1, gdim, tdim);
     std::array<double, 9> Kb;
-    mdspan3_t K(Kb.data(), 1, tdim, gdim);
+    mdspan_t<double, 3> K(Kb.data(), 1, tdim, gdim);
     std::array<double, 1> detJ;
 
     std::array<double, gdim> x;
@@ -579,11 +583,11 @@ compute_raytracing_map(const dolfinx::mesh::Mesh<double>& quadrature_mesh,
       candidate_facets, candidate_mesh);
   // Structures used for computing physical normal
   std::array<double, 9> Jb;
-  mdspan2_t J(Jb.data(), gdim, tdim);
+  mdspan_t<double, 2> J(Jb.data(), gdim, tdim);
   std::array<double, 9> Kb;
-  mdspan2_t K(Kb.data(), tdim, gdim);
+  mdspan_t<double, 2> K(Kb.data(), tdim, gdim);
   std::array<double, 9> Kcb;
-  mdspan2_t K_c(Kcb.data(), tdim, gdim);
+  mdspan_t<double, 2> K_c(Kcb.data(), tdim, gdim);
 
   // Get relevant information from quadrature mesh
   const dolfinx::mesh::Geometry<double>& geom_q = quadrature_mesh.geometry();
@@ -613,7 +617,7 @@ compute_raytracing_map(const dolfinx::mesh::Mesh<double>& quadrature_mesh,
   // Push forward quadrature points to physical space
   std::vector<double> quadrature_points(quadrature_facets.size() / 2
                                         * num_q_points * gdim);
-  cmdspan4_t basis_values_q(basis_q.data(), basis_shape_q);
+  mdspan_t<const double, 4> basis_values_q(basis_q.data(), basis_shape_q);
   compute_physical_points(quadrature_mesh, quadrature_facets, q_offset,
                           basis_values_q, quadrature_points);
 
@@ -819,8 +823,8 @@ compute_raytracing_map(const dolfinx::mesh::Mesh<double>& quadrature_mesh,
     {
       std::vector<std::int32_t> cand_facets_patch(2 * cand_patch.size());
       std::vector<double> padded_qpsb(count_missing_matches * 3);
-      dolfinx_contact::mdspan2_t padded_qps(padded_qpsb.data(),
-                                            count_missing_matches, 3);
+      dolfinx_contact::mdspan_t<double, 2> padded_qps(padded_qpsb.data(),
+                                                      count_missing_matches, 3);
       dolfinx_contact::mdspan_t<const double, 3> qps(
           quadrature_points.data(), quadrature_facets.size() / 2, num_q_points,
           gdim);

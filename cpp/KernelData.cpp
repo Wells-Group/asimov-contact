@@ -90,13 +90,13 @@ dolfinx_contact::KernelData::KernelData(
 }
 //-----------------------------------------------------------------------------
 double dolfinx_contact::KernelData::compute_first_facet_jacobian(
-    const std::size_t facet_index, dolfinx_contact::mdspan2_t J,
-    dolfinx_contact::mdspan2_t K, dolfinx_contact::mdspan2_t J_tot,
-    std::span<double> detJ_scratch,
+    const std::size_t facet_index, dolfinx_contact::mdspan_t<double, 2> J,
+    dolfinx_contact::mdspan_t<double, 2> K,
+    dolfinx_contact::mdspan_t<double, 2> J_tot, std::span<double> detJ_scratch,
     dolfinx_contact::mdspan_t<const double, 2> coords) const
 {
-  dolfinx_contact::cmdspan4_t full_basis(_c_basis_values.data(),
-                                         _c_basis_shape);
+  dolfinx_contact::mdspan_t<const double, 4> full_basis(_c_basis_values.data(),
+                                                        _c_basis_shape);
   dolfinx_contact::s_cmdspan2_t dphi_fc
       = MDSPAN_IMPL_STANDARD_NAMESPACE::submdspan(
           full_basis, std::pair{1, (std::size_t)_tdim + 1},

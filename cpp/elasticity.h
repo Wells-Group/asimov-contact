@@ -27,7 +27,8 @@ namespace dolfinx_contact
 /// @param[in] n_1        1st normal vector, typically n_surf
 /// @param[in] n_2        2nd normal vector, typically n_phys
 /// @param[in] q_pos      offset of quadrature point for accessing dphi
-void compute_normal_strain_basis(mdspan2_t epsn, mdspan2_t tr,
+void compute_normal_strain_basis(mdspan_t<double, 2> epsn,
+                                 mdspan_t<double, 2> tr,
                                  mdspan_t<const double, 2> K,
                                  s_cmdspan3_t s_dphi, std::array<double, 3> n_1,
                                  std::span<const double> n_2,
@@ -47,9 +48,10 @@ void compute_normal_strain_basis(mdspan2_t epsn, mdspan2_t tr,
 /// @param[in] mu    The poisson ratio
 /// @param[in] lmbda The 1st Lame parameter
 /// @param[in] q_pos The offset of quadrature point for accessing dphi
-void compute_sigma_n_basis(mdspan3_t sig_n, mdspan_t<const double, 2> K,
-                           s_cmdspan3_t dphi, std::span<const double> n,
-                           double mu, double lmbda, std::size_t q_pos);
+void compute_sigma_n_basis(mdspan_t<double, 3> sig_n,
+                           mdspan_t<const double, 2> K, s_cmdspan3_t dphi,
+                           std::span<const double> n, double mu, double lmbda,
+                           std::size_t q_pos);
 
 /// @brief Compute sigma(u)*n from grad(u)
 ///
@@ -75,7 +77,8 @@ void compute_sigma_n_u(std::span<double> sig_n_u,
 /// @param[in] mu     The poisson ratio
 /// @param[in] lmbda  The 1st Lame parameter
 /// @param[in] q_pos  The offset of quadrature point for accessing dphi
-void compute_sigma_n_opp(mdspan4_t sig_n_opp, std::span<const double> grad_v,
+void compute_sigma_n_opp(mdspan_t<double, 4> sig_n_opp,
+                         std::span<const double> grad_v,
                          std::span<const double> n, double mu, double lmbda,
                          std::size_t q, std::size_t num_q_points);
 

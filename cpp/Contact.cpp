@@ -369,9 +369,9 @@ dolfinx_contact::Contact::pack_nx(int pair) const
                                             gdim);
   std::array<double, 9> Jb;
   std::array<double, 9> Kb;
-  mdspan2_t J(Jb.data(), gdim, tdim);
-  mdspan2_t K(Kb.data(), tdim, gdim);
-  mdspan4_t full_basis(cmap_basisb.data(), basis_shape);
+  mdspan_t<double, 2> J(Jb.data(), gdim, tdim);
+  mdspan_t<double, 2> K(Kb.data(), tdim, gdim);
+  mdspan_t<double, 4> full_basis(cmap_basisb.data(), basis_shape);
 
   // Loop over quadrature points
   for (std::size_t i = 0; i < quadrature_facets.size(); i += 2)
@@ -433,9 +433,10 @@ void dolfinx_contact::Contact::create_q_phys(int origin_meshtag)
   const std::vector<size_t>& qp_offsets = _quadrature_rule->offset();
   _qp_phys[origin_meshtag].resize((qp_offsets[1] - qp_offsets[0])
                                   * (submesh_facets.size() / 2) * gdim);
-  compute_physical_points(*mesh_sub, submesh_facets, qp_offsets,
-                          cmdspan4_t(_reference_basis.data(), _reference_shape),
-                          _qp_phys[origin_meshtag]);
+  compute_physical_points(
+      *mesh_sub, submesh_facets, qp_offsets,
+      mdspan_t<const double, 4>(_reference_basis.data(), _reference_shape),
+      _qp_phys[origin_meshtag]);
 }
 //------------------------------------------------------------------------------------------------
 void dolfinx_contact::Contact::max_links(int pair)
@@ -536,7 +537,7 @@ dolfinx_contact::Contact::pack_gap(int pair) const
   mdspan_t<const double, 2> coordinate_dofs(coordinate_dofsb.data(), num_dofs_g,
                                             gdim);
   std::array<double, 3> coordb;
-  mdspan2_t coord(coordb.data(), 1, gdim);
+  mdspan_t<double, 2> coord(coordb.data(), 1, gdim);
 
   auto f_to_c = candidate_mesh->topology()->connectivity(tdim - 1, tdim);
   if (!f_to_c)
@@ -552,7 +553,7 @@ dolfinx_contact::Contact::pack_gap(int pair) const
       basis_shape.begin(), basis_shape.end(), 1, std::multiplies{}));
   cmap.tabulate(0, reference_x, shape, cmap_basis);
 
-  cmdspan4_t full_basis(cmap_basis.data(), basis_shape);
+  mdspan_t<const double, 4> full_basis(cmap_basis.data(), basis_shape);
   for (std::size_t i = 0; i < num_facets; ++i)
   {
     int offset = (int)i * cstride;
@@ -662,7 +663,7 @@ dolfinx_contact::Contact::pack_test_functions(
   std::vector<double> basis_valuesb(
       std::reduce(b_shape.cbegin(), b_shape.cend(), 1, std::multiplies{}));
   element->tabulate(basis_valuesb, reference_x, shape, 0);
-  cmdspan4_t basis_values(basis_valuesb.data(), b_shape);
+  mdspan_t<const double, 4> basis_values(basis_valuesb.data(), b_shape);
 
   // Need to apply push forward and dof transformations to test functions
   assert((b_shape.front() == 1) and (b_shape.back() == 1));
@@ -853,7 +854,7 @@ dolfinx_contact::Contact::pack_u_contact(
         "non-indentity maps is not supported");
   }
 
-  cmdspan4_t basis_values(basis_valuesb.data(), b_shape);
+  mdspan_t<const double, 4> basis_values(basis_valuesb.data(), b_shape);
   const std::span<const PetscScalar>& u_coeffs = u_sub.x()->array();
 
   // Get cell index on sub-mesh
@@ -1031,9 +1032,9 @@ dolfinx_contact::Contact::pack_ny(int pair) const
                                             gdim);
   std::array<double, 9> Jb;
   std::array<double, 9> Kb;
-  mdspan2_t J(Jb.data(), gdim, tdim);
-  mdspan2_t K(Kb.data(), tdim, gdim);
-  mdspan4_t full_basis(cmap_basisb.data(), basis_shape);
+  mdspan_t<double, 2> J(Jb.data(), gdim, tdim);
+  mdspan_t<double, 2> K(Kb.data(), tdim, gdim);
+  mdspan_t<double, 4> full_basis(cmap_basisb.data(), basis_shape);
   for (int i = 0; i < (int)num_facets; ++i)
   {
     auto facets = candidate_map->links(i);
@@ -1429,7 +1430,7 @@ dolfinx_contact::Contact::pack_grad_test_functions(
       cells.resize(indices.size());
       std::fill(cells.begin(), cells.end(), linked_cell);
       evaluate_basis_functions(V, x_c, cells, basis_valuesb, 1);
-      cmdspan4_t basis_values(basis_valuesb.data(), b_shape);
+      mdspan_t<const double, 4> basis_values(basis_valuesb.data(), b_shape);
       // Insert basis function values into c
       for (std::size_t k = 0; k < ndofs; k++)
         for (std::size_t q = 0; q < indices.size(); ++q)
@@ -1484,7 +1485,7 @@ dolfinx_contact::Contact::pack_grad_u_contact(
   // NOTE: Assuming same number of quadrature points on each cell
   dolfinx_contact::error::check_cell_type(mesh->topology()->cell_type());
   std::vector<double> points(num_facets * num_q_points * gdim);
-  mdspan3_t pts(points.data(), num_facets, num_q_points, gdim);
+  mdspan_t<double, 3> pts(points.data(), num_facets, num_q_points, gdim);
   std::vector<std::int32_t> cells(num_facets * num_q_points, -1);
   for (std::size_t i = 0; i < num_facets; ++i)
   {
@@ -1514,8 +1515,8 @@ dolfinx_contact::Contact::pack_grad_u_contact(
 
   const std::size_t num_basis_functions = b_shape[2];
   const std::size_t value_size = b_shape[3];
-  mdspan4_t bvals(basis_values.data(), b_shape[0], b_shape[1], b_shape[2],
-                  b_shape[3]);
+  mdspan_t<double, 4> bvals(basis_values.data(), b_shape[0], b_shape[1],
+                            b_shape[2], b_shape[3]);
   std::vector<PetscScalar> coefficients(num_basis_functions * bs_element);
   for (std::size_t i = 0; i < num_facets; ++i)
   {

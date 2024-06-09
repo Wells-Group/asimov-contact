@@ -78,11 +78,11 @@ dolfinx_contact::generate_contact_kernel(
     // Create data structures for jacobians
     // We allocate more memory than required, but its better for the compiler
     std::array<double, 9> Jb;
-    mdspan2_t J(Jb.data(), gdim, tdim);
+    mdspan_t<double, 2> J(Jb.data(), gdim, tdim);
     std::array<double, 9> Kb;
-    mdspan2_t K(Kb.data(), tdim, gdim);
+    mdspan_t<double, 2> K(Kb.data(), tdim, gdim);
     std::array<double, 6> J_totb;
-    mdspan2_t J_tot(J_totb.data(), gdim, tdim - 1);
+    mdspan_t<double, 2> J_tot(J_totb.data(), gdim, tdim - 1);
     double detJ = 0;
     std::array<double, 18> detJ_scratch;
 
@@ -117,9 +117,9 @@ dolfinx_contact::generate_contact_kernel(
     // Temporary data structures used inside quadrature loop
     std::array<double, 3> n_surf = {0, 0, 0};
     std::vector<double> epsnb(ndofs_cell * gdim, 0);
-    mdspan2_t epsn(epsnb.data(), ndofs_cell, gdim);
+    mdspan_t<double, 2> epsn(epsnb.data(), ndofs_cell, gdim);
     std::vector<double> trb(ndofs_cell * gdim, 0);
-    mdspan2_t tr(trb.data(), ndofs_cell, gdim);
+    mdspan_t<double, 2> tr(trb.data(), ndofs_cell, gdim);
     std::vector<double> sig_n_u(gdim);
 
     // Loop over quadrature points
@@ -228,11 +228,11 @@ dolfinx_contact::generate_contact_kernel(
     // Create data structures for jacobians
     // We allocate more memory than required, but its better for the compiler
     std::array<double, 9> Jb;
-    mdspan2_t J(Jb.data(), gdim, tdim);
+    mdspan_t<double, 2> J(Jb.data(), gdim, tdim);
     std::array<double, 9> Kb;
-    mdspan2_t K(Kb.data(), tdim, gdim);
+    mdspan_t<double, 2> K(Kb.data(), tdim, gdim);
     std::array<double, 6> J_totb;
-    mdspan2_t J_tot(J_totb.data(), gdim, tdim - 1);
+    mdspan_t<double, 2> J_tot(J_totb.data(), gdim, tdim - 1);
     double detJ = 0;
     std::array<double, 18> detJ_scratch;
 
@@ -266,9 +266,9 @@ dolfinx_contact::generate_contact_kernel(
     std::span<const double> weights = kd.weights(facet_index);
     std::array<double, 3> n_surf = {0, 0, 0};
     std::vector<double> epsnb(ndofs_cell * gdim);
-    mdspan2_t epsn(epsnb.data(), ndofs_cell, gdim);
+    mdspan_t<double, 2> epsn(epsnb.data(), ndofs_cell, gdim);
     std::vector<double> trb(ndofs_cell * gdim);
-    mdspan2_t tr(trb.data(), ndofs_cell, gdim);
+    mdspan_t<double, 2> tr(trb.data(), ndofs_cell, gdim);
     std::vector<double> sig_n_u(gdim);
 
     // Loop over quadrature points
@@ -395,11 +395,11 @@ dolfinx_contact::generate_contact_kernel(
     // Create data structures for jacobians
     // We allocate more memory than required, but its better for the compiler
     std::array<double, 9> Jb;
-    mdspan2_t J(Jb.data(), gdim, tdim);
+    mdspan_t<double, 2> J(Jb.data(), gdim, tdim);
     std::array<double, 9> Kb;
-    mdspan2_t K(Kb.data(), tdim, gdim);
+    mdspan_t<double, 2> K(Kb.data(), tdim, gdim);
     std::array<double, 6> J_totb;
-    mdspan2_t J_tot(J_totb.data(), gdim, tdim - 1);
+    mdspan_t<double, 2> J_tot(J_totb.data(), gdim, tdim - 1);
     double detJ = 0;
     std::array<double, 18> detJ_scratch;
 
@@ -436,12 +436,12 @@ dolfinx_contact::generate_contact_kernel(
     std::array<double, 3> n_surf = {0, 0, 0};
     std::array<double, 3> Pt_u = {0, 0, 0};
     std::vector<double> epsnb(ndofs_cell * gdim, 0);
-    mdspan2_t epsn(epsnb.data(), ndofs_cell, gdim);
+    mdspan_t<double, 2> epsn(epsnb.data(), ndofs_cell, gdim);
     std::vector<double> trb(ndofs_cell * gdim, 0);
-    mdspan2_t tr(trb.data(), ndofs_cell, gdim);
+    mdspan_t<double, 2> tr(trb.data(), ndofs_cell, gdim);
     std::vector<double> sig_n_u(gdim);
     std::vector<double> sig_nb(ndofs_cell * gdim * gdim);
-    mdspan3_t sig_n(sig_nb.data(), ndofs_cell, gdim, gdim);
+    mdspan_t<double, 3> sig_n(sig_nb.data(), ndofs_cell, gdim, gdim);
 
     // Loop over quadrature points
     const std::size_t q_start = kd.qp_offsets(facet_index);
@@ -580,11 +580,11 @@ dolfinx_contact::generate_contact_kernel(
     // Create data structures for jacobians
     // We allocate more memory than required, but its better for the compiler
     std::array<double, 9> Jb;
-    mdspan2_t J(Jb.data(), gdim, tdim);
+    mdspan_t<double, 2> J(Jb.data(), gdim, tdim);
     std::array<double, 9> Kb;
-    mdspan2_t K(Kb.data(), tdim, gdim);
+    mdspan_t<double, 2> K(Kb.data(), tdim, gdim);
     std::array<double, 6> J_totb;
-    mdspan2_t J_tot(J_totb.data(), gdim, tdim - 1);
+    mdspan_t<double, 2> J_tot(J_totb.data(), gdim, tdim - 1);
     double detJ = 0;
     std::array<double, 18> detJ_scratch;
 
@@ -620,12 +620,12 @@ dolfinx_contact::generate_contact_kernel(
     std::array<double, 3> n_surf = {0, 0, 0};
     std::array<double, 3> Pt_u = {0, 0, 0};
     std::vector<double> epsnb(ndofs_cell * gdim);
-    mdspan2_t epsn(epsnb.data(), ndofs_cell, gdim);
+    mdspan_t<double, 2> epsn(epsnb.data(), ndofs_cell, gdim);
     std::vector<double> trb(ndofs_cell * gdim);
-    mdspan2_t tr(trb.data(), ndofs_cell, gdim);
+    mdspan_t<double, 2> tr(trb.data(), ndofs_cell, gdim);
     std::vector<double> sig_n_u(gdim);
     std::vector<double> sig_nb(ndofs_cell * gdim * gdim);
-    mdspan3_t sig_n(sig_nb.data(), ndofs_cell, gdim, gdim);
+    mdspan_t<double, 3> sig_n(sig_nb.data(), ndofs_cell, gdim, gdim);
 
     // Loop over quadrature points
     for (auto q : q_indices)
@@ -812,11 +812,11 @@ dolfinx_contact::generate_contact_kernel(
     // Create data structures for jacobians
     // We allocate more memory than required, but its better for the compiler
     std::array<double, 9> Jb;
-    mdspan2_t J(Jb.data(), gdim, tdim);
+    mdspan_t<double, 2> J(Jb.data(), gdim, tdim);
     std::array<double, 9> Kb;
-    mdspan2_t K(Kb.data(), tdim, gdim);
+    mdspan_t<double, 2> K(Kb.data(), tdim, gdim);
     std::array<double, 6> J_totb;
-    mdspan2_t J_tot(J_totb.data(), gdim, tdim - 1);
+    mdspan_t<double, 2> J_tot(J_totb.data(), gdim, tdim - 1);
     double detJ = 0;
     std::array<double, 18> detJ_scratch;
 
@@ -856,12 +856,12 @@ dolfinx_contact::generate_contact_kernel(
     std::array<double, 3> Pt_u = {0, 0, 0};
     std::array<double, 3> v_rel = {0, 0, 0};
     std::vector<double> epsnb(ndofs_cell * gdim, 0);
-    mdspan2_t epsn(epsnb.data(), ndofs_cell, gdim);
+    mdspan_t<double, 2> epsn(epsnb.data(), ndofs_cell, gdim);
     std::vector<double> trb(ndofs_cell * gdim, 0);
-    mdspan2_t tr(trb.data(), ndofs_cell, gdim);
+    mdspan_t<double, 2> tr(trb.data(), ndofs_cell, gdim);
     std::vector<double> sig_n_u(gdim);
     std::vector<double> sig_nb(ndofs_cell * gdim * gdim);
-    mdspan3_t sig_n(sig_nb.data(), ndofs_cell, gdim, gdim);
+    mdspan_t<double, 3> sig_n(sig_nb.data(), ndofs_cell, gdim, gdim);
 
     // Loop over quadrature points
     const std::size_t q_start = kd.qp_offsets(facet_index);
@@ -1010,11 +1010,11 @@ dolfinx_contact::generate_contact_kernel(
     // Create data structures for jacobians
     // We allocate more memory than required, but its better for the compiler
     std::array<double, 9> Jb;
-    mdspan2_t J(Jb.data(), gdim, tdim);
+    mdspan_t<double, 2> J(Jb.data(), gdim, tdim);
     std::array<double, 9> Kb;
-    mdspan2_t K(Kb.data(), tdim, gdim);
+    mdspan_t<double, 2> K(Kb.data(), tdim, gdim);
     std::array<double, 6> J_totb;
-    mdspan2_t J_tot(J_totb.data(), gdim, tdim - 1);
+    mdspan_t<double, 2> J_tot(J_totb.data(), gdim, tdim - 1);
     double detJ = 0;
     std::array<double, 18> detJ_scratch;
 
@@ -1052,12 +1052,12 @@ dolfinx_contact::generate_contact_kernel(
     std::array<double, 3> Pt_u = {0, 0, 0};
     std::array<double, 3> v_rel = {0, 0, 0};
     std::vector<double> epsnb(ndofs_cell * gdim);
-    mdspan2_t epsn(epsnb.data(), ndofs_cell, gdim);
+    mdspan_t<double, 2> epsn(epsnb.data(), ndofs_cell, gdim);
     std::vector<double> trb(ndofs_cell * gdim);
-    mdspan2_t tr(trb.data(), ndofs_cell, gdim);
+    mdspan_t<double, 2> tr(trb.data(), ndofs_cell, gdim);
     std::vector<double> sig_n_u(gdim);
     std::vector<double> sig_nb(ndofs_cell * gdim * gdim);
-    mdspan3_t sig_n(sig_nb.data(), ndofs_cell, gdim, gdim);
+    mdspan_t<double, 3> sig_n(sig_nb.data(), ndofs_cell, gdim, gdim);
 
     // Loop over quadrature points
     for (auto q : q_indices)

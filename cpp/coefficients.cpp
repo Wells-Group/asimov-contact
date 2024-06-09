@@ -14,10 +14,11 @@ using namespace dolfinx_contact;
 
 void dolfinx_contact::transformed_push_forward(
     const dolfinx::fem::FiniteElement<double>* element,
-    cmdspan4_t reference_basis, std::vector<double>& element_basisb,
-    mdspan3_t basis_values, mdspan_t<const double, 2> J,
-    mdspan_t<const double, 2> K, double detJ, std::size_t basis_offset,
-    std::size_t q, std::int32_t cell, std::span<const std::uint32_t> cell_info)
+    mdspan_t<const double, 4> reference_basis,
+    std::vector<double>& element_basisb, mdspan_t<double, 3> basis_values,
+    mdspan_t<const double, 2> J, mdspan_t<const double, 2> K, double detJ,
+    std::size_t basis_offset, std::size_t q, std::int32_t cell,
+    std::span<const std::uint32_t> cell_info)
 {
   const std::function<void(const std::span<PetscScalar>&,
                            const std::span<const std::uint32_t>&, std::int32_t,
@@ -28,12 +29,12 @@ void dolfinx_contact::transformed_push_forward(
   // Get push forward function
   auto push_forward_fn
       = element->basix_element()
-            .map_fn<dolfinx_contact::mdspan2_t,
+            .map_fn<dolfinx_contact::mdspan_t<double, 2>,
                     dolfinx_contact::mdspan_t<const double, 2>,
                     dolfinx_contact::mdspan_t<const double, 2>,
                     dolfinx_contact::mdspan_t<const double, 2>>();
-  mdspan2_t element_basis(element_basisb.data(), basis_values.extent(1),
-                          basis_values.extent(2));
+  mdspan_t<double, 2> element_basis(
+      element_basisb.data(), basis_values.extent(1), basis_values.extent(2));
 
   // Copy basis values prior to calling transformation
   for (std::size_t j = 0; j < element_basis.extent(0); ++j)
@@ -107,7 +108,7 @@ dolfinx_contact::pack_coefficient_quadrature(
   std::vector<double> reference_basisb(
       std::reduce(tab_shape.cbegin(), tab_shape.cend(), 1, std::multiplies{}));
   element->tabulate(reference_basisb, q_points, p_shape, 0);
-  cmdspan4_t reference_basis(reference_basisb.data(), tab_shape);
+  mdspan_t<const double, 4> reference_basis(reference_basisb.data(), tab_shape);
 
   assert(value_size / bs == tab_shape[3]);
 
@@ -166,23 +167,25 @@ dolfinx_contact::pack_coefficient_quadrature(
     std::vector<double> c_basisb(
         std::reduce(c_shape.cbegin(), c_shape.cend(), 1, std::multiplies{}));
     cmap.tabulate(1, q_points, p_shape, c_basisb);
-    cmdspan4_t c_basis(c_basisb.data(), c_shape);
+    mdspan_t<const double, 4> c_basis(c_basisb.data(), c_shape);
 
     // Prepare geometry data structures
     std::array<double, 9> Jb;
     std::array<double, 9> Kb;
-    mdspan2_t J(Jb.data(), gdim, tdim);
-    mdspan2_t K(Kb.data(), tdim, gdim);
+    mdspan_t<double, 2> J(Jb.data(), gdim, tdim);
+    mdspan_t<double, 2> K(Kb.data(), tdim, gdim);
     std::vector<double> detJ_scratch(2 * gdim * tdim);
     std::vector<double> coordinate_dofsb(num_dofs_g * gdim);
-    mdspan2_t coordinate_dofs(coordinate_dofsb.data(), num_dofs_g, gdim);
+    mdspan_t<double, 2> coordinate_dofs(coordinate_dofsb.data(), num_dofs_g,
+                                        gdim);
 
     // Prepare transformation function
     std::vector<double> element_basisb(tab_shape[2] * tab_shape[3]);
     std::vector<double> basis_valuesb(num_points_per_entity * tab_shape[2]
                                       * tab_shape[3]);
-    mdspan3_t basis_values(basis_valuesb.data(), num_points_per_entity,
-                           tab_shape[2], tab_shape[3]);
+    mdspan_t<double, 3> basis_values(basis_valuesb.data(),
+                                     num_points_per_entity, tab_shape[2],
+                                     tab_shape[3]);
 
     for (std::size_t i = 0; i < num_active_entities; i++)
     {
@@ -378,7 +381,7 @@ dolfinx_contact::pack_gradient_quadrature(
   std::vector<double> reference_basisb(
       std::reduce(tab_shape.cbegin(), tab_shape.cend(), 1, std::multiplies{}));
   element->tabulate(reference_basisb, q_points, p_shape, 1);
-  cmdspan4_t reference_basis(reference_basisb.data(), tab_shape);
+  mdspan_t<const double, 4> reference_basis(reference_basisb.data(), tab_shape);
   assert(value_size / bs == tab_shape[3]);
 
   // Get geometry data
@@ -398,16 +401,17 @@ dolfinx_contact::pack_gradient_quadrature(
   std::vector<double> c_basisb(
       std::reduce(c_shape.cbegin(), c_shape.cend(), 1, std::multiplies{}));
   cmap.tabulate(1, q_points, p_shape, c_basisb);
-  cmdspan4_t c_basis(c_basisb.data(), c_shape);
+  mdspan_t<const double, 4> c_basis(c_basisb.data(), c_shape);
 
   // Prepare geometry data structures
   std::array<double, 9> Jb;
   std::array<double, 9> Kb;
-  mdspan2_t J(Jb.data(), gdim, tdim);
-  mdspan2_t K(Kb.data(), tdim, gdim);
+  mdspan_t<double, 2> J(Jb.data(), gdim, tdim);
+  mdspan_t<double, 2> K(Kb.data(), tdim, gdim);
   std::vector<double> detJ_scratch(2 * gdim * tdim);
   std::vector<double> coordinate_dofsb(num_dofs_g * gdim);
-  mdspan2_t coordinate_dofs(coordinate_dofsb.data(), num_dofs_g, gdim);
+  mdspan_t<double, 2> coordinate_dofs(coordinate_dofsb.data(), num_dofs_g,
+                                      gdim);
 
   std::size_t num_active_entities;
   switch (integral)
@@ -587,7 +591,8 @@ dolfinx_contact::pack_circumradius(const dolfinx::mesh::Mesh<double>& mesh,
       std::reduce(tab_shape.cbegin(), tab_shape.cend(), 1, std::multiplies{}));
   assert(tab_shape.back() == 1);
   cmap.tabulate(1, q_points, q_shape, coordinate_basisb);
-  cmdspan4_t coordinate_basis(coordinate_basisb.data(), tab_shape);
+  mdspan_t<const double, 4> coordinate_basis(coordinate_basisb.data(),
+                                             tab_shape);
 
   // Prepare output variables
   std::vector<PetscScalar> circumradius;
@@ -606,11 +611,12 @@ dolfinx_contact::pack_circumradius(const dolfinx::mesh::Mesh<double>& mesh,
 
   std::array<double, 9> Jb;
   std::array<double, 9> Kb;
-  mdspan2_t J(Jb.data(), gdim, tdim);
-  mdspan2_t K(Kb.data(), tdim, gdim);
+  mdspan_t<double, 2> J(Jb.data(), gdim, tdim);
+  mdspan_t<double, 2> K(Kb.data(), tdim, gdim);
   std::vector<double> detJ_scratch(2 * gdim * tdim);
   std::vector<double> coordinate_dofsb(num_dofs_g * gdim);
-  mdspan2_t coordinate_dofs(coordinate_dofsb.data(), num_dofs_g, gdim);
+  mdspan_t<double, 2> coordinate_dofs(coordinate_dofsb.data(), num_dofs_g,
+                                      gdim);
 
   assert(num_dofs_g == tab_shape[2]);
   for (std::size_t i = 0; i < active_facets.size(); i += 2)

@@ -50,11 +50,11 @@ dolfinx_contact::generate_meshtie_kernel(
     // Create data structures for jacobians
     // We allocate more memory than required, but its better for the compiler
     std::array<double, 9> Jb;
-    mdspan2_t J(Jb.data(), gdim, tdim);
+    mdspan_t<double, 2> J(Jb.data(), gdim, tdim);
     std::array<double, 9> Kb;
-    mdspan2_t K(Kb.data(), tdim, gdim);
+    mdspan_t<double, 2> K(Kb.data(), tdim, gdim);
     std::array<double, 6> J_totb;
-    mdspan2_t J_tot(J_totb.data(), gdim, tdim - 1);
+    mdspan_t<double, 2> J_tot(J_totb.data(), gdim, tdim - 1);
     double detJ = 0;
     std::array<double, 18> detJ_scratch;
 
@@ -92,8 +92,9 @@ dolfinx_contact::generate_meshtie_kernel(
     std::vector<double> sig_n_oppb(num_links * ndofs_cell * gdim * gdim);
     std::vector<double> sig_n_u(gdim);
     std::vector<double> jump_u(gdim);
-    mdspan3_t sig_n(sig_nb.data(), ndofs_cell, gdim, gdim);
-    mdspan4_t sig_n_opp(sig_n_oppb.data(), num_links, ndofs_cell, gdim, gdim);
+    mdspan_t<double, 3> sig_n(sig_nb.data(), ndofs_cell, gdim, gdim);
+    mdspan_t<double, 4> sig_n_opp(sig_n_oppb.data(), num_links, ndofs_cell,
+                                  gdim, gdim);
 
     // Loop over quadrature points
     std::array<std::size_t, 2> q_offset
@@ -193,11 +194,11 @@ dolfinx_contact::generate_meshtie_kernel(
     // Create data structures for jacobians
     // We allocate more memory than required, but its better for the compiler
     std::array<double, 9> Jb;
-    mdspan2_t J(Jb.data(), gdim, tdim);
+    mdspan_t<double, 2> J(Jb.data(), gdim, tdim);
     std::array<double, 9> Kb;
-    mdspan2_t K(Kb.data(), tdim, gdim);
+    mdspan_t<double, 2> K(Kb.data(), tdim, gdim);
     std::array<double, 6> J_totb;
-    mdspan2_t J_tot(J_totb.data(), gdim, tdim - 1);
+    mdspan_t<double, 2> J_tot(J_totb.data(), gdim, tdim - 1);
     double detJ = 0;
     std::array<double, 18> detJ_scratch;
 
@@ -294,11 +295,11 @@ dolfinx_contact::generate_meshtie_kernel(
     // Create data structures for jacobians
     // We allocate more memory than required, but its better for the compiler
     std::array<double, 9> Jb;
-    mdspan2_t J(Jb.data(), gdim, tdim);
+    mdspan_t<double, 2> J(Jb.data(), gdim, tdim);
     std::array<double, 9> Kb;
-    mdspan2_t K(Kb.data(), tdim, gdim);
+    mdspan_t<double, 2> K(Kb.data(), tdim, gdim);
     std::array<double, 6> J_totb;
-    mdspan2_t J_tot(J_totb.data(), gdim, tdim - 1);
+    mdspan_t<double, 2> J_tot(J_totb.data(), gdim, tdim - 1);
     double detJ = 0;
     std::array<double, 18> detJ_scratch;
 
@@ -334,8 +335,9 @@ dolfinx_contact::generate_meshtie_kernel(
     // Temporary data structures used inside quadrature loop
     std::vector<double> sig_nb(ndofs_cell * gdim * gdim);
     std::vector<double> sig_n_oppb(num_links * ndofs_cell * gdim * gdim);
-    mdspan3_t sig_n(sig_nb.data(), ndofs_cell, gdim, gdim);
-    mdspan4_t sig_n_opp(sig_n_oppb.data(), num_links, ndofs_cell, gdim, gdim);
+    mdspan_t<double, 3> sig_n(sig_nb.data(), ndofs_cell, gdim, gdim);
+    mdspan_t<double, 4> sig_n_opp(sig_n_oppb.data(), num_links, ndofs_cell,
+                                  gdim, gdim);
 
     // Loop over quadrature points
     std::array<std::size_t, 2> q_offset
@@ -492,11 +494,11 @@ dolfinx_contact::generate_poisson_kernel(
     // Create data structures for jacobians
     // We allocate more memory than required, but its better for the compiler
     std::array<double, 9> Jb;
-    mdspan2_t J(Jb.data(), gdim, tdim);
+    mdspan_t<double, 2> J(Jb.data(), gdim, tdim);
     std::array<double, 9> Kb;
-    mdspan2_t K(Kb.data(), tdim, gdim);
+    mdspan_t<double, 2> K(Kb.data(), tdim, gdim);
     std::array<double, 6> J_totb;
-    mdspan2_t J_tot(J_totb.data(), gdim, tdim - 1);
+    mdspan_t<double, 2> J_tot(J_totb.data(), gdim, tdim - 1);
     double detJ = 0;
     std::array<double, 18> detJ_scratch;
 
@@ -619,11 +621,11 @@ dolfinx_contact::generate_poisson_kernel(
     // Create data structures for jacobians
     // We allocate more memory than required, but its better for the compiler
     std::array<double, 9> Jb;
-    mdspan2_t J(Jb.data(), gdim, tdim);
+    mdspan_t<double, 2> J(Jb.data(), gdim, tdim);
     std::array<double, 9> Kb;
-    mdspan2_t K(Kb.data(), tdim, gdim);
+    mdspan_t<double, 2> K(Kb.data(), tdim, gdim);
     std::array<double, 6> J_totb;
-    mdspan2_t J_tot(J_totb.data(), gdim, tdim - 1);
+    mdspan_t<double, 2> J_tot(J_totb.data(), gdim, tdim - 1);
     double detJ = 0;
     std::array<double, 18> detJ_scratch;
 

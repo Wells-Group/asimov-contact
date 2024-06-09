@@ -85,7 +85,8 @@ dolfinx_contact::QuadratureRule::QuadratureRule(dolfinx::mesh::CellType ct,
       entity_element.tabulate(0, q_points, {num_points, tdim},
                               reference_entity_b);
 
-      cmdspan4_t basis_full(reference_entity_b.data(), e_tab_shape);
+      mdspan_t<const double, 4> basis_full(reference_entity_b.data(),
+                                           e_tab_shape);
       auto phi = MDSPAN_IMPL_STANDARD_NAMESPACE::submdspan(
           basis_full, 0, MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent,
           MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent, 0);
@@ -98,8 +99,8 @@ dolfinx_contact::QuadratureRule::QuadratureRule(dolfinx::mesh::CellType ct,
       // entity on cell
       const std::size_t offset = _points.size();
       _points.resize(_points.size() + num_points * coords.extent(1));
-      mdspan2_t entity_qp(_points.data() + offset, num_points,
-                          coords.extent(1));
+      mdspan_t<double, 2> entity_qp(_points.data() + offset, num_points,
+                                    coords.extent(1));
       assert(coords.extent(1) == _tdim);
       dolfinx::math::dot(phi, coords, entity_qp);
       const std::size_t weights_offset = _weights.size();

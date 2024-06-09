@@ -269,12 +269,12 @@ int raytracing_cell(
   assert(std::size_t(std::reduce(basis_shape.cbegin(), basis_shape.cend(), 1,
                                  std::multiplies{}))
          == basis_values.size());
-  cmdspan4_t basis(basis_values.data(), basis_shape);
+  mdspan_t<const double, 4> basis(basis_values.data(), basis_shape);
   auto dphi = MDSPAN_IMPL_STANDARD_NAMESPACE::submdspan(
       basis, std::pair{1, tdim + 1}, 0,
       MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent, 0);
   mdspan_t<const double, 2> coords(coordinate_dofs.data(), cmap.dim(), gdim);
-  mdspan2_t _xk(x_k.data(), 1, gdim);
+  mdspan_t<double, 2> _xk(x_k.data(), 1, gdim);
   for (int k = 0; k < max_iter; ++k)
   {
     // Evaluate reference coordinate at current iteration

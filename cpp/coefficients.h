@@ -29,10 +29,11 @@ namespace dolfinx_contact
 /// @param[in] cell_info The cell info
 void transformed_push_forward(
     const dolfinx::fem::FiniteElement<double>* element,
-    cmdspan4_t reference_basis, std::vector<double>& element_basisb,
-    mdspan3_t basis_values, mdspan_t<const double, 2> J,
-    mdspan_t<const double, 2> K, double detJ, std::size_t basis_offset,
-    std::size_t q, std::int32_t cell, std::span<const std::uint32_t> cell_info);
+    mdspan_t<const double, 4> reference_basis,
+    std::vector<double>& element_basisb, mdspan_t<double, 3> basis_values,
+    mdspan_t<const double, 2> J, mdspan_t<const double, 2> K, double detJ,
+    std::size_t basis_offset, std::size_t q, std::int32_t cell,
+    std::span<const std::uint32_t> cell_info);
 
 /// @brief Pack a coefficient at quadrature points.
 ///
