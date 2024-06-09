@@ -101,7 +101,8 @@ double dolfinx_contact::KernelData::compute_first_facet_jacobian(
           full_basis, std::pair{1, (std::size_t)_tdim + 1},
           _qp_offsets[facet_index], MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent,
           0);
-  dolfinx_contact::cmdspan3_t ref_jacs(_ref_jacobians.data(), _jac_shape);
+  dolfinx_contact::mdspan_t<const double, 3> ref_jacs(_ref_jacobians.data(),
+                                                      _jac_shape);
   auto J_f = MDSPAN_IMPL_STANDARD_NAMESPACE::submdspan(
       ref_jacs, (std::size_t)facet_index,
       MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent,
@@ -127,8 +128,10 @@ dolfinx_contact::KernelData::weights(std::size_t i) const
                    _qp_offsets[i + 1] - _qp_offsets[i]);
 }
 //-----------------------------------------------------------------------------
-dolfinx_contact::cmdspan3_t dolfinx_contact::KernelData::ref_jacobians() const
+dolfinx_contact::mdspan_t<const double, 3>
+dolfinx_contact::KernelData::ref_jacobians() const
 {
-  return dolfinx_contact::cmdspan3_t(_ref_jacobians.data(), _jac_shape);
+  return dolfinx_contact::mdspan_t<const double, 3>(_ref_jacobians.data(),
+                                                    _jac_shape);
 }
 //-----------------------------------------------------------------------------

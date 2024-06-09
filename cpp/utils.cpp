@@ -1035,9 +1035,9 @@ dolfinx_contact::compute_distance_map(
     {
       dolfinx_contact::mdspan3_t padded_qps(
           padded_qpsb.data(), quadrature_facets.size() / 2, num_q_points, 3);
-      dolfinx_contact::cmdspan3_t qps(quadrature_points.data(),
-                                      quadrature_facets.size() / 2,
-                                      num_q_points, gdim);
+      dolfinx_contact::mdspan_t<const double, 3> qps(
+          quadrature_points.data(), quadrature_facets.size() / 2, num_q_points,
+          gdim);
       for (std::size_t i = 0; i < qps.extent(0); ++i)
         for (std::size_t j = 0; j < qps.extent(1); ++j)
           for (std::size_t k = 0; k < qps.extent(2); ++k)

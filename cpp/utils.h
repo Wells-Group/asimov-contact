@@ -646,7 +646,7 @@ compute_raytracing_map(const dolfinx::mesh::Mesh<double>& quadrature_mesh,
   auto [ref_jac, jac_shape] = basix::cell::facet_jacobians<double>(basix_cell);
   assert(tdim == jac_shape[1]);
   assert(tdim - 1 == jac_shape[2]);
-  cmdspan3_t facet_jacobians(ref_jac.data(), jac_shape);
+  mdspan_t<const double, 3> facet_jacobians(ref_jac.data(), jac_shape);
 
   // Get basix geometry information
   std::pair<std::vector<double>, std::array<std::size_t, 2>> geometry
@@ -816,9 +816,9 @@ compute_raytracing_map(const dolfinx::mesh::Mesh<double>& quadrature_mesh,
       std::vector<double> padded_qpsb(count_missing_matches * 3);
       dolfinx_contact::mdspan2_t padded_qps(padded_qpsb.data(),
                                             count_missing_matches, 3);
-      dolfinx_contact::cmdspan3_t qps(quadrature_points.data(),
-                                      quadrature_facets.size() / 2,
-                                      num_q_points, gdim);
+      dolfinx_contact::mdspan_t<const double, 3> qps(
+          quadrature_points.data(), quadrature_facets.size() / 2, num_q_points,
+          gdim);
 
       // Retrieve remaining quadrature points
       for (std::size_t j = 0; j < padded_qps.extent(0); ++j)

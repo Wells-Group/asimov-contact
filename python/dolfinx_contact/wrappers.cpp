@@ -159,7 +159,8 @@ NB_MODULE(cpp, m)
           [](dolfinx_contact::Contact& self, int origin_meshtag, int facet)
           {
             auto [qp, qp_shape] = self.qp_phys(origin_meshtag);
-            dolfinx_contact::cmdspan3_t qp_span(qp.data(), qp_shape);
+            dolfinx_contact::mdspan_t<const double, 3> qp_span(qp.data(),
+                                                               qp_shape);
             std::vector<double> qp_vec(qp_shape[1] * qp_shape[2]);
             for (std::size_t i = 0; i < qp_shape[1]; ++i)
               for (std::size_t j = 0; j < qp_shape[2]; ++j)

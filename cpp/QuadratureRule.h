@@ -14,14 +14,17 @@
 namespace dolfinx_contact
 {
 namespace stdex = std::experimental;
+
+template <typename T, std::size_t d, typename S = stdex::layout_stride>
+using mdspan_t = MDSPAN_IMPL_STANDARD_NAMESPACE::mdspan<
+    T, MDSPAN_IMPL_STANDARD_NAMESPACE::dextents<std::size_t, d>>;
+
 using mdspan2_t = MDSPAN_IMPL_STANDARD_NAMESPACE::mdspan<
     double, MDSPAN_IMPL_STANDARD_NAMESPACE::dextents<std::size_t, 2>>;
 using cmdspan2_t = MDSPAN_IMPL_STANDARD_NAMESPACE::mdspan<
     const double, MDSPAN_IMPL_STANDARD_NAMESPACE::dextents<std::size_t, 2>>;
 using mdspan3_t = MDSPAN_IMPL_STANDARD_NAMESPACE::mdspan<
     double, MDSPAN_IMPL_STANDARD_NAMESPACE::dextents<std::size_t, 3>>;
-using cmdspan3_t = MDSPAN_IMPL_STANDARD_NAMESPACE::mdspan<
-    const double, MDSPAN_IMPL_STANDARD_NAMESPACE::dextents<std::size_t, 3>>;
 using mdspan4_t = MDSPAN_IMPL_STANDARD_NAMESPACE::mdspan<
     double, MDSPAN_IMPL_STANDARD_NAMESPACE::dextents<std::size_t, 4>>;
 using cmdspan4_t = MDSPAN_IMPL_STANDARD_NAMESPACE::mdspan<

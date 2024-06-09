@@ -126,7 +126,7 @@ public:
     auto dphi_fc = MDSPAN_IMPL_STANDARD_NAMESPACE::submdspan(
         full_basis, std::pair{1, (std::size_t)_tdim + 1}, q_pos,
         MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent, 0);
-    cmdspan3_t ref_jacs(_ref_jacobians.data(), _jac_shape);
+    mdspan_t<const double, 3> ref_jacs(_ref_jacobians.data(), _jac_shape);
     auto J_f = MDSPAN_IMPL_STANDARD_NAMESPACE::submdspan(
         ref_jacs, (std::size_t)facet_index,
         MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent,
@@ -161,7 +161,7 @@ public:
   std::span<const double> weights(std::size_t i) const;
 
   // return the reference jacobians
-  cmdspan3_t ref_jacobians() const;
+  mdspan_t<const double, 3> ref_jacobians() const;
 
 private:
   std::uint32_t _gdim;                  // geometrical dimension

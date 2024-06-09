@@ -520,8 +520,8 @@ dolfinx_contact::Contact::pack_gap(int pair) const
   std::array<std::size_t, 2> shape = _reference_contact_shape[pair];
 
   const int q_gdim = quadrature_mesh->geometry().dim();
-  cmdspan3_t qp_span(_qp_phys[quadrature_mt].data(), num_facets, num_q_point,
-                     q_gdim);
+  mdspan_t<const double, 3> qp_span(_qp_phys[quadrature_mt].data(), num_facets,
+                                    num_q_point, q_gdim);
 
   // Get information about submesh geometry and topology
   std::span<const double> x_g = geometry.x();
@@ -927,8 +927,8 @@ dolfinx_contact::Contact::pack_gap_plane(int pair, double g)
   // FIXME: This does not work for prism meshes
   std::size_t num_q_point
       = _quadrature_rule->offset()[1] - _quadrature_rule->offset()[0];
-  cmdspan3_t qp_span(_qp_phys[quadrature_mt].data(), num_facets, num_q_point,
-                     gdim);
+  mdspan_t<const double, 3> qp_span(_qp_phys[quadrature_mt].data(), num_facets,
+                                    num_q_point, gdim);
   std::vector<PetscScalar> c(num_facets * num_q_point * gdim, 0.0);
   const int cstride = (int)num_q_point * gdim;
   for (std::size_t i = 0; i < num_facets; i++)
@@ -1349,8 +1349,8 @@ dolfinx_contact::Contact::pack_grad_test_functions(
   const std::size_t num_q_points
       = _quadrature_rule->offset()[1] - _quadrature_rule->offset()[0];
   std::vector<double> q_points(std::size_t(num_q_points) * std::size_t(gdim));
-  cmdspan3_t qp_span(_qp_phys[quadrature_mt].data(), num_facets, num_q_points,
-                     gdim);
+  mdspan_t<const double, 3> qp_span(_qp_phys[quadrature_mt].data(), num_facets,
+                                    num_q_points, gdim);
 
   std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> facet_map
       = _submesh.facet_map();
