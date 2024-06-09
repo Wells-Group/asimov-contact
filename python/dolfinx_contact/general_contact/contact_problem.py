@@ -261,7 +261,9 @@ class ContactProblem(dolfinx_contact.cpp.Contact):
                 self.coeffs[i][:num_local_facets, offset0:offset1] = normals[:, :]
                 offset0 = offset1
                 offset1 = offset0 + self._num_q_points[i] * gdim * max_links * ndofs_cell
-                self.coeffs[i][:num_local_facets, offset0:offset1] = self.pack_test_functions(i, function_space._cpp_object)
+                self.coeffs[i][:num_local_facets, offset0:offset1] = self.pack_test_functions(
+                    i, function_space._cpp_object
+                )
                 if new_model:
                     self.coeffs[i][:num_local_facets, -normals.shape[1] :] = normals[:, :]
 
@@ -320,7 +322,9 @@ class ContactProblem(dolfinx_contact.cpp.Contact):
                 self.coeffs[i][:num_local_facets, offset0:offset1] = self.pack_normals(i)[:, :]
                 offset0 = offset1
                 offset1 = offset0 + self._num_q_points[i] * gdim * max_links * ndofs_cell
-                self.coeffs[i][:num_local_facets, offset0:offset1] = self.pack_test_functions(i, u.function_space._cpp_object)
+                self.coeffs[i][:num_local_facets, offset0:offset1] = self.pack_test_functions(
+                    i, u.function_space._cpp_object
+                )
 
         # pack grad u
         self._grad_u = []
