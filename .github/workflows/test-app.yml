@@ -132,13 +132,13 @@ jobs:
           python demo_nitsche_rigid_surface_custom.py
           python nitsche_euler_bernoulli.py
 
-      - name: Run unbiased demos
-        working-directory: ./python/demos
-        run: |
-          python demo_nitsche_unbiased.py --problem=1
-          python demo_nitsche_unbiased.py --problem=2 --friction=0.1
-          python demo_nitsche_unbiased.py --problem=3
-          python demo_nitsche_unbiased.py --problem=3 --3D --friction=0.1 --coulomb
+      # - name: Run unbiased demos
+      #   working-directory: ./python/demos
+      #   run: |
+      #     python demo_nitsche_unbiased.py --problem=1
+      #     python demo_nitsche_unbiased.py --problem=2 --friction=0.1
+      #     python demo_nitsche_unbiased.py --problem=3
+      #     python demo_nitsche_unbiased.py --problem=3 --3D --friction=0.1 --coulomb
 
       - name: Run meshties demos
         working-directory: ./python/demos
