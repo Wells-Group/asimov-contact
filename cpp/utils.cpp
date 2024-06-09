@@ -86,6 +86,7 @@ void dolfinx_contact::pull_back(
     std::vector<double> data(
         std::reduce(c_shape.cbegin(), c_shape.cend(), 1, std::multiplies{}));
     std::array<double, 3> X0;
+    std::fill(X0.begin(), X0.end(), 0);
     cmap.tabulate(1, std::span(X0.data(), tdim), {1, tdim}, data);
     dolfinx_contact::cmdspan4_t c_basis(data.data(), c_shape);
 
