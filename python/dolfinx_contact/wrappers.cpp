@@ -318,7 +318,7 @@ NB_MODULE(cpp, m)
       .def(
           "pack_u_contact",
           [](dolfinx_contact::Contact& self, int origin_meshtag,
-             std::shared_ptr<dolfinx::fem::Function<scalar_t>> u)
+             const dolfinx::fem::Function<scalar_t>& u)
           {
             auto [coeffs, cstride] = self.pack_u_contact(origin_meshtag, u);
             int shape0 = cstride == 0 ? 0 : coeffs.size() / cstride;
@@ -328,7 +328,7 @@ NB_MODULE(cpp, m)
           nb::arg("origin_meshtag"), nb::arg("u"))
       .def("pack_grad_u_contact",
            [](dolfinx_contact::Contact& self, int origin_meshtag,
-              std::shared_ptr<dolfinx::fem::Function<scalar_t>> u)
+              const dolfinx::fem::Function<scalar_t>& u)
            {
              auto [coeffs, cstride]
                  = self.pack_grad_u_contact(origin_meshtag, u);
@@ -429,7 +429,7 @@ NB_MODULE(cpp, m)
           "Create a PETSc Mat for tying disconnected meshes.");
   m.def(
       "pack_coefficient_quadrature",
-      [](std::shared_ptr<const dolfinx::fem::Function<scalar_t>> coeff, int q,
+      [](const dolfinx::fem::Function<scalar_t>& coeff, int q,
          nb::ndarray<const std::int32_t, nb::c_contig> entities)
       {
         std::span<const std::int32_t> e_span(entities.data(), entities.size());
@@ -453,7 +453,7 @@ NB_MODULE(cpp, m)
           throw std::invalid_argument("Unsupported entities");
       });
   m.def("pack_gradient_quadrature",
-        [](std::shared_ptr<const dolfinx::fem::Function<scalar_t>> coeff, int q,
+        [](const dolfinx::fem::Function<scalar_t>& coeff, int q,
            nb::ndarray<const std::int32_t, nb::c_contig> entities)
         {
           std::span<const std::int32_t> e_span(entities.data(),

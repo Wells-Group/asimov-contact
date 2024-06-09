@@ -51,14 +51,14 @@ void dolfinx_contact::transformed_push_forward(
 
 std::pair<std::vector<PetscScalar>, int>
 dolfinx_contact::pack_coefficient_quadrature(
-    std::shared_ptr<const dolfinx::fem::Function<PetscScalar>> coeff,
-    int q_degree, std::span<const std::int32_t> active_entities,
+    const dolfinx::fem::Function<PetscScalar>& coeff, int q_degree,
+    std::span<const std::int32_t> active_entities,
     dolfinx::fem::IntegralType integral)
 {
 
   // Get mesh
   std::shared_ptr<const dolfinx::mesh::Mesh<double>> mesh
-      = coeff->function_space()->mesh();
+      = coeff.function_space()->mesh();
   assert(mesh);
 
   // Get topology data
@@ -86,9 +86,9 @@ dolfinx_contact::pack_coefficient_quadrature(
 
   // Get element information
   const dolfinx::fem::FiniteElement<double>* element
-      = coeff->function_space()->element().get();
+      = coeff.function_space()->element().get();
   const std::size_t bs = element->block_size();
-  const std::size_t value_size = coeff->function_space()->value_size();
+  const std::size_t value_size = coeff.function_space()->value_size();
 
   // Tabulate function at quadrature points (assuming no derivatives)
   dolfinx_contact::error::check_cell_type(cell_type);
@@ -129,10 +129,10 @@ dolfinx_contact::pack_coefficient_quadrature(
   std::vector<PetscScalar> coefficients(num_active_entities * cstride, 0.0);
 
   // Get the coeffs to pack
-  const std::span<const double> data = coeff->x()->array();
+  std::span<const double> data = coeff.x()->array();
 
   // Get dofmap info
-  const dolfinx::fem::DofMap* dofmap = coeff->function_space()->dofmap().get();
+  const dolfinx::fem::DofMap* dofmap = coeff.function_space()->dofmap().get();
   const std::size_t dofmap_bs = dofmap->bs();
 
   // Get dof transformations
@@ -322,14 +322,14 @@ dolfinx_contact::pack_coefficient_quadrature(
 
 std::pair<std::vector<PetscScalar>, int>
 dolfinx_contact::pack_gradient_quadrature(
-    std::shared_ptr<const dolfinx::fem::Function<PetscScalar>> coeff,
-    int q_degree, std::span<const std::int32_t> active_entities,
+    const dolfinx::fem::Function<PetscScalar>& coeff, int q_degree,
+    std::span<const std::int32_t> active_entities,
     dolfinx::fem::IntegralType integral)
 {
 
   // Get mesh
   std::shared_ptr<const dolfinx::mesh::Mesh<double>> mesh
-      = coeff->function_space()->mesh();
+      = coeff.function_space()->mesh();
   assert(mesh);
 
   // Get topology data
@@ -357,9 +357,9 @@ dolfinx_contact::pack_gradient_quadrature(
 
   // Get element information
   const dolfinx::fem::FiniteElement<double>* element
-      = coeff->function_space()->element().get();
+      = coeff.function_space()->element().get();
   const std::size_t bs = element->block_size();
-  const std::size_t value_size = coeff->function_space()->value_size();
+  const std::size_t value_size = coeff.function_space()->value_size();
 
   // Tabulate function at quadrature points (assuming one derivatives)
   dolfinx_contact::error::check_cell_type(cell_type);
@@ -425,10 +425,10 @@ dolfinx_contact::pack_gradient_quadrature(
   std::vector<PetscScalar> coefficients(num_active_entities * cstride, 0.0);
 
   // Get the coeffs to pack
-  const std::span<const double> data = coeff->x()->array();
+  const std::span<const double> data = coeff.x()->array();
 
   // Get dofmap info
-  const dolfinx::fem::DofMap* dofmap = coeff->function_space()->dofmap().get();
+  const dolfinx::fem::DofMap* dofmap = coeff.function_space()->dofmap().get();
   const std::size_t dofmap_bs = dofmap->bs();
 
   // Get dof transformations

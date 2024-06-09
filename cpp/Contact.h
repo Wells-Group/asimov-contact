@@ -253,18 +253,17 @@ public:
   /// @param[in] pair index of contact pair
   /// @param[in] gap packed on facets per quadrature point
   /// @param[out] c - test functions packed on facets.
-  std::pair<std::vector<PetscScalar>, int> pack_u_contact(
-      int pair,
-      std::shared_ptr<const dolfinx::fem::Function<PetscScalar>> u) const;
+  std::pair<std::vector<PetscScalar>, int>
+  pack_u_contact(int pair, const dolfinx::fem::Function<PetscScalar>& u) const;
 
   /// @todo Function signature are args docs look wrong
   /// Compute gradient of function on opposite surface at quadrature
   /// points of facets
   /// @param[in] pair index of contact pair
   /// @param[out] u test functions packed on facets.
-  std::pair<std::vector<PetscScalar>, int> pack_grad_u_contact(
-      int pair,
-      std::shared_ptr<const dolfinx::fem::Function<PetscScalar>> u) const;
+  std::pair<std::vector<PetscScalar>, int>
+  pack_grad_u_contact(int pair,
+                      const dolfinx::fem::Function<PetscScalar>& u) const;
 
   /// Compute outward surface normal at x
   /// @param[in] pair index of contact pair

@@ -34,20 +34,21 @@ void transformed_push_forward(
     mdspan3_t basis_values, cmdspan2_t J, cmdspan2_t K, double detJ,
     std::size_t basis_offset, std::size_t q, std::int32_t cell,
     std::span<const std::uint32_t> cell_info);
+
 /// @brief Pack a coefficient at quadrature points.
 ///
-/// Prepare a coefficient (dolfinx::fem::Function) for assembly with custom
-/// kernels by packing them as a vector. The vector is packed such that the
-/// coefficients for the jth entry in active_entities is in the range
-/// c[j*cstride:(j+1)*cstride] where
+/// Prepare a coefficient (dolfinx::fem::Function) for assembly with
+/// custom kernels by packing them as a vector. The vector is packed
+/// such that the coefficients for the jth entry in active_entities is
+/// in the range c[j*cstride:(j+1)*cstride] where
 /// cstride=(num_quadrature_points)*block_size*value_size, where
 /// block_size*value_size is the number of components in coeff.
 ///
-/// @note For the `j`th entry, the coefficients are packed per quadrature point,
-/// i.e. c[j*cstride + q * (block_size * value_size) + k + c] = sum_i c^i[k] *
-/// phi^i(x_q)[c] where c^i[k] is the ith coefficient's kth vector component,
-/// phi^i(x_q)[c] is the ith basis function's c-th value component at the
-/// quadrature point x_q.
+/// @note For the `j`th entry, the coefficients are packed per
+/// quadrature point, i.e. c[j*cstride + q * (block_size * value_size) +
+/// k + c] = sum_i c^i[k] * phi^i(x_q)[c] where c^i[k] is the ith
+/// coefficient's kth vector component, phi^i(x_q)[c] is the ith basis
+/// function's c-th value component at the quadrature point x_q.
 ///
 /// @param[in] coeff The coefficient to pack
 /// @param[in] q_degree The quadrature degree
@@ -55,10 +56,11 @@ void transformed_push_forward(
 /// @param[in] active_entities List of active entities.
 /// @param[in] integral The integral type (cells or exterior facet)
 /// @returns c The packed coefficients and the number of coeffs per entity
-std::pair<std::vector<PetscScalar>, int> pack_coefficient_quadrature(
-    std::shared_ptr<const dolfinx::fem::Function<PetscScalar>> coeff,
-    int q_degree, std::span<const std::int32_t> active_entities,
-    dolfinx::fem::IntegralType integral);
+std::pair<std::vector<PetscScalar>, int>
+pack_coefficient_quadrature(const dolfinx::fem::Function<PetscScalar>& coeff,
+                            int q_degree,
+                            std::span<const std::int32_t> active_entities,
+                            dolfinx::fem::IntegralType integral);
 
 /// @brief Pack the gradient of a coefficient at quadrature points.
 ///
@@ -82,10 +84,11 @@ std::pair<std::vector<PetscScalar>, int> pack_coefficient_quadrature(
 /// @param[in] active_entities List of active entities.
 /// @param[in] integral The integral type (cells or exterior facet)
 /// @returns c The packed coefficients and the number of coeffs per entity
-std::pair<std::vector<PetscScalar>, int> pack_gradient_quadrature(
-    std::shared_ptr<const dolfinx::fem::Function<PetscScalar>> coeff,
-    int q_degree, std::span<const std::int32_t> active_entities,
-    dolfinx::fem::IntegralType integral);
+std::pair<std::vector<PetscScalar>, int>
+pack_gradient_quadrature(const dolfinx::fem::Function<PetscScalar>& coeff,
+                         int q_degree,
+                         std::span<const std::int32_t> active_entities,
+                         dolfinx::fem::IntegralType integral);
 
 /// Prepare circumradii of triangle/tetrahedron for assembly with custom
 /// kernels by packing them as an array, where the ith entry of the output

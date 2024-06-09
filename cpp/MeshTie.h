@@ -119,11 +119,10 @@ public:
   /// @param[in] offset1 - position within coeffs where data on contacting
   /// surface should be added
   /// @param[in] coeff_size - total size of the coefficient array per facet
-  void
-  update_function_data(std::shared_ptr<const dolfinx::fem::Function<double>> u,
-                       std::vector<std::vector<double>>& coeffs,
-                       std::size_t offset0, std::size_t offset1,
-                       std::size_t coeff_size);
+  void update_function_data(const dolfinx::fem::Function<double>& u,
+                            std::vector<std::vector<double>>& coeffs,
+                            std::size_t offset0, std::size_t offset1,
+                            std::size_t coeff_size);
 
   /// Update gradient value data for vector assembly based on state
   /// @param[in] u - the function
@@ -133,7 +132,7 @@ public:
   /// @param[in] offset1 - position within coeffs where data on contacting
   /// surface should be added
   /// @param[in] coeff_size - total size of the coefficient array per facet
-  void update_gradient_data(std::shared_ptr<dolfinx::fem::Function<double>> u,
+  void update_gradient_data(const dolfinx::fem::Function<double>& u,
                             std::vector<std::vector<double>>& coeffs,
                             std::size_t offset0, std::size_t offset1,
                             std::size_t coeff_size);
@@ -145,8 +144,7 @@ public:
   /// @param[in] theta - Nitsche parameter
   void generate_poisson_data_matrix_only(
       const dolfinx::fem::FunctionSpace<double>& V,
-      std::shared_ptr<dolfinx::fem::Function<double>> kdt, double gamma,
-      double theta);
+      const dolfinx::fem::Function<double>& kdt, double gamma, double theta);
 
   using Contact::assemble_vector;
   /// Assemble right hand side

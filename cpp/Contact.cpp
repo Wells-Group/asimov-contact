@@ -776,8 +776,7 @@ void dolfinx_contact::Contact::crop_invalid_points(std::size_t pair,
 //------------------------------------------------------------------------------------------------
 std::pair<std::vector<PetscScalar>, int>
 dolfinx_contact::Contact::pack_u_contact(
-    int pair,
-    std::shared_ptr<const dolfinx::fem::Function<PetscScalar>> u) const
+    int pair, const dolfinx::fem::Function<PetscScalar>& u) const
 {
   dolfinx::common::Timer t("Pack contact u");
   auto [quadrature_mt, candidate_mt] = _contact_pairs[pair];
@@ -794,7 +793,7 @@ dolfinx_contact::Contact::pack_u_contact(
 
   // copy u onto submesh
   auto V_sub = std::make_shared<dolfinx::fem::FunctionSpace<double>>(
-      _submesh.create_functionspace(*u->function_space()));
+      _submesh.create_functionspace(*u.function_space()));
   std::shared_ptr<const dolfinx::fem::FiniteElement<double>> element
       = V_sub->element();
   auto topology = candidate_mesh->topology();
@@ -804,7 +803,7 @@ dolfinx_contact::Contact::pack_u_contact(
   std::shared_ptr<const dolfinx::fem::DofMap> sub_dofmap = V_sub->dofmap();
   assert(sub_dofmap);
   const int bs_dof = sub_dofmap->bs();
-  _submesh.copy_function(*u, u_sub);
+  _submesh.copy_function(u, u_sub);
 
   // Output vector
   const std::size_t num_q_points
@@ -1448,14 +1447,13 @@ dolfinx_contact::Contact::pack_grad_test_functions(
 //-----------------------------------------------------------------------------------------------
 std::pair<std::vector<PetscScalar>, int>
 dolfinx_contact::Contact::pack_grad_u_contact(
-    int pair,
-    std::shared_ptr<const dolfinx::fem::Function<PetscScalar>> u) const
+    int pair, const dolfinx::fem::Function<PetscScalar>& u) const
 {
   auto [quadrature_mt, candidate_mt] = _contact_pairs[pair];
 
   // Mesh inf
   std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V
-      = u->function_space();
+      = u.function_space();
   std::shared_ptr<const dolfinx::mesh::Mesh<double>> mesh = V->mesh();
   const std::size_t gdim = mesh->geometry().dim(); // geometrical dimension
   std::span<const std::int32_t> parent_cells = _submesh.parent_cells();
@@ -1509,7 +1507,7 @@ dolfinx_contact::Contact::pack_grad_u_contact(
   std::fill(basis_values.begin(), basis_values.end(), 0);
   evaluate_basis_functions(*V, reference_x, cells, basis_values, 1);
 
-  const std::span<const PetscScalar>& u_coeffs = u->x()->array();
+  std::span<const PetscScalar> u_coeffs = u.x()->array();
 
   // Create work vector for expansion coefficients
 
