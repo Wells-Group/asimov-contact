@@ -1,4 +1,4 @@
-# Copyright (C) 2021 Sarah Roggendorf
+# Copyright (C) 2021-2024 Sarah Roggendorf and Jørgen S. Dokken
 #
 # SPDX-License-Identifier:    MIT
 #
@@ -21,6 +21,7 @@ from mpi4py import MPI
 
 import dolfinx.fem as _fem
 import numpy as np
+import numpy.typing as npt
 import pytest
 import scipy
 import ufl
@@ -29,6 +30,7 @@ from dolfinx.cpp.mesh import to_type
 from dolfinx.graph import adjacencylist
 from dolfinx.mesh import (
     CellType,
+    Mesh,
     compute_midpoints,
     create_mesh,
     locate_entities,
@@ -418,14 +420,34 @@ def compute_dof_permutations_all(V_dg, V_cg, gap):
     return indices_dg
 
 
-def create_meshes(ct, gap):
-    """This is a helper function to create the two element function
+def create_meshes(ct: str, gap: float, xdtype: npt.DTypeLike = np.float64) -> tuple[Mesh, Mesh]:
+    """Create meshes for the two different formulations.
+
+    This is a helper function to create the two element function
     spaces both for custom assembly and the DG formulation for quads,
     triangles, hexes and tetrahedra.
+
+    Args:
+        ct: The cell-type of the mesh
+        gap: Gap between the two elements in `tdim-1` direction.
+        xdtype: Data type for mesh coordinates
+
+    Note:
+        The triangular grid is a flat manifold with geometrical dimension 3.
+
+    Note:
+        The gap between two elements can be negative
+
+    Returns:
+        Two meshes, (standard, custom) where the standard mesh is two elements
+        glued together at the contact surface. The custom mesh consists of two elements separate
+        by a distance `gap` in the `topological dimension - 1` direction.
     """
+    assert MPI.COMM_WORLD.size == 1, "This test only supports running in serial"
+
     cell_type = to_type(ct)
     if cell_type == CellType.quadrilateral:
-        x_ufl = np.array([[0, 0], [0.8, 0], [0.1, 1.3], [0.7, 1.2], [-0.1, -1.2], [0.8, -1.1]])
+        x_ufl = np.array([[0, 0], [0.8, 0], [0.1, 1.3], [0.7, 1.2], [-0.1, -1.2], [0.8, -1.1]], dtype=xdtype)
         x_custom = np.array(
             [
                 [0, 0],
@@ -438,10 +460,10 @@ def create_meshes(ct, gap):
                 [0.8, -1.1 - gap],
             ]
         )
-        cells_ufl = np.array([[0, 1, 2, 3], [4, 5, 0, 1]], dtype=np.int32)
-        cells_custom = np.array([[0, 1, 2, 3], [4, 5, 6, 7]], dtype=np.int32)
+        cells_ufl = np.array([[0, 1, 2, 3], [4, 5, 0, 1]], dtype=np.int64)
+        cells_custom = np.array([[0, 1, 2, 3], [4, 5, 6, 7]], dtype=np.int64)
     elif cell_type == CellType.triangle:
-        x_ufl = np.array([[0, 0, 0], [0.8, 0, 0], [0.3, 1.3, 0.0], [0.4, -1.2, 0.0]])
+        x_ufl = np.array([[0, 0, 0], [0.8, 0, 0], [0.3, 1.3, 0.0], [0.4, -1.2, 0.0]], dtype=xdtype)
         x_custom = np.array(
             [
                 [0, 0, 0],
@@ -450,12 +472,13 @@ def create_meshes(ct, gap):
                 [0, -gap, 0],
                 [0.8, -gap, 0],
                 [0.4, -1.2 - gap, 0.0],
-            ]
+            ],
+            dtype=xdtype,
         )
-        cells_ufl = np.array([[0, 1, 2], [0, 1, 3]], dtype=np.int32)
-        cells_custom = np.array([[0, 1, 2], [3, 4, 5]], dtype=np.int32)
+        cells_ufl = np.array([[0, 1, 2], [0, 1, 3]], dtype=np.int64)
+        cells_custom = np.array([[0, 1, 2], [3, 4, 5]], dtype=np.int64)
     elif cell_type == CellType.tetrahedron:
-        x_ufl = np.array([[0, 0, 0], [1.1, 0, 0], [0.3, 1.0, 0], [1, 1.2, 1.5], [0.8, 1.2, -1.6]])
+        x_ufl = np.array([[0, 0, 0], [1.1, 0, 0], [0.3, 1.0, 0], [1, 1.2, 1.5], [0.8, 1.2, -1.6]], dtype=xdtype)
         x_custom = np.array(
             [
                 [0, 0, 0],
@@ -466,10 +489,11 @@ def create_meshes(ct, gap):
                 [1.1, 0, -gap],
                 [0.3, 1.0, -gap],
                 [0.8, 1.2, -1.6 - gap],
-            ]
+            ],
+            dtype=xdtype,
         )
-        cells_ufl = np.array([[0, 1, 2, 3], [0, 1, 2, 4]], dtype=np.int32)
-        cells_custom = np.array([[0, 1, 2, 3], [4, 5, 6, 7]], dtype=np.int32)
+        cells_ufl = np.array([[0, 1, 2, 3], [0, 1, 2, 4]], dtype=np.int64)
+        cells_custom = np.array([[0, 1, 2, 3], [4, 5, 6, 7]], dtype=np.int64)
     elif cell_type == CellType.hexahedron:
         x_ufl = np.array(
             [
@@ -485,7 +509,8 @@ def create_meshes(ct, gap):
                 [1.0, 0, -1.3],
                 [0, 1, -1],
                 [1, 1, -1],
-            ]
+            ],
+            dtype=xdtype,
         )
         x_custom = np.array(
             [
@@ -505,18 +530,17 @@ def create_meshes(ct, gap):
                 [1.1, 0, -gap],
                 [0.1, 1, -gap],
                 [1, 1.2, -gap],
-            ]
+            ],
+            dtype=xdtype,
         )
-        cells_ufl = np.array([[0, 1, 2, 3, 4, 5, 6, 7], [8, 9, 10, 11, 0, 1, 2, 3]], dtype=np.int32)
-        cells_custom = np.array([[0, 1, 2, 3, 4, 5, 6, 7], [8, 9, 10, 11, 12, 13, 14, 15]], dtype=np.int32)
+        cells_ufl = np.array([[0, 1, 2, 3, 4, 5, 6, 7], [8, 9, 10, 11, 0, 1, 2, 3]], dtype=np.int64)
+        cells_custom = np.array([[0, 1, 2, 3, 4, 5, 6, 7], [8, 9, 10, 11, 12, 13, 14, 15]], dtype=np.int64)
     else:
         raise ValueError(f"Unsupported mesh type {ct}")
-    gdim = x_ufl.shape[1]
-    coord_el = element("Lagrange", cell_type.name, 1, shape=(gdim,))
-    domain = ufl.Mesh(coord_el)
-    mesh_ufl = create_mesh(MPI.COMM_WORLD, cells_ufl, x_ufl, domain)
-    domain_custom = ufl.Mesh(coord_el)
-    mesh_custom = create_mesh(MPI.COMM_WORLD, cells_custom, x_custom, domain_custom)
+
+    coord_el = element("Lagrange", cell_type.name, 1, shape=(x_ufl.shape[1],))
+    mesh_ufl = create_mesh(MPI.COMM_WORLD, cells_ufl, x_ufl, e=coord_el)
+    mesh_custom = create_mesh(MPI.COMM_WORLD, cells_custom, x_custom, e=coord_el)
 
     return mesh_ufl, mesh_custom
 
