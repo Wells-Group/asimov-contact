@@ -2,7 +2,6 @@
 #
 # SPDX-License-Identifier:    MIT
 
-import os
 
 from mpi4py import MPI
 
