@@ -1,4 +1,4 @@
-name: Test Nitsche solver
+name: CI
 
 on:
   # Trigger tests on push
@@ -56,14 +56,6 @@ jobs:
           cmake --install build
           pip install -r dolfinx/python/build-requirements.txt # TO REMOVE
           pip -v install --check-build-dependencies --no-build-isolation dolfinx/python/
-
-      # uses: jorgensd/actions/install-dolfinx@v0.3.0
-        # with:
-        #   petsc_arch: ${{ env.PETSC_ARCH }}
-        #   dolfinx: main
-        #   ffcx: main
-        #   ufl: main
-        #   basix: main
 
       - name: Install contact library (C++)
         id: cpp-contact
@@ -132,13 +124,13 @@ jobs:
           python demo_nitsche_rigid_surface_custom.py
           python nitsche_euler_bernoulli.py
 
-      # - name: Run unbiased demos
-      #   working-directory: ./python/demos
-      #   run: |
-      #     python demo_nitsche_unbiased.py --problem=1
-      #     python demo_nitsche_unbiased.py --problem=2 --friction=0.1
-      #     python demo_nitsche_unbiased.py --problem=3
-      #     python demo_nitsche_unbiased.py --problem=3 --3D --friction=0.1 --coulomb
+      - name: Run unbiased demos
+        working-directory: ./python/demos
+        run: |
+          python demo_nitsche_unbiased.py --problem=1
+          python demo_nitsche_unbiased.py --problem=2 --friction=0.1
+          python demo_nitsche_unbiased.py --problem=3
+          python demo_nitsche_unbiased.py --problem=3 --3D --friction=0.1 --coulomb
 
       - name: Run meshties demos
         working-directory: ./python/demos
@@ -169,7 +161,6 @@ jobs:
 
       - name: Run unbiased demos in parallel
         working-directory: ./python/demos
-        # FIXME: --problem 1 fails in parallel (3 proc) on my machine
         run: |
           mpirun -np 2 python demo_nitsche_unbiased.py --problem=1
           mpirun -np 2 python demo_nitsche_unbiased.py --problem=2 --friction=0.1
