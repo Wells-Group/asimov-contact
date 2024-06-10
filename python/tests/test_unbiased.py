@@ -420,7 +420,7 @@ def compute_dof_permutations_all(V_dg, V_cg, gap):
     return indices_dg
 
 
-def create_meshes(ct: str, gap: float, xdtype: npt.DTypeLike=np.float64) -> tuple[Mesh, Mesh]:
+def create_meshes(ct: str, gap: float, xdtype: npt.DTypeLike = np.float64) -> tuple[Mesh, Mesh]:
     """Create meshes for the two different formulations.
 
     This is a helper function to create the two element function
