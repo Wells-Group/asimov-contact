@@ -835,7 +835,7 @@ def tied_dg_T(u0, v0, T0, h, n, gamma, theta, sigma, sigma_T, dS):
     ],
 )
 @pytest.mark.parametrize("gap", [0.5, -0.5])
-@pytest.mark.parametrize("quadrature_degree", [1, 5])
+@pytest.mark.parametrize("quadrature_degree", [1, 4])
 @pytest.mark.parametrize("theta", [1, 0, -1])
 def test_meshtie_kernels(ct, gap, quadrature_degree, theta, problem):
     # Problem parameters
