@@ -284,7 +284,7 @@ class NewtonSolver:
     ) -> Tuple[int, int]:
         t = common.Timer("~Contact: Newton (Newton solver)")
         try:
-            x_vec = x.petsc_vec
+            x_vec = x.x.petsc_vec
         except AttributeError:
             x_vec = x
             write_solution = False

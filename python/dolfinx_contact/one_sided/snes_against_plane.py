@@ -167,7 +167,7 @@ def snes_solver(
 
     # Create LHS matrix and RHS vector
     b_func = _fem.Function(V)
-    b = b_func.petsc_vec
+    b = b_func.x.petsc_vec
     J = create_matrix(problem.a)
 
     # Create semismooth Newton solver (SNES)
@@ -186,7 +186,7 @@ def snes_solver(
     # Set solve functions and variable bounds
     snes.setFunction(problem.F, b)
     snes.setJacobian(problem.J, J)
-    snes.setVariableBounds(umin.petsc_vec, umax.petsc_vec)
+    snes.setVariableBounds(umin.x.petsc_vec, umax.x.petsc_vec)
     null_space = rigid_motions_nullspace(V)
     J.setNearNullSpace(null_space)
 
