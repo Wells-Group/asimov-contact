@@ -1095,10 +1095,11 @@ dolfinx_contact::compute_distance_map(
     }
     else
       throw std::runtime_error("Invalid tdim: " + std::to_string(tdim));
+
+    break;
   }
   case dolfinx_contact::ContactMode::RayTracing:
   {
-
     if (tdim == 2)
     {
       if (gdim == 2)
@@ -1125,11 +1126,13 @@ dolfinx_contact::compute_distance_map(
     else
       throw std::runtime_error("Invalid tdim: " + std::to_string(tdim));
   }
+  default:
+    throw std::runtime_error("Unsupported contact mode");
   }
 
   throw std::runtime_error("Unsupported contact mode");
 }
-
+//----------------------------------------------------------------------------
 MatNullSpace dolfinx_contact::build_nullspace_multibody(
     const dolfinx::fem::FunctionSpace<double>& V,
     const dolfinx::mesh::MeshTags<std::int32_t>& mt,
