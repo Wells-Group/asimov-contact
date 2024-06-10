@@ -17,7 +17,7 @@ from dolfinx.io import XDMFFile
 from dolfinx.mesh import CellType, create_mesh, locate_entities_boundary, meshtags
 
 
-def create_functionspaces(ct, gap, delta, disp):
+def create_functionspaces(tempdir, ct, gap, delta, disp):
     """This is a helper function to create the two element function spaces
     for custom assembly using quads, triangles, hexes and tetrahedra"""
     cell_type = to_type(ct)
@@ -113,7 +113,7 @@ def create_functionspaces(ct, gap, delta, disp):
     else:
         el = basix.ufl.element("Lagrange", mesh.topology.cell_name(), 1)
     V = _fem.functionspace(mesh, el)
-    with XDMFFile(mesh.comm, "test_mesh.xdmf", "w") as xdmf:
+    with XDMFFile(mesh.comm, tempdir / "test_mesh.xdmf", "w") as xdmf:
         xdmf.write_mesh(mesh)
     return V
 
@@ -123,7 +123,7 @@ def compare_test_fn(fn_space, test_fn, grad_test_fn, q_indices, link, x_ref, cel
     mesh = fn_space.mesh
     gdim = mesh.geometry.dim
     bs = fn_space.dofmap.index_map_bs
-    dofs = fn_space.dofmap.cell_dofs(cell)
+    dofs = fn_space.dofmap.cell_dofs(cell[0])
 
     num_q_points = x_ref.shape[0]
     cell_arr = np.array(cell, dtype=np.int32)
@@ -162,7 +162,7 @@ def assert_zero_test_fn(fn_space, test_fn, grad_test_fn, num_q_points, zero_ind,
     mesh = fn_space.mesh
     gdim = mesh.geometry.dim
     bs = fn_space.dofmap.index_map_bs
-    dofs = fn_space.dofmap.cell_dofs(cell)
+    dofs = fn_space.dofmap.cell_dofs(cell[0])
     for i in range(len(dofs)):
         for k in range(bs):
             # ensure values are zero if q not connected to quadrature point
@@ -225,9 +225,9 @@ def compare_u(fn_space, u, u_opposite, grad_u_opposite, q_indices, x_ref, cell):
 @pytest.mark.parametrize("delta", [0.0, -0.5])
 @pytest.mark.parametrize("surface", [0, 1])
 @pytest.mark.parametrize("disp", [True, False])
-def test_packing(ct, gap, q_deg, delta, surface, disp):
+def test_packing(tmp_path, ct, gap, q_deg, delta, surface, disp):
     # Create function space
-    V = create_functionspaces(ct, gap, delta, disp)
+    V = create_functionspaces(tmp_path, ct, gap, delta, disp)
 
     # Retrieve mesh and mesh data
     mesh = V.mesh

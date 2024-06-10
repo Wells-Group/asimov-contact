@@ -503,7 +503,7 @@ compute_ray(const dolfinx::mesh::Mesh<double>& mesh,
               std::span<const double, tdim - 1> xi, std::span<double, tdim> X)
     {
       const std::vector<int>& facet = facets[facet_index];
-      dolfinx_contact::mdspan_t<const double, 2> x(xb.data(), x_shape);
+      mdspan_t<const double, 2> x(xb.data(), x_shape);
       for (std::size_t i = 0; i < tdim; ++i)
       {
         X[i] = x(facet.front(), i);

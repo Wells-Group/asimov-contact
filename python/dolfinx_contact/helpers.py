@@ -168,8 +168,8 @@ class NonlinearPDE_SNESProblem:
     def F(self, snes, x, F):
         """Assemble residual vector."""
         x.ghostUpdate(addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD)
-        x.copy(self.u.vector)
-        self.u.vector.ghostUpdate(addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD)
+        x.copy(self.u.x.petsc_vec)
+        self.u.x.petsc_vec.ghostUpdate(addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD)
         with F.localForm() as f_local:
             f_local.set(0.0)
         assemble_vector(F, self.L)
@@ -262,7 +262,7 @@ def near_nullspace_subdomains(
     _x = Function(V)
 
     # Create list of vectors for null space
-    nullspace_basis = [_x.vector.copy() for i in range(num_domains)]
+    nullspace_basis = [_x.petsc_vec.copy() for i in range(num_domains)]
 
     with ExitStack() as stack:
         vec_local = [stack.enter_context(x.localForm()) for x in nullspace_basis]

@@ -6,11 +6,11 @@
 
 #include "contact_kernels.h"
 
+//----------------------------------------------------------------------------
 dolfinx_contact::kernel_fn<PetscScalar>
 dolfinx_contact::generate_contact_kernel(
-    dolfinx_contact::Kernel type, const dolfinx::fem::FunctionSpace<double>& V,
-    const dolfinx_contact::QuadratureRule& quadrature_rule,
-    std::size_t max_links)
+    Kernel type, const dolfinx::fem::FunctionSpace<double>& V,
+    const QuadratureRule& quadrature_rule, std::size_t max_links)
 {
   std::shared_ptr<const dolfinx::mesh::Mesh<double>> mesh = V.mesh();
   assert(mesh);
@@ -43,7 +43,7 @@ dolfinx_contact::generate_contact_kernel(
          num_q_points * bs,
          num_q_points * gdim};
 
-  auto kd = dolfinx_contact::KernelData(V, quadrature_rule, cstrides);
+  auto kd = KernelData(V, quadrature_rule, cstrides);
 
   /// @brief Assemble kernel for RHS of unbiased contact problem
   ///
@@ -457,15 +457,16 @@ dolfinx_contact::generate_contact_kernel(
                                 coord);
       kd.update_normal(std::span(n_phys.data(), gdim), K, facet_index);
       double n_dot = 0;
-      double gap = 0;
+
       // For ray tracing the gap is given by n * (Pi(x) -x)
       // where n = n_x
       // For closest point n = -n_y
+      // double gap = 0;
       for (std::size_t i = 0; i < gdim; i++)
       {
         n_surf[i] = -c[kd.offsets(2) + q * gdim + i];
         n_dot += n_phys[i] * n_surf[i];
-        gap += c[kd.offsets(1) + q * gdim + i] * n_surf[i];
+        // gap += c[kd.offsets(1) + q * gdim + i] * n_surf[i];
       }
 
       compute_normal_strain_basis(epsn, tr, K, dphi, n_surf,
@@ -638,15 +639,15 @@ dolfinx_contact::generate_contact_kernel(
       kd.update_normal(std::span(n_phys.data(), gdim), K, facet_index);
 
       double n_dot = 0;
-      double gap = 0;
       // The gap is given by n * (Pi(x) -x)
       // For raytracing n = n_x
       // For closest point n = -n_y
+      // double gap = 0;
       for (std::size_t i = 0; i < gdim; i++)
       {
         n_surf[i] = -c[kd.offsets(2) + q * gdim + i];
         n_dot += n_phys[i] * n_surf[i];
-        gap += c[kd.offsets(1) + q * gdim + i] * n_surf[i];
+        // gap += c[kd.offsets(1) + q * gdim + i] * n_surf[i];
       }
 
       compute_normal_strain_basis(epsn, tr, K, dphi, n_surf,

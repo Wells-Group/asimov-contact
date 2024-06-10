@@ -105,7 +105,7 @@ public:
   /// Compute residual F at current point x
   auto F()
   {
-    return [&](const Vec x, Vec bin)
+    return [&](const Vec x, Vec /*bin*/)
     {
       // Avoid long log output
       // loguru::g_stderr_verbosity = loguru::Verbosity_OFF;

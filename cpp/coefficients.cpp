@@ -12,6 +12,7 @@
 
 using namespace dolfinx_contact;
 
+//----------------------------------------------------------------------------
 void dolfinx_contact::transformed_push_forward(
     const dolfinx::fem::FiniteElement<double>* element,
     mdspan_t<const double, 4> reference_basis,
@@ -28,10 +29,8 @@ void dolfinx_contact::transformed_push_forward(
   // Get push forward function
   auto push_forward_fn
       = element->basix_element()
-            .map_fn<dolfinx_contact::mdspan_t<double, 2>,
-                    dolfinx_contact::mdspan_t<const double, 2>,
-                    dolfinx_contact::mdspan_t<const double, 2>,
-                    dolfinx_contact::mdspan_t<const double, 2>>();
+            .map_fn<mdspan_t<double, 2>, mdspan_t<const double, 2>,
+                    mdspan_t<const double, 2>, mdspan_t<const double, 2>>();
   mdspan_t<double, 2> element_basis(
       element_basisb.data(), basis_values.extent(1), basis_values.extent(2));
 
@@ -50,14 +49,13 @@ void dolfinx_contact::transformed_push_forward(
       MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent);
   push_forward_fn(_u, element_basis, J, detJ, K);
 }
-
+//----------------------------------------------------------------------------
 std::pair<std::vector<PetscScalar>, int>
 dolfinx_contact::pack_coefficient_quadrature(
     const dolfinx::fem::Function<PetscScalar>& coeff, int q_degree,
     std::span<const std::int32_t> active_entities,
     dolfinx::fem::IntegralType integral)
 {
-
   // Get mesh
   std::shared_ptr<const dolfinx::mesh::Mesh<double>> mesh
       = coeff.function_space()->mesh();
@@ -93,7 +91,7 @@ dolfinx_contact::pack_coefficient_quadrature(
   const std::size_t value_size = coeff.function_space()->value_size();
 
   // Tabulate function at quadrature points (assuming no derivatives)
-  dolfinx_contact::error::check_cell_type(cell_type);
+  error::check_cell_type(cell_type);
   const std::vector<double>& q_points = q_rule.points();
   const std::vector<std::size_t>& q_offset = q_rule.offset();
   const std::size_t sum_q_points = q_offset.back();
@@ -323,14 +321,13 @@ dolfinx_contact::pack_coefficient_quadrature(
   }
   return {std::move(coefficients), cstride};
 }
-
+//----------------------------------------------------------------------------
 std::pair<std::vector<PetscScalar>, int>
 dolfinx_contact::pack_gradient_quadrature(
     const dolfinx::fem::Function<PetscScalar>& coeff, int q_degree,
     std::span<const std::int32_t> active_entities,
     dolfinx::fem::IntegralType integral)
 {
-
   // Get mesh
   std::shared_ptr<const dolfinx::mesh::Mesh<double>> mesh
       = coeff.function_space()->mesh();
@@ -366,7 +363,7 @@ dolfinx_contact::pack_gradient_quadrature(
   const std::size_t value_size = coeff.function_space()->value_size();
 
   // Tabulate function at quadrature points (assuming one derivatives)
-  dolfinx_contact::error::check_cell_type(cell_type);
+  error::check_cell_type(cell_type);
   const std::vector<double>& q_points = q_rule.points();
   const std::vector<std::size_t>& q_offsets = q_rule.offset();
   const std::size_t sum_q_points = q_offsets.back();
@@ -555,7 +552,6 @@ dolfinx_contact::pack_gradient_quadrature(
 
   return {std::move(coefficients), cstride};
 }
-
 //-----------------------------------------------------------------------------
 std::vector<PetscScalar>
 dolfinx_contact::pack_circumradius(const dolfinx::mesh::Mesh<double>& mesh,
@@ -569,11 +565,11 @@ dolfinx_contact::pack_circumradius(const dolfinx::mesh::Mesh<double>& mesh,
 
   // Tabulate element at quadrature points
   const dolfinx::mesh::CellType cell_type = topology->cell_type();
-  dolfinx_contact::error::check_cell_type(cell_type);
+  error::check_cell_type(cell_type);
 
   const int tdim = topology->dim();
   const int fdim = tdim - 1;
-  const dolfinx_contact::QuadratureRule q_rule(cell_type, 0, fdim);
+  const QuadratureRule q_rule(cell_type, 0, fdim);
 
   // Get quadrature points on reference facets
   const std::vector<double>& q_points = q_rule.points();
@@ -645,6 +641,8 @@ dolfinx_contact::pack_circumradius(const dolfinx::mesh::Mesh<double>& mesh,
             J, detJ_scratch);
     circumradius.push_back(compute_circumradius(mesh, detJ, coordinate_dofs));
   }
+
   assert(circumradius.size() == active_facets.size() / 2);
   return circumradius;
 }
+//----------------------------------------------------------------------------

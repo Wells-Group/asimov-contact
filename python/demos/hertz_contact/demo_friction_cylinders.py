@@ -322,7 +322,7 @@ if __name__ == "__main__":
         g_top.value[1] = -0.2 / steps1
         t.value[1] = 0  # val
         print(f"Fricitionless part: Step {i+1} of {steps1}----------------------------------------------")
-        set_bc(du.vector, bcs)
+        set_bc(du.x.petsc_vec, bcs)
         n, converged = newton_solver.solve(du, write_solution=True)
         newton_steps1.append(n)
         du.x.scatter_forward()
@@ -397,12 +397,12 @@ if __name__ == "__main__":
         dirichletbc(g_top, dofs_top, V),
     ]
 
-    fric = Function(V0)
-    fric.interpolate(lambda x: np.full((1, x.shape[1]), 0.3))
+    fric1 = Function(V0)
+    fric1.interpolate(lambda x: np.full((1, x.shape[1]), 0.3))
     contact_problem.generate_contact_data(
         FrictionLaw.Coulomb,
         V,
-        {"u": u, "du": du, "mu": mu_dg, "lambda": lmbda_dg, "fric": fric},
+        {"u": u, "du": du, "mu": mu_dg, "lambda": lmbda_dg, "fric": fric1},
         E * 10 * args.order**2,
         1,
     )
@@ -412,7 +412,7 @@ if __name__ == "__main__":
     newton_steps2 = []
     for i in range(steps2):
         print(f"Fricitional part: Step {i+1} of {steps2}----------------------------------------------")
-        set_bc(du.vector, bcs)
+        set_bc(du.x.petsc_vec, bcs)
         g_top.value[0] = 6 * 0.05 / steps2
         n, converged = newton_solver.solve(du, write_solution=True)
         newton_steps2.append(n)

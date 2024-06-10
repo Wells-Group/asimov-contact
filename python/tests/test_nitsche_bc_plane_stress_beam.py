@@ -2,7 +2,6 @@
 #
 # SPDX-License-Identifier:    MIT
 
-import os
 from typing import List
 
 from mpi4py import MPI
@@ -25,6 +24,7 @@ from dolfinx_contact.helpers import epsilon, lame_parameters, sigma_func
 
 
 def solve_manufactured(
+    tmp_path,
     nx: int,
     ny: int,
     theta: float,
@@ -136,9 +136,9 @@ def solve_manufactured(
         print(f"Number of interations: {n:d}")
     u.x.scatter_forward()
 
-    os.system("mkdir -p results")
-
-    with XDMFFile(mesh.comm, f"results/u_manufactured_{nx}_{ny}.xdmf", "w") as xdmf:
+    results_dir = tmp_path / "results"
+    results_dir.mkdir(exist_ok=True)
+    with XDMFFile(mesh.comm, f"{results_dir}/u_manufactured_{nx}_{ny}.xdmf", "w") as xdmf:
         xdmf.write_mesh(mesh)
         xdmf.write_function(u)
 
@@ -155,7 +155,7 @@ def solve_manufactured(
 @pytest.mark.parametrize("strain", [True, False])
 @pytest.mark.parametrize("gamma", [10, 100, 100])
 @pytest.mark.parametrize("linear_solver", [True, False])
-def test_nitsche_dirichlet(theta, gamma, strain, linear_solver):
+def test_nitsche_dirichlet(tmp_path, theta, gamma, strain, linear_solver):
     """
     Manufatured solution test for the linear elasticity equation using Nitsche-Dirichlet
     boundary conditions.
@@ -178,7 +178,7 @@ def test_nitsche_dirichlet(theta, gamma, strain, linear_solver):
     errors = np.zeros(len(Nx))
     hs = np.zeros(len(Nx))
     for i, (nx, ny) in enumerate(zip(Nx, Ny)):
-        h, E = solve_manufactured(nx, ny, theta, gamma, strain, linear_solver)
+        h, E = solve_manufactured(tmp_path, nx, ny, theta, gamma, strain, linear_solver)
         errors[i] = E
         hs[i] = h
     rates = np.log(errors[:-1] / errors[1:]) / np.log(hs[:-1] / hs[1:])
