@@ -539,12 +539,8 @@ def create_meshes(ct: str, gap: float, xdtype: npt.DTypeLike=np.float64) -> tupl
         raise ValueError(f"Unsupported mesh type {ct}")
 
     coord_el = element("Lagrange", cell_type.name, 1, shape=(x_ufl.shape[1],))
-    domain = ufl.Mesh(coord_el)
-    mesh_ufl = create_mesh(MPI.COMM_WORLD, cells_ufl, x_ufl, domain)
-    # NOTE: It is important to create a new ufl mesh here, as the DOLFINx mesh creator
-    # changes underlying variables in the ufl Mesh-object (i.e. the ufl_cargo)
-    domain_custom = ufl.Mesh(coord_el)
-    mesh_custom = create_mesh(MPI.COMM_WORLD, cells_custom, x_custom, domain_custom)
+    mesh_ufl = create_mesh(MPI.COMM_WORLD, cells_ufl, x_ufl, e=coord_el)
+    mesh_custom = create_mesh(MPI.COMM_WORLD, cells_custom, x_custom, e=coord_el)
 
     return mesh_ufl, mesh_custom
 
