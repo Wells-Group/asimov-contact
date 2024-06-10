@@ -26,6 +26,7 @@ import pytest
 import scipy
 import ufl
 from basix.ufl import element
+from dolfinx import la
 from dolfinx.cpp.mesh import to_type
 from dolfinx.graph import adjacencylist
 from dolfinx.mesh import (
@@ -402,7 +403,7 @@ def compute_dof_permutations_all(V_dg, V_cg, gap):
 
     # retrieve all dg dofs on mesh without gap for each cell
     # and modify coordinates by gap if necessary
-    num_cells = mesh_dg.topology.index_map(tdim).size_local
+    num_cells = mesh_dg.topology.index_map(tdim).size_local + mesh_dg.topology.index_map(tdim).num_ghosts
     for cell in range(num_cells):
         midpoint = compute_midpoints(mesh_dg, tdim, np.array([cell]))[0]
         if midpoint[tdim - 1] <= 0:
@@ -443,105 +444,136 @@ def create_meshes(ct: str, gap: float, xdtype: npt.DTypeLike = np.float64) -> tu
         glued together at the contact surface. The custom mesh consists of two elements separate
         by a distance `gap` in the `topological dimension - 1` direction.
     """
-    assert MPI.COMM_WORLD.size == 1, "This test only supports running in serial"
-
     cell_type = to_type(ct)
-    if cell_type == CellType.quadrilateral:
-        x_ufl = np.array([[0, 0], [0.8, 0], [0.1, 1.3], [0.7, 1.2], [-0.1, -1.2], [0.8, -1.1]], dtype=xdtype)
-        x_custom = np.array(
-            [
-                [0, 0],
-                [0.8, 0],
-                [0.1, 1.3],
-                [0.7, 1.2],
-                [0, -gap],
-                [0.8, -gap],
-                [-0.1, -1.2 - gap],
-                [0.8, -1.1 - gap],
-            ]
-        )
-        cells_ufl = np.array([[0, 1, 2, 3], [4, 5, 0, 1]], dtype=np.int64)
-        cells_custom = np.array([[0, 1, 2, 3], [4, 5, 6, 7]], dtype=np.int64)
-    elif cell_type == CellType.triangle:
-        x_ufl = np.array([[0, 0, 0], [0.8, 0, 0], [0.3, 1.3, 0.0], [0.4, -1.2, 0.0]], dtype=xdtype)
-        x_custom = np.array(
-            [
-                [0, 0, 0],
-                [0.8, 0, 0],
-                [0.3, 1.3, 0.0],
-                [0, -gap, 0],
-                [0.8, -gap, 0],
-                [0.4, -1.2 - gap, 0.0],
-            ],
-            dtype=xdtype,
-        )
-        cells_ufl = np.array([[0, 1, 2], [0, 1, 3]], dtype=np.int64)
-        cells_custom = np.array([[0, 1, 2], [3, 4, 5]], dtype=np.int64)
-    elif cell_type == CellType.tetrahedron:
-        x_ufl = np.array([[0, 0, 0], [1.1, 0, 0], [0.3, 1.0, 0], [1, 1.2, 1.5], [0.8, 1.2, -1.6]], dtype=xdtype)
-        x_custom = np.array(
-            [
-                [0, 0, 0],
-                [1.1, 0, 0],
-                [0.3, 1.0, 0],
-                [1, 1.2, 1.5],
-                [0, 0, -gap],
-                [1.1, 0, -gap],
-                [0.3, 1.0, -gap],
-                [0.8, 1.2, -1.6 - gap],
-            ],
-            dtype=xdtype,
-        )
-        cells_ufl = np.array([[0, 1, 2, 3], [0, 1, 2, 4]], dtype=np.int64)
-        cells_custom = np.array([[0, 1, 2, 3], [4, 5, 6, 7]], dtype=np.int64)
-    elif cell_type == CellType.hexahedron:
-        x_ufl = np.array(
-            [
-                [0, 0, 0],
-                [1.1, 0, 0],
-                [0.1, 1, 0],
-                [1, 1.2, 0],
-                [0, 0, 1.2],
-                [1.0, 0, 1],
-                [0, 1, 1],
-                [1, 1, 1],
-                [0, 0, -1.2],
-                [1.0, 0, -1.3],
-                [0, 1, -1],
-                [1, 1, -1],
-            ],
-            dtype=xdtype,
-        )
-        x_custom = np.array(
-            [
-                [0, 0, 0],
-                [1.1, 0, 0],
-                [0.1, 1, 0],
-                [1, 1.2, 0],
-                [0, 0, 1.2],
-                [1.0, 0, 1],
-                [0, 1, 1],
-                [1, 1, 1],
-                [0, 0, -1.2 - gap],
-                [1.0, 0, -1.3 - gap],
-                [0, 1, -1 - gap],
-                [1, 1, -1 - gap],
-                [0, 0, -gap],
-                [1.1, 0, -gap],
-                [0.1, 1, -gap],
-                [1, 1.2, -gap],
-            ],
-            dtype=xdtype,
-        )
-        cells_ufl = np.array([[0, 1, 2, 3, 4, 5, 6, 7], [8, 9, 10, 11, 0, 1, 2, 3]], dtype=np.int64)
-        cells_custom = np.array([[0, 1, 2, 3, 4, 5, 6, 7], [8, 9, 10, 11, 12, 13, 14, 15]], dtype=np.int64)
+    if MPI.COMM_WORLD.rank == 0:
+        if cell_type == CellType.quadrilateral:
+            x_ufl = np.array([[0, 0], [0.8, 0], [0.1, 1.3], [0.7, 1.2], [-0.1, -1.2], [0.8, -1.1]], dtype=xdtype)
+            x_custom = np.array(
+                [
+                    [0, 0],
+                    [0.8, 0],
+                    [0.1, 1.3],
+                    [0.7, 1.2],
+                    [0, -gap],
+                    [0.8, -gap],
+                    [-0.1, -1.2 - gap],
+                    [0.8, -1.1 - gap],
+                ]
+            )
+            cells_ufl = np.array([[0, 1, 2, 3], [4, 5, 0, 1]], dtype=np.int64)
+            cells_custom = np.array([[0, 1, 2, 3], [4, 5, 6, 7]], dtype=np.int64)
+        elif cell_type == CellType.triangle:
+            x_ufl = np.array([[0, 0, 0], [0.8, 0, 0], [0.3, 1.3, 0.0], [0.4, -1.2, 0.0]], dtype=xdtype)
+            x_custom = np.array(
+                [
+                    [0, 0, 0],
+                    [0.8, 0, 0],
+                    [0.3, 1.3, 0.0],
+                    [0, -gap, 0],
+                    [0.8, -gap, 0],
+                    [0.4, -1.2 - gap, 0.0],
+                ],
+                dtype=xdtype,
+            )
+            cells_ufl = np.array([[0, 1, 2], [0, 1, 3]], dtype=np.int64)
+            cells_custom = np.array([[0, 1, 2], [3, 4, 5]], dtype=np.int64)
+        elif cell_type == CellType.tetrahedron:
+            x_ufl = np.array([[0, 0, 0], [1.1, 0, 0], [0.3, 1.0, 0], [1, 1.2, 1.5], [0.8, 1.2, -1.6]], dtype=xdtype)
+            x_custom = np.array(
+                [
+                    [0, 0, 0],
+                    [1.1, 0, 0],
+                    [0.3, 1.0, 0],
+                    [1, 1.2, 1.5],
+                    [0, 0, -gap],
+                    [1.1, 0, -gap],
+                    [0.3, 1.0, -gap],
+                    [0.8, 1.2, -1.6 - gap],
+                ],
+                dtype=xdtype,
+            )
+            cells_ufl = np.array([[0, 1, 2, 3], [0, 1, 2, 4]], dtype=np.int64)
+            cells_custom = np.array([[0, 1, 2, 3], [4, 5, 6, 7]], dtype=np.int64)
+        elif cell_type == CellType.hexahedron:
+            x_ufl = np.array(
+                [
+                    [0, 0, 0],
+                    [1.1, 0, 0],
+                    [0.1, 1, 0],
+                    [1, 1.2, 0],
+                    [0, 0, 1.2],
+                    [1.0, 0, 1],
+                    [0, 1, 1],
+                    [1, 1, 1],
+                    [0, 0, -1.2],
+                    [1.0, 0, -1.3],
+                    [0, 1, -1],
+                    [1, 1, -1],
+                ],
+                dtype=xdtype,
+            )
+            x_custom = np.array(
+                [
+                    [0, 0, 0],
+                    [1.1, 0, 0],
+                    [0.1, 1, 0],
+                    [1, 1.2, 0],
+                    [0, 0, 1.2],
+                    [1.0, 0, 1],
+                    [0, 1, 1],
+                    [1, 1, 1],
+                    [0, 0, -1.2 - gap],
+                    [1.0, 0, -1.3 - gap],
+                    [0, 1, -1 - gap],
+                    [1, 1, -1 - gap],
+                    [0, 0, -gap],
+                    [1.1, 0, -gap],
+                    [0.1, 1, -gap],
+                    [1, 1.2, -gap],
+                ],
+                dtype=xdtype,
+            )
+            cells_ufl = np.array([[0, 1, 2, 3, 4, 5, 6, 7], [8, 9, 10, 11, 0, 1, 2, 3]], dtype=np.int64)
+            cells_custom = np.array([[0, 1, 2, 3, 4, 5, 6, 7], [8, 9, 10, 11, 12, 13, 14, 15]], dtype=np.int64)
+        else:
+            raise ValueError(f"Unsupported mesh type {ct}")
+        MPI.COMM_WORLD.bcast(x_custom.shape[1], root=0)
+        MPI.COMM_WORLD.bcast(cells_custom.shape[1], root=0)
     else:
-        raise ValueError(f"Unsupported mesh type {ct}")
+        gdim = MPI.COMM_WORLD.bcast(None, root=0)
+        num_nodes = MPI.COMM_WORLD.bcast(None, root=0)
+
+        x_ufl = np.zeros((0, gdim),
+                dtype=xdtype,
+            )
+        x_custom = np.zeros((0, gdim), dtype=xdtype)
+
+        cells_ufl = np.zeros((0, num_nodes),
+                dtype=np.int64,
+            )
+        cells_custom = np.zeros((0, num_nodes),
+                dtype=np.int64,
+            )
+    assert MPI.COMM_WORLD.size <= 2, "This test only supports running with 1 or 2 MPI ranks"
+    serial = MPI.COMM_WORLD.size == 1
+
+    def partitioner(comm, nparts, local_graph, num_ghost_nodes):
+        """First cell goes to first process, second cell to second process (if available)"""
+        if MPI.COMM_WORLD.rank == 0:
+            if serial:
+                dest = np.array([0, 0], dtype=np.int32)
+                offsets = np.array([0,1,2], dtype=np.int32)
+            else:
+                dest = np.array([0, 1, 1, 0], dtype=np.int32)
+                offsets = np.array([0, 2, 4], dtype=np.int32)
+        else:
+            dest = np.zeros(0, dtype=np.int32)
+            offsets = np.zeros(1, dtype=np.int32)
+        return adjacencylist(dest, offsets)
 
     coord_el = element("Lagrange", cell_type.name, 1, shape=(x_ufl.shape[1],))
-    mesh_ufl = create_mesh(MPI.COMM_WORLD, cells_ufl, x_ufl, e=coord_el)
-    mesh_custom = create_mesh(MPI.COMM_WORLD, cells_custom, x_custom, e=coord_el)
-
+    mesh_ufl = create_mesh(MPI.COMM_WORLD, cells_ufl, x_ufl, e=coord_el, partitioner=partitioner)
+    mesh_custom = create_mesh(MPI.COMM_WORLD, cells_custom, x_custom, e=coord_el, partitioner=partitioner)
     return mesh_ufl, mesh_custom
 
 
@@ -645,7 +677,7 @@ def test_contact_kernels(ct, gap, quadrature_degree, theta, frictionlaw, search)
         for i in range(tdim):
             values[i] = np.sin(x[i] + gap) + 2 if i == tdim - 1 else np.sin(x[i]) + 2
         return values
-
+    # FIXME: Check validity of two cell mesh
     # DG ufl 'contact'
     u0 = _fem.Function(V_ufl)
     u0.interpolate(_u0, cells_ufl_0)
@@ -675,9 +707,9 @@ def test_contact_kernels(ct, gap, quadrature_degree, theta, frictionlaw, search)
 
     # rhs vector
     F0 = _fem.form(F0)
-    b0 = _fem.petsc.create_vector(F0)
-    b0.zeroEntries()
-    _fem.petsc.assemble_vector(b0, F0)
+    b0 = _fem.Function(V_ufl)
+    b0.x.array[:]
+    _fem.petsc.assemble_vector(b0.x.petsc_vec, F0)
 
     # lhs matrix
     J0 = _fem.form(J0)
@@ -737,15 +769,18 @@ def test_contact_kernels(ct, gap, quadrature_degree, theta, frictionlaw, search)
     jit_options = {"cffi_extra_compile_args": cffi_options, "cffi_libraries": ["m"]}
     # Generate residual data structures
     F_custom = _fem.form(F_custom, jit_options=jit_options)
-    b1 = _fem.petsc.create_vector(F_custom)
+    b1 = _fem.Function(V_custom)
 
     # Generate residual data structures
     J_custom = _fem.form(J_custom, jit_options=jit_options)
     A1 = contact_problem.create_matrix(J_custom)
 
     # Assemble  residual
-    b1.zeroEntries()
-    contact_problem.assemble_vector(b1, V_custom)
+    b1.x.array[:] = 0.0
+    contact_problem.assemble_vector(b1.x.petsc_vec, V_custom)
+    print(b1.x.array, b0.x.array)
+    assert(False)
+    b1.x.scatter_reverse(la.InsertMode.add)
 
     # Assemble  jacobian
     A1.zeroEntries()
@@ -756,16 +791,19 @@ def test_contact_kernels(ct, gap, quadrature_degree, theta, frictionlaw, search)
     tdim = mesh_ufl.topology.dim
     ind_dg = compute_dof_permutations_all(V_ufl, V_custom, gap)
 
+    print(b0.x.array[ind_dg], b1.x.array)
     # Compare rhs
-    assert np.allclose(b0.array[ind_dg], b1.array)
+    assert np.allclose(b0.x.array[ind_dg], b1.x.array)
 
     # create scipy matrix
-    ai, aj, av = A0.getValuesCSR()
-    A_sp = scipy.sparse.csr_matrix((av, aj, ai), shape=A0.getSize()).todense()
-    bi, bj, bv = A1.getValuesCSR()
-    B_sp = scipy.sparse.csr_matrix((bv, bj, bi), shape=A1.getSize()).todense()
+    if MPI.COMM_WORLD.size < 2:
+        # Skip matrix comparison in parallel
+        ai, aj, av = A0.getValuesCSR()
+        A_sp = scipy.sparse.csr_matrix((av, aj, ai), shape=A0.getSize()).todense()
+        bi, bj, bv = A1.getValuesCSR()
+        B_sp = scipy.sparse.csr_matrix((bv, bj, bi), shape=A1.getSize()).todense()
 
-    assert np.allclose(A_sp[ind_dg, :][:, ind_dg], B_sp)
+        assert np.allclose(A_sp[ind_dg, :][:, ind_dg], B_sp)
 
     # Sanity check different formulations
     if frictionlaw == FrictionLaw.Frictionless:
@@ -773,10 +811,12 @@ def test_contact_kernels(ct, gap, quadrature_degree, theta, frictionlaw, search)
         F2 = DG_rhs_minus(u0, v0, h, n, gamma_scaled, theta, sigma, gap, dS)
 
         F2 = _fem.form(F2)
-        b2 = _fem.petsc.create_vector(F2)
-        b2.zeroEntries()
-        _fem.petsc.assemble_vector(b2, F2)
-        assert np.allclose(b1.array, b2.array[ind_dg])
+        b2 = _fem.Function(V_ufl)
+        b2.x.array[:] = 0.
+        _fem.petsc.assemble_vector(b2.x.petsc_vec, F2)
+        b2.x.scatter_reverse(la.InsertMode.add)
+        print(b1.x.array, flush=True)
+        assert np.allclose(b1.x.array, b2.x.array[ind_dg])
 
         # Contact terms formulated using ufl consistent with nitsche_ufl.py
         J2 = DG_jac_minus(u0, v0, w0, h, n, gamma_scaled, theta, sigma, gap, dS)
