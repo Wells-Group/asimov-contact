@@ -6,11 +6,13 @@
 
 #include "elasticity.h"
 
+namespace stdex = std::experimental;
+
 //-----------------------------------------------------------------------------
 void dolfinx_contact::compute_normal_strain_basis(
     mdspan_t<double, 2> epsn, mdspan_t<double, 2> tr,
     dolfinx_contact::mdspan_t<const double, 2> K,
-    dolfinx_contact::s_cmdspan3_t dphi, std::array<double, 3> n_surf,
+    dolfinx_contact::mdspan_t<const double, 3, stdex::layout_stride> dphi, std::array<double, 3> n_surf,
     std::span<const double> n_phys, std::size_t q_pos)
 {
   const std::size_t ndofs_cell = epsn.extent(0);
@@ -44,7 +46,7 @@ void dolfinx_contact::compute_normal_strain_basis(
 }
 //-----------------------------------------------------------------------------
 void dolfinx_contact::compute_sigma_n_basis(
-    mdspan_t<double, 3> sig_n, mdspan_t<const double, 2> K, s_cmdspan3_t dphi,
+    mdspan_t<double, 3> sig_n, mdspan_t<const double, 2> K, mdspan_t<const double, 3, stdex::layout_stride> dphi,
     std::span<const double> n, double mu, double lmbda, std::size_t q_pos)
 {
   const std::size_t ndofs_cell = sig_n.extent(0);

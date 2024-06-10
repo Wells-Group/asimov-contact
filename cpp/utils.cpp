@@ -12,15 +12,15 @@
 #include <dolfinx/geometry/utils.h>
 #include <dolfinx/io/XDMFFile.h>
 
+namespace stdex = std::experimental;
+
 //-----------------------------------------------------------------------------
 std::tuple<std::shared_ptr<dolfinx::mesh::Mesh<U>>,
            dolfinx::mesh::MeshTags<std::int32_t>,
            dolfinx::mesh::MeshTags<std::int32_t>>
-dolfinx_contact::read_mesh(const std::string& filename,
-                           const std::string& topo_name,
-                           const std::string& geo_name,
-                           const std::string& volume_markers,
-                           const std::string& facet_markers)
+dolfinx_contact::read_mesh(std::string filename, std::string topo_name,
+                           std::string geo_name, std::string volume_markers,
+                           std::string facet_markers)
 {
   // Read and create mesh
   dolfinx::io::XDMFFile file(MPI_COMM_WORLD, filename, "r");
@@ -252,14 +252,12 @@ void dolfinx_contact::update_geometry(
   std::vector<double> dx(coords.size());
   for (std::int32_t c = 0; c < num_cells; ++c)
   {
-    const std::span<const int> dofs = dofmap->cell_dofs(c);
+    std::span<const int> dofs = dofmap->cell_dofs(c);
     auto dofs_x = MDSPAN_IMPL_STANDARD_NAMESPACE::submdspan(
         dofmap_x, c, MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent);
     for (std::size_t i = 0; i < dofs.size(); ++i)
       for (int j = 0; j < bs; ++j)
-      {
         dx[3 * dofs_x[i] + j] = u_data[bs * dofs[i] + j];
-      }
   }
   // add u to mesh dofs
   std::transform(coords.begin(), coords.end(), dx.begin(), coords.begin(),
@@ -480,9 +478,8 @@ void dolfinx_contact::evaluate_basis_functions(
       const double, MDSPAN_IMPL_STANDARD_NAMESPACE::dextents<std::size_t, 2>>;
   auto push_forward_fn
       = element->basix_element().map_fn<xu_t, xU_t, xJ_t, xK_t>();
-  const std::function<void(const std::span<double>&,
-                           const std::span<const std::uint32_t>&, std::int32_t,
-                           int)>
+  const std::function<void(std::span<double>, std::span<const std::uint32_t>,
+                           std::int32_t, int)>
       apply_dof_transformation = element->dof_transformation_fn<double>(
           dolfinx::fem::doftransform::standard);
   const std::size_t num_basis_values = space_dimension * reference_value_size;
@@ -570,7 +567,7 @@ double dolfinx_contact::compute_facet_jacobian(
     dolfinx_contact::mdspan_t<double, 2> K,
     dolfinx_contact::mdspan_t<double, 2> J_tot, std::span<double> detJ_scratch,
     dolfinx_contact::mdspan_t<const double, 2> J_f,
-    dolfinx_contact::s_cmdspan2_t dphi,
+    dolfinx_contact::mdspan_t<const double, 2, stdex::layout_stride> dphi,
     dolfinx_contact::mdspan_t<const double, 2> coords)
 {
   std::size_t gdim = J.extent(0);
@@ -595,7 +592,8 @@ std::function<double(
     double, dolfinx_contact::mdspan_t<double, 2>,
     dolfinx_contact::mdspan_t<double, 2>, dolfinx_contact::mdspan_t<double, 2>,
     std::span<double>, dolfinx_contact::mdspan_t<const double, 2>,
-    dolfinx_contact::s_cmdspan2_t, dolfinx_contact::mdspan_t<const double, 2>)>
+    dolfinx_contact::mdspan_t<const double, 2, stdex::layout_stride>,
+    dolfinx_contact::mdspan_t<const double, 2>)>
 dolfinx_contact::get_update_jacobian_dependencies(
     const dolfinx::fem::CoordinateElement<double>& cmap)
 {
@@ -608,7 +606,9 @@ dolfinx_contact::get_update_jacobian_dependencies(
            [[maybe_unused]] dolfinx_contact::mdspan_t<double, 2> J_tot,
            [[maybe_unused]] std::span<double> detJ_scratch,
            [[maybe_unused]] dolfinx_contact::mdspan_t<const double, 2> J_f,
-           [[maybe_unused]] dolfinx_contact::s_cmdspan2_t dphi,
+           [[maybe_unused]] dolfinx_contact::mdspan_t<const double, 2,
+                                                      stdex::layout_stride>
+               dphi,
            [[maybe_unused]] dolfinx_contact::mdspan_t<const double, 2> coords)
     { return detJ; };
   }
@@ -621,7 +621,9 @@ dolfinx_contact::get_update_jacobian_dependencies(
            [[maybe_unused]] dolfinx_contact::mdspan_t<double, 2> J_tot,
            [[maybe_unused]] std::span<double> detJ_scratch,
            [[maybe_unused]] dolfinx_contact::mdspan_t<const double, 2> J_f,
-           [[maybe_unused]] dolfinx_contact::s_cmdspan2_t dphi,
+           [[maybe_unused]] dolfinx_contact::mdspan_t<const double, 2,
+                                                      stdex::layout_stride>
+               dphi,
            [[maybe_unused]] dolfinx_contact::mdspan_t<const double, 2> coords)
     {
       double new_detJ = dolfinx_contact::compute_facet_jacobian(
@@ -746,7 +748,7 @@ dolfinx_contact::compute_active_entities(
 dolfinx::graph::AdjacencyList<std::int32_t>
 dolfinx_contact::entities_to_geometry_dofs(
     const dolfinx::mesh::Mesh<double>& mesh, int dim,
-    const std::span<const std::int32_t>& entity_list)
+    std::span<const std::int32_t> entity_list)
 {
 
   // Get mesh geometry and topology data
@@ -789,7 +791,7 @@ dolfinx_contact::entities_to_geometry_dofs(
     if (idx < 0)
       continue;
     const std::int32_t cell = e_to_c->links(idx).front();
-    const std::span<const int> cell_entities = c_to_e->links(cell);
+    std::span<const int> cell_entities = c_to_e->links(cell);
     auto it = std::find(cell_entities.begin(), cell_entities.end(), idx);
     assert(it != cell_entities.end());
     const auto local_entity = std::distance(cell_entities.begin(), it);

@@ -81,8 +81,8 @@ dolfinx_contact::generate_meshtie_kernel(
     double lmbda = c[1];
 
     // Extract reference to the tabulated basis function
-    s_cmdspan2_t phi = kd.phi();
-    s_cmdspan3_t dphi = kd.dphi();
+    mdspan_t<const double, 2, stdex::layout_stride> phi = kd.phi();
+    mdspan_t<const double, 3, stdex::layout_stride> dphi = kd.dphi();
 
     // Extract reference to quadrature weights for the local facet
     std::span<const double> weights = kd.weights(facet_index);
@@ -224,7 +224,7 @@ dolfinx_contact::generate_meshtie_kernel(
     double alpha = c[3] * (3 * lmbda + 2 * mu);
 
     // Extract reference to the tabulated basis function
-    s_cmdspan2_t phi = kd.phi();
+    mdspan_t<const double, 2, stdex::layout_stride> phi = kd.phi();
 
     // Extract reference to quadrature weights for the local facet
     std::span<const double> weights = kd.weights(facet_index);
@@ -326,8 +326,8 @@ dolfinx_contact::generate_meshtie_kernel(
     double lmbda = c[1];
 
     // Extract reference to the tabulated basis function
-    s_cmdspan2_t phi = kd.phi();
-    s_cmdspan3_t dphi = kd.dphi();
+    mdspan_t<const double, 2, stdex::layout_stride> phi = kd.phi();
+    mdspan_t<const double, 3, stdex::layout_stride> dphi = kd.dphi();
 
     // Extract reference to quadrature weights for the local facet
     std::span<const double> weights = kd.weights(facet_index);
@@ -524,8 +524,8 @@ dolfinx_contact::generate_poisson_kernel(
     double kdt = c[1];
 
     // Extract reference to the tabulated basis function
-    s_cmdspan2_t phi = kd.phi();
-    s_cmdspan3_t dphi = kd.dphi();
+    mdspan_t<const double, 2, stdex::layout_stride> phi = kd.phi();
+    mdspan_t<const double, 3, stdex::layout_stride> dphi = kd.dphi();
 
     // Extract reference to quadrature weights for the local facet
     std::span<const double> weights = kd.weights(facet_index);
@@ -650,8 +650,8 @@ dolfinx_contact::generate_poisson_kernel(
     double kdt = c[1];
 
     // Extract reference to the tabulated basis function
-    s_cmdspan2_t phi = kd.phi();
-    s_cmdspan3_t dphi = kd.dphi();
+    mdspan_t<const double, 2, stdex::layout_stride> phi = kd.phi();
+    mdspan_t<const double, 3, stdex::layout_stride> dphi = kd.dphi();
 
     // Extract reference to quadrature weights for the local facet
     std::span<const double> weights = kd.weights(facet_index);

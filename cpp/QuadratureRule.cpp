@@ -15,9 +15,9 @@
 
 using namespace dolfinx_contact;
 
-dolfinx_contact::QuadratureRule::QuadratureRule(dolfinx::mesh::CellType ct,
-                                                int degree, int dim,
-                                                basix::quadrature::type type)
+//----------------------------------------------------------------------------
+QuadratureRule::QuadratureRule(dolfinx::mesh::CellType ct, int degree, int dim,
+                               basix::quadrature::type type)
     : _cell_type(ct), _degree(degree), _type(type), _dim(dim)
 {
 
@@ -113,8 +113,7 @@ dolfinx_contact::QuadratureRule::QuadratureRule(dolfinx::mesh::CellType ct,
                      std::next(_entity_offset.begin()));
   }
 }
-
-//-----------------------------------------------------------------------------------------------
+//----------------------------------------------------------------------------
 dolfinx::mesh::CellType QuadratureRule::cell_type(int i) const
 {
   basix::cell::type b_ct = dolfinx::mesh::cell_type_to_basix_type(_cell_type);
@@ -123,17 +122,17 @@ dolfinx::mesh::CellType QuadratureRule::cell_type(int i) const
   basix::cell::type et = basix::cell::sub_entity_type(b_ct, _dim, i);
   return dolfinx::mesh::cell_type_from_basix_type(et);
 }
-//-----------------------------------------------------------------------------------------------
+//----------------------------------------------------------------------------
 int QuadratureRule::degree() const { return _degree; }
-//-----------------------------------------------------------------------------------------------
+//----------------------------------------------------------------------------
 basix::quadrature::type QuadratureRule::type() const { return _type; }
-//-----------------------------------------------------------------------------------------------
+//----------------------------------------------------------------------------
 std::size_t QuadratureRule::num_points(int i) const
 {
   assert(i < _num_sub_entities);
   return _entity_offset[i + 1] - _entity_offset[i];
 }
-//-----------------------------------------------------------------------------------------------
+//----------------------------------------------------------------------------
 mdspan_t<const double, 2> QuadratureRule::points(int i) const
 {
   assert(i < _num_sub_entities);
@@ -142,10 +141,11 @@ mdspan_t<const double, 2> QuadratureRule::points(int i) const
       all_points, std::pair(_entity_offset[i], _entity_offset[i + 1]),
       MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent);
 }
-//-----------------------------------------------------------------------------------------------
+//----------------------------------------------------------------------------
 std::span<const double> QuadratureRule::weights(int i) const
 {
   assert(i < _num_sub_entities);
   return std::span(_weights.data() + _entity_offset[i],
                    _entity_offset[i + 1] - _entity_offset[i]);
 }
+//----------------------------------------------------------------------------

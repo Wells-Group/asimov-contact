@@ -13,23 +13,15 @@
 
 namespace dolfinx_contact
 {
-namespace stdex = std::experimental;
-
-template <typename T, std::size_t d, typename S = stdex::layout_stride>
+template <typename T, std::size_t d,
+          typename S = std::experimental::layout_right>
 using mdspan_t = MDSPAN_IMPL_STANDARD_NAMESPACE::mdspan<
-    T, MDSPAN_IMPL_STANDARD_NAMESPACE::dextents<std::size_t, d>>;
+    T, MDSPAN_IMPL_STANDARD_NAMESPACE::dextents<std::size_t, d>, S>;
 
-using s_cmdspan2_t = MDSPAN_IMPL_STANDARD_NAMESPACE::mdspan<
-    const double, MDSPAN_IMPL_STANDARD_NAMESPACE::dextents<std::size_t, 2>,
-    stdex::layout_stride>;
-using s_cmdspan3_t = MDSPAN_IMPL_STANDARD_NAMESPACE::mdspan<
-    const double, MDSPAN_IMPL_STANDARD_NAMESPACE::dextents<std::size_t, 3>,
-    stdex::layout_stride>;
-
+/// Contains quadrature points and weights on a cell on a set of
+/// entities
 class QuadratureRule
 {
-  // Contains quadrature points and weights on a cell on a set of entities
-
 public:
   /// Constructor
   /// @param[in] ct The cell type
@@ -43,8 +35,8 @@ public:
   /// Return a list of quadrature points for each entity in the cell
   const std::vector<double>& points() const { return _points; }
 
-  /// Return a list of quadrature weights for each entity in the cell (using
-  /// local entity index as in DOLFINx/Basix)
+  /// Return a list of quadrature weights for each entity in the cell
+  /// (using local entity index as in DOLFINx/Basix)
   const std::vector<double>& weights() const { return _weights; }
 
   /// Return dimension of entity in the quadrature rule
@@ -83,18 +75,27 @@ public:
 
 private:
   dolfinx::mesh::CellType _cell_type;
-  std::size_t _tdim;
-  int _degree;
-  basix::quadrature::type _type;
-  int _dim;
-  std::vector<double>
-      _points; // Quadrature points for each entity on the cell. Shape (entity,
-               // num_points, tdim). Flattened row-major.
-  std::vector<double>
-      _weights; // Quadrature weights for each entity on the cell
-  std::vector<std::size_t> _entity_offset; // The offset for each entity
 
-  int _num_sub_entities; // Number of sub entities
+  std::size_t _tdim;
+
+  int _degree;
+
+  basix::quadrature::type _type;
+
+  int _dim;
+
+  // Quadrature points for each entity on the cell. Shape (entity,
+  // num_points, tdim). Flattened row-major.
+  std::vector<double> _points;
+
+  // Quadrature weights for each entity on the cell
+  std::vector<double> _weights;
+
+  // The offset for each entity
+  std::vector<std::size_t> _entity_offset;
+
+  // Number of sub entities
+  int _num_sub_entities;
 };
 
 } // namespace dolfinx_contact

@@ -25,9 +25,9 @@
 #include <dolfinx/mesh/MeshTags.h>
 #include <dolfinx/mesh/cell_types.h>
 
-using mat_set_fn = const std::function<int(
-    const std::span<const std::int32_t>&, const std::span<const std::int32_t>&,
-    const std::span<const PetscScalar>&)>;
+using mat_set_fn = const std::function<int(std::span<const std::int32_t>,
+                                           std::span<const std::int32_t>,
+                                           std::span<const PetscScalar>)>;
 
 namespace dolfinx_contact
 {
@@ -147,8 +147,8 @@ public:
   /// @param[in] constants used in the variational form
   void assemble_matrix(const mat_set_fn& mat_set, int pair,
                        const kernel_fn<PetscScalar>& kernel,
-                       const std::span<const PetscScalar> coeffs, int cstride,
-                       const std::span<const PetscScalar>& constants,
+                       std::span<const PetscScalar> coeffs, int cstride,
+                       std::span<const PetscScalar> constants,
                        const dolfinx::fem::FunctionSpace<double>& V);
 
   /// Assemble vector over exterior facet (for contact facets)
@@ -161,8 +161,8 @@ public:
   /// @param[in] constants used in the variational form
   void assemble_vector(std::span<PetscScalar> b, int pair,
                        const kernel_fn<PetscScalar>& kernel,
-                       const std::span<const PetscScalar>& coeffs, int cstride,
-                       const std::span<const PetscScalar>& constants,
+                       std::span<const PetscScalar> coeffs, int cstride,
+                       std::span<const PetscScalar> constants,
                        const dolfinx::fem::FunctionSpace<double>& V);
 
   /// @brief Generate contact kernel

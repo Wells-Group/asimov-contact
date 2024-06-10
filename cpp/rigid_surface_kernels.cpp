@@ -14,12 +14,12 @@
 #include <dolfinx/fem/FiniteElement.h>
 #include <dolfinx/fem/FunctionSpace.h>
 
+//----------------------------------------------------------------------------
 dolfinx_contact::kernel_fn<PetscScalar>
 dolfinx_contact::generate_rigid_surface_kernel(
     const dolfinx::fem::FunctionSpace<double>& V, dolfinx_contact::Kernel type,
     dolfinx_contact::QuadratureRule& quadrature_rule, bool constant_normal)
 {
-
   auto mesh = V.mesh();
   assert(mesh);
 
@@ -31,6 +31,7 @@ dolfinx_contact::generate_rigid_surface_kernel(
   // FIXME: This will not work for prism meshes
   const std::vector<std::size_t>& qp_offsets = quadrature_rule.offset();
   const std::size_t num_qp_per_entity = qp_offsets[1] - qp_offsets[0];
+
   // Coefficient sizes
   // Expecting coefficients in following order:
   // mu, lmbda, h, gap, u, grad(u), normals
@@ -42,32 +43,33 @@ dolfinx_contact::generate_rigid_surface_kernel(
                                        gdim * gdim * num_qp_per_entity,
                                        gdim * num_qp_per_entity};
 
-  dolfinx_contact::KernelData kd(V, quadrature_rule, cstrides);
+  KernelData kd(V, quadrature_rule, cstrides);
 
   /// @brief Kernel for contact with rigid surface (RHS).
   ////
   /// The kernel is using Nitsche's method to enforce contact between a
   /// deformable body and a rigid surface.
   ///
-  /// @param[in, out] b The local vector to insert values into (List with one
-  /// vector)
+  /// @param[in, out] b The local vector to insert values into (List
+  /// with one vector)
   /// @param[in] c The coefficients used in kernel. Assumed to be
   /// ordered as u, mu, lmbda, n_surf_x, n_surf_y, n_surf_z
-  /// @param[in] w The constants used in kernel. Assumed to be ordered as
-  /// gamma, theta, n_surf_x, n_surf_y, n_surf_z if a constant surface used
+  /// @param[in] w The constants used in kernel. Assumed to be ordered
+  /// as gamma, theta, n_surf_x, n_surf_y, n_surf_z if a constant
+  /// surface used
   /// @param[in] coordinate_dofs The flattened cell geometry, padded to 3D.
   /// @param[in] facet_index The local index (wrt. the cell) of the
   /// facet. Used to access the correct quadrature rule.
-  /// @param[in] num_links Unused integer. In two sided contact this indicates
-  /// how many cells are connected with the cell.
-  /// @param[in] q_indices Unused indices. In two sided contact this yields what
-  /// quadrature points to add contributions from
+  /// @param[in] num_links Unused integer. In two sided contact this
+  /// indicates how many cells are connected with the cell.
+  /// @param[in] q_indices Unused indices. In two sided contact this
+  /// yields what quadrature points to add contributions from
   dolfinx_contact::kernel_fn<PetscScalar> nitsche_rigid_rhs
       = [kd, gdim, tdim, constant_normal](
             std::vector<std::vector<PetscScalar>>& b,
             std::span<const PetscScalar> c, const PetscScalar* w,
             const double* coordinate_dofs, const std::size_t facet_index,
-            [[maybe_unused]] const std::size_t num_links,
+            [[maybe_unused]] std::size_t num_links,
             [[maybe_unused]] std::span<const std::int32_t> q_indices)
   {
     // Retrieve some data from kd
@@ -75,16 +77,16 @@ dolfinx_contact::generate_rigid_surface_kernel(
     const std::size_t ndofs_cell = kd.ndofs_cell();
 
     // Reshape coordinate dofs to two-dimensional array
-    dolfinx_contact::mdspan_t<const double, 2> coord(
-        coordinate_dofs, kd.num_coordinate_dofs(), 3);
+    mdspan_t<const double, 2> coord(coordinate_dofs, kd.num_coordinate_dofs(),
+                                    3);
 
     // Compute Jacobian and determinant at first quadrature point
     std::array<double, 9> Jb;
-    dolfinx_contact::mdspan_t<double, 2> J(Jb.data(), gdim, tdim);
+    mdspan_t<double, 2> J(Jb.data(), gdim, tdim);
     std::array<double, 9> Kb;
-    dolfinx_contact::mdspan_t<double, 2> K(Kb.data(), tdim, gdim);
+    mdspan_t<double, 2> K(Kb.data(), tdim, gdim);
     std::array<double, 6> J_totb;
-    dolfinx_contact::mdspan_t<double, 2> J_tot(J_totb.data(), gdim, tdim - 1);
+    mdspan_t<double, 2> J_tot(J_totb.data(), gdim, tdim - 1);
     double detJ = 0;
     std::array<double, 18> detJ_scratch;
 
@@ -96,12 +98,12 @@ dolfinx_contact::generate_rigid_surface_kernel(
     {
       detJ = kd.compute_first_facet_jacobian(facet_index, J, K, J_tot,
                                              detJ_scratch, coord);
-      dolfinx_contact::physical_facet_normal(
-          std::span(n_phys.data(), gdim), K,
-          MDSPAN_IMPL_STANDARD_NAMESPACE::submdspan(
-              kd.facet_normals(), facet_index,
-              MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent));
+      physical_facet_normal(std::span(n_phys.data(), gdim), K,
+                            MDSPAN_IMPL_STANDARD_NAMESPACE::submdspan(
+                                kd.facet_normals(), facet_index,
+                                MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent));
     }
+
     // Retrieve normal of rigid surface if constant
     std::array<double, 3> n_surf = {0, 0, 0};
     double n_dot = 0;
@@ -117,6 +119,7 @@ dolfinx_contact::generate_rigid_surface_kernel(
         n_dot += n_phys[i] * n_surf[i];
       }
     }
+
     // This is gamma/h
     double gamma = w[0] / c[2];
     double gamma_inv = c[2] / w[0];
@@ -127,14 +130,14 @@ dolfinx_contact::generate_rigid_surface_kernel(
 
     // Temporary work arrays
     std::vector<double> epsnb(ndofs_cell * gdim);
-    dolfinx_contact::mdspan_t<double, 2> epsn(epsnb.data(), ndofs_cell, gdim);
+    mdspan_t<double, 2> epsn(epsnb.data(), ndofs_cell, gdim);
     std::vector<double> trb(ndofs_cell * gdim);
-    dolfinx_contact::mdspan_t<double, 2> tr(trb.data(), ndofs_cell, gdim);
+    mdspan_t<double, 2> tr(trb.data(), ndofs_cell, gdim);
     std::vector<double> sig_n_u(gdim);
 
     // Extract reference to the tabulated basis function
-    dolfinx_contact::s_cmdspan2_t phi = kd.phi();
-    dolfinx_contact::s_cmdspan3_t dphi = kd.dphi();
+    mdspan_t<const double, 2, stdex::layout_stride> phi = kd.phi();
+    mdspan_t<const double, 3, stdex::layout_stride> dphi = kd.dphi();
 
     // Loop over quadrature points
     const std::array<std::size_t, 2> q_offset
@@ -178,15 +181,16 @@ dolfinx_contact::generate_rigid_surface_kernel(
                         std::span(n_phys.data(), gdim), mu, lmbda);
       double sign_u = 0;
       double u_dot_nsurf = 0;
+
       // compute inner(sig(u)*n_phys, n_surf) and inner(u, n_surf)
       for (std::size_t j = 0; j < gdim; ++j)
       {
         sign_u += sig_n_u[j] * n_surf[j];
         u_dot_nsurf += c[kd.offsets(4) + gdim * q + j] * n_surf[j];
       }
-      double R_minus_scaled
-          = dolfinx_contact::R_minus(gamma_inv * sign_u + (gap - u_dot_nsurf))
-            * detJ * weights[q];
+
+      double R_minus_scaled = R_minus(gamma_inv * sign_u + (gap - u_dot_nsurf))
+                              * detJ * weights[q];
       sign_u *= detJ * weights[q];
       for (std::size_t j = 0; j < ndofs_cell; j++)
       {
@@ -208,8 +212,8 @@ dolfinx_contact::generate_rigid_surface_kernel(
   /// The kernel is using Nitsche's method to enforce contact between a
   /// deformable body and a rigid surface.
   ///
-  /// @param[in, out] A The local matrix to insert values into (List with one
-  /// matrix)
+  /// @param[in, out] A The local matrix to insert values into (List
+  /// with one matrix)
   /// @param[in] c The coefficients used in kernel. Assumed to be
   /// ordered as u, mu, lmbda, n_surf_x, n_surf_y, n_surf_z
   /// @param[in] w The constants used in kernel. Assumed to be ordered as
@@ -217,16 +221,15 @@ dolfinx_contact::generate_rigid_surface_kernel(
   /// @param[in] coordinate_dofs The flattened cell geometry, padded to 3D.
   /// @param[in] facet_index The local index (wrt. the cell) of the
   /// facet. Used to access the correct quadrature rule.
-  /// @param[in] num_links Unused integer. In two sided contact this indicates
-  /// how many cells are connected with the cell.
-  /// @param[in] q_indices Unused indices. In two sided contact this yields what
-  /// quadrature points to add contributions from
+  /// @param[in] num_links Unused integer. In two sided contact this
+  /// indicates how many cells are connected with the cell.
+  /// @param[in] q_indices Unused indices. In two sided contact this
+  /// yields what quadrature points to add contributions from
   dolfinx_contact::kernel_fn<PetscScalar> nitsche_rigid_jacobian
       = [kd, gdim, tdim, constant_normal](
             std::vector<std::vector<double>>& A, std::span<const PetscScalar> c,
             const PetscScalar* w, const double* coordinate_dofs,
-            const std::size_t facet_index,
-            [[maybe_unused]] const std::size_t num_links,
+            std::size_t facet_index, [[maybe_unused]] std::size_t num_links,
             [[maybe_unused]] std::span<const std::int32_t> q_indices)
   {
     // Retrieve some data from kd
@@ -234,16 +237,16 @@ dolfinx_contact::generate_rigid_surface_kernel(
     const std::uint32_t ndofs_cell = kd.ndofs_cell();
 
     // Reshape coordinate dofs to two-dimensional array
-    dolfinx_contact::mdspan_t<const double, 2> coord(
-        coordinate_dofs, kd.num_coordinate_dofs(), 3);
+    mdspan_t<const double, 2> coord(coordinate_dofs, kd.num_coordinate_dofs(),
+                                    3);
 
     // Compute Jacobian and determinant at first quadrature point
     std::array<double, 9> Jb;
-    dolfinx_contact::mdspan_t<double, 2> J(Jb.data(), gdim, tdim);
+    mdspan_t<double, 2> J(Jb.data(), gdim, tdim);
     std::array<double, 9> Kb;
-    dolfinx_contact::mdspan_t<double, 2> K(Kb.data(), tdim, gdim);
+    mdspan_t<double, 2> K(Kb.data(), tdim, gdim);
     std::array<double, 6> J_totb;
-    dolfinx_contact::mdspan_t<double, 2> J_tot(J_totb.data(), gdim, tdim - 1);
+    mdspan_t<double, 2> J_tot(J_totb.data(), gdim, tdim - 1);
     double detJ = 0;
     std::array<double, 18> detJ_scratch;
 
@@ -294,14 +297,15 @@ dolfinx_contact::generate_rigid_surface_kernel(
     std::vector<double> sig_n_u(gdim);
 
     // Extract reference to the tabulated basis function
-    dolfinx_contact::s_cmdspan2_t phi = kd.phi();
-    dolfinx_contact::s_cmdspan3_t dphi = kd.dphi();
+    dolfinx_contact::mdspan_t<const double, 2, stdex::layout_stride> phi
+        = kd.phi();
+    dolfinx_contact::mdspan_t<const double, 3, stdex::layout_stride> dphi
+        = kd.dphi();
 
     // Loop over quadrature points
     const std::array<std::size_t, 2> q_offset
         = {kd.qp_offsets(facet_index), kd.qp_offsets(facet_index + 1)};
     const std::size_t num_points = q_offset.back() - q_offset.front();
-
     for (std::size_t q = 0; q < num_points; q++)
     {
       const std::size_t q_pos = q_offset.front() + q;
@@ -325,6 +329,7 @@ dolfinx_contact::generate_rigid_surface_kernel(
           n_dot += n_phys[i] * n_surf[i];
         }
       }
+
       std::size_t gap_offset = kd.offsets(3);
       double gap = 0;
       for (std::size_t i = 0; i < gdim; i++)
@@ -347,8 +352,8 @@ dolfinx_contact::generate_rigid_surface_kernel(
         sign_u += sig_n_u[j] * n_surf[j];
         u_dot_nsurf += c[kd.offsets(4) + gdim * q + j] * n_surf[j];
       }
-      double Pn_u
-          = dolfinx_contact::dR_minus(sign_u + gamma * (gap - u_dot_nsurf));
+
+      double Pn_u = dR_minus(sign_u + gamma * (gap - u_dot_nsurf));
       const double w0 = weights[q] * detJ;
       for (std::size_t j = 0; j < ndofs_cell; j++)
       {
@@ -375,6 +380,7 @@ dolfinx_contact::generate_rigid_surface_kernel(
       }
     }
   };
+
   switch (type)
   {
   case dolfinx_contact::Kernel::Rhs:
@@ -385,3 +391,4 @@ dolfinx_contact::generate_rigid_surface_kernel(
     throw std::invalid_argument("Unrecognized kernel");
   }
 }
+//----------------------------------------------------------------------------

@@ -25,6 +25,7 @@
 /// entity (`entity _local_index`), the quadrature permutation and the
 /// number of cells on the other contact boundary coefficients are
 /// extracted from.
+///
 /// @note The ordering of coefficients are expected to be `mu`, `lmbda`,
 /// `h`, `test_fn`, `grad(test_fn)`, `u`, `u_opposite`,
 /// `grad(u_opposite)`.

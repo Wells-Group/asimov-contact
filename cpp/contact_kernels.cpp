@@ -106,9 +106,10 @@ dolfinx_contact::generate_contact_kernel(
     double theta = w[1];
     double mu = c[0];
     double lmbda = c[1];
+
     // Extract reference to the tabulated basis function
-    s_cmdspan2_t phi = kd.phi();
-    s_cmdspan3_t dphi = kd.dphi();
+    mdspan_t<const double, 2, stdex::layout_stride> phi = kd.phi();
+    mdspan_t<const double, 3, stdex::layout_stride> dphi = kd.dphi();
 
     // Extract reference to quadrature weights for the local facet
 
@@ -258,8 +259,8 @@ dolfinx_contact::generate_contact_kernel(
     double mu = c[0];
     double lmbda = c[1];
 
-    s_cmdspan3_t dphi = kd.dphi();
-    s_cmdspan2_t phi = kd.phi();
+    mdspan_t<const double, 3, stdex::layout_stride> dphi = kd.dphi();
+    mdspan_t<const double, 2, stdex::layout_stride> phi = kd.phi();
     std::array<std::size_t, 2> q_offset
         = {kd.qp_offsets(facet_index), kd.qp_offsets(facet_index + 1)};
     const std::size_t num_points = q_offset.back() - q_offset.front();
@@ -425,8 +426,8 @@ dolfinx_contact::generate_contact_kernel(
     double lmbda = c[1];
     double fric = c[2];
     // Extract reference to the tabulated basis function
-    s_cmdspan2_t phi = kd.phi();
-    s_cmdspan3_t dphi = kd.dphi();
+    mdspan_t<const double, 2, stdex::layout_stride> phi = kd.phi();
+    mdspan_t<const double, 3, stdex::layout_stride> dphi = kd.dphi();
 
     // Extract reference to quadrature weights for the local facet
 
@@ -611,8 +612,8 @@ dolfinx_contact::generate_contact_kernel(
     double lmbda = c[1];
     double fric = c[2];
 
-    s_cmdspan3_t dphi = kd.dphi();
-    s_cmdspan2_t phi = kd.phi();
+    mdspan_t<const double, 3, stdex::layout_stride> dphi = kd.dphi();
+    mdspan_t<const double, 2, stdex::layout_stride> phi = kd.phi();
     std::array<std::size_t, 2> q_offset
         = {kd.qp_offsets(facet_index), kd.qp_offsets(facet_index + 1)};
     const std::size_t num_points = q_offset.back() - q_offset.front();
@@ -843,8 +844,8 @@ dolfinx_contact::generate_contact_kernel(
     double fric = c[2];
 
     // Extract reference to the tabulated basis function
-    s_cmdspan2_t phi = kd.phi();
-    s_cmdspan3_t dphi = kd.dphi();
+    mdspan_t<const double, 2, stdex::layout_stride> phi = kd.phi();
+    mdspan_t<const double, 3, stdex::layout_stride> dphi = kd.dphi();
 
     // Extract reference to quadrature weights for the local facet
 
@@ -1041,8 +1042,8 @@ dolfinx_contact::generate_contact_kernel(
     double lmbda = c[1];
     double fric = c[2];
 
-    s_cmdspan3_t dphi = kd.dphi();
-    s_cmdspan2_t phi = kd.phi();
+    mdspan_t<const double, 3, stdex::layout_stride> dphi = kd.dphi();
+    mdspan_t<const double, 2, stdex::layout_stride> phi = kd.phi();
     std::array<std::size_t, 2> q_offset
         = {kd.qp_offsets(facet_index), kd.qp_offsets(facet_index + 1)};
     const std::size_t num_points = q_offset.back() - q_offset.front();

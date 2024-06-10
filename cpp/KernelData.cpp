@@ -97,17 +97,16 @@ double dolfinx_contact::KernelData::compute_first_facet_jacobian(
 {
   dolfinx_contact::mdspan_t<const double, 4> full_basis(_c_basis_values.data(),
                                                         _c_basis_shape);
-  dolfinx_contact::s_cmdspan2_t dphi_fc
-      = MDSPAN_IMPL_STANDARD_NAMESPACE::submdspan(
-          full_basis, std::pair{1, (std::size_t)_tdim + 1},
-          _qp_offsets[facet_index], MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent,
-          0);
+  auto dphi_fc = MDSPAN_IMPL_STANDARD_NAMESPACE::submdspan(
+      full_basis, std::pair{1, (std::size_t)_tdim + 1},
+      _qp_offsets[facet_index], MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent, 0);
   dolfinx_contact::mdspan_t<const double, 3> ref_jacs(_ref_jacobians.data(),
                                                       _jac_shape);
   auto J_f = MDSPAN_IMPL_STANDARD_NAMESPACE::submdspan(
       ref_jacs, (std::size_t)facet_index,
       MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent,
       MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent);
+
   return std::fabs(dolfinx_contact::compute_facet_jacobian(
       J, K, J_tot, detJ_scratch, J_f, dphi_fc, coords));
 }

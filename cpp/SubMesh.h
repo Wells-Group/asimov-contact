@@ -23,15 +23,14 @@ public:
   // Default empty constructor
   SubMesh() = default;
 
-  // submesh constructor
-  // constructs a submesh consisting of the cells adjacent to a given set of
-  // exterior facets
+  /// @brief constructs a submesh consisting of the cells adjacent to a
+  /// given set of exterior facets
   /// @param[in] mesh the parent mesh
-  // / @param[in] facets vector of pairs (cell, facet) of exterior
-  // facets, / where cell is the index of the cell local to the process
-  // and facet is / the facet index within the cell. The data is
-  // flattened row-major.
-  SubMesh(std::shared_ptr<const dolfinx::mesh::Mesh<double>> mesh,
+  /// @param[in] facets vector of pairs (cell, facet) of exterior
+  /// facets, where cell is the index of the cell local to the process
+  /// and facet is the facet index within the cell. The data is
+  /// flattened row-major.
+  SubMesh(const dolfinx::mesh::Mesh<double>& mesh,
           std::span<const std::int32_t> facets);
 
   // Return mesh

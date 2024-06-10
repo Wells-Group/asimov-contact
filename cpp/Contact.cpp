@@ -47,9 +47,9 @@ tabulate(const dolfinx::fem::CoordinateElement<double>& cmap,
 /// mesh cell (local to process)
 void compute_linked_cells(
     std::vector<std::int32_t>& linked_cells,
-    const std::span<const std::int32_t>& submesh_facets,
+    std::span<const std::int32_t> submesh_facets,
     const dolfinx::graph::AdjacencyList<std::int32_t>& sub_to_parent,
-    const std::span<const std::int32_t>& parent_cells)
+    std::span<const std::int32_t> parent_cells)
 {
   linked_cells.resize(0);
   linked_cells.reserve(submesh_facets.size());
@@ -132,7 +132,7 @@ dolfinx_contact::Contact::Contact(
           = num_local; // store how many facets are owned by the process
     }
   }
-  _submesh = dolfinx_contact::SubMesh(mesh, all_facet_pairs);
+  _submesh = dolfinx_contact::SubMesh(*mesh, all_facet_pairs);
   _cell_facet_pairs
       = std::make_shared<dolfinx::graph::AdjacencyList<std::int32_t>>(
           std::move(all_facet_pairs), std::move(offsets));
@@ -855,7 +855,7 @@ dolfinx_contact::Contact::pack_u_contact(
   }
 
   mdspan_t<const double, 4> basis_values(basis_valuesb.data(), b_shape);
-  const std::span<const PetscScalar>& u_coeffs = u_sub.x()->array();
+  std::span<const PetscScalar> u_coeffs = u_sub.x()->array();
 
   // Get cell index on sub-mesh
   const int tdim = topology->dim();
@@ -1093,8 +1093,8 @@ dolfinx_contact::Contact::pack_ny(int pair) const
 void dolfinx_contact::Contact::assemble_matrix(
     mat_set_fn& mat_set, int pair,
     const dolfinx_contact::kernel_fn<PetscScalar>& kernel,
-    const std::span<const PetscScalar> coeffs, int cstride,
-    const std::span<const PetscScalar>& constants,
+    std::span<const PetscScalar> coeffs, int cstride,
+    std::span<const PetscScalar> constants,
     const dolfinx::fem::FunctionSpace<double>& V)
 {
   std::shared_ptr<const dolfinx::mesh::Mesh<double>> mesh = V.mesh();
@@ -1212,8 +1212,8 @@ void dolfinx_contact::Contact::assemble_matrix(
 void dolfinx_contact::Contact::assemble_vector(
     std::span<PetscScalar> b, int pair,
     const dolfinx_contact::kernel_fn<PetscScalar>& kernel,
-    const std::span<const PetscScalar>& coeffs, int cstride,
-    const std::span<const PetscScalar>& constants,
+    std::span<const PetscScalar> coeffs, int cstride,
+    std::span<const PetscScalar> constants,
     const dolfinx::fem::FunctionSpace<double>& V)
 {
   /// Check that we support the function space
@@ -1313,14 +1313,13 @@ void dolfinx_contact::Contact::assemble_vector(
            num_linked_cells, q_indices);
 
     // Add element vector to global vector
-    const std::span<const int> dofs_cell = dofmap->cell_dofs(active_facets[i]);
+    std::span<const int> dofs_cell = dofmap->cell_dofs(active_facets[i]);
     for (std::size_t j = 0; j < ndofs_cell; ++j)
       for (int k = 0; k < bs; ++k)
         b[bs * dofs_cell[j] + k] += bes[0][bs * j + k];
     for (std::size_t l = 0; l < num_linked_cells; ++l)
     {
-      const std::span<const int> dofs_linked
-          = dofmap->cell_dofs(linked_cells[l]);
+      std::span<const int> dofs_linked = dofmap->cell_dofs(linked_cells[l]);
       for (std::size_t j = 0; j < ndofs_cell; ++j)
         for (int k = 0; k < bs; ++k)
           b[bs * dofs_linked[j] + k] += bes[l + 1][bs * j + k];
@@ -1379,7 +1378,7 @@ dolfinx_contact::Contact::pack_grad_test_functions(
   const std::vector<double>& reference_x = _reference_contact_points[pair];
   for (std::size_t i = 0; i < num_facets; i++)
   {
-    const std::span<const int> links = map->links((int)i);
+    std::span<const int> links = map->links((int)i);
     assert(links.size() == num_q_points);
     for (std::size_t j = 0; j < num_q_points; j++)
     {
@@ -1387,7 +1386,7 @@ dolfinx_contact::Contact::pack_grad_test_functions(
         linked_cells[j] = -1;
       else
       {
-        const std::span<const int> linked_pair = facet_map->links(links[j]);
+        std::span<const int> linked_pair = facet_map->links(links[j]);
         assert(!linked_pair.empty());
         linked_cells[j] = linked_pair.front();
       }

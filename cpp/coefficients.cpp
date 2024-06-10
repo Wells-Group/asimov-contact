@@ -20,9 +20,8 @@ void dolfinx_contact::transformed_push_forward(
     std::size_t basis_offset, std::size_t q, std::int32_t cell,
     std::span<const std::uint32_t> cell_info)
 {
-  const std::function<void(const std::span<PetscScalar>&,
-                           const std::span<const std::uint32_t>&, std::int32_t,
-                           int)>
+  const std::function<void(std::span<PetscScalar>,
+                           std::span<const std::uint32_t>, std::int32_t, int)>
       transformation = element->dof_transformation_fn<PetscScalar>(
           dolfinx::fem::doftransform::standard);
 
@@ -431,7 +430,7 @@ dolfinx_contact::pack_gradient_quadrature(
   std::vector<PetscScalar> coefficients(num_active_entities * cstride, 0.0);
 
   // Get the coeffs to pack
-  const std::span<const double> data = coeff.x()->array();
+  std::span<const double> data = coeff.x()->array();
 
   // Get dofmap info
   const dolfinx::fem::DofMap* dofmap = coeff.function_space()->dofmap().get();
