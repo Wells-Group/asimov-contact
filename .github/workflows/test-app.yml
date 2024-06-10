@@ -100,6 +100,11 @@ jobs:
           cmake -G Ninja -DCMAKE_BUILD_TYPE=Developer  -B build-contact -S cpp/
           ninja -C build-contact install
 
+      - name: Build C++ docs
+        run: |
+          cd cpp/doc
+          doxygen
+
       - name: Run demos (C++)
         run: |
           cd cpp/demos/
