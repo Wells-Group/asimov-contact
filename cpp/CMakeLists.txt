@@ -4,7 +4,7 @@ cmake_minimum_required(VERSION 3.21)
 # Set project name and version number
 project(DOLFINX_CONTACT VERSION 0.8.0.0)
 
-#------------------------------------------------------------------------------
+#-----------------------------------------------------------------------------
 # Set CMake options, see `cmake --help-policy CMP00xx`
 
 cmake_policy(VERSION 3.10)
@@ -15,10 +15,8 @@ if (POLICY CMP0075)
   cmake_policy(SET CMP0075 NEW)
 endif()
 
-# Use C++17
+# Use C++20
 set(CMAKE_CXX_STANDARD 20)
-
-# Require C++17
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Do not enable compler-specific extensions
@@ -50,12 +48,6 @@ target_link_libraries(dolfinx_contact PUBLIC Basix::basix)
 target_link_libraries(dolfinx_contact PUBLIC dolfinx)
 target_link_libraries(dolfinx_contact PRIVATE m)
 
-include(GNUInstallDirs)
-install(FILES Contact.h MeshTie.h contact_kernels.h rigid_surface_kernels.h error_handling.h utils.h coefficients.h
-              elasticity.h geometric_quantities.h meshtie_kernels.h parallel_mesh_ghosting.h point_cloud.h SubMesh.h
-              QuadratureRule.h RayTracing.h KernelData.h
-              DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/dolfinx_contact COMPONENT Development)
-
 target_sources(dolfinx_contact PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/utils.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/coefficients.cpp
@@ -85,12 +77,19 @@ set_target_properties(dolfinx_contact PROPERTIES
   VERSION ${DOLFINX_CONTACT_VERSION}
   SOVERSION ${DOLFINX_CONTACT_VERSION_MAJOR}.${DOLFINX_CONTACT_VERSION_MINOR})
 
-
 # Add version to definitions (public)
 target_compile_definitions(dolfinx_contact PUBLIC DOLFINX_CONTACT_VERSION="${DOLFINX_CONTACT_VERSION}")
 
 #------------------------------------------------------------------------------
-# Install dolfinx library and header files
+# Install library and header files
+
+include(GNUInstallDirs)
+install(FILES Contact.h MeshTie.h contact_kernels.h rigid_surface_kernels.h
+              error_handling.h utils.h coefficients.h elasticity.h
+              geometric_quantities.h meshtie_kernels.h parallel_mesh_ghosting.h
+              point_cloud.h SubMesh.h QuadratureRule.h RayTracing.h KernelData.h
+              DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/dolfinx_contact COMPONENT Development)
+
 install(TARGETS dolfinx_contact
   EXPORT DOLFINX_CONTACTTargets
   RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT RuntimeExecutables
@@ -102,14 +101,11 @@ install(TARGETS dolfinx_contact
 install(EXPORT DOLFINX_CONTACTTargets DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/dolfinx_contact)
 
 include(CMakePackageConfigHelpers)
-
 configure_package_config_file(${DOLFINX_CONTACT_SOURCE_DIR}/DOLFINX_CONTACTConfig.cmake.in
 ${CMAKE_BINARY_DIR}/dolfinx_contact/DOLFINX_CONTACTConfig.cmake
 INSTALL_DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/dolfinx_contact)
 
 # Install CMake helper files
-install(
-  FILES
-  ${CMAKE_BINARY_DIR}/dolfinx_contact/DOLFINX_CONTACTConfig.cmake
-  DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/dolfinx_contact
-  COMPONENT Development)
+install(FILES ${CMAKE_BINARY_DIR}/dolfinx_contact/DOLFINX_CONTACTConfig.cmake
+        DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/dolfinx_contact
+        COMPONENT Development)

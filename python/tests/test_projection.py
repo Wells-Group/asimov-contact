@@ -2,10 +2,12 @@
 #
 # SPDX-License-Identifier:   MIT
 #
-# This test verifies the closest point projection. If we consider the closest point projection Pi(x)
-# mapping a point x on surface 0 to a point Pi(x) on surface 1, then Pi(x) - x should be orthogonal
-# to surface 1 in Pi(x) and point inwards. The normalised version (Pi(x) - x)||Pi(x)-x|| should therefore
-# be the same as the outward unit normal in the point Pi(x) with the opposite sign.
+# This test verifies the closest point projection. If we consider the
+# closest point projection Pi(x) mapping a point x on surface 0 to a
+# point Pi(x) on surface 1, then Pi(x) - x should be orthogonal to
+# surface 1 in Pi(x) and point inwards. The normalised version (Pi(x) -
+# x)||Pi(x)-x|| should therefore be the same as the outward unit normal
+# in the point Pi(x) with the opposite sign.
 
 import os
 
