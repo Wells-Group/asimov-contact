@@ -273,7 +273,7 @@ compute_active_entities(const dolfinx::mesh::Mesh<double>& mesh,
 ///
 /// @param[in] mesh The mesh
 /// @param[in] dim The dimension of the entities
-/// @param[in] entities List of mesh entities
+/// @param[in] entity_list List of mesh entities
 /// @returns An adjacency list where the i-th link corresponds to the
 /// closure dofs of the i-th input entity
 dolfinx::graph::AdjacencyList<std::int32_t>

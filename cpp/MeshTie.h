@@ -16,6 +16,7 @@
 
 namespace dolfinx_contact
 {
+// MeshTye class
 class MeshTie : public Contact
 {
 public:

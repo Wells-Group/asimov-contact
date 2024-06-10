@@ -20,16 +20,19 @@
 
 namespace dolfinx_contact
 {
+/// @brief  Typedef
 using jac_fn = std::function<double(
     double, mdspan_t<double, 2>, mdspan_t<double, 2>, mdspan_t<double, 2>,
     std::span<double>, mdspan_t<const double, 2>,
     mdspan_t<const double, 2, stdex::layout_stride>,
     mdspan_t<const double, 2>)>;
 
+/// @brief  Typedef
 using normal_fn
     = std::function<void(std::span<double>, mdspan_t<const double, 2>,
                          mdspan_t<const double, 2>, const std::size_t)>;
 
+/// @brief  Kernal data class
 class KernelData
 {
 public:

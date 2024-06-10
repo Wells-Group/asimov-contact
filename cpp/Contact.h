@@ -31,6 +31,7 @@ using mat_set_fn = const std::function<int(std::span<const std::int32_t>,
 
 namespace dolfinx_contact
 {
+/// @brief Contact class
 class Contact
 {
 public:
@@ -43,7 +44,7 @@ public:
   /// associated with ith meshtag in markers
   /// @param[in] contact_pairs list of pairs (i, j) marking the ith and jth
   /// surface in surfaces->array() as a contact pair
-  /// @param[in] V The functions space
+  /// @param[in] mesh TODO
   /// @param[in] mode Contact detection algorithm for each pair
   /// @param[in] q_deg The quadrature degree.
   Contact(const std::vector<std::shared_ptr<
@@ -154,6 +155,7 @@ public:
   /// facets
   /// @param[in] cstride Number of coefficients per facet
   /// @param[in] constants used in the variational form
+  /// @param[in] V TODO
   void assemble_matrix(const mat_set_fn& mat_set, int pair,
                        const kernel_fn<PetscScalar>& kernel,
                        std::span<const PetscScalar> coeffs, int cstride,

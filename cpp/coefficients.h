@@ -19,7 +19,7 @@ namespace dolfinx_contact
 /// @param[in] reference_basis The basis functions tabulated on the reference
 /// element
 /// @param[in] element_basisb Storage for transformed basis
-/// @param[in, out] _u The basis values in the physical space
+/// @param[in, out] basis_values
 /// @param[in] J The jacobian
 /// @param[in] K The inverse of the jacobian
 /// @param[in] detJ The determinant of the jacobian
@@ -53,7 +53,6 @@ void transformed_push_forward(
 ///
 /// @param[in] coeff The coefficient to pack
 /// @param[in] q_degree The quadrature degree
-/// @param[in] integral The integral type (cell or exterior facet)
 /// @param[in] active_entities List of active entities.
 /// @param[in] integral The integral type (cells or exterior facet)
 /// @returns c The packed coefficients and the number of coeffs per entity
@@ -82,7 +81,6 @@ pack_coefficient_quadrature(const dolfinx::fem::Function<PetscScalar>& coeff,
 ///
 /// @param[in] coeff The coefficient to pack
 /// @param[in] q_degree The quadrature degree
-/// @param[in] integral The integral type (cell or exterior facet)
 /// @param[in] active_entities List of active entities.
 /// @param[in] integral The integral type (cells or exterior facet)
 /// @returns The packed coefficients and the number of coeffs per
