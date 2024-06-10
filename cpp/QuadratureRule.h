@@ -26,7 +26,7 @@ public:
   /// Constructor
   /// @param[in] ct The cell type
   /// @param[in] degree Degree of quadrature rule
-  /// @param[in] Dimension of entity
+  /// @param[in] dim Dimension of entity
   /// @param[in] type Type of quadrature rule
   QuadratureRule(dolfinx::mesh::CellType ct, int degree, int dim,
                  basix::quadrature::type type
@@ -43,7 +43,7 @@ public:
   int dim() const { return _dim; }
 
   /// Return the cell type for the ith quadrature rule
-  /// @param[in] Local entity number
+  /// @param[in] i Local entity number
   dolfinx::mesh::CellType cell_type(int i) const;
 
   /// @brief Return degree of quadrature rule

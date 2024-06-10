@@ -34,7 +34,7 @@ namespace dolfinx_contact
 class Contact
 {
 public:
-  // empty constructor
+  /// empty constructor
   Contact() = default;
 
   /// Constructor
@@ -64,34 +64,44 @@ public:
     return _contact_pairs[pair];
   }
 
-  // Return active entities for surface s
+  /// Return active entities for surface s
+  /// @param[in] s TODO
+  /// @return TODO
   std::span<const std::int32_t> active_entities(int s) const
   {
     return _cell_facet_pairs->links(s);
   }
 
-  // Return number of facets in surface s owned by the process
+  /// Return number of facets in surface s owned by the process
+  /// @param[in] s TODO
+  /// @return TODO
   std::size_t local_facets(int s) const { return _local_facets[s]; }
 
-  // set quadrature rule
+  /// set quadrature rule
   void set_quadrature_rule(QuadratureRule q_rule)
   {
     _quadrature_rule = std::make_shared<QuadratureRule>(q_rule);
   }
 
-  // return quadrature rule
+  /// return quadrature rule
   const QuadratureRule& quadrature_rule() const { return *_quadrature_rule; }
 
+  /// @brief TODO
+  /// @return TODO
   std::size_t max_links() const
   {
     return *std::max_element(_max_links.begin(), _max_links.end());
   }
-  // set search radius for ray-tracing
+
+  /// set search radius for ray-tracing
+  /// @param[in] r
   void set_search_radius(double r) { _radius = r; }
 
   /// return size of coefficients vector per facet on s
-  /// @param[in] meshtie - Type of constraint,meshtie if true, unbiased contact
-  /// if false
+  /// @param[in] meshtie Type of constraint,meshtie if true, unbiased
+  /// contact if false
+  /// @param[in] V
+  /// @return TODO
   std::size_t
   coefficients_size(bool meshtie,
                     const dolfinx::fem::FunctionSpace<double>& V) const;
@@ -116,7 +126,7 @@ public:
   /// Return the submesh of all cells containing facets of the contact surface
   const SubMesh& submesh() const { return _submesh; }
 
-  // Return mesh
+  /// Return mesh
   std::shared_ptr<const dolfinx::mesh::Mesh<double>> mesh() const
   {
     return _mesh;
@@ -124,11 +134,11 @@ public:
 
   /// @brief Create a PETSc matrix with contact sparsity pattern
   ///
-  /// Create a PETSc matrix with the sparsity pattern of the input form and the
-  /// coupling contact interfaces
+  /// Create a PETSc matrix with the sparsity pattern of the input form
+  /// and the coupling contact interfaces
   ///
-  /// @param[in] The bilinear form
-  /// @param[in] The matrix type, see:
+  /// @param[in] a The bilinear form
+  /// @param[in] type The matrix type, see:
   /// https://petsc.org/main/docs/manualpages/Mat/MatType.html#MatType for
   /// available types
   /// @returns Mat The PETSc matrix
@@ -138,7 +148,6 @@ public:
   /// Assemble matrix over exterior facets (for contact facets)
   ///
   /// @param[in] mat_set the function for setting the values in the matrix
-  /// @param[in] bcs List of Dirichlet BCs
   /// @param[in] pair index of contact pair
   /// @param[in] kernel The integration kernel
   /// @param[in] coeffs coefficients used in the variational form packed on
@@ -151,7 +160,8 @@ public:
                        std::span<const PetscScalar> constants,
                        const dolfinx::fem::FunctionSpace<double>& V);
 
-  /// Assemble vector over exterior facet (for contact facets)
+  /// @brief Assemble vector over exterior facet (for contact facets).
+  ///
   /// @param[in] b The vector
   /// @param[in] pair index of contact pair
   /// @param[in] kernel The integration kernel
@@ -159,6 +169,7 @@ public:
   /// facets
   /// @param[in] cstride Number of coefficients per facet
   /// @param[in] constants used in the variational form
+  /// @param[in] V TODO
   void assemble_vector(std::span<PetscScalar> b, int pair,
                        const kernel_fn<PetscScalar>& kernel,
                        std::span<const PetscScalar> coeffs, int cstride,
@@ -169,10 +180,12 @@ public:
   ///
   /// The kernel will expect input on the form
   /// @param[in] type The kernel type (Either `Jac` or `Rhs`).
+  /// @param[in]  V TOOD,
   /// @returns Kernel function that takes in a vector (b) to assemble into, the
   /// coefficients (`c`), the constants (`w`), the local facet entity (`entity
   /// _local_index`), the quadrature permutation and the number of cells on the
   /// other contact boundary coefficients are extracted from.
+  ///
   /// @note The ordering of coefficients are expected to be `mu`, `lmbda`, `h`,
   /// `gap`, `normals` `test_fn`, `u`, `u_opposite`.
   /// @note The scalar valued coefficients `mu`,`lmbda` and `h` are expected to
@@ -205,11 +218,13 @@ public:
   void create_distance_map(int pair);
 
   /// Compute and pack the gap function for each quadrature point the set of
-  /// facets. For a set of facets; go through the quadrature points on each
+  /// facets.
+  ///
+  /// For a set of facets; go through the quadrature points on each
   /// facet find the closest facet on the other surface and compute the
   /// distance vector
-  /// @param[in] pair - surface on which to integrate
-  /// @param[out] c - gap packed on facets. c[i*cstride +  gdim * k+ j]
+  /// @param[in] pair surface on which to integrate
+  /// @return TOOD gap packed on facets. c[i*cstride +  gdim * k+ j]
   /// contains the jth component of the Gap on the ith facet at kth
   /// quadrature point
   std::pair<std::vector<PetscScalar>, int> pack_gap(int pair) const;
@@ -218,17 +233,19 @@ public:
   /// @brief Compute test functions on opposite surface at quadrature
   /// points of facets
   /// @param[in] pair index of contact pair
-  /// @param[in] gap gap packed on facets per quadrature point
-  /// @param[out] c - test functions packed on facets.
+  /// @param[in] V gap packed on facets per quadrature point
+  /// @return TODO
   std::pair<std::vector<PetscScalar>, int>
   pack_test_functions(int pair,
                       const dolfinx::fem::FunctionSpace<double>& V) const;
 
-  /// @todo Function signature are args docs look wrong
   /// Compute gradient of test functions on opposite surface (initial
   /// configuration) at quadrature points of facets
+  ///
+  /// @todo Function signature are args docs look wrong
+  ///
   /// @param[in] pair index of contact pair
-  /// @param[out] c - test functions packed on facets.
+  /// @param[out] V TODO
   std::pair<std::vector<PetscScalar>, int>
   pack_grad_test_functions(int pair,
                            const dolfinx::fem::FunctionSpace<double>& V) const;
@@ -244,11 +261,12 @@ public:
                            std::span<const double> n_y, double tol);
 
   /// @todo Function signature are args docs look wrong
+  ///
   /// Compute function on opposite surface at quadrature points of
   /// facets
-  /// @param[in] pair index of contact pair
-  /// @param[in] gap packed on facets per quadrature point
-  /// @param[out] c - test functions packed on facets.
+  /// @param[in] pair TODO
+  /// @param[in] u TODO
+  /// @return TODO
   std::pair<std::vector<PetscScalar>, int>
   pack_u_contact(int pair, const dolfinx::fem::Function<PetscScalar>& u) const;
 
@@ -275,11 +293,10 @@ public:
   /// @brief Pack gap with rigid surface defined by x[gdim-1] = -g.
   /// g_vec = zeros(gdim), g_vec[gdim-1] = -g
   /// Gap = x - g_vec
-  /// @param[in] pair - index of contact pair
-  /// @param[in] g - defines location of plane
-  /// @param[out] c - gap packed on facets. c[i, gdim * k+ j] contains
-  /// the jth component of the Gap on the ith facet at kth quadrature
-  /// point
+  /// @param[in] pair index of contact pair
+  /// @param[in] g defines location of plane
+  /// @return TODO: gap packed on facets. c[i, gdim * k+ j] contains the
+  /// jth component of the Gap on the ith facet at kth quadrature point
   std::pair<std::vector<PetscScalar>, int> pack_gap_plane(int pair, double g);
 
   /// This function updates the submesh geometry for all submeshes using
