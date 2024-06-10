@@ -167,7 +167,7 @@ def snes_solver(
 
     # Create LHS matrix and RHS vector
     b_func = _fem.Function(V)
-    b = b_func.vector
+    b = b_func.petsc_vec
     J = create_matrix(problem.a)
 
     # Create semismooth Newton solver (SNES)
@@ -186,7 +186,7 @@ def snes_solver(
     # Set solve functions and variable bounds
     snes.setFunction(problem.F, b)
     snes.setJacobian(problem.J, J)
-    snes.setVariableBounds(umin.vector, umax.vector)
+    snes.setVariableBounds(umin.petsc_vec, umax.petsc_vec)
     null_space = rigid_motions_nullspace(V)
     J.setNearNullSpace(null_space)
 
@@ -209,7 +209,7 @@ def snes_solver(
     u.interpolate(_u_initial)
     num_dofs_global = V.dofmap.index_map.size_global * V.dofmap.index_map_bs
     with _common.Timer(f"{num_dofs_global} Solve SNES"):
-        snes.solve(None, u.vector)
+        snes.solve(None, u.x.petsc_vec)
     u.x.scatter_forward()
 
     assert snes.getConvergedReason() > 1

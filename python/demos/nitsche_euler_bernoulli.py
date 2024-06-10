@@ -100,7 +100,7 @@ def solve_euler_bernoulli(
     else:
         # Strong Dirichlet enforcement via lifting
         u_bc = Function(V)
-        with u_bc.vector.localForm() as loc:
+        with u_bc.x.petsc_vec.localForm() as loc:
             loc.set(0)
         bc = dirichletbc(u_bc, locate_dofs_topological(V, mesh.topology.dim - 1, left_facets))
         bcs = [bc]
