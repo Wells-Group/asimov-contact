@@ -397,12 +397,12 @@ if __name__ == "__main__":
         dirichletbc(g_top, dofs_top, V),
     ]
 
-    fric = Function(V0)
-    fric.interpolate(lambda x: np.full((1, x.shape[1]), 0.3))
+    fric1 = Function(V0)
+    fric1.interpolate(lambda x: np.full((1, x.shape[1]), 0.3))
     contact_problem.generate_contact_data(
         FrictionLaw.Coulomb,
         V,
-        {"u": u, "du": du, "mu": mu_dg, "lambda": lmbda_dg, "fric": fric},
+        {"u": u, "du": du, "mu": mu_dg, "lambda": lmbda_dg, "fric": fric1},
         E * 10 * args.order**2,
         1,
     )
