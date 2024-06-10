@@ -179,7 +179,7 @@ dolfinx_contact::generate_meshtie_kernel(
   kernel_fn<PetscScalar> meshtie_thermo_elastic
       = [kd, gdim, bs,
          ndofs_cell](std::vector<std::vector<PetscScalar>>& b,
-                     std::span<const PetscScalar> c, const PetscScalar* w,
+                     std::span<const PetscScalar> c, const PetscScalar* /*w */,
                      const double* coordinate_dofs,
                      const std::size_t facet_index, const std::size_t num_links,
                      std::span<const std::int32_t> q_indices)

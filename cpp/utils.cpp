@@ -616,7 +616,8 @@ dolfinx_contact::get_update_jacobian_dependencies(
   {
     // Return function that returns the input determinant
     return
-        [](double detJ, [[maybe_unused]] dolfinx_contact::mdspan_t<double, 2> J,
+        []([[maybe_unused]] double detJ,
+           [[maybe_unused]] dolfinx_contact::mdspan_t<double, 2> J,
            [[maybe_unused]] dolfinx_contact::mdspan_t<double, 2> K,
            [[maybe_unused]] dolfinx_contact::mdspan_t<double, 2> J_tot,
            [[maybe_unused]] std::span<double> detJ_scratch,

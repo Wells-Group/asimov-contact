@@ -170,16 +170,11 @@ dolfinx_contact::create_contact_mesh(
       x.push_back(xg[i * 3 + j]);
   }
 
-  // auto partitioner
-  //     = [cell_to_dests,
-  //        ncells](MPI_Comm comm, int nparts, dolfinx::mesh::CellType
-  //        cell_type,
-  //                const dolfinx::graph::AdjacencyList<std::int64_t>& cells)
   auto partitioner
       = [cell_to_dests,
-         ncells](MPI_Comm comm, int nparts,
-                 const std::vector<dolfinx::mesh::CellType>& cell_types,
-                 const std::vector<std::span<const std::int64_t>>& cells)
+         ncells](MPI_Comm comm, int /*nparts */,
+                 const std::vector<dolfinx::mesh::CellType>& /*cell_types*/,
+                 const std::vector<std::span<const std::int64_t>>& /*cells*/)
   {
     int rank = dolfinx::MPI::rank(comm);
     std::vector<std::int32_t> dests;

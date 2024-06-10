@@ -22,6 +22,33 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # Do not enable compler-specific extensions
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+include(CheckCXXCompilerFlag)
+check_cxx_compiler_flag("-Wall -Werror -Wextra -pedantic" HAVE_PEDANTIC)
+if(HAVE_PEDANTIC)
+  list(APPEND DOLFINX_CONTACT_CXX_DEVELOPER_FLAGS -Wall;-Werror;-Wextra;-pedantic)
+endif()
+
+# Debug flags
+check_cxx_compiler_flag(-g HAVE_DEBUG)
+if(HAVE_DEBUG)
+  list(APPEND DOLFINX_CONTACT_CXX_DEVELOPER_FLAGS -g)
+endif()
+
+# Optimisation
+check_cxx_compiler_flag(-O2 HAVE_O2_OPTIMISATION)
+if(HAVE_O2_OPTIMISATION)
+  list(APPEND DOLFINX_CONTACT_CXX_DEVELOPER_FLAGS -O2)
+endif()
+
+# Turn off some checks in gcc12 and gcc13 due to false positives with the fmt
+# library
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU"
+   AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER "11.4"
+   AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS "14.0")
+  list(APPEND DOLFINX_CONTACT_CXX_DEVELOPER_FLAGS
+       -Wno-array-bounds;-Wno-stringop-overflow)
+endif()
+
 #------------------------------------------------------------------------------
 # configurable options for how we want to build
 
@@ -47,6 +74,11 @@ add_library(dolfinx_contact)
 target_link_libraries(dolfinx_contact PUBLIC Basix::basix)
 target_link_libraries(dolfinx_contact PUBLIC dolfinx)
 target_link_libraries(dolfinx_contact PRIVATE m)
+
+# Set 'Developer' build type flags
+target_compile_options(
+  dolfinx_contact PRIVATE $<$<CONFIG:Developer>:${DOLFINX_CONTACT_CXX_DEVELOPER_FLAGS}>
+)
 
 target_sources(dolfinx_contact PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/utils.cpp

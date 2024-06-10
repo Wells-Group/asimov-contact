@@ -97,7 +97,7 @@ jobs:
         id: cpp-contact
         run: |
           export VERBOSE=1
-          cmake -G Ninja -B build-contact -S cpp/
+          cmake -G Ninja -DCMAKE_BUILD_TYPE=Developer  -B build-contact -S cpp/
           ninja -C build-contact install
 
       - name: Run demos (C++)
