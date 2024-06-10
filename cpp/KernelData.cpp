@@ -6,9 +6,9 @@
 
 #include "KernelData.h"
 
+//----------------------------------------------------------------------------
 dolfinx_contact::KernelData::KernelData(
-    const dolfinx::fem::FunctionSpace<double>& V,
-    const dolfinx_contact::QuadratureRule& q_rule,
+    const dolfinx::fem::FunctionSpace<double>& V, const QuadratureRule& q_rule,
     const std::vector<std::size_t>& cstrides)
     : _qp_offsets(q_rule.offset()), _q_weights(q_rule.weights())
 {
@@ -25,8 +25,8 @@ dolfinx_contact::KernelData::KernelData(
   _gdim = geometry.dim();
   auto topology = mesh->topology();
   _tdim = topology->dim();
+  error::check_cell_type(topology->cell_type());
 
-  dolfinx_contact::error::check_cell_type(topology->cell_type());
   // Create quadrature points on reference facet
   const std::vector<double>& q_points = q_rule.points();
   const std::size_t num_quadrature_pts = _q_weights.size();
@@ -38,9 +38,7 @@ dolfinx_contact::KernelData::KernelData(
   _ndofs_cell = dofmap->element_dof_layout().num_dofs();
   _bs = dofmap->bs();
 
-  if (const bool needs_dof_transformations
-      = element->needs_dof_transformations();
-      needs_dof_transformations)
+  if (element->needs_dof_transformations())
   {
     throw std::invalid_argument("Contact-kernels are not supporting finite "
                                 "elements requiring dof transformations.");
@@ -83,42 +81,38 @@ dolfinx_contact::KernelData::KernelData(
       = basix::cell::facet_outward_normals<double>(basix_cell);
 
   // Get update Jacobian function (for each quadrature point)
-  _update_jacobian = dolfinx_contact::get_update_jacobian_dependencies(cmap);
+  _update_jacobian = get_update_jacobian_dependencies(cmap);
 
   // Get update FacetNormal function (for each quadrature point)
-  _update_normal = dolfinx_contact::get_update_normal(cmap);
+  _update_normal = get_update_normal(cmap);
 }
 //-----------------------------------------------------------------------------
 double dolfinx_contact::KernelData::compute_first_facet_jacobian(
-    const std::size_t facet_index, dolfinx_contact::mdspan_t<double, 2> J,
-    dolfinx_contact::mdspan_t<double, 2> K,
-    dolfinx_contact::mdspan_t<double, 2> J_tot, std::span<double> detJ_scratch,
-    dolfinx_contact::mdspan_t<const double, 2> coords) const
+    const std::size_t facet_index, mdspan_t<double, 2> J, mdspan_t<double, 2> K,
+    mdspan_t<double, 2> J_tot, std::span<double> detJ_scratch,
+    mdspan_t<const double, 2> coords) const
 {
-  dolfinx_contact::mdspan_t<const double, 4> full_basis(_c_basis_values.data(),
-                                                        _c_basis_shape);
+  mdspan_t<const double, 4> full_basis(_c_basis_values.data(), _c_basis_shape);
   auto dphi_fc = MDSPAN_IMPL_STANDARD_NAMESPACE::submdspan(
       full_basis, std::pair{1, (std::size_t)_tdim + 1},
       _qp_offsets[facet_index], MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent, 0);
-  dolfinx_contact::mdspan_t<const double, 3> ref_jacs(_ref_jacobians.data(),
-                                                      _jac_shape);
+  mdspan_t<const double, 3> ref_jacs(_ref_jacobians.data(), _jac_shape);
   auto J_f = MDSPAN_IMPL_STANDARD_NAMESPACE::submdspan(
       ref_jacs, (std::size_t)facet_index,
       MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent,
       MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent);
 
-  return std::fabs(dolfinx_contact::compute_facet_jacobian(
-      J, K, J_tot, detJ_scratch, J_f, dphi_fc, coords));
+  return std::fabs(
+      compute_facet_jacobian(J, K, J_tot, detJ_scratch, J_f, dphi_fc, coords));
 }
 //-----------------------------------------------------------------------------
 void dolfinx_contact::KernelData::update_normal(
-    std::span<double> n, dolfinx_contact::mdspan_t<const double, 2> K,
+    std::span<double> n, mdspan_t<const double, 2> K,
     const std::size_t local_index) const
 {
-  return _update_normal(n, K,
-                        dolfinx_contact::mdspan_t<const double, 2>(
-                            _facet_normals.data(), _normals_shape),
-                        local_index);
+  return _update_normal(
+      n, K, mdspan_t<const double, 2>(_facet_normals.data(), _normals_shape),
+      local_index);
 }
 //-----------------------------------------------------------------------------
 std::span<const double>
@@ -132,7 +126,6 @@ dolfinx_contact::KernelData::weights(std::size_t i) const
 dolfinx_contact::mdspan_t<const double, 3>
 dolfinx_contact::KernelData::ref_jacobians() const
 {
-  return dolfinx_contact::mdspan_t<const double, 3>(_ref_jacobians.data(),
-                                                    _jac_shape);
+  return mdspan_t<const double, 3>(_ref_jacobians.data(), _jac_shape);
 }
 //-----------------------------------------------------------------------------

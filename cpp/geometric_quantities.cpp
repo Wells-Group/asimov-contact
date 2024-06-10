@@ -8,6 +8,7 @@
 
 using namespace dolfinx_contact;
 
+//----------------------------------------------------------------------------
 std::vector<double> dolfinx_contact::allocate_pull_back_nonaffine(
     const dolfinx::fem::CoordinateElement<double>& cmap, int gdim, int tdim)
 {
@@ -16,7 +17,7 @@ std::vector<double> dolfinx_contact::allocate_pull_back_nonaffine(
       = std::reduce(c_shape.cbegin(), c_shape.cend(), 1, std::multiplies{});
   return std::vector<double>(2 * gdim * tdim + basis_size + 9);
 }
-
+//----------------------------------------------------------------------------
 void dolfinx_contact::pull_back_nonaffine(
     std::span<double> X, std::span<double> work_array,
     std::span<const double> x,
@@ -93,7 +94,7 @@ void dolfinx_contact::pull_back_nonaffine(
         "Newton method failed to converge for non-affine geometry");
   }
 }
-
+//----------------------------------------------------------------------------
 std::array<double, 3> dolfinx_contact::push_forward_facet_normal(
     std::span<double> work_array, std::span<const double> x, std::size_t gdim,
     std::size_t tdim, mdspan_t<const double, 2> coordinate_dofs,
@@ -234,3 +235,4 @@ dolfinx_contact::compute_circumradius(const dolfinx::mesh::Mesh<double>& mesh,
                                 + dolfinx::mesh::to_string(cell_type));
   }
 }
+//----------------------------------------------------------------------------

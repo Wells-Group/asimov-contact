@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.19)
 
 set(PROJECT_NAME demo_meshtie)
 project(${PROJECT_NAME})
+project(${PROJECT_NAME} LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 
@@ -53,4 +54,12 @@ copy_meshes_to_target_dir(${PROJECT_NAME})
 
 target_link_libraries(${PROJECT_NAME} PRIVATE dolfinx)
 target_link_libraries(${PROJECT_NAME} PRIVATE dolfinx_contact)
+
+# Set 'Developer' build type flags
+set_source_files_properties(
+  main.cpp
+  PROPERTIES
+    COMPILE_FLAGS
+    "-Wall -Wextra -pedantic -Werror"
+)
 

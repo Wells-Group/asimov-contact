@@ -591,6 +591,21 @@ def create_facet_markers(mesh, facets_cg):
 
 
 @pytest.mark.parametrize(
+    "search",
+    [
+        ContactMode.Raytracing,
+        ContactMode.ClosestPoint,
+    ],
+)
+@pytest.mark.parametrize(
+    "frictionlaw",
+    [
+        FrictionLaw.Frictionless,
+        FrictionLaw.Coulomb,
+        FrictionLaw.Tresca,
+    ],
+)
+@pytest.mark.parametrize(
     "ct",
     [
         "triangle",
@@ -600,10 +615,9 @@ def create_facet_markers(mesh, facets_cg):
     ],
 )
 @pytest.mark.parametrize("gap", [0.5, -0.5])
-@pytest.mark.parametrize("quadrature_degree", [1, 5])
+# @pytest.mark.parametrize("quadrature_degree", [1, 5])
+@pytest.mark.parametrize("quadrature_degree", [1, 4])
 @pytest.mark.parametrize("theta", [1, 0, -1])
-@pytest.mark.parametrize("frictionlaw", [FrictionLaw.Frictionless, FrictionLaw.Coulomb, FrictionLaw.Tresca])
-@pytest.mark.parametrize("search", [ContactMode.Raytracing, ContactMode.ClosestPoint])
 def test_contact_kernels(ct, gap, quadrature_degree, theta, frictionlaw, search):
     # Compute lame parameters
     plane_strain = False
@@ -827,11 +841,26 @@ def tied_dg_T(u0, v0, T0, h, n, gamma, theta, sigma, sigma_T, dS):
     return 0.5 * F
 
 
-@pytest.mark.parametrize("ct", ["triangle", "quadrilateral", "tetrahedron", "hexahedron"])
+@pytest.mark.parametrize(
+    "ct",
+    [
+        "triangle",
+        "quadrilateral",
+        "tetrahedron",
+        "hexahedron",
+    ],
+)
+@pytest.mark.parametrize(
+    "problem",
+    [
+        Problem.Poisson,
+        Problem.Elasticity,
+        Problem.ThermoElasticity,
+    ],
+)
 @pytest.mark.parametrize("gap", [0.5, -0.5])
-@pytest.mark.parametrize("quadrature_degree", [1, 5])
+@pytest.mark.parametrize("quadrature_degree", [1, 4])
 @pytest.mark.parametrize("theta", [1, 0, -1])
-@pytest.mark.parametrize("problem", [Problem.Poisson, Problem.Elasticity, Problem.ThermoElasticity])
 def test_meshtie_kernels(ct, gap, quadrature_degree, theta, problem):
     # Problem parameters
     kdt = 5

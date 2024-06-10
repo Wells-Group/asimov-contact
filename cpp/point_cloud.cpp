@@ -14,7 +14,6 @@
 dolfinx::graph::AdjacencyList<std::int32_t>
 dolfinx_contact::point_cloud_pairs(std::span<const double> x, double r)
 {
-
   assert(x.size() % 3 == 0);
   const int npoints = x.size() / 3;
 

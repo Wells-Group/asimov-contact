@@ -2,7 +2,6 @@
 #
 # SPDX-License-Identifier:    MIT
 
-import os
 
 from mpi4py import MPI
 
@@ -36,7 +35,7 @@ kt = dolfinx_contact.cpp.Kernel
 @pytest.mark.parametrize("gamma", [10, 1000])
 @pytest.mark.parametrize("dim", [2, 3])
 @pytest.mark.parametrize("gap", [0.02, -0.01])
-def test_contact_kernel(theta, gamma, dim, gap):
+def test_contact_kernel(tmp_path, theta, gamma, dim, gap):
     # Problem parameters
     num_refs = 1
     top_value = 1
@@ -48,8 +47,8 @@ def test_contact_kernel(theta, gamma, dim, gap):
 
     # Load mesh and create identifier functions for the top (Displacement condition)
     # and the bottom (contact condition)
-    mesh_dir = "meshes"
-    os.system(f"mkdir -p {mesh_dir}")
+    mesh_dir = tmp_path / "meshes"
+    mesh_dir.mkdir(exist_ok=True)
     if dim == 3:
         fname = f"{mesh_dir}/sphere"
         create_sphere_mesh(filename=f"{fname}.msh")

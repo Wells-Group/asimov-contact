@@ -35,7 +35,7 @@ namespace dolfinx_contact
 /// @note  All other coefficients are packed at quadrature points.
 /// `u_opposite`, `grad(u_opposite)` have dimension `bs == gdim`.
 kernel_fn<PetscScalar>
-generate_meshtie_kernel(dolfinx_contact::Kernel type,
+generate_meshtie_kernel(Kernel type,
                         const dolfinx::fem::FunctionSpace<double>& V,
                         const QuadratureRule& quadrature_rule,
                         const std::vector<std::size_t>& cstrides);

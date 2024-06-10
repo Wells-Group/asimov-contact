@@ -178,7 +178,7 @@ def unsplit_domain(threed: bool = False, runs: int = 1, order: int = 1):
         solver.setMonitor(lambda _, its, rnorm: print(f"Iteration: {its}, rel. residual: {rnorm}"))
         timing_str = "~Krylov Solver"
         with Timer(timing_str):
-            solver.solve(b, uh.vector)
+            solver.solve(b, uh.x.petsc_vec)
 
         times.append(timing(timing_str)[1])
         its.append(solver.getIterationNumber())
@@ -410,7 +410,7 @@ def test_meshtie(threed: bool = False, simplex: bool = True, runs: int = 5, orde
         solver.setMonitor(lambda _, its, rnorm: print(f"Iteration: {its}, rel. residual: {rnorm}"))
         timing_str = "~Contact : Krylov Solver"
         with Timer(timing_str):
-            solver.solve(b, u1.vector)
+            solver.solve(b, u1.x.petsc_vec)
 
         # Scatter forward the solution vector to update ghost values
         u1.x.scatter_forward()

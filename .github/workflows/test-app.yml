@@ -11,11 +11,47 @@ on:
   schedule:
     # '*' is a special character in YAML, so string must be quoted
     - cron: "0 1 * * *"
+
 jobs:
+  lint:
+    runs-on: ubuntu-latest
+    name: Lint
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install linting tools
+        run: pip install clang-format mypy ruff
+      - name: ruff checks
+        run: |
+          pip install ruff
+          ruff format --check
+          ruff check
+      - name: mypy checks
+        run: |
+          cd python/
+          mypy . --exclude=build
+      # - name: clang-format C++ checks (non-blocking)
+      #   continue-on-error: true
+      #   run: |
+      #     cd cpp
+      #     clang-format --version
+      #     find . -type f \( -name "*.cpp" -o -name "*.h" \) ! -name "loguru.cpp" | xargs clang-format --dry-run --Werror
+      # - name: clang-format Python binding checks (non-blocking)
+      #   continue-on-error: true
+      #   run: |
+      #     cd python/dolfinx/wrappers
+      #     clang-format --version
+      #     find . -type f \( -name "*.cpp" -o -name "*.h" \) | xargs clang-format --dry-run --Werror
+
+
   build:
+    name: Build and test
+    needs: lint
     runs-on: ubuntu-latest
     container: ghcr.io/fenics/test-env:current-mpich
-
     strategy:
       matrix:
         # Complex mode not working
@@ -61,8 +97,13 @@ jobs:
         id: cpp-contact
         run: |
           export VERBOSE=1
-          cmake -G Ninja -B build-contact -S cpp/
+          cmake -G Ninja -DCMAKE_BUILD_TYPE=Developer  -B build-contact -S cpp/
           ninja -C build-contact install
+
+      - name: Build C++ docs
+        run: |
+          cd cpp/doc
+          doxygen
 
       - name: Run demos (C++)
         run: |
@@ -90,19 +131,6 @@ jobs:
           pip -v install -r ./python/build-requirements.txt
           pip -v install --no-build-isolation python/
           pip install scipy matplotlib
-
-      - name: Check formatting
-        if: always()
-        run: |
-          pip install ruff
-          ruff format --check
-          ruff check
-
-      - name: Run mypy checks
-        run: |
-          pip install mypy
-          cd python
-          mypy . --exclude=build
 
       - name: Create output folders
         id: output-creation
@@ -156,8 +184,8 @@ jobs:
           pip install pytest pytest-xdist
           cd python/tests
           mkdir -p meshes
-          python -m pytest .
-          # python -m pytest -n auto .
+          # python -m pytest .
+          python -m pytest -v -n auto --durations=50 .
 
       - name: Run unbiased demos in parallel
         working-directory: ./python/demos
