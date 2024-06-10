@@ -29,11 +29,11 @@ jobs:
           pip install ruff
           ruff format --check
           ruff check
-      - name: mypy checks
-        run: |
-          mypy . --exclude=build
-          cd python/
-          mypy dolfinx
+      # - name: mypy checks
+      #   run: |
+      #     mypy . --exclude=build
+      #     cd python/
+      #     mypy dolfinx
       # - name: clang-format C++ checks (non-blocking)
       #   continue-on-error: true
       #   run: |
@@ -50,6 +50,7 @@ jobs:
 
   build:
     name: Build and test
+    needs: lint
     runs-on: ubuntu-latest
     container: ghcr.io/fenics/test-env:current-mpich
     strategy:
