@@ -34,7 +34,6 @@ using U = typename dolfinx::scalar_value_type_t<T>;
 
 namespace dolfinx_contact
 {
-
 enum class ContactMode
 {
   ClosestPoint,
@@ -61,9 +60,10 @@ enum class Problem
   ThermoElasticity
 };
 
-/// Read a mesh
+/// @brief Read a mesh
 /// @param[in] filename The file name
-/// @param[in] topo_name Optional, grid name/marker name for extracting topology
+/// @param[in] topo_name Optional, grid name/marker name for extracting
+/// topology
 /// @param[in] geo_name Optional, grid name for extracting geometry
 /// @param[in] volume_markers Optional, name of the volume markers
 /// @param[in] facet_markers Optional, name of the facet markers
@@ -71,11 +71,10 @@ enum class Problem
 std::tuple<std::shared_ptr<dolfinx::mesh::Mesh<U>>,
            dolfinx::mesh::MeshTags<std::int32_t>,
            dolfinx::mesh::MeshTags<std::int32_t>>
-read_mesh(const std::string& filename,
-          const std::string& topo_name = "volume markers",
-          const std::string& geo_name = "geometry",
-          const std::string& volume_markers = "volume markers",
-          const std::string& facet_markers = "facet markers");
+read_mesh(std::string filename, std::string topo_name = "volume markers",
+          std::string geo_name = "geometry",
+          std::string volume_markers = "volume markers",
+          std::string facet_markers = "facet markers");
 
 // NOTE: this function should change signature to T * ,..... , num_links,
 // num_dofs_per_link
@@ -86,87 +85,95 @@ using kernel_fn
                          const std::size_t, std::span<const std::int32_t>)>;
 
 /// This function computes the pull back for a set of points x on a cell
-/// described by coordinate_dofs as well as the corresponding Jacobian, their
-/// inverses and their determinants
-/// @param[in, out] J: Jacobians of transformation from reference element to
-/// physical element. Shape = (num_points, tdim, gdim). Computed at each point
-/// in x
-/// @param[in, out] K: inverse of J at each point.
-/// @param[in, out] detJ: determinant of J at each  point
-/// @param[in ,out] X: pull pack of x (points on reference element)
-/// @param[in] x: points on physical element
+/// described by coordinate_dofs as well as the corresponding Jacobian,
+/// their inverses and their determinants
+///
+/// @param[in,out] J: Jacobians of transformation from reference
+/// element to physical element. Shape = (num_points, tdim, gdim).
+/// Computed at each point in x
+/// @param[in,out] K inverse of J at each point.
+/// @param[in,out] detJ determinant of J at each  point
+/// @param[in,out] X pull pack of x (points on reference element)
+/// @param[in] x points on physical element
 /// @param[in] coordinate_dofs: geometry coordinates of cell
 /// @param[in] cmap: the coordinate element
-void pull_back(mdspan3_t J, mdspan3_t K, std::span<double> detJ,
-               std::span<double> X, cmdspan2_t x, cmdspan2_t coordinate_dofs,
+void pull_back(mdspan_t<double, 3> J, mdspan_t<double, 3> K,
+               std::span<double> detJ, std::span<double> X,
+               mdspan_t<const double, 2> x,
+               mdspan_t<const double, 2> coordinate_dofs,
                const dolfinx::fem::CoordinateElement<double>& cmap);
 
 /// @param[in] cells: the cells to be sorted
-/// @param[in, out] perm: the permutation for the sorted cells
-/// @param[out] pair(unique_cells, offsets): unique_cells is a vector of
-/// sorted cells with all duplicates deleted, offsets contains the start and
-/// end for each unique value in the sorted vector with all duplicates
+/// @param[in, out] perm the permutation for the sorted cells
+/// @return (unique_cells, offsets): unique_cells is a vector of sorted
+/// cells with all duplicates deleted, offsets contains the start and
+/// end for each unique value in the sorted vector with all duplicates.
+///
 /// Example: cells = [5, 7, 6, 5]
 ///          unique_cells = [5, 6, 7]
 ///          offsets = [0, 2, 3, 4]
 ///          perm = [0, 3, 2, 1]
-/// Then given a cell and its index ("i") in unique_cells, one can recover the
-/// indices for its occurance in cells with perm[k], where
-/// offsets[i]<=k<offsets[i+1]. In the example if i = 0, then perm[k] = 0 or
-/// perm[k] = 3.
+///
+/// Then given a cell and its index ("i") in unique_cells, one can
+/// recover the indices for its occurance in cells with perm[k], where
+/// offsets[i]<=k<offsets[i+1]. In the example if i = 0, then perm[k] =
+/// 0 or perm[k] = 3.
 std::pair<std::vector<std::int32_t>, std::vector<std::int32_t>>
 sort_cells(std::span<const std::int32_t> cells, std::span<std::int32_t> perm);
 
+/// @brief Adds perturbation u to mesh
 /// @param[in] u dolfinx function on function space base on basix
 /// element
 /// @param[in] mesh mesh to be updated
-/// Adds perturbation u to mesh
 void update_geometry(const dolfinx::fem::Function<PetscScalar>& u,
                      dolfinx::mesh::Mesh<double>& mesh);
 
-/// Compute the positive restriction of a double, i.e. f(x)= x if x>0 else 0
+/// Compute the positive restriction of a double, i.e. f(x)= x if x>0
+/// else 0
 double R_plus(double x);
 
-/// Compute the negative restriction of a double, i.e. f(x)= x if x<0 else 0
+/// Compute the negative restriction of a double, i.e. f(x)= x if x<0
+/// else 0
 double R_minus(double x);
 
-/// Compute the derivative of the positive restriction (i.e.) the step function.
+/// Compute the derivative of the positive restriction (i.e.) the step
+/// function.
 /// @note Evaluates to 0 at x=0
 double dR_plus(double x);
 
-/// Compute the derivative of the negative restriction (i.e.) the step function.
+/// Compute the derivative of the negative restriction (i.e.) the step
+/// function.
 /// @note Evaluates to 0 at x=0
 double dR_minus(double x);
 
-/// Compute ball projection of a vector with block size bs and ball of radius
-/// alpha
-/// @param[in] x     The input vector (max bs 3)
+/// Compute ball projection of a vector with block size bs and ball of
+/// radius alpha
+/// @param[in] x The input vector (max bs 3)
 /// @param[in] alpha The radius of the ball
 /// @return The projection vector
-/// @note Assumes that any unused entries in x are initialised to 0, e.g., if
-/// bs=2
+/// @note Assumes that any unused entries in x are initialised to 0,
+/// e.g., if bs=2
 std::array<double, 3> ball_projection(std::array<double, 3> x, double alpha);
 
-/// Compute derivative of ball projection of a vector with block size bs and
-/// ball
-//  of radius alpha
-/// @param[in] x     The input vector (max bs 3)
+/// Compute derivative of ball projection of a vector with block size bs
+/// and ball of radius alpha
+/// @param[in] x The input vector (max bs 3)
 /// @param[in] alpha The radius of the ball
-/// @param[in] bs    The block size
+/// @param[in] bs The block size
 /// @return The jacobi matrix for the ball projection
-/// @note Assumes that any unused entries in x are initialised to 0, e.g., if
-/// bs=2
+/// @note Assumes that any unused entries in x are initialised to 0,
+/// e.g., if bs=2
 std::array<double, 9> d_ball_projection(std::array<double, 3> x, double alpha,
                                         std::size_t bs);
 
-/// Compute term of derivative of ball projection for alpha depending on x with
-/// size bs and ball of radius alpha
-/// @param[in] x       The input vector (max bs 3)
-/// @param[in] alpha   The radius of the ball
+/// Compute term of derivative of ball projection for alpha depending on
+/// x with size bs and ball of radius alpha
+/// @param[in] x The input vector (max bs 3)
+/// @param[in] alpha The radius of the ball
 /// @param[in] d_alpha The derivative of the radius of the ball
 /// @return The jacobi matrix for the ball projection
-/// @note Assumes that any unused entries in x are initialised to 0, e.g., if
-/// bs=2
+/// @note Assumes that any unused entries in x are initialised to 0,
+/// e.g., if bs=2
 std::array<double, 3> d_alpha_ball_projection(std::array<double, 3> x,
                                               double alpha, double d_alpha);
 
@@ -176,20 +183,21 @@ std::array<std::size_t, 4>
 evaluate_basis_shape(const dolfinx::fem::FunctionSpace<double>& V,
                      std::size_t num_points, std::size_t num_derivatives);
 
-/// Get basis values (not unrolled for block size) for a set of points and
-/// corresponding cells.
+/// Get basis values (not unrolled for block size) for a set of points
+/// and corresponding cells.
+///
 /// @param[in] V The function space
-/// @param[in] x The coordinates of the points in the reference elements. It has
-/// shape (num_points, tdim). Flattened row major
-/// @param[in] x The coordinates of the points in the reference elements. It has
-/// shape (num_points, tdim). Flattened row major
-/// @param[in] cells An array of cell indices. cells[i] is the index
-/// of the cell that contains the point x(i). Negative cell indices
-/// can be passed, and the corresponding point will be ignored.
+/// @param[in] x The coordinates of the points in the reference
+/// elements. It has shape (num_points, tdim). Flattened row major
+/// @param[in] x The coordinates of the points in the reference
+/// elements. It has shape (num_points, tdim). Flattened row major
+/// @param[in] cells An array of cell indices. cells[i] is the index of
+/// the cell that contains the point x(i). Negative cell indices can be
+/// passed, and the corresponding point will be ignored.
 /// @param[in,out] basis_values The values at the points. Values are not
-/// computed for points with a negative cell index. This argument must be passed
-/// with the correct size (num_points, number_of_dofs, value_size). The basis
-/// values are flattened row-major.
+/// computed for points with a negative cell index. This argument must
+/// be passed with the correct size (num_points, number_of_dofs,
+/// value_size). The basis values are flattened row-major.
 /// @param[in] number_of_derivatives FIXME: Add docs
 void evaluate_basis_functions(const dolfinx::fem::FunctionSpace<double>& V,
                               std::span<const double> x,
@@ -198,50 +206,58 @@ void evaluate_basis_functions(const dolfinx::fem::FunctionSpace<double>& V,
                               std::size_t num_derivatives);
 
 /// Compute the following jacobians on a given facet:
+///
 /// J: physical cell -> reference cell (and its inverse)
 /// J_tot: physical facet -> reference facet
-/// @param[in,out] J - Jacobian between reference cell and physical cell
-/// @param[in,out] K - inverse of J
-/// @param[in,out] J_tot - J_f*J
-/// @param[in,out] detJ_scratch Working memory for Jacobian computation. Has to
-/// be at least 2*gdim*tdim.
-/// @param[in] J_f - the Jacobian between reference facet and reference cell
-/// @param[in] dphi - derivatives of coordinate basis tabulated for quardrature
-/// points
-/// @param[in] coords - the coordinates of the facet
+///
+/// @param[in,out] J Jacobian between reference cell and physical cell
+/// @param[in,out] K inverse of J
+/// @param[in,out] J_tot J_f*J
+/// @param[in,out] detJ_scratch Working memory for Jacobian computation.
+/// Has to be at least 2*gdim*tdim.
+/// @param[in] J_f the Jacobian between reference facet and reference
+/// cell
+/// @param[in] dphi derivatives of coordinate basis tabulated for
+/// quadrature points @param[in] coords the coordinates of the facet
 /// @return absolute value of determinant of J_tot
-double compute_facet_jacobian(mdspan2_t J, mdspan2_t K, mdspan2_t J_tot,
-                              std::span<double> detJ_scratch, cmdspan2_t J_f,
-                              s_cmdspan2_t dphi, cmdspan2_t coords);
+double compute_facet_jacobian(
+    mdspan_t<double, 2> J, mdspan_t<double, 2> K, mdspan_t<double, 2> J_tot,
+    std::span<double> detJ_scratch, mdspan_t<const double, 2> J_f,
+    mdspan_t<const double, 2, stdex::layout_stride> dphi,
+    mdspan_t<const double, 2> coords);
 
 /// @brief Convenience function to update Jacobians
 ///
-/// For affine geometries, the input determinant is returned.
-/// For non-affine geometries, the Jacobian, it's inverse and the total Jacobian
-/// (J*J_f) is computed.
+/// For affine geometries, the input determinant is returned. For
+/// non-affine geometries, the Jacobian, it's inverse and the total
+/// Jacobian (J*J_f) is computed.
 /// @param[in] cmap The coordinate element
-std::function<double(double, mdspan2_t, mdspan2_t, mdspan2_t, std::span<double>,
-                     cmdspan2_t, s_cmdspan2_t, cmdspan2_t)>
+std::function<double(
+    double, mdspan_t<double, 2>, mdspan_t<double, 2>, mdspan_t<double, 2>,
+    std::span<double>, mdspan_t<const double, 2>,
+    mdspan_t<const double, 2, stdex::layout_stride>, mdspan_t<const double, 2>)>
 get_update_jacobian_dependencies(
     const dolfinx::fem::CoordinateElement<double>& cmap);
 
 /// @brief Convenience function to update facet normals
 ///
-/// For affine geometries, a do nothing function is returned.
-/// For non-affine geometries, a function updating the physical facet normal is
-/// returned.
+/// For affine geometries, a do nothing function is returned. For
+/// non-affine geometries, a function updating the physical facet normal
+/// is returned.
 /// @param[in] cmap The coordinate element
-std::function<void(std::span<double>, cmdspan2_t, cmdspan2_t,
-                   const std::size_t)>
+std::function<void(std::span<double>, mdspan_t<const double, 2>,
+                   mdspan_t<const double, 2>, const std::size_t)>
 get_update_normal(const dolfinx::fem::CoordinateElement<double>& cmap);
 
 /// @brief Convert local entity indices to integration entities
 ///
-/// Compute the active entities in DOLFINx format for a given integral type over
-/// a set of entities If the integral type is cell, return the input, if it is
-/// exterior facets, return a list of pairs (cell, local_facet_index), and if it
-/// is interior facets, return a list of tuples (cell_0, local_facet_index_0,
-/// cell_1, local_facet_index_1) for each entity.
+/// Compute the active entities in DOLFINx format for a given integral
+/// type over a set of entities If the integral type is cell, return the
+/// input, if it is exterior facets, return a list of pairs (cell,
+/// local_facet_index), and if it is interior facets, return a list of
+/// tuples (cell_0, local_facet_index_0, cell_1, local_facet_index_1)
+/// for each entity.
+///
 /// @param[in] mesh The mesh
 /// @param[in] entities List of mesh entities
 /// @param[in] integral The type of integral
@@ -252,7 +268,8 @@ compute_active_entities(const dolfinx::mesh::Mesh<double>& mesh,
 
 /// @brief Compute the geometry dof indices for a set of entities
 ///
-/// For a set of entities, compute the geometry closure dofs of the entity.
+/// For a set of entities, compute the geometry closure dofs of the
+/// entity.
 ///
 /// @param[in] mesh The mesh
 /// @param[in] dim The dimension of the entities
@@ -261,29 +278,33 @@ compute_active_entities(const dolfinx::mesh::Mesh<double>& mesh,
 /// closure dofs of the i-th input entity
 dolfinx::graph::AdjacencyList<std::int32_t>
 entities_to_geometry_dofs(const mesh::Mesh<double>& mesh, int dim,
-                          const std::span<const std::int32_t>& entity_list);
+                          std::span<const std::int32_t> entity_list);
 
-/// @brief find candidate facets within a given radius of quadrature facet
+/// @brief find candidate facets within a given radius of quadrature
+/// facet.
 ///
-/// Given one quadrature facet and a list of candidate facets return
-/// the indices of only those candidate facet within the given radius
-/// sorted according to the distance measured at the midpoints
+/// Given one quadrature facet and a list of candidate facets return the
+/// indices of only those candidate facet within the given radius sorted
+/// according to the distance measured at the midpoints
 ///
 /// @param[in] mesh The mesh
 /// @param[in] quadrature facet Single quadrature facet
 /// @param[in] candidate_facets Candidate facets
 /// @param[in] radius The search radius
-/// @return sorted indices of candidate facets within radius of quadrature facet
+/// @return sorted indices of candidate facets within radius of
+/// quadrature facet
 std::vector<std::size_t>
 find_candidate_facets(const dolfinx::mesh::Mesh<double>& quadrature_mesh,
                       const dolfinx::mesh::Mesh<double>& candidate_mesh,
                       std::int32_t quadrature_facet,
                       std::span<const std::int32_t> candidate_facets,
                       double radius);
-/// @brief find candidate facets within a given radius of quadratuere facets
+
+/// @brief find candidate facets within a given radius of quadratuere
+/// facets
 ///
-/// Given a list of quadrature facets and a list of candidate facets return
-/// only those candidate facet within the given radius
+/// Given a list of quadrature facets and a list of candidate facets
+/// return only those candidate facet within the given radius
 ///
 /// @param[in] mesh The mesh
 /// @param[in] quadrature_facets Quadrature facets
@@ -297,40 +318,44 @@ std::vector<std::int32_t> find_candidate_surface_segment(
 
 /// @brief compute physical points on set of facets
 ///
-/// Given a list of facets and the basis functions evaluated at set of points on
-/// reference facets compute physical points
+/// Given a list of facets and the basis functions evaluated at set of
+/// points on reference facets compute physical points
 ///
 /// @param[in] mesh The mesh
-/// @param[in] facets The list of facets as (cell, local_facet). The data is
-/// flattened row-major
+/// @param[in] facets The list of facets as (cell, local_facet). The
+/// data is flattened row-major
 /// @param[in] offsets for accessing the basis_values for local_facet
 /// @param[in] phi Basis functions evaluated at desired set of points on
 /// reference facet
-/// @param[in, out] qp_phys Vector to store the quadrature points. Shape
+/// @param[in,out] qp_phys Vector to store the quadrature points. Shape
 /// (num_facets, num_q_points_per_facet, gdim). Flattened row-major
 void compute_physical_points(const dolfinx::mesh::Mesh<double>& mesh,
                              std::span<const std::int32_t> facets,
                              std::span<const std::size_t> offsets,
-                             cmdspan4_t phi, std::span<double> qp_phys);
+                             mdspan_t<const double, 4> phi,
+                             std::span<double> qp_phys);
 
-/// Compute the closest entity at every quadrature point on a subset of facets
-/// on one mesh, to a subset of facets on the other mesh.
+/// Compute the closest entity at every quadrature point on a subset of
+/// facets on one mesh, to a subset of facets on the other mesh.
+///
 /// @param[in] quadrature_mesh The mesh to compute quadrature points on
-/// @param[in] quadrature_facets The facets to compute quadrature points on,
-/// defined as (cell, local_facet_index). Flattened row-major.
-/// @param[in] candidate_mesh The mesh with the facets we want to compute the
-/// distance to
-/// @param[in] candidate_facets The facets on candidate_mesh,defined as (cell,
-/// local_facet_index). Flattened row-major.
+/// @param[in] quadrature_facets The facets to compute quadrature points
+/// on, defined as (cell, local_facet_index). Flattened row-major.
+/// @param[in] candidate_mesh The mesh with the facets we want to
+/// compute the distance to
+/// @param[in] candidate_facets The facets on candidate_mesh,defined as
+/// (cell, local_facet_index). Flattened row-major.
 /// @param[in] q_rule The quadrature rule for the input facets
 /// @param[in] mode The contact mode, either closest point or ray-tracing
-/// @param[in] radius The search radius. Only used for ray-tracing at the moment
-/// @returns A tuple (closest_facets, reference_points) where `closest_facets`
-/// is an adjacency list for each input facet in quadrature facets, where the
-/// links indicate which facet on the other mesh is closest for each quadrature
-/// point.`reference_points` is the corresponding points on the reference
-/// element for each quadrature point.  Shape (num_facets, num_q_points, tdim).
-/// Flattened to (num_facets*num_q_points, tdim).
+/// @param[in] radius The search radius. Only used for ray-tracing at
+/// the moment
+/// @returns A tuple (closest_facets, reference_points) where
+/// `closest_facets` is an adjacency list for each input facet in
+/// quadrature facets, where the links indicate which facet on the other
+/// mesh is closest for each quadrature point.`reference_points` is the
+/// corresponding points on the reference element for each quadrature
+/// point.  Shape (num_facets, num_q_points, tdim). Flattened to
+/// (num_facets*num_q_points, tdim).
 std::tuple<dolfinx::graph::AdjacencyList<std::int32_t>, std::vector<double>,
            std::array<std::size_t, 2>>
 compute_distance_map(const dolfinx::mesh::Mesh<double>& quadrature_mesh,
@@ -341,6 +366,7 @@ compute_distance_map(const dolfinx::mesh::Mesh<double>& quadrature_mesh,
                      dolfinx_contact::ContactMode mode, double radius);
 
 /// Compute facet indices from given pairs (cell, local__facet)
+///
 /// @param[in] facet_pairs The facets given as pair (cell, local_facet).
 /// Flattened row major.
 /// @param[in] mesh The mesh
@@ -349,18 +375,18 @@ std::vector<int32_t>
 facet_indices_from_pair(std::span<const std::int32_t> facet_pairs,
                         const dolfinx::mesh::Mesh<double>& mesh);
 
-/// Compute the relation between a set of points and a mesh by computing the
-/// closest point on mesh at a specific set of points. There is also a subset
-/// of facets on mesh we use for intersection checks.
+/// Compute the relation between a set of points and a mesh by computing
+/// the closest point on mesh at a specific set of points. There is also
+/// a subset of facets on mesh we use for intersection checks.
+///
 /// @param[in] mesh The mesh to compute the closest point at
-/// @param[in] facet_tuples Set of facets in the of
-/// tuples (cell_index, local_facet_index) for the
-/// `quadrature_mesh`. Flattened row major.
+/// @param[in] facet_tuples Set of facets in the of tuples (cell_index,
+/// local_facet_index) for the `quadrature_mesh`. Flattened row major.
 /// @param[in] points The points to compute the closest entity from.
 /// Shape (num_quadrature_points, 3). Flattened row-major
 /// @returns A tuple (closest_facets, reference_points), where
-/// `closest_entities[i]` is the closest entity in `facet_tuples` for the ith
-/// input point
+/// `closest_entities[i]` is the closest entity in `facet_tuples` for
+/// the ith input point
 template <std::size_t tdim, std::size_t gdim>
 std::tuple<std::vector<std::int32_t>, std::vector<double>,
            std::array<std::size_t, 2>>
@@ -368,20 +394,17 @@ compute_projection_map(const dolfinx::mesh::Mesh<double>& mesh,
                        std::span<const std::int32_t> facet_tuples,
                        std::span<const double> points)
 {
-
   assert(tdim == mesh.topology()->dim());
   assert(mesh.geometry().dim() == gdim);
-
   const std::size_t num_points = points.size() / 3;
   std::vector<double> candidate_X(num_points * tdim, 0);
-
   if (facet_tuples.empty())
   {
     std::vector<std::int32_t> closest_facets(num_points, -1);
     return {closest_facets, candidate_X, {candidate_X.size() / tdim, tdim}};
   }
-  // Convert cell,local_facet_index to facet_index (local
-  // to proc)
+
+  // Convert cell,local_facet_index to facet_index (local to proc)
   std::vector<std::int32_t> facets(facet_tuples.size() / 2);
   auto c_to_f = mesh.topology()->connectivity(tdim, tdim - 1);
   if (!c_to_f)
@@ -409,27 +432,24 @@ compute_projection_map(const dolfinx::mesh::Mesh<double>& mesh,
   std::span<const double> mesh_geometry = mesh.geometry().x();
   const dolfinx::fem::CoordinateElement<double>& cmap = mesh.geometry().cmap();
   {
-    // Find displacement vector from each point
-    // to closest entity. As a point on the surface
-    // might have penetrated the cell in question, we use
-    // the convex hull of the surface facet for distance
+    // Find displacement vector from each point to closest entity. As a
+    // point on the surface might have penetrated the cell in question,
+    // we use the convex hull of the surface facet for distance
     // computations
 
-    // Get information aboute cell type and number of
-    // closure dofs on the facet NOTE: Assumption that we
-    // do not have variable facet types (prism/pyramid
-    // cell)
+    // Get information aboute cell type and number of closure dofs on
+    // the facet NOTE: Assumption that we do not have variable facet
+    // types (prism/pyramid cell)
     const dolfinx::fem::ElementDofLayout layout = cmap.create_dof_layout();
 
     error::check_cell_type(mesh.topology()->cell_type());
     const std::vector<std::int32_t>& closure_dofs
         = layout.entity_closure_dofs(tdim - 1, 0);
-    const std::size_t num_facet_dofs = closure_dofs.size();
+    std::size_t num_facet_dofs = closure_dofs.size();
 
     // Get the geometry dofs of closest facets
-    const dolfinx::graph::AdjacencyList<std::int32_t> facets_geometry
-        = dolfinx_contact::entities_to_geometry_dofs(mesh, tdim - 1,
-                                                     closest_facets);
+    dolfinx::graph::AdjacencyList<std::int32_t> facets_geometry
+        = entities_to_geometry_dofs(mesh, tdim - 1, closest_facets);
     assert(facets_geometry.num_nodes() == (int)num_points);
 
     // Compute physical points for each facet
@@ -465,9 +485,9 @@ compute_projection_map(const dolfinx::mesh::Mesh<double>& mesh,
     // Temporary data structures used in loop over each
     // quadrature point on each facet
     std::array<double, 9> Jb;
-    mdspan3_t J(Jb.data(), 1, gdim, tdim);
+    mdspan_t<double, 3> J(Jb.data(), 1, gdim, tdim);
     std::array<double, 9> Kb;
-    mdspan3_t K(Kb.data(), 1, tdim, gdim);
+    mdspan_t<double, 3> K(Kb.data(), 1, tdim, gdim);
     std::array<double, 1> detJ;
 
     std::array<double, gdim> x;
@@ -478,7 +498,8 @@ compute_projection_map(const dolfinx::mesh::Mesh<double>& mesh,
         MDSPAN_IMPL_STANDARD_NAMESPACE::dextents<std::size_t, 2>>
         x_dofmap = mesh.geometry().dofmap();
     std::vector<double> coordinate_dofsb(num_dofs_g * gdim);
-    cmdspan2_t coordinate_dofs(coordinate_dofsb.data(), num_dofs_g, gdim);
+    mdspan_t<const double, 2> coordinate_dofs(coordinate_dofsb.data(),
+                                              num_dofs_g, gdim);
     auto f_to_c = mesh.topology()->connectivity(tdim - 1, tdim);
     if (!f_to_c)
       throw std::runtime_error("Missing facet to cell connectivity");
@@ -506,8 +527,8 @@ compute_projection_map(const dolfinx::mesh::Mesh<double>& mesh,
       // in a single cell at the same time
       // Pull back coordinates
       std::fill(Jb.begin(), Jb.end(), 0);
-      pull_back(J, K, detJ, X, cmdspan2_t(x.data(), 1, gdim), coordinate_dofs,
-                cmap);
+      pull_back(J, K, detJ, X, mdspan_t<const double, 2>(x.data(), 1, gdim),
+                coordinate_dofs, cmap);
       // Copy into output
       std::copy_n(X.begin(), tdim, std::next(candidate_X.begin(), i * tdim));
     }
@@ -575,11 +596,11 @@ compute_raytracing_map(const dolfinx::mesh::Mesh<double>& quadrature_mesh,
       candidate_facets, candidate_mesh);
   // Structures used for computing physical normal
   std::array<double, 9> Jb;
-  mdspan2_t J(Jb.data(), gdim, tdim);
+  mdspan_t<double, 2> J(Jb.data(), gdim, tdim);
   std::array<double, 9> Kb;
-  mdspan2_t K(Kb.data(), tdim, gdim);
+  mdspan_t<double, 2> K(Kb.data(), tdim, gdim);
   std::array<double, 9> Kcb;
-  mdspan2_t K_c(Kcb.data(), tdim, gdim);
+  mdspan_t<double, 2> K_c(Kcb.data(), tdim, gdim);
 
   // Get relevant information from quadrature mesh
   const dolfinx::mesh::Geometry<double>& geom_q = quadrature_mesh.geometry();
@@ -593,7 +614,8 @@ compute_raytracing_map(const dolfinx::mesh::Mesh<double>& quadrature_mesh,
       q_dofmap = geom_q.dofmap();
   const std::size_t num_nodes_q = cmap_q.dim();
   std::vector<double> coordinate_dofs_qb(num_nodes_q * gdim);
-  cmdspan2_t coordinate_dofs_q(coordinate_dofs_qb.data(), num_nodes_q, gdim);
+  mdspan_t<const double, 2> coordinate_dofs_q(coordinate_dofs_qb.data(),
+                                              num_nodes_q, gdim);
   auto [reference_normals, rn_shape]
       = basix::cell::facet_outward_normals<double>(
           dolfinx::mesh::cell_type_to_basix_type(top_q->cell_type()));
@@ -608,7 +630,7 @@ compute_raytracing_map(const dolfinx::mesh::Mesh<double>& quadrature_mesh,
   // Push forward quadrature points to physical space
   std::vector<double> quadrature_points(quadrature_facets.size() / 2
                                         * num_q_points * gdim);
-  cmdspan4_t basis_values_q(basis_q.data(), basis_shape_q);
+  mdspan_t<const double, 4> basis_values_q(basis_q.data(), basis_shape_q);
   compute_physical_points(quadrature_mesh, quadrature_facets, q_offset,
                           basis_values_q, quadrature_points);
 
@@ -646,7 +668,7 @@ compute_raytracing_map(const dolfinx::mesh::Mesh<double>& quadrature_mesh,
   auto [ref_jac, jac_shape] = basix::cell::facet_jacobians<double>(basix_cell);
   assert(tdim == jac_shape[1]);
   assert(tdim - 1 == jac_shape[2]);
-  cmdspan3_t facet_jacobians(ref_jac.data(), jac_shape);
+  mdspan_t<const double, 3> facet_jacobians(ref_jac.data(), jac_shape);
 
   // Get basix geometry information
   std::pair<std::vector<double>, std::array<std::size_t, 2>> geometry
@@ -743,7 +765,7 @@ compute_raytracing_map(const dolfinx::mesh::Mesh<double>& quadrature_mesh,
                                 std::span<double, tdim> X)
         {
           const std::vector<int>& facet = bfacets[facet_index_c];
-          dolfinx_contact::cmdspan2_t x(xb.data(), x_shape);
+          dolfinx_contact::mdspan_t<const double, 2> x(xb.data(), x_shape);
           const int f0 = facet.front();
           for (std::size_t i = 0; i < tdim; ++i)
           {
@@ -814,11 +836,11 @@ compute_raytracing_map(const dolfinx::mesh::Mesh<double>& quadrature_mesh,
     {
       std::vector<std::int32_t> cand_facets_patch(2 * cand_patch.size());
       std::vector<double> padded_qpsb(count_missing_matches * 3);
-      dolfinx_contact::mdspan2_t padded_qps(padded_qpsb.data(),
-                                            count_missing_matches, 3);
-      dolfinx_contact::cmdspan3_t qps(quadrature_points.data(),
-                                      quadrature_facets.size() / 2,
-                                      num_q_points, gdim);
+      dolfinx_contact::mdspan_t<double, 2> padded_qps(padded_qpsb.data(),
+                                                      count_missing_matches, 3);
+      dolfinx_contact::mdspan_t<const double, 3> qps(
+          quadrature_points.data(), quadrature_facets.size() / 2, num_q_points,
+          gdim);
 
       // Retrieve remaining quadrature points
       for (std::size_t j = 0; j < padded_qps.extent(0); ++j)

@@ -173,11 +173,12 @@ int main(int argc, char* argv[])
     auto contact_markers
         = std::make_shared<dolfinx::graph::AdjacencyList<std::int32_t>>(
             std::move(data), std::move(offsets));
-    std::vector<std::shared_ptr<dolfinx::mesh::MeshTags<std::int32_t>>> markers
+    std::vector<std::shared_ptr<const dolfinx::mesh::MeshTags<std::int32_t>>>
+        markers
         = {std::make_shared<dolfinx::mesh::MeshTags<std::int32_t>>(facet1)};
     std::vector<std::array<int, 2>> pairs = {{0, 1}, {1, 0}};
     auto meshties
-        = dolfinx_contact::MeshTie(markers, contact_markers, pairs, mesh, 5);
+        = dolfinx_contact::MeshTie(markers, *contact_markers, pairs, mesh, 5);
 
     meshties.generate_kernel_data(dolfinx_contact::Problem::Elasticity, *V,
                                   {{"mu", mu}, {"lambda", lmbda}}, E * gamma,

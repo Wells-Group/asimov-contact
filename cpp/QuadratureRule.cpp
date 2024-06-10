@@ -15,9 +15,9 @@
 
 using namespace dolfinx_contact;
 
-dolfinx_contact::QuadratureRule::QuadratureRule(dolfinx::mesh::CellType ct,
-                                                int degree, int dim,
-                                                basix::quadrature::type type)
+//----------------------------------------------------------------------------
+QuadratureRule::QuadratureRule(dolfinx::mesh::CellType ct, int degree, int dim,
+                               basix::quadrature::type type)
     : _cell_type(ct), _degree(degree), _type(type), _dim(dim)
 {
 
@@ -34,7 +34,8 @@ dolfinx_contact::QuadratureRule::QuadratureRule(dolfinx::mesh::CellType ct,
     std::vector<double>& q_weights = quadrature.back();
     std::size_t num_points = q_weights.size();
     std::size_t pt_shape = quadrature.front().size() / num_points;
-    cmdspan2_t qp(quadrature.front().data(), num_points, pt_shape);
+    mdspan_t<const double, 2> qp(quadrature.front().data(), num_points,
+                                 pt_shape);
 
     _points = std::vector<double>(num_points * _num_sub_entities * _tdim);
     _entity_offset = std::vector<std::size_t>(_num_sub_entities + 1, 0);
@@ -84,21 +85,22 @@ dolfinx_contact::QuadratureRule::QuadratureRule(dolfinx::mesh::CellType ct,
       entity_element.tabulate(0, q_points, {num_points, tdim},
                               reference_entity_b);
 
-      cmdspan4_t basis_full(reference_entity_b.data(), e_tab_shape);
+      mdspan_t<const double, 4> basis_full(reference_entity_b.data(),
+                                           e_tab_shape);
       auto phi = MDSPAN_IMPL_STANDARD_NAMESPACE::submdspan(
           basis_full, 0, MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent,
           MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent, 0);
 
       auto [sub_geomb, sub_geom_shape]
           = basix::cell::sub_entity_geometry<double>(b_ct, dim, i);
-      cmdspan2_t coords(sub_geomb.data(), sub_geom_shape);
+      mdspan_t<const double, 2> coords(sub_geomb.data(), sub_geom_shape);
 
       // Push forward quadrature point from reference entity to reference
       // entity on cell
       const std::size_t offset = _points.size();
       _points.resize(_points.size() + num_points * coords.extent(1));
-      mdspan2_t entity_qp(_points.data() + offset, num_points,
-                          coords.extent(1));
+      mdspan_t<double, 2> entity_qp(_points.data() + offset, num_points,
+                                    coords.extent(1));
       assert(coords.extent(1) == _tdim);
       dolfinx::math::dot(phi, coords, entity_qp);
       const std::size_t weights_offset = _weights.size();
@@ -111,8 +113,7 @@ dolfinx_contact::QuadratureRule::QuadratureRule(dolfinx::mesh::CellType ct,
                      std::next(_entity_offset.begin()));
   }
 }
-
-//-----------------------------------------------------------------------------------------------
+//----------------------------------------------------------------------------
 dolfinx::mesh::CellType QuadratureRule::cell_type(int i) const
 {
   basix::cell::type b_ct = dolfinx::mesh::cell_type_to_basix_type(_cell_type);
@@ -121,29 +122,30 @@ dolfinx::mesh::CellType QuadratureRule::cell_type(int i) const
   basix::cell::type et = basix::cell::sub_entity_type(b_ct, _dim, i);
   return dolfinx::mesh::cell_type_from_basix_type(et);
 }
-//-----------------------------------------------------------------------------------------------
+//----------------------------------------------------------------------------
 int QuadratureRule::degree() const { return _degree; }
-//-----------------------------------------------------------------------------------------------
+//----------------------------------------------------------------------------
 basix::quadrature::type QuadratureRule::type() const { return _type; }
-//-----------------------------------------------------------------------------------------------
+//----------------------------------------------------------------------------
 std::size_t QuadratureRule::num_points(int i) const
 {
   assert(i < _num_sub_entities);
   return _entity_offset[i + 1] - _entity_offset[i];
 }
-//-----------------------------------------------------------------------------------------------
-cmdspan2_t QuadratureRule::points(int i) const
+//----------------------------------------------------------------------------
+mdspan_t<const double, 2> QuadratureRule::points(int i) const
 {
   assert(i < _num_sub_entities);
-  cmdspan2_t all_points(_points.data(), _weights.size(), _tdim);
+  mdspan_t<const double, 2> all_points(_points.data(), _weights.size(), _tdim);
   return MDSPAN_IMPL_STANDARD_NAMESPACE::submdspan(
       all_points, std::pair(_entity_offset[i], _entity_offset[i + 1]),
       MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent);
 }
-//-----------------------------------------------------------------------------------------------
+//----------------------------------------------------------------------------
 std::span<const double> QuadratureRule::weights(int i) const
 {
   assert(i < _num_sub_entities);
   return std::span(_weights.data() + _entity_offset[i],
                    _entity_offset[i + 1] - _entity_offset[i]);
 }
+//----------------------------------------------------------------------------

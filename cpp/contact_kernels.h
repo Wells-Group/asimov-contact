@@ -25,6 +25,7 @@
 /// entity (`entity _local_index`), the quadrature permutation and the
 /// number of cells on the other contact boundary coefficients are
 /// extracted from.
+///
 /// @note The ordering of coefficients are expected to be `mu`, `lmbda`,
 /// `h`, `test_fn`, `grad(test_fn)`, `u`, `u_opposite`,
 /// `grad(u_opposite)`.
@@ -38,9 +39,7 @@
 /// `u_opposite`, `grad(u_opposite)` have dimension `bs == gdim`.
 namespace dolfinx_contact
 {
-kernel_fn<PetscScalar>
-generate_contact_kernel(Kernel type,
-                        const dolfinx::fem::FunctionSpace<double>& V,
-                        std::shared_ptr<const QuadratureRule> quadrature_rule,
-                        std::size_t max_links);
+kernel_fn<PetscScalar> generate_contact_kernel(
+    Kernel type, const dolfinx::fem::FunctionSpace<double>& V,
+    const QuadratureRule& quadrature_rule, std::size_t max_links);
 } // namespace dolfinx_contact

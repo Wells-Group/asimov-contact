@@ -87,7 +87,8 @@ NB_MODULE(cpp, m)
       .def("points",
            [](dolfinx_contact::QuadratureRule& self, int i)
            {
-             dolfinx_contact::cmdspan2_t points_i = self.points(i);
+             dolfinx_contact::mdspan_t<const double, 2> points_i
+                 = self.points(i);
              std::array<std::size_t, 2> shape
                  = {points_i.extent(0), points_i.extent(1)};
              std::vector<double> _points(shape[0] * shape[1]);
@@ -111,11 +112,10 @@ NB_MODULE(cpp, m)
   nb::class_<dolfinx_contact::Contact>(m, "Contact", "Contact object")
       .def(
           nb::init<const std::vector<
-                       std::shared_ptr<dolfinx::mesh::MeshTags<std::int32_t>>>&,
-                   std::shared_ptr<
-                       const dolfinx::graph::AdjacencyList<std::int32_t>>,
+                       std::shared_ptr<const dolfinx::mesh::MeshTags<std::int32_t>>>&,
+                   const dolfinx::graph::AdjacencyList<std::int32_t>&,
                    const std::vector<std::array<int, 2>>&,
-                   std::shared_ptr<dolfinx::mesh::Mesh<double>>,
+                   std::shared_ptr<const dolfinx::mesh::Mesh<double>>,
                    std::vector<dolfinx_contact::ContactMode>, const int>(),
           nb::arg("markers"), nb::arg("surfaces"), nb::arg("contact_pairs"),
           nb::arg("mesh"), nb::arg("search_method"),
@@ -123,24 +123,24 @@ NB_MODULE(cpp, m)
       .def("create_distance_map",
            [](dolfinx_contact::Contact& self, int pair)
            {
-             self.create_distance_map(pair);
-             return;
+            self.create_distance_map(pair);
+            return;
            })
       .def("pack_gap_plane",
            [](dolfinx_contact::Contact& self, int origin_meshtag, double g)
            {
-             auto [coeffs, cstride] = self.pack_gap_plane(origin_meshtag, g);
-             std::size_t shape0 = cstride == 0 ? 0 : coeffs.size() / cstride;
-             return dolfinx_wrappers::as_nbarray(
-                 std::move(coeffs), {shape0, (std::size_t)cstride});
+            auto [coeffs, cstride] = self.pack_gap_plane(origin_meshtag, g);
+            std::size_t shape0 = cstride == 0 ? 0 : coeffs.size() / cstride;
+            return dolfinx_wrappers::as_nbarray(std::move(coeffs),
+                                                {shape0, (std::size_t)cstride});
            })
       .def("pack_gap",
            [](dolfinx_contact::Contact& self, int origin_meshtag)
            {
-             auto [coeffs, cstride] = self.pack_gap(origin_meshtag);
-             std::size_t shape0 = cstride == 0 ? 0 : coeffs.size() / cstride;
-             return dolfinx_wrappers::as_nbarray(
-                 std::move(coeffs), {shape0, (std::size_t)cstride});
+            auto [coeffs, cstride] = self.pack_gap(origin_meshtag);
+            std::size_t shape0 = cstride == 0 ? 0 : coeffs.size() / cstride;
+            return dolfinx_wrappers::as_nbarray(std::move(coeffs),
+                                                {shape0, (std::size_t)cstride});
            })
       .def("local_facets", &dolfinx_contact::Contact::local_facets)
       .def("contact_pair", &dolfinx_contact::Contact::contact_pair)
@@ -160,7 +160,8 @@ NB_MODULE(cpp, m)
           [](dolfinx_contact::Contact& self, int origin_meshtag, int facet)
           {
             auto [qp, qp_shape] = self.qp_phys(origin_meshtag);
-            dolfinx_contact::cmdspan3_t qp_span(qp.data(), qp_shape);
+            dolfinx_contact::mdspan_t<const double, 3> qp_span(qp.data(),
+                                                               qp_shape);
             std::vector<double> qp_vec(qp_shape[1] * qp_shape[2]);
             for (std::size_t i = 0; i < qp_shape[1]; ++i)
               for (std::size_t j = 0; j < qp_shape[2]; ++j)
@@ -173,60 +174,60 @@ NB_MODULE(cpp, m)
       .def("active_entities",
            [](dolfinx_contact::Contact& self, int s)
            {
-             std::span<const std::int32_t> active_entities
-                 = self.active_entities(s);
-             return nb::ndarray<const std::int32_t, nb::numpy>(
-                 active_entities.data(), {active_entities.size() / 2, 2},
-                 nb::handle());
+            std::span<const std::int32_t> active_entities
+                = self.active_entities(s);
+            return nb::ndarray<const std::int32_t, nb::numpy>(
+                active_entities.data(), {active_entities.size() / 2, 2},
+                nb::handle());
            })
       .def("facet_map",
            [](dolfinx_contact::Contact& self, int pair)
            {
-             // This exposes facet_map() to Python but replaces the
-             // facet indices on the submesh with the facet indices in
-             // the parent mesh This is only exposed for testing (in
-             // particular.
-             // nitsche_rigid_surface.py/demo_nitsche_rigid_surface_ufl.py)
-             //  auto contact_pair = self.contact_pair(pair);
-             std::shared_ptr<const dolfinx::mesh::Mesh<double>> mesh
-                 = self.mesh();
-             int tdim = mesh->topology()->dim(); // topological dimension
+            // This exposes facet_map() to Python but replaces the
+            // facet indices on the submesh with the facet indices in
+            // the parent mesh This is only exposed for testing (in
+            // particular.
+            // nitsche_rigid_surface.py/demo_nitsche_rigid_surface_ufl.py)
+            //  auto contact_pair = self.contact_pair(pair);
+            std::shared_ptr<const dolfinx::mesh::Mesh<double>> mesh
+                = self.mesh();
+            int tdim = mesh->topology()->dim(); // topological dimension
 
-             int fdim = tdim - 1; // topological dimension of facet
-             auto c_to_f = mesh->topology()->connectivity(tdim, fdim);
-             assert(c_to_f);
-             std::shared_ptr<const dolfinx::graph::AdjacencyList<std::int32_t>>
-                 submesh_map = self.facet_map(pair);
-             const std::vector<int>& offsets = submesh_map->offsets();
-             const std::vector<std::int32_t>& old_data = submesh_map->array();
-             std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> facet_map
-                 = self.submesh().facet_map();
-             std::span<const std::int32_t> parent_cells
-                 = self.submesh().parent_cells();
-             std::vector<std::int32_t> data(old_data.size());
-             std::transform(
-                 old_data.cbegin(), old_data.cend(), data.begin(),
-                 [&facet_map, &parent_cells, &c_to_f](auto submesh_facet)
-                 {
-                   if (submesh_facet < 0)
-                     return -1;
-                   else
-                   {
-                     auto facet_pair = facet_map->links(submesh_facet);
-                     assert(facet_pair.size() == 2);
-                     auto cell_parent = parent_cells[facet_pair.front()];
-                     return c_to_f->links(cell_parent)[facet_pair.back()];
-                   }
-                 });
-             return std::make_shared<
-                 dolfinx::graph::AdjacencyList<std::int32_t>>(
-                 std::move(data), std::move(offsets));
+            int fdim = tdim - 1; // topological dimension of facet
+            auto c_to_f = mesh->topology()->connectivity(tdim, fdim);
+            assert(c_to_f);
+            std::shared_ptr<const dolfinx::graph::AdjacencyList<std::int32_t>>
+                submesh_map = self.facet_map(pair);
+            const std::vector<int>& offsets = submesh_map->offsets();
+            const std::vector<std::int32_t>& old_data = submesh_map->array();
+            std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> facet_map
+                = self.submesh().facet_map();
+            std::span<const std::int32_t> parent_cells
+                = self.submesh().parent_cells();
+            std::vector<std::int32_t> data(old_data.size());
+            std::transform(
+                old_data.cbegin(), old_data.cend(), data.begin(),
+                [&facet_map, &parent_cells, &c_to_f](auto submesh_facet)
+                {
+                  if (submesh_facet < 0)
+                    return -1;
+                  else
+                  {
+                    auto facet_pair = facet_map->links(submesh_facet);
+                    assert(facet_pair.size() == 2);
+                    auto cell_parent = parent_cells[facet_pair.front()];
+                    return c_to_f->links(cell_parent)[facet_pair.back()];
+                  }
+                });
+            return std::make_shared<
+                dolfinx::graph::AdjacencyList<std::int32_t>>(
+                std::move(data), std::move(offsets));
            })
       .def("submesh",
            [](dolfinx_contact::Contact& self)
            {
-             const dolfinx_contact::SubMesh& submesh = self.submesh();
-             return submesh.mesh();
+            const dolfinx_contact::SubMesh& submesh = self.submesh();
+            return submesh.mesh();
            })
       .def("mesh", &dolfinx_contact::Contact::mesh)
       .def("copy_to_submesh",
@@ -234,8 +235,8 @@ NB_MODULE(cpp, m)
               const dolfinx::fem::Function<scalar_t>& u,
               dolfinx::fem::Function<scalar_t>& u_sub)
            {
-             dolfinx_contact::SubMesh submesh = self.submesh();
-             submesh.copy_function(u, u_sub);
+            dolfinx_contact::SubMesh submesh = self.submesh();
+            submesh.copy_function(u, u_sub);
            })
       .def("coefficients_size", &dolfinx_contact::Contact::coefficients_size,
            nb::arg("meshtie"), nb::arg("V"))
@@ -245,8 +246,8 @@ NB_MODULE(cpp, m)
       .def("generate_kernel",
            [](dolfinx_contact::Contact& self, dolfinx_contact::Kernel type,
               const dolfinx::fem::FunctionSpace<double>& V) {
-             return contact_wrappers::KernelWrapper<T>(
-                 self.generate_kernel(type, V));
+            return contact_wrappers::KernelWrapper<T>(
+                self.generate_kernel(type, V));
            })
       .def("assemble_matrix",
            [](dolfinx_contact::Contact& self, Mat A, int origin_meshtag,
@@ -255,13 +256,13 @@ NB_MODULE(cpp, m)
               nb::ndarray<const scalar_t, nb::c_contig> constants,
               const dolfinx::fem::FunctionSpace<double>& V)
            {
-             auto ker = kernel.get();
-             self.assemble_matrix(
-                 dolfinx::la::petsc::Matrix::set_block_fn(A, ADD_VALUES),
-                 origin_meshtag, ker,
-                 std::span<const scalar_t>(coeffs.data(), coeffs.size()),
-                 coeffs.shape(1),
-                 std::span(constants.data(), constants.shape(0)), V);
+            auto ker = kernel.get();
+            self.assemble_matrix(
+                dolfinx::la::petsc::Matrix::set_block_fn(A, ADD_VALUES),
+                origin_meshtag, ker,
+                std::span<const scalar_t>(coeffs.data(), coeffs.size()),
+                coeffs.shape(1),
+                std::span(constants.data(), constants.shape(0)), V);
            })
       .def("assemble_vector",
            [](dolfinx_contact::Contact& self,
@@ -271,54 +272,52 @@ NB_MODULE(cpp, m)
               nb::ndarray<const scalar_t, nb::c_contig> constants,
               const dolfinx::fem::FunctionSpace<double>& V)
            {
-             auto ker = kernel.get();
-             self.assemble_vector(
-                 std::span(b.data(), b.size()), origin_meshtag, ker,
-                 std::span(coeffs.data(), coeffs.size()), coeffs.shape(1),
-                 std::span(constants.data(), constants.size()), V);
+            auto ker = kernel.get();
+            self.assemble_vector(
+                std::span(b.data(), b.size()), origin_meshtag, ker,
+                std::span(coeffs.data(), coeffs.size()), coeffs.shape(1),
+                std::span(constants.data(), constants.size()), V);
            })
       .def("pack_test_functions",
            [](dolfinx_contact::Contact& self, int origin_meshtag,
               const dolfinx::fem::FunctionSpace<double>& V)
            {
-             auto [coeffs, cstride]
-                 = self.pack_test_functions(origin_meshtag, V);
-             std::size_t shape0 = cstride == 0 ? 0 : coeffs.size() / cstride;
-             return dolfinx_wrappers::as_nbarray(
-                 std::move(coeffs), {shape0, (std::size_t)cstride});
+            auto [coeffs, cstride]
+                = self.pack_test_functions(origin_meshtag, V);
+            std::size_t shape0 = cstride == 0 ? 0 : coeffs.size() / cstride;
+            return dolfinx_wrappers::as_nbarray(std::move(coeffs),
+                                                {shape0, (std::size_t)cstride});
            })
       .def("pack_grad_test_functions",
            [](dolfinx_contact::Contact& self, int origin_meshtag,
               const dolfinx::fem::FunctionSpace<double>& V)
            {
-             auto [coeffs, cstride]
-                 = self.pack_grad_test_functions(origin_meshtag, V);
-             std::size_t shape0 = cstride == 0 ? 0 : coeffs.size() / cstride;
-             return dolfinx_wrappers::as_nbarray(
-                 std::move(coeffs), {shape0, (std::size_t)cstride});
+            auto [coeffs, cstride]
+                = self.pack_grad_test_functions(origin_meshtag, V);
+            std::size_t shape0 = cstride == 0 ? 0 : coeffs.size() / cstride;
+            return dolfinx_wrappers::as_nbarray(std::move(coeffs),
+                                                {shape0, (std::size_t)cstride});
            })
       .def("pack_nx",
            [](dolfinx_contact::Contact& self, int origin_meshtag)
            {
-             auto [coeffs, cstride] = self.pack_nx(origin_meshtag);
-             std::size_t shape0
-                 = cstride == 0 ? 0 : coeffs.size() / cstride;
-             return dolfinx_wrappers::as_nbarray(
-                 std::move(coeffs), {shape0, (std::size_t)cstride});
+            auto [coeffs, cstride] = self.pack_nx(origin_meshtag);
+            std::size_t shape0 = cstride == 0 ? 0 : coeffs.size() / cstride;
+            return dolfinx_wrappers::as_nbarray(std::move(coeffs),
+                                                {shape0, (std::size_t)cstride});
            })
       .def("pack_ny",
            [](dolfinx_contact::Contact& self, int origin_meshtag)
            {
-             auto [coeffs, cstride] = self.pack_ny(origin_meshtag);
-             std::size_t shape0
-                 = cstride == 0 ? 0 : coeffs.size() / cstride;
-             return dolfinx_wrappers::as_nbarray(
-                 std::move(coeffs), {shape0, (std::size_t)cstride});
+            auto [coeffs, cstride] = self.pack_ny(origin_meshtag);
+            std::size_t shape0 = cstride == 0 ? 0 : coeffs.size() / cstride;
+            return dolfinx_wrappers::as_nbarray(std::move(coeffs),
+                                                {shape0, (std::size_t)cstride});
            })
       .def(
           "pack_u_contact",
           [](dolfinx_contact::Contact& self, int origin_meshtag,
-             std::shared_ptr<dolfinx::fem::Function<scalar_t>> u)
+             const dolfinx::fem::Function<scalar_t>& u)
           {
             auto [coeffs, cstride] = self.pack_u_contact(origin_meshtag, u);
             int shape0 = cstride == 0 ? 0 : coeffs.size() / cstride;
@@ -328,13 +327,13 @@ NB_MODULE(cpp, m)
           nb::arg("origin_meshtag"), nb::arg("u"))
       .def("pack_grad_u_contact",
            [](dolfinx_contact::Contact& self, int origin_meshtag,
-              std::shared_ptr<dolfinx::fem::Function<scalar_t>> u)
+              const dolfinx::fem::Function<scalar_t>& u)
            {
-             auto [coeffs, cstride]
-                 = self.pack_grad_u_contact(origin_meshtag, u);
-             std::size_t shape0 = cstride == 0 ? 0 : coeffs.size() / cstride;
-             return dolfinx_wrappers::as_nbarray(
-                 std::move(coeffs), {shape0, (std::size_t)cstride});
+            auto [coeffs, cstride]
+                = self.pack_grad_u_contact(origin_meshtag, u);
+            std::size_t shape0 = cstride == 0 ? 0 : coeffs.size() / cstride;
+            return dolfinx_wrappers::as_nbarray(std::move(coeffs),
+                                                {shape0, (std::size_t)cstride});
            })
       .def("update_submesh_geometry",
            &dolfinx_contact::Contact::update_submesh_geometry)
@@ -344,9 +343,9 @@ NB_MODULE(cpp, m)
               nb::ndarray<const scalar_t, nb::ndim<1>, nb::c_contig> n_y,
               double tol)
            {
-             return self.crop_invalid_points(
-                 pair, std::span(gap.data(), gap.size()),
-                 std::span(n_y.data(), n_y.size()), tol);
+            return self.crop_invalid_points(
+                pair, std::span(gap.data(), gap.size()),
+                std::span(n_y.data(), n_y.size()), tol);
            })
       .def("max_links",
            [](dolfinx_contact::Contact& self) { return self.max_links(); });
@@ -377,14 +376,15 @@ NB_MODULE(cpp, m)
 
   // Contact
   nb::class_<dolfinx_contact::MeshTie>(m, "MeshTie", "meshtie object")
-      .def(nb::init<std::vector<
-                        std::shared_ptr<dolfinx::mesh::MeshTags<std::int32_t>>>,
-                    std::shared_ptr<
-                        const dolfinx::graph::AdjacencyList<std::int32_t>>,
-                    std::vector<std::array<int, 2>>,
-                    std::shared_ptr<dolfinx::mesh::Mesh<double>>, const int>(),
-           nb::arg("markers"), nb::arg("surfaces"), nb::arg("contact_pairs"),
-           nb::arg("V"), nb::arg("quadrature_degree") = 3)
+      .def(
+          nb::init<
+              std::vector<
+                  std::shared_ptr<const dolfinx::mesh::MeshTags<std::int32_t>>>,
+              const dolfinx::graph::AdjacencyList<std::int32_t>&,
+              std::vector<std::array<int, 2>>,
+              std::shared_ptr<const dolfinx::mesh::Mesh<double>>, const int>(),
+          nb::arg("markers"), nb::arg("surfaces"), nb::arg("contact_pairs"),
+          nb::arg("V"), nb::arg("quadrature_degree") = 3)
       .def(
           "coeffs",
           [](dolfinx_contact::MeshTie& self, int pair)
@@ -429,7 +429,7 @@ NB_MODULE(cpp, m)
           "Create a PETSc Mat for tying disconnected meshes.");
   m.def(
       "pack_coefficient_quadrature",
-      [](std::shared_ptr<const dolfinx::fem::Function<scalar_t>> coeff, int q,
+      [](const dolfinx::fem::Function<scalar_t>& coeff, int q,
          nb::ndarray<const std::int32_t, nb::c_contig> entities)
       {
         std::span<const std::int32_t> e_span(entities.data(), entities.size());
@@ -453,7 +453,7 @@ NB_MODULE(cpp, m)
           throw std::invalid_argument("Unsupported entities");
       });
   m.def("pack_gradient_quadrature",
-        [](std::shared_ptr<const dolfinx::fem::Function<scalar_t>> coeff, int q,
+        [](const dolfinx::fem::Function<scalar_t>& coeff, int q,
            nb::ndarray<const std::int32_t, nb::c_contig> entities)
         {
           std::span<const std::int32_t> e_span(entities.data(),

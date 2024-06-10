@@ -9,7 +9,7 @@
 dolfinx_contact::kernel_fn<PetscScalar>
 dolfinx_contact::generate_contact_kernel(
     dolfinx_contact::Kernel type, const dolfinx::fem::FunctionSpace<double>& V,
-    std::shared_ptr<const dolfinx_contact::QuadratureRule> quadrature_rule,
+    const dolfinx_contact::QuadratureRule& quadrature_rule,
     std::size_t max_links)
 {
   std::shared_ptr<const dolfinx::mesh::Mesh<double>> mesh = V.mesh();
@@ -17,7 +17,7 @@ dolfinx_contact::generate_contact_kernel(
   const std::size_t gdim = mesh->geometry().dim(); // geometrical dimension
   const std::size_t bs = V.dofmap()->bs();
   // FIXME: This will not work for prism meshes
-  const std::vector<std::size_t>& qp_offsets = quadrature_rule->offset();
+  const std::vector<std::size_t>& qp_offsets = quadrature_rule.offset();
   const std::size_t num_q_points = qp_offsets[1] - qp_offsets[0];
   const std::size_t ndofs_cell = V.dofmap()->element_dof_layout().num_dofs();
 
@@ -72,16 +72,17 @@ dolfinx_contact::generate_contact_kernel(
     const std::uint32_t tdim = kd.tdim();
 
     // NOTE: DOLFINx has 3D input coordinate dofs
-    cmdspan2_t coord(coordinate_dofs, kd.num_coordinate_dofs(), 3);
+    mdspan_t<const double, 2> coord(coordinate_dofs, kd.num_coordinate_dofs(),
+                                    3);
 
     // Create data structures for jacobians
     // We allocate more memory than required, but its better for the compiler
     std::array<double, 9> Jb;
-    mdspan2_t J(Jb.data(), gdim, tdim);
+    mdspan_t<double, 2> J(Jb.data(), gdim, tdim);
     std::array<double, 9> Kb;
-    mdspan2_t K(Kb.data(), tdim, gdim);
+    mdspan_t<double, 2> K(Kb.data(), tdim, gdim);
     std::array<double, 6> J_totb;
-    mdspan2_t J_tot(J_totb.data(), gdim, tdim - 1);
+    mdspan_t<double, 2> J_tot(J_totb.data(), gdim, tdim - 1);
     double detJ = 0;
     std::array<double, 18> detJ_scratch;
 
@@ -105,9 +106,10 @@ dolfinx_contact::generate_contact_kernel(
     double theta = w[1];
     double mu = c[0];
     double lmbda = c[1];
+
     // Extract reference to the tabulated basis function
-    s_cmdspan2_t phi = kd.phi();
-    s_cmdspan3_t dphi = kd.dphi();
+    mdspan_t<const double, 2, stdex::layout_stride> phi = kd.phi();
+    mdspan_t<const double, 3, stdex::layout_stride> dphi = kd.dphi();
 
     // Extract reference to quadrature weights for the local facet
 
@@ -116,9 +118,9 @@ dolfinx_contact::generate_contact_kernel(
     // Temporary data structures used inside quadrature loop
     std::array<double, 3> n_surf = {0, 0, 0};
     std::vector<double> epsnb(ndofs_cell * gdim, 0);
-    mdspan2_t epsn(epsnb.data(), ndofs_cell, gdim);
+    mdspan_t<double, 2> epsn(epsnb.data(), ndofs_cell, gdim);
     std::vector<double> trb(ndofs_cell * gdim, 0);
-    mdspan2_t tr(trb.data(), ndofs_cell, gdim);
+    mdspan_t<double, 2> tr(trb.data(), ndofs_cell, gdim);
     std::vector<double> sig_n_u(gdim);
 
     // Loop over quadrature points
@@ -221,16 +223,17 @@ dolfinx_contact::generate_contact_kernel(
     const std::uint32_t tdim = kd.tdim();
 
     // NOTE: DOLFINx has 3D input coordinate dofs
-    cmdspan2_t coord(coordinate_dofs, kd.num_coordinate_dofs(), 3);
+    mdspan_t<const double, 2> coord(coordinate_dofs, kd.num_coordinate_dofs(),
+                                    3);
 
     // Create data structures for jacobians
     // We allocate more memory than required, but its better for the compiler
     std::array<double, 9> Jb;
-    mdspan2_t J(Jb.data(), gdim, tdim);
+    mdspan_t<double, 2> J(Jb.data(), gdim, tdim);
     std::array<double, 9> Kb;
-    mdspan2_t K(Kb.data(), tdim, gdim);
+    mdspan_t<double, 2> K(Kb.data(), tdim, gdim);
     std::array<double, 6> J_totb;
-    mdspan2_t J_tot(J_totb.data(), gdim, tdim - 1);
+    mdspan_t<double, 2> J_tot(J_totb.data(), gdim, tdim - 1);
     double detJ = 0;
     std::array<double, 18> detJ_scratch;
 
@@ -256,17 +259,17 @@ dolfinx_contact::generate_contact_kernel(
     double mu = c[0];
     double lmbda = c[1];
 
-    s_cmdspan3_t dphi = kd.dphi();
-    s_cmdspan2_t phi = kd.phi();
+    mdspan_t<const double, 3, stdex::layout_stride> dphi = kd.dphi();
+    mdspan_t<const double, 2, stdex::layout_stride> phi = kd.phi();
     std::array<std::size_t, 2> q_offset
         = {kd.qp_offsets(facet_index), kd.qp_offsets(facet_index + 1)};
     const std::size_t num_points = q_offset.back() - q_offset.front();
     std::span<const double> weights = kd.weights(facet_index);
     std::array<double, 3> n_surf = {0, 0, 0};
     std::vector<double> epsnb(ndofs_cell * gdim);
-    mdspan2_t epsn(epsnb.data(), ndofs_cell, gdim);
+    mdspan_t<double, 2> epsn(epsnb.data(), ndofs_cell, gdim);
     std::vector<double> trb(ndofs_cell * gdim);
-    mdspan2_t tr(trb.data(), ndofs_cell, gdim);
+    mdspan_t<double, 2> tr(trb.data(), ndofs_cell, gdim);
     std::vector<double> sig_n_u(gdim);
 
     // Loop over quadrature points
@@ -387,16 +390,17 @@ dolfinx_contact::generate_contact_kernel(
     const std::uint32_t tdim = kd.tdim();
 
     // NOTE: DOLFINx has 3D input coordinate dofs
-    cmdspan2_t coord(coordinate_dofs, kd.num_coordinate_dofs(), 3);
+    mdspan_t<const double, 2> coord(coordinate_dofs, kd.num_coordinate_dofs(),
+                                    3);
 
     // Create data structures for jacobians
     // We allocate more memory than required, but its better for the compiler
     std::array<double, 9> Jb;
-    mdspan2_t J(Jb.data(), gdim, tdim);
+    mdspan_t<double, 2> J(Jb.data(), gdim, tdim);
     std::array<double, 9> Kb;
-    mdspan2_t K(Kb.data(), tdim, gdim);
+    mdspan_t<double, 2> K(Kb.data(), tdim, gdim);
     std::array<double, 6> J_totb;
-    mdspan2_t J_tot(J_totb.data(), gdim, tdim - 1);
+    mdspan_t<double, 2> J_tot(J_totb.data(), gdim, tdim - 1);
     double detJ = 0;
     std::array<double, 18> detJ_scratch;
 
@@ -422,8 +426,8 @@ dolfinx_contact::generate_contact_kernel(
     double lmbda = c[1];
     double fric = c[2];
     // Extract reference to the tabulated basis function
-    s_cmdspan2_t phi = kd.phi();
-    s_cmdspan3_t dphi = kd.dphi();
+    mdspan_t<const double, 2, stdex::layout_stride> phi = kd.phi();
+    mdspan_t<const double, 3, stdex::layout_stride> dphi = kd.dphi();
 
     // Extract reference to quadrature weights for the local facet
 
@@ -433,12 +437,12 @@ dolfinx_contact::generate_contact_kernel(
     std::array<double, 3> n_surf = {0, 0, 0};
     std::array<double, 3> Pt_u = {0, 0, 0};
     std::vector<double> epsnb(ndofs_cell * gdim, 0);
-    mdspan2_t epsn(epsnb.data(), ndofs_cell, gdim);
+    mdspan_t<double, 2> epsn(epsnb.data(), ndofs_cell, gdim);
     std::vector<double> trb(ndofs_cell * gdim, 0);
-    mdspan2_t tr(trb.data(), ndofs_cell, gdim);
+    mdspan_t<double, 2> tr(trb.data(), ndofs_cell, gdim);
     std::vector<double> sig_n_u(gdim);
     std::vector<double> sig_nb(ndofs_cell * gdim * gdim);
-    mdspan3_t sig_n(sig_nb.data(), ndofs_cell, gdim, gdim);
+    mdspan_t<double, 3> sig_n(sig_nb.data(), ndofs_cell, gdim, gdim);
 
     // Loop over quadrature points
     const std::size_t q_start = kd.qp_offsets(facet_index);
@@ -571,16 +575,17 @@ dolfinx_contact::generate_contact_kernel(
     const std::uint32_t tdim = kd.tdim();
 
     // NOTE: DOLFINx has 3D input coordinate dofs
-    cmdspan2_t coord(coordinate_dofs, kd.num_coordinate_dofs(), 3);
+    mdspan_t<const double, 2> coord(coordinate_dofs, kd.num_coordinate_dofs(),
+                                    3);
 
     // Create data structures for jacobians
     // We allocate more memory than required, but its better for the compiler
     std::array<double, 9> Jb;
-    mdspan2_t J(Jb.data(), gdim, tdim);
+    mdspan_t<double, 2> J(Jb.data(), gdim, tdim);
     std::array<double, 9> Kb;
-    mdspan2_t K(Kb.data(), tdim, gdim);
+    mdspan_t<double, 2> K(Kb.data(), tdim, gdim);
     std::array<double, 6> J_totb;
-    mdspan2_t J_tot(J_totb.data(), gdim, tdim - 1);
+    mdspan_t<double, 2> J_tot(J_totb.data(), gdim, tdim - 1);
     double detJ = 0;
     std::array<double, 18> detJ_scratch;
 
@@ -607,8 +612,8 @@ dolfinx_contact::generate_contact_kernel(
     double lmbda = c[1];
     double fric = c[2];
 
-    s_cmdspan3_t dphi = kd.dphi();
-    s_cmdspan2_t phi = kd.phi();
+    mdspan_t<const double, 3, stdex::layout_stride> dphi = kd.dphi();
+    mdspan_t<const double, 2, stdex::layout_stride> phi = kd.phi();
     std::array<std::size_t, 2> q_offset
         = {kd.qp_offsets(facet_index), kd.qp_offsets(facet_index + 1)};
     const std::size_t num_points = q_offset.back() - q_offset.front();
@@ -616,12 +621,12 @@ dolfinx_contact::generate_contact_kernel(
     std::array<double, 3> n_surf = {0, 0, 0};
     std::array<double, 3> Pt_u = {0, 0, 0};
     std::vector<double> epsnb(ndofs_cell * gdim);
-    mdspan2_t epsn(epsnb.data(), ndofs_cell, gdim);
+    mdspan_t<double, 2> epsn(epsnb.data(), ndofs_cell, gdim);
     std::vector<double> trb(ndofs_cell * gdim);
-    mdspan2_t tr(trb.data(), ndofs_cell, gdim);
+    mdspan_t<double, 2> tr(trb.data(), ndofs_cell, gdim);
     std::vector<double> sig_n_u(gdim);
     std::vector<double> sig_nb(ndofs_cell * gdim * gdim);
-    mdspan3_t sig_n(sig_nb.data(), ndofs_cell, gdim, gdim);
+    mdspan_t<double, 3> sig_n(sig_nb.data(), ndofs_cell, gdim, gdim);
 
     // Loop over quadrature points
     for (auto q : q_indices)
@@ -802,16 +807,17 @@ dolfinx_contact::generate_contact_kernel(
     const std::uint32_t tdim = kd.tdim();
 
     // NOTE: DOLFINx has 3D input coordinate dofs
-    cmdspan2_t coord(coordinate_dofs, kd.num_coordinate_dofs(), 3);
+    mdspan_t<const double, 2> coord(coordinate_dofs, kd.num_coordinate_dofs(),
+                                    3);
 
     // Create data structures for jacobians
     // We allocate more memory than required, but its better for the compiler
     std::array<double, 9> Jb;
-    mdspan2_t J(Jb.data(), gdim, tdim);
+    mdspan_t<double, 2> J(Jb.data(), gdim, tdim);
     std::array<double, 9> Kb;
-    mdspan2_t K(Kb.data(), tdim, gdim);
+    mdspan_t<double, 2> K(Kb.data(), tdim, gdim);
     std::array<double, 6> J_totb;
-    mdspan2_t J_tot(J_totb.data(), gdim, tdim - 1);
+    mdspan_t<double, 2> J_tot(J_totb.data(), gdim, tdim - 1);
     double detJ = 0;
     std::array<double, 18> detJ_scratch;
 
@@ -838,8 +844,8 @@ dolfinx_contact::generate_contact_kernel(
     double fric = c[2];
 
     // Extract reference to the tabulated basis function
-    s_cmdspan2_t phi = kd.phi();
-    s_cmdspan3_t dphi = kd.dphi();
+    mdspan_t<const double, 2, stdex::layout_stride> phi = kd.phi();
+    mdspan_t<const double, 3, stdex::layout_stride> dphi = kd.dphi();
 
     // Extract reference to quadrature weights for the local facet
 
@@ -851,12 +857,12 @@ dolfinx_contact::generate_contact_kernel(
     std::array<double, 3> Pt_u = {0, 0, 0};
     std::array<double, 3> v_rel = {0, 0, 0};
     std::vector<double> epsnb(ndofs_cell * gdim, 0);
-    mdspan2_t epsn(epsnb.data(), ndofs_cell, gdim);
+    mdspan_t<double, 2> epsn(epsnb.data(), ndofs_cell, gdim);
     std::vector<double> trb(ndofs_cell * gdim, 0);
-    mdspan2_t tr(trb.data(), ndofs_cell, gdim);
+    mdspan_t<double, 2> tr(trb.data(), ndofs_cell, gdim);
     std::vector<double> sig_n_u(gdim);
     std::vector<double> sig_nb(ndofs_cell * gdim * gdim);
-    mdspan3_t sig_n(sig_nb.data(), ndofs_cell, gdim, gdim);
+    mdspan_t<double, 3> sig_n(sig_nb.data(), ndofs_cell, gdim, gdim);
 
     // Loop over quadrature points
     const std::size_t q_start = kd.qp_offsets(facet_index);
@@ -999,16 +1005,17 @@ dolfinx_contact::generate_contact_kernel(
     const std::uint32_t tdim = kd.tdim();
 
     // NOTE: DOLFINx has 3D input coordinate dofs
-    cmdspan2_t coord(coordinate_dofs, kd.num_coordinate_dofs(), 3);
+    mdspan_t<const double, 2> coord(coordinate_dofs, kd.num_coordinate_dofs(),
+                                    3);
 
     // Create data structures for jacobians
     // We allocate more memory than required, but its better for the compiler
     std::array<double, 9> Jb;
-    mdspan2_t J(Jb.data(), gdim, tdim);
+    mdspan_t<double, 2> J(Jb.data(), gdim, tdim);
     std::array<double, 9> Kb;
-    mdspan2_t K(Kb.data(), tdim, gdim);
+    mdspan_t<double, 2> K(Kb.data(), tdim, gdim);
     std::array<double, 6> J_totb;
-    mdspan2_t J_tot(J_totb.data(), gdim, tdim - 1);
+    mdspan_t<double, 2> J_tot(J_totb.data(), gdim, tdim - 1);
     double detJ = 0;
     std::array<double, 18> detJ_scratch;
 
@@ -1035,8 +1042,8 @@ dolfinx_contact::generate_contact_kernel(
     double lmbda = c[1];
     double fric = c[2];
 
-    s_cmdspan3_t dphi = kd.dphi();
-    s_cmdspan2_t phi = kd.phi();
+    mdspan_t<const double, 3, stdex::layout_stride> dphi = kd.dphi();
+    mdspan_t<const double, 2, stdex::layout_stride> phi = kd.phi();
     std::array<std::size_t, 2> q_offset
         = {kd.qp_offsets(facet_index), kd.qp_offsets(facet_index + 1)};
     const std::size_t num_points = q_offset.back() - q_offset.front();
@@ -1046,12 +1053,12 @@ dolfinx_contact::generate_contact_kernel(
     std::array<double, 3> Pt_u = {0, 0, 0};
     std::array<double, 3> v_rel = {0, 0, 0};
     std::vector<double> epsnb(ndofs_cell * gdim);
-    mdspan2_t epsn(epsnb.data(), ndofs_cell, gdim);
+    mdspan_t<double, 2> epsn(epsnb.data(), ndofs_cell, gdim);
     std::vector<double> trb(ndofs_cell * gdim);
-    mdspan2_t tr(trb.data(), ndofs_cell, gdim);
+    mdspan_t<double, 2> tr(trb.data(), ndofs_cell, gdim);
     std::vector<double> sig_n_u(gdim);
     std::vector<double> sig_nb(ndofs_cell * gdim * gdim);
-    mdspan3_t sig_n(sig_nb.data(), ndofs_cell, gdim, gdim);
+    mdspan_t<double, 3> sig_n(sig_nb.data(), ndofs_cell, gdim, gdim);
 
     // Loop over quadrature points
     for (auto q : q_indices)

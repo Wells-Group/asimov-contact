@@ -331,14 +331,15 @@ int main(int argc, char* argv[])
         = std::make_shared<dolfinx::graph::AdjacencyList<std::int32_t>>(
             std::move(data), std::move(offsets));
     // wrap facet markers
-    std::vector<std::shared_ptr<dolfinx::mesh::MeshTags<std::int32_t>>> markers
+    std::vector<std::shared_ptr<const dolfinx::mesh::MeshTags<std::int32_t>>>
+        markers
         = {std::make_shared<dolfinx::mesh::MeshTags<std::int32_t>>(facet1)};
     // define pairs (slave, master)
     std::vector<std::array<int, 2>> pairs = {{0, 1}, {1, 0}};
 
     // create meshties
     auto meshties = std::make_shared<dolfinx_contact::MeshTie>(
-        dolfinx_contact::MeshTie(markers, contact_markers, pairs, mesh, 5));
+        dolfinx_contact::MeshTie(markers, *contact_markers, pairs, mesh, 5));
 
     // create "non-linear" meshtie problem (linear problem written as non-linear
     // problem)

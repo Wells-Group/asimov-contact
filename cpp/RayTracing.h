@@ -33,6 +33,7 @@ void normalize(AB_span<A, B>& vectors)
     double norm = 0;
     for (std::size_t j = 0; j < B; ++j)
       norm += vectors(i, j) * vectors(i, j);
+
     norm = std::sqrt(norm);
     for (std::size_t j = 0; j < B; ++j)
       vectors(i, j) = vectors(i, j) / norm;
@@ -48,7 +49,6 @@ template <std::size_t gdim>
 void compute_tangents(std::span<const double, gdim> n,
                       AB_span<gdim - 1, gdim> tangents)
 {
-
   // Compute local maximum and create iteration array
   auto max_el = std::max_element(n.begin(), n.end(), [](double a, double b)
                                  { return std::norm(a) < std::norm(b); });
@@ -56,12 +56,15 @@ void compute_tangents(std::span<const double, gdim> n,
   std::size_t c = 0;
   std::vector<std::size_t> indices(gdim - 1, 0);
   for (std::size_t i = 0; i < gdim; ++i)
+  {
     if (i != (std::size_t)max_pos)
       indices[c++] = i;
+  }
 
   /// Compute first tangent
   for (std::size_t i = 0; i < gdim; ++i)
     tangents(0, i) = 1;
+
   tangents(0, max_pos) = 0;
   for (std::size_t i = 0; i < gdim - 1; ++i)
     tangents(0, max_pos) -= n[indices[i]] / n[max_pos];
@@ -82,8 +85,9 @@ template <std::size_t tdim, std::size_t gdim>
 class NewtonStorage
 {
 public:
-  /// Creates storage for Newton solver with the following entries (listed in
-  /// order of appearance in the work-array)
+  /// Creates storage for Newton solver with the following entries
+  /// (listed in order of appearance in the work-array)
+  ///
   /// The data-structures the Newton step requires is:
   /// dxi The Jacobian of the reference mapping, shape (tdim, tdim-1)
   /// X_k Solution on reference domain, size: tdim
@@ -269,12 +273,12 @@ int raytracing_cell(
   assert(std::size_t(std::reduce(basis_shape.cbegin(), basis_shape.cend(), 1,
                                  std::multiplies{}))
          == basis_values.size());
-  cmdspan4_t basis(basis_values.data(), basis_shape);
+  mdspan_t<const double, 4> basis(basis_values.data(), basis_shape);
   auto dphi = MDSPAN_IMPL_STANDARD_NAMESPACE::submdspan(
       basis, std::pair{1, tdim + 1}, 0,
       MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent, 0);
-  cmdspan2_t coords(coordinate_dofs.data(), cmap.dim(), gdim);
-  mdspan2_t _xk(x_k.data(), 1, gdim);
+  mdspan_t<const double, 2> coords(coordinate_dofs.data(), cmap.dim(), gdim);
+  mdspan_t<double, 2> _xk(x_k.data(), 1, gdim);
   for (int k = 0; k < max_iter; ++k)
   {
     // Evaluate reference coordinate at current iteration
@@ -420,12 +424,12 @@ std::tuple<int, std::int32_t, std::array<double, gdim>,
 compute_ray(const dolfinx::mesh::Mesh<double>& mesh,
             std::span<const double, gdim> point,
             std::span<const double, gdim> normal,
-            std::span<const std::int32_t> cells, const int max_iter = 25,
-            const double tol = 1e-8)
+            std::span<const std::int32_t> cells, int max_iter = 25,
+            double tol = 1e-8)
 {
   int status = -1;
   dolfinx::mesh::CellType cell_type = mesh.topology()->cell_type();
-  if ((mesh.topology()->dim() != tdim) or (mesh.geometry().dim() != gdim))
+  if (mesh.topology()->dim() != tdim or mesh.geometry().dim() != gdim)
     throw std::invalid_argument("Invalid topological or geometrical dimension");
 
   const dolfinx::fem::CoordinateElement<double>& cmap = mesh.geometry().cmap();
@@ -463,7 +467,7 @@ compute_ray(const dolfinx::mesh::Mesh<double>& mesh,
   auto [ref_jac, jac_shape] = basix::cell::facet_jacobians<double>(basix_cell);
   assert(tdim == jac_shape[1]);
   assert(tdim - 1 == jac_shape[2]);
-  cmdspan3_t facet_jacobians(ref_jac.data(), jac_shape);
+  mdspan_t<const double, 3> facet_jacobians(ref_jac.data(), jac_shape);
 
   // Get basix geometry information
   std::pair<std::vector<double>, std::array<std::size_t, 2>> bgeometry
@@ -475,7 +479,6 @@ compute_ray(const dolfinx::mesh::Mesh<double>& mesh,
 
   for (std::size_t c = 0; c < cells.size(); c += 2)
   {
-
     // Get cell geometry
     auto x_dofs = MDSPAN_IMPL_STANDARD_NAMESPACE::submdspan(
         x_dofmap, cells[c], MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent);
@@ -500,7 +503,7 @@ compute_ray(const dolfinx::mesh::Mesh<double>& mesh,
               std::span<const double, tdim - 1> xi, std::span<double, tdim> X)
     {
       const std::vector<int>& facet = facets[facet_index];
-      dolfinx_contact::cmdspan2_t x(xb.data(), x_shape);
+      dolfinx_contact::mdspan_t<const double, 2> x(xb.data(), x_shape);
       for (std::size_t i = 0; i < tdim; ++i)
       {
         X[i] = x(facet.front(), i);
@@ -529,10 +532,7 @@ compute_ray(const dolfinx::mesh::Mesh<double>& mesh,
   auto X_fin = allocated_memory.X_k();
   std::copy_n(x_fin.begin(), gdim, x.begin());
   std::copy_n(X_fin.begin(), tdim, X.begin());
-  std::tuple<int, std::int32_t, std::array<double, gdim>,
-             std::array<double, tdim>>
-      output = std::make_tuple(status, cell_idx, x, X);
-  return output;
+  return std::make_tuple(status, cell_idx, x, X);
 }
 
 /// @brief Compute the first intersection between a ray and a set of
@@ -558,7 +558,7 @@ compute_ray(const dolfinx::mesh::Mesh<double>& mesh,
 std::tuple<int, std::int32_t, std::vector<double>, std::vector<double>>
 raytracing(const dolfinx::mesh::Mesh<double>& mesh,
            std::span<const double> point, std::span<const double> normal,
-           std::span<const std::int32_t> cells, const int max_iter = 25,
-           const double tol = 1e-8);
+           std::span<const std::int32_t> cells, int max_iter = 25,
+           double tol = 1e-8);
 
 } // namespace dolfinx_contact

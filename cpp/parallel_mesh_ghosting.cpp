@@ -45,6 +45,7 @@ copy_to_all(MPI_Comm comm, const std::vector<std::int64_t>& indices,
 };
 } // namespace
 
+//----------------------------------------------------------------------------
 std::tuple<dolfinx::mesh::Mesh<double>, dolfinx::mesh::MeshTags<std::int32_t>,
            dolfinx::mesh::MeshTags<std::int32_t>>
 dolfinx_contact::create_contact_mesh(
@@ -92,8 +93,7 @@ dolfinx_contact::create_contact_mesh(
   spdlog::warn("Compute cell destinations");
 
   // Find destinations for the cells attached to the tag-marked facets
-  auto cell_dests = dolfinx_contact::compute_ghost_cell_destinations(
-      mesh, marker_subset, R);
+  auto cell_dests = compute_ghost_cell_destinations(mesh, marker_subset, R);
 
   spdlog::warn("cells to ghost");
 
@@ -246,7 +246,7 @@ dolfinx_contact::create_contact_mesh(
   spdlog::warn("Lex match facet markers");
   dolfinx::common::Timer tlex1("~Contact: Add ghosts: Lex match facet markers");
 
-  auto [new_fm_index, new_fm_data] = dolfinx_contact::lex_match(
+  auto [new_fm_index, new_fm_data] = lex_match(
       num_facet_vertices, fv_new_indices, all_facet_indices, all_facet_values);
 
   auto new_fmarker = dolfinx::mesh::MeshTags<std::int32_t>(
@@ -276,7 +276,7 @@ dolfinx_contact::create_contact_mesh(
   spdlog::warn("Lex match cell markers");
   dolfinx::common::Timer tlex2("~Contact: Add ghosts: Lex match cell markers");
 
-  auto [new_cm_index, new_cm_data] = dolfinx_contact::lex_match(
+  auto [new_cm_index, new_cm_data] = lex_match(
       num_cell_vertices, cv_new_indices, all_cell_indices, all_cell_values);
 
   auto new_cmarker = dolfinx::mesh::MeshTags<std::int32_t>(
@@ -286,7 +286,7 @@ dolfinx_contact::create_contact_mesh(
 
   return {new_mesh, new_fmarker, new_cmarker};
 }
-
+//----------------------------------------------------------------------------
 dolfinx::graph::AdjacencyList<std::int32_t>
 dolfinx_contact::compute_ghost_cell_destinations(
     const dolfinx::mesh::Mesh<double>& mesh,
@@ -420,7 +420,7 @@ dolfinx_contact::compute_ghost_cell_destinations(
 
   return dolfinx::graph::AdjacencyList<std::int32_t>(cell_dests, doffsets);
 }
-
+//----------------------------------------------------------------------------
 std::pair<std::vector<int>, std::vector<int>>
 dolfinx_contact::lex_match(int dim,
                            const std::vector<std::int64_t>& local_indices,
@@ -513,3 +513,4 @@ dolfinx_contact::lex_match(int dim,
 
   return {std::move(nmi), std::move(nmv)};
 }
+//----------------------------------------------------------------------------
