@@ -29,11 +29,10 @@ jobs:
           pip install ruff
           ruff format --check
           ruff check
-      # - name: mypy checks
-      #   run: |
-      #     mypy . --exclude=build
-      #     cd python/
-      #     mypy dolfinx
+      - name: mypy checks
+        run: |
+          cd python/
+          mypy . --exclude=build
       # - name: clang-format C++ checks (non-blocking)
       #   continue-on-error: true
       #   run: |
