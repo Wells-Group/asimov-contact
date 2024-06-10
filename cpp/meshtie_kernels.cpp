@@ -6,6 +6,7 @@
 
 #include "meshtie_kernels.h"
 
+//----------------------------------------------------------------------------
 dolfinx_contact::kernel_fn<PetscScalar>
 dolfinx_contact::generate_meshtie_kernel(
     dolfinx_contact::Kernel type, const dolfinx::fem::FunctionSpace<double>& V,
@@ -211,11 +212,10 @@ dolfinx_contact::generate_meshtie_kernel(
       detJ = kd.compute_first_facet_jacobian(facet_index, J, K, J_tot,
                                              detJ_scratch, coord);
 
-      dolfinx_contact::physical_facet_normal(
-          std::span(n_phys.data(), gdim), K,
-          MDSPAN_IMPL_STANDARD_NAMESPACE::submdspan(
-              kd.facet_normals(), facet_index,
-              MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent));
+      physical_facet_normal(std::span(n_phys.data(), gdim), K,
+                            MDSPAN_IMPL_STANDARD_NAMESPACE::submdspan(
+                                kd.facet_normals(), facet_index,
+                                MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent));
     }
 
     // Extract constants used inside quadrature loop
@@ -267,6 +267,7 @@ dolfinx_contact::generate_meshtie_kernel(
       }
     }
   };
+
   /// @brief Assemble kernel for Jacobian (LHS) for gluing two problems with
   /// Nitsche
   ///
@@ -312,11 +313,10 @@ dolfinx_contact::generate_meshtie_kernel(
       detJ = kd.compute_first_facet_jacobian(facet_index, J, K, J_tot,
                                              detJ_scratch, coord);
 
-      dolfinx_contact::physical_facet_normal(
-          std::span(n_phys.data(), gdim), K,
-          MDSPAN_IMPL_STANDARD_NAMESPACE::submdspan(
-              kd.facet_normals(), facet_index,
-              MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent));
+      physical_facet_normal(std::span(n_phys.data(), gdim), K,
+                            MDSPAN_IMPL_STANDARD_NAMESPACE::submdspan(
+                                kd.facet_normals(), facet_index,
+                                MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent));
     }
 
     // Extract constants used inside quadrature loop
@@ -432,23 +432,24 @@ dolfinx_contact::generate_meshtie_kernel(
       }
     }
   };
+
   switch (type)
   {
-  case dolfinx_contact::Kernel::MeshTieRhs:
+  case Kernel::MeshTieRhs:
     return meshtie_rhs;
-  case dolfinx_contact::Kernel::MeshTieJac:
+  case Kernel::MeshTieJac:
     return meshtie_jac;
-  case dolfinx_contact::Kernel::ThermoElasticRhs:
+  case Kernel::ThermoElasticRhs:
     return meshtie_thermo_elastic;
   default:
     throw std::invalid_argument("Unrecognized kernel");
   }
 }
-
+//----------------------------------------------------------------------------
 dolfinx_contact::kernel_fn<PetscScalar>
 dolfinx_contact::generate_poisson_kernel(
-    dolfinx_contact::Kernel type, const dolfinx::fem::FunctionSpace<double>& V,
-    const dolfinx_contact::QuadratureRule& quadrature_rule,
+    Kernel type, const dolfinx::fem::FunctionSpace<double>& V,
+    const QuadratureRule& quadrature_rule,
     const std::vector<std::size_t>& cstrides)
 {
   std::shared_ptr<const dolfinx::mesh::Mesh<double>> mesh = V.mesh();
@@ -461,10 +462,10 @@ dolfinx_contact::generate_poisson_kernel(
   }
 
   // NOTE: Assuming same number of quadrature points on each cell
-  dolfinx_contact::error::check_cell_type(mesh->topology()->cell_type());
+  error::check_cell_type(mesh->topology()->cell_type());
   const std::size_t ndofs_cell = V.dofmap()->element_dof_layout().num_dofs();
 
-  auto kd = dolfinx_contact::KernelData(V, quadrature_rule, cstrides);
+  auto kd = KernelData(V, quadrature_rule, cstrides);
   /// @brief Assemble kernel for RHS gluing two objects with Nitsche
   ///
   /// Assemble of the residual of the unbiased contact problem into vector
@@ -511,11 +512,10 @@ dolfinx_contact::generate_poisson_kernel(
       detJ = kd.compute_first_facet_jacobian(facet_index, J, K, J_tot,
                                              detJ_scratch, coord);
 
-      dolfinx_contact::physical_facet_normal(
-          std::span(n_phys.data(), gdim), K,
-          MDSPAN_IMPL_STANDARD_NAMESPACE::submdspan(
-              kd.facet_normals(), facet_index,
-              MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent));
+      physical_facet_normal(std::span(n_phys.data(), gdim), K,
+                            MDSPAN_IMPL_STANDARD_NAMESPACE::submdspan(
+                                kd.facet_normals(), facet_index,
+                                MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent));
     }
 
     // Extract constants used inside quadrature loop
@@ -638,11 +638,10 @@ dolfinx_contact::generate_poisson_kernel(
       detJ = kd.compute_first_facet_jacobian(facet_index, J, K, J_tot,
                                              detJ_scratch, coord);
 
-      dolfinx_contact::physical_facet_normal(
-          std::span(n_phys.data(), gdim), K,
-          MDSPAN_IMPL_STANDARD_NAMESPACE::submdspan(
-              kd.facet_normals(), facet_index,
-              MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent));
+      physical_facet_normal(std::span(n_phys.data(), gdim), K,
+                            MDSPAN_IMPL_STANDARD_NAMESPACE::submdspan(
+                                kd.facet_normals(), facet_index,
+                                MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent));
     }
     // Extract constants used inside quadrature loop
     double gamma = w[0] / c[0]; // gamma/h
@@ -741,13 +740,15 @@ dolfinx_contact::generate_poisson_kernel(
       }
     }
   };
+
   switch (type)
   {
-  case dolfinx_contact::Kernel::MeshTieRhs:
+  case Kernel::MeshTieRhs:
     return poisson_rhs;
-  case dolfinx_contact::Kernel::MeshTieJac:
+  case Kernel::MeshTieJac:
     return poisson_jac;
   default:
     throw std::invalid_argument("Unrecognized kernel");
   }
 }
+//----------------------------------------------------------------------------

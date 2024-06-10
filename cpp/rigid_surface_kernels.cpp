@@ -17,8 +17,8 @@
 //----------------------------------------------------------------------------
 dolfinx_contact::kernel_fn<PetscScalar>
 dolfinx_contact::generate_rigid_surface_kernel(
-    const dolfinx::fem::FunctionSpace<double>& V, dolfinx_contact::Kernel type,
-    dolfinx_contact::QuadratureRule& quadrature_rule, bool constant_normal)
+    const dolfinx::fem::FunctionSpace<double>& V, Kernel type,
+    QuadratureRule& quadrature_rule, bool constant_normal)
 {
   auto mesh = V.mesh();
   assert(mesh);
@@ -258,11 +258,10 @@ dolfinx_contact::generate_rigid_surface_kernel(
     {
       detJ = kd.compute_first_facet_jacobian(facet_index, J, K, J_tot,
                                              detJ_scratch, coord);
-      dolfinx_contact::physical_facet_normal(
-          std::span(n_phys.data(), gdim), K,
-          MDSPAN_IMPL_STANDARD_NAMESPACE::submdspan(
-              kd.facet_normals(), facet_index,
-              MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent));
+      physical_facet_normal(std::span(n_phys.data(), gdim), K,
+                            MDSPAN_IMPL_STANDARD_NAMESPACE::submdspan(
+                                kd.facet_normals(), facet_index,
+                                MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent));
     }
 
     // Retrieve normal of rigid surface if constant
@@ -291,16 +290,14 @@ dolfinx_contact::generate_rigid_surface_kernel(
 
     // Temporary work arrays
     std::vector<double> epsnb(ndofs_cell * gdim);
-    dolfinx_contact::mdspan_t<double, 2> epsn(epsnb.data(), ndofs_cell, gdim);
+    mdspan_t<double, 2> epsn(epsnb.data(), ndofs_cell, gdim);
     std::vector<double> trb(ndofs_cell * gdim);
-    dolfinx_contact::mdspan_t<double, 2> tr(trb.data(), ndofs_cell, gdim);
+    mdspan_t<double, 2> tr(trb.data(), ndofs_cell, gdim);
     std::vector<double> sig_n_u(gdim);
 
     // Extract reference to the tabulated basis function
-    dolfinx_contact::mdspan_t<const double, 2, stdex::layout_stride> phi
-        = kd.phi();
-    dolfinx_contact::mdspan_t<const double, 3, stdex::layout_stride> dphi
-        = kd.dphi();
+    mdspan_t<const double, 2, stdex::layout_stride> phi = kd.phi();
+    mdspan_t<const double, 3, stdex::layout_stride> dphi = kd.dphi();
 
     // Loop over quadrature points
     const std::array<std::size_t, 2> q_offset
@@ -383,9 +380,9 @@ dolfinx_contact::generate_rigid_surface_kernel(
 
   switch (type)
   {
-  case dolfinx_contact::Kernel::Rhs:
+  case Kernel::Rhs:
     return nitsche_rigid_rhs;
-  case dolfinx_contact::Kernel::Jac:
+  case Kernel::Jac:
     return nitsche_rigid_jacobian;
   default:
     throw std::invalid_argument("Unrecognized kernel");

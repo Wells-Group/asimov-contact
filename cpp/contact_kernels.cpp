@@ -6,11 +6,11 @@
 
 #include "contact_kernels.h"
 
+//----------------------------------------------------------------------------
 dolfinx_contact::kernel_fn<PetscScalar>
 dolfinx_contact::generate_contact_kernel(
-    dolfinx_contact::Kernel type, const dolfinx::fem::FunctionSpace<double>& V,
-    const dolfinx_contact::QuadratureRule& quadrature_rule,
-    std::size_t max_links)
+    Kernel type, const dolfinx::fem::FunctionSpace<double>& V,
+    const QuadratureRule& quadrature_rule, std::size_t max_links)
 {
   std::shared_ptr<const dolfinx::mesh::Mesh<double>> mesh = V.mesh();
   assert(mesh);
@@ -43,7 +43,7 @@ dolfinx_contact::generate_contact_kernel(
          num_q_points * bs,
          num_q_points * gdim};
 
-  auto kd = dolfinx_contact::KernelData(V, quadrature_rule, cstrides);
+  auto kd = KernelData(V, quadrature_rule, cstrides);
 
   /// @brief Assemble kernel for RHS of unbiased contact problem
   ///

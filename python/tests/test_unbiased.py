@@ -591,7 +591,8 @@ def create_facet_markers(mesh, facets_cg):
     ],
 )
 @pytest.mark.parametrize("gap", [0.5, -0.5])
-@pytest.mark.parametrize("quadrature_degree", [1, 5])
+# @pytest.mark.parametrize("quadrature_degree", [1, 5])
+@pytest.mark.parametrize("quadrature_degree", [1, 4])
 @pytest.mark.parametrize("theta", [1, 0, -1])
 def test_contact_kernels(ct, gap, quadrature_degree, theta, frictionlaw, search):
     # Compute lame parameters

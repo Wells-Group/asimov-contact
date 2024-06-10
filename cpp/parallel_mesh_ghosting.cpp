@@ -349,7 +349,7 @@ dolfinx_contact::compute_ghost_cell_destinations(
     std::for_each(offsets.begin(), offsets.end(), [](int& i) { i /= 3; });
 
     // Find all pairs of facets within radius R
-    auto x_near = dolfinx_contact::point_cloud_pairs(x_all_flat, R);
+    auto x_near = point_cloud_pairs(x_all_flat, R);
 
     int i = 0;
     std::vector<int> neighbor_p;

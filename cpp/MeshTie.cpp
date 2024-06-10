@@ -113,8 +113,7 @@ void dolfinx_contact::MeshTie::generate_kernel_data(
 }
 //-----------------------------------------------------------------------------
 void dolfinx_contact::MeshTie::generate_meshtie_data_matrix_only(
-    dolfinx_contact::Problem problem_type,
-    const dolfinx::fem::FunctionSpace<double>& V,
+    Problem problem_type, const dolfinx::fem::FunctionSpace<double>& V,
     std::vector<std::shared_ptr<const dolfinx::fem::Function<double>>> coeffs,
     double gamma, double theta)
 {
@@ -231,7 +230,7 @@ void dolfinx_contact::MeshTie::update_kernel_data(
     const std::map<std::string,
                    std::shared_ptr<const dolfinx::fem::Function<double>>>&
         coefficients,
-    dolfinx_contact::Problem problem_type)
+    Problem problem_type)
 {
   // declare variables
   std::size_t gdim = 0; // geometrical dimension
@@ -467,7 +466,7 @@ void dolfinx_contact::MeshTie::generate_poisson_data_matrix_only(
 //-----------------------------------------------------------------------------
 void dolfinx_contact::MeshTie::assemble_vector(
     std::span<PetscScalar> b, const dolfinx::fem::FunctionSpace<double>& V,
-    dolfinx_contact::Problem problem_type)
+    Problem problem_type)
 {
   switch (problem_type)
   {
@@ -501,7 +500,7 @@ void dolfinx_contact::MeshTie::assemble_vector(
 //-----------------------------------------------------------------------------
 void dolfinx_contact::MeshTie::assemble_matrix(
     const mat_set_fn& mat_set, const dolfinx::fem::FunctionSpace<double>& V,
-    dolfinx_contact::Problem problem_type)
+    Problem problem_type)
 {
   switch (problem_type)
   {
