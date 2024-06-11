@@ -12,6 +12,8 @@
 #include "geometric_quantities.h"
 #include "utils.h"
 
+namespace dolfinx_contact
+{
 /// @brief Generate contact kernel
 ///
 /// @param[in] type The kernel type (`Rhs`, `Jac`, `TrescaRhs`,
@@ -37,8 +39,6 @@
 /// `u` is packed at dofs.
 /// @note The vector valued coefficents `test_fn`, `grad(test_fn)`, `u`,
 /// `u_opposite`, `grad(u_opposite)` have dimension `bs == gdim`.
-namespace dolfinx_contact
-{
 kernel_fn<PetscScalar> generate_contact_kernel(
     Kernel type, const dolfinx::fem::FunctionSpace<double>& V,
     const QuadratureRule& quadrature_rule, std::size_t max_links);

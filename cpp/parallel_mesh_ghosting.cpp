@@ -170,16 +170,11 @@ dolfinx_contact::create_contact_mesh(
       x.push_back(xg[i * 3 + j]);
   }
 
-  // auto partitioner
-  //     = [cell_to_dests,
-  //        ncells](MPI_Comm comm, int nparts, dolfinx::mesh::CellType
-  //        cell_type,
-  //                const dolfinx::graph::AdjacencyList<std::int64_t>& cells)
   auto partitioner
       = [cell_to_dests,
-         ncells](MPI_Comm comm, int nparts,
-                 const std::vector<dolfinx::mesh::CellType>& cell_types,
-                 const std::vector<std::span<const std::int64_t>>& cells)
+         ncells](MPI_Comm comm, int /*nparts */,
+                 const std::vector<dolfinx::mesh::CellType>& /*cell_types*/,
+                 const std::vector<std::span<const std::int64_t>>& /*cells*/)
   {
     int rank = dolfinx::MPI::rank(comm);
     std::vector<std::int32_t> dests;
@@ -354,7 +349,7 @@ dolfinx_contact::compute_ghost_cell_destinations(
     std::for_each(offsets.begin(), offsets.end(), [](int& i) { i /= 3; });
 
     // Find all pairs of facets within radius R
-    auto x_near = dolfinx_contact::point_cloud_pairs(x_all_flat, R);
+    auto x_near = point_cloud_pairs(x_all_flat, R);
 
     int i = 0;
     std::vector<int> neighbor_p;

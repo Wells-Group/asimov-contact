@@ -65,7 +65,7 @@ def test_circumradius(dim):
     cells = []
     for i, facet in enumerate(facets):
         cell = f_to_c.links(facet)[0]
-        h2[i] = uh.vector[cell]
+        h2[i] = uh.x.petsc_vec[cell]
         cells.append(cell)
 
     active_facets, num_local = dolfinx_contact.cpp.compute_active_entities(

@@ -342,5 +342,5 @@ ksp.setFromOptions()
 # Start Newton solver with loglevel info for monitoring
 newton_solver.report = True
 log.set_log_level(log.LogLevel.INFO)
-newton_solver.solve(u.vector)
+newton_solver.solve(u.x.petsc_vec)
 u.x.scatter_forward()

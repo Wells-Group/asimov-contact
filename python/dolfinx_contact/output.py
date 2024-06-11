@@ -221,10 +221,10 @@ class ContactWriter:
         ksp.getPC().setFactorSolverType("mumps")
 
         # Compute projection
-        ksp.solve(b, self.p_f.vector)
+        ksp.solve(b, self.p_f.x.petsc_vec)
         self.p_f.x.scatter_forward()
 
-        ksp.solve(b2, self.pt_f.vector)
+        ksp.solve(b2, self.pt_f.x.petsc_vec)
         self.pt_f.x.scatter_forward()
 
         # interpolate exact pressure

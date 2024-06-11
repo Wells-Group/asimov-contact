@@ -273,11 +273,11 @@ compute_active_entities(const dolfinx::mesh::Mesh<double>& mesh,
 ///
 /// @param[in] mesh The mesh
 /// @param[in] dim The dimension of the entities
-/// @param[in] entities List of mesh entities
+/// @param[in] entity_list List of mesh entities
 /// @returns An adjacency list where the i-th link corresponds to the
 /// closure dofs of the i-th input entity
 dolfinx::graph::AdjacencyList<std::int32_t>
-entities_to_geometry_dofs(const mesh::Mesh<double>& mesh, int dim,
+entities_to_geometry_dofs(const dolfinx::mesh::Mesh<double>& mesh, int dim,
                           std::span<const std::int32_t> entity_list);
 
 /// @brief find candidate facets within a given radius of quadrature
@@ -362,8 +362,8 @@ compute_distance_map(const dolfinx::mesh::Mesh<double>& quadrature_mesh,
                      std::span<const std::int32_t> quadrature_facets,
                      const dolfinx::mesh::Mesh<double>& candidate_mesh,
                      std::span<const std::int32_t> candidate_facets,
-                     const QuadratureRule& q_rule,
-                     dolfinx_contact::ContactMode mode, double radius);
+                     const QuadratureRule& q_rule, ContactMode mode,
+                     double radius);
 
 /// Compute facet indices from given pairs (cell, local__facet)
 ///
@@ -590,10 +590,10 @@ compute_raytracing_map(const dolfinx::mesh::Mesh<double>& quadrature_mesh,
   const std::size_t sum_q_points = q_offset.back();
 
   // Get facet indices for qudrature and candidate facets
-  std::vector<std::int32_t> q_facets = dolfinx_contact::facet_indices_from_pair(
-      quadrature_facets, quadrature_mesh);
-  std::vector<std::int32_t> c_facets = dolfinx_contact::facet_indices_from_pair(
-      candidate_facets, candidate_mesh);
+  std::vector<std::int32_t> q_facets
+      = facet_indices_from_pair(quadrature_facets, quadrature_mesh);
+  std::vector<std::int32_t> c_facets
+      = facet_indices_from_pair(candidate_facets, candidate_mesh);
   // Structures used for computing physical normal
   std::array<double, 9> Jb;
   mdspan_t<double, 2> J(Jb.data(), gdim, tdim);
@@ -765,7 +765,7 @@ compute_raytracing_map(const dolfinx::mesh::Mesh<double>& quadrature_mesh,
                                 std::span<double, tdim> X)
         {
           const std::vector<int>& facet = bfacets[facet_index_c];
-          dolfinx_contact::mdspan_t<const double, 2> x(xb.data(), x_shape);
+          mdspan_t<const double, 2> x(xb.data(), x_shape);
           const int f0 = facet.front();
           for (std::size_t i = 0; i < tdim; ++i)
           {
@@ -784,7 +784,7 @@ compute_raytracing_map(const dolfinx::mesh::Mesh<double>& quadrature_mesh,
         auto J_c = allocated_memory.J();
         dolfinx::fem::CoordinateElement<double>::compute_jacobian_inverse(J_c,
                                                                           K_c);
-        dolfinx_contact::physical_facet_normal(
+        physical_facet_normal(
             std::span(normal_c.data(), gdim), K_c,
             std::span(reference_normals.data() + rn_shape[1] * facet_index_c,
                       rn_shape[1]));
@@ -836,11 +836,11 @@ compute_raytracing_map(const dolfinx::mesh::Mesh<double>& quadrature_mesh,
     {
       std::vector<std::int32_t> cand_facets_patch(2 * cand_patch.size());
       std::vector<double> padded_qpsb(count_missing_matches * 3);
-      dolfinx_contact::mdspan_t<double, 2> padded_qps(padded_qpsb.data(),
-                                                      count_missing_matches, 3);
-      dolfinx_contact::mdspan_t<const double, 3> qps(
-          quadrature_points.data(), quadrature_facets.size() / 2, num_q_points,
-          gdim);
+      mdspan_t<double, 2> padded_qps(padded_qpsb.data(), count_missing_matches,
+                                     3);
+      mdspan_t<const double, 3> qps(quadrature_points.data(),
+                                    quadrature_facets.size() / 2, num_q_points,
+                                    gdim);
 
       // Retrieve remaining quadrature points
       for (std::size_t j = 0; j < padded_qps.extent(0); ++j)

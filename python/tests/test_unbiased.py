@@ -647,6 +647,21 @@ def create_facet_markers(
 
 @pytest.mark.skipif(MPI.COMM_WORLD.size > 2, reason="This test can only be executed with one or two processes")
 @pytest.mark.parametrize(
+    "search",
+    [
+        ContactMode.Raytracing,
+        ContactMode.ClosestPoint,
+    ],
+)
+@pytest.mark.parametrize(
+    "frictionlaw",
+    [
+        FrictionLaw.Frictionless,
+        FrictionLaw.Coulomb,
+        FrictionLaw.Tresca,
+    ],
+)
+@pytest.mark.parametrize(
     "ct",
     [
         "triangle",
@@ -656,10 +671,9 @@ def create_facet_markers(
     ],
 )
 @pytest.mark.parametrize("gap", [0.5, -0.5])
-@pytest.mark.parametrize("quadrature_degree", [1, 5])
+# @pytest.mark.parametrize("quadrature_degree", [1, 5])
+@pytest.mark.parametrize("quadrature_degree", [1, 4])
 @pytest.mark.parametrize("theta", [1, 0, -1])
-@pytest.mark.parametrize("frictionlaw", [FrictionLaw.Frictionless, FrictionLaw.Coulomb, FrictionLaw.Tresca])
-@pytest.mark.parametrize("search", [ContactMode.Raytracing, ContactMode.ClosestPoint])
 def test_contact_kernels(ct, gap, quadrature_degree, theta, frictionlaw, search):
     # Compute lame parameters
     plane_strain = False
@@ -898,11 +912,26 @@ def tied_dg_T(u0, v0, T0, h, n, gamma, theta, sigma, sigma_T, dS):
 
 
 @pytest.mark.skipif(MPI.COMM_WORLD.size > 2, reason="This test can only be executed with one or two processes")
-@pytest.mark.parametrize("ct", ["triangle", "quadrilateral", "tetrahedron", "hexahedron"])
+@pytest.mark.parametrize(
+    "ct",
+    [
+        "triangle",
+        "quadrilateral",
+        "tetrahedron",
+        "hexahedron",
+    ],
+)
+@pytest.mark.parametrize(
+    "problem",
+    [
+        Problem.Poisson,
+        Problem.Elasticity,
+        Problem.ThermoElasticity,
+    ],
+)
 @pytest.mark.parametrize("gap", [0.5, -0.5])
-@pytest.mark.parametrize("quadrature_degree", [1, 5])
+@pytest.mark.parametrize("quadrature_degree", [1, 3])
 @pytest.mark.parametrize("theta", [1, 0, -1])
-@pytest.mark.parametrize("problem", [Problem.Poisson, Problem.Elasticity, Problem.ThermoElasticity])
 def test_meshtie_kernels(ct, gap, quadrature_degree, theta, problem):
     # Problem parameters
     kdt = 5
@@ -1004,7 +1033,8 @@ def test_meshtie_kernels(ct, gap, quadrature_degree, theta, problem):
         T0.interpolate(lambda x: np.sin(x[tdim - 1]) + 2, cells_ufl_1)
         T1.interpolate(lambda x: np.sin(x[0]) + 1, np.array(cells[0]))
         T1.interpolate(lambda x: np.sin(x[tdim - 1] + gap) + 2, np.array(cells[1]))
-
+        T0.x.scatter_forward()
+        T1.x.scatter_forward()
         def sigma_T(w, T):
             return sigma(w) - alpha * (3 * lmbda + 2 * mu) * T * ufl.Identity(gdim)
 

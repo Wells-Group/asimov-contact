@@ -41,3 +41,11 @@ copy_meshes_to_target_dir(${PROJECT_NAME})
 
 target_link_libraries(${PROJECT_NAME} PRIVATE dolfinx)
 target_link_libraries(${PROJECT_NAME} PRIVATE dolfinx_contact)
+
+# Set 'Developer' build type flags
+set_source_files_properties(
+  main.cpp
+  PROPERTIES
+    COMPILE_FLAGS
+    "-Wall -Wextra -pedantic -Werror"
+)
