@@ -2,53 +2,53 @@
 #
 # SPDX-License-Identifier:    MIT
 
-import argparse
+# import argparse
 
-from mpi4py import MPI
-from petsc4py.PETSc import InsertMode, ScatterMode  # type: ignore
+# from mpi4py import MPI
+# from petsc4py.PETSc import InsertMode, ScatterMode  # type: ignore
 
-import numpy as np
-import numpy.typing as npt
-import ufl
-from dolfinx import default_scalar_type
-from dolfinx.common import Timer, timed
-from dolfinx.fem import (
-    Constant,
-    Function,
-    dirichletbc,
-    form,
-    functionspace,
-    locate_dofs_topological,
-)
-from dolfinx.fem.petsc import (
-    apply_lifting,
-    assemble_matrix,
-    assemble_vector,
-    create_vector,
-    set_bc,
-)
-from dolfinx.geometry import bb_tree, compute_closest_entity
-from dolfinx.graph import adjacencylist
-from dolfinx.io import VTXWriter, XDMFFile
-from dolfinx.mesh import Mesh
-from dolfinx_contact.cpp import ContactMode
-from dolfinx_contact.general_contact.contact_problem import ContactProblem, FrictionLaw
-from dolfinx_contact.helpers import epsilon, lame_parameters, rigid_motions_nullspace_subdomains, sigma_func
-from dolfinx_contact.meshing import (
-    convert_mesh,
-    create_circle_plane_mesh,
-    create_halfdisk_plane_mesh,
-    create_halfsphere_box_mesh,
-)
-from dolfinx_contact.newton_solver import NewtonSolver
-from dolfinx_contact.output import ContactWriter
+# import numpy as np
+# import numpy.typing as npt
+# import ufl
+# from dolfinx import default_scalar_type
+# from dolfinx.common import Timer, timed
+# from dolfinx.fem import (
+#     Constant,
+#     Function,
+#     dirichletbc,
+#     form,
+#     functionspace,
+#     locate_dofs_topological,
+# )
+# from dolfinx.fem.petsc import (
+#     apply_lifting,
+#     assemble_matrix,
+#     assemble_vector,
+#     create_vector,
+#     set_bc,
+# )
+# from dolfinx.geometry import bb_tree, compute_closest_entity
+# from dolfinx.graph import adjacencylist
+# from dolfinx.io import VTXWriter, XDMFFile
+# from dolfinx.mesh import Mesh
+# from dolfinx_contact.cpp import ContactMode
+# from dolfinx_contact.general_contact.contact_problem import ContactProblem, FrictionLaw
+# from dolfinx_contact.helpers import epsilon, lame_parameters, rigid_motions_nullspace_subdomains, sigma_func
+# from dolfinx_contact.meshing import (
+#     convert_mesh,
+#     create_circle_plane_mesh,
+#     create_halfdisk_plane_mesh,
+#     create_halfsphere_box_mesh,
+# )
+# from dolfinx_contact.newton_solver import NewtonSolver
+# from dolfinx_contact.output import ContactWriter
 
 
-def closest_node_in_mesh(mesh: Mesh, point: npt.NDArray[np.float64]) -> npt.NDArray[np.int32]:
-    points = np.reshape(point, (1, 3))
-    bounding_box = bb_tree(mesh, 0)
-    node = compute_closest_entity(bounding_box, bounding_box, mesh, points[0])
-    return node
+# def closest_node_in_mesh(mesh: Mesh, point: npt.NDArray[np.float64]) -> npt.NDArray[np.int32]:
+#     points = np.reshape(point, (1, 3))
+#     bounding_box = bb_tree(mesh, 0)
+#     node = compute_closest_entity(bounding_box, bounding_box, mesh, points[0])
+#     return node
 
 
 if __name__ == "__main__":
