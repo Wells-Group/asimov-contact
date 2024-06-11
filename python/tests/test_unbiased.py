@@ -544,17 +544,20 @@ def create_meshes(ct: str, gap: float, xdtype: npt.DTypeLike = np.float64) -> tu
         gdim = MPI.COMM_WORLD.bcast(None, root=0)
         num_nodes = MPI.COMM_WORLD.bcast(None, root=0)
 
-        x_ufl = np.zeros((0, gdim),
-                dtype=xdtype,
-            )
+        x_ufl = np.zeros(
+            (0, gdim),
+            dtype=xdtype,
+        )
         x_custom = np.zeros((0, gdim), dtype=xdtype)
 
-        cells_ufl = np.zeros((0, num_nodes),
-                dtype=np.int64,
-            )
-        cells_custom = np.zeros((0, num_nodes),
-                dtype=np.int64,
-            )
+        cells_ufl = np.zeros(
+            (0, num_nodes),
+            dtype=np.int64,
+        )
+        cells_custom = np.zeros(
+            (0, num_nodes),
+            dtype=np.int64,
+        )
     assert MPI.COMM_WORLD.size <= 2, "This test only supports running with 1 or 2 MPI ranks"
     serial = MPI.COMM_WORLD.size == 1
 
@@ -563,7 +566,7 @@ def create_meshes(ct: str, gap: float, xdtype: npt.DTypeLike = np.float64) -> tu
         if MPI.COMM_WORLD.rank == 0:
             if serial:
                 dest = np.array([0, 0], dtype=np.int32)
-                offsets = np.array([0,1,2], dtype=np.int32)
+                offsets = np.array([0, 1, 2], dtype=np.int32)
             else:
                 dest = np.array([0, 1, 1, 0], dtype=np.int32)
                 offsets = np.array([0, 2, 4], dtype=np.int32)
@@ -627,9 +630,10 @@ def locate_contact_facets_custom(V, gap):
     return cells, [contact_facets1, contact_facets2]
 
 
-def create_facet_markers(mesh: Mesh, facets_cg:tuple[npt.NDArray[np.int32], npt.NDArray[np.int32]],
-                         markers:tuple[int, int]=(0, 1))->MeshTags:
-    """ Given a mesh and a tuple of facets (`facets_cg`) with corresponding markers (`markers`),
+def create_facet_markers(
+    mesh: Mesh, facets_cg: tuple[npt.NDArray[np.int32], npt.NDArray[np.int32]], markers: tuple[int, int] = (0, 1)
+) -> MeshTags:
+    """Given a mesh and a tuple of facets (`facets_cg`) with corresponding markers (`markers`),
     create a meshtag for the facets"""
     # create meshtags
     tdim = mesh.topology.dim
@@ -639,6 +643,7 @@ def create_facet_markers(mesh: Mesh, facets_cg:tuple[npt.NDArray[np.int32], npt.
     indices = np.concatenate([facets_cg[0], facets_cg[1]])
     sorted_facets = np.argsort(indices)
     return meshtags(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
+
 
 @pytest.mark.skipif(MPI.COMM_WORLD.size > 2, reason="This test can only be executed with one or two processes")
 @pytest.mark.parametrize(
@@ -696,6 +701,7 @@ def test_contact_kernels(ct, gap, quadrature_degree, theta, frictionlaw, search)
         for i in range(tdim):
             values[i] = np.sin(x[i] + gap) + 2 if i == tdim - 1 else np.sin(x[i]) + 2
         return values
+
     # FIXME: Check validity of two cell mesh
     # DG ufl 'contact'
     u0 = _fem.Function(V_ufl)
@@ -728,7 +734,7 @@ def test_contact_kernels(ct, gap, quadrature_degree, theta, frictionlaw, search)
     # rhs vector
     F0 = _fem.form(F0)
     b0 = _fem.Function(V_ufl)
-    b0.x.array[:] = 0.
+    b0.x.array[:] = 0.0
     _fem.petsc.assemble_vector(b0.x.petsc_vec, F0)
     b0.x.scatter_reverse(la.InsertMode.add)
     b0.x.scatter_forward()
@@ -795,7 +801,6 @@ def test_contact_kernels(ct, gap, quadrature_degree, theta, frictionlaw, search)
     F_custom = _fem.form(F_custom, jit_options=jit_options)
     b1 = _fem.Function(V_custom)
 
-
     ind_dg = compute_dof_permutations_all(V_ufl, V_custom, gap)
 
     # Generate residual data structures
@@ -835,7 +840,7 @@ def test_contact_kernels(ct, gap, quadrature_degree, theta, frictionlaw, search)
 
         F2 = _fem.form(F2)
         b2 = _fem.Function(V_ufl)
-        b2.x.array[:] = 0.
+        b2.x.array[:] = 0.0
         _fem.petsc.assemble_vector(b2.x.petsc_vec, F2)
         b2.x.scatter_reverse(la.InsertMode.add)
         b2.x.scatter_forward()
@@ -844,7 +849,6 @@ def test_contact_kernels(ct, gap, quadrature_degree, theta, frictionlaw, search)
         # Contact terms formulated using ufl consistent with nitsche_ufl.py
         # FIXME: Add parallel matrix comparison
         if MPI.COMM_WORLD.size < 2:
-
             J2 = DG_jac_minus(u0, v0, w0, h, n, gamma_scaled, theta, sigma, gap, dS)
             J2 = _fem.form(J2)
             A2 = _fem.petsc.create_matrix(J2)
@@ -891,6 +895,7 @@ def tied_dg_T(u0, v0, T0, h, n, gamma, theta, sigma, sigma_T, dS):
         + theta * ufl.inner(ufl.avg(sigma(v0)) * n("-"), ufl.jump(u0)) * dS
     )
     return 0.5 * F
+
 
 @pytest.mark.skipif(MPI.COMM_WORLD.size > 2, reason="This test can only be executed with one or two processes")
 @pytest.mark.parametrize("ct", ["triangle", "quadrilateral", "tetrahedron", "hexahedron"])
