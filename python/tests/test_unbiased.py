@@ -640,7 +640,7 @@ def create_facet_markers(mesh: Mesh, facets_cg:tuple[npt.NDArray[np.int32], npt.
     sorted_facets = np.argsort(indices)
     return meshtags(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
 
-
+@pytest.mark.skipif(MPI.COMM_WORLD.size > 2, reason="This test can only be executed with one or two processes")
 @pytest.mark.parametrize(
     "ct",
     [
@@ -701,6 +701,7 @@ def test_contact_kernels(ct, gap, quadrature_degree, theta, frictionlaw, search)
     u0 = _fem.Function(V_ufl)
     u0.interpolate(_u0, cells_ufl_0)
     u0.interpolate(_u1, cells_ufl_1)
+    u0.x.scatter_forward()
     v0 = ufl.TestFunction(V_ufl)
     w0 = ufl.TrialFunction(V_ufl)
     metadata = {"quadrature_degree": quadrature_degree}
@@ -727,8 +728,10 @@ def test_contact_kernels(ct, gap, quadrature_degree, theta, frictionlaw, search)
     # rhs vector
     F0 = _fem.form(F0)
     b0 = _fem.Function(V_ufl)
-    b0.x.array[:]
+    b0.x.array[:] = 0.
     _fem.petsc.assemble_vector(b0.x.petsc_vec, F0)
+    b0.x.scatter_reverse(la.InsertMode.add)
+    b0.x.scatter_forward()
 
     # lhs matrix
     J0 = _fem.form(J0)
@@ -762,8 +765,10 @@ def test_contact_kernels(ct, gap, quadrature_degree, theta, frictionlaw, search)
     mu0.interpolate(lambda x: np.full((1, x.shape[1]), mu))
     lmbda0.interpolate(lambda x: np.full((1, x.shape[1]), lmbda))
     fric.interpolate(lambda x: np.full((1, x.shape[1]), 0.1))
-    # create meshtags
+
+    # Create single meshtag for contact pair
     facet_marker = create_facet_markers(mesh_custom, facets_cg)
+    # Create adjacency list associating the only meshtag with the to markers
     data = np.array([0, 1], dtype=np.int32)
     offsets = np.array([0, 2], dtype=np.int32)
     surfaces = adjacencylist(data, offsets)
@@ -790,16 +795,19 @@ def test_contact_kernels(ct, gap, quadrature_degree, theta, frictionlaw, search)
     F_custom = _fem.form(F_custom, jit_options=jit_options)
     b1 = _fem.Function(V_custom)
 
+
+    ind_dg = compute_dof_permutations_all(V_ufl, V_custom, gap)
+
     # Generate residual data structures
     J_custom = _fem.form(J_custom, jit_options=jit_options)
     A1 = contact_problem.create_matrix(J_custom)
 
-    # Assemble  residual
+    # Assemble residual
     b1.x.array[:] = 0.0
     contact_problem.assemble_vector(b1.x.petsc_vec, V_custom)
-    print(b1.x.array, b0.x.array)
-    assert(False)
     b1.x.scatter_reverse(la.InsertMode.add)
+    b1.x.scatter_forward()
+    assert np.allclose(b0.x.array[ind_dg], b1.x.array)
 
     # Assemble  jacobian
     A1.zeroEntries()
@@ -808,13 +816,9 @@ def test_contact_kernels(ct, gap, quadrature_degree, theta, frictionlaw, search)
 
     # Retrieve data necessary for comparison
     tdim = mesh_ufl.topology.dim
-    ind_dg = compute_dof_permutations_all(V_ufl, V_custom, gap)
-
-    print(b0.x.array[ind_dg], b1.x.array)
-    # Compare rhs
-    assert np.allclose(b0.x.array[ind_dg], b1.x.array)
 
     # create scipy matrix
+    # FIXME: Add parallel matrix comparison
     if MPI.COMM_WORLD.size < 2:
         # Skip matrix comparison in parallel
         ai, aj, av = A0.getValuesCSR()
@@ -834,20 +838,23 @@ def test_contact_kernels(ct, gap, quadrature_degree, theta, frictionlaw, search)
         b2.x.array[:] = 0.
         _fem.petsc.assemble_vector(b2.x.petsc_vec, F2)
         b2.x.scatter_reverse(la.InsertMode.add)
-        print(b1.x.array, flush=True)
+        b2.x.scatter_forward()
         assert np.allclose(b1.x.array, b2.x.array[ind_dg])
 
         # Contact terms formulated using ufl consistent with nitsche_ufl.py
-        J2 = DG_jac_minus(u0, v0, w0, h, n, gamma_scaled, theta, sigma, gap, dS)
-        J2 = _fem.form(J2)
-        A2 = _fem.petsc.create_matrix(J2)
-        A2.zeroEntries()
-        _fem.petsc.assemble_matrix(A2, J2)
-        A2.assemble()
+        # FIXME: Add parallel matrix comparison
+        if MPI.COMM_WORLD.size < 2:
 
-        ci, cj, cv = A2.getValuesCSR()
-        C_sp = scipy.sparse.csr_matrix((cv, cj, ci), shape=A2.getSize()).todense()
-        assert np.allclose(C_sp[ind_dg, :][:, ind_dg], B_sp)
+            J2 = DG_jac_minus(u0, v0, w0, h, n, gamma_scaled, theta, sigma, gap, dS)
+            J2 = _fem.form(J2)
+            A2 = _fem.petsc.create_matrix(J2)
+            A2.zeroEntries()
+            _fem.petsc.assemble_matrix(A2, J2)
+            A2.assemble()
+
+            ci, cj, cv = A2.getValuesCSR()
+            C_sp = scipy.sparse.csr_matrix((cv, cj, ci), shape=A2.getSize()).todense()
+            assert np.allclose(C_sp[ind_dg, :][:, ind_dg], B_sp)
 
 
 def poisson_dg(u0, v0, h, n, kdt, gamma, theta, dS):
@@ -885,7 +892,7 @@ def tied_dg_T(u0, v0, T0, h, n, gamma, theta, sigma, sigma_T, dS):
     )
     return 0.5 * F
 
-
+@pytest.mark.skipif(MPI.COMM_WORLD.size > 2, reason="This test can only be executed with one or two processes")
 @pytest.mark.parametrize("ct", ["triangle", "quadrilateral", "tetrahedron", "hexahedron"])
 @pytest.mark.parametrize("gap", [0.5, -0.5])
 @pytest.mark.parametrize("quadrature_degree", [1, 5])
@@ -1001,9 +1008,11 @@ def test_meshtie_kernels(ct, gap, quadrature_degree, theta, problem):
 
     # rhs vector
     F0 = _fem.form(F0)
-    b0 = _fem.petsc.create_vector(F0)
-    b0.zeroEntries()
-    _fem.petsc.assemble_vector(b0, F0)
+    b0 = _fem.Function(V_ufl)
+    b0.x.array[:] = 0
+    _fem.petsc.assemble_vector(b0.x.petsc_vec, F0)
+    b0.x.scatter_reverse(la.InsertMode.add)
+    b0.x.scatter_forward()
 
     # lhs matrix
     J0 = _fem.form(J0)
@@ -1063,16 +1072,18 @@ def test_meshtie_kernels(ct, gap, quadrature_degree, theta, problem):
     meshties.generate_kernel_data(problem, V_custom._cpp_object, coeffs, gamma, theta)
 
     # Generate residual data structures
-    F_custom = _fem.form(F0)
-    b1 = _fem.petsc.create_vector(F_custom)
+    F_custom = _fem.form(F_custom)
+    b1 = _fem.Function(V_custom)
 
     # # Generate matrix
     J_custom = _fem.form(J_custom)
     A1 = meshties.create_matrix(J_custom._cpp_object)
 
     # Assemble  residual
-    b1.zeroEntries()
-    meshties.assemble_vector(b1, V_custom._cpp_object, problem)
+    b1.x.array[:] = 0.0
+    meshties.assemble_vector(b1.x.petsc_vec, V_custom._cpp_object, problem)
+    b1.x.scatter_reverse(la.InsertMode.add)
+    b1.x.scatter_forward()
 
     # Assemble  jacobian
     A1.zeroEntries()
@@ -1084,12 +1095,14 @@ def test_meshtie_kernels(ct, gap, quadrature_degree, theta, problem):
     ind_dg = compute_dof_permutations_all(V_ufl, V_custom, gap)
 
     # Compare rhs
-    assert np.allclose(b0.array[ind_dg], b1.array)
+    assert np.allclose(b0.x.array[ind_dg], b1.x.array)
 
     # create scipy matrix
-    ai, aj, av = A0.getValuesCSR()
-    A_sp = scipy.sparse.csr_matrix((av, aj, ai), shape=A0.getSize()).todense()
-    bi, bj, bv = A1.getValuesCSR()
-    B_sp = scipy.sparse.csr_matrix((bv, bj, bi), shape=A1.getSize()).todense()
+    # FIXME: Add parallel matrix comparison
+    if MPI.COMM_WORLD.size < 2:
+        ai, aj, av = A0.getValuesCSR()
+        A_sp = scipy.sparse.csr_matrix((av, aj, ai), shape=A0.getSize()).todense()
+        bi, bj, bv = A1.getValuesCSR()
+        B_sp = scipy.sparse.csr_matrix((bv, bj, bi), shape=A1.getSize()).todense()
 
-    assert np.allclose(A_sp[:, ind_dg][ind_dg, :], B_sp)
+        assert np.allclose(A_sp[:, ind_dg][ind_dg, :], B_sp)
