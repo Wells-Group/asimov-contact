@@ -28,7 +28,7 @@ from dolfinx_contact.one_sided.snes_against_plane import snes_solver
 
 def solver(
     theta=1.0,
-    gamma=10,
+    gamma=10.0,
     # linear_solver=False,
     threed=False,
     cube=False,
@@ -38,7 +38,7 @@ def solver(
     nu=0.1,
     disp=0.08,
     refs=1,
-    gap=0.2,
+    gap=0.02,
 ):
     # Current formulation uses unilateral contact
     nitsche_parameters = {"gamma": gamma, "theta": theta}
@@ -280,4 +280,16 @@ if __name__ == "__main__":
 
 
 def test_custom_snes():
-    solver()
+    solver(
+        theta=1.0,
+        gamma=10.0,
+        threed=False,
+        cube=False,
+        plane_strain=False,
+        dirichlet=False,
+        E=1e3,
+        nu=0.1,
+        disp=0.08,
+        refs=1,
+        gap=0.02,
+    )

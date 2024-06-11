@@ -131,10 +131,10 @@ jobs:
           pip -v install --no-build-isolation python/
           pip install scipy matplotlib
 
-      - name: Run demos (C++)
+      - name: Run demos (Python)
         run: |
           pip install pytest pytest-xdist
-          pytest python/demos/demo_christmas_tree.py
+          python -m pytest -v .
 
       - name: Create output folders
         id: output-creation
@@ -146,7 +146,7 @@ jobs:
       - name: Run SNES demos
         working-directory: ./python/demos
         run: |
-          python new_demo_custom_snes_one_sided.py
+          # python new_demo_custom_snes_one_sided.py
           python compare_nitsche_snes.py
 
       - name: Run rigid surface demos
