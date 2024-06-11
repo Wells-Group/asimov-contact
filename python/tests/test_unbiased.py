@@ -1035,6 +1035,7 @@ def test_meshtie_kernels(ct, gap, quadrature_degree, theta, problem):
         T1.interpolate(lambda x: np.sin(x[tdim - 1] + gap) + 2, np.array(cells[1]))
         T0.x.scatter_forward()
         T1.x.scatter_forward()
+
         def sigma_T(w, T):
             return sigma(w) - alpha * (3 * lmbda + 2 * mu) * T * ufl.Identity(gdim)
 
