@@ -673,7 +673,6 @@ def tied_dg_T(u0, v0, T0, h, n, gamma, theta, sigma, sigma_T, dS):
     return 0.5 * F
 
 
-@pytest.mark.xdist_group(name="group0")
 @pytest.mark.parametrize("gap", [0.5, -0.5])
 @pytest.mark.parametrize("theta", [1, 0, -1])
 @pytest.mark.parametrize(
@@ -689,6 +688,7 @@ def tied_dg_T(u0, v0, T0, h, n, gamma, theta, sigma, sigma_T, dS):
 class TestUnbiased:
     """Doc."""
 
+    @pytest.mark.xdist_group(name="group0")
     @pytest.mark.skipif(MPI.COMM_WORLD.size > 2, reason="This test can only be executed with one or two processes")
     @pytest.mark.parametrize(
         "search",
@@ -904,6 +904,7 @@ class TestUnbiased:
                 C_sp = scipy.sparse.csr_matrix((cv, cj, ci), shape=A2.getSize()).todense()
                 assert np.allclose(C_sp[ind_dg, :][:, ind_dg], B_sp)
 
+    @pytest.mark.xdist_group(name="group1")
     @pytest.mark.skipif(MPI.COMM_WORLD.size > 2, reason="This test can only be executed with one or two processes")
     @pytest.mark.parametrize(
         "problem",
