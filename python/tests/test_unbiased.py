@@ -544,20 +544,12 @@ def create_meshes(ct: str, gap: float, xdtype: npt.DTypeLike = np.float64) -> tu
         gdim = MPI.COMM_WORLD.bcast(None, root=0)
         num_nodes = MPI.COMM_WORLD.bcast(None, root=0)
 
-        x_ufl = np.zeros(
-            (0, gdim),
-            dtype=xdtype,
-        )
+        x_ufl = np.zeros((0, gdim), dtype=xdtype)
         x_custom = np.zeros((0, gdim), dtype=xdtype)
 
-        cells_ufl = np.zeros(
-            (0, num_nodes),
-            dtype=np.int64,
-        )
-        cells_custom = np.zeros(
-            (0, num_nodes),
-            dtype=np.int64,
-        )
+        cells_ufl = np.zeros((0, num_nodes), dtype=np.int64)
+        cells_custom = np.zeros((0, num_nodes), dtype=np.int64)
+
     assert MPI.COMM_WORLD.size <= 2, "This test only supports running with 1 or 2 MPI ranks"
     serial = MPI.COMM_WORLD.size == 1
 
@@ -681,7 +673,6 @@ def tied_dg_T(u0, v0, T0, h, n, gamma, theta, sigma, sigma_T, dS):
     return 0.5 * F
 
 
-@pytest.mark.parametrize("quadrature_degree", [1, 4])
 @pytest.mark.parametrize(
     "ct",
     [
@@ -691,6 +682,7 @@ def tied_dg_T(u0, v0, T0, h, n, gamma, theta, sigma, sigma_T, dS):
         "hexahedron",
     ],
 )
+@pytest.mark.parametrize("quadrature_degree", [1, 3])
 @pytest.mark.parametrize("gap", [0.5, -0.5])
 @pytest.mark.parametrize("theta", [1, 0, -1])
 class TestUnbiased:
@@ -722,7 +714,7 @@ class TestUnbiased:
         lmbda = lambda_func(E, nu)
         sigma = sigma_func(mu, lmbda)
 
-        # Nitche parameter
+        # Nitsche parameter
         gamma = 10
 
         # create meshes and function spaces
@@ -1129,5 +1121,4 @@ class TestUnbiased:
             A_sp = scipy.sparse.csr_matrix((av, aj, ai), shape=A0.getSize()).todense()
             bi, bj, bv = A1.getValuesCSR()
             B_sp = scipy.sparse.csr_matrix((bv, bj, bi), shape=A1.getSize()).todense()
-
             assert np.allclose(A_sp[:, ind_dg][ind_dg, :], B_sp)
