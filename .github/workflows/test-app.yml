@@ -145,7 +145,7 @@ jobs:
       - name: Run SNES demos
         working-directory: ./python/demos
         run: |
-          python compare_custom_snes_one_sided.py
+          python new_demo_custom_snes_one_sided.py
           python compare_nitsche_snes.py
 
       - name: Run rigid surface demos
