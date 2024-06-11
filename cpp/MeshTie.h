@@ -16,6 +16,7 @@
 
 namespace dolfinx_contact
 {
+/// MeshTye class
 class MeshTie : public Contact
 {
 public:
@@ -28,7 +29,7 @@ public:
   /// @param[in] connected_pairs list of pairs (i, j) marking the ith
   /// and jth surface in surfaces->array() as a pair of connected
   /// surfaces
-  /// @param[in] V The functions space
+  /// @param[in] mesh
   /// @param[in] q_deg The quadrature degree.
   MeshTie(const std::vector<std::shared_ptr<
               const dolfinx::mesh::MeshTags<std::int32_t>>>& markers,
@@ -37,13 +38,20 @@ public:
           std::shared_ptr<const dolfinx::mesh::Mesh<double>> mesh,
           int q_deg = 3);
 
+  /// @brief TODO
+  /// @param V
+  /// @return TODP
   std::size_t offset_elasticity(const dolfinx::fem::FunctionSpace<double>& V);
 
+  /// @brief TODO
+  /// @param V
+  /// @return TODO
   std::size_t offset_poisson(const dolfinx::fem::FunctionSpace<double>& V);
 
-  /// Generate the input data for the custom integration kernel
+  /// @brief Generate the input data for the custom integration kernel.
   /// @param[in] problem_type specifies the type of the equation, e.g,
   /// elasticity
+  /// @param[in] V TODO
   /// @param[in] coefficients maps coefficients to their names used for
   /// the kernel
   /// @param[in] gamma Nitsche parameter
@@ -56,8 +64,9 @@ public:
       double gamma, double theta);
 
   /// Generate data for matrix assembly
-  /// @param[in] lambda lame parameter lambda as DG0 function
-  /// @param[in] mu lame parameter mu as DG0 function
+  /// @param[in] problem_type lame parameter lambda as DG0 function
+  /// @param[in] V lame parameter mu as DG0 function
+  /// @param[in] coeffs
   /// @param[in] gamma Nitsche penalty parameter
   /// @param[in] theta Nitsche parameter
   void generate_meshtie_data_matrix_only(

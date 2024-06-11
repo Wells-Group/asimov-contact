@@ -17,7 +17,6 @@ namespace dolfinx_contact
 /// @param[in] V The function space of the trial/test function
 /// @param[in] type The kernel type (Rhs or Jac)
 /// @param[in] quadrature_rule The quadrature rule used in kernels
-/// @param[in] coeffs The coefficients. Ordered as (u, mu, lambda).
 /// @param[in] constant_normal Boolean indicating if normal is constant
 /// at every point of the cell.
 /// @returns The integration kernel

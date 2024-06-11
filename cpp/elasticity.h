@@ -31,8 +31,9 @@ namespace dolfinx_contact
 void compute_normal_strain_basis(
     mdspan_t<double, 2> epsn, mdspan_t<double, 2> tr,
     mdspan_t<const double, 2> K,
-    mdspan_t<const double, 3, std::experimental::layout_stride> s_dphi,
-    std::array<double, 3> n_1, std::span<const double> n_2, std::size_t q_pos);
+    mdspan_t<const double, 3, std::experimental::layout_stride> dphi,
+    std::array<double, 3> n_surf, std::span<const double> n_phys,
+    std::size_t q_pos);
 
 /// @brief Compute sigma(v)*n for all test functions in dphi at
 /// quadrature point q_pos

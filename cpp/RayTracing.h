@@ -14,6 +14,7 @@
 
 namespace dolfinx_contact
 {
+/// @todo document
 namespace stdex = std::experimental;
 template <std::size_t A, std::size_t B>
 using AB_span
@@ -81,6 +82,9 @@ void compute_tangents(std::span<const double, gdim> n,
 
 } // namespace impl
 
+/// @brief  TODO: document
+/// @tparam tdim
+/// @tparam gdim
 template <std::size_t tdim, std::size_t gdim>
 class NewtonStorage
 {
@@ -205,8 +209,8 @@ private:
 /// @brief Compute the solution to the ray tracing problem for a single
 /// cell.
 ///
-/// The implementation solves dot(\Phi(\xi, \eta)-p, t_i)=0, i=1,..,,
-/// tdim-1 where \Phi(\xi,\eta) is the parameterized mapping from the
+/// The implementation solves dot(Phi(xi, eta)-p, t_i)=0, i=1,..,,
+/// tdim-1 where Phi(xi,eta) is the parameterized mapping from the
 /// reference facet to the physical facet, p the point of origin of the
 /// ray, and t_i is the ith tangents defining the ray. For more details,
 /// see DOI: 10.1016/j.compstruc.2015.02.027 (eq 14).
@@ -223,6 +227,7 @@ private:
 /// @note All other variables of the class is updated.
 /// @param[in, out] basis_values Work_array for basis evaluation. Should
 /// have the length given by `cmap.tabulate_shape(1,1)`
+/// @param[in] basis_shape
 /// @param[in] max_iter Maximum number of iterations for the Newton
 /// solver
 /// @param[in] tol The tolerance for termination of the Newton solver
