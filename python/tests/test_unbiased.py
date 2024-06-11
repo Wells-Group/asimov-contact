@@ -673,6 +673,9 @@ def tied_dg_T(u0, v0, T0, h, n, gamma, theta, sigma, sigma_T, dS):
     return 0.5 * F
 
 
+@pytest.mark.parametrize("gap", [0.5, -0.5])
+@pytest.mark.parametrize("theta", [1, 0, -1])
+@pytest.mark.parametrize("quadrature_degree", [1, 3])
 @pytest.mark.parametrize(
     "ct",
     [
@@ -682,9 +685,6 @@ def tied_dg_T(u0, v0, T0, h, n, gamma, theta, sigma, sigma_T, dS):
         "hexahedron",
     ],
 )
-@pytest.mark.parametrize("quadrature_degree", [1, 3])
-@pytest.mark.parametrize("gap", [0.5, -0.5])
-@pytest.mark.parametrize("theta", [1, 0, -1])
 class TestUnbiased:
     """Doc."""
 
