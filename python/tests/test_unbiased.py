@@ -32,6 +32,7 @@ from dolfinx.graph import adjacencylist
 from dolfinx.mesh import (
     CellType,
     Mesh,
+    MeshTags,
     compute_midpoints,
     create_mesh,
     locate_entities,
@@ -586,8 +587,23 @@ def locate_contact_facets_custom(V, gap):
     # locate facets
     tdim = mesh.topology.dim
     mesh.topology.create_connectivity(tdim, tdim)
+
+    # NOTE: This only returns owned facets
     facets1 = locate_entities_boundary(mesh, tdim - 1, lambda x: np.isclose(x[tdim - 1], 0))
     facets2 = locate_entities_boundary(mesh, tdim - 1, lambda x: np.isclose(x[tdim - 1], -gap))
+    fmap = mesh.topology.index_map(tdim - 1)
+
+    # Create communication structure for local facets
+    marker_vec = la.vector(fmap, 1, dtype=np.int8)
+    marker_vec.array[:] = 0
+    marker_vec.array[facets1] = 1
+    marker_vec.scatter_forward()
+    facets1 = np.flatnonzero(marker_vec.array)
+
+    marker_vec.array[:] = 0
+    marker_vec.array[facets2] = 1
+    marker_vec.scatter_forward()
+    facets2 = np.flatnonzero(marker_vec.array)
 
     # choose correct facet if gap is zero
     mesh.topology.create_connectivity(tdim - 1, tdim)
@@ -611,11 +627,14 @@ def locate_contact_facets_custom(V, gap):
     return cells, [contact_facets1, contact_facets2]
 
 
-def create_facet_markers(mesh, facets_cg):
+def create_facet_markers(mesh: Mesh, facets_cg:tuple[npt.NDArray[np.int32], npt.NDArray[np.int32]],
+                         markers:tuple[int, int]=(0, 1))->MeshTags:
+    """ Given a mesh and a tuple of facets (`facets_cg`) with corresponding markers (`markers`),
+    create a meshtag for the facets"""
     # create meshtags
     tdim = mesh.topology.dim
-    val0 = np.full(len(facets_cg[0]), 0, dtype=np.int32)
-    val1 = np.full(len(facets_cg[1]), 1, dtype=np.int32)
+    val0 = np.full(len(facets_cg[0]), markers[0], dtype=np.int32)
+    val1 = np.full(len(facets_cg[1]), markers[1], dtype=np.int32)
     values = np.hstack([val0, val1])
     indices = np.concatenate([facets_cg[0], facets_cg[1]])
     sorted_facets = np.argsort(indices)
