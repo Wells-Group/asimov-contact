@@ -109,7 +109,7 @@ def run_solver(
         # Create Dirichlet bdy conditions
         dofs = _fem.locate_dofs_topological(V.sub(2), mesh.topology.dim - 1, facet_marker.find(z_Dirichlet))
         gz = _fem.Constant(mesh, default_scalar_type(0))
-        bcs = [_fem.dirichletbc(gz, dofs, V.sub(2))]  # type: list[_fem.DirichletBC]
+        bcs = [_fem.dirichletbc(gz, dofs, V.sub(2))]
         # bc_fns: list[typing.Union[_fem.Constant, _fem.Function]] = [gz]
         g = _fem.Constant(mesh, default_scalar_type((0, 0, 0)))  # zero dirichlet
         t_val = [0.2, 0.5, 0.0]

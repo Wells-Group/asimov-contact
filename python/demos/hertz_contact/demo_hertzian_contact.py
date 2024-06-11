@@ -55,6 +55,7 @@ if __name__ == "__main__":
     print("Demo needs updating. Exiting.")
     exit(0)
 
+    """
     desc = "Example for verifying correctness of code"
     parser = argparse.ArgumentParser(description=desc, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument(
@@ -491,3 +492,4 @@ if __name__ == "__main__":
         vtx.write(i + 1)
 
     vtx.close()
+    """
