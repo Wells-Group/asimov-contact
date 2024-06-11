@@ -133,6 +133,7 @@ jobs:
 
       - name: Run demos (C++)
         run: |
+          pip install pytest pytest-xdist
           pytest python/demos/demo_christmas_tree.py
 
       - name: Create output folders
