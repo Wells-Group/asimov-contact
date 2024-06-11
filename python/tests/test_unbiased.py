@@ -673,9 +673,9 @@ def tied_dg_T(u0, v0, T0, h, n, gamma, theta, sigma, sigma_T, dS):
     return 0.5 * F
 
 
+@pytest.mark.xdist_group(name="group0")
 @pytest.mark.parametrize("gap", [0.5, -0.5])
 @pytest.mark.parametrize("theta", [1, 0, -1])
-@pytest.mark.parametrize("quadrature_degree", [1, 3])
 @pytest.mark.parametrize(
     "ct",
     [
@@ -685,6 +685,7 @@ def tied_dg_T(u0, v0, T0, h, n, gamma, theta, sigma, sigma_T, dS):
         "hexahedron",
     ],
 )
+@pytest.mark.parametrize("quadrature_degree", [1, 3])
 class TestUnbiased:
     """Doc."""
 
@@ -763,13 +764,12 @@ class TestUnbiased:
         h = ufl.CellDiameter(mesh_ufl)
         gamma_scaled = gamma * E
 
-        # DG formulation
-        # Contact terms formulated using ufl consistent with https://doi.org/10.1007/s00211-018-0950-x
+        # DG formulation. Contact terms formulated using ufl consistent
+        # with https://doi.org/10.1007/s00211-018-0950-x
         F0 = DG_rhs_plus(u0, v0, h, n, gamma_scaled, theta, sigma, gap, dS)
         J0 = DG_jac_plus(u0, v0, w0, h, n, gamma_scaled, theta, sigma, gap, dS)
         if frictionlaw == FrictionLaw.Tresca:
             F0 += DG_rhs_tresca(u0, v0, h, n, gamma_scaled, theta, sigma, 0.1, dS, gdim)
-
             J0 += DG_jac_tresca(u0, v0, w0, h, n, gamma_scaled, theta, sigma, 0.1, dS, gdim)
         elif frictionlaw == FrictionLaw.Coulomb:
             F0 += DG_rhs_coulomb(u0, v0, h, n, gamma_scaled, theta, sigma, gap, 0.1, dS, gdim)

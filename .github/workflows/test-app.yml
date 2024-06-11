@@ -189,7 +189,7 @@ jobs:
           cd python/tests
           mkdir -p meshes
           # python -m pytest .
-          python -m pytest -v -n auto --durations=50 .
+          python -m pytest -v -n auto --durations=50 --dist loadgroup .
 
       - name: Run unbiased demos in parallel
         working-directory: ./python/demos
