@@ -1,5 +1,6 @@
-cmake_minimum_required(VERSION 3.16)
-project(dolfinx-contact-demos)
+cmake_minimum_required(VERSION 3.21)
+
+project(dolfinx_contact_demos)
 
 find_package(DOLFINX REQUIRED)
 find_package(Basix REQUIRED)

@@ -32,6 +32,7 @@ jobs:
         run: |
           cd python/
           mypy . --exclude=build
+
       # - name: clang-format C++ checks (non-blocking)
       #   continue-on-error: true
       #   run: |
@@ -67,8 +68,6 @@ jobs:
       # OMPI_MCA_btl_vader_single_copy_mechanism: none
       # OMPI_MCA_mpi_yield_when_idle: 1
       # OMPI_MCA_hwloc_base_binding_policy: none
-      # CONTACT_CMAKE_CXX_FLAGS: "-Wall -Werror -g -pedantic -Ofast -march=native"
-      # CONTACT_CMAKE_CXX_FLAGS: "-Wall -Werror -pedantic -Wno-array-bounds -Wno-stringop-overflow"
     steps:
       - uses: actions/checkout@v4
 
@@ -79,6 +78,11 @@ jobs:
           path: ./dolfinx
           repository: FEniCS/dolfinx
           ref: main
+
+      - name: Build C++ docs
+        run: |
+          cd cpp/doc
+          doxygen
 
       - name: Install DOLFINx
         run: |
@@ -98,11 +102,6 @@ jobs:
           export VERBOSE=1
           cmake -G Ninja -DCMAKE_BUILD_TYPE=Developer  -B build-contact -S cpp/
           ninja -C build-contact install
-
-      - name: Build C++ docs
-        run: |
-          cd cpp/doc
-          doxygen
 
       - name: Run demos (C++)
         run: |
