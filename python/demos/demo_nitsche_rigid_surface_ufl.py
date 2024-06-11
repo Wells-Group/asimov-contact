@@ -16,6 +16,8 @@ from dolfinx_contact.meshing import (
 from dolfinx_contact.one_sided.nitsche_rigid_surface import nitsche_rigid_surface
 
 if __name__ == "__main__":
+    print("Demo needs updating. Exiting.")
+    exit(0)
     desc = "Compare Nitsche's metood for contact against a straight plane with PETSc SNES"
     parser = argparse.ArgumentParser(description=desc, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument(
