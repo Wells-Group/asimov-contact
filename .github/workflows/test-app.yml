@@ -132,6 +132,10 @@ jobs:
           pip -v install --no-build-isolation python/
           pip install scipy matplotlib
 
+      - name: Run demos (C++)
+        run: |
+          pytest python/demos/demo_christmas_tree.py
+
       - name: Create output folders
         id: output-creation
         working-directory: ./python/demos

@@ -5,6 +5,7 @@
 import argparse
 import sys
 import typing
+from pathlib import Path
 
 from mpi4py import MPI
 from petsc4py.PETSc import InsertMode, ScatterMode  # type: ignore
@@ -43,12 +44,12 @@ from dolfinx_contact.parallel_mesh_ghosting import create_contact_mesh
 
 
 # if __name__ == "__main__":
-def solver(
+def run_solver(
     theta=1.0,
-    gamma=1.0,
+    gamma=10.0,
     q_degree=5,
     set_timing=False,
-    ksp=False,
+    ksp_view=False,
     E=1e3,
     nu=0.1,
     res=0.2,
@@ -59,100 +60,13 @@ def solver(
     raytracing=False,
     threed=False,
 ):
-    #     desc = "Nitsche's method for two elastic bodies using custom assemblers"
-    #     parser = argparse.ArgumentParser(description=desc, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    #     parser.add_argument(
-    #         "--theta",
-    #         default=1.0,
-    #         type=float,
-    #         dest="theta",
-    #         help="Theta parameter for Nitsche, 1 symmetric, -1 skew symmetric, 0 Penalty-like",
-    #         choices=[1.0, -1.0, 0.0],
-    #     )
-    #     parser.add_argument(
-    #         "--gamma",
-    #         default=10,
-    #         type=np.float64,
-    #         dest="gamma",
-    #         help="Coercivity/Stabilization parameter for Nitsche condition",
-    #     )
-    #     parser.add_argument(
-    #         "--quadrature",
-    #         default=5,
-    #         type=int,
-    #         dest="q_degree",
-    #         help="Quadrature degree used for contact integrals",
-    #     )
-    #     _3D = parser.add_mutually_exclusive_group(required=False)
-    #     _3D.add_argument("--3D", dest="threed", action="store_true", help="Use 3D mesh", default=False)
-    #     _timing = parser.add_mutually_exclusive_group(required=False)
-    #     _timing.add_argument(
-    #         "--timing",
-    #         dest="timing",
-    #         action="store_true",
-    #         help="List timings",
-    #         default=False,
-    #     )
-    #     _ksp = parser.add_mutually_exclusive_group(required=False)
-    #     _ksp.add_argument(
-    #         "--ksp-view",
-    #         dest="ksp",
-    #         action="store_true",
-    #         help="List ksp options",
-    #         default=False,
-    #     )
-    #     parser.add_argument("--E", default=1e3, type=np.float64, dest="E", help="Youngs modulus of material")
-    #     parser.add_argument("--nu", default=0.1, type=np.float64, dest="nu", help="Poisson's ratio")
-    #     parser.add_argument("--res", default=0.2, type=np.float64, dest="res", help="Mesh resolution")
-    #     parser.add_argument(
-    #         "--radius",
-    #         default=0.5,
-    #         type=np.float64,
-    #         dest="radius",
-    #         help="Search radius for ray-tracing",
-    #     )
-    #     parser.add_argument(
-    #         "--outfile",
-    #         type=str,
-    #         default=None,
-    #         required=False,
-    #         help="File for appending results",
-    #         dest="outfile",
-    #     )
-    #     parser.add_argument(
-    #         "--split",
-    #         type=np.int32,
-    #         default=1,
-    #         required=False,
-    #         help="number of surface segments",
-    #         dest="split",
-    #     )
-    #     parser.add_argument(
-    #         "--load_steps",
-    #         default=1,
-    #         type=np.int32,
-    #         dest="nload_steps",
-    #         help="Number of loading steps",
-    #     )
-    #     _raytracing = parser.add_mutually_exclusive_group(required=False)
-    #     _raytracing.add_argument(
-    #         "--raytracing",
-    #         dest="raytracing",
-    #         action="store_true",
-    #         help="Use raytracing for contact search.",
-    #         default=False,
-    #     )
-    #     # Parse input arguments or set to defualt values
-    #     args = parser.parse_args()
-
-    #     threed = args.threed
-    #     split = args.split
-    mesh_dir = "meshes"
-    fname = f"{mesh_dir}/xmas_tree"
+    mesh_dir = Path("meshes")
+    mesh_dir.mkdir(exist_ok=True)
+    fname = mesh_dir / "xmas_tree"
     if threed:
         create_christmas_tree_mesh_3D(filename=fname, res=res, split=split, n1=81, n2=41)
         convert_mesh(fname, fname, gdim=3)
-        with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
+        with XDMFFile(MPI.COMM_WORLD, f"{str(fname)}.xdmf", "r") as xdmf:
             mesh = xdmf.read_mesh(ghost_mode=GhostMode.none)
             domain_marker = xdmf.read_meshtags(mesh, "cell_marker")
             tdim = mesh.topology.dim
@@ -206,8 +120,8 @@ def solver(
 
     else:
         create_christmas_tree_mesh(filename=fname, res=res, split=split)
-        convert_mesh(fname, fname, gdim=2)
-        with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
+        convert_mesh(str(fname), str(fname), gdim=2)
+        with XDMFFile(MPI.COMM_WORLD, f"{str(fname)}.xdmf", "r") as xdmf:
             mesh = xdmf.read_mesh()
             tdim = mesh.topology.dim
             domain_marker = xdmf.read_meshtags(mesh, name="cell_marker")
@@ -371,7 +285,7 @@ def solver(
     lmbda0 = _fem.Function(V0)
     mu0.interpolate(lambda x: np.full((1, x.shape[1]), mu))
     lmbda0.interpolate(lambda x: np.full((1, x.shape[1]), lmbda))
-    solver_outfile = outfile if ksp else None
+    solver_outfile = outfile if ksp_view else None
     log.set_log_level(log.LogLevel.OFF)
     rhs_fns = [g, t, f]
     size = mesh.comm.size
@@ -500,6 +414,7 @@ def solver(
         outfile = sys.stdout
     else:
         outfile = open(outfile, "a")
+
     if mesh.comm.rank == 0:
         print("-" * 25, file=outfile)
         print(f"Newton options {newton_options}", file=outfile)
@@ -520,9 +435,6 @@ def solver(
         print(f"Newton iterations {num_newton_its}, ", file=outfile)
         print(f"Krylov iterations {num_krylov_its},", file=outfile)
         print("-" * 25, file=outfile)
-
-    if outfile is not None:
-        outfile.close()
 
 
 if __name__ == "__main__":
@@ -615,7 +527,7 @@ if __name__ == "__main__":
     threed = args.threed
     split = args.split
 
-    solver(
+    run_solver(
         args.theta,
         args.gamma,
         args.q_degree,
@@ -632,5 +544,6 @@ if __name__ == "__main__":
         args.threed,
     )
 
+
 def test_christmas_tree():
-    solver()
+    run_solver()
