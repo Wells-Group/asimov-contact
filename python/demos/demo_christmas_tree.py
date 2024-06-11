@@ -4,7 +4,6 @@
 
 import argparse
 import sys
-import typing
 from pathlib import Path
 
 from mpi4py import MPI
@@ -111,7 +110,7 @@ def run_solver(
         dofs = _fem.locate_dofs_topological(V.sub(2), mesh.topology.dim - 1, facet_marker.find(z_Dirichlet))
         gz = _fem.Constant(mesh, default_scalar_type(0))
         bcs = [_fem.dirichletbc(gz, dofs, V.sub(2))]  # type: list[_fem.DirichletBC]
-        bc_fns: list[typing.Union[_fem.Constant, _fem.Function]] = [gz]
+        # bc_fns: list[typing.Union[_fem.Constant, _fem.Function]] = [gz]
         g = _fem.Constant(mesh, default_scalar_type((0, 0, 0)))  # zero dirichlet
         t_val = [0.2, 0.5, 0.0]
         f_val = [1.0, 0.5, 0.0]
@@ -139,7 +138,7 @@ def run_solver(
 
         V = _fem.functionspace(mesh, ("Lagrange", 1, (mesh.geometry.dim,)))
         bcs = []
-        bc_fns = []
+        # bc_fns = []
         g = _fem.Constant(mesh, default_scalar_type((0, 0)))  # zero Dirichlet
         t_val = [0.2, 0.5]
         f_val = [1.0, 0.5]
@@ -285,9 +284,9 @@ def run_solver(
     lmbda0 = _fem.Function(V0)
     mu0.interpolate(lambda x: np.full((1, x.shape[1]), mu))
     lmbda0.interpolate(lambda x: np.full((1, x.shape[1]), lmbda))
-    solver_outfile = outfile if ksp_view else None
+    # solver_outfile = outfile if ksp_view else None
     log.set_log_level(log.LogLevel.OFF)
-    rhs_fns = [g, t, f]
+    # rhs_fns = [g, t, f]
     size = mesh.comm.size
     outname = f"results/xmas_{tdim}D_{size}"
 
@@ -305,9 +304,9 @@ def run_solver(
         E * gamma,
         theta,
     )
-    solver_outfile = None
+    # solver_outfile = None
     log.set_log_level(log.LogLevel.WARNING)
-    rhs_fns = [g, t, f]
+    # rhs_fns = [g, t, f]
     size = mesh.comm.size
     outname = f"results/xmas_{tdim}D_{size}"
 

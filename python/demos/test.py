@@ -23,6 +23,7 @@ for f in demo_files:
 # demos.remove("./hertz_contact/demo_friction_cylinders.py")
 print(demos)
 
+
 @pytest.mark.serial
 @pytest.mark.parametrize("path,name", demos)
 def test_demos(path, name):
