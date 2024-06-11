@@ -17,6 +17,7 @@
 
 namespace dolfinx_contact
 {
+/// @brief  TODO: document
 class SubMesh
 {
 public:

@@ -14,6 +14,7 @@
 
 namespace dolfinx_contact
 {
+/// @todo document
 namespace stdex = std::experimental;
 template <std::size_t A, std::size_t B>
 using AB_span
@@ -81,6 +82,9 @@ void compute_tangents(std::span<const double, gdim> n,
 
 } // namespace impl
 
+/// @brief  TODO: document
+/// @tparam tdim
+/// @tparam gdim
 template <std::size_t tdim, std::size_t gdim>
 class NewtonStorage
 {

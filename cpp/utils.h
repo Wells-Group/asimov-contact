@@ -277,7 +277,7 @@ compute_active_entities(const dolfinx::mesh::Mesh<double>& mesh,
 /// @returns An adjacency list where the i-th link corresponds to the
 /// closure dofs of the i-th input entity
 dolfinx::graph::AdjacencyList<std::int32_t>
-entities_to_geometry_dofs(const mesh::Mesh<double>& mesh, int dim,
+entities_to_geometry_dofs(const dolfinx::mesh::Mesh<double>& mesh, int dim,
                           std::span<const std::int32_t> entity_list);
 
 /// @brief find candidate facets within a given radius of quadrature
