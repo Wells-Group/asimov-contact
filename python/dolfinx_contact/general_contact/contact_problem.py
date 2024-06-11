@@ -226,6 +226,7 @@ class ContactProblem(dolfinx_contact.cpp.Contact):
         ncells = mesh.topology.index_map(tdim).size_local
         h_vals = cpp.mesh.h(mesh._cpp_object, mesh.topology.dim, np.arange(0, ncells, dtype=np.int32))
         h.x.array[:ncells] = h_vals[:]
+        h.x.scatter_forward()
 
         new_model = False
         if len(self.coeffs) == 0:
