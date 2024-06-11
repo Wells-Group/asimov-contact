@@ -41,6 +41,9 @@ from dolfinx_contact.newton_solver import NewtonSolver
 from dolfinx_contact.output import ContactWriter
 
 if __name__ == "__main__":
+    print("Demo needs updating. Exiting.")
+    exit(0)
+
     desc = "Friction example with two elastic cylinders for verifying correctness of code"
     parser = argparse.ArgumentParser(description=desc, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument(

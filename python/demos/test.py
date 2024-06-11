@@ -19,6 +19,9 @@ demo_files = list(path.glob("**/*.py"))
 for f in demo_files:
     demos.append((f.parent, f.name))
 
+# if "hertz_contact/demo_friction_cylinders.py" in demos:
+# demos.remove("./hertz_contact/demo_friction_cylinders.py")
+print(demos)
 
 @pytest.mark.serial
 @pytest.mark.parametrize("path,name", demos)

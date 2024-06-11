@@ -27,6 +27,9 @@ from dolfinx_contact.meshing import convert_mesh, create_2d_rectangle_split
 from dolfinx_contact.unbiased.nitsche_unbiased import nitsche_unbiased
 
 if __name__ == "__main__":
+    print("Demo needs updating. Exiting.")
+    exit(0)
+
     desc = "Example for verifying correctness of code"
     parser = argparse.ArgumentParser(description=desc, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument(

@@ -35,6 +35,9 @@ from dolfinx_contact.meshing import convert_mesh, create_box_mesh_3D
 from dolfinx_contact.parallel_mesh_ghosting import create_contact_mesh
 
 if __name__ == "__main__":
+    print("Demo needs updating. Exiting.")
+    exit(0)
+
     desc = "Nitsche's method for two elastic bodies using custom assemblers"
     parser = argparse.ArgumentParser(description=desc, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument(

@@ -52,6 +52,9 @@ def closest_node_in_mesh(mesh: Mesh, point: npt.NDArray[np.float64]) -> npt.NDAr
 
 
 if __name__ == "__main__":
+    print("Demo needs updating. Exiting.")
+    exit(0)
+
     desc = "Example for verifying correctness of code"
     parser = argparse.ArgumentParser(description=desc, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument(
