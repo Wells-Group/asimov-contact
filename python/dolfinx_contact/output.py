@@ -9,7 +9,7 @@ import ufl
 from dolfinx.fem import Function, FunctionSpace, form
 from dolfinx.fem.petsc import assemble_matrix, assemble_vector
 from dolfinx.io import VTXWriter
-from dolfinx.mesh import create_submesh
+from dolfinx.mesh import create_submesh, Mesh
 from matplotlib import pyplot as plt
 
 import dolfinx_contact
@@ -40,23 +40,33 @@ class ContactWriter:
 
     def __init__(
         self,
-        mesh,
+        mesh: Mesh,
         contact,
-        u,
-        contact_pairs,
-        material,
+        u: Function,
+        contact_pairs: list[tuple[int, int]],
+        material: list[np.ndarray],
         order,
         simplex,
         projection_coordinates,
         fname,
     ):
+        """Convenience class for writing data from a contact problem.
+
+        Args:
+            mesh: The computational mesh # FIXME: Should be extracted from `u`
+            contact: The contact problem object
+            u: The displacement field
+            contact_pairs: List of pairs of contact entities
+            material: List of material properties for each contact pair, assumes that there are two materials [mu, lambda], packed as a [1, 2] nd-array for each contact pair
+        
+        """
         self.contact = contact
         self.u = u
         self.contact_pairs = contact_pairs
         self.material = material
         self.projection_coordinates = projection_coordinates
         self.mesh = mesh
-
+        assert u.function_space.mesh == mesh
         tdim = mesh.topology.dim
         c_to_f = mesh.topology.connectivity(tdim, tdim - 1)
         facet_list = []

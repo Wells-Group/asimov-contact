@@ -3,6 +3,7 @@
 # SPDX-License-Identifier:    MIT
 
 import argparse
+from pathlib import Path
 
 from mpi4py import MPI
 from petsc4py.PETSc import InsertMode, ScatterMode  # type: ignore
@@ -27,7 +28,7 @@ from dolfinx.fem.petsc import (
 )
 from dolfinx.graph import adjacencylist
 from dolfinx.io import VTXWriter, XDMFFile
-from dolfinx.mesh import locate_entities
+from dolfinx.mesh import locate_entities, meshtags
 from dolfinx_contact.cpp import ContactMode
 from dolfinx_contact.general_contact.contact_problem import ContactProblem, FrictionLaw
 from dolfinx_contact.helpers import (
@@ -58,20 +59,25 @@ if __name__ == "__main__":
         help="Order of mesh geometry",
         choices=[1, 2],
     )
-    _simplex = parser.add_mutually_exclusive_group(required=False)
-    _simplex.add_argument(
+    parser.add_argument(
         "--simplex",
         dest="simplex",
         action="store_true",
-        help="Use triangle/tet mesh",
+        help="Use triangle mesh",
         default=False,
     )
-    parser.add_argument("--res", default=0.06, type=np.float64, dest="res", help="Mesh resolution")
-
+    parser.add_argument(
+        "--res", default=0.25, type=np.float64, dest="res", help="Mesh resolution"
+    )  # NOTE: Default was 0.06
+    parser.add_argument("--mesh-dir", type=Path, dest="mesh_dir", default="meshes", help="Directory to store meshes")
+    parser.add_argument(
+        "--results-dir", type=Path, dest="results_dir", default="results", help="Directory to store results"
+    )
     # Parse input arguments or set to defualt values
     args = parser.parse_args()
     simplex = args.simplex
-    mesh_dir = "../meshes"
+    mesh_dir = args.mesh_dir
+    results_dir = args.results_dir
 
     # Problem parameters
     R = 8
@@ -88,28 +94,36 @@ if __name__ == "__main__":
 
     # Create mesh
     name = "force_driven_cylinders"
-    outname = f"../results/{name}_simplex" if simplex else f"results/{name}_quads"
-    fname = f"{mesh_dir}/{name}_simplex" if simplex else f"{mesh_dir}/{name}_quads"
-    create_quarter_disks_mesh(f"{fname}.msh", args.res, args.order, not simplex, R, gap)
+    ext = "simplex" if args.simplex else "quads"
+    fname = f"{name}_{ext}"
+    outfile = (results_dir / fname).with_suffix(".bp")
+    meshfile = results_dir / fname
+    results_dir.mkdir(exist_ok=True, parents=True)
+    mesh_dir.mkdir(exist_ok=True, parents=True)
+    create_quarter_disks_mesh(meshfile.with_suffix(".msh"), args.res, args.order, not simplex, R, gap)
 
-    convert_mesh(fname, f"{fname}.xdmf", gdim=2)
-    with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
+    convert_mesh(meshfile.with_suffix(".msh"), meshfile.with_suffix(".xmdf"), gdim=2)
+    with XDMFFile(MPI.COMM_WORLD, meshfile.with_suffix(".xdmf"), "r") as xdmf:
         mesh = xdmf.read_mesh()
-        domain_marker = xdmf.read_meshtags(mesh, name="cell_marker")
         tdim = mesh.topology.dim
+        domain_marker = xdmf.read_meshtags(mesh, name="cell_marker")
         mesh.topology.create_connectivity(tdim - 1, tdim)
         facet_marker = xdmf.read_meshtags(mesh, name="facet_marker")
 
-    vals = facet_marker.values
-    facet_marker.values[vals == 5] = 4
-    facet_marker.values[vals == 8] = 7
-    facet_marker.values[vals == 11] = 10
-    facet_marker.values[vals == 14] = 13
-
+    # Re-map facet markers
+    num_facets = mesh.topology.index_map(tdim - 1).size_local + mesh.topology.index_map(tdim - 1).num_ghosts
+    assert facet_marker.dim == tdim - 1
+    values = np.zeros(num_facets, dtype=np.int32)
     contact_bdy_1 = 4
     contact_bdy_2 = 10
     top = 7
     bottom = 13
+    values[facet_marker.find(5)] = contact_bdy_1
+    values[facet_marker.find(8)] = contact_bdy_2
+    values[facet_marker.find(11)] = top
+    values[facet_marker.find(14)] = bottom
+
+    new_tags = meshtags(mesh, tdim - 1, np.arange(num_facets, dtype=np.int32), values)
 
     # Solver options
     ksp_tol = 1e-10
@@ -150,9 +164,10 @@ if __name__ == "__main__":
     g = Constant(mesh, default_scalar_type((0.0)))
 
     symmetry_nodes = locate_entities(mesh, 0, lambda x: np.logical_and(np.isclose(x[0], 0), x[1] >= -8))
+    mesh.topology.create_connectivity(0, tdim)
     dofs_symmetry = locate_dofs_topological(V.sub(0), 0, symmetry_nodes)
-    dofs_bottom = locate_dofs_topological(V, 1, facet_marker.find(bottom))
-    dofs_top = locate_dofs_topological(V, 1, facet_marker.find(top))
+    dofs_bottom = locate_dofs_topological(V, new_tags.dim, new_tags.find(bottom))
+    dofs_top = locate_dofs_topological(V, new_tags.dim, new_tags.find(top))
 
     g_top = Constant(mesh, default_scalar_type((0.0, -0.1)))
     bcs = [
@@ -180,7 +195,7 @@ if __name__ == "__main__":
     du = Function(V)
     w = ufl.TrialFunction(V)
     dx = ufl.Measure("dx", domain=mesh, subdomain_data=domain_marker)
-    ds = ufl.Measure("ds", domain=mesh, subdomain_data=facet_marker)
+    ds = ufl.Measure("ds", domain=mesh, subdomain_data=new_tags)
 
     # Create variational form without contact contributions
     F = ufl.inner(sigma(u), epsilon(v)) * dx
@@ -236,7 +251,7 @@ if __name__ == "__main__":
 
     # Solve contact problem using Nitsche's method
     steps1 = 4
-    contact_problem = ContactProblem([facet_marker], surfaces, contact_pairs, mesh, args.q_degree, search_mode)
+    contact_problem = ContactProblem([new_tags], surfaces, contact_pairs, mesh, args.q_degree, search_mode)
     contact_problem.generate_contact_data(
         FrictionLaw.Frictionless,
         V,
@@ -279,6 +294,7 @@ if __name__ == "__main__":
         assemble_matrix(a_mat, J_compiled, bcs=bcs)
         a_mat.assemble()
 
+    breakpoint()
     writer = ContactWriter(
         mesh,
         contact_problem,
@@ -369,7 +385,7 @@ if __name__ == "__main__":
         "ksp_norm_type": "unpreconditioned",
     }
 
-    dofs_constraint = locate_dofs_topological(V.sub(1), 1, facet_marker.find(top))
+    dofs_constraint = locate_dofs_topological(V.sub(1), new_tags.dim, new_tags.find(top))
     g_top = Constant(mesh, default_scalar_type((0.0, 0.0)))
     bcs = [
         dirichletbc(Constant(mesh, default_scalar_type((0.0, 0.0))), dofs_bottom, V),

@@ -3,7 +3,7 @@
 # SPDX-License-Identifier:    MIT
 
 from mpi4py import MPI
-
+from pathlib import Path
 import gmsh
 import numpy as np
 from dolfinx.io import XDMFFile, gmshio
@@ -172,11 +172,12 @@ def create_halfdisk_plane_mesh(
     gmsh.finalize()
 
 
-def create_quarter_disks_mesh(filename: str, res=0.1, order: int = 1, quads=False, r=0.25, gap=0.01):
+def create_quarter_disks_mesh(filename: str|Path, res=0.1, order: int = 1, quads=False, r=0.25, gap=0.01):
     """
     Create a quarter disk, with center at (0.0,0.0,0), radius r and  y<=0.0, x>=0
     and a a second quarter disk with center (0.0, -2r - gap, 0.0), radius r and y>= -3r-gap, x>=0
     """
+    filename = Path(filename)
     center = [0, 0, 0]
     gmsh.initialize()
     if MPI.COMM_WORLD.rank == 0:
@@ -252,7 +253,7 @@ def create_quarter_disks_mesh(filename: str, res=0.1, order: int = 1, quads=Fals
         gmsh.model.mesh.setOrder(order)
 
         # gmsh.option.setNumber("Mesh.SaveAll", 1)
-        gmsh.write(filename)
+        gmsh.write(filename.absolute().as_posix())
     MPI.COMM_WORLD.Barrier()
     gmsh.finalize()
 
