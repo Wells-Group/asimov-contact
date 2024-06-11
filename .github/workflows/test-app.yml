@@ -133,6 +133,7 @@ jobs:
       - name: Run demos (Python)
         run: |
           pip install pytest pytest-xdist
+          cd python/demos
           python -m pytest -v .
 
       - name: Create output folders
