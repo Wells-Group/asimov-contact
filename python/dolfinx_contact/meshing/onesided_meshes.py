@@ -2,8 +2,8 @@
 #
 # SPDX-License-Identifier:    MIT
 
-import warnings
 import typing
+import warnings
 from pathlib import Path
 
 from mpi4py import MPI

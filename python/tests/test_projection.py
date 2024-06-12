@@ -9,7 +9,6 @@
 # x)||Pi(x)-x|| should therefore be the same as the outward unit normal
 # in the point Pi(x) with the opposite sign.
 
-from pathlib import Path
 
 from mpi4py import MPI
 
