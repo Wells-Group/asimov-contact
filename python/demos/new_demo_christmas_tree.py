@@ -4,6 +4,7 @@
 
 import argparse
 import sys
+import tempfile
 from pathlib import Path
 
 from mpi4py import MPI
@@ -34,7 +35,7 @@ from dolfinx_contact.helpers import (
     weak_dirichlet,
 )
 from dolfinx_contact.meshing import (
-    convert_mesh,
+    convert_mesh_new,
     create_christmas_tree_mesh,
     create_christmas_tree_mesh_3D,
 )
@@ -59,21 +60,22 @@ def run_solver(
     raytracing=False,
     threed=False,
 ):
-    mesh_dir = Path("meshes")
-    mesh_dir.mkdir(exist_ok=True)
-    fname = mesh_dir / "xmas_tree"
+    # mesh_dir = Path("meshes")
+    # mesh_dir.mkdir(exist_ok=True)
+    # fname = mesh_dir / "xmas_tree"
     if threed:
-        create_christmas_tree_mesh_3D(filename=fname, res=res, split=split, n1=81, n2=41)
-        convert_mesh(fname, fname, gdim=3)
-        with XDMFFile(MPI.COMM_WORLD, f"{str(fname)}.xdmf", "r") as xdmf:
-            mesh = xdmf.read_mesh(ghost_mode=GhostMode.none)
-            domain_marker = xdmf.read_meshtags(mesh, "cell_marker")
-            tdim = mesh.topology.dim
-            mesh.topology.create_connectivity(tdim - 1, tdim)
-            facet_marker = xdmf.read_meshtags(mesh, "facet_marker")
+        with tempfile.TemporaryDirectory() as tmpdirname:
+            fname = Path(tmpdirname, "xmas_tree.msh")
+            create_christmas_tree_mesh_3D(filename=fname, res=res, split=split, n1=81, n2=41)
+            convert_mesh_new(fname, fname.with_suffix(".xdmf"), gdim=3)
+            with XDMFFile(MPI.COMM_WORLD, fname.with_suffix(".xdmf"), "r") as xdmf:
+                mesh = xdmf.read_mesh(ghost_mode=GhostMode.none)
+                domain_marker = xdmf.read_meshtags(mesh, "cell_marker")
+                tdim = mesh.topology.dim
+                mesh.topology.create_connectivity(tdim - 1, tdim)
+                facet_marker = xdmf.read_meshtags(mesh, "facet_marker")
 
         marker_offset = 6
-
         if mesh.comm.size > 1:
             mesh, facet_marker, domain_marker = create_contact_mesh(
                 mesh,
@@ -118,14 +120,16 @@ def run_solver(
         f = _fem.Constant(mesh, default_scalar_type(f_val))  # body force
 
     else:
-        create_christmas_tree_mesh(filename=fname, res=res, split=split)
-        convert_mesh(str(fname), str(fname), gdim=2)
-        with XDMFFile(MPI.COMM_WORLD, f"{str(fname)}.xdmf", "r") as xdmf:
-            mesh = xdmf.read_mesh()
-            tdim = mesh.topology.dim
-            domain_marker = xdmf.read_meshtags(mesh, name="cell_marker")
-            mesh.topology.create_connectivity(tdim - 1, tdim)
-            facet_marker = xdmf.read_meshtags(mesh, name="facet_marker")
+        with tempfile.TemporaryDirectory() as tmpdirname:
+            fname = Path(tmpdirname, "xmas_tree.msh")
+            create_christmas_tree_mesh(filename=fname, res=res, split=split)
+            convert_mesh_new(fname, fname.with_suffix(".xdmf"), gdim=2)
+            with XDMFFile(MPI.COMM_WORLD, fname.with_suffix(".xdmf"), "r") as xdmf:
+                mesh = xdmf.read_mesh()
+                tdim = mesh.topology.dim
+                domain_marker = xdmf.read_meshtags(mesh, name="cell_marker")
+                mesh.topology.create_connectivity(tdim - 1, tdim)
+                facet_marker = xdmf.read_meshtags(mesh, name="facet_marker")
 
         marker_offset = 5
         if mesh.comm.size > 1:
@@ -223,7 +227,7 @@ def run_solver(
     J = ufl.derivative(F, du, w)
 
     # compiler options to improve performance
-    cffi_options = ["-Ofast", "-march=native"]
+    cffi_options = ["-O3"]
     jit_options = {"cffi_extra_compile_args": cffi_options, "cffi_libraries": ["m"]}
     # compiled forms for rhs and tangen system
     F_compiled = _fem.form(F, jit_options=jit_options)
