@@ -3,6 +3,8 @@
 # SPDX-License-Identifier:    MIT
 
 import warnings
+import typing
+from pathlib import Path
 
 from mpi4py import MPI
 
@@ -13,7 +15,7 @@ warnings.filterwarnings("ignore")
 __all__ = ["create_disk_mesh", "create_sphere_mesh"]
 
 
-def create_disk_mesh(LcMin=0.005, LcMax=0.015, filename="disk.msh"):
+def create_disk_mesh(LcMin=0.005, LcMax=0.015, filename: typing.Union[str, Path] = "disk.msh"):
     """
     Create a disk mesh centered at (0.5, 0.5) with radius 0.5.
     Mesh is finer at (0.5,0) using LcMin, and gradually decreasing to LcMax
@@ -41,15 +43,16 @@ def create_disk_mesh(LcMin=0.005, LcMax=0.015, filename="disk.msh"):
 
         gmsh.model.mesh.generate(2)
 
-        gmsh.write(filename)
+        gmsh.write(str(filename))
 
     gmsh.finalize()
 
 
-def create_sphere_mesh(LcMin=0.025, LcMax=0.1, filename="disk.msh"):
-    """
-    Create a sphere mesh centered at (0.5, 0.5, 0.5) with radius 0.5.
-    Mesh is finer at (0.5, 0.5, 0) using LcMin, and gradually decreasing to LcMax
+def create_sphere_mesh(LcMin=0.025, LcMax=0.1, filename: typing.Union[str, Path] = "disk.msh"):
+    """Create a sphere mesh centered at (0.5, 0.5, 0.5) with radius 0.5.
+
+    Mesh is finer at (0.5, 0.5, 0) using LcMin, and gradually decreasing
+    to LcMax.
     """
     gmsh.initialize()
     if MPI.COMM_WORLD.rank == 0:
@@ -73,7 +76,6 @@ def create_sphere_mesh(LcMin=0.025, LcMax=0.1, filename="disk.msh"):
         gmsh.model.mesh.field.setAsBackgroundMesh(2)
 
         gmsh.model.mesh.generate(3)
-
-        gmsh.write(filename)
+        gmsh.write(str(filename))
 
     gmsh.finalize()

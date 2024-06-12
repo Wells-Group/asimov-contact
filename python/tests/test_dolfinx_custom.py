@@ -23,7 +23,7 @@ from dolfinx_contact.helpers import (
     lame_parameters,
     sigma_func,
 )
-from dolfinx_contact.meshing import convert_mesh, create_disk_mesh, create_sphere_mesh
+from dolfinx_contact.meshing import convert_mesh_new, create_disk_mesh, create_sphere_mesh
 
 kt = dolfinx_contact.cpp.Kernel
 
@@ -47,14 +47,12 @@ def test_contact_kernel(tmp_path, theta, gamma, dim, gap):
 
     # Load mesh and create identifier functions for the top (Displacement condition)
     # and the bottom (contact condition)
-    mesh_dir = tmp_path / "meshes"
-    mesh_dir.mkdir(exist_ok=True)
     if dim == 3:
-        fname = f"{mesh_dir}/sphere"
-        create_sphere_mesh(filename=f"{fname}.msh")
-        convert_mesh(fname, fname, gdim=3)
+        fname = tmp_path / "sphere.msh"
+        create_sphere_mesh(filename=fname)
+        convert_mesh_new(fname, fname.with_suffix(".xdmf"), gdim=3)
 
-        with dolfinx.io.XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
+        with dolfinx.io.XDMFFile(MPI.COMM_WORLD, fname.with_suffix(".xdmf"), "r") as xdmf:
             mesh = xdmf.read_mesh()
 
         def top(x):
@@ -64,10 +62,10 @@ def test_contact_kernel(tmp_path, theta, gamma, dim, gap):
             return x[2] < 0.15
 
     else:
-        fname = f"{mesh_dir}/disk"
-        create_disk_mesh(filename=f"{fname}.msh")
-        convert_mesh(fname, fname, gdim=2)
-        with dolfinx.io.XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
+        fname = tmp_path / "disk.msh"
+        create_disk_mesh(filename=fname)
+        convert_mesh_new(fname, fname.with_suffix(".xdmf"), gdim=2)
+        with dolfinx.io.XDMFFile(MPI.COMM_WORLD, fname.with_suffix(".xdmf"), "r") as xdmf:
             mesh = xdmf.read_mesh()
 
         def top(x):

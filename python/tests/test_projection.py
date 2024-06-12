@@ -29,10 +29,10 @@ from dolfinx_contact.meshing import convert_mesh_new, create_box_mesh_2D, create
 def test_projection(tmp_path, q_deg, surf, dim):
     # Create mesh
     if dim == 2:
-        fname = Path(tmp_path / "box_2D.msh")
+        fname = tmp_path / "box_2D.msh"
         create_box_mesh_2D(filename=fname, res=1.0)
     else:
-        fname = Path(tmp_path / "box_3D.msh")
+        fname = tmp_path / "box_3D.msh"
         create_box_mesh_3D(filename=fname, res=1.0, offset=0.0)
 
     convert_mesh_new(fname, fname.with_suffix(".xdmf"), gdim=dim)
