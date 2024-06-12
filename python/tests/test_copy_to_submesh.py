@@ -18,17 +18,18 @@ from dolfinx_contact.meshing import (
 )
 
 
+# @pytest.mark.xdist_group(name="group0")
 @pytest.mark.parametrize("order", [1, 2])
 @pytest.mark.parametrize("simplex", [True, False])
 @pytest.mark.parametrize("res", [0.01, 0.1])
 @pytest.mark.parametrize("dim", [2, 3])
-def test_copy_to_submesh(order, res, simplex, dim):
-    mesh_dir = "meshes"
+def test_copy_to_submesh(tmp_path, order, res, simplex, dim):
+    mesh_dir = tmp_path
     if dim == 3:
         if simplex:
-            fname = f"{mesh_dir}/sphere3D"
+            fname = mesh_dir / "sphere3D"
             create_sphere_plane_mesh(
-                filename=f"{fname}.msh",
+                filename=f"{str(fname)}.msh",
                 res=res,
                 order=order,
                 r=0.25,
@@ -36,8 +37,8 @@ def test_copy_to_submesh(order, res, simplex, dim):
                 length=1.0,
                 width=1.0,
             )
-            convert_mesh(fname, f"{fname}.xdmf", gdim=3)
-            with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
+            convert_mesh(str(fname), f"{str(fname)}.xdmf", gdim=3)
+            with XDMFFile(MPI.COMM_WORLD, f"{str(fname)}.xdmf", "r") as xdmf:
                 mesh = xdmf.read_mesh()
                 tdim = mesh.topology.dim
                 mesh.topology.create_connectivity(tdim - 1, tdim)
@@ -45,9 +46,9 @@ def test_copy_to_submesh(order, res, simplex, dim):
             contact_bdy_1 = 1
             contact_bdy_2 = 8
         else:
-            fname = f"{mesh_dir}/cylinders3D"
+            fname = mesh_dir / "cylinders3D"
             create_cylinder_cylinder_mesh(fname, order=order, res=10 * res, simplex=simplex)
-            with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
+            with XDMFFile(MPI.COMM_WORLD, f"{str(fname)}.xdmf", "r") as xdmf:
                 mesh = xdmf.read_mesh(name="cylinder_cylinder")
             tdim = mesh.topology.dim
             mesh.topology.create_connectivity(tdim - 1, tdim)
@@ -90,9 +91,9 @@ def test_copy_to_submesh(order, res, simplex, dim):
             sorted_facets = np.argsort(indices)
             facet_marker = meshtags(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
     else:
-        fname = f"{mesh_dir}/hertz2D_simplex" if simplex else f"{mesh_dir}/hertz2D_quads"
+        fname = mesh_dir / "hertz2D_simplex" if simplex else mesh_dir / "hertz2D_quads"
         create_circle_plane_mesh(
-            filename=f"{fname}.msh",
+            filename=f"{str(fname)}.msh",
             res=res,
             order=order,
             quads=not simplex,
@@ -100,8 +101,8 @@ def test_copy_to_submesh(order, res, simplex, dim):
             height=0.25,
             length=1.0,
         )
-        convert_mesh(fname, f"{fname}.xdmf", gdim=2)
-        with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
+        convert_mesh(str(fname), f"{str(fname)}.xdmf", gdim=2)
+        with XDMFFile(MPI.COMM_WORLD, f"{str(fname)}.xdmf", "r") as xdmf:
             mesh = xdmf.read_mesh()
             tdim = mesh.topology.dim
             mesh.topology.create_connectivity(tdim - 1, tdim)
