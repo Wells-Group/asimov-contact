@@ -2,6 +2,9 @@
 #
 # SPDX-License-Identifier:    MIT
 
+import typing
+from pathlib import Path
+
 from mpi4py import MPI
 
 import gmsh
@@ -23,7 +26,7 @@ __all__ = [
 
 
 def create_circle_plane_mesh(
-    filename: str,
+    filename: typing.Union[str, Path],
     quads: bool = False,
     res=0.1,
     order: int = 1,
@@ -95,13 +98,13 @@ def create_circle_plane_mesh(
         gmsh.model.mesh.setOrder(order)
 
         # gmsh.option.setNumber("Mesh.SaveAll", 1)
-        gmsh.write(filename)
+        gmsh.write(str(filename))
     MPI.COMM_WORLD.Barrier()
     gmsh.finalize()
 
 
 def create_halfdisk_plane_mesh(
-    filename: str,
+    filename: typing.Union[str, Path],
     res=0.1,
     order: int = 1,
     quads=False,
@@ -167,12 +170,14 @@ def create_halfdisk_plane_mesh(
         gmsh.model.mesh.setOrder(order)
 
         # gmsh.option.setNumber("Mesh.SaveAll", 1)
-        gmsh.write(filename)
+        gmsh.write(str(filename))
     MPI.COMM_WORLD.Barrier()
     gmsh.finalize()
 
 
-def create_quarter_disks_mesh(filename: str, res=0.1, order: int = 1, quads=False, r=0.25, gap=0.01):
+def create_quarter_disks_mesh(
+    filename: typing.Union[str, Path], res=0.1, order: int = 1, quads=False, r=0.25, gap=0.01
+):
     """
     Create a quarter disk, with center at (0.0,0.0,0), radius r and  y<=0.0, x>=0
     and a a second quarter disk with center (0.0, -2r - gap, 0.0), radius r and y>= -3r-gap, x>=0
@@ -252,13 +257,13 @@ def create_quarter_disks_mesh(filename: str, res=0.1, order: int = 1, quads=Fals
         gmsh.model.mesh.setOrder(order)
 
         # gmsh.option.setNumber("Mesh.SaveAll", 1)
-        gmsh.write(filename)
+        gmsh.write(str(filename))
     MPI.COMM_WORLD.Barrier()
     gmsh.finalize()
 
 
 def sliding_wedges(
-    filename: str,
+    filename: typing.Union[str, Path],
     quads: bool = False,
     res: float = 0.1,
     order: int = 1,
@@ -330,15 +335,13 @@ def sliding_wedges(
         gmsh.model.mesh.setOrder(order)
 
         # gmsh.option.setNumber("Mesh.SaveAll", 1)
-        gmsh.write(filename)
+        gmsh.write(str(filename))
     MPI.COMM_WORLD.Barrier()
     gmsh.finalize()
 
 
-def create_circle_circle_mesh(filename: str, quads: bool = False, res: float = 0.1, order: int = 1):
-    """
-    Create two circular meshes, with radii 0.3 and 0.6 with centers (0.5,0.5) and (0.5, -0.5)
-    """
+def create_circle_circle_mesh(filename: typing.Union[str, Path], quads: bool = False, res: float = 0.1, order: int = 1):
+    """Create two circular meshes, with radii 0.3 and 0.6 with centers (0.5,0.5) and (0.5, -0.5)"""
     center = [0.5, 0.5, 0]
     r = 0.3
     angle = np.pi / 4
@@ -403,15 +406,13 @@ def create_circle_circle_mesh(filename: str, quads: bool = False, res: float = 0
         gmsh.model.mesh.setOrder(order)
 
         # gmsh.option.setNumber("Mesh.SaveAll", 1)
-        gmsh.write(filename)
+        gmsh.write(str(filename))
     MPI.COMM_WORLD.Barrier()
     gmsh.finalize()
 
 
-def create_box_mesh_2D(filename: str, quads: bool = False, res=0.1, order: int = 1):
-    """
-    Create two boxes, one slightly skewed
-    """
+def create_box_mesh_2D(filename: typing.Union[str, Path], quads: bool = False, res=0.1, order: int = 1):
+    """Create two boxes, one slightly skewed"""
     length = 0.5
     height = 0.5
     disp = -0.6
@@ -467,14 +468,14 @@ def create_box_mesh_2D(filename: str, quads: bool = False, res=0.1, order: int =
         gmsh.model.mesh.setOrder(order)
 
         # gmsh.option.setNumber("Mesh.SaveAll", 1)
-        gmsh.write(filename)
+        gmsh.write(str(filename))
     MPI.COMM_WORLD.Barrier()
 
     gmsh.finalize()
 
 
 def create_box_mesh_3D(
-    filename: str,
+    filename: typing.Union[str, Path],
     simplex: bool = True,
     order: int = 1,
     res: float = 0.1,
@@ -482,8 +483,7 @@ def create_box_mesh_3D(
     width: float = 0.5,
     offset: float = 0.2,
 ):
-    """
-    Create two boxes lying directly over eachother with a gap in between"""
+    """Create two boxes lying directly over eachother with a gap in between"""
     length = 0.5
     height = 0.5
 
@@ -532,13 +532,13 @@ def create_box_mesh_3D(
         model.mesh.generate(3)
         model.mesh.setOrder(order)
         # gmsh.option.setNumber("Mesh.SaveAll", 1)
-        gmsh.write(filename)
+        gmsh.write(str(filename))
     MPI.COMM_WORLD.Barrier()
     gmsh.finalize()
 
 
 def create_sphere_plane_mesh(
-    filename: str,
+    filename: typing.Union[str, Path],
     order: int = 1,
     res=0.05,
     r=0.25,
@@ -596,14 +596,13 @@ def create_sphere_plane_mesh(
         gmsh.model.mesh.setOrder(order)
 
         # gmsh.option.setNumber("Mesh.SaveAll", 1)
-        gmsh.write(filename)
+        gmsh.write(str(filename))
     MPI.COMM_WORLD.Barrier()
     gmsh.finalize()
 
 
-def create_sphere_sphere_mesh(filename: str, order: int = 1):
-    """
-    Create a 3D mesh consisting of two spheres with radii 0.3 and 0.6 and
+def create_sphere_sphere_mesh(filename: typing.Union[str, Path], order: int = 1):
+    """Create a 3D mesh consisting of two spheres with radii 0.3 and 0.6 and
     centers (0.5,0.5,0.5) and (0.5,0.5,-0.5)
     """
     center = [0.5, 0.5, 0.5]
@@ -658,12 +657,12 @@ def create_sphere_sphere_mesh(filename: str, order: int = 1):
         gmsh.model.mesh.setOrder(order)
 
         # gmsh.option.setNumber("Mesh.SaveAll", 1)
-        gmsh.write(filename)
+        gmsh.write(str(filename))
     MPI.COMM_WORLD.Barrier()
     gmsh.finalize()
 
 
-def create_cylinder_cylinder_mesh(filename: str, order: int = 1, res=0.25, simplex: bool = False):
+def create_cylinder_cylinder_mesh(filename: typing.Union[str, Path], order: int = 1, res=0.25, simplex: bool = False):
     gmsh.initialize()
     model = gmsh.model()
     if MPI.COMM_WORLD.rank == 0:
@@ -717,16 +716,14 @@ def create_cylinder_cylinder_mesh(filename: str, order: int = 1, res=0.25, simpl
     mt_domain.name = "domain_marker"
 
     # Permute also entities which are tagged
-    with XDMFFile(MPI.COMM_WORLD, f"{filename}.xdmf", "w") as file:
+    with XDMFFile(MPI.COMM_WORLD, f"{str(filename)}.xdmf", "w") as file:
         file.write_mesh(msh)
         file.write_meshtags(mt_domain, msh.geometry)
     gmsh.finalize()
 
 
-def create_2d_rectangle_split(filename: str, quads: bool = False, res=0.1, order: int = 1, gap=0.2):
-    """
-    Create rectangle split into two domains
-    """
+def create_2d_rectangle_split(filename: typing.Union[str, Path], quads: bool = False, res=0.1, order: int = 1, gap=0.2):
+    """Create rectangle split into two domains"""
     length = 0.5
     height = 0.5
 
@@ -781,14 +778,14 @@ def create_2d_rectangle_split(filename: str, quads: bool = False, res=0.1, order
         gmsh.model.mesh.setOrder(order)
 
         # gmsh.option.setNumber("Mesh.SaveAll", 1)
-        gmsh.write(filename)
+        gmsh.write(str(filename))
     MPI.COMM_WORLD.Barrier()
 
     gmsh.finalize()
 
 
 def create_halfsphere_box_mesh(
-    filename: str,
+    filename: typing.Union[str, Path],
     order: int = 1,
     res=0.05,
     r=0.25,
@@ -843,6 +840,6 @@ def create_halfsphere_box_mesh(
         gmsh.model.mesh.setOrder(order)
 
         # gmsh.option.setNumber("Mesh.SaveAll", 1)
-        gmsh.write(filename)
+        gmsh.write(str(filename))
     MPI.COMM_WORLD.Barrier()
     gmsh.finalize()

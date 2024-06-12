@@ -544,20 +544,12 @@ def create_meshes(ct: str, gap: float, xdtype: npt.DTypeLike = np.float64) -> tu
         gdim = MPI.COMM_WORLD.bcast(None, root=0)
         num_nodes = MPI.COMM_WORLD.bcast(None, root=0)
 
-        x_ufl = np.zeros(
-            (0, gdim),
-            dtype=xdtype,
-        )
+        x_ufl = np.zeros((0, gdim), dtype=xdtype)
         x_custom = np.zeros((0, gdim), dtype=xdtype)
 
-        cells_ufl = np.zeros(
-            (0, num_nodes),
-            dtype=np.int64,
-        )
-        cells_custom = np.zeros(
-            (0, num_nodes),
-            dtype=np.int64,
-        )
+        cells_ufl = np.zeros((0, num_nodes), dtype=np.int64)
+        cells_custom = np.zeros((0, num_nodes), dtype=np.int64)
+
     assert MPI.COMM_WORLD.size <= 2, "This test only supports running with 1 or 2 MPI ranks"
     serial = MPI.COMM_WORLD.size == 1
 
@@ -645,236 +637,6 @@ def create_facet_markers(
     return meshtags(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
 
 
-@pytest.mark.skipif(MPI.COMM_WORLD.size > 2, reason="This test can only be executed with one or two processes")
-@pytest.mark.parametrize(
-    "search",
-    [
-        ContactMode.Raytracing,
-        ContactMode.ClosestPoint,
-    ],
-)
-@pytest.mark.parametrize(
-    "frictionlaw",
-    [
-        FrictionLaw.Frictionless,
-        FrictionLaw.Coulomb,
-        FrictionLaw.Tresca,
-    ],
-)
-@pytest.mark.parametrize(
-    "ct",
-    [
-        "triangle",
-        "quadrilateral",
-        "tetrahedron",
-        "hexahedron",
-    ],
-)
-@pytest.mark.parametrize("gap", [0.5, -0.5])
-# @pytest.mark.parametrize("quadrature_degree", [1, 5])
-@pytest.mark.parametrize("quadrature_degree", [1, 4])
-@pytest.mark.parametrize("theta", [1, 0, -1])
-def test_contact_kernels(ct, gap, quadrature_degree, theta, frictionlaw, search):
-    # Compute lame parameters
-    plane_strain = False
-    E = 1e3
-    nu = 0.1
-    mu_func, lambda_func = lame_parameters(plane_strain)
-    mu = mu_func(E, nu)
-    lmbda = lambda_func(E, nu)
-    sigma = sigma_func(mu, lmbda)
-
-    # Nitche parameter
-    gamma = 10
-
-    # create meshes and function spaces
-    mesh_ufl, mesh_custom = create_meshes(ct, gap)
-    gdim = mesh_ufl.geometry.dim
-    V_ufl = _fem.functionspace(mesh_ufl, ("DG", 1, (gdim,)))
-    V_custom = _fem.functionspace(mesh_custom, ("Lagrange", 1, (gdim,)))
-    tdim = mesh_ufl.topology.dim
-
-    TOL = 1e-7
-    cells_ufl_0 = locate_entities(mesh_ufl, tdim, lambda x: x[tdim - 1] > 0 - TOL)
-    cells_ufl_1 = locate_entities(mesh_ufl, tdim, lambda x: x[tdim - 1] < 0 + TOL)
-
-    def _u0(x):
-        values = np.zeros((gdim, x.shape[1]))
-        for i in range(tdim):
-            values[i] = np.sin(x[i]) + 1
-        return values
-
-    def _u1(x):
-        values = np.zeros((gdim, x.shape[1]))
-        for i in range(tdim):
-            values[i] = np.sin(x[i]) + 2
-        return values
-
-    def _u2(x):
-        values = np.zeros((gdim, x.shape[1]))
-        for i in range(tdim):
-            values[i] = np.sin(x[i] + gap) + 2 if i == tdim - 1 else np.sin(x[i]) + 2
-        return values
-
-    # FIXME: Check validity of two cell mesh
-    # DG ufl 'contact'
-    u0 = _fem.Function(V_ufl)
-    u0.interpolate(_u0, cells_ufl_0)
-    u0.interpolate(_u1, cells_ufl_1)
-    u0.x.scatter_forward()
-    v0 = ufl.TestFunction(V_ufl)
-    w0 = ufl.TrialFunction(V_ufl)
-    metadata = {"quadrature_degree": quadrature_degree}
-    dS = ufl.Measure("dS", domain=mesh_ufl, metadata=metadata)
-
-    n = ufl.FacetNormal(mesh_ufl)
-
-    # Scaled Nitsche parameter
-    h = ufl.CellDiameter(mesh_ufl)
-    gamma_scaled = gamma * E
-
-    # DG formulation
-    # Contact terms formulated using ufl consistent with https://doi.org/10.1007/s00211-018-0950-x
-    F0 = DG_rhs_plus(u0, v0, h, n, gamma_scaled, theta, sigma, gap, dS)
-    J0 = DG_jac_plus(u0, v0, w0, h, n, gamma_scaled, theta, sigma, gap, dS)
-    if frictionlaw == FrictionLaw.Tresca:
-        F0 += DG_rhs_tresca(u0, v0, h, n, gamma_scaled, theta, sigma, 0.1, dS, gdim)
-
-        J0 += DG_jac_tresca(u0, v0, w0, h, n, gamma_scaled, theta, sigma, 0.1, dS, gdim)
-    elif frictionlaw == FrictionLaw.Coulomb:
-        F0 += DG_rhs_coulomb(u0, v0, h, n, gamma_scaled, theta, sigma, gap, 0.1, dS, gdim)
-        J0 += DG_jac_coulomb(u0, v0, w0, h, n, gamma_scaled, theta, sigma, gap, 0.1, dS, gdim)
-
-    # rhs vector
-    F0 = _fem.form(F0)
-    b0 = _fem.Function(V_ufl)
-    b0.x.array[:] = 0.0
-    _fem.petsc.assemble_vector(b0.x.petsc_vec, F0)
-    b0.x.scatter_reverse(la.InsertMode.add)
-    b0.x.scatter_forward()
-
-    # lhs matrix
-    J0 = _fem.form(J0)
-    A0 = _fem.petsc.create_matrix(J0)
-    A0.zeroEntries()
-    _fem.petsc.assemble_matrix(A0, J0)
-    A0.assemble()
-
-    # Custom assembly
-    cells, facets_cg = locate_contact_facets_custom(V_custom, gap)
-
-    # Fem functions
-    u1 = _fem.Function(V_custom)
-    v1 = ufl.TestFunction(V_custom)
-    w1 = ufl.TrialFunction(V_custom)
-    u = _fem.Function(V_custom)
-
-    u1.interpolate(_u0, np.array(cells[0]))
-    u1.interpolate(_u2, np.array(cells[1]))
-    u1.x.scatter_forward()
-
-    # Dummy form for creating vector/matrix
-    dx = ufl.Measure("dx", domain=mesh_custom)
-    F_custom = ufl.inner(sigma(u1), epsilon(v1)) * dx
-    J_custom = ufl.inner(sigma(w1), epsilon(v1)) * dx
-
-    V0 = _fem.functionspace(mesh_custom, ("DG", 0))
-    mu0 = _fem.Function(V0)
-    lmbda0 = _fem.Function(V0)
-    fric = _fem.Function(V0)
-    mu0.interpolate(lambda x: np.full((1, x.shape[1]), mu))
-    lmbda0.interpolate(lambda x: np.full((1, x.shape[1]), lmbda))
-    fric.interpolate(lambda x: np.full((1, x.shape[1]), 0.1))
-
-    # Create single meshtag for contact pair
-    facet_marker = create_facet_markers(mesh_custom, facets_cg)
-    # Create adjacency list associating the only meshtag with the to markers
-    data = np.array([0, 1], dtype=np.int32)
-    offsets = np.array([0, 2], dtype=np.int32)
-    surfaces = adjacencylist(data, offsets)
-    contact_problem = ContactProblem(
-        [facet_marker],
-        surfaces,
-        [(0, 1), (1, 0)],
-        mesh_custom,
-        quadrature_degree,
-        [search, search],
-    )
-    contact_problem.generate_contact_data(
-        frictionlaw,
-        V_custom,
-        {"u": u, "du": u1, "mu": mu0, "lambda": lmbda0, "fric": fric},
-        E * gamma,
-        theta,
-    )
-
-    # compiler options to improve performance
-    cffi_options = ["-Ofast", "-march=native"]
-    jit_options = {"cffi_extra_compile_args": cffi_options, "cffi_libraries": ["m"]}
-    # Generate residual data structures
-    F_custom = _fem.form(F_custom, jit_options=jit_options)
-    b1 = _fem.Function(V_custom)
-
-    ind_dg = compute_dof_permutations_all(V_ufl, V_custom, gap)
-
-    # Generate residual data structures
-    J_custom = _fem.form(J_custom, jit_options=jit_options)
-    A1 = contact_problem.create_matrix(J_custom)
-
-    # Assemble residual
-    b1.x.array[:] = 0.0
-    contact_problem.assemble_vector(b1.x.petsc_vec, V_custom)
-    b1.x.scatter_reverse(la.InsertMode.add)
-    b1.x.scatter_forward()
-    assert np.allclose(b0.x.array[ind_dg], b1.x.array)
-
-    # Assemble  jacobian
-    A1.zeroEntries()
-    contact_problem.assemble_matrix(A1, V_custom)
-    A1.assemble()
-
-    # Retrieve data necessary for comparison
-    tdim = mesh_ufl.topology.dim
-
-    # create scipy matrix
-    # FIXME: Add parallel matrix comparison
-    if MPI.COMM_WORLD.size < 2:
-        # Skip matrix comparison in parallel
-        ai, aj, av = A0.getValuesCSR()
-        A_sp = scipy.sparse.csr_matrix((av, aj, ai), shape=A0.getSize()).todense()
-        bi, bj, bv = A1.getValuesCSR()
-        B_sp = scipy.sparse.csr_matrix((bv, bj, bi), shape=A1.getSize()).todense()
-
-        assert np.allclose(A_sp[ind_dg, :][:, ind_dg], B_sp)
-
-    # Sanity check different formulations
-    if frictionlaw == FrictionLaw.Frictionless:
-        # Contact terms formulated using ufl consistent with nitsche_ufl.py
-        F2 = DG_rhs_minus(u0, v0, h, n, gamma_scaled, theta, sigma, gap, dS)
-
-        F2 = _fem.form(F2)
-        b2 = _fem.Function(V_ufl)
-        b2.x.array[:] = 0.0
-        _fem.petsc.assemble_vector(b2.x.petsc_vec, F2)
-        b2.x.scatter_reverse(la.InsertMode.add)
-        b2.x.scatter_forward()
-        assert np.allclose(b1.x.array, b2.x.array[ind_dg])
-
-        # Contact terms formulated using ufl consistent with nitsche_ufl.py
-        # FIXME: Add parallel matrix comparison
-        if MPI.COMM_WORLD.size < 2:
-            J2 = DG_jac_minus(u0, v0, w0, h, n, gamma_scaled, theta, sigma, gap, dS)
-            J2 = _fem.form(J2)
-            A2 = _fem.petsc.create_matrix(J2)
-            A2.zeroEntries()
-            _fem.petsc.assemble_matrix(A2, J2)
-            A2.assemble()
-
-            ci, cj, cv = A2.getValuesCSR()
-            C_sp = scipy.sparse.csr_matrix((cv, cj, ci), shape=A2.getSize()).todense()
-            assert np.allclose(C_sp[ind_dg, :][:, ind_dg], B_sp)
-
-
 def poisson_dg(u0, v0, h, n, kdt, gamma, theta, dS):
     F = (
         gamma / h("+") * ufl.inner(ufl.jump(u0), ufl.jump(v0)) * dS
@@ -911,7 +673,8 @@ def tied_dg_T(u0, v0, T0, h, n, gamma, theta, sigma, sigma_T, dS):
     return 0.5 * F
 
 
-@pytest.mark.skipif(MPI.COMM_WORLD.size > 2, reason="This test can only be executed with one or two processes")
+@pytest.mark.parametrize("gap", [0.5, -0.5])
+@pytest.mark.parametrize("theta", [1, 0, -1])
 @pytest.mark.parametrize(
     "ct",
     [
@@ -921,56 +684,50 @@ def tied_dg_T(u0, v0, T0, h, n, gamma, theta, sigma, sigma_T, dS):
         "hexahedron",
     ],
 )
-@pytest.mark.parametrize(
-    "problem",
-    [
-        Problem.Poisson,
-        Problem.Elasticity,
-        Problem.ThermoElasticity,
-    ],
-)
-@pytest.mark.parametrize("gap", [0.5, -0.5])
 @pytest.mark.parametrize("quadrature_degree", [1, 3])
-@pytest.mark.parametrize("theta", [1, 0, -1])
-def test_meshtie_kernels(ct, gap, quadrature_degree, theta, problem):
-    # Problem parameters
-    kdt = 5
-    plane_strain = False
-    E = 1e3
-    nu = 0.1
-    mu_func, lambda_func = lame_parameters(plane_strain)
-    mu = mu_func(E, nu)
-    lmbda = lambda_func(E, nu)
-    sigma = sigma_func(mu, lmbda)
+class TestUnbiased:
+    """Doc."""
 
-    # Nitche parameter
-    gamma = 10
+    @pytest.mark.xdist_group(name="group0")
+    @pytest.mark.skipif(MPI.COMM_WORLD.size > 2, reason="This test can only be executed with one or two processes")
+    @pytest.mark.parametrize(
+        "search",
+        [
+            ContactMode.Raytracing,
+            ContactMode.ClosestPoint,
+        ],
+    )
+    @pytest.mark.parametrize(
+        "frictionlaw",
+        [
+            FrictionLaw.Frictionless,
+            FrictionLaw.Coulomb,
+            FrictionLaw.Tresca,
+        ],
+    )
+    def test_contact_kernels(self, ct, gap, quadrature_degree, theta, frictionlaw, search):
+        # Compute lame parameters
+        plane_strain = False
+        E = 1e3
+        nu = 0.1
+        mu_func, lambda_func = lame_parameters(plane_strain)
+        mu = mu_func(E, nu)
+        lmbda = lambda_func(E, nu)
+        sigma = sigma_func(mu, lmbda)
 
-    # create meshes and function spaces
+        # Nitsche parameter
+        gamma = 10
 
-    # create meshes and function spaces
-    mesh_ufl, mesh_custom = create_meshes(ct, gap)
-    gdim = mesh_ufl.geometry.dim
-    tdim = mesh_ufl.topology.dim
-    TOL = 1e-7
-    cells_ufl_0 = locate_entities(mesh_ufl, tdim, lambda x: x[tdim - 1] > 0 - TOL)
-    cells_ufl_1 = locate_entities(mesh_ufl, tdim, lambda x: x[tdim - 1] < 0 + TOL)
-
-    if problem == Problem.Poisson:
-        V_ufl = _fem.functionspace(mesh_ufl, ("DG", 1))
-        V_custom = _fem.functionspace(mesh_custom, ("Lagrange", 1))
-
-        def _u0(x):
-            return np.sin(x[0]) + 1
-
-        def _u1(x):
-            return np.sin(x[tdim - 1]) + 2
-
-        def _u2(x):
-            return np.sin(x[tdim - 1] + gap) + 2
-    else:
+        # create meshes and function spaces
+        mesh_ufl, mesh_custom = create_meshes(ct, gap)
+        gdim = mesh_ufl.geometry.dim
         V_ufl = _fem.functionspace(mesh_ufl, ("DG", 1, (gdim,)))
         V_custom = _fem.functionspace(mesh_custom, ("Lagrange", 1, (gdim,)))
+        tdim = mesh_ufl.topology.dim
+
+        TOL = 1e-7
+        cells_ufl_0 = locate_entities(mesh_ufl, tdim, lambda x: x[tdim - 1] > 0 - TOL)
+        cells_ufl_1 = locate_entities(mesh_ufl, tdim, lambda x: x[tdim - 1] < 0 + TOL)
 
         def _u0(x):
             values = np.zeros((gdim, x.shape[1]))
@@ -990,155 +747,379 @@ def test_meshtie_kernels(ct, gap, quadrature_degree, theta, problem):
                 values[i] = np.sin(x[i] + gap) + 2 if i == tdim - 1 else np.sin(x[i]) + 2
             return values
 
-    # DG ufl 'contact'
-    u0 = _fem.Function(V_ufl)
-    u0.interpolate(_u0, cells_ufl_0)
-    u0.interpolate(_u1, cells_ufl_1)
-    v0 = ufl.TestFunction(V_ufl)
-    w0 = ufl.TrialFunction(V_ufl)
-    T0, Q_ufl, Q_custom = None, None, None
-    metadata = {"quadrature_degree": quadrature_degree}
-    dS = ufl.Measure("dS", domain=mesh_ufl, metadata=metadata)
+        # FIXME: Check validity of two cell mesh
+        # DG ufl 'contact'
+        u0 = _fem.Function(V_ufl)
+        u0.interpolate(_u0, cells_ufl_0)
+        u0.interpolate(_u1, cells_ufl_1)
+        u0.x.scatter_forward()
+        v0 = ufl.TestFunction(V_ufl)
+        w0 = ufl.TrialFunction(V_ufl)
+        metadata = {"quadrature_degree": quadrature_degree}
+        dS = ufl.Measure("dS", domain=mesh_ufl, metadata=metadata)
 
-    # Custom assembly
-    cells, facets_cg = locate_contact_facets_custom(V_custom, gap)
-    # Fem functions
-    u1 = _fem.Function(V_custom)
-    v1 = ufl.TestFunction(V_custom)
-    w1 = ufl.TrialFunction(V_custom)
+        n = ufl.FacetNormal(mesh_ufl)
 
-    u1.interpolate(_u0, np.array(cells[0]))
-    u1.interpolate(_u2, np.array(cells[1]))
-    u1.x.scatter_forward()
+        # Scaled Nitsche parameter
+        h = ufl.CellDiameter(mesh_ufl)
+        gamma_scaled = gamma * E
 
-    n = ufl.FacetNormal(mesh_ufl)
+        # DG formulation. Contact terms formulated using ufl consistent
+        # with https://doi.org/10.1007/s00211-018-0950-x
+        F0 = DG_rhs_plus(u0, v0, h, n, gamma_scaled, theta, sigma, gap, dS)
+        J0 = DG_jac_plus(u0, v0, w0, h, n, gamma_scaled, theta, sigma, gap, dS)
+        if frictionlaw == FrictionLaw.Tresca:
+            F0 += DG_rhs_tresca(u0, v0, h, n, gamma_scaled, theta, sigma, 0.1, dS, gdim)
+            J0 += DG_jac_tresca(u0, v0, w0, h, n, gamma_scaled, theta, sigma, 0.1, dS, gdim)
+        elif frictionlaw == FrictionLaw.Coulomb:
+            F0 += DG_rhs_coulomb(u0, v0, h, n, gamma_scaled, theta, sigma, gap, 0.1, dS, gdim)
+            J0 += DG_jac_coulomb(u0, v0, w0, h, n, gamma_scaled, theta, sigma, gap, 0.1, dS, gdim)
 
-    # Scaled Nitsche parameter
-    h = ufl.CellDiameter(mesh_ufl)
-    alpha = 0.5
+        # rhs vector
+        F0 = _fem.form(F0)
+        b0 = _fem.Function(V_ufl)
+        b0.x.array[:] = 0.0
+        _fem.petsc.assemble_vector(b0.x.petsc_vec, F0)
+        b0.x.scatter_reverse(la.InsertMode.add)
+        b0.x.scatter_forward()
 
-    # DG formulation
-    if problem == Problem.Poisson:
-        F0 = poisson_dg(u0, v0, h, n, kdt, gamma, theta, dS)
-        J0 = poisson_dg(w0, v0, h, n, kdt, gamma, theta, dS)
-    elif problem == Problem.Elasticity:
-        F0 = tied_dg(u0, v0, h, n, gamma * E, theta, sigma, dS)
-        J0 = tied_dg(w0, v0, h, n, gamma * E, theta, sigma, dS)
-    elif problem == Problem.ThermoElasticity:
-        Q_ufl = _fem.functionspace(mesh_ufl, ("DG", 1))
-        Q_custom = _fem.functionspace(mesh_custom, ("Lagrange", 1))
-        T0 = _fem.Function(Q_ufl)
-        T1 = _fem.Function(Q_custom)
-        T0.interpolate(lambda x: np.sin(x[0]) + 1, cells_ufl_0)
-        T0.interpolate(lambda x: np.sin(x[tdim - 1]) + 2, cells_ufl_1)
-        T1.interpolate(lambda x: np.sin(x[0]) + 1, np.array(cells[0]))
-        T1.interpolate(lambda x: np.sin(x[tdim - 1] + gap) + 2, np.array(cells[1]))
-        T0.x.scatter_forward()
-        T1.x.scatter_forward()
+        # lhs matrix
+        J0 = _fem.form(J0)
+        A0 = _fem.petsc.create_matrix(J0)
+        A0.zeroEntries()
+        _fem.petsc.assemble_matrix(A0, J0)
+        A0.assemble()
 
-        def sigma_T(w, T):
-            return sigma(w) - alpha * (3 * lmbda + 2 * mu) * T * ufl.Identity(gdim)
+        # Custom assembly
+        cells, facets_cg = locate_contact_facets_custom(V_custom, gap)
 
-        F0 = tied_dg_T(u0, v0, T0, h, n, gamma * E, theta, sigma, sigma_T, dS)
-        J0 = tied_dg(w0, v0, h, n, gamma * E, theta, sigma, dS)
+        # Fem functions
+        u1 = _fem.Function(V_custom)
+        v1 = ufl.TestFunction(V_custom)
+        w1 = ufl.TrialFunction(V_custom)
+        u = _fem.Function(V_custom)
 
-    # rhs vector
-    F0 = _fem.form(F0)
-    b0 = _fem.Function(V_ufl)
-    b0.x.array[:] = 0
-    _fem.petsc.assemble_vector(b0.x.petsc_vec, F0)
-    b0.x.scatter_reverse(la.InsertMode.add)
-    b0.x.scatter_forward()
+        u1.interpolate(_u0, np.array(cells[0]))
+        u1.interpolate(_u2, np.array(cells[1]))
+        u1.x.scatter_forward()
 
-    # lhs matrix
-    J0 = _fem.form(J0)
-    A0 = _fem.petsc.create_matrix(J0)
-    A0.zeroEntries()
-    _fem.petsc.assemble_matrix(A0, J0)
-    A0.assemble()
+        # Dummy form for creating vector/matrix
+        dx = ufl.Measure("dx", domain=mesh_custom)
+        F_custom = ufl.inner(sigma(u1), epsilon(v1)) * dx
+        J_custom = ufl.inner(sigma(w1), epsilon(v1)) * dx
 
-    V0 = _fem.functionspace(mesh_custom, ("DG", 0))
-    kdt_custom = _fem.Function(V0)
-    kdt_custom.interpolate(lambda x: np.full((1, x.shape[1]), kdt))
-    lmbda_custom = _fem.Function(V0)
-    lmbda_custom.interpolate(lambda x: np.full((1, x.shape[1]), lmbda))
-    mu_custom = _fem.Function(V0)
-    mu_custom.interpolate(lambda x: np.full((1, x.shape[1]), mu))
-    alpha_custom = _fem.Function(V0)
-    alpha_custom.interpolate(lambda x: np.full((1, x.shape[1]), alpha))
+        V0 = _fem.functionspace(mesh_custom, ("DG", 0))
+        mu0 = _fem.Function(V0)
+        lmbda0 = _fem.Function(V0)
+        fric = _fem.Function(V0)
+        mu0.interpolate(lambda x: np.full((1, x.shape[1]), mu))
+        lmbda0.interpolate(lambda x: np.full((1, x.shape[1]), lmbda))
+        fric.interpolate(lambda x: np.full((1, x.shape[1]), 0.1))
 
-    if problem == Problem.Poisson:
-        coeffs = {"T": u1._cpp_object, "kdt": kdt_custom._cpp_object}
-    elif problem == Problem.Elasticity:
-        coeffs = {
-            "u": u1._cpp_object,
-            "mu": mu_custom._cpp_object,
-            "lambda": lmbda_custom._cpp_object,
-        }
-        gamma = gamma * E
-    else:
-        coeffs = {
-            "u": u1._cpp_object,
-            "T": T1._cpp_object,
-            "mu": mu_custom._cpp_object,
-            "lambda": lmbda_custom._cpp_object,
-            "alpha": alpha_custom._cpp_object,
-        }
-        gamma = gamma * E
+        # Create single meshtag for contact pair
+        facet_marker = create_facet_markers(mesh_custom, facets_cg)
+        # Create adjacency list associating the only meshtag with the to markers
+        data = np.array([0, 1], dtype=np.int32)
+        offsets = np.array([0, 2], dtype=np.int32)
+        surfaces = adjacencylist(data, offsets)
+        contact_problem = ContactProblem(
+            [facet_marker],
+            surfaces,
+            [(0, 1), (1, 0)],
+            mesh_custom,
+            quadrature_degree,
+            [search, search],
+        )
+        contact_problem.generate_contact_data(
+            frictionlaw,
+            V_custom,
+            {"u": u, "du": u1, "mu": mu0, "lambda": lmbda0, "fric": fric},
+            E * gamma,
+            theta,
+        )
 
-    # Dummy form for creating vector/matrix
-    dx = ufl.Measure("dx", domain=mesh_custom)
-    F_custom = ufl.inner(ufl.grad(u1), ufl.grad(v1)) * dx
-    J_custom = kdt * ufl.inner(ufl.grad(w1), ufl.grad(v1)) * dx
+        # compiler options to improve performance
+        cffi_options = ["-Ofast", "-march=native"]
+        jit_options = {"cffi_extra_compile_args": cffi_options, "cffi_libraries": ["m"]}
+        # Generate residual data structures
+        F_custom = _fem.form(F_custom, jit_options=jit_options)
+        b1 = _fem.Function(V_custom)
 
-    # meshtie surfaces
-    facet_marker = create_facet_markers(mesh_custom, facets_cg)
+        ind_dg = compute_dof_permutations_all(V_ufl, V_custom, gap)
 
-    data = np.array([0, 1], dtype=np.int32)
-    offsets = np.array([0, 2], dtype=np.int32)
-    surfaces = adjacencylist(data, offsets)
-    # initialise meshties
-    meshties = MeshTie(
-        [facet_marker._cpp_object],
-        surfaces,
-        [(0, 1), (1, 0)],
-        mesh_custom._cpp_object,
-        quadrature_degree=quadrature_degree,
+        # Generate residual data structures
+        J_custom = _fem.form(J_custom, jit_options=jit_options)
+        A1 = contact_problem.create_matrix(J_custom)
+
+        # Assemble residual
+        b1.x.array[:] = 0.0
+        contact_problem.assemble_vector(b1.x.petsc_vec, V_custom)
+        b1.x.scatter_reverse(la.InsertMode.add)
+        b1.x.scatter_forward()
+        assert np.allclose(b0.x.array[ind_dg], b1.x.array)
+
+        # Assemble  jacobian
+        A1.zeroEntries()
+        contact_problem.assemble_matrix(A1, V_custom)
+        A1.assemble()
+
+        # Retrieve data necessary for comparison
+        tdim = mesh_ufl.topology.dim
+
+        # create scipy matrix
+        # FIXME: Add parallel matrix comparison
+        if MPI.COMM_WORLD.size < 2:
+            # Skip matrix comparison in parallel
+            ai, aj, av = A0.getValuesCSR()
+            A_sp = scipy.sparse.csr_matrix((av, aj, ai), shape=A0.getSize()).todense()
+            bi, bj, bv = A1.getValuesCSR()
+            B_sp = scipy.sparse.csr_matrix((bv, bj, bi), shape=A1.getSize()).todense()
+
+            assert np.allclose(A_sp[ind_dg, :][:, ind_dg], B_sp)
+
+        # Sanity check different formulations
+        if frictionlaw == FrictionLaw.Frictionless:
+            # Contact terms formulated using ufl consistent with nitsche_ufl.py
+            F2 = DG_rhs_minus(u0, v0, h, n, gamma_scaled, theta, sigma, gap, dS)
+
+            F2 = _fem.form(F2)
+            b2 = _fem.Function(V_ufl)
+            b2.x.array[:] = 0.0
+            _fem.petsc.assemble_vector(b2.x.petsc_vec, F2)
+            b2.x.scatter_reverse(la.InsertMode.add)
+            b2.x.scatter_forward()
+            assert np.allclose(b1.x.array, b2.x.array[ind_dg])
+
+            # Contact terms formulated using ufl consistent with nitsche_ufl.py
+            # FIXME: Add parallel matrix comparison
+            if MPI.COMM_WORLD.size < 2:
+                J2 = DG_jac_minus(u0, v0, w0, h, n, gamma_scaled, theta, sigma, gap, dS)
+                J2 = _fem.form(J2)
+                A2 = _fem.petsc.create_matrix(J2)
+                A2.zeroEntries()
+                _fem.petsc.assemble_matrix(A2, J2)
+                A2.assemble()
+
+                ci, cj, cv = A2.getValuesCSR()
+                C_sp = scipy.sparse.csr_matrix((cv, cj, ci), shape=A2.getSize()).todense()
+                assert np.allclose(C_sp[ind_dg, :][:, ind_dg], B_sp)
+
+    @pytest.mark.xdist_group(name="group1")
+    @pytest.mark.skipif(MPI.COMM_WORLD.size > 2, reason="This test can only be executed with one or two processes")
+    @pytest.mark.parametrize(
+        "problem",
+        [
+            Problem.Poisson,
+            Problem.Elasticity,
+            Problem.ThermoElasticity,
+        ],
     )
-    meshties.generate_kernel_data(problem, V_custom._cpp_object, coeffs, gamma, theta)
+    def test_meshtie_kernels(self, ct, gap, quadrature_degree, theta, problem):
+        # Problem parameters
+        kdt = 5
+        plane_strain = False
+        E = 1e3
+        nu = 0.1
+        mu_func, lambda_func = lame_parameters(plane_strain)
+        mu = mu_func(E, nu)
+        lmbda = lambda_func(E, nu)
+        sigma = sigma_func(mu, lmbda)
 
-    # Generate residual data structures
-    F_custom = _fem.form(F_custom)
-    b1 = _fem.Function(V_custom)
+        # Nitche parameter
+        gamma = 10
 
-    # # Generate matrix
-    J_custom = _fem.form(J_custom)
-    A1 = meshties.create_matrix(J_custom._cpp_object)
+        # create meshes and function spaces
 
-    # Assemble  residual
-    b1.x.array[:] = 0.0
-    meshties.assemble_vector(b1.x.petsc_vec, V_custom._cpp_object, problem)
-    b1.x.scatter_reverse(la.InsertMode.add)
-    b1.x.scatter_forward()
+        # create meshes and function spaces
+        mesh_ufl, mesh_custom = create_meshes(ct, gap)
+        gdim = mesh_ufl.geometry.dim
+        tdim = mesh_ufl.topology.dim
+        TOL = 1e-7
+        cells_ufl_0 = locate_entities(mesh_ufl, tdim, lambda x: x[tdim - 1] > 0 - TOL)
+        cells_ufl_1 = locate_entities(mesh_ufl, tdim, lambda x: x[tdim - 1] < 0 + TOL)
 
-    # Assemble  jacobian
-    A1.zeroEntries()
-    meshties.assemble_matrix(A1, V_custom._cpp_object, problem)
-    A1.assemble()
+        if problem == Problem.Poisson:
+            V_ufl = _fem.functionspace(mesh_ufl, ("DG", 1))
+            V_custom = _fem.functionspace(mesh_custom, ("Lagrange", 1))
 
-    # Retrieve data necessary for comparison
-    tdim = mesh_ufl.topology.dim
-    ind_dg = compute_dof_permutations_all(V_ufl, V_custom, gap)
+            def _u0(x):
+                return np.sin(x[0]) + 1
 
-    # Compare rhs
-    assert np.allclose(b0.x.array[ind_dg], b1.x.array)
+            def _u1(x):
+                return np.sin(x[tdim - 1]) + 2
 
-    # create scipy matrix
-    # FIXME: Add parallel matrix comparison
-    if MPI.COMM_WORLD.size < 2:
-        ai, aj, av = A0.getValuesCSR()
-        A_sp = scipy.sparse.csr_matrix((av, aj, ai), shape=A0.getSize()).todense()
-        bi, bj, bv = A1.getValuesCSR()
-        B_sp = scipy.sparse.csr_matrix((bv, bj, bi), shape=A1.getSize()).todense()
+            def _u2(x):
+                return np.sin(x[tdim - 1] + gap) + 2
+        else:
+            V_ufl = _fem.functionspace(mesh_ufl, ("DG", 1, (gdim,)))
+            V_custom = _fem.functionspace(mesh_custom, ("Lagrange", 1, (gdim,)))
 
-        assert np.allclose(A_sp[:, ind_dg][ind_dg, :], B_sp)
+            def _u0(x):
+                values = np.zeros((gdim, x.shape[1]))
+                for i in range(tdim):
+                    values[i] = np.sin(x[i]) + 1
+                return values
+
+            def _u1(x):
+                values = np.zeros((gdim, x.shape[1]))
+                for i in range(tdim):
+                    values[i] = np.sin(x[i]) + 2
+                return values
+
+            def _u2(x):
+                values = np.zeros((gdim, x.shape[1]))
+                for i in range(tdim):
+                    values[i] = np.sin(x[i] + gap) + 2 if i == tdim - 1 else np.sin(x[i]) + 2
+                return values
+
+        # DG ufl 'contact'
+        u0 = _fem.Function(V_ufl)
+        u0.interpolate(_u0, cells_ufl_0)
+        u0.interpolate(_u1, cells_ufl_1)
+        v0 = ufl.TestFunction(V_ufl)
+        w0 = ufl.TrialFunction(V_ufl)
+        T0, Q_ufl, Q_custom = None, None, None
+        metadata = {"quadrature_degree": quadrature_degree}
+        dS = ufl.Measure("dS", domain=mesh_ufl, metadata=metadata)
+
+        # Custom assembly
+        cells, facets_cg = locate_contact_facets_custom(V_custom, gap)
+        # Fem functions
+        u1 = _fem.Function(V_custom)
+        v1 = ufl.TestFunction(V_custom)
+        w1 = ufl.TrialFunction(V_custom)
+
+        u1.interpolate(_u0, np.array(cells[0]))
+        u1.interpolate(_u2, np.array(cells[1]))
+        u1.x.scatter_forward()
+
+        n = ufl.FacetNormal(mesh_ufl)
+
+        # Scaled Nitsche parameter
+        h = ufl.CellDiameter(mesh_ufl)
+        alpha = 0.5
+
+        # DG formulation
+        if problem == Problem.Poisson:
+            F0 = poisson_dg(u0, v0, h, n, kdt, gamma, theta, dS)
+            J0 = poisson_dg(w0, v0, h, n, kdt, gamma, theta, dS)
+        elif problem == Problem.Elasticity:
+            F0 = tied_dg(u0, v0, h, n, gamma * E, theta, sigma, dS)
+            J0 = tied_dg(w0, v0, h, n, gamma * E, theta, sigma, dS)
+        elif problem == Problem.ThermoElasticity:
+            Q_ufl = _fem.functionspace(mesh_ufl, ("DG", 1))
+            Q_custom = _fem.functionspace(mesh_custom, ("Lagrange", 1))
+            T0 = _fem.Function(Q_ufl)
+            T1 = _fem.Function(Q_custom)
+            T0.interpolate(lambda x: np.sin(x[0]) + 1, cells_ufl_0)
+            T0.interpolate(lambda x: np.sin(x[tdim - 1]) + 2, cells_ufl_1)
+            T1.interpolate(lambda x: np.sin(x[0]) + 1, np.array(cells[0]))
+            T1.interpolate(lambda x: np.sin(x[tdim - 1] + gap) + 2, np.array(cells[1]))
+            T0.x.scatter_forward()
+            T1.x.scatter_forward()
+
+            def sigma_T(w, T):
+                return sigma(w) - alpha * (3 * lmbda + 2 * mu) * T * ufl.Identity(gdim)
+
+            F0 = tied_dg_T(u0, v0, T0, h, n, gamma * E, theta, sigma, sigma_T, dS)
+            J0 = tied_dg(w0, v0, h, n, gamma * E, theta, sigma, dS)
+
+        # rhs vector
+        F0 = _fem.form(F0)
+        b0 = _fem.Function(V_ufl)
+        b0.x.array[:] = 0
+        _fem.petsc.assemble_vector(b0.x.petsc_vec, F0)
+        b0.x.scatter_reverse(la.InsertMode.add)
+        b0.x.scatter_forward()
+
+        # lhs matrix
+        J0 = _fem.form(J0)
+        A0 = _fem.petsc.create_matrix(J0)
+        A0.zeroEntries()
+        _fem.petsc.assemble_matrix(A0, J0)
+        A0.assemble()
+
+        V0 = _fem.functionspace(mesh_custom, ("DG", 0))
+        kdt_custom = _fem.Function(V0)
+        kdt_custom.interpolate(lambda x: np.full((1, x.shape[1]), kdt))
+        lmbda_custom = _fem.Function(V0)
+        lmbda_custom.interpolate(lambda x: np.full((1, x.shape[1]), lmbda))
+        mu_custom = _fem.Function(V0)
+        mu_custom.interpolate(lambda x: np.full((1, x.shape[1]), mu))
+        alpha_custom = _fem.Function(V0)
+        alpha_custom.interpolate(lambda x: np.full((1, x.shape[1]), alpha))
+
+        if problem == Problem.Poisson:
+            coeffs = {"T": u1._cpp_object, "kdt": kdt_custom._cpp_object}
+        elif problem == Problem.Elasticity:
+            coeffs = {
+                "u": u1._cpp_object,
+                "mu": mu_custom._cpp_object,
+                "lambda": lmbda_custom._cpp_object,
+            }
+            gamma = gamma * E
+        else:
+            coeffs = {
+                "u": u1._cpp_object,
+                "T": T1._cpp_object,
+                "mu": mu_custom._cpp_object,
+                "lambda": lmbda_custom._cpp_object,
+                "alpha": alpha_custom._cpp_object,
+            }
+            gamma = gamma * E
+
+        # Dummy form for creating vector/matrix
+        dx = ufl.Measure("dx", domain=mesh_custom)
+        F_custom = ufl.inner(ufl.grad(u1), ufl.grad(v1)) * dx
+        J_custom = kdt * ufl.inner(ufl.grad(w1), ufl.grad(v1)) * dx
+
+        # meshtie surfaces
+        facet_marker = create_facet_markers(mesh_custom, facets_cg)
+
+        data = np.array([0, 1], dtype=np.int32)
+        offsets = np.array([0, 2], dtype=np.int32)
+        surfaces = adjacencylist(data, offsets)
+        # initialise meshties
+        meshties = MeshTie(
+            [facet_marker._cpp_object],
+            surfaces,
+            [(0, 1), (1, 0)],
+            mesh_custom._cpp_object,
+            quadrature_degree=quadrature_degree,
+        )
+        meshties.generate_kernel_data(problem, V_custom._cpp_object, coeffs, gamma, theta)
+
+        # Generate residual data structures
+        F_custom = _fem.form(F_custom)
+        b1 = _fem.Function(V_custom)
+
+        # # Generate matrix
+        J_custom = _fem.form(J_custom)
+        A1 = meshties.create_matrix(J_custom._cpp_object)
+
+        # Assemble  residual
+        b1.x.array[:] = 0.0
+        meshties.assemble_vector(b1.x.petsc_vec, V_custom._cpp_object, problem)
+        b1.x.scatter_reverse(la.InsertMode.add)
+        b1.x.scatter_forward()
+
+        # Assemble  jacobian
+        A1.zeroEntries()
+        meshties.assemble_matrix(A1, V_custom._cpp_object, problem)
+        A1.assemble()
+
+        # Retrieve data necessary for comparison
+        tdim = mesh_ufl.topology.dim
+        ind_dg = compute_dof_permutations_all(V_ufl, V_custom, gap)
+
+        # Compare rhs
+        assert np.allclose(b0.x.array[ind_dg], b1.x.array)
+
+        # create scipy matrix
+        # FIXME: Add parallel matrix comparison
+        if MPI.COMM_WORLD.size < 2:
+            ai, aj, av = A0.getValuesCSR()
+            A_sp = scipy.sparse.csr_matrix((av, aj, ai), shape=A0.getSize()).todense()
+            bi, bj, bv = A1.getValuesCSR()
+            B_sp = scipy.sparse.csr_matrix((bv, bj, bi), shape=A1.getSize()).todense()
+            assert np.allclose(A_sp[:, ind_dg][ind_dg, :], B_sp)

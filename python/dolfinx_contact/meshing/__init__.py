@@ -26,7 +26,7 @@ from .split_box import (
     horizontal_sine,
     vertical_line,
 )
-from .utils import convert_mesh
+from .utils import convert_mesh, convert_mesh_new
 
 __all__ = [
     "create_christmas_tree_mesh",
@@ -37,6 +37,7 @@ __all__ = [
     "create_box_mesh_3D",
     "create_sphere_plane_mesh",
     "convert_mesh",
+    "convert_mesh_new",
     "create_disk_mesh",
     "create_sphere_mesh",
     "create_sphere_sphere_mesh",

@@ -26,7 +26,6 @@ jobs:
         run: pip install clang-format mypy ruff
       - name: ruff checks
         run: |
-          pip install ruff
           ruff format --check
           ruff check
       - name: mypy checks
@@ -131,17 +130,23 @@ jobs:
           pip -v install --no-build-isolation python/
           pip install scipy matplotlib
 
+      - name: Run demos (Python)
+        run: |
+          pip install pytest pytest-xdist
+          cd python/demos
+          python -m pytest -v .
+
       - name: Create output folders
         id: output-creation
         working-directory: ./python/demos
         run: |
-            mkdir -p results
-            mkdir -p meshes
+          mkdir -p results
+          mkdir -p meshes
 
       - name: Run SNES demos
         working-directory: ./python/demos
         run: |
-          python compare_custom_snes_one_sided.py
+          # python new_demo_custom_snes_one_sided.py
           python compare_nitsche_snes.py
 
       - name: Run rigid surface demos
@@ -184,7 +189,7 @@ jobs:
           cd python/tests
           mkdir -p meshes
           # python -m pytest .
-          python -m pytest -v -n auto --durations=50 .
+          python -m pytest -v -n auto --durations=50 --dist loadgroup .
 
       - name: Run unbiased demos in parallel
         working-directory: ./python/demos

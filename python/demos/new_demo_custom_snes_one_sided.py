@@ -25,96 +25,29 @@ from dolfinx_contact.meshing import convert_mesh, create_disk_mesh, create_spher
 from dolfinx_contact.one_sided.nitsche_custom import nitsche_custom
 from dolfinx_contact.one_sided.snes_against_plane import snes_solver
 
-if __name__ == "__main__":
-    description = "Compare Nitsche's method for contact against a straight plane with PETSc SNES"
-    parser = argparse.ArgumentParser(description=description, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument(
-        "--theta",
-        default=1.0,
-        type=float,
-        dest="theta",
-        choices=[-1.0, 0.0, 1.0],
-        help="Theta parameter for Nitsche: skew symmetric (-1), Penalty-like (0), symmetric (1)",
-    )
-    parser.add_argument(
-        "--gamma",
-        default=10.0,
-        type=float,
-        dest="gamma",
-        help="Coercivity/Stabilization parameter for Nitsche condition",
-    )
-    _solve = parser.add_mutually_exclusive_group(required=False)
-    _solve.add_argument(
-        "--linear",
-        dest="linear_solver",
-        action="store_true",
-        help="Use linear solver",
-        default=False,
-    )
-    _3D = parser.add_mutually_exclusive_group(required=False)
-    _3D.add_argument("--3D", dest="threed", action="store_true", help="Use 3D mesh", default=False)
-    _cube = parser.add_mutually_exclusive_group(required=False)
-    _cube.add_argument(
-        "--cube",
-        dest="cube",
-        action="store_true",
-        help="Use Cube/Square",
-        default=False,
-    )
-    _strain = parser.add_mutually_exclusive_group(required=False)
-    _strain.add_argument(
-        "--strain",
-        dest="plane_strain",
-        action="store_true",
-        help="Use plane strain formulation",
-        default=False,
-    )
-    _dirichlet = parser.add_mutually_exclusive_group(required=False)
-    _dirichlet.add_argument(
-        "--dirichlet",
-        dest="dirichlet",
-        action="store_true",
-        help="Use strong Dirichlet formulation",
-        default=False,
-    )
-    _E = parser.add_argument("--E", default=1e3, type=np.float64, dest="E", help="Youngs modulus of material")
-    _nu = parser.add_argument("--nu", default=0.1, type=np.float64, dest="nu", help="Poisson's ratio")
-    _disp = parser.add_argument(
-        "--disp",
-        default=0.08,
-        type=np.float64,
-        dest="disp",
-        help="Displacement BC in negative y direction",
-    )
-    _ref = parser.add_argument(
-        "--refinements",
-        default=1,
-        type=np.int32,
-        dest="refs",
-        help="Number of mesh refinements",
-    )
-    _gap = parser.add_argument(
-        "--gap",
-        default=0.02,
-        type=np.float64,
-        dest="gap",
-        help="Gap between plane and y=0",
-    )
 
-    # Parse input arguments or set to defualt values
-    args = parser.parse_args()
-
+def solver(
+    theta=1.0,
+    gamma=10.0,
+    # linear_solver=False,
+    threed=False,
+    cube=False,
+    plane_strain=False,
+    dirichlet=False,
+    E=1e3,
+    nu=0.1,
+    disp=0.08,
+    refs=1,
+    gap=0.02,
+):
     # Current formulation uses unilateral contact
-    nitsche_parameters = {"gamma": args.gamma, "theta": args.theta}
-    nitsche_bc = not args.dirichlet
-    physical_parameters = {"E": args.E, "nu": args.nu, "strain": args.plane_strain}
-    vertical_displacement = -args.disp
-    num_refs = args.refs + 1
-    gap = args.gap
+    nitsche_parameters = {"gamma": gamma, "theta": theta}
+    nitsche_bc = not dirichlet
+    physical_parameters = {"E": E, "nu": nu, "strain": plane_strain}
+    vertical_displacement = -disp
+    num_refs = refs + 1
     top_value = 1
-    threed = args.threed
     bottom_value = 2
-    cube = args.cube
 
     petsc_options = {"ksp_type": "preonly", "pc_type": "lu"}
     # petsc_options = {"ksp_type": "cg", "pc_type": "gamg", "rtol": 1e-6, "pc_gamg_coarse_eq_limit": 1000,
@@ -249,3 +182,114 @@ if __name__ == "__main__":
             print(f"{dofs_global[i]}, Nitsche: {nitsche_timings[1]: 0.2e}" + f" SNES: {snes_timings[1]:0.2e}")
     assert e_rel[-1] < 1e-3
     assert e_abs[-1] < 1e-4
+
+
+if __name__ == "__main__":
+    description = "Compare Nitsche's method for contact against a straight plane with PETSc SNES"
+    parser = argparse.ArgumentParser(description=description, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument(
+        "--theta",
+        default=1.0,
+        type=float,
+        dest="theta",
+        choices=[-1.0, 0.0, 1.0],
+        help="Theta parameter for Nitsche: skew symmetric (-1), Penalty-like (0), symmetric (1)",
+    )
+    parser.add_argument(
+        "--gamma",
+        default=10.0,
+        type=float,
+        dest="gamma",
+        help="Coercivity/Stabilization parameter for Nitsche condition",
+    )
+    _solve = parser.add_mutually_exclusive_group(required=False)
+    _solve.add_argument(
+        "--linear",
+        dest="linear_solver",
+        action="store_true",
+        help="Use linear solver",
+        default=False,
+    )
+    _3D = parser.add_mutually_exclusive_group(required=False)
+    _3D.add_argument("--3D", dest="threed", action="store_true", help="Use 3D mesh", default=False)
+    _cube = parser.add_mutually_exclusive_group(required=False)
+    _cube.add_argument(
+        "--cube",
+        dest="cube",
+        action="store_true",
+        help="Use Cube/Square",
+        default=False,
+    )
+    _strain = parser.add_mutually_exclusive_group(required=False)
+    _strain.add_argument(
+        "--strain",
+        dest="plane_strain",
+        action="store_true",
+        help="Use plane strain formulation",
+        default=False,
+    )
+    _dirichlet = parser.add_mutually_exclusive_group(required=False)
+    _dirichlet.add_argument(
+        "--dirichlet",
+        dest="dirichlet",
+        action="store_true",
+        help="Use strong Dirichlet formulation",
+        default=False,
+    )
+    _E = parser.add_argument("--E", default=1e3, type=np.float64, dest="E", help="Youngs modulus of material")
+    _nu = parser.add_argument("--nu", default=0.1, type=np.float64, dest="nu", help="Poisson's ratio")
+    _disp = parser.add_argument(
+        "--disp",
+        default=0.08,
+        type=np.float64,
+        dest="disp",
+        help="Displacement BC in negative y direction",
+    )
+    _ref = parser.add_argument(
+        "--refinements",
+        default=1,
+        type=np.int32,
+        dest="refs",
+        help="Number of mesh refinements",
+    )
+    _gap = parser.add_argument(
+        "--gap",
+        default=0.02,
+        type=np.float64,
+        dest="gap",
+        help="Gap between plane and y=0",
+    )
+
+    # Parse input arguments or set to defualt values
+    args = parser.parse_args()
+
+    solver(
+        theta=args.theta,
+        gamma=args.gamma,
+        # linear_solver=args.linear_solver,
+        threed=args.threed,
+        cube=args.cube,
+        plane_strain=args.plane_strain,
+        dirichlet=args.dirichlet,
+        E=args.E,
+        nu=args.nu,
+        disp=args.disp,
+        refs=args.refs,
+        gap=args.gap,
+    )
+
+
+def test_custom_snes():
+    solver(
+        theta=1.0,
+        gamma=10.0,
+        threed=False,
+        cube=False,
+        plane_strain=False,
+        dirichlet=False,
+        E=1e3,
+        nu=0.1,
+        disp=0.08,
+        refs=1,
+        gap=0.02,
+    )

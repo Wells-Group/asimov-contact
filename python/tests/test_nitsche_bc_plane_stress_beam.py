@@ -33,8 +33,7 @@ def solve_manufactured(
     linear_solver: bool,
     L: float = 10,
 ):
-    """
-    Solve the manufactured problem
+    """Solve the manufactured problem
     u = [(nu + 1) / E * x[1]**4, (nu + 1) / E * x[0]**4]
     on the domain [0, -1]x[L, 1]
     where u solves the linear elasticity equations (plane stress/plane strain) with

@@ -19,7 +19,7 @@ from dolfinx.mesh import CellType, create_mesh, locate_entities_boundary, meshta
 
 def create_functionspaces(tempdir, ct, gap, delta, disp):
     """This is a helper function to create the two element function spaces
-    for custom assembly using quads, triangles, hexes and tetrahedra"""
+    for custom assembly using quads, triangles, hexes and tetrahedra."""
     cell_type = to_type(ct)
     if cell_type == CellType.quadrilateral:
         x_1 = np.array([[0, 0], [0.8, 0], [0.1, 1.3], [0.7, 1.2]])

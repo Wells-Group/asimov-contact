@@ -17,10 +17,7 @@ from dolfinx.graph import adjacencylist
 
 @pytest.mark.skipif(MPI.COMM_WORLD.size > 1, reason="This test should only be run in serial.")
 def test_pack_u():
-    """
-    Test that evaluation of a function u on the opposite surface is correct
-
-    """
+    """Test that evaluation of a function u on the opposite surface is correct."""
     # Create mesh consisting of 4 triangles, where they are grouped in two
     # disconnected regions (with two cells in each region)
     points = np.array(
