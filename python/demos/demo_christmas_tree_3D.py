@@ -55,7 +55,7 @@ if __name__ == "__main__":
         dest="nload_steps",
         help="Number of steps for gradual loading",
     )
-    # Parse input arguments or set to defualt values
+    # Parse input arguments or set to default values
     args = parser.parse_args()
     nload_steps = args.nload_steps
     mesh_dir = "meshes"

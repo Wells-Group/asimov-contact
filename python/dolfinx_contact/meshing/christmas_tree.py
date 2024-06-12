@@ -2,6 +2,10 @@
 #
 # SPDX-License-Identifier:    MIT
 
+
+import typing
+from pathlib import Path
+
 from mpi4py import MPI
 
 import gmsh
@@ -48,7 +52,7 @@ def jagged_curve(npoints, t, r0, r1, xmax):
     return np.array(xvals), np.array(yvals)
 
 
-def create_christmas_tree_mesh_3D(filename: str, res=0.2, split=1, n1=101, n2=51):
+def create_christmas_tree_mesh_3D(filename: typing.Union[str, Path], res=0.2, split=1, n1=101, n2=51):
     offset = [0.0, 0.0, 1.0]
     # TODO: Some of the curve parameters should probably be input
     nc = n1
@@ -141,13 +145,13 @@ def create_christmas_tree_mesh_3D(filename: str, res=0.2, split=1, n1=101, n2=51
         model.mesh.field.setAsBackgroundMesh(2)
         model.mesh.generate(3)
         model.mesh.optimize("Netgen")
-        gmsh.write(f"{filename}.msh")
+        gmsh.write(str(filename))
 
     MPI.COMM_WORLD.Barrier()
     gmsh.finalize()
 
 
-def create_christmas_tree_mesh(filename: str, res=0.2, split=1):
+def create_christmas_tree_mesh(filename: typing.Union[str, Path], res=0.2, split=1):
     # TODO: Some of the curve parameters should probably be input
     nc = 101
     x, y = jagged_curve(nc, -0.95, lambda x: 0.8 * x / 5.0, lambda x: 0.6, 8.0)
@@ -216,7 +220,7 @@ def create_christmas_tree_mesh(filename: str, res=0.2, split=1):
             model.addPhysicalGroup(1, tree_outer[start:end], tag=4 + split + i + 1)
         model.mesh.field.setAsBackgroundMesh(2)
         model.mesh.generate(2)
-        gmsh.write(f"{filename}.msh")
+        gmsh.write(str(filename))
 
     MPI.COMM_WORLD.Barrier()
     gmsh.finalize()
