@@ -4,6 +4,7 @@
 #
 # Compare Nitsche's method for enforcing contact of a body subject to linear elasticity
 #  against a rigid plane with a SNES implementation
+
 import argparse
 
 from mpi4py import MPI

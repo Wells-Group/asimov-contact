@@ -11,7 +11,7 @@ from dolfinx.io import XDMFFile
 from dolfinx.mesh import Mesh, locate_entities_boundary, meshtags
 from dolfinx_contact.cpp import Contact, ContactMode
 from dolfinx_contact.meshing import (
-    convert_mesh,
+    convert_mesh_new,
     create_circle_plane_mesh,
     create_cylinder_cylinder_mesh,
     create_sphere_plane_mesh,
@@ -24,12 +24,13 @@ from dolfinx_contact.meshing import (
 @pytest.mark.parametrize("res", [0.01, 0.1])
 @pytest.mark.parametrize("dim", [2, 3])
 def test_copy_to_submesh(tmp_path, order, res, simplex, dim):
+    """TODO."""
     mesh_dir = tmp_path
     if dim == 3:
         if simplex:
             fname = mesh_dir / "sphere3D"
             create_sphere_plane_mesh(
-                filename=f"{str(fname)}.msh",
+                filename=fname.with_suffix(".msh"),
                 res=res,
                 order=order,
                 r=0.25,
@@ -37,8 +38,10 @@ def test_copy_to_submesh(tmp_path, order, res, simplex, dim):
                 length=1.0,
                 width=1.0,
             )
-            convert_mesh(str(fname), f"{str(fname)}.xdmf", gdim=3)
-            with XDMFFile(MPI.COMM_WORLD, f"{str(fname)}.xdmf", "r") as xdmf:
+
+            convert_mesh_new(fname.with_suffix(".msh"), fname.with_suffix(".xdmf"), gdim=3)
+
+            with XDMFFile(MPI.COMM_WORLD, fname.with_suffix(".xdmf"), "r") as xdmf:
                 mesh = xdmf.read_mesh()
                 tdim = mesh.topology.dim
                 mesh.topology.create_connectivity(tdim - 1, tdim)
@@ -47,8 +50,8 @@ def test_copy_to_submesh(tmp_path, order, res, simplex, dim):
             contact_bdy_2 = 8
         else:
             fname = mesh_dir / "cylinders3D"
-            create_cylinder_cylinder_mesh(fname, order=order, res=10 * res, simplex=simplex)
-            with XDMFFile(MPI.COMM_WORLD, f"{str(fname)}.xdmf", "r") as xdmf:
+            create_cylinder_cylinder_mesh(str(fname), order=order, res=10 * res, simplex=simplex)
+            with XDMFFile(MPI.COMM_WORLD, fname.with_suffix(".xdmf"), "r") as xdmf:
                 mesh = xdmf.read_mesh(name="cylinder_cylinder")
             tdim = mesh.topology.dim
             mesh.topology.create_connectivity(tdim - 1, tdim)
@@ -93,7 +96,7 @@ def test_copy_to_submesh(tmp_path, order, res, simplex, dim):
     else:
         fname = mesh_dir / "hertz2D_simplex" if simplex else mesh_dir / "hertz2D_quads"
         create_circle_plane_mesh(
-            filename=f"{str(fname)}.msh",
+            filename=str(fname.with_suffix(".msh")),
             res=res,
             order=order,
             quads=not simplex,
@@ -101,8 +104,8 @@ def test_copy_to_submesh(tmp_path, order, res, simplex, dim):
             height=0.25,
             length=1.0,
         )
-        convert_mesh(str(fname), f"{str(fname)}.xdmf", gdim=2)
-        with XDMFFile(MPI.COMM_WORLD, f"{str(fname)}.xdmf", "r") as xdmf:
+        convert_mesh_new(fname.with_suffix(".msh"), fname.with_suffix(".xdmf"), gdim=2)
+        with XDMFFile(MPI.COMM_WORLD, fname.with_suffix(".xdmf"), "r") as xdmf:
             mesh = xdmf.read_mesh()
             tdim = mesh.topology.dim
             mesh.topology.create_connectivity(tdim - 1, tdim)

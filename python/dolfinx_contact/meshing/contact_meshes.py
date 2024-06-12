@@ -2,6 +2,9 @@
 #
 # SPDX-License-Identifier:    MIT
 
+import typing
+from pathlib import Path
+
 from mpi4py import MPI
 
 import gmsh
@@ -538,7 +541,7 @@ def create_box_mesh_3D(
 
 
 def create_sphere_plane_mesh(
-    filename: str,
+    filename: typing.Union[str, Path],
     order: int = 1,
     res=0.05,
     r=0.25,
@@ -596,14 +599,13 @@ def create_sphere_plane_mesh(
         gmsh.model.mesh.setOrder(order)
 
         # gmsh.option.setNumber("Mesh.SaveAll", 1)
-        gmsh.write(filename)
+        gmsh.write(str(filename))
     MPI.COMM_WORLD.Barrier()
     gmsh.finalize()
 
 
-def create_sphere_sphere_mesh(filename: str, order: int = 1):
-    """
-    Create a 3D mesh consisting of two spheres with radii 0.3 and 0.6 and
+def create_sphere_sphere_mesh(filename: typing.Union[str, Path], order: int = 1):
+    """Create a 3D mesh consisting of two spheres with radii 0.3 and 0.6 and
     centers (0.5,0.5,0.5) and (0.5,0.5,-0.5)
     """
     center = [0.5, 0.5, 0.5]
@@ -658,12 +660,12 @@ def create_sphere_sphere_mesh(filename: str, order: int = 1):
         gmsh.model.mesh.setOrder(order)
 
         # gmsh.option.setNumber("Mesh.SaveAll", 1)
-        gmsh.write(filename)
+        gmsh.write(str(filename))
     MPI.COMM_WORLD.Barrier()
     gmsh.finalize()
 
 
-def create_cylinder_cylinder_mesh(filename: str, order: int = 1, res=0.25, simplex: bool = False):
+def create_cylinder_cylinder_mesh(filename: typing.Union[str, Path], order: int = 1, res=0.25, simplex: bool = False):
     gmsh.initialize()
     model = gmsh.model()
     if MPI.COMM_WORLD.rank == 0:
@@ -717,7 +719,7 @@ def create_cylinder_cylinder_mesh(filename: str, order: int = 1, res=0.25, simpl
     mt_domain.name = "domain_marker"
 
     # Permute also entities which are tagged
-    with XDMFFile(MPI.COMM_WORLD, f"{filename}.xdmf", "w") as file:
+    with XDMFFile(MPI.COMM_WORLD, f"{str(filename)}.xdmf", "w") as file:
         file.write_mesh(msh)
         file.write_meshtags(mt_domain, msh.geometry)
     gmsh.finalize()
