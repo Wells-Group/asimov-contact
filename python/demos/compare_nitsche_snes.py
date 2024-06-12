@@ -6,6 +6,8 @@
 #  against a rigid plane with a SNES implementation
 
 import argparse
+import tempfile
+from pathlib import Path
 
 from mpi4py import MPI
 
@@ -21,7 +23,7 @@ from dolfinx.mesh import (
     meshtags,
     refine,
 )
-from dolfinx_contact.meshing import convert_mesh, create_disk_mesh, create_sphere_mesh
+from dolfinx_contact.meshing import convert_mesh_new, create_disk_mesh, create_sphere_mesh
 from dolfinx_contact.one_sided import nitsche_ufl, snes_solver
 
 if __name__ == "__main__":
@@ -122,11 +124,12 @@ if __name__ == "__main__":
         if cube:
             mesh = create_unit_cube(MPI.COMM_WORLD, 10, 10, 20)
         else:
-            fname = f"{mesh_dir}/sphere"
-            create_sphere_mesh(filename=f"{fname}.msh")
-            convert_mesh(fname, fname, gdim=3)
-            with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
-                mesh = xdmf.read_mesh()
+            with tempfile.TemporaryDirectory() as tmpdirname:
+                fname = Path(tmpdirname, "sphere.msh")
+                create_sphere_mesh(filename=f"{fname}.msh")
+                convert_mesh_new(fname, fname.with_suffix(".xdmf"), gdim=3)
+                with XDMFFile(MPI.COMM_WORLD, fname.with_suffix(".xdmf"), "r") as xdmf:
+                    mesh = xdmf.read_mesh()
 
         def top(x):
             return x[2] > 0.9
@@ -138,11 +141,12 @@ if __name__ == "__main__":
         if cube:
             mesh = create_unit_square(MPI.COMM_WORLD, 30, 30)
         else:
-            fname = f"{mesh_dir}/disk"
-            create_disk_mesh(filename=f"{fname}.msh")
-            convert_mesh(fname, fname, gdim=2)
-            with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
-                mesh = xdmf.read_mesh()
+            with tempfile.TemporaryDirectory() as tmpdirname:
+                fname = Path(tmpdirname, "disk.msh")
+                create_disk_mesh(filename=fname)
+                convert_mesh_new(fname, fname.with_suffix(".xdmf"), gdim=2)
+                with XDMFFile(MPI.COMM_WORLD, fname.with_suffix(".xdmf"), "r") as xdmf:
+                    mesh = xdmf.read_mesh()
 
         def top(x):
             return x[1] > 0.5
@@ -197,6 +201,7 @@ if __name__ == "__main__":
         sorted_facets = np.argsort(indices)
         facet_marker = meshtags(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
         mesh_data = (facet_marker, top_value, bottom_value)
+
         # Solve contact problem using Nitsche's method
         u1 = nitsche_ufl(
             mesh=mesh,
