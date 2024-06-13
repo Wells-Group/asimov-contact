@@ -58,7 +58,7 @@ def run_solver(
         else:
             with tempfile.TemporaryDirectory() as tmpdirname:
                 fname = Path(tmpdirname, "sphere.msh")
-                create_sphere_mesh(filename=f"{fname}.msh")
+                create_sphere_mesh(filename=fname)
                 convert_mesh_new(fname, fname.with_suffix(".xdmf"), gdim=3)
                 with XDMFFile(MPI.COMM_WORLD, fname.with_suffix(".xdmf"), "r") as xdmf:
                     mesh = xdmf.read_mesh()
