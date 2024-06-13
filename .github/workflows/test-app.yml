@@ -128,13 +128,12 @@ jobs:
         run: |
           pip -v install -r ./python/build-requirements.txt
           pip -v install --no-build-isolation python/
-          pip install scipy matplotlib
+          pip install scipy matplotlib pytest pytest-xdist
 
       - name: Run demos (Python)
         run: |
-          pip install pytest pytest-xdist
           cd python/demos
-          python -m pytest -v -n auto .
+          pytest -v -n auto .
 
       - name: Create output folders
         id: output-creation
