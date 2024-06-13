@@ -3,7 +3,6 @@
 # SPDX-License-Identifier:    MIT
 
 import argparse
-import os
 
 from mpi4py import MPI
 
