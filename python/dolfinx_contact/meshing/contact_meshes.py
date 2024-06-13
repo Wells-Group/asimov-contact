@@ -35,8 +35,7 @@ def create_circle_plane_mesh(
     length: float = 1.0,
     gap: float = 0.01,
 ):
-    """
-    Create a circular mesh, with center at (0.0,0.0,0) with radius r
+    """Create a circular mesh, with center at (0.0,0.0,0) with radius r
     and a box [-length/2, length/2]x[-height-gap-r,-gap-r]
     """
     center = [0, 0, 0]
@@ -113,8 +112,7 @@ def create_halfdisk_plane_mesh(
     length=1.0,
     gap=0.01,
 ):
-    """
-    Create a halfdisk, with center at (0.0,0.0,0), radius r and  y<=0.0
+    """Create a halfdisk, with center at (0.0,0.0,0), radius r and  y<=0.0
     and a box [-length/2, length/2]x[-height-gap-r,-gap-r]
     """
     center = [0, 0, 0]
@@ -178,8 +176,7 @@ def create_halfdisk_plane_mesh(
 def create_quarter_disks_mesh(
     filename: typing.Union[str, Path], res=0.1, order: int = 1, quads=False, r=0.25, gap=0.01
 ):
-    """
-    Create a quarter disk, with center at (0.0,0.0,0), radius r and  y<=0.0, x>=0
+    """Create a quarter disk, with center at (0.0,0.0,0), radius r and  y<=0.0, x>=0
     and a a second quarter disk with center (0.0, -2r - gap, 0.0), radius r and y>= -3r-gap, x>=0
     """
     center = [0, 0, 0]
@@ -483,7 +480,7 @@ def create_box_mesh_3D(
     width: float = 0.5,
     offset: float = 0.2,
 ):
-    """Create two boxes lying directly over eachother with a gap in between"""
+    """Create two boxes lying directly over each other with a gap in between"""
     length = 0.5
     height = 0.5
 
@@ -547,8 +544,7 @@ def create_sphere_plane_mesh(
     width=1.0,
     gap=0.0,
 ):
-    """
-    Create a 3D sphere with center (0,0,0) an radius r
+    """Create a 3D sphere with center (0,0,0) an radius r
     with a box at [-length/2, length/2] x [ -width/2, width/2] x [-gap-height-r, -gap-r]
     """
     center = [0.0, 0.0, 0.0]
@@ -794,9 +790,8 @@ def create_halfsphere_box_mesh(
     width=1.0,
     gap=0.0,
 ):
-    """
-    Create a 3D half-sphere with center (0,0,0), radius r and z<=0.0
-    with a box at [-length/2, length/2] x [ -width/2, width/2] x [-gap-height-r, -gap-r]
+    """Create a 3D half-sphere with center (0,0,0), radius r and z<=0.0
+    with a box at [-length/2, length/2] x [ -width/2, width/2] x [-gap-height-r, -gap-r].
     """
     center = [0.0, 0.0, 0.0]
     angle = 0

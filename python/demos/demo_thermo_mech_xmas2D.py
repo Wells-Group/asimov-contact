@@ -1,6 +1,10 @@
 # Copyright (C) 2023 Sarah Roggendorf
 #
 # SPDX-License-Identifier:    MIT
+
+import tempfile
+from pathlib import Path
+
 from mpi4py import MPI
 from petsc4py.PETSc import InsertMode, ScatterMode  # type: ignore
 
@@ -27,19 +31,20 @@ from dolfinx_contact.helpers import (
     sigma_func,
     weak_dirichlet,
 )
-from dolfinx_contact.meshing import convert_mesh, create_christmas_tree_mesh
+from dolfinx_contact.meshing import convert_mesh_new, create_christmas_tree_mesh
 from dolfinx_contact.newton_solver import NewtonSolver
 from dolfinx_contact.parallel_mesh_ghosting import create_contact_mesh
 
-fname = "meshes/xmas_2D"
-create_christmas_tree_mesh(filename=fname, res=0.2)
-convert_mesh(fname, fname, gdim=2)
-with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
-    mesh = xdmf.read_mesh()
+with tempfile.TemporaryDirectory() as tmpdirname:
+    fname = Path(tmpdirname, "xmas_2D.msh")
+    create_christmas_tree_mesh(filename=fname, res=0.2)
+    convert_mesh_new(fname, fname.with_suffix(".xdmf"), gdim=2)
+    with XDMFFile(MPI.COMM_WORLD, fname.with_suffix(".xdmf"), "r") as xdmf:
+        mesh = xdmf.read_mesh()
+        domain_marker = xdmf.read_meshtags(mesh, name="cell_marker")
+        facet_marker = xdmf.read_meshtags(mesh, name="facet_marker")
     tdim = mesh.topology.dim
-    domain_marker = xdmf.read_meshtags(mesh, name="cell_marker")
     mesh.topology.create_connectivity(tdim - 1, tdim)
-    facet_marker = xdmf.read_meshtags(mesh, name="facet_marker")
 
 contact_bdy_1 = 5
 contact_bdy_2 = 6
@@ -155,8 +160,9 @@ newton_options = {
     "error_on_nonconvergence": False,
 }
 
-# In order to use an LU solver for debugging purposes on small scale problems
-# use the following PETSc options: {"ksp_type": "preonly", "pc_type": "lu"}
+# In order to use an LU solver for debugging purposes on small scale
+# problems use the following PETSc options: {"ksp_type": "preonly",
+# "pc_type": "lu"}
 petsc_options = {
     "matptap_via": "scalable",
     "ksp_type": "cg",
@@ -268,7 +274,6 @@ vtx = io.VTXWriter(mesh.comm, "results/xmas_disp.bp", [u_dg, T_dg, sigma_vm_h], 
 vtx.write(0)
 for i in range(50):
     Tproblem.solve()
-
     n, converged = newton_solver.solve(du)
     du.x.scatter_forward()
     u.x.array[:] += du.x.array[:]
