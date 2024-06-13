@@ -134,7 +134,7 @@ jobs:
         run: |
           pip install pytest pytest-xdist
           cd python/demos
-          python -m pytest -v .
+          python -m pytest -v -n auto .
 
       - name: Create output folders
         id: output-creation
