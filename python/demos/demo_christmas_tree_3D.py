@@ -4,6 +4,8 @@
 
 import argparse
 import sys
+import tempfile
+from pathlib import Path
 
 from mpi4py import MPI
 from petsc4py.PETSc import InsertMode, ScatterMode  # type: ignore
@@ -32,7 +34,7 @@ from dolfinx_contact.helpers import (
     sigma_func,
     weak_dirichlet,
 )
-from dolfinx_contact.meshing import convert_mesh, create_christmas_tree_mesh_3D
+from dolfinx_contact.meshing import convert_mesh_new, create_christmas_tree_mesh_3D
 from dolfinx_contact.newton_solver import NewtonSolver
 from dolfinx_contact.parallel_mesh_ghosting import create_contact_mesh
 
@@ -58,14 +60,17 @@ if __name__ == "__main__":
     # Parse input arguments or set to default values
     args = parser.parse_args()
     nload_steps = args.nload_steps
-    mesh_dir = "meshes"
-    fname = f"{mesh_dir}/xmas_tree"
 
-    # Call function that creates mesh using gmsh
-    create_christmas_tree_mesh_3D(filename=fname, res=args.res, n1=81, n2=41)
-
-    # Convert gmsh output into xdmf
-    convert_mesh(fname, fname, gdim=3)
+    with tempfile.TemporaryDirectory() as tmpdirname:
+        fname = Path(tmpdirname, "xmas_tree.msh")
+        create_christmas_tree_mesh_3D(filename=fname, res=args.res, n1=81, n2=41)
+        convert_mesh_new(fname, fname.with_suffix(".xdmf"), gdim=3)
+        with XDMFFile(MPI.COMM_WORLD, fname.with_suffix(".xdmf"), "r") as xdmf:
+            mesh = xdmf.read_mesh(ghost_mode=GhostMode.none)
+            domain_marker = xdmf.read_meshtags(mesh, "cell_marker")
+            tdim = mesh.topology.dim
+            mesh.topology.create_connectivity(tdim - 1, tdim)
+            facet_marker = xdmf.read_meshtags(mesh, "facet_marker")
 
     # Read in mesh from xdmf file including markers
     # Cell markers:  It is expected that all cells are marked and that
@@ -96,13 +101,6 @@ if __name__ == "__main__":
     surface_2 = 7
     z_Dirichlet = 8  # this tag is defined further down, use value different from all
     # input markers
-
-    with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
-        mesh = xdmf.read_mesh(ghost_mode=GhostMode.none)
-        domain_marker = xdmf.read_meshtags(mesh, "cell_marker")
-        tdim = mesh.topology.dim
-        mesh.topology.create_connectivity(tdim - 1, tdim)
-        facet_marker = xdmf.read_meshtags(mesh, "facet_marker")
 
     # Call function that repartitions mesh for parallel computation
     if mesh.comm.size > 1:
@@ -187,9 +185,7 @@ if __name__ == "__main__":
 
     # body forces
     F -= ufl.inner(f, v) * dx(1)
-
     F = ufl.replace(F, {u: u + du})
-
     J = ufl.derivative(F, du, w)
 
     # compiler options to improve performance
