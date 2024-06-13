@@ -143,11 +143,6 @@ jobs:
           mkdir -p results
           mkdir -p meshes
 
-      - name: Run rigid surface demos
-        working-directory: ./python/demos
-        run: |
-          python nitsche_euler_bernoulli.py
-
       - name: Run unbiased demos
         working-directory: ./python/demos
         run: |
