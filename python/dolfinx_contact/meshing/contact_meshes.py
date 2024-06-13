@@ -716,7 +716,7 @@ def create_cylinder_cylinder_mesh(filename: typing.Union[str, Path], order: int 
     mt_domain.name = "domain_marker"
 
     # Permute also entities which are tagged
-    with XDMFFile(MPI.COMM_WORLD, f"{str(filename)}.xdmf", "w") as file:
+    with XDMFFile(MPI.COMM_WORLD, filename.with_suffix(".xdmf"), "w") as file:
         file.write_mesh(msh)
         file.write_meshtags(mt_domain, msh.geometry)
     gmsh.finalize()

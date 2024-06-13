@@ -4,6 +4,8 @@
 
 import argparse
 import sys
+import tempfile
+from pathlib import Path
 
 from mpi4py import MPI
 from petsc4py.PETSc import InsertMode, ScatterMode  # type: ignore
@@ -42,6 +44,7 @@ from dolfinx_contact.helpers import (
 )
 from dolfinx_contact.meshing import (
     convert_mesh,
+    convert_mesh_new,
     create_box_mesh_2D,
     create_box_mesh_3D,
     create_circle_circle_mesh,
@@ -213,13 +216,13 @@ if __name__ == "__main__":
         displacement = np.array([[0, 0, -args.disp], [0, 0, 0]])
         if problem == 1:
             outname = "results/problem1_3D_simplex" if simplex else "results/problem1_3D_hex"
-            fname = f"{mesh_dir}/box_3D"
-            create_box_mesh_3D(f"{fname}.msh", simplex, order=args.order)
-            convert_mesh(fname, fname, gdim=3)
-
-            with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
-                mesh = xdmf.read_mesh()
-                domain_marker = xdmf.read_meshtags(mesh, name="cell_marker")
+            with tempfile.TemporaryDirectory() as tmpdirname:
+                fname = Path(tmpdirname, "box_3D.msh")
+                create_box_mesh_3D(fname, simplex, order=args.order)
+                convert_mesh_new(fname, fname.with_suffix(".xdmf"), gdim=3)
+                with XDMFFile(MPI.COMM_WORLD, fname.with_suffix(".xdmf"), "r") as xdmf:
+                    mesh = xdmf.read_mesh()
+                    domain_marker = xdmf.read_meshtags(mesh, name="cell_marker")
             tdim = mesh.topology.dim
             mesh.topology.create_connectivity(tdim - 1, 0)
             mesh.topology.create_connectivity(tdim - 1, tdim)
@@ -245,15 +248,16 @@ if __name__ == "__main__":
 
         elif problem == 2:
             outname = "results/problem2_3D_simplex" if simplex else "results/problem2_3D_hex"
-            fname = f"{mesh_dir}/sphere"
-            create_sphere_plane_mesh(filename=f"{fname}.msh", order=args.order, res=args.res)
-            convert_mesh(fname, fname, gdim=3)
-            with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
-                mesh = xdmf.read_mesh()
-                domain_marker = xdmf.read_meshtags(mesh, name="cell_marker")
-                tdim = mesh.topology.dim
-                mesh.topology.create_connectivity(tdim - 1, tdim)
-                facet_marker = xdmf.read_meshtags(mesh, name="facet_marker")
+            with tempfile.TemporaryDirectory() as tmpdirname:
+                fname = Path(tmpdirname, "sphere.msh")
+                create_sphere_plane_mesh(filename=fname, order=args.order, res=args.res)
+                convert_mesh_new(fname, fname.with_suffix(".xdmf"), gdim=3)
+                with XDMFFile(MPI.COMM_WORLD, fname.with_suffix(".xdmf"), "r") as xdmf:
+                    mesh = xdmf.read_mesh()
+                    domain_marker = xdmf.read_meshtags(mesh, name="cell_marker")
+                    tdim = mesh.topology.dim
+                    mesh.topology.create_connectivity(tdim - 1, tdim)
+                    facet_marker = xdmf.read_meshtags(mesh, name="facet_marker")
             dirichlet_bdy_1 = 2
             contact_bdy_1 = 1
             contact_bdy_2 = 8
@@ -261,12 +265,13 @@ if __name__ == "__main__":
 
         elif problem == 3:
             outname = "results/problem3_3D_simplex" if simplex else "results/problem3_3D_hex"
-            fname = "meshes/cylinder_cylinder_3D"
             displacement = np.array([[-1, 0, 0], [0, 0, 0]])
-            create_cylinder_cylinder_mesh(fname, res=args.res, simplex=simplex)
-            with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
-                mesh = xdmf.read_mesh(name="cylinder_cylinder")
-                domain_marker = xdmf.read_meshtags(mesh, name="domain_marker")
+            with tempfile.TemporaryDirectory() as tmpdirname:
+                fname = Path(tmpdirname, "cylinder_cylinder_3D.msh")
+                create_cylinder_cylinder_mesh(fname, res=args.res, simplex=simplex)
+                with XDMFFile(MPI.COMM_WORLD, fname.with_suffix(".xdmf"), "r") as xdmf:
+                    mesh = xdmf.read_mesh(name="cylinder_cylinder")
+                    domain_marker = xdmf.read_meshtags(mesh, name="domain_marker")
             tdim = mesh.topology.dim
             mesh.topology.create_connectivity(tdim - 1, tdim)
 
