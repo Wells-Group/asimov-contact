@@ -25,22 +25,11 @@ from dolfinx_contact.meshing import (
 @pytest.mark.parametrize("dim", [2, 3])
 def test_copy_to_submesh(tmp_path, order, res, simplex, dim):
     """TODO."""
-    mesh_dir = tmp_path
     if dim == 3:
         if simplex:
-            fname = mesh_dir / "sphere3D"
-            create_sphere_plane_mesh(
-                filename=fname.with_suffix(".msh"),
-                res=res,
-                order=order,
-                r=0.25,
-                height=0.25,
-                length=1.0,
-                width=1.0,
-            )
-
+            fname = tmp_path / "sphere3D.msh"
+            create_sphere_plane_mesh(filename=fname, res=res, order=order, r=0.25, height=0.25, length=1.0, width=1.0)
             convert_mesh_new(fname.with_suffix(".msh"), fname.with_suffix(".xdmf"), gdim=3)
-
             with XDMFFile(MPI.COMM_WORLD, fname.with_suffix(".xdmf"), "r") as xdmf:
                 mesh = xdmf.read_mesh()
                 tdim = mesh.topology.dim
@@ -49,8 +38,8 @@ def test_copy_to_submesh(tmp_path, order, res, simplex, dim):
             contact_bdy_1 = 1
             contact_bdy_2 = 8
         else:
-            fname = mesh_dir / "cylinders3D"
-            create_cylinder_cylinder_mesh(str(fname), order=order, res=10 * res, simplex=simplex)
+            fname = tmp_path / "cylinders3D.msh"
+            create_cylinder_cylinder_mesh(fname, order=order, res=10 * res, simplex=simplex)
             with XDMFFile(MPI.COMM_WORLD, fname.with_suffix(".xdmf"), "r") as xdmf:
                 mesh = xdmf.read_mesh(name="cylinder_cylinder")
             tdim = mesh.topology.dim
@@ -94,17 +83,11 @@ def test_copy_to_submesh(tmp_path, order, res, simplex, dim):
             sorted_facets = np.argsort(indices)
             facet_marker = meshtags(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
     else:
-        fname = mesh_dir / "hertz2D_simplex" if simplex else mesh_dir / "hertz2D_quads"
+        fname = tmp_path / "hertz2D.msh"
         create_circle_plane_mesh(
-            filename=str(fname.with_suffix(".msh")),
-            res=res,
-            order=order,
-            quads=not simplex,
-            r=0.25,
-            height=0.25,
-            length=1.0,
+            filename=fname, res=res, order=order, quads=not simplex, r=0.25, height=0.25, length=1.0
         )
-        convert_mesh_new(fname.with_suffix(".msh"), fname.with_suffix(".xdmf"), gdim=2)
+        convert_mesh_new(fname, fname.with_suffix(".xdmf"), gdim=2)
         with XDMFFile(MPI.COMM_WORLD, fname.with_suffix(".xdmf"), "r") as xdmf:
             mesh = xdmf.read_mesh()
             tdim = mesh.topology.dim
