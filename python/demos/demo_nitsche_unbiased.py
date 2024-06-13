@@ -211,17 +211,18 @@ if __name__ == "__main__":
     # Load mesh and create identifier functions for the top (Displacement condition)
     # and the bottom (contact condition)
 
+    fname = Path("nitsche_unbiased/mesh.msh")
     if threed:
         displacement = np.array([[0, 0, -args.disp], [0, 0, 0]])
         if problem == 1:
             outname = "results/problem1_3D_simplex" if simplex else "results/problem1_3D_hex"
-            with tempfile.TemporaryDirectory() as tmpdirname:
-                fname = Path(tmpdirname, "box_3D.msh")
-                create_box_mesh_3D(fname, simplex, order=args.order)
-                convert_mesh_new(fname, fname.with_suffix(".xdmf"), gdim=3)
-                with XDMFFile(MPI.COMM_WORLD, fname.with_suffix(".xdmf"), "r") as xdmf:
-                    mesh = xdmf.read_mesh()
-                    domain_marker = xdmf.read_meshtags(mesh, name="cell_marker")
+            # with tempfile.TemporaryDirectory() as tmpdirname:
+                # fname = Path(tmpdirname, "box_3D.msh")
+            create_box_mesh_3D(fname, simplex, order=args.order)
+            convert_mesh_new(fname, fname.with_suffix(".xdmf"), gdim=3)
+            with XDMFFile(MPI.COMM_WORLD, fname.with_suffix(".xdmf"), "r") as xdmf:
+                mesh = xdmf.read_mesh()
+                domain_marker = xdmf.read_meshtags(mesh, name="cell_marker")
             tdim = mesh.topology.dim
             mesh.topology.create_connectivity(tdim - 1, 0)
             mesh.topology.create_connectivity(tdim - 1, tdim)
@@ -247,16 +248,17 @@ if __name__ == "__main__":
 
         elif problem == 2:
             outname = "results/problem2_3D_simplex" if simplex else "results/problem2_3D_hex"
-            with tempfile.TemporaryDirectory() as tmpdirname:
-                fname = Path(tmpdirname, "sphere.msh")
-                create_sphere_plane_mesh(filename=fname, order=args.order, res=args.res)
-                convert_mesh_new(fname, fname.with_suffix(".xdmf"), gdim=3)
-                with XDMFFile(MPI.COMM_WORLD, fname.with_suffix(".xdmf"), "r") as xdmf:
-                    mesh = xdmf.read_mesh()
-                    domain_marker = xdmf.read_meshtags(mesh, name="cell_marker")
-                    tdim = mesh.topology.dim
-                    mesh.topology.create_connectivity(tdim - 1, tdim)
-                    facet_marker = xdmf.read_meshtags(mesh, name="facet_marker")
+            # fname = Path("nitsche_unbiased/box_3D.msh")
+            # with tempfile.TemporaryDirectory() as tmpdirname:
+                # fname = Path(tmpdirname, "sphere.msh")
+            create_sphere_plane_mesh(filename=fname, order=args.order, res=args.res)
+            convert_mesh_new(fname, fname.with_suffix(".xdmf"), gdim=3)
+            with XDMFFile(MPI.COMM_WORLD, fname.with_suffix(".xdmf"), "r") as xdmf:
+                mesh = xdmf.read_mesh()
+                domain_marker = xdmf.read_meshtags(mesh, name="cell_marker")
+                tdim = mesh.topology.dim
+                mesh.topology.create_connectivity(tdim - 1, tdim)
+                facet_marker = xdmf.read_meshtags(mesh, name="facet_marker")
             dirichlet_bdy_1 = 2
             contact_bdy_1 = 1
             contact_bdy_2 = 8
@@ -265,12 +267,12 @@ if __name__ == "__main__":
         elif problem == 3:
             outname = "results/problem3_3D_simplex" if simplex else "results/problem3_3D_hex"
             displacement = np.array([[-1, 0, 0], [0, 0, 0]])
-            with tempfile.TemporaryDirectory() as tmpdirname:
-                fname = Path(tmpdirname, "cylinder_cylinder_3D.msh")
-                create_cylinder_cylinder_mesh(fname, res=args.res, simplex=simplex)
-                with XDMFFile(MPI.COMM_WORLD, fname.with_suffix(".xdmf"), "r") as xdmf:
-                    mesh = xdmf.read_mesh(name="cylinder_cylinder")
-                    domain_marker = xdmf.read_meshtags(mesh, name="domain_marker")
+            # with tempfile.TemporaryDirectory() as tmpdirname:
+            #     fname = Path(tmpdirname, "cylinder_cylinder_3D.msh")
+            create_cylinder_cylinder_mesh(fname, res=args.res, simplex=simplex)
+            with XDMFFile(MPI.COMM_WORLD, fname.with_suffix(".xdmf"), "r") as xdmf:
+                mesh = xdmf.read_mesh(name="cylinder_cylinder")
+                domain_marker = xdmf.read_meshtags(mesh, name="domain_marker")
             tdim = mesh.topology.dim
             mesh.topology.create_connectivity(tdim - 1, tdim)
 
@@ -316,16 +318,16 @@ if __name__ == "__main__":
         displacement = np.array([[0, -args.disp], [0, 0]])
         if problem == 1:
             outname = "results/problem1_2D_simplex" if simplex else "results/problem1_2D_quads"
-            with tempfile.TemporaryDirectory() as tmpdirname:
-                fname = Path(tmpdirname, "box_2D.msh")
-                create_box_mesh_2D(filename=fname, quads=not simplex, res=args.res, order=args.order)
-                convert_mesh_new(fname, fname.with_suffix(".xdmf"), gdim=2)
-                with XDMFFile(MPI.COMM_WORLD, fname.with_suffix(".xdmf"), "r") as xdmf:
-                    mesh = xdmf.read_mesh(ghost_mode=GhostMode.none)
-                    domain_marker = xdmf.read_meshtags(mesh, name="cell_marker")
-                    tdim = mesh.topology.dim
-                    mesh.topology.create_connectivity(tdim - 1, tdim)
-                    facet_marker = xdmf.read_meshtags(mesh, name="facet_marker")
+            # with tempfile.TemporaryDirectory() as tmpdirname:
+            #     fname = Path(tmpdirname, "box_2D.msh")
+            create_box_mesh_2D(filename=fname, quads=not simplex, res=args.res, order=args.order)
+            convert_mesh_new(fname, fname.with_suffix(".xdmf"), gdim=2)
+            with XDMFFile(MPI.COMM_WORLD, fname.with_suffix(".xdmf"), "r") as xdmf:
+                mesh = xdmf.read_mesh(ghost_mode=GhostMode.none)
+                domain_marker = xdmf.read_meshtags(mesh, name="cell_marker")
+                tdim = mesh.topology.dim
+                mesh.topology.create_connectivity(tdim - 1, tdim)
+                facet_marker = xdmf.read_meshtags(mesh, name="facet_marker")
             dirichlet_bdy_1 = 5
             contact_bdy_1 = 3
             contact_bdy_2 = 9
@@ -333,25 +335,25 @@ if __name__ == "__main__":
 
         elif problem == 2:
             outname = "results/problem2_2D_simplex" if simplex else "results/problem2_2D_quads"
-            with tempfile.TemporaryDirectory() as tmpdirname:
-                fname = Path(tmpdirname, "problem2_2D.msh")
-                create_circle_plane_mesh(
-                    filename=fname,
-                    quads=not simplex,
-                    res=args.res,
-                    order=args.order,
-                    r=0.3,
-                    gap=0.1,
-                    height=0.1,
-                    length=1.0,
-                )
-                convert_mesh_new(fname, fname.with_suffix(".xdmf"), gdim=2)
-                with XDMFFile(MPI.COMM_WORLD, fname.with_suffix(".xdmf"), "r") as xdmf:
-                    mesh = xdmf.read_mesh()
-                    domain_marker = xdmf.read_meshtags(mesh, name="cell_marker")
-                    tdim = mesh.topology.dim
-                    mesh.topology.create_connectivity(tdim - 1, tdim)
-                    facet_marker = xdmf.read_meshtags(mesh, name="facet_marker")
+            # with tempfile.TemporaryDirectory() as tmpdirname:
+            #     fname = Path(tmpdirname, "problem2_2D.msh")
+            create_circle_plane_mesh(
+                filename=fname,
+                quads=not simplex,
+                res=args.res,
+                order=args.order,
+                r=0.3,
+                gap=0.1,
+                height=0.1,
+                length=1.0,
+            )
+            convert_mesh_new(fname, fname.with_suffix(".xdmf"), gdim=2)
+            with XDMFFile(MPI.COMM_WORLD, fname.with_suffix(".xdmf"), "r") as xdmf:
+                mesh = xdmf.read_mesh()
+                domain_marker = xdmf.read_meshtags(mesh, name="cell_marker")
+                tdim = mesh.topology.dim
+                mesh.topology.create_connectivity(tdim - 1, tdim)
+                facet_marker = xdmf.read_meshtags(mesh, name="facet_marker")
             dirichlet_bdy_1 = 8
             contact_bdy_1 = 10
             contact_bdy_2 = 6
