@@ -662,7 +662,7 @@ def create_sphere_sphere_mesh(filename: typing.Union[str, Path], order: int = 1)
     gmsh.finalize()
 
 
-def create_cylinder_cylinder_mesh(filename: typing.Union[str, Path], order: int = 1, res=0.25, simplex: bool = False):
+def create_cylinder_cylinder_mesh(filename: Path, order: int = 1, res=0.25, simplex: bool = False):
     gmsh.initialize()
     model = gmsh.model()
     if MPI.COMM_WORLD.rank == 0:
