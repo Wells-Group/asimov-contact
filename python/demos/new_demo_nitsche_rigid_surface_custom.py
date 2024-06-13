@@ -288,3 +288,6 @@ if __name__ == "__main__":
         disp=args.disp,
         refs=args.refs,
     )
+
+def test_nitsche_rigid_custom():
+    run_solver()

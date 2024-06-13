@@ -146,8 +146,6 @@ jobs:
       - name: Run rigid surface demos
         working-directory: ./python/demos
         run: |
-          # python demo_nitsche_rigid_surface_ufl.py
-          python demo_nitsche_rigid_surface_custom.py
           python nitsche_euler_bernoulli.py
 
       - name: Run unbiased demos
