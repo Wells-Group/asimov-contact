@@ -38,6 +38,8 @@ def run_solver(
     disp=0.08,
     refs=1,
 ):
+    gmsh.initialize()
+
     # Current formulation uses unilateral contact
     nitsche_parameters = {"gamma": gamma, "theta": theta}
     # nitsche_bc = not dirichlet
@@ -54,6 +56,7 @@ def run_solver(
         model.setCurrent(name)
         model = create_sphere_plane_mesh(model)
         mesh, _, facet_marker = dolfinx.io.gmshio.model_to_mesh(model, MPI.COMM_WORLD, 0, gdim=3)
+        tdim = mesh.topology.dim
 
         # with tempfile.TemporaryDirectory() as tmpdirname:
         #     fname = Path(tmpdirname, "sphere.msh")
@@ -127,23 +130,32 @@ def run_solver(
             sorted_facets = np.argsort(indices)
             facet_marker = meshtags(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
         else:
-            with tempfile.TemporaryDirectory() as tmpdirname:
-                fname = Path(tmpdirname, "twomeshes.msh")
-                create_circle_plane_mesh(
-                    filename=fname,
-                    quads=(not simplex),
-                    res=0.05,
-                    r=0.3,
-                    gap=0.1,
-                    height=0.1,
-                    length=1.0,
-                )
-                convert_mesh_new(fname, fname.with_suffix(".xdmf"), gdim=2)
-                with XDMFFile(MPI.COMM_WORLD, fname.with_suffix(".xdmf"), "r") as xdmf:
-                    mesh = xdmf.read_mesh()
-                    tdim = mesh.topology.dim
-                    mesh.topology.create_connectivity(tdim - 1, tdim)
-                    facet_marker = xdmf.read_meshtags(mesh, "facet_marker")
+            name = "problem2_2D"
+            model = gmsh.model()
+            model.add(name)
+            model.setCurrent(name)
+            model = create_circle_plane_mesh(
+                model, quads=(not simplex), res=0.05, r=0.3, gap=0.1, height=0.1, length=1.0
+            )
+            mesh, _, facet_marker = dolfinx.io.gmshio.model_to_mesh(model, MPI.COMM_WORLD, 0, gdim=2)
+            tdim = mesh.topology.dim
+            # with tempfile.TemporaryDirectory() as tmpdirname:
+            #     fname = Path(tmpdirname, "twomeshes.msh")
+            #     create_circle_plane_mesh(
+            #         filename=fname,
+            #         quads=(not simplex),
+            #         res=0.05,
+            #         r=0.3,
+            #         gap=0.1,
+            #         height=0.1,
+            #         length=1.0,
+            #     )
+            #     convert_mesh_new(fname, fname.with_suffix(".xdmf"), gdim=2)
+            #     with XDMFFile(MPI.COMM_WORLD, fname.with_suffix(".xdmf"), "r") as xdmf:
+            #         mesh = xdmf.read_mesh()
+            #         tdim = mesh.topology.dim
+            #         mesh.topology.create_connectivity(tdim - 1, tdim)
+            #         facet_marker = xdmf.read_meshtags(mesh, "facet_marker")
 
             def top(x):
                 return x[1] > 0.0
@@ -169,6 +181,8 @@ def run_solver(
             values = np.hstack([top_values, bottom_values, surface_values, sbottom_values])
             sorted_facets = np.argsort(indices)
             facet_marker = meshtags(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
+
+    gmsh.finalize()
 
     # Solver options
     newton_options = {"relaxation_parameter": 1.0, "max_it": 50}
