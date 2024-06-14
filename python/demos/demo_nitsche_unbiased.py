@@ -217,7 +217,7 @@ if __name__ == "__main__":
         if problem == 1:
             outname = "results/problem1_3D_simplex" if simplex else "results/problem1_3D_hex"
             # with tempfile.TemporaryDirectory() as tmpdirname:
-                # fname = Path(tmpdirname, "box_3D.msh")
+            # fname = Path(tmpdirname, "box_3D.msh")
             create_box_mesh_3D(fname, simplex, order=args.order)
             convert_mesh_new(fname, fname.with_suffix(".xdmf"), gdim=3)
             with XDMFFile(MPI.COMM_WORLD, fname.with_suffix(".xdmf"), "r") as xdmf:
@@ -250,7 +250,7 @@ if __name__ == "__main__":
             outname = "results/problem2_3D_simplex" if simplex else "results/problem2_3D_hex"
             # fname = Path("nitsche_unbiased/box_3D.msh")
             # with tempfile.TemporaryDirectory() as tmpdirname:
-                # fname = Path(tmpdirname, "sphere.msh")
+            # fname = Path(tmpdirname, "sphere.msh")
             create_sphere_plane_mesh(filename=fname, order=args.order, res=args.res)
             convert_mesh_new(fname, fname.with_suffix(".xdmf"), gdim=3)
             with XDMFFile(MPI.COMM_WORLD, fname.with_suffix(".xdmf"), "r") as xdmf:
