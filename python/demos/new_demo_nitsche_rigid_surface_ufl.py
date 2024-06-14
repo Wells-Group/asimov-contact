@@ -13,7 +13,6 @@ import gmsh
 import numpy as np
 from dolfinx.io import XDMFFile
 from dolfinx_contact.meshing import (
-    convert_mesh_new,
     create_circle_plane_mesh,
     create_sphere_plane_mesh,
 )
@@ -32,6 +31,9 @@ def run_solver(
     disp=0.08,
     refs=1,
 ):
+
+    gmsh.initialize()
+
     # Current formulation uses unilateral contact
     nitsche_parameters = {"gamma": gamma, "theta": theta}
     nitsche_bc = not dirichlet
@@ -65,20 +67,29 @@ def run_solver(
         surface_value = 8
         surface_bottom = 7
     else:
-        with tempfile.TemporaryDirectory() as tmpdirname:
-            fname = Path(tmpdirname, "twomeshes.msh")
-            create_circle_plane_mesh(filename=fname)
-            convert_mesh_new(fname, fname.with_suffix(".xdmf"), gdim=2)
-            with XDMFFile(MPI.COMM_WORLD, fname.with_suffix(".xdmf"), "r") as xdmf:
-                mesh = xdmf.read_mesh()
-                tdim = mesh.topology.dim
-                mesh.topology.create_connectivity(tdim - 1, tdim)
-                facet_marker = xdmf.read_meshtags(mesh, name="facet_marker")
+        name = "circle_plane"
+        model = gmsh.model()
+        model.add(name)
+        model.setCurrent(name)
+        model = create_circle_plane_mesh(model)
+        mesh, _, facet_marker = dolfinx.io.gmshio.model_to_mesh(model, MPI.COMM_WORLD, 0, gdim=2)
+        # with tempfile.TemporaryDirectory() as tmpdirname:
+        #     fname = Path(tmpdirname, "twomeshes.msh")
+        #     create_circle_plane_mesh(filename=fname)
+        #     convert_mesh_new(fname, fname.with_suffix(".xdmf"), gdim=2)
+        #     with XDMFFile(MPI.COMM_WORLD, fname.with_suffix(".xdmf"), "r") as xdmf:
+        #         mesh = xdmf.read_mesh()
+        #         tdim = mesh.topology.dim
+        #         mesh.topology.create_connectivity(tdim - 1, tdim)
+        #         facet_marker = xdmf.read_meshtags(mesh, name="facet_marker")
 
         top_value = 2
         bottom_value = 4
         surface_value = 9
         surface_bottom = 7
+
+
+    gmsh.finalize()
 
     # Solver options
     newton_options = {"relaxation_parameter": 1.0}
