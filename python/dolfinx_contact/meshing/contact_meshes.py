@@ -16,7 +16,7 @@ __all__ = [
     "create_circle_circle_mesh",
     "create_box_mesh_3D",
     "create_gmsh_box_mesh_2D",
-    "create_gmsh_sphere_plane_mesh",
+    "create_sphere_plane_mesh",
     "create_sphere_sphere_mesh",
     "create_cylinder_cylinder_mesh",
     "create_2d_rectangle_split",
@@ -554,8 +554,8 @@ def create_sphere_plane_mesh(
     comm: MPI.Comm = MPI.COMM_WORLD,
     rank: int = 0,
 ):
-    """Create a 3D sphere with center (0,0,0) an radius r
-    with a box at [-length/2, length/2] x [ -width/2, width/2] x [-gap-height-r, -gap-r]
+    """Create a 3D sphere with center (0,0,0) an radius r with a box at
+    [-length/2, length/2] x [ -width/2, width/2] x [-gap-height-r, -gap-r]
     """
     center = [0.0, 0.0, 0.0]
     angle = 0

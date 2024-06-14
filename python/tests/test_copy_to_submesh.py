@@ -1,8 +1,11 @@
 # Copyright (C) 2023 Sarah Roggendorf
 #
 # SPDX-License-Identifier:    MIT
+
 from mpi4py import MPI
 
+import dolfinx.io.gmshio
+import gmsh
 import numpy as np
 import pytest
 from dolfinx.fem import Function, functionspace
@@ -27,14 +30,21 @@ def test_copy_to_submesh(tmp_path, order, res, simplex, dim):
     """TODO."""
     if dim == 3:
         if simplex:
-            fname = tmp_path / "sphere3D.msh"
-            create_sphere_plane_mesh(filename=fname, res=res, order=order, r=0.25, height=0.25, length=1.0, width=1.0)
-            convert_mesh_new(fname.with_suffix(".msh"), fname.with_suffix(".xdmf"), gdim=3)
-            with XDMFFile(MPI.COMM_WORLD, fname.with_suffix(".xdmf"), "r") as xdmf:
-                mesh = xdmf.read_mesh()
-                tdim = mesh.topology.dim
-                mesh.topology.create_connectivity(tdim - 1, tdim)
-                facet_marker = xdmf.read_meshtags(mesh, name="facet_marker")
+            name = "test_copy"
+            model = gmsh.model(name)
+            model.add(name)
+            model.setCurrent(name)
+            model = create_sphere_plane_mesh(model, res=res, order=order, r=0.25, height=0.25, length=1.0, width=1.0)
+            mesh, _, facet_marker = dolfinx.io.gmshio.model_to_mesh(model, MPI.COMM_WORLD, 0, gdim=3)
+
+            # fname = tmp_path / "sphere3D.msh"
+            # create_sphere_plane_mesh(filename=fname, res=res, order=order, r=0.25, height=0.25, length=1.0, width=1.0)
+            # convert_mesh_new(fname.with_suffix(".msh"), fname.with_suffix(".xdmf"), gdim=3)
+            # with XDMFFile(MPI.COMM_WORLD, fname.with_suffix(".xdmf"), "r") as xdmf:
+            #     mesh = xdmf.read_mesh()
+            #     tdim = mesh.topology.dim
+            #     mesh.topology.create_connectivity(tdim - 1, tdim)
+            #     facet_marker = xdmf.read_meshtags(mesh, name="facet_marker")
             contact_bdy_1 = 1
             contact_bdy_2 = 8
         else:

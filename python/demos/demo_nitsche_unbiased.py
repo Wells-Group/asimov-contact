@@ -256,14 +256,21 @@ if __name__ == "__main__":
             # fname = Path("nitsche_unbiased/box_3D.msh")
             # with tempfile.TemporaryDirectory() as tmpdirname:
             # fname = Path(tmpdirname, "sphere.msh")
-            create_sphere_plane_mesh(filename=fname, order=args.order, res=args.res)
-            convert_mesh_new(fname, fname.with_suffix(".xdmf"), gdim=3)
-            with XDMFFile(MPI.COMM_WORLD, fname.with_suffix(".xdmf"), "r") as xdmf:
-                mesh = xdmf.read_mesh()
-                domain_marker = xdmf.read_meshtags(mesh, name="cell_marker")
-                tdim = mesh.topology.dim
-                mesh.topology.create_connectivity(tdim - 1, tdim)
-                facet_marker = xdmf.read_meshtags(mesh, name="facet_marker")
+            name = "problem2_3D"
+            model = gmsh.model(name)
+            model.add(name)
+            model.setCurrent(name)
+            model = create_sphere_plane_mesh(model, order=args.order, res=args.res)
+            mesh, domain_marker, facet_marker = dolfinx.io.gmshio.model_to_mesh(model, MPI.COMM_WORLD, 0, gdim=3)
+
+            # create_sphere_plane_mesh(filename=fname, order=args.order, res=args.res)
+            # convert_mesh_new(fname, fname.with_suffix(".xdmf"), gdim=3)
+            # with XDMFFile(MPI.COMM_WORLD, fname.with_suffix(".xdmf"), "r") as xdmf:
+            #     mesh = xdmf.read_mesh()
+            #     domain_marker = xdmf.read_meshtags(mesh, name="cell_marker")
+            #     tdim = mesh.topology.dim
+            #     mesh.topology.create_connectivity(tdim - 1, tdim)
+            #     facet_marker = xdmf.read_meshtags(mesh, name="facet_marker")
             dirichlet_bdy_1 = 2
             contact_bdy_1 = 1
             contact_bdy_2 = 8

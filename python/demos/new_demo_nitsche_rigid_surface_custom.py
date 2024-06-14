@@ -8,6 +8,8 @@ from pathlib import Path
 
 from mpi4py import MPI
 
+import dolfinx.io.gmshio
+import gmsh
 import numpy as np
 from dolfinx.io import XDMFFile
 from dolfinx.mesh import locate_entities_boundary, meshtags
@@ -46,15 +48,22 @@ def run_solver(
     # Load mesh and create identifier functions for the top
     # (Displacement condition) and the bottom (contact condition)
     if threed:
-        with tempfile.TemporaryDirectory() as tmpdirname:
-            fname = Path(tmpdirname, "sphere.msh")
-            create_sphere_plane_mesh(filename=fname)
-            convert_mesh_new(fname, fname.with_suffix(".xdmf"), gdim=3)
-            with XDMFFile(MPI.COMM_WORLD, fname.with_suffix(".xdmf"), "r") as xdmf:
-                mesh = xdmf.read_mesh()
-                tdim = mesh.topology.dim
-                mesh.topology.create_connectivity(tdim - 1, tdim)
-                facet_marker = xdmf.read_meshtags(mesh, name="facet_marker")
+        name = "demo_nitsche_rigid"
+        model = gmsh.model(name)
+        model.add(name)
+        model.setCurrent(name)
+        model = create_sphere_plane_mesh(model)
+        mesh, _, facet_marker = dolfinx.io.gmshio.model_to_mesh(model, MPI.COMM_WORLD, 0, gdim=3)
+
+        # with tempfile.TemporaryDirectory() as tmpdirname:
+        #     fname = Path(tmpdirname, "sphere.msh")
+        #     create_sphere_plane_mesh(filename=fname)
+        #     convert_mesh_new(fname, fname.with_suffix(".xdmf"), gdim=3)
+        #     with XDMFFile(MPI.COMM_WORLD, fname.with_suffix(".xdmf"), "r") as xdmf:
+        #         mesh = xdmf.read_mesh()
+        #         tdim = mesh.topology.dim
+        #         mesh.topology.create_connectivity(tdim - 1, tdim)
+        #         facet_marker = xdmf.read_meshtags(mesh, name="facet_marker")
 
         # fname = f"{mesh_dir}/sphere"
         # create_sphere_plane_mesh(filename=f"{fname}.msh")
