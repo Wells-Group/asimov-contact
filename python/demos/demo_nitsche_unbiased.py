@@ -336,10 +336,12 @@ if __name__ == "__main__":
 
         elif problem == 2:
             outname = "results/problem2_2D_simplex" if simplex else "results/problem2_2D_quads"
-            # with tempfile.TemporaryDirectory() as tmpdirname:
-            #     fname = Path(tmpdirname, "problem2_2D.msh")
-            create_circle_plane_mesh(
-                filename=fname,
+            name = "problem2_2D"
+            model = gmsh.model()
+            model.add(name)
+            model.setCurrent(name)
+            model = create_circle_plane_mesh(
+                model,
                 quads=not simplex,
                 res=args.res,
                 order=args.order,
@@ -348,13 +350,7 @@ if __name__ == "__main__":
                 height=0.1,
                 length=1.0,
             )
-            convert_mesh_new(fname, fname.with_suffix(".xdmf"), gdim=2)
-            with XDMFFile(MPI.COMM_WORLD, fname.with_suffix(".xdmf"), "r") as xdmf:
-                mesh = xdmf.read_mesh()
-                domain_marker = xdmf.read_meshtags(mesh, name="cell_marker")
-                tdim = mesh.topology.dim
-                mesh.topology.create_connectivity(tdim - 1, tdim)
-                facet_marker = xdmf.read_meshtags(mesh, name="facet_marker")
+            mesh, domain_marker, facet_marker = dolfinx.io.gmshio.model_to_mesh(model, MPI.COMM_WORLD, 0, gdim=2)
             dirichlet_bdy_1 = 8
             contact_bdy_1 = 10
             contact_bdy_2 = 6
@@ -403,12 +399,12 @@ if __name__ == "__main__":
 
             facet_marker = meshtags(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
 
-    gmsh.finalize()
-
     if mesh.comm.size > 1:
         mesh, facet_marker, domain_marker = create_contact_mesh(
             mesh, facet_marker, domain_marker, [contact_bdy_1, contact_bdy_2], 2.0
         )
+
+    gmsh.finalize()
 
     tdim = mesh.topology.dim
     ncells = mesh.topology.index_map(tdim).size_local
