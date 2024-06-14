@@ -5,11 +5,11 @@
 from .christmas_tree import create_christmas_tree_mesh, create_christmas_tree_mesh_3D
 from .contact_meshes import (
     create_2d_rectangle_split,
-    create_box_mesh_2D,
     create_box_mesh_3D,
     create_circle_circle_mesh,
     create_circle_plane_mesh,
     create_cylinder_cylinder_mesh,
+    create_gmsh_box_mesh_2D,
     create_halfdisk_plane_mesh,
     create_halfsphere_box_mesh,
     create_quarter_disks_mesh,
@@ -33,8 +33,8 @@ __all__ = [
     "create_christmas_tree_mesh_3D",
     "create_circle_plane_mesh",
     "create_circle_circle_mesh",
-    "create_box_mesh_2D",
     "create_box_mesh_3D",
+    "create_gmsh_box_mesh_2D",
     "create_sphere_plane_mesh",
     "convert_mesh",
     "convert_mesh_new",

@@ -10,6 +10,8 @@ from pathlib import Path
 from mpi4py import MPI
 from petsc4py.PETSc import InsertMode, ScatterMode  # type: ignore
 
+import dolfinx.io.gmshio
+import gmsh
 import numpy as np
 import ufl
 from dolfinx import default_scalar_type, log
@@ -32,7 +34,7 @@ from dolfinx.fem.petsc import (
 )
 from dolfinx.graph import adjacencylist
 from dolfinx.io import VTXWriter, XDMFFile
-from dolfinx.mesh import GhostMode, locate_entities_boundary, meshtags
+from dolfinx.mesh import locate_entities_boundary, meshtags
 from dolfinx_contact.cpp import ContactMode
 from dolfinx_contact.general_contact.contact_problem import ContactProblem, FrictionLaw
 from dolfinx_contact.helpers import (
@@ -44,11 +46,11 @@ from dolfinx_contact.helpers import (
 )
 from dolfinx_contact.meshing import (
     convert_mesh_new,
-    create_box_mesh_2D,
     create_box_mesh_3D,
     create_circle_circle_mesh,
     create_circle_plane_mesh,
     create_cylinder_cylinder_mesh,
+    create_gmsh_box_mesh_2D,
     create_sphere_plane_mesh,
 )
 from dolfinx_contact.newton_solver import NewtonSolver
@@ -211,7 +213,10 @@ if __name__ == "__main__":
     # Load mesh and create identifier functions for the top (Displacement condition)
     # and the bottom (contact condition)
 
+    gmsh.initialize()
+
     fname = Path("nitsche_unbiased/mesh.msh")
+    fname.parent.mkdir(exist_ok=True)
     if threed:
         displacement = np.array([[0, 0, -args.disp], [0, 0, 0]])
         if problem == 1:
@@ -318,16 +323,12 @@ if __name__ == "__main__":
         displacement = np.array([[0, -args.disp], [0, 0]])
         if problem == 1:
             outname = "results/problem1_2D_simplex" if simplex else "results/problem1_2D_quads"
-            # with tempfile.TemporaryDirectory() as tmpdirname:
-            #     fname = Path(tmpdirname, "box_2D.msh")
-            create_box_mesh_2D(filename=fname, quads=not simplex, res=args.res, order=args.order)
-            convert_mesh_new(fname, fname.with_suffix(".xdmf"), gdim=2)
-            with XDMFFile(MPI.COMM_WORLD, fname.with_suffix(".xdmf"), "r") as xdmf:
-                mesh = xdmf.read_mesh(ghost_mode=GhostMode.none)
-                domain_marker = xdmf.read_meshtags(mesh, name="cell_marker")
-                tdim = mesh.topology.dim
-                mesh.topology.create_connectivity(tdim - 1, tdim)
-                facet_marker = xdmf.read_meshtags(mesh, name="facet_marker")
+            name = "box_mesh_2D"
+            model = gmsh.model()
+            model.add(name)
+            model.setCurrent(name)
+            model = create_gmsh_box_mesh_2D(model, quads=not simplex, res=args.res, order=args.order)
+            mesh, domain_marker, facet_marker = dolfinx.io.gmshio.model_to_mesh(model, MPI.COMM_WORLD, 0, gdim=2)
             dirichlet_bdy_1 = 5
             contact_bdy_1 = 3
             contact_bdy_2 = 9
@@ -402,11 +403,14 @@ if __name__ == "__main__":
 
             facet_marker = meshtags(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
 
+    gmsh.finalize()
+
     if mesh.comm.size > 1:
         mesh, facet_marker, domain_marker = create_contact_mesh(
             mesh, facet_marker, domain_marker, [contact_bdy_1, contact_bdy_2], 2.0
         )
 
+    tdim = mesh.topology.dim
     ncells = mesh.topology.index_map(tdim).size_local
     indices = np.array(range(ncells), dtype=np.int32)
     values = mesh.comm.rank * np.ones(ncells, dtype=np.int32)
