@@ -3,8 +3,6 @@
 # SPDX-License-Identifier:    MIT
 
 import argparse
-import tempfile
-from pathlib import Path
 
 from mpi4py import MPI
 
@@ -31,7 +29,6 @@ def run_solver(
     disp=0.08,
     refs=1,
 ):
-
     gmsh.initialize()
 
     # Current formulation uses unilateral contact
@@ -87,7 +84,6 @@ def run_solver(
         bottom_value = 4
         surface_value = 9
         surface_bottom = 7
-
 
     gmsh.finalize()
 
