@@ -8,6 +8,8 @@ import sys
 from mpi4py import MPI
 from petsc4py import PETSc
 
+import dolfinx.io.gmshio
+import gmsh
 import numpy as np
 import ufl
 from dolfinx import default_scalar_type, log
@@ -36,7 +38,7 @@ from dolfinx_contact.helpers import (
     rigid_motions_nullspace_subdomains,
     sigma_func,
 )
-from dolfinx_contact.meshing import convert_mesh, create_box_mesh_3D
+from dolfinx_contact.meshing import create_box_mesh_3D
 from dolfinx_contact.parallel_mesh_ghosting import create_contact_mesh
 
 if __name__ == "__main__":
@@ -111,21 +113,33 @@ if __name__ == "__main__":
     args = parser.parse_args()
     simplex = args.simplex
 
+    gmsh.initialize()
+
+
     # Load mesh and create identifier functions for the top (Displacement condition)
     # and the bottom (contact condition)
     displacement = [[0, 0, 0]]
     gap = 1e-5
     H = 1.5
-    fname = "meshes/box_3D"
-    create_box_mesh_3D(f"{fname}.msh", simplex, gap=gap, width=H, offset=0.0)
-    convert_mesh(fname, fname, gdim=3)
+    name = "box_3D"
+    model = gmsh.model()
+    model.add(name)
+    model.setCurrent(name)
+    model = create_box_mesh_3D(model, simplex, gap=gap, width=H, offset=0.0)
+    mesh, domain_marker, facet_marker = dolfinx.io.gmshio.model_to_mesh(model, MPI.COMM_WORLD, 0, gdim=3)
 
-    with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
-        mesh = xdmf.read_mesh()
-        domain_marker = xdmf.read_meshtags(mesh, "cell_marker")
-        tdim = mesh.topology.dim
-        mesh.topology.create_connectivity(tdim - 1, tdim)
-        facet_marker = xdmf.read_meshtags(mesh, "facet_marker")
+    gmsh.finalize()
+
+
+    # fname = "meshes/box_3D"
+    # create_box_mesh_3D(f"{fname}.msh", simplex, gap=gap, width=H, offset=0.0)
+    # convert_mesh(fname, fname, gdim=3)
+    # with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
+    #     mesh = xdmf.read_mesh()
+    #     domain_marker = xdmf.read_meshtags(mesh, "cell_marker")
+    #     tdim = mesh.topology.dim
+    #     mesh.topology.create_connectivity(tdim - 1, tdim)
+    #     facet_marker = xdmf.read_meshtags(mesh, "facet_marker")
 
     tdim = mesh.topology.dim
     gdim = mesh.geometry.dim
@@ -199,7 +213,8 @@ if __name__ == "__main__":
         )
 
     # compile forms
-    cffi_options = ["-Ofast", "-march=native"]
+    # cffi_options = ["-Ofast", "-march=native"]
+    cffi_options = []
     jit_options = {"cffi_extra_compile_args": cffi_options, "cffi_libraries": ["m"]}
     F = form(F, jit_options=jit_options)
     J = form(J, jit_options=jit_options)
