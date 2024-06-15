@@ -44,7 +44,6 @@ from dolfinx_contact.helpers import (
     weak_dirichlet,
 )
 from dolfinx_contact.meshing import (
-    convert_mesh_new,
     create_box_mesh_3D,
     create_circle_circle_mesh,
     create_circle_plane_mesh,
@@ -220,13 +219,22 @@ if __name__ == "__main__":
         displacement = np.array([[0, 0, -args.disp], [0, 0, 0]])
         if problem == 1:
             outname = "results/problem1_3D_simplex" if simplex else "results/problem1_3D_hex"
-            # with tempfile.TemporaryDirectory() as tmpdirname:
-            # fname = Path(tmpdirname, "box_3D.msh")
-            create_box_mesh_3D(fname, simplex, order=args.order)
-            convert_mesh_new(fname, fname.with_suffix(".xdmf"), gdim=3)
-            with XDMFFile(MPI.COMM_WORLD, fname.with_suffix(".xdmf"), "r") as xdmf:
-                mesh = xdmf.read_mesh()
-                domain_marker = xdmf.read_meshtags(mesh, name="cell_marker")
+
+            name = "box_3D"
+            model = gmsh.model()
+            model.add(name)
+            model.setCurrent(name)
+            model = create_box_mesh_3D(model, simplex, order=args.order)
+            mesh, domain_marker, _ = dolfinx.io.gmshio.model_to_mesh(model, MPI.COMM_WORLD, 0, gdim=3)
+
+
+            # # with tempfile.TemporaryDirectory() as tmpdirname:
+            # # fname = Path(tmpdirname, "box_3D.msh")
+            # create_box_mesh_3D(fname, simplex, order=args.order)
+            # convert_mesh_new(fname, fname.with_suffix(".xdmf"), gdim=3)
+            # with XDMFFile(MPI.COMM_WORLD, fname.with_suffix(".xdmf"), "r") as xdmf:
+            #     mesh = xdmf.read_mesh()
+            #     domain_marker = xdmf.read_meshtags(mesh, name="cell_marker")
             tdim = mesh.topology.dim
             mesh.topology.create_connectivity(tdim - 1, 0)
             mesh.topology.create_connectivity(tdim - 1, tdim)
@@ -256,7 +264,7 @@ if __name__ == "__main__":
             # with tempfile.TemporaryDirectory() as tmpdirname:
             # fname = Path(tmpdirname, "sphere.msh")
             name = "problem2_3D"
-            model = gmsh.model(name)
+            model = gmsh.model()
             model.add(name)
             model.setCurrent(name)
             model = create_sphere_plane_mesh(model, order=args.order, res=args.res)
@@ -278,12 +286,23 @@ if __name__ == "__main__":
         elif problem == 3:
             outname = "results/problem3_3D_simplex" if simplex else "results/problem3_3D_hex"
             displacement = np.array([[-1, 0, 0], [0, 0, 0]])
+
+            name = "Cylinder-cylinder-mesh"
+            model = gmsh.model()
+            model.add(name)
+            model.setCurrent(name)
+            model = create_cylinder_cylinder_mesh(model, res=args.res, simplex=simplex)
+            mesh, domain_marker, _ = dolfinx.io.gmshio.model_to_mesh(model, MPI.COMM_WORLD, 0, gdim=3)
+
+            mesh.name = "cylinder_cylinder"
+            domain_marker.name = "domain_marker"
+
             # with tempfile.TemporaryDirectory() as tmpdirname:
             #     fname = Path(tmpdirname, "cylinder_cylinder_3D.msh")
-            create_cylinder_cylinder_mesh(fname, res=args.res, simplex=simplex)
-            with XDMFFile(MPI.COMM_WORLD, fname.with_suffix(".xdmf"), "r") as xdmf:
-                mesh = xdmf.read_mesh(name="cylinder_cylinder")
-                domain_marker = xdmf.read_meshtags(mesh, name="domain_marker")
+            # create_cylinder_cylinder_mesh(fname, res=args.res, simplex=simplex)
+            # with XDMFFile(MPI.COMM_WORLD, fname.with_suffix(".xdmf"), "r") as xdmf:
+            #     mesh = xdmf.read_mesh(name="cylinder_cylinder")
+            #     domain_marker = xdmf.read_meshtags(mesh, name="domain_marker")
             tdim = mesh.topology.dim
             mesh.topology.create_connectivity(tdim - 1, tdim)
 

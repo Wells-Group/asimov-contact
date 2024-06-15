@@ -9,7 +9,6 @@ from mpi4py import MPI
 
 import gmsh
 import numpy as np
-from dolfinx.io import XDMFFile, gmshio
 
 __all__ = [
     "create_circle_plane_mesh",
@@ -41,7 +40,7 @@ def create_circle_plane_mesh(
     and a box [-length/2, length/2]x[-height-gap-r,-gap-r]
     """
     center = [0, 0, 0]
-    if comm.rank == rank:
+    if comm.rank == 0:
         # Create circular mesh (divided into 4 segments)
         c = model.occ.addPoint(center[0], center[1], center[2])
         contact_pt = model.occ.addPoint(center[0], center[1] - r, center[2])
@@ -336,75 +335,75 @@ def sliding_wedges(
     gmsh.finalize()
 
 
-def create_circle_circle_mesh(
-    model, quads: bool = False, res: float = 0.1, order: int = 1, comm: MPI.Comm = MPI.COMM_WORLD, rank: int = 0
-):
+def create_circle_circle_mesh(filename: typing.Union[str, Path], quads: bool = False, res: float = 0.1, order: int = 1):
     """Create two circular meshes, with radii 0.3 and 0.6 with centers (0.5,0.5) and (0.5, -0.5)"""
     center = [0.5, 0.5, 0]
     r = 0.3
     angle = np.pi / 4
 
-    if comm.rank == rank:
+    gmsh.initialize()
+    if MPI.COMM_WORLD.rank == 0:
         # Create circular mesh (divided into 4 segments)
-        c = model.occ.addPoint(center[0], center[1], center[2])
+        c = gmsh.model.occ.addPoint(center[0], center[1], center[2])
         # Add 4 points on circle (clockwise, starting in top left)
         angles = [angle, -angle, np.pi + angle, np.pi - angle]
         c_points = [
-            model.occ.addPoint(center[0] + r * np.cos(angle), center[1] + r * np.sin(angle), center[2])
+            gmsh.model.occ.addPoint(center[0] + r * np.cos(angle), center[1] + r * np.sin(angle), center[2])
             for angle in angles
         ]
-        arcs = [model.occ.addCircleArc(c_points[i - 1], c, c_points[i]) for i in range(len(c_points))]
-        curve = model.occ.addCurveLoop(arcs)
-        model.occ.synchronize()
-        surface = model.occ.addPlaneSurface([curve])
+        arcs = [gmsh.model.occ.addCircleArc(c_points[i - 1], c, c_points[i]) for i in range(len(c_points))]
+        curve = gmsh.model.occ.addCurveLoop(arcs)
+        gmsh.model.occ.synchronize()
+        surface = gmsh.model.occ.addPlaneSurface([curve])
         # Create 2nd circular mesh (divided into 4 segments)
         center2 = [0.5, -0.5, 0]
-        c2 = model.occ.addPoint(center2[0], center2[1], center2[2])
+        c2 = gmsh.model.occ.addPoint(center2[0], center2[1], center2[2])
         # Add 4 points on circle (clockwise, starting in top left)
         c_points2 = [
-            model.occ.addPoint(
+            gmsh.model.occ.addPoint(
                 center2[0] + 2 * r * np.cos(angle),
                 center2[1] + 2 * r * np.sin(angle),
                 center2[2],
             )
             for angle in angles
         ]
-        arcs2 = [model.occ.addCircleArc(c_points2[i - 1], c2, c_points2[i]) for i in range(len(c_points2))]
-        curve2 = model.occ.addCurveLoop(arcs2)
-        model.occ.synchronize()
-        surface2 = model.occ.addPlaneSurface([curve2])
+        arcs2 = [gmsh.model.occ.addCircleArc(c_points2[i - 1], c2, c_points2[i]) for i in range(len(c_points2))]
+        curve2 = gmsh.model.occ.addCurveLoop(arcs2)
+        gmsh.model.occ.synchronize()
+        surface2 = gmsh.model.occ.addPlaneSurface([curve2])
 
         # Synchronize and create physical tags
-        model.occ.addPoint(0.5, 0.2, 0, tag=17)
-        model.occ.synchronize()
-        model.addPhysicalGroup(2, [surface], tag=1)
-        bndry = model.getBoundary([(2, surface)], oriented=False)
-        [model.addPhysicalGroup(b[0], [b[1]]) for b in bndry]
+        gmsh.model.occ.addPoint(0.5, 0.2, 0, tag=17)
+        gmsh.model.occ.synchronize()
+        gmsh.model.addPhysicalGroup(2, [surface], tag=1)
+        bndry = gmsh.model.getBoundary([(2, surface)], oriented=False)
+        [gmsh.model.addPhysicalGroup(b[0], [b[1]]) for b in bndry]
 
-        model.addPhysicalGroup(2, [surface2], tag=2)
-        bndry2 = model.getBoundary([(2, surface2)], oriented=False)
-        [model.addPhysicalGroup(b[0], [b[1]]) for b in bndry2]
+        gmsh.model.addPhysicalGroup(2, [surface2], tag=2)
+        bndry2 = gmsh.model.getBoundary([(2, surface2)], oriented=False)
+        [gmsh.model.addPhysicalGroup(b[0], [b[1]]) for b in bndry2]
 
-        model.mesh.field.add("Distance", 1)
-        model.mesh.field.setNumbers(1, "NodesList", [17])
+        gmsh.model.mesh.field.add("Distance", 1)
+        gmsh.model.mesh.field.setNumbers(1, "NodesList", [17])
 
-        model.mesh.field.add("Threshold", 2)
-        model.mesh.field.setNumber(2, "IField", 1)
-        model.mesh.field.setNumber(2, "LcMin", res)
-        model.mesh.field.setNumber(2, "LcMax", 3 * res)
-        model.mesh.field.setNumber(2, "DistMin", 0.3)
-        model.mesh.field.setNumber(2, "DistMax", 0.6)
+        gmsh.model.mesh.field.add("Threshold", 2)
+        gmsh.model.mesh.field.setNumber(2, "IField", 1)
+        gmsh.model.mesh.field.setNumber(2, "LcMin", res)
+        gmsh.model.mesh.field.setNumber(2, "LcMax", 3 * res)
+        gmsh.model.mesh.field.setNumber(2, "DistMin", 0.3)
+        gmsh.model.mesh.field.setNumber(2, "DistMax", 0.6)
         if quads:
             gmsh.option.setNumber("Mesh.RecombinationAlgorithm", 8)
             gmsh.option.setNumber("Mesh.RecombineAll", 2)
             gmsh.option.setNumber("Mesh.SubdivisionAlgorithm", 1)
-        model.mesh.field.setAsBackgroundMesh(2)
-        model.mesh.generate(2)
-        model.mesh.setOrder(order)
+        gmsh.model.mesh.field.setAsBackgroundMesh(2)
+        gmsh.model.mesh.generate(2)
+        gmsh.model.mesh.setOrder(order)
 
-        return model
-    else:
-        return None
+        # gmsh.option.setNumber("Mesh.SaveAll", 1)
+        gmsh.write(str(filename))
+    MPI.COMM_WORLD.Barrier()
+    gmsh.finalize()
 
 
 def create_gmsh_box_mesh_2D(
@@ -480,22 +479,22 @@ def create_gmsh_box_mesh_2D(
 
 
 def create_box_mesh_3D(
-    filename: typing.Union[str, Path],
+    model,
     simplex: bool = True,
     order: int = 1,
     res: float = 0.1,
     gap: float = 0.1,
     width: float = 0.5,
     offset: float = 0.2,
+    comm: MPI.Comm = MPI.COMM_WORLD,
+    rank: int = 0,
 ):
     """Create two boxes lying directly over each other with a gap in between"""
     length = 0.5
     height = 0.5
 
     disp = -width - gap
-    gmsh.initialize()
-    model = gmsh.model
-    if MPI.COMM_WORLD.rank == 0:
+    if comm.rank == rank:
         # Create box
         if simplex:
             model.occ.add_box(0, 0 + offset, 0, length, height, width)
@@ -537,9 +536,10 @@ def create_box_mesh_3D(
         model.mesh.generate(3)
         model.mesh.setOrder(order)
         # gmsh.option.setNumber("Mesh.SaveAll", 1)
-        gmsh.write(str(filename))
-    MPI.COMM_WORLD.Barrier()
-    gmsh.finalize()
+
+        return model
+    else:
+        return None
 
 
 def create_sphere_plane_mesh(
@@ -554,8 +554,8 @@ def create_sphere_plane_mesh(
     comm: MPI.Comm = MPI.COMM_WORLD,
     rank: int = 0,
 ):
-    """Create a 3D sphere with center (0,0,0) an radius r with a box at
-    [-length/2, length/2] x [ -width/2, width/2] x [-gap-height-r, -gap-r]
+    """Create a 3D sphere with center (0,0,0) an radius r
+    with a box at [-length/2, length/2] x [ -width/2, width/2] x [-gap-height-r, -gap-r]
     """
     center = [0.0, 0.0, 0.0]
     angle = 0
@@ -666,14 +666,11 @@ def create_sphere_sphere_mesh(filename: typing.Union[str, Path], order: int = 1)
     gmsh.finalize()
 
 
-def create_cylinder_cylinder_mesh(filename: Path, order: int = 1, res=0.25, simplex: bool = False):
-    gmsh.initialize()
-    model = gmsh.model()
-    if MPI.COMM_WORLD.rank == 0:
-        # Generate a mesh with 2nd-order hexahedral cells using gmsh
-        model_name = "Cylinder-cylinder mesh"
-        model.add(model_name)
-        model.setCurrent(model_name)
+def create_cylinder_cylinder_mesh(
+    model, order: int = 1, res=0.25, simplex: bool = False, comm: MPI.Comm = MPI.COMM_WORLD, rank: int = 0
+):
+    """Generate a mesh with 2nd-order hexahedral cells using gmsh."""
+    if comm.rank == rank:
         # Recombine tetrahedrons to hexahedrons
         if not simplex:
             gmsh.option.setNumber("Mesh.RecombinationAlgorithm", 2)
@@ -694,36 +691,28 @@ def create_cylinder_cylinder_mesh(filename: Path, order: int = 1, res=0.25, simp
         circle2 = model.occ.addDisk(*center2, r2, r2)
         model.occ.extrude([(2, circle2)], 0, 0, l2, numElements=[Nl2], recombine=not simplex)
 
-        gmsh.model.mesh.field.add("Box", 1)
-        gmsh.model.mesh.field.setNumber(1, "VIn", res)
-        gmsh.model.mesh.field.setNumber(1, "VOut", res)
-        gmsh.model.mesh.field.setNumber(1, "XMin", center1[0] - l1)
-        gmsh.model.mesh.field.setNumber(1, "XMax", center1[0] + l1)
-        gmsh.model.mesh.field.setNumber(1, "YMin", center1[1] - 2 * r1)
-        gmsh.model.mesh.field.setNumber(1, "YMax", center1[1] + 2 * r1)
-        gmsh.model.mesh.field.setNumber(1, "ZMin", center1[2] - 2 * r1)
-        gmsh.model.mesh.field.setNumber(1, "ZMax", center1[2] + 2 * r1)
+        model.mesh.field.add("Box", 1)
+        model.mesh.field.setNumber(1, "VIn", res)
+        model.mesh.field.setNumber(1, "VOut", res)
+        model.mesh.field.setNumber(1, "XMin", center1[0] - l1)
+        model.mesh.field.setNumber(1, "XMax", center1[0] + l1)
+        model.mesh.field.setNumber(1, "YMin", center1[1] - 2 * r1)
+        model.mesh.field.setNumber(1, "YMax", center1[1] + 2 * r1)
+        model.mesh.field.setNumber(1, "ZMin", center1[2] - 2 * r1)
+        model.mesh.field.setNumber(1, "ZMax", center1[2] + 2 * r1)
 
-        gmsh.model.mesh.field.setAsBackgroundMesh(1)
+        model.mesh.field.setAsBackgroundMesh(1)
         model.occ.synchronize()
-
         for i, entity in enumerate(model.getEntities(3)):
             model.addPhysicalGroup(3, [entity[1]], tag=i)
 
         model.setPhysicalName(3, 1, "Mesh volume")
-
         model.mesh.generate(3)
         model.mesh.setOrder(order)
-    msh, mt_domain, _ = gmshio.model_to_mesh(model, MPI.COMM_WORLD, 0, 3)
 
-    msh.name = "cylinder_cylinder"
-    mt_domain.name = "domain_marker"
-
-    # Permute also entities which are tagged
-    with XDMFFile(MPI.COMM_WORLD, filename.with_suffix(".xdmf"), "w") as file:
-        file.write_mesh(msh)
-        file.write_meshtags(mt_domain, msh.geometry)
-    gmsh.finalize()
+        return model
+    else:
+        return None
 
 
 def create_2d_rectangle_split(filename: typing.Union[str, Path], quads: bool = False, res=0.1, order: int = 1, gap=0.2):
