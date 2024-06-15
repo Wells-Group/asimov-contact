@@ -227,7 +227,6 @@ if __name__ == "__main__":
             model = create_box_mesh_3D(model, simplex, order=args.order)
             mesh, domain_marker, _ = dolfinx.io.gmshio.model_to_mesh(model, MPI.COMM_WORLD, 0, gdim=3)
 
-
             # # with tempfile.TemporaryDirectory() as tmpdirname:
             # # fname = Path(tmpdirname, "box_3D.msh")
             # create_box_mesh_3D(fname, simplex, order=args.order)
