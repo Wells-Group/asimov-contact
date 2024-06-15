@@ -76,7 +76,7 @@ def run_soler(args):
     outfile = args.outfile
     lifting = args.lifting
     # ksp_v = args.ksp
-    fric = args.fric
+    fric_val = args.fric
 
     mesh_dir = "meshes"
     # triangle_ext = {1: "", 2: "6", 3: "10"}
@@ -203,6 +203,7 @@ def run_soler(args):
             model.setCurrent(name)
             model = create_gmsh_box_mesh_2D(model, quads=not simplex, res=res, order=order)
             mesh, domain_marker, facet_marker = dolfinx.io.gmshio.model_to_mesh(model, MPI.COMM_WORLD, 0, gdim=2)
+
             dirichlet_bdy_1 = 5
             contact_bdy_1 = 3
             contact_bdy_2 = 9
@@ -376,12 +377,13 @@ def run_soler(args):
     # solver_outfile = outfile if ksp_v else None
 
     V0 = functionspace(mesh, ("DG", 0))
+
     mu0 = Function(V0)
     lmbda0 = Function(V0)
     fric = Function(V0)
     mu0.interpolate(lambda x: np.full((1, x.shape[1]), mu))
     lmbda0.interpolate(lambda x: np.full((1, x.shape[1]), lmbda))
-    fric.interpolate(lambda x: np.full((1, x.shape[1]), fric))
+    fric.interpolate(lambda x: np.full((1, x.shape[1]), fric_val))
 
     if raytracing:
         search_mode = [ContactMode.Raytracing for _ in range(len(contact))]
