@@ -4,7 +4,6 @@
 
 import argparse
 import sys
-import tempfile
 from pathlib import Path
 
 from mpi4py import MPI
