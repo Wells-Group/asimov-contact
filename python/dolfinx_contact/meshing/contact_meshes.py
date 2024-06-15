@@ -335,75 +335,71 @@ def sliding_wedges(
     gmsh.finalize()
 
 
-def create_circle_circle_mesh(filename: typing.Union[str, Path], quads: bool = False, res: float = 0.1, order: int = 1):
+def create_circle_circle_mesh(
+    model, quads: bool = False, res: float = 0.1, order: int = 1, comm: MPI.Comm = MPI.COMM_WORLD, rank: int = 0
+) -> typing.Optional[gmsh.model]:
     """Create two circular meshes, with radii 0.3 and 0.6 with centers (0.5,0.5) and (0.5, -0.5)"""
     center = [0.5, 0.5, 0]
     r = 0.3
     angle = np.pi / 4
 
-    gmsh.initialize()
-    if MPI.COMM_WORLD.rank == 0:
+    if comm.rank == 0:
         # Create circular mesh (divided into 4 segments)
-        c = gmsh.model.occ.addPoint(center[0], center[1], center[2])
+        c = model.occ.addPoint(center[0], center[1], center[2])
         # Add 4 points on circle (clockwise, starting in top left)
         angles = [angle, -angle, np.pi + angle, np.pi - angle]
         c_points = [
-            gmsh.model.occ.addPoint(center[0] + r * np.cos(angle), center[1] + r * np.sin(angle), center[2])
+            model.occ.addPoint(center[0] + r * np.cos(angle), center[1] + r * np.sin(angle), center[2])
             for angle in angles
         ]
-        arcs = [gmsh.model.occ.addCircleArc(c_points[i - 1], c, c_points[i]) for i in range(len(c_points))]
-        curve = gmsh.model.occ.addCurveLoop(arcs)
-        gmsh.model.occ.synchronize()
-        surface = gmsh.model.occ.addPlaneSurface([curve])
+        arcs = [model.occ.addCircleArc(c_points[i - 1], c, c_points[i]) for i in range(len(c_points))]
+        curve = model.occ.addCurveLoop(arcs)
+        model.occ.synchronize()
+        surface = model.occ.addPlaneSurface([curve])
         # Create 2nd circular mesh (divided into 4 segments)
         center2 = [0.5, -0.5, 0]
-        c2 = gmsh.model.occ.addPoint(center2[0], center2[1], center2[2])
+        c2 = model.occ.addPoint(center2[0], center2[1], center2[2])
         # Add 4 points on circle (clockwise, starting in top left)
         c_points2 = [
-            gmsh.model.occ.addPoint(
-                center2[0] + 2 * r * np.cos(angle),
-                center2[1] + 2 * r * np.sin(angle),
-                center2[2],
-            )
+            model.occ.addPoint(center2[0] + 2 * r * np.cos(angle), center2[1] + 2 * r * np.sin(angle), center2[2])
             for angle in angles
         ]
-        arcs2 = [gmsh.model.occ.addCircleArc(c_points2[i - 1], c2, c_points2[i]) for i in range(len(c_points2))]
-        curve2 = gmsh.model.occ.addCurveLoop(arcs2)
-        gmsh.model.occ.synchronize()
-        surface2 = gmsh.model.occ.addPlaneSurface([curve2])
+        arcs2 = [model.occ.addCircleArc(c_points2[i - 1], c2, c_points2[i]) for i in range(len(c_points2))]
+        curve2 = model.occ.addCurveLoop(arcs2)
+        model.occ.synchronize()
+        surface2 = model.occ.addPlaneSurface([curve2])
 
         # Synchronize and create physical tags
-        gmsh.model.occ.addPoint(0.5, 0.2, 0, tag=17)
-        gmsh.model.occ.synchronize()
-        gmsh.model.addPhysicalGroup(2, [surface], tag=1)
-        bndry = gmsh.model.getBoundary([(2, surface)], oriented=False)
-        [gmsh.model.addPhysicalGroup(b[0], [b[1]]) for b in bndry]
+        model.occ.addPoint(0.5, 0.2, 0, tag=17)
+        model.occ.synchronize()
+        model.addPhysicalGroup(2, [surface], tag=1)
+        bndry = model.getBoundary([(2, surface)], oriented=False)
+        [model.addPhysicalGroup(b[0], [b[1]]) for b in bndry]
 
-        gmsh.model.addPhysicalGroup(2, [surface2], tag=2)
-        bndry2 = gmsh.model.getBoundary([(2, surface2)], oriented=False)
-        [gmsh.model.addPhysicalGroup(b[0], [b[1]]) for b in bndry2]
+        model.addPhysicalGroup(2, [surface2], tag=2)
+        bndry2 = model.getBoundary([(2, surface2)], oriented=False)
+        [model.addPhysicalGroup(b[0], [b[1]]) for b in bndry2]
 
-        gmsh.model.mesh.field.add("Distance", 1)
-        gmsh.model.mesh.field.setNumbers(1, "NodesList", [17])
+        model.mesh.field.add("Distance", 1)
+        model.mesh.field.setNumbers(1, "NodesList", [17])
 
-        gmsh.model.mesh.field.add("Threshold", 2)
-        gmsh.model.mesh.field.setNumber(2, "IField", 1)
-        gmsh.model.mesh.field.setNumber(2, "LcMin", res)
-        gmsh.model.mesh.field.setNumber(2, "LcMax", 3 * res)
-        gmsh.model.mesh.field.setNumber(2, "DistMin", 0.3)
-        gmsh.model.mesh.field.setNumber(2, "DistMax", 0.6)
+        model.mesh.field.add("Threshold", 2)
+        model.mesh.field.setNumber(2, "IField", 1)
+        model.mesh.field.setNumber(2, "LcMin", res)
+        model.mesh.field.setNumber(2, "LcMax", 3 * res)
+        model.mesh.field.setNumber(2, "DistMin", 0.3)
+        model.mesh.field.setNumber(2, "DistMax", 0.6)
         if quads:
             gmsh.option.setNumber("Mesh.RecombinationAlgorithm", 8)
             gmsh.option.setNumber("Mesh.RecombineAll", 2)
             gmsh.option.setNumber("Mesh.SubdivisionAlgorithm", 1)
-        gmsh.model.mesh.field.setAsBackgroundMesh(2)
-        gmsh.model.mesh.generate(2)
-        gmsh.model.mesh.setOrder(order)
+        model.mesh.field.setAsBackgroundMesh(2)
+        model.mesh.generate(2)
+        model.mesh.setOrder(order)
 
-        # gmsh.option.setNumber("Mesh.SaveAll", 1)
-        gmsh.write(str(filename))
-    MPI.COMM_WORLD.Barrier()
-    gmsh.finalize()
+        return model
+    else:
+        return None
 
 
 def create_gmsh_box_mesh_2D(
