@@ -115,7 +115,6 @@ if __name__ == "__main__":
 
     gmsh.initialize()
 
-
     # Load mesh and create identifier functions for the top (Displacement condition)
     # and the bottom (contact condition)
     displacement = [[0, 0, 0]]
@@ -129,7 +128,6 @@ if __name__ == "__main__":
     mesh, domain_marker, facet_marker = dolfinx.io.gmshio.model_to_mesh(model, MPI.COMM_WORLD, 0, gdim=3)
 
     gmsh.finalize()
-
 
     # fname = "meshes/box_3D"
     # create_box_mesh_3D(f"{fname}.msh", simplex, gap=gap, width=H, offset=0.0)
