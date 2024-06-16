@@ -60,7 +60,7 @@ public:
 
   /// Return contact pair
   /// @param[in] pair - the index of the contact pair
-  const std::array<int, 2>& contact_pair(int pair) const
+  std::array<int, 2> contact_pair(int pair) const
   {
     return _contact_pairs[pair];
   }

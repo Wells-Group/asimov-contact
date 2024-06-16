@@ -16,17 +16,19 @@
 using namespace dolfinx_contact;
 
 //----------------------------------------------------------------------------
-QuadratureRule::QuadratureRule(dolfinx::mesh::CellType ct, int degree, int dim,
-                               basix::quadrature::type type)
-    : _cell_type(ct), _degree(degree), _type(type), _dim(dim)
+QuadratureRule::QuadratureRule(dolfinx::mesh::CellType cell, int degree,
+                               int dim, basix::quadrature::type type)
+    : _cell_type(cell), _degree(degree), _type(type), _dim(dim)
 {
 
-  basix::cell::type b_ct = dolfinx::mesh::cell_type_to_basix_type(ct);
+  basix::cell::type b_ct = dolfinx::mesh::cell_type_to_basix_type(cell);
   _num_sub_entities = basix::cell::num_sub_entities(b_ct, dim);
-  _tdim = basix::cell::topological_dimension(b_ct);
+  int tdim = basix::cell::topological_dimension(b_ct);
+
   assert(dim <= 3);
+
   // If cell dimension no pushing forward
-  if (_tdim == std::size_t(dim))
+  if (tdim == dim)
   {
     std::array<std::vector<double>, 2> quadrature
         = basix::quadrature::make_quadrature<double>(
@@ -37,7 +39,7 @@ QuadratureRule::QuadratureRule(dolfinx::mesh::CellType ct, int degree, int dim,
     mdspan_t<const double, 2> qp(quadrature.front().data(), num_points,
                                  pt_shape);
 
-    _points = std::vector<double>(num_points * _num_sub_entities * _tdim);
+    _points = std::vector<double>(num_points * _num_sub_entities * tdim);
     _entity_offset = std::vector<std::size_t>(_num_sub_entities + 1, 0);
     _weights = std::vector<double>(num_points * _num_sub_entities);
     for (std::int32_t i = 0; i < _num_sub_entities; i++)
@@ -46,9 +48,8 @@ QuadratureRule::QuadratureRule(dolfinx::mesh::CellType ct, int degree, int dim,
       for (std::size_t j = 0; j < num_points; ++j)
       {
         _weights[i * num_points * _num_sub_entities + j] = q_weights[j];
-        for (std::size_t k = 0; k < _tdim; ++k)
-          _points[i * num_points * _num_sub_entities + j * _tdim + k]
-              = qp(j, k);
+        for (int k = 0; k < tdim; ++k)
+          _points[i * num_points * _num_sub_entities + j * tdim + k] = qp(j, k);
       }
     }
   }
@@ -101,7 +102,7 @@ QuadratureRule::QuadratureRule(dolfinx::mesh::CellType ct, int degree, int dim,
       _points.resize(_points.size() + num_points * coords.extent(1));
       mdspan_t<double, 2> entity_qp(_points.data() + offset, num_points,
                                     coords.extent(1));
-      assert(coords.extent(1) == _tdim);
+      assert(coords.extent(1) == tdim);
       dolfinx::math::dot(phi, coords, entity_qp);
       const std::size_t weights_offset = _weights.size();
       _weights.resize(_weights.size() + q_weights.size());
@@ -133,10 +134,16 @@ std::size_t QuadratureRule::num_points(int i) const
   return _entity_offset[i + 1] - _entity_offset[i];
 }
 //----------------------------------------------------------------------------
+std::size_t QuadratureRule::tdim() const
+{
+  return dolfinx::mesh::cell_dim(_cell_type);
+}
+//----------------------------------------------------------------------------
 mdspan_t<const double, 2> QuadratureRule::points(int i) const
 {
   assert(i < _num_sub_entities);
-  mdspan_t<const double, 2> all_points(_points.data(), _weights.size(), _tdim);
+  mdspan_t<const double, 2> all_points(_points.data(), _weights.size(),
+                                       this->tdim());
   return MDSPAN_IMPL_STANDARD_NAMESPACE::submdspan(
       all_points, std::pair(_entity_offset[i], _entity_offset[i + 1]),
       MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent);

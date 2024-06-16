@@ -3,7 +3,7 @@
 //
 // This file is part of DOLFINx_CONTACT
 //
-// SPDX-License-Identifier:    MIT
+// SPDX-License-Identifier: MIT
 
 #pragma once
 
@@ -18,17 +18,17 @@ template <typename T, std::size_t d,
 using mdspan_t = MDSPAN_IMPL_STANDARD_NAMESPACE::mdspan<
     T, MDSPAN_IMPL_STANDARD_NAMESPACE::dextents<std::size_t, d>, S>;
 
-/// Contains quadrature points and weights on a cell on a set of
+/// @brief Contains quadrature points and weights on a cell on a set of
 /// entities
 class QuadratureRule
 {
 public:
   /// Constructor
-  /// @param[in] ct The cell type
+  /// @param[in] cell The cell type
   /// @param[in] degree Degree of quadrature rule
   /// @param[in] dim Dimension of entity
-  /// @param[in] type Type of quadrature rule
-  QuadratureRule(dolfinx::mesh::CellType ct, int degree, int dim,
+  /// @param[in] type Quadrature rule type.
+  QuadratureRule(dolfinx::mesh::CellType cell, int degree, int dim,
                  basix::quadrature::type type
                  = basix::quadrature::type::Default);
 
@@ -59,8 +59,9 @@ public:
   /// Return the number of quadrature points per entity
   std::size_t num_points(int i) const;
 
-  /// Return the topological dimension of the quadrature rule
-  std::size_t tdim() const { return _tdim; };
+  /// Topological dimension of the quadrature rule
+  /// @todo Docstring doesn't make sense
+  std::size_t tdim() const;
 
   /// Return the quadrature points for the ith entity
   /// @param[in] i The local entity index
@@ -74,14 +75,16 @@ public:
   const std::vector<std::size_t>& offset() const { return _entity_offset; }
 
 private:
+  // What is this?
   dolfinx::mesh::CellType _cell_type;
 
-  std::size_t _tdim;
-
+  // What is this?
   int _degree;
 
+  // What is this?
   basix::quadrature::type _type;
 
+  // What is this?
   int _dim;
 
   // Quadrature points for each entity on the cell. Shape (entity,
