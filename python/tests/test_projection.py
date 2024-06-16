@@ -19,9 +19,8 @@ import gmsh
 import numpy as np
 import pytest
 from dolfinx.graph import adjacencylist
-from dolfinx.io import XDMFFile
 from dolfinx.mesh import locate_entities_boundary, meshtags
-from dolfinx_contact.meshing import convert_mesh_new, create_box_mesh_3D, create_gmsh_box_mesh_2D
+from dolfinx_contact.meshing import create_box_mesh_3D, create_gmsh_box_mesh_2D
 
 
 @pytest.mark.parametrize("q_deg", range(1, 4))
