@@ -27,16 +27,16 @@ from dolfinx_contact.meshing import create_box_mesh_3D, create_gmsh_box_mesh_2D
 @pytest.mark.parametrize("surf", [0, 1])
 @pytest.mark.parametrize("dim", [2, 3])
 def test_projection(tmp_path, q_deg, surf, dim):
+    gmsh.initialize()
+
     # Create mesh
     if dim == 2:
-        gmsh.initialize()
         name = "box_mesh_2D"
         model = gmsh.model()
         model.add(name)
         model.setCurrent(name)
         model = create_gmsh_box_mesh_2D(model, res=1.0)
         mesh, _, _ = dolfinx.io.gmshio.model_to_mesh(model, MPI.COMM_WORLD, 0, gdim=2)
-        gmsh.finalize()
     else:
         name = "test_proj_box_3D"
         model = gmsh.model()
@@ -44,6 +44,8 @@ def test_projection(tmp_path, q_deg, surf, dim):
         model.setCurrent(name)
         model = create_box_mesh_3D(model, res=1.0, offset=0.0)
         mesh, _, _ = dolfinx.io.gmshio.model_to_mesh(model, MPI.COMM_WORLD, 0, gdim=dim)
+
+    gmsh.finalize()
 
     tdim = mesh.topology.dim
     gdim = mesh.geometry.dim
