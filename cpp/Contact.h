@@ -35,8 +35,8 @@ namespace dolfinx_contact
 class Contact
 {
 public:
-  /// empty constructor
-  Contact() = default;
+  // /// empty constructor
+  // Contact() = default;
 
   /// Constructor
   /// @param[in] markers List of meshtags defining the contact surfaces
@@ -52,7 +52,9 @@ public:
           const dolfinx::graph::AdjacencyList<std::int32_t>& surfaces,
           const std::vector<std::array<int, 2>>& contact_pairs,
           std::shared_ptr<const dolfinx::mesh::Mesh<double>> mesh,
-          const std::vector<ContactMode>& mode, const int q_deg = 3);
+          const std::vector<ContactMode>& mode,
+          // QuadratureRule q_rule,
+          const int q_deg = 3);
 
   /// Return meshtag value for surface with index surface
   /// @param[in] surface - the index of the surface
@@ -78,14 +80,8 @@ public:
   /// @return TODO
   std::size_t local_facets(int s) const { return _local_facets[s]; }
 
-  /// set quadrature rule
-  void set_quadrature_rule(QuadratureRule q_rule)
-  {
-    _quadrature_rule = std::make_shared<QuadratureRule>(q_rule);
-  }
-
   /// return quadrature rule
-  const QuadratureRule& quadrature_rule() const { return *_quadrature_rule; }
+  const QuadratureRule& quadrature_rule() const { return _quadrature_rule; }
 
   /// @brief TODO
   /// @return TODO
@@ -311,7 +307,9 @@ public:
   std::size_t num_q_points() const;
 
 private:
-  std::shared_ptr<QuadratureRule> _quadrature_rule; // quadrature rule
+  // quadrature rule
+  QuadratureRule _quadrature_rule;
+
   std::vector<int> _surfaces; // meshtag values for surfaces
 
   // store index of candidate_surface for each quadrature_surface
