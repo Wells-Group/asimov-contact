@@ -818,7 +818,9 @@ class TestUnbiased:
 
         # Create single meshtag for contact pair
         facet_marker = create_facet_markers(mesh_custom, facets_cg)
-        # Create adjacency list associating the only meshtag with the to markers
+
+        # Create adjacency list associating the only meshtag with the to
+        # markers
         data = np.array([0, 1], dtype=np.int32)
         offsets = np.array([0, 2], dtype=np.int32)
         surfaces = adjacencylist(data, offsets)
@@ -984,6 +986,7 @@ class TestUnbiased:
 
         # Custom assembly
         cells, facets_cg = locate_contact_facets_custom(V_custom, gap)
+
         # Fem functions
         u1 = _fem.Function(V_custom)
         v1 = ufl.TestFunction(V_custom)

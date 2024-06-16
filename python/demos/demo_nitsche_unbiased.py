@@ -362,7 +362,6 @@ def run_soler(args):
     J = ufl.derivative(F, du, w)
 
     # compiler options to improve performance
-    # cffi_options = ["-Ofast", "-march=native"]
     cffi_options = []
     jit_options = {"cffi_extra_compile_args": cffi_options, "cffi_libraries": ["m"]}
     # compiled forms for rhs and tangen system

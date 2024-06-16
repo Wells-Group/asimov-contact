@@ -36,15 +36,6 @@ def test_copy_to_submesh(tmp_path, order, res, simplex, dim):
             model.setCurrent(name)
             model = create_sphere_plane_mesh(model, res=res, order=order, r=0.25, height=0.25, length=1.0, width=1.0)
             mesh, _, facet_marker = dolfinx.io.gmshio.model_to_mesh(model, MPI.COMM_WORLD, 0, gdim=3)
-
-            # fname = tmp_path / "sphere3D.msh"
-            # create_sphere_plane_mesh(filename=fname, res=res, order=order, r=0.25, height=0.25, length=1.0, width=1.0)
-            # convert_mesh_new(fname.with_suffix(".msh"), fname.with_suffix(".xdmf"), gdim=3)
-            # with XDMFFile(MPI.COMM_WORLD, fname.with_suffix(".xdmf"), "r") as xdmf:
-            #     mesh = xdmf.read_mesh()
-            #     tdim = mesh.topology.dim
-            #     mesh.topology.create_connectivity(tdim - 1, tdim)
-            #     facet_marker = xdmf.read_meshtags(mesh, name="facet_marker")
             contact_bdy_1 = 1
             contact_bdy_2 = 8
         else:
@@ -104,17 +95,6 @@ def test_copy_to_submesh(tmp_path, order, res, simplex, dim):
             model, res=res, order=order, quads=not simplex, r=0.25, height=0.25, length=1.0
         )
         mesh, _, facet_marker = dolfinx.io.gmshio.model_to_mesh(model, MPI.COMM_WORLD, 0, gdim=2)
-
-        # fname = tmp_path / "hertz2D.msh"
-        # create_circle_plane_mesh(
-        #     filename=fname, res=res, order=order, quads=not simplex, r=0.25, height=0.25, length=1.0
-        # )
-        # convert_mesh_new(fname, fname.with_suffix(".xdmf"), gdim=2)
-        # with XDMFFile(MPI.COMM_WORLD, fname.with_suffix(".xdmf"), "r") as xdmf:
-        #     mesh = xdmf.read_mesh()
-        #     tdim = mesh.topology.dim
-        #     mesh.topology.create_connectivity(tdim - 1, tdim)
-        #     facet_marker = xdmf.read_meshtags(mesh, name="facet_marker")
         contact_bdy_1 = 4
         contact_bdy_2 = 9
 

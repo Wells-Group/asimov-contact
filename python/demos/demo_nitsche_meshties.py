@@ -129,16 +129,6 @@ if __name__ == "__main__":
 
     gmsh.finalize()
 
-    # fname = "meshes/box_3D"
-    # create_box_mesh_3D(f"{fname}.msh", simplex, gap=gap, width=H, offset=0.0)
-    # convert_mesh(fname, fname, gdim=3)
-    # with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
-    #     mesh = xdmf.read_mesh()
-    #     domain_marker = xdmf.read_meshtags(mesh, "cell_marker")
-    #     tdim = mesh.topology.dim
-    #     mesh.topology.create_connectivity(tdim - 1, tdim)
-    #     facet_marker = xdmf.read_meshtags(mesh, "facet_marker")
-
     tdim = mesh.topology.dim
     gdim = mesh.geometry.dim
     mesh.topology.create_connectivity(tdim - 1, 0)
@@ -211,7 +201,6 @@ if __name__ == "__main__":
         )
 
     # compile forms
-    # cffi_options = ["-Ofast", "-march=native"]
     cffi_options = []
     jit_options = {"cffi_extra_compile_args": cffi_options, "cffi_libraries": ["m"]}
     F = form(F, jit_options=jit_options)

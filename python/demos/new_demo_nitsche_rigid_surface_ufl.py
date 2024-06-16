@@ -50,15 +50,6 @@ def run_solver(
         model = create_sphere_plane_mesh(model)
         mesh, _, facet_marker = dolfinx.io.gmshio.model_to_mesh(model, MPI.COMM_WORLD, 0, gdim=3)
 
-        # with tempfile.TemporaryDirectory() as tmpdirname:
-        #     fname = Path(tmpdirname, "sphere.msh")
-        #     create_sphere_plane_mesh(filename=fname)
-        #     convert_mesh_new(fname, fname.with_suffix(".xdmf"), gdim=3)
-        #     with XDMFFile(MPI.COMM_WORLD, fname.with_suffix(".xdmf"), "r") as xdmf:
-        #         mesh = xdmf.read_mesh()
-        #         tdim = mesh.topology.dim
-        #         mesh.topology.create_connectivity(tdim - 1, tdim)
-        #         facet_marker = xdmf.read_meshtags(mesh, name="facet_marker")
         top_value = 2
         bottom_value = 1
         surface_value = 8
@@ -70,15 +61,6 @@ def run_solver(
         model.setCurrent(name)
         model = create_circle_plane_mesh(model)
         mesh, _, facet_marker = dolfinx.io.gmshio.model_to_mesh(model, MPI.COMM_WORLD, 0, gdim=2)
-        # with tempfile.TemporaryDirectory() as tmpdirname:
-        #     fname = Path(tmpdirname, "twomeshes.msh")
-        #     create_circle_plane_mesh(filename=fname)
-        #     convert_mesh_new(fname, fname.with_suffix(".xdmf"), gdim=2)
-        #     with XDMFFile(MPI.COMM_WORLD, fname.with_suffix(".xdmf"), "r") as xdmf:
-        #         mesh = xdmf.read_mesh()
-        #         tdim = mesh.topology.dim
-        #         mesh.topology.create_connectivity(tdim - 1, tdim)
-        #         facet_marker = xdmf.read_meshtags(mesh, name="facet_marker")
 
         top_value = 2
         bottom_value = 4
