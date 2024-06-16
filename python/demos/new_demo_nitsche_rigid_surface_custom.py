@@ -51,7 +51,7 @@ def run_solver(
     # (Displacement condition) and the bottom (contact condition)
     if threed:
         name = "demo_nitsche_rigid"
-        model = gmsh.model(name)
+        model = gmsh.model()
         model.add(name)
         model.setCurrent(name)
         model = create_sphere_plane_mesh(model)
