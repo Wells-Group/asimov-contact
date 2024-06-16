@@ -167,7 +167,7 @@ if __name__ == "__main__":
             jit_options=jit_options,
         )
 
-        with XDMFFile(mesh.comm, f"results/u_nitsche_{i}.xdmf", "w") as xdmf:
+        with XDMFFile(mesh.comm, f"results/u_nitsche_debug{i}.xdmf", "w") as xdmf:
             xdmf.write_mesh(mesh)
             xdmf.write_function(u1)
 
@@ -183,7 +183,7 @@ if __name__ == "__main__":
             jit_options=jit_options,
             snes_options=snes_options,
         )
-        with XDMFFile(mesh.comm, f"results/u_snes_{i}.xdmf", "w") as xdmf:
+        with XDMFFile(mesh.comm, f"results/u_snes_debug{i}.xdmf", "w") as xdmf:
             xdmf.write_mesh(mesh)
             xdmf.write_function(u2)
 

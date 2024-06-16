@@ -1,7 +1,7 @@
 # Copyright (C) 2023 Sarah Roggendorf
 #
 # SPDX-License-Identifier:    MIT
-#
+
 from mpi4py import MPI
 from petsc4py import PETSc
 
@@ -66,24 +66,23 @@ class MeshTieProblem:
         u: Function,
         lmbda: Function,
         mu: Function,
-        gamma: np.float64,
-        theta: np.float64,
+        gamma: float,
+        theta: float,
     ):
-        """
-        Create a MeshTie problem
+        """Create a MeshTie problem.
 
         Args:
-            l:          The form describing the residual
-            j:          The form describing the jacobian
-            bcs:        The boundary conditions
-            meshties:   The MeshTie class describing the tied surfaces
-            subdomains: The domain marker labelling the individual components
-            u:          The displacement function
-            lmbda:      The lame parameter lambda
-            mu:         The lame parameter mu
-            gamma:      The Nitsche parameter
-            theta:      The parameter selecting version of Nitsche (1 - symmetric, -1
-                        anti-symmetric, 0 - penalty-like)
+            l: Form describing the residual
+            j: Form describing the jacobian
+            bcs: Boundary conditions
+            meshties: MeshTie class describing the tied surfaces
+            subdomains: Domain marker labelling the individual components
+            u: Displacement function
+            lmbda: Lame parameter lambda
+            mu: Lame parameter mu
+            gamma: Nitsche parameter
+            theta: Parameter selecting version of Nitsche (1: symmetric,
+                -1: anti-symmetric, 0 - penalty-like)
         """
         # Initialise class from input
         self._l = a

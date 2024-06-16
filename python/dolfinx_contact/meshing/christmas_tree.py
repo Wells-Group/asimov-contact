@@ -3,9 +3,6 @@
 # SPDX-License-Identifier:    MIT
 
 
-import typing
-from pathlib import Path
-
 from mpi4py import MPI
 
 import gmsh
@@ -52,27 +49,31 @@ def jagged_curve(npoints, t, r0, r1, xmax):
     return np.array(xvals), np.array(yvals)
 
 
-def create_christmas_tree_mesh_3D(filename: typing.Union[str, Path], res=0.2, split=1, n1=101, n2=51):
-    offset = [0.0, 0.0, 1.0]
-    # TODO: Some of the curve parameters should probably be input
-    nc = n1
-    x, y = jagged_curve(nc, -0.95, lambda x: 0.8 * x / 5.0, lambda x: 0.6, 4.0)
-    nc = n2
-    # Fill in bottom
-    yb = np.linspace(y[-1], -y[-1], nc)
-    xb = np.ones_like(yb) * x[-1]
+def create_christmas_tree_mesh_3D(
+    model,
+    res=0.2,
+    split=1,
+    n1=101,
+    n2=51,
+    comm: MPI.Comm = MPI.COMM_WORLD,
+    rank: int = 0,
+):
+    if comm.rank == rank:
+        offset = [0.0, 0.0, 1.0]
+        # TODO: Some of the curve parameters should probably be input
+        nc = n1
+        x, y = jagged_curve(nc, -0.95, lambda x: 0.8 * x / 5.0, lambda x: 0.6, 4.0)
+        nc = n2
+        # Fill in bottom
+        yb = np.linspace(y[-1], -y[-1], nc)
+        xb = np.ones_like(yb) * x[-1]
 
-    # Flip and concatenate
-    xv = np.concatenate((x[1:], xb[1:-1], np.flip(x[1:])))
-    yv = np.concatenate((y[1:], yb[1:-1], np.flip(-y[1:])))
+        # Flip and concatenate
+        xv = np.concatenate((x[1:], xb[1:-1], np.flip(x[1:])))
+        yv = np.concatenate((y[1:], yb[1:-1], np.flip(-y[1:])))
 
-    gmsh.initialize()
-    gmsh.option.setNumber("General.Terminal", 0)
-    if MPI.COMM_WORLD.rank == 0:
+        gmsh.option.setNumber("General.Terminal", 0)
         gmsh.option.setNumber("Mesh.CharacteristicLengthFactor", res)
-        model = gmsh.model()
-        model.add("xmas")
-        model.setCurrent("xmas")
         ps1, lines1, curve1 = create_closed_curve(model, (xv, yv))
         ps2, lines2, curve2 = create_closed_curve(model, (xv + offset[0], yv + offset[1]), z=offset[2])
         lines_z1 = []
@@ -137,40 +138,44 @@ def create_christmas_tree_mesh_3D(filename: typing.Union[str, Path], res=0.2, sp
                 start = 0
             else:
                 start = i * num_surfaces + 1
+
             if i == split - 1:
                 end = len(tree_outer)
             else:
                 end = (i + 1) * num_surfaces + 1
+
             model.addPhysicalGroup(2, tree_outer[start:end], tag=5 + split + i + 1)
+
         model.mesh.field.setAsBackgroundMesh(2)
         model.mesh.generate(3)
         model.mesh.optimize("Netgen")
-        gmsh.write(str(filename))
+        return model
+    else:
+        return None
 
-    MPI.COMM_WORLD.Barrier()
-    gmsh.finalize()
 
+def create_christmas_tree_mesh(
+    model,
+    res=0.2,
+    split=1,
+    comm: MPI.Comm = MPI.COMM_WORLD,
+    rank: int = 0,
+):
+    if comm.rank == rank:
+        # TODO: Some of the curve parameters should probably be input
+        nc = 101
+        x, y = jagged_curve(nc, -0.95, lambda x: 0.8 * x / 5.0, lambda x: 0.6, 8.0)
+        nc = 51
+        # Fill in bottom
+        yb = np.linspace(y[-1], -y[-1], nc)
+        xb = np.ones_like(yb) * x[-1]
 
-def create_christmas_tree_mesh(filename: typing.Union[str, Path], res=0.2, split=1):
-    # TODO: Some of the curve parameters should probably be input
-    nc = 101
-    x, y = jagged_curve(nc, -0.95, lambda x: 0.8 * x / 5.0, lambda x: 0.6, 8.0)
-    nc = 51
-    # Fill in bottom
-    yb = np.linspace(y[-1], -y[-1], nc)
-    xb = np.ones_like(yb) * x[-1]
+        # Flip and concatenate
+        xv = np.concatenate((x[1:], xb[1:-1], np.flip(x[1:])))
+        yv = np.concatenate((y[1:], yb[1:-1], np.flip(-y[1:])))
 
-    # Flip and concatenate
-    xv = np.concatenate((x[1:], xb[1:-1], np.flip(x[1:])))
-    yv = np.concatenate((y[1:], yb[1:-1], np.flip(-y[1:])))
-
-    gmsh.initialize()
-    gmsh.option.setNumber("General.Terminal", 0)
-    if MPI.COMM_WORLD.rank == 0:
+        gmsh.option.setNumber("General.Terminal", 0)
         gmsh.option.setNumber("Mesh.CharacteristicLengthFactor", res)
-        model = gmsh.model()
-        model.add("xmas")
-        model.setCurrent("xmas")
         _, lines1, curve1 = create_closed_curve(model, (xv, yv))
         surface = model.occ.addPlaneSurface([curve1])
         model.occ.synchronize()
@@ -218,9 +223,9 @@ def create_christmas_tree_mesh(filename: typing.Union[str, Path], res=0.2, split
             else:
                 end = (i + 1) * num_lines + 1
             model.addPhysicalGroup(1, tree_outer[start:end], tag=4 + split + i + 1)
+
         model.mesh.field.setAsBackgroundMesh(2)
         model.mesh.generate(2)
-        gmsh.write(str(filename))
-
-    MPI.COMM_WORLD.Barrier()
-    gmsh.finalize()
+        return model
+    else:
+        return None

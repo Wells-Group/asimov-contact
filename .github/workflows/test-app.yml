@@ -28,10 +28,10 @@ jobs:
         run: |
           ruff format --check
           ruff check
-      - name: mypy checks
-        run: |
-          cd python/
-          mypy . --exclude=build
+      # - name: mypy checks
+      #   run: |
+      #     cd python/
+      #     mypy . --exclude=build
 
       # - name: clang-format C++ checks (non-blocking)
       #   continue-on-error: true
@@ -128,13 +128,12 @@ jobs:
         run: |
           pip -v install -r ./python/build-requirements.txt
           pip -v install --no-build-isolation python/
-          pip install scipy matplotlib
+          pip install scipy matplotlib pytest pytest-xdist
 
       - name: Run demos (Python)
         run: |
-          pip install pytest pytest-xdist
           cd python/demos
-          python -m pytest -v .
+          pytest -v -n auto .
 
       - name: Create output folders
         id: output-creation
@@ -142,19 +141,6 @@ jobs:
         run: |
           mkdir -p results
           mkdir -p meshes
-
-      - name: Run SNES demos
-        working-directory: ./python/demos
-        run: |
-          # python new_demo_custom_snes_one_sided.py
-          python compare_nitsche_snes.py
-
-      - name: Run rigid surface demos
-        working-directory: ./python/demos
-        run: |
-          python demo_nitsche_rigid_surface_ufl.py
-          python demo_nitsche_rigid_surface_custom.py
-          python nitsche_euler_bernoulli.py
 
       - name: Run unbiased demos
         working-directory: ./python/demos

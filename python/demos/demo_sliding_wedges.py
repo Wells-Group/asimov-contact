@@ -3,6 +3,8 @@
 # SPDX-License-Identifier:    MIT
 
 import argparse
+import tempfile
+from pathlib import Path
 
 from mpi4py import MPI
 from petsc4py.PETSc import InsertMode, ScatterMode  # type: ignore
@@ -36,7 +38,7 @@ from dolfinx_contact.helpers import (
     rigid_motions_nullspace_subdomains,
     sigma_func,
 )
-from dolfinx_contact.meshing import convert_mesh, sliding_wedges
+from dolfinx_contact.meshing import convert_mesh_new, sliding_wedges
 from dolfinx_contact.newton_solver import NewtonSolver
 
 if __name__ == "__main__":
@@ -86,17 +88,16 @@ if __name__ == "__main__":
 
     # Create mesh
     outname = "results/sliding_wedges_simplex" if simplex else "results/sliding_wedges_quads"
-    fname = f"{mesh_dir}/sliding_wedges_simplex" if simplex else f"{mesh_dir}/sliding_wedges_quads"
-    sliding_wedges(f"{fname}.msh", not simplex, args.res, args.order, angle=angle)
-
-    convert_mesh(fname, f"{fname}.xdmf", gdim=2)
-    with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
-        mesh = xdmf.read_mesh()
-        domain_marker = xdmf.read_meshtags(mesh, name="cell_marker")
-        tdim = mesh.topology.dim
-        mesh.topology.create_connectivity(tdim - 1, tdim)
-        facet_marker = xdmf.read_meshtags(mesh, name="facet_marker")
-
+    with tempfile.TemporaryDirectory() as tmpdirname:
+        fname = Path(tmpdirname, "sliding_wedges.msh")
+        sliding_wedges(fname, not simplex, args.res, args.order, angle=angle)
+        convert_mesh_new(fname, fname.with_suffix(".xdmf"), gdim=2)
+        with XDMFFile(MPI.COMM_WORLD, fname.with_suffix(".xdmf"), "r") as xdmf:
+            mesh = xdmf.read_mesh()
+            domain_marker = xdmf.read_meshtags(mesh, name="cell_marker")
+            tdim = mesh.topology.dim
+            mesh.topology.create_connectivity(tdim - 1, tdim)
+            facet_marker = xdmf.read_meshtags(mesh, name="facet_marker")
     contact_bdy_1 = 7
     contact_bdy_2 = 5
     neumann_bdy = 10

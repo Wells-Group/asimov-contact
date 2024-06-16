@@ -8,6 +8,8 @@ import sys
 from mpi4py import MPI
 from petsc4py import PETSc
 
+import dolfinx.io.gmshio
+import gmsh
 import numpy as np
 import ufl
 from dolfinx import default_scalar_type, log
@@ -36,99 +38,41 @@ from dolfinx_contact.helpers import (
     rigid_motions_nullspace_subdomains,
     sigma_func,
 )
-from dolfinx_contact.meshing import convert_mesh, create_box_mesh_3D
+from dolfinx_contact.meshing import create_box_mesh_3D
 from dolfinx_contact.parallel_mesh_ghosting import create_contact_mesh
 
-if __name__ == "__main__":
-    desc = "Nitsche's method for two elastic bodies using custom assemblers"
-    parser = argparse.ArgumentParser(description=desc, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument(
-        "--theta",
-        default=1.0,
-        type=float,
-        dest="theta",
-        help="Theta parameter for Nitsche, 1 symmetric, -1 skew symmetric, 0 Penalty-like",
-        choices=[1.0, -1.0, 0.0],
-    )
-    parser.add_argument(
-        "--gamma",
-        default=10,
-        type=float,
-        dest="gamma",
-        help="Coercivity/Stabilization parameter for Nitsche condition",
-    )
-    parser.add_argument(
-        "--quadrature",
-        default=5,
-        type=int,
-        dest="q_degree",
-        help="Quadrature degree used for contact integrals",
-    )
-    _timing = parser.add_mutually_exclusive_group(required=False)
-    _timing.add_argument(
-        "--timing",
-        dest="timing",
-        action="store_true",
-        help="List timings",
-        default=False,
-    )
-    _ksp = parser.add_mutually_exclusive_group(required=False)
-    _ksp.add_argument(
-        "--ksp-view",
-        dest="ksp",
-        action="store_true",
-        help="List ksp options",
-        default=False,
-    )
-    _simplex = parser.add_mutually_exclusive_group(required=False)
-    _simplex.add_argument(
-        "--simplex",
-        dest="simplex",
-        action="store_true",
-        help="Use triangle/tet mesh",
-        default=False,
-    )
-    parser.add_argument("--E", default=1e3, type=np.float64, dest="E", help="Youngs modulus of material")
-    parser.add_argument("--nu", default=0.1, type=np.float64, dest="nu", help="Poisson's ratio")
-    parser.add_argument(
-        "--outfile",
-        type=str,
-        default=None,
-        required=False,
-        help="File for appending results",
-        dest="outfile",
-    )
-    _lifting = parser.add_mutually_exclusive_group(required=False)
-    _lifting.add_argument(
-        "--lifting",
-        dest="lifting",
-        action="store_true",
-        help="Apply lifting (strong enforcement of Dirichlet condition",
-        default=False,
-    )
 
-    # Parse input arguments or set to defualt values
-    args = parser.parse_args()
-    simplex = args.simplex
+def run_demo(simplex, E, nu, gamma, theta, lifting, outfile, ksp_view, timing_view):
+    # simplex = args.simplex
+    # E = args.E
+    # nu = args.nu
+    # # Nitsche parameters
+    # gamma = args.gamma
+    # theta = args.theta
+    # lifting = args.lifting
+    # outfile = args.outfile
+    # ksp_view = args.ksp
+    # timing_view = args.timing
+    # outfile = args.outfile
+
+    gmsh.initialize()
 
     # Load mesh and create identifier functions for the top (Displacement condition)
     # and the bottom (contact condition)
-    displacement = [[0, 0, 0]]
+    # displacement = [[0, 0, 0]]
     gap = 1e-5
     H = 1.5
-    fname = "meshes/box_3D"
-    create_box_mesh_3D(f"{fname}.msh", simplex, gap=gap, width=H, offset=0.0)
-    convert_mesh(fname, fname, gdim=3)
+    name = "box_3D"
+    model = gmsh.model()
+    model.add(name)
+    model.setCurrent(name)
+    model = create_box_mesh_3D(model, simplex, gap=gap, width=H, offset=0.0)
+    mesh, domain_marker, facet_marker = dolfinx.io.gmshio.model_to_mesh(model, MPI.COMM_WORLD, 0, gdim=3)
 
-    with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
-        mesh = xdmf.read_mesh()
-        domain_marker = xdmf.read_meshtags(mesh, "cell_marker")
-        tdim = mesh.topology.dim
-        mesh.topology.create_connectivity(tdim - 1, tdim)
-        facet_marker = xdmf.read_meshtags(mesh, "facet_marker")
+    gmsh.finalize()
 
     tdim = mesh.topology.dim
-    gdim = mesh.geometry.dim
+    # gdim = mesh.geometry.dim
     mesh.topology.create_connectivity(tdim - 1, 0)
     mesh.topology.create_connectivity(tdim - 1, tdim)
 
@@ -158,8 +102,6 @@ if __name__ == "__main__":
     n = ufl.FacetNormal(mesh)
 
     # Compute lame parameters
-    E = args.E
-    nu = args.nu
     mu_func, lambda_func = lame_parameters(False)
     V2 = functionspace(mesh, ("Discontinuous Lagrange", 0))
     lmbda = Function(V2)
@@ -167,10 +109,6 @@ if __name__ == "__main__":
     mu = Function(V2)
     mu.interpolate(lambda x: np.full((1, x.shape[1]), mu_func(E, nu)))
     sigma = sigma_func(mu, lmbda)
-
-    # Nitsche parameters
-    gamma = args.gamma
-    theta = args.theta
 
     J = ufl.inner(sigma(w), epsilon(v)) * dx
 
@@ -184,7 +122,7 @@ if __name__ == "__main__":
 
     # Dirichlet bdry conditions
     g = Constant(mesh, default_scalar_type((0.0, 0.0, 0.0)))
-    if args.lifting:
+    if lifting:
         bdy_dofs = locate_dofs_topological(V, tdim - 1, facet_marker.find(dirichlet_bdy))  # type: ignore
         bcs = [dirichletbc(g, bdy_dofs, V)]
     else:
@@ -199,7 +137,7 @@ if __name__ == "__main__":
         )
 
     # compile forms
-    cffi_options = ["-Ofast", "-march=native"]
+    cffi_options = []
     jit_options = {"cffi_extra_compile_args": cffi_options, "cffi_libraries": ["m"]}
     F = form(F, jit_options=jit_options)
     J = form(J, jit_options=jit_options)
@@ -230,7 +168,7 @@ if __name__ == "__main__":
     surfaces = adjacencylist(data, offsets)
 
     log.set_log_level(log.LogLevel.OFF)
-    solver_outfile = args.outfile if args.ksp else None
+    # solver_outfile = outfile if ksp_view else None
 
     # initialise meshties
     meshties = MeshTie(
@@ -317,22 +255,106 @@ if __name__ == "__main__":
         xdmf.write_mesh(mesh)
         uh.name = "u"
         xdmf.write_function(uh)
-    if args.timing:
+    if timing_view:
         list_timings(mesh.comm, [TimingType.wall])
 
-    if args.outfile is None:
-        outfile = sys.stdout
+    if outfile is None:
+        ofile = sys.stdout
     else:
-        outfile = open(args.outfile, "a")
-    print("-" * 25, file=outfile)
+        ofile = open(outfile, "a")
+    print("-" * 25, file=ofile)
     print(
         f"num_dofs: {uh.function_space.dofmap.index_map_bs*uh.function_space.dofmap.index_map.size_global}"
         + f", {mesh.topology.cell_type}",
-        file=outfile,
+        file=ofile,
     )
-    print(f"Krylov solver {solver_time}", file=outfile)
-    print(f"Krylov iterations {solver.getIterationNumber()}", file=outfile)
+    print(f"Krylov solver {solver_time}", file=ofile)
+    print(f"Krylov iterations {solver.getIterationNumber()}", file=ofile)
     print("-" * 25, file=outfile)
 
-    if args.outfile is not None:
-        outfile.close()
+    if outfile is not None:
+        ofile.close()
+
+
+if __name__ == "__main__":
+    desc = "Nitsche's method for two elastic bodies using custom assemblers"
+    parser = argparse.ArgumentParser(description=desc, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument(
+        "--theta",
+        default=1.0,
+        type=float,
+        dest="theta",
+        help="Theta parameter for Nitsche, 1 symmetric, -1 skew symmetric, 0 Penalty-like",
+        choices=[1.0, -1.0, 0.0],
+    )
+    parser.add_argument(
+        "--gamma",
+        default=10,
+        type=float,
+        dest="gamma",
+        help="Coercivity/Stabilization parameter for Nitsche condition",
+    )
+    parser.add_argument(
+        "--quadrature",
+        default=5,
+        type=int,
+        dest="q_degree",
+        help="Quadrature degree used for contact integrals",
+    )
+    _timing = parser.add_mutually_exclusive_group(required=False)
+    _timing.add_argument(
+        "--timing",
+        dest="timing",
+        action="store_true",
+        help="List timings",
+        default=False,
+    )
+    _ksp = parser.add_mutually_exclusive_group(required=False)
+    _ksp.add_argument(
+        "--ksp-view",
+        dest="ksp",
+        action="store_true",
+        help="List ksp options",
+        default=False,
+    )
+    _simplex = parser.add_mutually_exclusive_group(required=False)
+    _simplex.add_argument(
+        "--simplex",
+        dest="simplex",
+        action="store_true",
+        help="Use triangle/tet mesh",
+        default=False,
+    )
+    parser.add_argument("--E", default=1e3, type=np.float64, dest="E", help="Youngs modulus of material")
+    parser.add_argument("--nu", default=0.1, type=np.float64, dest="nu", help="Poisson's ratio")
+    parser.add_argument(
+        "--outfile",
+        type=str,
+        default=None,
+        required=False,
+        help="File for appending results",
+        dest="outfile",
+    )
+    _lifting = parser.add_mutually_exclusive_group(required=False)
+    _lifting.add_argument(
+        "--lifting",
+        dest="lifting",
+        action="store_true",
+        help="Apply lifting (strong enforcement of Dirichlet condition",
+        default=False,
+    )
+
+    # Parse input arguments or set to defualt values
+    args = parser.parse_args()
+
+    run_demo(
+        simplex=args.simplex,
+        E=args.E,
+        nu=args.nu,
+        gamma=args.gamma,
+        theta=args.theta,
+        lifting=args.lifting,
+        outfile=args.outfile,
+        ksp_view=args.ksp,
+        timing_view=args.timing,
+    )

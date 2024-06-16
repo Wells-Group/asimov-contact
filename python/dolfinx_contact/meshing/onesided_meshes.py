@@ -16,8 +16,8 @@ __all__ = ["create_disk_mesh", "create_sphere_mesh"]
 
 
 def create_disk_mesh(LcMin=0.005, LcMax=0.015, filename: typing.Union[str, Path] = "disk.msh"):
-    """
-    Create a disk mesh centered at (0.5, 0.5) with radius 0.5.
+    """Create a disk mesh centered at (0.5, 0.5) with radius 0.5.
+
     Mesh is finer at (0.5,0) using LcMin, and gradually decreasing to LcMax
     """
     gmsh.initialize()

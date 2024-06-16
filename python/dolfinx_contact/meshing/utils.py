@@ -14,11 +14,11 @@ def convert_mesh_new(filename: Path, outname: Path, gdim: int = 3):
     and facet tags in a single file.
 
     Args:
-        filename
+        filename:
             Name of input file
-        outname
+        outname:
             Name of output file
-        gdim
+        gdim:
             The geometrical dimension of the mesh
     """
     if MPI.COMM_WORLD.rank == 0:

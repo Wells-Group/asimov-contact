@@ -3,7 +3,6 @@
 # SPDX-License-Identifier:    MIT
 
 import argparse
-import os
 
 from mpi4py import MPI
 
@@ -29,17 +28,17 @@ def solve_euler_bernoulli(
     ny: int,
     theta: float,
     gamma: float,
-    linear_solver: bool,
-    plane_strain: bool,
-    nitsche: bool,
+    linear_solver: bool = False,
+    plane_strain: bool = False,
+    nitsche: bool = False,
     L: float = 47,
     H: float = 2.73,
     E: float = 1e5,
     nu: float = 0.3,
     rho_g: float = 1e-2,
 ):
-    """
-    Solve the Euler-Bernoulli equations for a (0,0)x(L,H) beam
+    """Solve the Euler-Bernoulli equations for a (0,0)x(L,H) beam.
+
     (https://en.wikipedia.org/wiki/Euler%E2%80%93Bernoulli_beam_theory#Cantilever_beams)
     """
     mesh = create_rectangle(
@@ -56,7 +55,8 @@ def solve_euler_bernoulli(
     def top(x):
         return np.isclose(x[1], H)
 
-    # Locate top and left facets to set Dirichlet condition and load condition
+    # Locate top and left facets to set Dirichlet condition and load
+    # condition
     tdim = mesh.topology.dim
     left_marker = int(1)
     top_marker = int(2)
@@ -127,10 +127,9 @@ def solve_euler_bernoulli(
         # Solve non-linear problem
         n, converged = solver.solve(u)
         assert converged
-        print(f"Number of interations: {n:d}")
+        print(f"Number of iterations: {n:d}")
     u.x.scatter_forward()
 
-    os.system("mkdir -p results")
     with XDMFFile(mesh.comm, f"results/u_euler_bernoulli_{nx}_{ny}.xdmf", "w") as xdmf:
         xdmf.write_mesh(mesh)
         xdmf.write_function(u)
@@ -221,3 +220,8 @@ if __name__ == "__main__":
     # FIXME: Add option for L, H, E, nu and rho_g
     for nx, ny in zip(Nx, Ny):
         solve_euler_bernoulli(nx, ny, theta, gamma, linear_solver, plane_strain, nitsche)
+
+
+def test_euler_bernoulli():
+    n = 4
+    solve_euler_bernoulli(nx=5 * (2**n), ny=2**n, theta=1, gamma=10)

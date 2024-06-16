@@ -12,33 +12,40 @@
 
 from mpi4py import MPI
 
+import dolfinx.io.gmshio
 import dolfinx_contact
 import dolfinx_contact.cpp
+import gmsh
 import numpy as np
 import pytest
 from dolfinx.graph import adjacencylist
-from dolfinx.io import XDMFFile
 from dolfinx.mesh import locate_entities_boundary, meshtags
-from dolfinx_contact.meshing import convert_mesh_new, create_box_mesh_2D, create_box_mesh_3D
+from dolfinx_contact.meshing import create_box_mesh_3D, create_gmsh_box_mesh_2D
 
 
 @pytest.mark.parametrize("q_deg", range(1, 4))
 @pytest.mark.parametrize("surf", [0, 1])
 @pytest.mark.parametrize("dim", [2, 3])
 def test_projection(tmp_path, q_deg, surf, dim):
+    gmsh.initialize()
+
     # Create mesh
     if dim == 2:
-        fname = tmp_path / "box_2D.msh"
-        create_box_mesh_2D(filename=fname, res=1.0)
+        name = "box_mesh_2D"
+        model = gmsh.model()
+        model.add(name)
+        model.setCurrent(name)
+        model = create_gmsh_box_mesh_2D(model, res=1.0)
+        mesh, _, _ = dolfinx.io.gmshio.model_to_mesh(model, MPI.COMM_WORLD, 0, gdim=2)
     else:
-        fname = tmp_path / "box_3D.msh"
-        create_box_mesh_3D(filename=fname, res=1.0, offset=0.0)
+        name = "test_proj_box_3D"
+        model = gmsh.model()
+        model.add(name)
+        model.setCurrent(name)
+        model = create_box_mesh_3D(model, res=1.0, offset=0.0)
+        mesh, _, _ = dolfinx.io.gmshio.model_to_mesh(model, MPI.COMM_WORLD, 0, gdim=dim)
 
-    convert_mesh_new(fname, fname.with_suffix(".xdmf"), gdim=dim)
-
-    # Read in mesh
-    with XDMFFile(MPI.COMM_WORLD, fname.with_suffix(".xdmf"), "r") as xdmf:
-        mesh = xdmf.read_mesh()
+    gmsh.finalize()
 
     tdim = mesh.topology.dim
     gdim = mesh.geometry.dim
