@@ -52,9 +52,7 @@ public:
           const dolfinx::graph::AdjacencyList<std::int32_t>& surfaces,
           const std::vector<std::array<int, 2>>& contact_pairs,
           std::shared_ptr<const dolfinx::mesh::Mesh<double>> mesh,
-          const std::vector<ContactMode>& mode,
-          // QuadratureRule q_rule,
-          const int q_deg = 3);
+          const std::vector<ContactMode>& mode, int q_deg = 3);
 
   /// Return meshtag value for surface with index surface
   /// @param[in] surface - the index of the surface
@@ -72,7 +70,7 @@ public:
   /// @return TODO
   std::span<const std::int32_t> active_entities(int s) const
   {
-    return _cell_facet_pairs->links(s);
+    return _cell_facet_pairs.links(s);
   }
 
   /// Return number of facets in surface s owned by the process
@@ -328,7 +326,7 @@ private:
   // surface output of compute_distance_map
   std::vector<std::vector<double>> _reference_contact_points;
 
-  // shape  associated with _reference_contact_points
+  // shape associated with _reference_contact_points
   std::vector<std::array<std::size_t, 2>> _reference_contact_shape;
 
   // _qp_phys[i] contains the quadrature points on the physical facets
@@ -348,8 +346,7 @@ private:
 
   // Adjacency list linking facets as (cell, facet) pairs to the index of the
   // surface. The pairs are flattened row-major
-  std::shared_ptr<const dolfinx::graph::AdjacencyList<std::int32_t>>
-      _cell_facet_pairs;
+  dolfinx::graph::AdjacencyList<std::int32_t> _cell_facet_pairs;
 
   // number of facets owned by process for each surface
   std::vector<std::size_t> _local_facets;
