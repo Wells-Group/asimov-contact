@@ -40,7 +40,9 @@ from dolfinx_contact.parallel_mesh_ghosting import create_contact_mesh
 
 if __name__ == "__main__":
     desc = "Nitsche's method for two elastic bodies using custom assemblers"
-    parser = argparse.ArgumentParser(description=desc, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser = argparse.ArgumentParser(
+        description=desc, formatter_class=argparse.ArgumentDefaultsHelpFormatter
+    )
 
     parser.add_argument(
         "--quadrature",
@@ -67,7 +69,9 @@ if __name__ == "__main__":
     model.add(name)
     model.setCurrent(name)
     model = create_christmas_tree_mesh_3D(model, res=args.res, n1=81, n2=41)
-    mesh, domain_marker, facet_marker = dolfinx.io.gmshio.model_to_mesh(model, MPI.COMM_WORLD, 0, gdim=3)
+    mesh, domain_marker, facet_marker = dolfinx.io.gmshio.model_to_mesh(
+        model, MPI.COMM_WORLD, 0, gdim=3
+    )
 
     tdim = mesh.topology.dim
 
@@ -111,10 +115,12 @@ if __name__ == "__main__":
 
     V = _fem.functionspace(mesh, ("Lagrange", 1, (mesh.geometry.dim,)))
 
-    # Apply zero Dirichlet boundary conditions in z-direction on part of the xmas-tree
-    # Find facets for z-Dirichlet bc
+    # Apply zero Dirichlet boundary conditions in z-direction on part of
+    # the xmas-tree Find facets for z-Dirichlet bc
     def identifier(x, z):
-        return np.logical_and(np.logical_and(np.isclose(x[2], z), abs(x[1]) < 0.1), abs(x[0] - 2) < 0.1)
+        return np.logical_and(
+            np.logical_and(np.isclose(x[2], z), abs(x[1]) < 0.1), abs(x[0] - 2) < 0.1
+        )
 
     dirichlet_facets1 = locate_entities_boundary(mesh, tdim - 1, lambda x: identifier(x, 0.0))
     dirichlet_facets2 = locate_entities_boundary(mesh, tdim - 1, lambda x: identifier(x, 1.0))
@@ -132,7 +138,9 @@ if __name__ == "__main__":
 
     dirichlet_dofs = _fem.locate_dofs_topological(V.sub(2), tdim - 1, indices[sorted_facets])
     # Create Dirichlet bdy conditions for preventing rigid body motion in z-direction
-    dofs = _fem.locate_dofs_topological(V.sub(2), mesh.topology.dim - 1, facet_marker.find(z_Dirichlet))
+    dofs = _fem.locate_dofs_topological(
+        V.sub(2), mesh.topology.dim - 1, facet_marker.find(z_Dirichlet)
+    )
     g0 = _fem.Constant(mesh, default_scalar_type(0))
     bcs = [_fem.dirichletbc(g0, dofs, V.sub(2))]
     bc_fns = [g0]
@@ -248,9 +256,15 @@ if __name__ == "__main__":
 
     # create contact solver
     search_mode = [ContactMode.ClosestPoint for _ in range(len(contact_pairs))]
-    contact_problem = ContactProblem([facet_marker], surfaces, contact_pairs, mesh, args.q_degree, search_mode)
+    contact_problem = ContactProblem(
+        [facet_marker], surfaces, contact_pairs, mesh, args.q_degree, search_mode
+    )
     contact_problem.generate_contact_data(
-        FrictionLaw.Frictionless, V, {"u": u, "du": du, "mu": mu0, "lambda": lmbda0}, E * gamma, theta
+        FrictionLaw.Frictionless,
+        V,
+        {"u": u, "du": du, "mu": mu0, "lambda": lmbda0},
+        E * gamma,
+        theta,
     )
     solver_outfile = None
     log.set_log_level(log.LogLevel.WARNING)
@@ -300,7 +314,9 @@ if __name__ == "__main__":
     newton_solver.set_coefficients(compute_coefficients)
 
     # Set rigid motion nullspace
-    null_space = rigid_motions_nullspace_subdomains(V, domain_marker, np.unique(domain_marker.values), num_domains=2)
+    null_space = rigid_motions_nullspace_subdomains(
+        V, domain_marker, np.unique(domain_marker.values), num_domains=2
+    )
     newton_solver.A.setNearNullSpace(null_space)
 
     # Set Newton solver options
@@ -358,10 +374,11 @@ if __name__ == "__main__":
     outfile = sys.stdout
 
     if mesh.comm.rank == 0:
+        dofmap = u1.function_space.dofmap
         print("-" * 25, file=outfile)
         print(f"Newton options {newton_options}", file=outfile)
         print(
-            f"num_dofs: {u1.function_space.dofmap.index_map_bs*u1.function_space.dofmap.index_map.size_global}"
+            f"num_dofs: {dofmap.index_map_bs * dofmap.index_map.size_global}"
             + f", {mesh.topology.cell_type}",
             file=outfile,
         )

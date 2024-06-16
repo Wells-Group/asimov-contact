@@ -184,7 +184,9 @@ class ThermoElasticProblem:
         """
         log.set_log_level(log.LogLevel.OFF)
         self._mat_a.zeroEntries()
-        self._meshties.assemble_matrix(self._mat_a, self._j.function_spaces[0], Problem.ThermoElasticity)
+        self._meshties.assemble_matrix(
+            self._mat_a, self._j.function_spaces[0], Problem.ThermoElasticity
+        )
         assemble_matrix(self._mat_a, self._j, self._bcs)
         self._mat_a.assemble()
         log.set_log_level(log.LogLevel.INFO)
@@ -242,7 +244,9 @@ with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
     facet_marker = xdmf.read_meshtags(mesh, name="contact_facets")
 
 if mesh.comm.size > 1:
-    mesh, facet_marker, domain_marker = create_contact_mesh(mesh, facet_marker, domain_marker, [3, 4, 7, 8])
+    mesh, facet_marker, domain_marker = create_contact_mesh(
+        mesh, facet_marker, domain_marker, [3, 4, 7, 8]
+    )
 
 # compiler options to improve performance
 jit_options = {"cffi_extra_compile_args": [], "cffi_libraries": ["m"]}
@@ -295,9 +299,15 @@ offsets = np.array([0, 4], dtype=np.int32)
 surfaces = adjacencylist(data, offsets)
 
 # initialise meshties
-meshties = MeshTie([facet_marker._cpp_object], surfaces, contact, mesh._cpp_object, quadrature_degree=3)
+meshties = MeshTie(
+    [facet_marker._cpp_object], surfaces, contact, mesh._cpp_object, quadrature_degree=3
+)
 meshties.generate_kernel_data(
-    Problem.Poisson, Q._cpp_object, {"T": T0._cpp_object, "kdt": kdt_custom._cpp_object}, gamma, theta
+    Problem.Poisson,
+    Q._cpp_object,
+    {"T": T0._cpp_object, "kdt": kdt_custom._cpp_object},
+    gamma,
+    theta,
 )
 
 # Create matrix and vector
@@ -370,7 +380,9 @@ def eps(w):
 
 
 def sigma(w, T):
-    return (lmbda * tr(eps(w)) - alpha * (3 * lmbda + 2 * mu) * T) * Identity(tdim) + 2.0 * mu * eps(w)
+    return (lmbda * tr(eps(w)) - alpha * (3 * lmbda + 2 * mu) * T) * Identity(
+        tdim
+    ) + 2.0 * mu * eps(w)
 
 
 # Elasticity problem: ufl
@@ -388,7 +400,18 @@ F = form(F, jit_options=jit_options)
 J = form(J, jit_options=jit_options)
 
 elastic_problem = ThermoElasticProblem(
-    F, J, bcs, meshties, domain_marker, u, T0, lmbda, mu, alpha_c, np.float64(gamma * E), np.float64(theta)
+    F,
+    J,
+    bcs,
+    meshties,
+    domain_marker,
+    u,
+    T0,
+    lmbda,
+    mu,
+    alpha_c,
+    np.float64(gamma * E),
+    np.float64(theta),
 )
 
 # Set up Newton sovler

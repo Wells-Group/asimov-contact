@@ -113,7 +113,9 @@ def run_solver(
             model = create_circle_plane_mesh(
                 model, quads=(not simplex), res=0.05, r=0.3, gap=0.1, height=0.1, length=1.0
             )
-            mesh, _, facet_marker = dolfinx.io.gmshio.model_to_mesh(model, MPI.COMM_WORLD, 0, gdim=2)
+            mesh, _, facet_marker = dolfinx.io.gmshio.model_to_mesh(
+                model, MPI.COMM_WORLD, 0, gdim=2
+            )
             tdim = mesh.topology.dim
 
             def top(x):
@@ -130,7 +132,9 @@ def run_solver(
             top_facets1 = locate_entities_boundary(mesh, tdim - 1, top)
             bottom_facets1 = locate_entities_boundary(mesh, tdim - 1, bottom)
             top_facets2 = locate_entities_boundary(mesh, tdim - 1, lambda x: np.isclose(x[1], -0.4))
-            bottom_facets2 = locate_entities_boundary(mesh, tdim - 1, lambda x: np.isclose(x[1], -0.5))
+            bottom_facets2 = locate_entities_boundary(
+                mesh, tdim - 1, lambda x: np.isclose(x[1], -0.5)
+            )
             top_values = np.full(len(top_facets1), top_value, dtype=np.int32)
             bottom_values = np.full(len(bottom_facets1), bottom_value, dtype=np.int32)
 
@@ -179,7 +183,9 @@ def run_solver(
 
 if __name__ == "__main__":
     desc = "Nitsche's method with rigid surface using custom assemblers"
-    parser = argparse.ArgumentParser(description=desc, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser = argparse.ArgumentParser(
+        description=desc, formatter_class=argparse.ArgumentDefaultsHelpFormatter
+    )
     parser.add_argument(
         "--theta",
         default=1,
@@ -236,8 +242,12 @@ if __name__ == "__main__":
         help="Use strong Dirichlet formulation",
         default=False,
     )
-    _E = parser.add_argument("--E", default=1e3, type=np.float64, dest="E", help="Youngs modulus of material")
-    _nu = parser.add_argument("--nu", default=0.1, type=np.float64, dest="nu", help="Poisson's ratio")
+    _E = parser.add_argument(
+        "--E", default=1e3, type=np.float64, dest="E", help="Youngs modulus of material"
+    )
+    _nu = parser.add_argument(
+        "--nu", default=0.1, type=np.float64, dest="nu", help="Poisson's ratio"
+    )
     _disp = parser.add_argument(
         "--disp",
         default=0.2,

@@ -104,7 +104,9 @@ def run_solver(
 
 if __name__ == "__main__":
     desc = "Compare Nitsche's metood for contact against a straight plane with PETSc SNES"
-    parser = argparse.ArgumentParser(description=desc, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser = argparse.ArgumentParser(
+        description=desc, formatter_class=argparse.ArgumentDefaultsHelpFormatter
+    )
     parser.add_argument(
         "--theta",
         default=1,
@@ -145,8 +147,12 @@ if __name__ == "__main__":
         help="Use strong Dirichlet formulation",
         default=False,
     )
-    _E = parser.add_argument("--E", default=1e3, type=np.float64, dest="E", help="Youngs modulus of material")
-    _nu = parser.add_argument("--nu", default=0.1, type=np.float64, dest="nu", help="Poisson's ratio")
+    _E = parser.add_argument(
+        "--E", default=1e3, type=np.float64, dest="E", help="Youngs modulus of material"
+    )
+    _nu = parser.add_argument(
+        "--nu", default=0.1, type=np.float64, dest="nu", help="Poisson's ratio"
+    )
     _disp = parser.add_argument(
         "--disp",
         default=0.2,

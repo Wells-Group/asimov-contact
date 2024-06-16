@@ -71,7 +71,10 @@ class ContactWriter:
 
         self.facet_mesh = facet_mesh
         # Create msh to submsh entity map
-        num_facets = mesh.topology.index_map(tdim - 1).size_local + mesh.topology.index_map(tdim - 1).num_ghosts
+        num_facets = (
+            mesh.topology.index_map(tdim - 1).size_local
+            + mesh.topology.index_map(tdim - 1).num_ghosts
+        )
         msh_to_fm = np.full(num_facets, -1)
         msh_to_fm[fm_to_msh] = np.arange(len(fm_to_msh))
         self.msh_to_fm = msh_to_fm
@@ -260,14 +263,18 @@ def plot_gap(mesh, contact, gaps, entities, num_pairs):
         # Draw facets on opposite surface
         plt.figure(dpi=600)
         for facet in facets_opp:
-            facet_geometry = dolfinx.cpp.mesh.entities_to_geometry(mesh._cpp_object, fdim, [facet], False)
+            facet_geometry = dolfinx.cpp.mesh.entities_to_geometry(
+                mesh._cpp_object, fdim, [facet], False
+            )
             coords = mesh_geometry[facet_geometry][0]
             plt.plot(coords[:, 0], coords[:, 1], color="black")
         min_x = 1
         max_x = 0
         for j in range(num_facets):
             facet = facet_origin[j]
-            facet_geometry = dolfinx.cpp.mesh.entities_to_geometry(mesh._cpp_object, fdim, [facet], False)
+            facet_geometry = dolfinx.cpp.mesh.entities_to_geometry(
+                mesh._cpp_object, fdim, [facet], False
+            )
             coords = mesh_geometry[facet_geometry][0]
             plt.plot(coords[:, 0], coords[:, 1], color="black")
             qp = contact.qp_phys(i, j)

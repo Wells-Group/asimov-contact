@@ -62,10 +62,14 @@ def DG_rhs_plus(u0, v0, h, n, gamma, theta, sigma, gap, dS):
     # This version of the ufl form agrees with the formulation in
     # https://doi.org/10.1007/s00211-018-0950-x
     def Pn_g(u, a, b):
-        return ufl.dot(u(a) - u(b), -n(b)) - gap - (h(a) / gamma) * ufl.dot(sigma(u(a)) * n(a), -n(b))
+        return (
+            ufl.dot(u(a) - u(b), -n(b)) - gap - (h(a) / gamma) * ufl.dot(sigma(u(a)) * n(a), -n(b))
+        )
 
     def Pn_gtheta(v, a, b):
-        return ufl.dot(v(a) - v(b), -n(b)) - theta * (h(a) / gamma) * ufl.dot(sigma(v(a)) * n(a), -n(b))
+        return ufl.dot(v(a) - v(b), -n(b)) - theta * (h(a) / gamma) * ufl.dot(
+            sigma(v(a)) * n(a), -n(b)
+        )
 
     F = (
         0.5 * (gamma / h("+")) * R_plus(Pn_g(u0, "+", "-")) * Pn_gtheta(v0, "+", "-") * dS
@@ -94,10 +98,14 @@ def DG_rhs_minus(u0, v0, h, n, gamma, theta, sigma, gap, dS):
     # This version of the ufl form agrees with its one-sided equivalent
     # in nitsche_ufl.py
     def Pn_g(u, a, b):
-        return ufl.dot(sigma(u(a)) * n(a), -n(b)) + (gamma / h(a)) * (gap - ufl.dot(u(a) - u(b), -n(b)))
+        return ufl.dot(sigma(u(a)) * n(a), -n(b)) + (gamma / h(a)) * (
+            gap - ufl.dot(u(a) - u(b), -n(b))
+        )
 
     def Pn_gtheta(v, a, b):
-        return theta * ufl.dot(sigma(v(a)) * n(a), -n(b)) - (gamma / h(a)) * ufl.dot(v(a) - v(b), -n(b))
+        return theta * ufl.dot(sigma(v(a)) * n(a), -n(b)) - (gamma / h(a)) * ufl.dot(
+            v(a) - v(b), -n(b)
+        )
 
     F = (
         0.5 * (h("+") / gamma) * R_minus(Pn_g(u0, "+", "-")) * Pn_gtheta(v0, "+", "-") * dS
@@ -126,7 +134,9 @@ def DG_jac_plus(u0, v0, w0, h, n, gamma, theta, sigma, gap, dS):
     # This version of the ufl form agrees with the formulation in
     # https://doi.org/10.1007/s00211-018-0950-x
     def Pn_g(u, a, b):
-        return ufl.dot(u(a) - u(b), -n(b)) - gap - (h(a) / gamma) * ufl.dot(sigma(u(a)) * n(a), -n(b))
+        return (
+            ufl.dot(u(a) - u(b), -n(b)) - gap - (h(a) / gamma) * ufl.dot(sigma(u(a)) * n(a), -n(b))
+        )
 
     def Pn_gtheta(v, a, b, t):
         return ufl.dot(v(a) - v(b), -n(b)) - t * (h(a) / gamma) * ufl.dot(sigma(v(a)) * n(a), -n(b))
@@ -168,7 +178,9 @@ def DG_jac_minus(u0, v0, w0, h, n, gamma, theta, sigma, gap, dS):
     # This version of the ufl form agrees with its one-sided equivalent
     # in nitsche_ufl.py
     def Pn_g(u, a, b):
-        return ufl.dot(sigma(u(a)) * n(a), -n(b)) + (gamma / h(a)) * (gap - ufl.dot(u(a) - u(b), -n(b)))
+        return ufl.dot(sigma(u(a)) * n(a), -n(b)) + (gamma / h(a)) * (
+            gap - ufl.dot(u(a) - u(b), -n(b))
+        )
 
     def Pn_gtheta(v, a, b, t):
         return t * ufl.dot(sigma(v(a)) * n(a), -n(b)) - (gamma / h(a)) * ufl.dot(v(a) - v(b), -n(b))
@@ -280,7 +292,9 @@ def DG_rhs_coulomb(u0, v0, h, n, gamma, theta, sigma, gap, fric, dS, gdim):
     """UFL version of the Coulomb friction term for the unbiased Nitsche formulation."""
 
     def Pn_g(u, a, b):
-        return ufl.dot(u(a) - u(b), -n(b)) - gap - (h(a) / gamma) * ufl.dot(sigma(u(a)) * n(a), -n(b))
+        return (
+            ufl.dot(u(a) - u(b), -n(b)) - gap - (h(a) / gamma) * ufl.dot(sigma(u(a)) * n(a), -n(b))
+        )
 
     def pt_g(u, a, b, c):
         return tangential_proj(u(a) - u(b) - h(a) * c * sigma(u(a)) * n(a), -n(b))
@@ -313,10 +327,13 @@ def DG_rhs_coulomb(u0, v0, h, n, gamma, theta, sigma, gap, fric, dS, gdim):
 
 
 def DG_jac_coulomb(u0, v0, w0, h, n, gamma, theta, sigma, gap, fric, dS, gdim):
-    """UFL version of the Jacobian for the Coulomb friction term for the unbiased Nitsche formulation,"""
+    """UFL version of the Jacobian for the Coulomb friction term for the
+    unbiased Nitsche formulation"""
 
     def Pn_g(u, a, b):
-        return ufl.dot(u(a) - u(b), -n(b)) - gap - (h(a) / gamma) * ufl.dot(sigma(u(a)) * n(a), -n(b))
+        return (
+            ufl.dot(u(a) - u(b), -n(b)) - gap - (h(a) / gamma) * ufl.dot(sigma(u(a)) * n(a), -n(b))
+        )
 
     def Pn_gtheta(v, a, b, t):
         return ufl.dot(v(a) - v(b), -n(b)) - t * (h(a) / gamma) * ufl.dot(sigma(v(a)) * n(a), -n(b))
@@ -408,7 +425,9 @@ def compute_dof_permutations_all(V_dg, V_cg, gap):
 
     # retrieve all dg dofs on mesh without gap for each cell
     # and modify coordinates by gap if necessary
-    num_cells = mesh_dg.topology.index_map(tdim).size_local + mesh_dg.topology.index_map(tdim).num_ghosts
+    num_cells = (
+        mesh_dg.topology.index_map(tdim).size_local + mesh_dg.topology.index_map(tdim).num_ghosts
+    )
     for cell in range(num_cells):
         midpoint = compute_midpoints(mesh_dg, tdim, np.array([cell]))[0]
         if midpoint[tdim - 1] <= 0:
@@ -454,7 +473,9 @@ def create_meshes(ct: str, gap: float, xdtype: npt.DTypeLike = np.float64) -> tu
     cell_type = to_type(ct)
     if MPI.COMM_WORLD.rank == 0:
         if cell_type == CellType.quadrilateral:
-            x_ufl = np.array([[0, 0], [0.8, 0], [0.1, 1.3], [0.7, 1.2], [-0.1, -1.2], [0.8, -1.1]], dtype=xdtype)
+            x_ufl = np.array(
+                [[0, 0], [0.8, 0], [0.1, 1.3], [0.7, 1.2], [-0.1, -1.2], [0.8, -1.1]], dtype=xdtype
+            )
             x_custom = np.array(
                 [
                     [0, 0],
@@ -470,7 +491,9 @@ def create_meshes(ct: str, gap: float, xdtype: npt.DTypeLike = np.float64) -> tu
             cells_ufl = np.array([[0, 1, 2, 3], [4, 5, 0, 1]], dtype=np.int64)
             cells_custom = np.array([[0, 1, 2, 3], [4, 5, 6, 7]], dtype=np.int64)
         elif cell_type == CellType.triangle:
-            x_ufl = np.array([[0, 0, 0], [0.8, 0, 0], [0.3, 1.3, 0.0], [0.4, -1.2, 0.0]], dtype=xdtype)
+            x_ufl = np.array(
+                [[0, 0, 0], [0.8, 0, 0], [0.3, 1.3, 0.0], [0.4, -1.2, 0.0]], dtype=xdtype
+            )
             x_custom = np.array(
                 [
                     [0, 0, 0],
@@ -485,7 +508,10 @@ def create_meshes(ct: str, gap: float, xdtype: npt.DTypeLike = np.float64) -> tu
             cells_ufl = np.array([[0, 1, 2], [0, 1, 3]], dtype=np.int64)
             cells_custom = np.array([[0, 1, 2], [3, 4, 5]], dtype=np.int64)
         elif cell_type == CellType.tetrahedron:
-            x_ufl = np.array([[0, 0, 0], [1.1, 0, 0], [0.3, 1.0, 0], [1, 1.2, 1.5], [0.8, 1.2, -1.6]], dtype=xdtype)
+            x_ufl = np.array(
+                [[0, 0, 0], [1.1, 0, 0], [0.3, 1.0, 0], [1, 1.2, 1.5], [0.8, 1.2, -1.6]],
+                dtype=xdtype,
+            )
             x_custom = np.array(
                 [
                     [0, 0, 0],
@@ -540,8 +566,12 @@ def create_meshes(ct: str, gap: float, xdtype: npt.DTypeLike = np.float64) -> tu
                 ],
                 dtype=xdtype,
             )
-            cells_ufl = np.array([[0, 1, 2, 3, 4, 5, 6, 7], [8, 9, 10, 11, 0, 1, 2, 3]], dtype=np.int64)
-            cells_custom = np.array([[0, 1, 2, 3, 4, 5, 6, 7], [8, 9, 10, 11, 12, 13, 14, 15]], dtype=np.int64)
+            cells_ufl = np.array(
+                [[0, 1, 2, 3, 4, 5, 6, 7], [8, 9, 10, 11, 0, 1, 2, 3]], dtype=np.int64
+            )
+            cells_custom = np.array(
+                [[0, 1, 2, 3, 4, 5, 6, 7], [8, 9, 10, 11, 12, 13, 14, 15]], dtype=np.int64
+            )
         else:
             raise ValueError(f"Unsupported mesh type {ct}")
         MPI.COMM_WORLD.bcast(x_custom.shape[1], root=0)
@@ -573,7 +603,9 @@ def create_meshes(ct: str, gap: float, xdtype: npt.DTypeLike = np.float64) -> tu
 
     coord_el = element("Lagrange", cell_type.name, 1, shape=(x_ufl.shape[1],))
     mesh_ufl = create_mesh(MPI.COMM_WORLD, cells_ufl, x_ufl, e=coord_el, partitioner=partitioner)
-    mesh_custom = create_mesh(MPI.COMM_WORLD, cells_custom, x_custom, e=coord_el, partitioner=partitioner)
+    mesh_custom = create_mesh(
+        MPI.COMM_WORLD, cells_custom, x_custom, e=coord_el, partitioner=partitioner
+    )
     return mesh_ufl, mesh_custom
 
 
@@ -628,7 +660,9 @@ def locate_contact_facets_custom(V, gap):
 
 
 def create_facet_markers(
-    mesh: Mesh, facets_cg: tuple[npt.NDArray[np.int32], npt.NDArray[np.int32]], markers: tuple[int, int] = (0, 1)
+    mesh: Mesh,
+    facets_cg: tuple[npt.NDArray[np.int32], npt.NDArray[np.int32]],
+    markers: tuple[int, int] = (0, 1),
 ) -> MeshTags:
     """Given a mesh and a tuple of facets (`facets_cg`) with corresponding markers (`markers`),
     create a meshtag for the facets"""
@@ -694,7 +728,9 @@ class TestUnbiased:
     """Doc."""
 
     @pytest.mark.xdist_group(name="group0")
-    @pytest.mark.skipif(MPI.COMM_WORLD.size > 2, reason="This test can only be executed with one or two processes")
+    @pytest.mark.skipif(
+        MPI.COMM_WORLD.size > 2, reason="This test can only be executed with one or two processes"
+    )
     @pytest.mark.parametrize(
         "search",
         [
@@ -830,10 +866,19 @@ class TestUnbiased:
         offsets = np.array([0, 2], dtype=np.int32)
         surfaces = adjacencylist(data, offsets)
         contact_problem = ContactProblem(
-            [facet_marker], surfaces, [(0, 1), (1, 0)], mesh_custom, quadrature_degree, [search, search]
+            [facet_marker],
+            surfaces,
+            [(0, 1), (1, 0)],
+            mesh_custom,
+            quadrature_degree,
+            [search, search],
         )
         contact_problem.generate_contact_data(
-            frictionlaw, V_custom, {"u": u, "du": u1, "mu": mu0, "lambda": lmbda0, "fric": fric}, E * gamma, theta
+            frictionlaw,
+            V_custom,
+            {"u": u, "du": u1, "mu": mu0, "lambda": lmbda0, "fric": fric},
+            E * gamma,
+            theta,
         )
 
         # compiler options to improve performance
@@ -902,7 +947,9 @@ class TestUnbiased:
                 assert np.allclose(C_sp[ind_dg, :][:, ind_dg], B_sp)
 
     @pytest.mark.xdist_group(name="group1")
-    @pytest.mark.skipif(MPI.COMM_WORLD.size > 2, reason="This test can only be executed with one or two processes")
+    @pytest.mark.skipif(
+        MPI.COMM_WORLD.size > 2, reason="This test can only be executed with one or two processes"
+    )
     @pytest.mark.parametrize(
         "problem",
         [
@@ -1050,7 +1097,11 @@ class TestUnbiased:
         if problem == Problem.Poisson:
             coeffs = {"T": u1._cpp_object, "kdt": kdt_custom._cpp_object}
         elif problem == Problem.Elasticity:
-            coeffs = {"u": u1._cpp_object, "mu": mu_custom._cpp_object, "lambda": lmbda_custom._cpp_object}
+            coeffs = {
+                "u": u1._cpp_object,
+                "mu": mu_custom._cpp_object,
+                "lambda": lmbda_custom._cpp_object,
+            }
             gamma = gamma * E
         else:
             coeffs = {

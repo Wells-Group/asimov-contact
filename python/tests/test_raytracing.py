@@ -2,8 +2,9 @@
 #
 # SPDX-License-Identifier:    MIT
 #
-# This test check that the ray-tracing routines give the same result as the closest point projection
-# when a solution is found (It is not guaranteed that a ray hits the mesh on all processes in parallel)
+# This test check that the ray-tracing routines give the same result as
+# the closest point projection when a solution is found (It is not
+# guaranteed that a ray hits the mesh on all processes in parallel)
 
 from mpi4py import MPI
 
@@ -15,7 +16,9 @@ import pytest
 import ufl
 
 
-@pytest.mark.parametrize("cell_type", [dolfinx.mesh.CellType.hexahedron, dolfinx.mesh.CellType.tetrahedron])
+@pytest.mark.parametrize(
+    "cell_type", [dolfinx.mesh.CellType.hexahedron, dolfinx.mesh.CellType.tetrahedron]
+)
 def test_raytracing_3D(cell_type):
     origin = np.array([0.51, 0.33, -1], dtype=np.float64)
     normal = np.array([0, 0, 1], dtype=np.float64)
@@ -29,11 +32,15 @@ def test_raytracing_3D(cell_type):
     )
     integral_pairs = integral_pairs[:num_local]
 
-    status, cell_idx, x, X = dolfinx_contact.cpp.raytracing(mesh._cpp_object, origin, normal, integral_pairs, 10, 1e-6)
+    status, cell_idx, x, X = dolfinx_contact.cpp.raytracing(
+        mesh._cpp_object, origin, normal, integral_pairs, 10, 1e-6
+    )
 
     if status > 0:
         # Create structures needed for closest point projections
-        boundary_cells = dolfinx.mesh.compute_incident_entities(mesh.topology, facets, tdim - 1, tdim)
+        boundary_cells = dolfinx.mesh.compute_incident_entities(
+            mesh.topology, facets, tdim - 1, tdim
+        )
         bb_tree = dolfinx.geometry.bb_tree(mesh, tdim, boundary_cells)
         midpoint_tree = dolfinx.geometry.create_midpoint_tree(mesh, tdim, boundary_cells)
 
@@ -53,7 +60,9 @@ def test_raytracing_3D(cell_type):
         assert np.allclose(x, origin + distance)
 
 
-@pytest.mark.parametrize("cell_type", [dolfinx.mesh.CellType.hexahedron, dolfinx.mesh.CellType.tetrahedron])
+@pytest.mark.parametrize(
+    "cell_type", [dolfinx.mesh.CellType.hexahedron, dolfinx.mesh.CellType.tetrahedron]
+)
 def test_raytracing_3D_corner(cell_type):
     origin = np.array([1.5, 1.5, 1.5], dtype=np.float64)
     normal = np.array([1, 1, 1], dtype=np.float64)
@@ -66,17 +75,21 @@ def test_raytracing_3D_corner(cell_type):
         mesh._cpp_object, facets, dolfinx.fem.IntegralType.exterior_facet
     )
     integral_pairs = integral_pairs[:num_local]
-    status, cell_idx, x, X = dolfinx_contact.cpp.raytracing(mesh._cpp_object, origin, normal, integral_pairs, 10, 1e-6)
+    status, cell_idx, x, X = dolfinx_contact.cpp.raytracing(
+        mesh._cpp_object, origin, normal, integral_pairs, 10, 1e-6
+    )
     if status > 0:
         # Create structures needed for closest point projections
-        boundary_cells = dolfinx.mesh.compute_incident_entities(mesh.topology, facets, tdim - 1, tdim)
+        boundary_cells = dolfinx.mesh.compute_incident_entities(
+            mesh.topology, facets, tdim - 1, tdim
+        )
         bbtree = dolfinx.geometry.bb_tree(mesh, tdim, boundary_cells)
         midpoint_tree = dolfinx.geometry.create_midpoint_tree(mesh, tdim, boundary_cells)
 
         # Find closest cell using closest point projection
-        closest_cell = dolfinx.geometry.compute_closest_entity(bbtree, midpoint_tree, mesh, np.reshape(origin, (1, 3)))[
-            0
-        ]
+        closest_cell = dolfinx.geometry.compute_closest_entity(
+            bbtree, midpoint_tree, mesh, np.reshape(origin, (1, 3))
+        )[0]
 
         # Compute actual distance between cell and point using GJK
         cell_dofs = mesh.geometry.dofmap[closest_cell, :]
@@ -87,7 +100,9 @@ def test_raytracing_3D_corner(cell_type):
         assert np.allclose(x, origin + distance)
 
 
-@pytest.mark.parametrize("cell_type", [dolfinx.mesh.CellType.triangle, dolfinx.mesh.CellType.quadrilateral])
+@pytest.mark.parametrize(
+    "cell_type", [dolfinx.mesh.CellType.triangle, dolfinx.mesh.CellType.quadrilateral]
+)
 def test_raytracing_2D(cell_type):
     origin = np.array([0.273, -0.5], dtype=np.float64)
     normal = np.array([0, 1], dtype=np.float64)
@@ -101,11 +116,15 @@ def test_raytracing_2D(cell_type):
     )
     integral_pairs = integral_pairs[:num_local]
 
-    status, cell_idx, x, X = dolfinx_contact.cpp.raytracing(mesh._cpp_object, origin, normal, integral_pairs, 10, 1e-6)
+    status, cell_idx, x, X = dolfinx_contact.cpp.raytracing(
+        mesh._cpp_object, origin, normal, integral_pairs, 10, 1e-6
+    )
 
     if status > 0:
         # Create structures needed for closest point projections
-        boundary_cells = dolfinx.mesh.compute_incident_entities(mesh.topology, facets, tdim - 1, tdim)
+        boundary_cells = dolfinx.mesh.compute_incident_entities(
+            mesh.topology, facets, tdim - 1, tdim
+        )
         bbtree = dolfinx.geometry.bb_tree(mesh, tdim, boundary_cells)
         midpoint_tree = dolfinx.geometry.create_midpoint_tree(mesh, tdim, boundary_cells)
         op = np.array([origin[0], origin[1], 0])
@@ -122,7 +141,9 @@ def test_raytracing_2D(cell_type):
         assert np.allclose(x, origin + distance[:2])
 
 
-@pytest.mark.parametrize("cell_type", [dolfinx.mesh.CellType.triangle, dolfinx.mesh.CellType.quadrilateral])
+@pytest.mark.parametrize(
+    "cell_type", [dolfinx.mesh.CellType.triangle, dolfinx.mesh.CellType.quadrilateral]
+)
 def test_raytracing_2D_corner(cell_type):
     origin = np.array([1.5, 1.5], dtype=np.float64)
     normal = np.array([-1, 1], dtype=np.float64)
@@ -134,12 +155,18 @@ def test_raytracing_2D_corner(cell_type):
         mesh._cpp_object, facets, dolfinx.fem.IntegralType.exterior_facet
     )
     integral_pairs = integral_pairs[:num_local]
-    status, cell_idx, x, X = dolfinx_contact.cpp.raytracing(mesh._cpp_object, origin, normal, integral_pairs, 10, 1e-6)
+    status, cell_idx, x, X = dolfinx_contact.cpp.raytracing(
+        mesh._cpp_object, origin, normal, integral_pairs, 10, 1e-6
+    )
     if status > 0:
         # Create structures needed for closest point projections
-        boundary_cells = dolfinx.mesh.compute_incident_entities(mesh.topology, facets, tdim - 1, tdim)
+        boundary_cells = dolfinx.mesh.compute_incident_entities(
+            mesh.topology, facets, tdim - 1, tdim
+        )
         bbtree = dolfinx.geometry.bb_tree(mesh, tdim, boundary_cells)
-        midpoint_tree = dolfinx.cpp.geometry.create_midpoint_tree(mesh._cpp_object, tdim, boundary_cells)
+        midpoint_tree = dolfinx.cpp.geometry.create_midpoint_tree(
+            mesh._cpp_object, tdim, boundary_cells
+        )
 
         # Find closest cell using closest point projection
         op = np.array([origin[0], origin[1], 0])
@@ -154,7 +181,9 @@ def test_raytracing_2D_corner(cell_type):
         assert np.allclose(x, origin + distance[:2])
 
 
-@pytest.mark.parametrize("cell_type", [dolfinx.mesh.CellType.quadrilateral, dolfinx.mesh.CellType.triangle])
+@pytest.mark.parametrize(
+    "cell_type", [dolfinx.mesh.CellType.quadrilateral, dolfinx.mesh.CellType.triangle]
+)
 @pytest.mark.skipif(MPI.COMM_WORLD.size > 1, reason="This test should only be run in serial.")
 def test_raytracing_manifold(cell_type):
     geometry = np.array([[0, 0, 0], [1, 0, 0], [0, 1, 0.5], [1, 1, 0.5]], dtype=np.float64)
@@ -178,5 +207,7 @@ def test_raytracing_manifold(cell_type):
         mesh._cpp_object, facets, dolfinx.fem.IntegralType.exterior_facet
     )
     integral_pairs = integral_pairs[:num_local]
-    status, cell_idx, x, X = dolfinx_contact.cpp.raytracing(mesh._cpp_object, origin, normal, integral_pairs, 10, 1e-6)
+    status, cell_idx, x, X = dolfinx_contact.cpp.raytracing(
+        mesh._cpp_object, origin, normal, integral_pairs, 10, 1e-6
+    )
     assert np.allclose(x, exact_point)

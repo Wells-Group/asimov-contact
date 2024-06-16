@@ -59,7 +59,9 @@ def u_fun_2d(x: npt.NDArray[np.float64], d: float, gdim: int) -> npt.NDArray[np.
 
 # forcing 2D for manufactured solution
 # this is -div(sigma(u_fun_2d))
-def fun_2d(x: npt.NDArray[np.float64], d: float, mu: float, lmbda: float, gdim: int) -> npt.NDArray[np.float64]:
+def fun_2d(
+    x: npt.NDArray[np.float64], d: float, mu: float, lmbda: float, gdim: int
+) -> npt.NDArray[np.float64]:
     a = 2 * np.pi / 5
     b = 2 * np.pi
     vals = np.zeros((gdim, x.shape[1]))
@@ -82,12 +84,19 @@ def u_fun_3d(x: npt.NDArray[np.float64], d: float, gdim: int) -> npt.NDArray[np.
 
 # forcing 2D for manufactured solution
 # this is -div(sigma(u_fun_3d))
-def fun_3d(x: npt.NDArray[np.float64], d: float, mu: float, lmbda: float, gdim: int) -> npt.NDArray[np.float64]:
+def fun_3d(
+    x: npt.NDArray[np.float64], d: float, mu: float, lmbda: float, gdim: int
+) -> npt.NDArray[np.float64]:
     a = 2 * np.pi / 5
     b = 2 * np.pi
     c = 2 * np.pi
     f1 = -(lmbda + mu) * a * b * np.cos(a * x[0]) * np.cos(b * x[1]) * np.sin(c * x[2])
-    f2 = (mu * (a**2 + c**2) + (2 * mu + lmbda) * b**2) * np.sin(a * x[0]) * np.sin(b * x[1]) * np.sin(c * x[2])
+    f2 = (
+        (mu * (a**2 + c**2) + (2 * mu + lmbda) * b**2)
+        * np.sin(a * x[0])
+        * np.sin(b * x[1])
+        * np.sin(c * x[2])
+    )
     f3 = -(lmbda + mu) * b * c * np.sin(a * x[0]) * np.cos(b * x[1]) * np.cos(c * x[2])
     vals = np.zeros((gdim, x.shape[1]))
     vals[0, :] = d * f1[:]
@@ -323,7 +332,9 @@ def test_meshtie(threed: bool = False, simplex: bool = True, runs: int = 5):
             facet_marker = xdmf.read_meshtags(mesh, name="contact_facets")
 
         if mesh.comm.size > 1:
-            mesh, facet_marker, domain_marker = create_contact_mesh(mesh, facet_marker, domain_marker, [4, 6])
+            mesh, facet_marker, domain_marker = create_contact_mesh(
+                mesh, facet_marker, domain_marker, [4, 6]
+            )
 
         # Compute lame parameters
         E = 1e3
@@ -368,7 +379,9 @@ def test_meshtie(threed: bool = False, simplex: bool = True, runs: int = 5):
                 - theta * ufl.inner(sigma(v) * n, w) * ds(tag)
                 + E * gamma / h * ufl.inner(w, v) * ds(tag)
             )
-            F += -theta * ufl.inner(sigma(v) * n, g) * ds(tag) + E * gamma / h * ufl.inner(g, v) * ds(tag)
+            F += -theta * ufl.inner(sigma(v) * n, g) * ds(tag) + E * gamma / h * ufl.inner(
+                g, v
+            ) * ds(tag)
 
         # compile forms
         jit_options = {"cffi_extra_compile_args": [], "cffi_libraries": ["m"]}
@@ -382,9 +395,15 @@ def test_meshtie(threed: bool = False, simplex: bool = True, runs: int = 5):
         surfaces = adjacencylist(data, offsets)
 
         # initialise meshties
-        meshties = MeshTie([facet_marker._cpp_object], surfaces, contact, mesh._cpp_object, quadrature_degree=5)
+        meshties = MeshTie(
+            [facet_marker._cpp_object], surfaces, contact, mesh._cpp_object, quadrature_degree=5
+        )
         meshties.generate_kernel_data(
-            Problem.Elasticity, V._cpp_object, {"lambda": lmbda._cpp_object, "mu": mu._cpp_object}, E * gamma, theta
+            Problem.Elasticity,
+            V._cpp_object,
+            {"lambda": lmbda._cpp_object, "mu": mu._cpp_object},
+            E * gamma,
+            theta,
         )
 
         # create matrix, vector
@@ -465,7 +484,9 @@ def test_meshtie(threed: bool = False, simplex: bool = True, runs: int = 5):
 
 if __name__ == "__main__":
     desc = "Meshtie"
-    parser = argparse.ArgumentParser(description=desc, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser = argparse.ArgumentParser(
+        description=desc, formatter_class=argparse.ArgumentDefaultsHelpFormatter
+    )
     parser.add_argument("--runs", default=1, type=int, dest="runs", help="Number of refinements")
     _3D = parser.add_mutually_exclusive_group(required=False)
     _3D.add_argument("--3D", dest="threed", action="store_true", help="Use 3D mesh", default=False)

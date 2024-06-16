@@ -32,7 +32,11 @@ def R_minus(x):
 @pytest.mark.parametrize("Q", [0, 1, 2])
 def test_vector_surface_kernel(dim, kernel_type, P, Q):
     N = 20 if dim == 2 else 5
-    mesh = create_unit_square(MPI.COMM_WORLD, N, N) if dim == 2 else create_unit_cube(MPI.COMM_WORLD, N, N, N)
+    mesh = (
+        create_unit_square(MPI.COMM_WORLD, N, N)
+        if dim == 2
+        else create_unit_cube(MPI.COMM_WORLD, N, N, N)
+    )
 
     # Find facets on boundary to integrate over
     facets = locate_entities_boundary(
@@ -133,17 +137,30 @@ def test_vector_surface_kernel(dim, kernel_type, P, Q):
         mesh._cpp_object, ft.indices, IntegralType.exterior_facet
     )
     integral_entities = integral_entities[:num_local]
-    mu_packed = dolfinx_contact.cpp.pack_coefficient_quadrature(mu._cpp_object, 0, integral_entities)
-    lmbda_packed = dolfinx_contact.cpp.pack_coefficient_quadrature(lmbda._cpp_object, 0, integral_entities)
-    u_packed = dolfinx_contact.cpp.pack_coefficient_quadrature(u._cpp_object, 2 * P + Q + 1, integral_entities)
-    grad_u_packed = dolfinx_contact.cpp.pack_gradient_quadrature(u._cpp_object, 2 * P + Q + 1, integral_entities)
+    mu_packed = dolfinx_contact.cpp.pack_coefficient_quadrature(
+        mu._cpp_object, 0, integral_entities
+    )
+    lmbda_packed = dolfinx_contact.cpp.pack_coefficient_quadrature(
+        lmbda._cpp_object, 0, integral_entities
+    )
+    u_packed = dolfinx_contact.cpp.pack_coefficient_quadrature(
+        u._cpp_object, 2 * P + Q + 1, integral_entities
+    )
+    grad_u_packed = dolfinx_contact.cpp.pack_gradient_quadrature(
+        u._cpp_object, 2 * P + Q + 1, integral_entities
+    )
     h_facets = dolfinx_contact.pack_circumradius(mesh._cpp_object, integral_entities)
     data = np.array([1], dtype=np.int32)
     offsets = np.array([0, 1], dtype=np.int32)
     surfaces = adjacencylist(data, offsets)
     search_mode = [dolfinx_contact.cpp.ContactMode.ClosestPoint]
     contact = dolfinx_contact.cpp.Contact(
-        [ft._cpp_object], surfaces, [(0, 0)], mesh._cpp_object, search_mode, quadrature_degree=2 * P + Q + 1
+        [ft._cpp_object],
+        surfaces,
+        [(0, 0)],
+        mesh._cpp_object,
+        search_mode,
+        quadrature_degree=2 * P + Q + 1,
     )
     contact.create_distance_map(0)
     g_vec = contact.pack_gap_plane(0, -g)
@@ -171,11 +188,17 @@ def test_vector_surface_kernel(dim, kernel_type, P, Q):
 @pytest.mark.parametrize("Q", [0, 1, 2])
 def test_matrix_surface_kernel(dim, kernel_type, P, Q):
     N = 20 if dim == 2 else 5
-    mesh = create_unit_square(MPI.COMM_WORLD, N, N) if dim == 2 else create_unit_cube(MPI.COMM_WORLD, N, N, N)
+    mesh = (
+        create_unit_square(MPI.COMM_WORLD, N, N)
+        if dim == 2
+        else create_unit_cube(MPI.COMM_WORLD, N, N, N)
+    )
 
     # Find facets on boundary to integrate over
     facets = dolfinx.mesh.locate_entities_boundary(
-        mesh, mesh.topology.dim - 1, lambda x: np.logical_or(np.isclose(x[0], 0.0), np.isclose(x[0], 1.0))
+        mesh,
+        mesh.topology.dim - 1,
+        lambda x: np.logical_or(np.isclose(x[0], 0.0), np.isclose(x[0], 1.0)),
     )
     facets = np.sort(facets)
     values = np.ones(len(facets), dtype=np.int32)
@@ -275,17 +298,30 @@ def test_matrix_surface_kernel(dim, kernel_type, P, Q):
         mesh._cpp_object, facets, IntegralType.exterior_facet
     )
     integral_entities = integral_entities[:num_local]
-    mu_packed = dolfinx_contact.cpp.pack_coefficient_quadrature(mu._cpp_object, 0, integral_entities)
-    lmbda_packed = dolfinx_contact.cpp.pack_coefficient_quadrature(lmbda._cpp_object, 0, integral_entities)
-    u_packed = dolfinx_contact.cpp.pack_coefficient_quadrature(u._cpp_object, 2 * P + Q + 1, integral_entities)
-    grad_u_packed = dolfinx_contact.cpp.pack_gradient_quadrature(u._cpp_object, 2 * P + Q + 1, integral_entities)
+    mu_packed = dolfinx_contact.cpp.pack_coefficient_quadrature(
+        mu._cpp_object, 0, integral_entities
+    )
+    lmbda_packed = dolfinx_contact.cpp.pack_coefficient_quadrature(
+        lmbda._cpp_object, 0, integral_entities
+    )
+    u_packed = dolfinx_contact.cpp.pack_coefficient_quadrature(
+        u._cpp_object, 2 * P + Q + 1, integral_entities
+    )
+    grad_u_packed = dolfinx_contact.cpp.pack_gradient_quadrature(
+        u._cpp_object, 2 * P + Q + 1, integral_entities
+    )
     h_facets = dolfinx_contact.pack_circumradius(mesh._cpp_object, integral_entities)
     data = np.array([1], dtype=np.int32)
     offsets = np.array([0, 1], dtype=np.int32)
     surfaces = adjacencylist(data, offsets)
     search_mode = [dolfinx_contact.cpp.ContactMode.ClosestPoint]
     contact = dolfinx_contact.cpp.Contact(
-        [ft._cpp_object], surfaces, [(0, 0)], mesh._cpp_object, search_mode, quadrature_degree=2 * P + Q + 1
+        [ft._cpp_object],
+        surfaces,
+        [(0, 0)],
+        mesh._cpp_object,
+        search_mode,
+        quadrature_degree=2 * P + Q + 1,
     )
     contact.create_distance_map(0)
     g_vec = contact.pack_gap_plane(0, -g)

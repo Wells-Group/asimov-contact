@@ -103,7 +103,9 @@ def run_soler(args):
             model.add(name)
             model.setCurrent(name)
             model = create_box_mesh_3D(model, simplex, order=order)
-            mesh, domain_marker, _ = dolfinx.io.gmshio.model_to_mesh(model, MPI.COMM_WORLD, 0, gdim=3)
+            mesh, domain_marker, _ = dolfinx.io.gmshio.model_to_mesh(
+                model, MPI.COMM_WORLD, 0, gdim=3
+            )
             tdim = mesh.topology.dim
             mesh.topology.create_connectivity(tdim - 1, 0)
             mesh.topology.create_connectivity(tdim - 1, tdim)
@@ -114,9 +116,13 @@ def run_soler(args):
             dirichlet_bdy_2 = 4
             # Create meshtag for top and bottom markers
             top_facets1 = locate_entities_boundary(mesh, tdim - 1, lambda x: np.isclose(x[2], 0.5))
-            bottom_facets1 = locate_entities_boundary(mesh, tdim - 1, lambda x: np.isclose(x[2], 0.0))
+            bottom_facets1 = locate_entities_boundary(
+                mesh, tdim - 1, lambda x: np.isclose(x[2], 0.0)
+            )
             top_facets2 = locate_entities_boundary(mesh, tdim - 1, lambda x: np.isclose(x[2], -0.1))
-            bottom_facets2 = locate_entities_boundary(mesh, tdim - 1, lambda x: np.isclose(x[2], -0.6))
+            bottom_facets2 = locate_entities_boundary(
+                mesh, tdim - 1, lambda x: np.isclose(x[2], -0.6)
+            )
             top_values = np.full(len(top_facets1), dirichlet_bdy_1, dtype=np.int32)
             bottom_values = np.full(len(bottom_facets1), contact_bdy_1, dtype=np.int32)
 
@@ -134,7 +140,9 @@ def run_soler(args):
             model.add(name)
             model.setCurrent(name)
             model = create_sphere_plane_mesh(model, order=order, res=res)
-            mesh, domain_marker, facet_marker = dolfinx.io.gmshio.model_to_mesh(model, MPI.COMM_WORLD, 0, gdim=3)
+            mesh, domain_marker, facet_marker = dolfinx.io.gmshio.model_to_mesh(
+                model, MPI.COMM_WORLD, 0, gdim=3
+            )
             dirichlet_bdy_1 = 2
             contact_bdy_1 = 1
             contact_bdy_2 = 8
@@ -149,7 +157,9 @@ def run_soler(args):
             model.add(name)
             model.setCurrent(name)
             model = create_cylinder_cylinder_mesh(model, res=res, simplex=simplex)
-            mesh, domain_marker, _ = dolfinx.io.gmshio.model_to_mesh(model, MPI.COMM_WORLD, 0, gdim=3)
+            mesh, domain_marker, _ = dolfinx.io.gmshio.model_to_mesh(
+                model, MPI.COMM_WORLD, 0, gdim=3
+            )
             mesh.name = "cylinder_cylinder"
             domain_marker.name = "domain_marker"
             tdim = mesh.topology.dim
@@ -202,7 +212,9 @@ def run_soler(args):
             model.add(name)
             model.setCurrent(name)
             model = create_gmsh_box_mesh_2D(model, quads=not simplex, res=res, order=order)
-            mesh, domain_marker, facet_marker = dolfinx.io.gmshio.model_to_mesh(model, MPI.COMM_WORLD, 0, gdim=2)
+            mesh, domain_marker, facet_marker = dolfinx.io.gmshio.model_to_mesh(
+                model, MPI.COMM_WORLD, 0, gdim=2
+            )
 
             dirichlet_bdy_1 = 5
             contact_bdy_1 = 3
@@ -216,9 +228,18 @@ def run_soler(args):
             model.add(name)
             model.setCurrent(name)
             model = create_circle_plane_mesh(
-                model, quads=not simplex, res=res, order=order, r=0.3, gap=0.1, height=0.1, length=1.0
+                model,
+                quads=not simplex,
+                res=res,
+                order=order,
+                r=0.3,
+                gap=0.1,
+                height=0.1,
+                length=1.0,
             )
-            mesh, domain_marker, facet_marker = dolfinx.io.gmshio.model_to_mesh(model, MPI.COMM_WORLD, 0, gdim=2)
+            mesh, domain_marker, facet_marker = dolfinx.io.gmshio.model_to_mesh(
+                model, MPI.COMM_WORLD, 0, gdim=2
+            )
             dirichlet_bdy_1 = 8
             contact_bdy_1 = 10
             contact_bdy_2 = 6
@@ -230,7 +251,9 @@ def run_soler(args):
             model.add(name)
             model.setCurrent(name)
             model = create_circle_circle_mesh(model, quads=(not simplex), res=res, order=order)
-            mesh, domain_marker, _ = dolfinx.io.gmshio.model_to_mesh(model, MPI.COMM_WORLD, 0, gdim=2)
+            mesh, domain_marker, _ = dolfinx.io.gmshio.model_to_mesh(
+                model, MPI.COMM_WORLD, 0, gdim=2
+            )
             tdim = mesh.topology.dim
             mesh.topology.create_connectivity(tdim - 1, 0)
             mesh.topology.create_connectivity(tdim - 1, tdim)
@@ -448,7 +471,10 @@ def run_soler(args):
 
     # Set rigid motion nullspace
     null_space = rigid_motions_nullspace_subdomains(
-        V, domain_marker, np.unique(domain_marker.values), num_domains=len(np.unique(domain_marker.values))
+        V,
+        domain_marker,
+        np.unique(domain_marker.values),
+        num_domains=len(np.unique(domain_marker.values)),
     )
     newton_solver.A.setNearNullSpace(null_space)
 
@@ -515,7 +541,8 @@ def run_soler(args):
         print("-" * 25, file=outfile)
         print(f"Newton options {newton_options}", file=outfile)
         print(
-            f"num_dofs: {u.function_space.dofmap.index_map_bs*u.function_space.dofmap.index_map.size_global}"
+            f"num_dofs: {u.function_space.dofmap.index_map_bs
+                         * u.function_space.dofmap.index_map.size_global}"
             + f", {mesh.topology.cell_type}",
             file=outfile,
         )
@@ -538,7 +565,9 @@ def run_soler(args):
 
 if __name__ == "__main__":
     desc = "Nitsche's method for two elastic bodies using custom assemblers"
-    parser = argparse.ArgumentParser(description=desc, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser = argparse.ArgumentParser(
+        description=desc, formatter_class=argparse.ArgumentDefaultsHelpFormatter
+    )
     parser.add_argument(
         "--theta",
         default=1.0,
@@ -566,7 +595,8 @@ if __name__ == "__main__":
         default=1,
         type=int,
         dest="problem",
-        help="Which problem to solve: 1. Flat surfaces, 2. One curved surface, 3. Two curved surfaces",
+        help="Which problem to solve: 1. Flat surfaces, 2. One curved surface, 3. "
+        "Two curved surfaces",
         choices=[1, 2, 3],
     )
     parser.add_argument(
@@ -611,7 +641,9 @@ if __name__ == "__main__":
         help="Use plane strain formulation",
         default=False,
     )
-    parser.add_argument("--E", default=1e3, type=np.float64, dest="E", help="Youngs modulus of material")
+    parser.add_argument(
+        "--E", default=1e3, type=np.float64, dest="E", help="Youngs modulus of material"
+    )
     parser.add_argument("--nu", default=0.1, type=np.float64, dest="nu", help="Poisson's ratio")
     parser.add_argument(
         "--disp",

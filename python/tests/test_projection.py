@@ -68,7 +68,8 @@ def test_projection(tmp_path, q_deg, surf, dim):
     def surface_1(x):
         return np.isclose(x[dim - 1], disp + H)
 
-    # define restriced range for x coordinate to ensure closest point is on interior of opposite surface
+    # define restriced range for x coordinate to ensure closest point is
+    # on interior of opposite surface
     def x_range(x):
         return np.logical_and(x[0] > delta, x[0] < L - delta)
 
@@ -78,11 +79,15 @@ def test_projection(tmp_path, q_deg, surf, dim):
     # Create meshtags for surfaces
     # restrict range of x coordinate for origin surface
     if surf == 0:
-        facets_0 = locate_entities_boundary(mesh, tdim - 1, lambda x: np.logical_and(surface_0(x), x_range(x)))
+        facets_0 = locate_entities_boundary(
+            mesh, tdim - 1, lambda x: np.logical_and(surface_0(x), x_range(x))
+        )
         facets_1 = locate_entities_boundary(mesh, tdim - 1, surface_1)
     else:
         facets_0 = locate_entities_boundary(mesh, tdim - 1, surface_0)
-        facets_1 = locate_entities_boundary(mesh, tdim - 1, lambda x: np.logical_and(surface_1(x), x_range(x)))
+        facets_1 = locate_entities_boundary(
+            mesh, tdim - 1, lambda x: np.logical_and(surface_1(x), x_range(x))
+        )
 
     values_0 = np.full(len(facets_0), surface_0_val, dtype=np.int32)
     values_1 = np.full(len(facets_1), surface_1_val, dtype=np.int32)
@@ -95,9 +100,17 @@ def test_projection(tmp_path, q_deg, surf, dim):
     data = np.array([surface_0_val, surface_1_val], dtype=np.int32)
     offsets = np.array([0, 2], dtype=np.int32)
     surfaces = adjacencylist(data, offsets)
-    search_mode = [dolfinx_contact.cpp.ContactMode.ClosestPoint, dolfinx_contact.cpp.ContactMode.ClosestPoint]
+    search_mode = [
+        dolfinx_contact.cpp.ContactMode.ClosestPoint,
+        dolfinx_contact.cpp.ContactMode.ClosestPoint,
+    ]
     contact = dolfinx_contact.cpp.Contact(
-        [facet_marker._cpp_object], surfaces, [(0, 1), (1, 0)], mesh._cpp_object, search_mode, quadrature_degree=q_deg
+        [facet_marker._cpp_object],
+        surfaces,
+        [(0, 1), (1, 0)],
+        mesh._cpp_object,
+        search_mode,
+        quadrature_degree=q_deg,
     )
     contact.create_distance_map(surf)
     gap = contact.pack_gap(surf)

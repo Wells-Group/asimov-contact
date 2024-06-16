@@ -136,7 +136,9 @@ class MeshTieProblem:
         # Assemble residual vector
         self._b_petsc.zeroEntries()
         self._b_petsc.ghostUpdate(addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD)
-        self._meshties.assemble_vector(self._b_petsc, self._l.function_spaces[0], Problem.Elasticity)  # custom kernel
+        self._meshties.assemble_vector(
+            self._b_petsc, self._l.function_spaces[0], Problem.Elasticity
+        )  # custom kernel
         assemble_vector(self._b_petsc, self._l)  # standard kernels
 
         # Apply boundary condition
@@ -276,9 +278,20 @@ j_compiled = form(j, jit_options=jit_options)
 search_mode = [ContactMode.ClosestPoint, ContactMode.ClosestPoint]
 
 # Initialise MeshTie class and generate MeshTie problem
-meshties = MeshTie([facet_marker._cpp_object], surfaces, contact_pairs, mesh._cpp_object, quadrature_degree=5)
+meshties = MeshTie(
+    [facet_marker._cpp_object], surfaces, contact_pairs, mesh._cpp_object, quadrature_degree=5
+)
 problem = MeshTieProblem(
-    l_compiled, j_compiled, bcs, meshties, domain_marker, u, lmbda, mu, np.float64(gamma), np.float64(theta)
+    l_compiled,
+    j_compiled,
+    bcs,
+    meshties,
+    domain_marker,
+    u,
+    lmbda,
+    mu,
+    np.float64(gamma),
+    np.float64(theta),
 )
 
 # Set up Newton sovler

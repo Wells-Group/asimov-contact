@@ -35,7 +35,10 @@ def jagged_curve(npoints, t, r0, r1, xmax):
         ds = 4 * dx
         while ds > 2 * dx:
             x = xlast + xp
-            y = r0(x) * np.arctan(t * np.sin(np.pi * x) / (1 - t * np.cos(np.pi * x))) / t + r1(x) * x
+            y = (
+                r0(x) * np.arctan(t * np.sin(np.pi * x) / (1 - t * np.cos(np.pi * x))) / t
+                + r1(x) * x
+            )
             ds = np.sqrt((y - ylast) ** 2 + (x - xlast) ** 2)
             xp *= 0.8
 
@@ -71,7 +74,9 @@ def create_christmas_tree_mesh_3D(
         gmsh.option.setNumber("General.Terminal", 0)
         gmsh.option.setNumber("Mesh.CharacteristicLengthFactor", res)
         ps1, lines1, curve1 = create_closed_curve(model, (xv, yv))
-        ps2, lines2, curve2 = create_closed_curve(model, (xv + offset[0], yv + offset[1]), z=offset[2])
+        ps2, lines2, curve2 = create_closed_curve(
+            model, (xv + offset[0], yv + offset[1]), z=offset[2]
+        )
         lines_z1 = []
         for i in range(len(ps1)):
             lines_z1.append(model.occ.addLine(ps1[i], ps2[i]))
@@ -89,7 +94,9 @@ def create_christmas_tree_mesh_3D(
         tree_bottom = surfaces1[len(x) - 1 : len(x) + len(xb) - 2]
         num_surfaces = len(tree_inner) // split
         for i in range(split - 1):
-            model.addPhysicalGroup(2, tree_inner[i * num_surfaces : (i + 1) * num_surfaces], tag=5 + i + 1)
+            model.addPhysicalGroup(
+                2, tree_inner[i * num_surfaces : (i + 1) * num_surfaces], tag=5 + i + 1
+            )
         model.addPhysicalGroup(2, tree_inner[(split - 1) * num_surfaces :], tag=5 + split)
         model.addPhysicalGroup(2, tree_bottom, tag=3)
         model.addPhysicalGroup(2, [surface1, surface2], tag=5)
@@ -112,7 +119,9 @@ def create_christmas_tree_mesh_3D(
         yv = np.concatenate((-np.flip(yh), np.flip(-y), y, yh, yf, yg, -yf))
 
         ps3, lines3, curve3 = create_closed_curve(model, (xv, yv))
-        ps4, lines4, curve4 = create_closed_curve(model, (xv + offset[0], yv + offset[1]), z=offset[2])
+        ps4, lines4, curve4 = create_closed_curve(
+            model, (xv + offset[0], yv + offset[1]), z=offset[2]
+        )
         lines_z2 = []
         for i in range(len(ps3)):
             lines_z2.append(model.occ.addLine(ps3[i], ps4[i]))
@@ -180,7 +189,9 @@ def create_christmas_tree_mesh(
         tree_bottom = lines1[len(x) - 1 : len(x) + len(xb) - 2]
         num_lines = len(tree_inner) // split
         for i in range(split - 1):
-            model.addPhysicalGroup(1, tree_inner[i * num_lines : (i + 1) * num_lines], tag=4 + i + 1)
+            model.addPhysicalGroup(
+                1, tree_inner[i * num_lines : (i + 1) * num_lines], tag=4 + i + 1
+            )
         model.addPhysicalGroup(1, tree_inner[(split - 1) * num_lines :], tag=4 + split)
         model.addPhysicalGroup(1, tree_bottom, tag=3)
 

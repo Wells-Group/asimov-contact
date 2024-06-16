@@ -38,7 +38,9 @@ model = gmsh.model()
 model.add(name)
 model.setCurrent(name)
 model = create_christmas_tree_mesh(model, res=0.2)
-mesh, domain_marker, facet_marker = dolfinx.io.gmshio.model_to_mesh(model, MPI.COMM_WORLD, 0, gdim=2)
+mesh, domain_marker, facet_marker = dolfinx.io.gmshio.model_to_mesh(
+    model, MPI.COMM_WORLD, 0, gdim=2
+)
 
 
 tdim = mesh.topology.dim
@@ -121,7 +123,9 @@ alpha = 0.1
 
 
 def sigma(w, T):
-    return (lmbda * ufl.tr(eps(w)) - alpha * (3 * lmbda + 2 * mu) * T) * ufl.Identity(tdim) + 2.0 * mu * eps(w)
+    return (lmbda * ufl.tr(eps(w)) - alpha * (3 * lmbda + 2 * mu) * T) * ufl.Identity(
+        tdim
+    ) + 2.0 * mu * eps(w)
 
 
 # Create variational form without contact contributions
@@ -181,7 +185,11 @@ petsc_options = {
 
 
 # Solve contact problem using Nitsche's method
-problem_parameters = {"gamma": np.float64((1 - alpha) * E * gamma), "theta": np.float64(theta), "fric": np.float64(0.4)}
+problem_parameters = {
+    "gamma": np.float64((1 - alpha) * E * gamma),
+    "theta": np.float64(theta),
+    "fric": np.float64(0.4),
+}
 log.set_log_level(log.LogLevel.WARNING)
 size = mesh.comm.size
 outname = f"results/xmas_{tdim}D_{size}"
@@ -191,7 +199,11 @@ T0.name = "temperature"
 search_mode = [ContactMode.ClosestPoint for _ in range(len(contact_pairs))]
 contact_problem = ContactProblem([facet_marker], surfaces, contact_pairs, mesh, 5, search_mode)
 contact_problem.generate_contact_data(
-    FrictionLaw.Frictionless, V, {"u": u, "du": du, "mu": mu_dg, "lambda": lmbda_dg}, E * gamma, theta
+    FrictionLaw.Frictionless,
+    V,
+    {"u": u, "du": du, "mu": mu_dg, "lambda": lmbda_dg},
+    E * gamma,
+    theta,
 )
 # define functions for newton solver
 
@@ -235,7 +247,9 @@ newton_solver.set_jacobian(compute_jacobian_matrix)
 newton_solver.set_coefficients(compute_coefficients)
 
 # Set rigid motion nullspace
-null_space = rigid_motions_nullspace_subdomains(V, domain_marker, np.unique(domain_marker.values), num_domains=2)
+null_space = rigid_motions_nullspace_subdomains(
+    V, domain_marker, np.unique(domain_marker.values), num_domains=2
+)
 newton_solver.A.setNearNullSpace(null_space)
 
 # Set Newton solver options

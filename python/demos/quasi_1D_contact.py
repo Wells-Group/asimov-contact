@@ -31,7 +31,9 @@ if __name__ == "__main__":
     exit(0)
 
     desc = "Example for verifying correctness of code"
-    parser = argparse.ArgumentParser(description=desc, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser = argparse.ArgumentParser(
+        description=desc, formatter_class=argparse.ArgumentDefaultsHelpFormatter
+    )
     parser.add_argument(
         "--quadrature",
         default=5,
@@ -92,7 +94,9 @@ if __name__ == "__main__":
     disp_x = 0.2
 
     V = functionspace(mesh, ("CG", args.order, (mesh.geometry.dim,)))
-    dirichlet_dofs1 = locate_dofs_topological(V, mesh.topology.dim - 1, facet_marker.find(dirichlet_bdy_1))
+    dirichlet_dofs1 = locate_dofs_topological(
+        V, mesh.topology.dim - 1, facet_marker.find(dirichlet_bdy_1)
+    )
     L = 0.5
     H = 0.5
     dirichlet_nodes = locate_entities(

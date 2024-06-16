@@ -336,7 +336,12 @@ def sliding_wedges(
 
 
 def create_circle_circle_mesh(
-    model, quads: bool = False, res: float = 0.1, order: int = 1, comm: MPI.Comm = MPI.COMM_WORLD, rank: int = 0
+    model,
+    quads: bool = False,
+    res: float = 0.1,
+    order: int = 1,
+    comm: MPI.Comm = MPI.COMM_WORLD,
+    rank: int = 0,
 ) -> typing.Optional[gmsh.model]:
     """Create two circular meshes, with radii 0.3 and 0.6 with centers (0.5,0.5) and (0.5, -0.5)"""
     center = [0.5, 0.5, 0]
@@ -349,10 +354,14 @@ def create_circle_circle_mesh(
         # Add 4 points on circle (clockwise, starting in top left)
         angles = [angle, -angle, np.pi + angle, np.pi - angle]
         c_points = [
-            model.occ.addPoint(center[0] + r * np.cos(angle), center[1] + r * np.sin(angle), center[2])
+            model.occ.addPoint(
+                center[0] + r * np.cos(angle), center[1] + r * np.sin(angle), center[2]
+            )
             for angle in angles
         ]
-        arcs = [model.occ.addCircleArc(c_points[i - 1], c, c_points[i]) for i in range(len(c_points))]
+        arcs = [
+            model.occ.addCircleArc(c_points[i - 1], c, c_points[i]) for i in range(len(c_points))
+        ]
         curve = model.occ.addCurveLoop(arcs)
         model.occ.synchronize()
         surface = model.occ.addPlaneSurface([curve])
@@ -361,10 +370,15 @@ def create_circle_circle_mesh(
         c2 = model.occ.addPoint(center2[0], center2[1], center2[2])
         # Add 4 points on circle (clockwise, starting in top left)
         c_points2 = [
-            model.occ.addPoint(center2[0] + 2 * r * np.cos(angle), center2[1] + 2 * r * np.sin(angle), center2[2])
+            model.occ.addPoint(
+                center2[0] + 2 * r * np.cos(angle), center2[1] + 2 * r * np.sin(angle), center2[2]
+            )
             for angle in angles
         ]
-        arcs2 = [model.occ.addCircleArc(c_points2[i - 1], c2, c_points2[i]) for i in range(len(c_points2))]
+        arcs2 = [
+            model.occ.addCircleArc(c_points2[i - 1], c2, c_points2[i])
+            for i in range(len(c_points2))
+        ]
         curve2 = model.occ.addCurveLoop(arcs2)
         model.occ.synchronize()
         surface2 = model.occ.addPlaneSurface([curve2])
@@ -403,7 +417,12 @@ def create_circle_circle_mesh(
 
 
 def create_gmsh_box_mesh_2D(
-    model, quads: bool = False, res: float = 0.1, order: int = 1, comm: MPI.Comm = MPI.COMM_WORLD, rank: int = 0
+    model,
+    quads: bool = False,
+    res: float = 0.1,
+    order: int = 1,
+    comm: MPI.Comm = MPI.COMM_WORLD,
+    rank: int = 0,
 ) -> typing.Optional[gmsh.model]:
     """Create a Gmsh mode/mesh of two boxes, one slightly skewed.
 
@@ -559,9 +578,13 @@ def create_sphere_plane_mesh(
     lc_max = 2 * res
     if comm.rank == rank:
         # Create sphere composed of of two volumes
-        sphere_bottom = model.occ.addSphere(center[0], center[1], center[2], r, angle1=-np.pi / 2, angle2=-angle)
+        sphere_bottom = model.occ.addSphere(
+            center[0], center[1], center[2], r, angle1=-np.pi / 2, angle2=-angle
+        )
         p0 = model.occ.addPoint(center[0], center[1], center[2] - r)
-        sphere_top = model.occ.addSphere(center[0], center[1], center[2], r, angle1=-angle, angle2=np.pi / 2)
+        sphere_top = model.occ.addSphere(
+            center[0], center[1], center[2], r, angle1=-angle, angle2=np.pi / 2
+        )
         out_vol_tags, _ = model.occ.fragment([(3, sphere_bottom)], [(3, sphere_top)])
 
         # Add bottom box
@@ -613,9 +636,13 @@ def create_sphere_sphere_mesh(filename: typing.Union[str, Path], order: int = 1)
     gmsh.initialize()
     if MPI.COMM_WORLD.rank == 0:
         # Create sphere 1 composed of of two volumes
-        sphere_bottom = gmsh.model.occ.addSphere(center[0], center[1], center[2], r, angle1=-np.pi / 2, angle2=-angle)
+        sphere_bottom = gmsh.model.occ.addSphere(
+            center[0], center[1], center[2], r, angle1=-np.pi / 2, angle2=-angle
+        )
         p0 = gmsh.model.occ.addPoint(center[0], center[1], center[2] - r)
-        sphere_top = gmsh.model.occ.addSphere(center[0], center[1], center[2], r, angle1=-angle, angle2=np.pi / 2)
+        sphere_top = gmsh.model.occ.addSphere(
+            center[0], center[1], center[2], r, angle1=-angle, angle2=np.pi / 2
+        )
         out_vol_tags, _ = gmsh.model.occ.fragment([(3, sphere_bottom)], [(3, sphere_top)])
 
         # Create sphere 2 composed of of two volumes
@@ -623,7 +650,9 @@ def create_sphere_sphere_mesh(filename: typing.Union[str, Path], order: int = 1)
             center[0], center[1], -center[2], 2 * r, angle1=-np.pi / 2, angle2=-angle
         )
         p1 = gmsh.model.occ.addPoint(center[0], center[1], -center[2] - 2 * r)
-        sphere_top2 = gmsh.model.occ.addSphere(center[0], center[1], -center[2], 2 * r, angle1=-angle, angle2=np.pi / 2)
+        sphere_top2 = gmsh.model.occ.addSphere(
+            center[0], center[1], -center[2], 2 * r, angle1=-angle, angle2=np.pi / 2
+        )
         out_vol_tags2, _ = gmsh.model.occ.fragment([(3, sphere_bottom2)], [(3, sphere_top2)])
 
         # Synchronize and create physical tags
@@ -663,7 +692,12 @@ def create_sphere_sphere_mesh(filename: typing.Union[str, Path], order: int = 1)
 
 
 def create_cylinder_cylinder_mesh(
-    model, order: int = 1, res=0.25, simplex: bool = False, comm: MPI.Comm = MPI.COMM_WORLD, rank: int = 0
+    model,
+    order: int = 1,
+    res=0.25,
+    simplex: bool = False,
+    comm: MPI.Comm = MPI.COMM_WORLD,
+    rank: int = 0,
 ):
     """Generate a mesh with 2nd-order hexahedral cells using gmsh."""
     if comm.rank == rank:
@@ -711,7 +745,9 @@ def create_cylinder_cylinder_mesh(
         return None
 
 
-def create_2d_rectangle_split(filename: typing.Union[str, Path], quads: bool = False, res=0.1, order: int = 1, gap=0.2):
+def create_2d_rectangle_split(
+    filename: typing.Union[str, Path], quads: bool = False, res=0.1, order: int = 1, gap=0.2
+):
     """Create rectangle split into two domains"""
     length = 0.5
     height = 0.5
@@ -793,11 +829,15 @@ def create_halfsphere_box_mesh(
     gmsh.initialize()
     if MPI.COMM_WORLD.rank == 0:
         # Create sphere composed of of two volumes
-        sphere_bottom = gmsh.model.occ.addSphere(center[0], center[1], center[2], r, angle1=-np.pi / 2, angle2=-angle)
+        sphere_bottom = gmsh.model.occ.addSphere(
+            center[0], center[1], center[2], r, angle1=-np.pi / 2, angle2=-angle
+        )
         p0 = gmsh.model.occ.addPoint(center[0], center[1], center[2] - r)
 
         # Add bottom box
-        box = gmsh.model.occ.add_box(-length / 2, -width / 2, -height - r - gap, length, width, height)
+        box = gmsh.model.occ.add_box(
+            -length / 2, -width / 2, -height - r - gap, length, width, height
+        )
 
         # Synchronize and create physical tags
         gmsh.model.occ.synchronize()

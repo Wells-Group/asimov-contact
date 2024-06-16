@@ -302,7 +302,9 @@ def test_meshtie(threed: bool = False, simplex: bool = True, runs: int = 5, orde
             facet_marker = xdmf.read_meshtags(mesh, name="contact_facets")
 
         if mesh.comm.size > 1:
-            mesh, facet_marker, domain_marker = create_contact_mesh(mesh, facet_marker, domain_marker, [3, 4, 7, 8])
+            mesh, facet_marker, domain_marker = create_contact_mesh(
+                mesh, facet_marker, domain_marker, [3, 4, 7, 8]
+            )
 
         # Function, TestFunction, TrialFunction and measures
         V = functionspace(mesh, ("Lagrange", order))
@@ -313,7 +315,9 @@ def test_meshtie(threed: bool = False, simplex: bool = True, runs: int = 5, orde
         V0 = functionspace(mesh, ("DG", 0))
         h = Function(V0)
         ncells = mesh.topology.index_map(tdim).size_local
-        h_vals = cell_diameter(mesh._cpp_object, mesh.topology.dim, np.arange(0, ncells, dtype=np.int32))
+        h_vals = cell_diameter(
+            mesh._cpp_object, mesh.topology.dim, np.arange(0, ncells, dtype=np.int32)
+        )
         h.x.array[:ncells] = h_vals[:]
         n = ufl.FacetNormal(mesh)
 
@@ -340,7 +344,9 @@ def test_meshtie(threed: bool = False, simplex: bool = True, runs: int = 5, orde
                 - theta * kdt * ufl.inner(ufl.grad(v), n) * w * ds(tag)
                 + kdt * gamma / h * w * v * ds(tag)
             )
-            F += -kdt * theta * ufl.inner(ufl.grad(v), n) * g * ds(tag) + kdt * gamma / h * g * v * ds(tag)
+            F += -kdt * theta * ufl.inner(ufl.grad(v), n) * g * ds(
+                tag
+            ) + kdt * gamma / h * g * v * ds(tag)
 
         # compile forms
         jit_options = {"cffi_extra_compile_args": [], "cffi_libraries": ["m"]}
@@ -361,7 +367,9 @@ def test_meshtie(threed: bool = False, simplex: bool = True, runs: int = 5, orde
             mesh._cpp_object,
             quadrature_degree=5,
         )
-        meshties.generate_kernel_data(Problem.Poisson, V._cpp_object, {"kdt": kdt._cpp_object}, gamma, theta)
+        meshties.generate_kernel_data(
+            Problem.Poisson, V._cpp_object, {"kdt": kdt._cpp_object}, gamma, theta
+        )
 
         # create matrix, vector
         A = meshties.create_matrix(J._cpp_object)
@@ -451,7 +459,9 @@ def test_meshtie(threed: bool = False, simplex: bool = True, runs: int = 5, orde
 
 if __name__ == "__main__":
     desc = "Meshtie"
-    parser = argparse.ArgumentParser(description=desc, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser = argparse.ArgumentParser(
+        description=desc, formatter_class=argparse.ArgumentDefaultsHelpFormatter
+    )
     parser.add_argument("--runs", default=1, type=int, dest="runs", help="Number of refinements")
     _3D = parser.add_mutually_exclusive_group(required=False)
     _3D.add_argument("--3D", dest="threed", action="store_true", help="Use 3D mesh", default=False)

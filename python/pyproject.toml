@@ -48,7 +48,7 @@ ignore_missing_imports = true
 
 [tool.ruff]
 src = ["demos", "asimov-contact"]
-line-length = 120
+line-length = 100
 indent-width = 4
 
 [tool.ruff.lint]

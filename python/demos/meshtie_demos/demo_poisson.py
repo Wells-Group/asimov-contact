@@ -35,11 +35,13 @@ from dolfinx_contact.meshing import convert_mesh, create_box_mesh_3D
 from dolfinx_contact.parallel_mesh_ghosting import create_contact_mesh
 
 if __name__ == "__main__":
-    print("Demo needs updating. Exiting.")
-    exit(0)
+    # print("Demo needs updating. Exiting.")
+    # exit(0)
 
     desc = "Nitsche's method for two elastic bodies using custom assemblers"
-    parser = argparse.ArgumentParser(description=desc, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser = argparse.ArgumentParser(
+        description=desc, formatter_class=argparse.ArgumentDefaultsHelpFormatter
+    )
     parser.add_argument(
         "--theta",
         default=1.0,
@@ -86,7 +88,9 @@ if __name__ == "__main__":
         help="Use triangle/tet mesh",
         default=False,
     )
-    parser.add_argument("--E", default=1e3, type=np.float64, dest="E", help="Youngs modulus of material")
+    parser.add_argument(
+        "--E", default=1e3, type=np.float64, dest="E", help="Youngs modulus of material"
+    )
     parser.add_argument("--nu", default=0.1, type=np.float64, dest="nu", help="Poisson's ratio")
     parser.add_argument(
         "--outfile",
@@ -225,7 +229,9 @@ if __name__ == "__main__":
         mesh._cpp_object,
         quadrature_degree=5,
     )
-    meshties.generate_kernel_data(Problem.Poisson, V._cpp_object, {"kdt": kdt._cpp_object}, gamma, theta)
+    meshties.generate_kernel_data(
+        Problem.Poisson, V._cpp_object, {"kdt": kdt._cpp_object}, gamma, theta
+    )
 
     # create matrix, vector
     A = meshties.create_matrix(J._cpp_object)
@@ -250,7 +256,9 @@ if __name__ == "__main__":
     A.assemble()
 
     # Set piecewise constant nullspace
-    null_space = near_nullspace_subdomains(V, domain_marker, np.unique(domain_marker.values), num_domains=2)
+    null_space = near_nullspace_subdomains(
+        V, domain_marker, np.unique(domain_marker.values), num_domains=2
+    )
     A.setNearNullSpace(null_space)
 
     # Create PETSc Krylov solver and turn convergence monitoring on
@@ -299,7 +307,8 @@ if __name__ == "__main__":
         outfile = open(args.outfile, "a")
     print("-" * 25, file=outfile)
     print(
-        f"num_dofs: {uh.function_space.dofmap.index_map_bs*uh.function_space.dofmap.index_map.size_global}"
+        f"num_dofs: {uh.function_space.dofmap.index_map_bs
+                     * uh.function_space.dofmap.index_map.size_global}"
         + f", {mesh.topology.cell_types[0]}",
         file=outfile,
     )
