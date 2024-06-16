@@ -18,21 +18,28 @@ template <typename T, std::size_t d,
 using mdspan_t = MDSPAN_IMPL_STANDARD_NAMESPACE::mdspan<
     T, MDSPAN_IMPL_STANDARD_NAMESPACE::dextents<std::size_t, d>, S>;
 
-/// @brief Contains quadrature points and weights on a cell on a set of
-/// entities
+
+/// @brief Quadrature schemes for each entity of given dimension dim of
+/// a reference cell.
 class QuadratureRule
 {
 public:
   /// Constructor
-  /// @param[in] cell The cell type
-  /// @param[in] degree Degree of quadrature rule
-  /// @param[in] dim Dimension of entity
-  /// @param[in] type Quadrature rule type.
+  /// @param[in] cell Reference cell type.
+  /// @param[in] degree Degree of quadrature rule to compute for each
+  /// entity.
+  /// @param[in] dim Topological dimension of the reference cell
+  /// entities.
+  /// @param[in] type Quadrature rule type to compute for reference cell
+  /// entity.
   QuadratureRule(dolfinx::mesh::CellType cell, int degree, int dim,
                  basix::quadrature::type type
                  = basix::quadrature::type::Default);
 
-  /// Return a list of quadrature points for each entity in the cell
+  /// @brief Quadrature points for each entity of the cell.
+  ///
+  /// The shape is (entity index, num_quad_points, dim). Storage is
+  /// row-major.
   const std::vector<double>& points() const { return _points; }
 
   /// Return a list of quadrature weights for each entity in the cell
@@ -42,7 +49,7 @@ public:
   /// Return dimension of entity in the quadrature rule
   int dim() const { return _dim; }
 
-  /// Return the cell type for the ith quadrature rule
+  /// @brief Cell type for the ith quadrature rule
   /// @param[in] i Local entity number
   dolfinx::mesh::CellType cell_type(int i) const;
 

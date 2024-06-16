@@ -119,7 +119,6 @@ dolfinx::mesh::CellType QuadratureRule::cell_type(int i) const
 {
   basix::cell::type b_ct = dolfinx::mesh::cell_type_to_basix_type(_cell_type);
   assert(i < _num_sub_entities);
-
   basix::cell::type et = basix::cell::sub_entity_type(b_ct, _dim, i);
   return dolfinx::mesh::cell_type_from_basix_type(et);
 }

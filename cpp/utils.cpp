@@ -691,7 +691,6 @@ dolfinx_contact::compute_active_entities(
     std::vector<std::int32_t> active_entities(2 * entities.size());
     std::vector<std::int32_t> cells(entities.size());
     std::vector<std::int32_t> facets(entities.size());
-
     auto topology = mesh.topology();
     auto f_to_c = topology->connectivity(tdim - 1, tdim);
     assert(f_to_c);
@@ -700,21 +699,20 @@ dolfinx_contact::compute_active_entities(
     for (std::size_t f = 0; f < entities.size(); f++)
     {
       assert(f_to_c->num_links(entities[f]) == 1);
-      const std::int32_t cell = f_to_c->links(entities[f])[0];
+      std::int32_t cell = f_to_c->links(entities[f])[0];
       auto cell_facets = c_to_f->links(cell);
-
       auto facet_it
           = std::find(cell_facets.begin(), cell_facets.end(), entities[f]);
       assert(facet_it != cell_facets.end());
       cells[f] = cell;
-      facets[f] = (std::int32_t)std::distance(cell_facets.begin(), facet_it);
+      facets[f] = std::distance(cell_facets.begin(), facet_it);
     }
 
     std::vector<std::int32_t> perm(entities.size());
     std::iota(perm.begin(), perm.end(), 0);
     dolfinx::argsort_radix<std::int32_t>(cells, perm);
 
-    // Sort cells in accending order
+    // Sort cells in ascending order
     std::size_t num_local = 0;
     for (std::size_t f = 0; f < entities.size(); f++)
     {
@@ -731,6 +729,7 @@ dolfinx_contact::compute_active_entities(
         "Integral type not supported. Note that this function "
         "has not been implemented for interior facets.");
   }
+
   return {};
 }
 
