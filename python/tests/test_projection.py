@@ -39,11 +39,12 @@ def test_projection(tmp_path, q_deg, surf, dim):
         mesh, _, _ = dolfinx.io.gmshio.model_to_mesh(model, MPI.COMM_WORLD, 0, gdim=2)
         gmsh.finalize()
     else:
-        fname = tmp_path / "box_3D.msh"
-        create_box_mesh_3D(filename=fname, res=1.0, offset=0.0)
-        convert_mesh_new(fname, fname.with_suffix(".xdmf"), gdim=dim)
-        with XDMFFile(MPI.COMM_WORLD, fname.with_suffix(".xdmf"), "r") as xdmf:
-            mesh = xdmf.read_mesh()
+        name = "test_proj_box_3D"
+        model = gmsh.model()
+        model.add(name)
+        model.setCurrent(name)
+        model = create_box_mesh_3D(model, res=1.0, offset=0.0)
+        mesh, _, _ = dolfinx.io.gmshio.model_to_mesh(model, MPI.COMM_WORLD, 0, gdim=dim)
 
     tdim = mesh.topology.dim
     gdim = mesh.geometry.dim

@@ -48,10 +48,13 @@ def test_copy_to_submesh(tmp_path, order, res, simplex, dim):
             contact_bdy_1 = 1
             contact_bdy_2 = 8
         else:
-            fname = tmp_path / "cylinders3D.msh"
-            create_cylinder_cylinder_mesh(fname, order=order, res=10 * res, simplex=simplex)
-            with XDMFFile(MPI.COMM_WORLD, fname.with_suffix(".xdmf"), "r") as xdmf:
-                mesh = xdmf.read_mesh(name="cylinder_cylinder")
+            name = "test_copy_cylinders3D"
+            model = gmsh.model(name)
+            model.add(name)
+            model.setCurrent(name)
+            model = create_cylinder_cylinder_mesh(model, order=order, res=10 * res, simplex=simplex)
+            mesh, _, _ = dolfinx.io.gmshio.model_to_mesh(model, MPI.COMM_WORLD, 0, gdim=3)
+
             tdim = mesh.topology.dim
             mesh.topology.create_connectivity(tdim - 1, tdim)
 
