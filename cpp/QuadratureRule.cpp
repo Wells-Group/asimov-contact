@@ -75,17 +75,17 @@ QuadratureRule::QuadratureRule(dolfinx::mesh::CellType cell, int degree,
               type, et, basix::polyset::type::standard, degree);
       const std::vector<double>& q_weights = quadrature.back();
       const std::vector<double>& q_points = quadrature.front();
-      const std::size_t num_points = q_weights.size();
-      const std::size_t tdim = q_points.size() / q_weights.size();
-      num_points_per_entity[i] = num_points;
+
+      num_points_per_entity[i] = q_weights.size();
 
       const std::array<std::size_t, 4> e_tab_shape
-          = entity_element.tabulate_shape(0, num_points);
+          = entity_element.tabulate_shape(0, q_weights.size());
       std::vector<double> reference_entity_b(std::reduce(
           e_tab_shape.cbegin(), e_tab_shape.cend(), 1, std::multiplies{}));
 
-      entity_element.tabulate(0, q_points, {num_points, tdim},
-                              reference_entity_b);
+      entity_element.tabulate(
+          0, q_points, {q_weights.size(), q_weights.size() / q_weights.size()},
+          reference_entity_b);
 
       mdspan_t<const double, 4> basis_full(reference_entity_b.data(),
                                            e_tab_shape);
@@ -97,14 +97,11 @@ QuadratureRule::QuadratureRule(dolfinx::mesh::CellType cell, int degree,
           = basix::cell::sub_entity_geometry<double>(b_ct, dim, i);
       mdspan_t<const double, 2> coords(sub_geomb.data(), sub_geom_shape);
 
-      std::cout << "Test dim: " << _tdim << ", " << coords.extent(1)
-                << std::endl;
-
       // Push forward quadrature point from reference entity to reference
       // entity on cell
       const std::size_t offset = _points.size();
-      _points.resize(_points.size() + num_points * coords.extent(1));
-      mdspan_t<double, 2> entity_qp(_points.data() + offset, num_points,
+      _points.resize(_points.size() + q_weights.size() * coords.extent(1));
+      mdspan_t<double, 2> entity_qp(_points.data() + offset, q_weights.size(),
                                     coords.extent(1));
 
       assert(coords.extent(1) == (std::size_t)_tdim);
