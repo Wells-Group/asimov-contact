@@ -25,12 +25,9 @@ def create_closed_curve(model, curve, z=0.0):
 def jagged_curve(npoints, t, r0, r1, xmax):
     xvals = []
     yvals = []
-
     dx = xmax / npoints
-
     xvals = [0.0]
     yvals = [0.0]
-
     while xvals[-1] < xmax:
         ylast = yvals[-1]
         xlast = xvals[-1]
@@ -39,7 +36,6 @@ def jagged_curve(npoints, t, r0, r1, xmax):
         while ds > 2 * dx:
             x = xlast + xp
             y = r0(x) * np.arctan(t * np.sin(np.pi * x) / (1 - t * np.cos(np.pi * x))) / t + r1(x) * x
-
             ds = np.sqrt((y - ylast) ** 2 + (x - xlast) ** 2)
             xp *= 0.8
 

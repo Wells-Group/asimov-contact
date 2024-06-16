@@ -343,8 +343,7 @@ def test_meshtie(threed: bool = False, simplex: bool = True, runs: int = 5, orde
             F += -kdt * theta * ufl.inner(ufl.grad(v), n) * g * ds(tag) + kdt * gamma / h * g * v * ds(tag)
 
         # compile forms
-        cffi_options = ["-Ofast", "-march=native"]
-        jit_options = {"cffi_extra_compile_args": cffi_options, "cffi_libraries": ["m"]}
+        jit_options = {"cffi_extra_compile_args": [], "cffi_libraries": ["m"]}
         F = form(F, jit_options=jit_options)
         J = form(J, jit_options=jit_options)
 

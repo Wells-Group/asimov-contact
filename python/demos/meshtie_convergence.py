@@ -62,14 +62,11 @@ def u_fun_2d(x: npt.NDArray[np.float64], d: float, gdim: int) -> npt.NDArray[np.
 def fun_2d(x: npt.NDArray[np.float64], d: float, mu: float, lmbda: float, gdim: int) -> npt.NDArray[np.float64]:
     a = 2 * np.pi / 5
     b = 2 * np.pi
-
     vals = np.zeros((gdim, x.shape[1]))
     f1 = -(lmbda + mu) * a * b * np.cos(a * x[0]) * np.cos(b * x[1])
-
     f2 = (mu * a**2 + (2 * mu + lmbda) * b**2) * np.sin(a * x[0]) * np.sin(b * x[1])
     vals[0, :] = d * f1[:]
     vals[1, :] = d * f2[:]
-
     return vals
 
 
@@ -90,9 +87,7 @@ def fun_3d(x: npt.NDArray[np.float64], d: float, mu: float, lmbda: float, gdim: 
     b = 2 * np.pi
     c = 2 * np.pi
     f1 = -(lmbda + mu) * a * b * np.cos(a * x[0]) * np.cos(b * x[1]) * np.sin(c * x[2])
-
     f2 = (mu * (a**2 + c**2) + (2 * mu + lmbda) * b**2) * np.sin(a * x[0]) * np.sin(b * x[1]) * np.sin(c * x[2])
-
     f3 = -(lmbda + mu) * b * c * np.sin(a * x[0]) * np.cos(b * x[1]) * np.cos(c * x[2])
     vals = np.zeros((gdim, x.shape[1]))
     vals[0, :] = d * f1[:]
@@ -118,7 +113,6 @@ def unsplit_domain(threed: bool = False, runs: int = 1):
     res = 0.6  # mesh resolution (input to gmsh)
     # parameter for surface approximation
     num_segments = 2 * np.ceil(5.0 / (1.2 * 0.7)).astype(np.int32)
-
     for i in range(1, runs + 1):
         print(f"Run {i}")
         # create mesh
@@ -181,10 +175,7 @@ def unsplit_domain(threed: bool = False, runs: int = 1):
 
         b = assemble_vector(F)
         apply_lifting(b, [J], bcs=[[bc]])
-        b.ghostUpdate(
-            addv=PETSc.InsertMode.ADD,  # type: ignore
-            mode=PETSc.ScatterMode.REVERSE,  # type: ignore
-        )
+        b.ghostUpdate(addv=PETSc.InsertMode.ADD, mode=PETSc.ScatterMode.REVERSE)
         set_bc(b, [bc])
 
         # Set solver options
@@ -232,6 +223,7 @@ def unsplit_domain(threed: bool = False, runs: int = 1):
         errors.append(np.sqrt(mesh.comm.allreduce(error, op=MPI.SUM)))
         res = 0.5 * res
         num_segments = 2 * num_segments
+
     ncells = mesh.topology.index_map(tdim).size_local
     indices = np.array(range(ncells), dtype=np.int32)
     values = mesh.comm.rank * np.ones(ncells, dtype=np.int32)
@@ -247,10 +239,10 @@ def unsplit_domain(threed: bool = False, runs: int = 1):
 
 
 def test_meshtie(threed: bool = False, simplex: bool = True, runs: int = 5):
-    """
-    This function computes the finite element solution on mesh
+    """This function computes the finite element solution on mesh
     split along a surface, where the mesh and the surface discretisation
     are not matching along the surface
+
     threed: tdim=gdim=3 if True, 2 otherwise
     simplex: If true use tet/triangle mesh if false use hex/quad mesh
     runs: number of refinements
@@ -379,8 +371,7 @@ def test_meshtie(threed: bool = False, simplex: bool = True, runs: int = 5):
             F += -theta * ufl.inner(sigma(v) * n, g) * ds(tag) + E * gamma / h * ufl.inner(g, v) * ds(tag)
 
         # compile forms
-        cffi_options = ["-Ofast", "-march=native"]
-        jit_options = {"cffi_extra_compile_args": cffi_options, "cffi_libraries": ["m"]}
+        jit_options = {"cffi_extra_compile_args": [], "cffi_libraries": ["m"]}
         F = form(F, jit_options=jit_options)
         J = form(J, jit_options=jit_options)
 
@@ -391,19 +382,9 @@ def test_meshtie(threed: bool = False, simplex: bool = True, runs: int = 5):
         surfaces = adjacencylist(data, offsets)
 
         # initialise meshties
-        meshties = MeshTie(
-            [facet_marker._cpp_object],
-            surfaces,
-            contact,
-            mesh._cpp_object,
-            quadrature_degree=5,
-        )
+        meshties = MeshTie([facet_marker._cpp_object], surfaces, contact, mesh._cpp_object, quadrature_degree=5)
         meshties.generate_kernel_data(
-            Problem.Elasticity,
-            V._cpp_object,
-            {"lambda": lmbda._cpp_object, "mu": mu._cpp_object},
-            E * gamma,
-            theta,
+            Problem.Elasticity, V._cpp_object, {"lambda": lmbda._cpp_object, "mu": mu._cpp_object}, E * gamma, theta
         )
 
         # create matrix, vector
@@ -412,15 +393,9 @@ def test_meshtie(threed: bool = False, simplex: bool = True, runs: int = 5):
 
         # Assemble right hand side
         b.zeroEntries()
-        b.ghostUpdate(
-            addv=PETSc.InsertMode.INSERT,  # type: ignore
-            mode=PETSc.ScatterMode.FORWARD,  # type: ignore
-        )
+        b.ghostUpdate(addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD)
         assemble_vector(b, F)
-        b.ghostUpdate(
-            addv=PETSc.InsertMode.ADD,  # type: ignore
-            mode=PETSc.ScatterMode.REVERSE,  # type: ignore
-        )
+        b.ghostUpdate(addv=PETSc.InsertMode.ADD, mode=PETSc.ScatterMode.REVERSE)
 
         # Assemble matrix
         A.zeroEntries()

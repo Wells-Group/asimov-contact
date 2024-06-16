@@ -50,8 +50,8 @@ def run_solver(
     top_value = 1
     bottom_value = 2
 
-    # Load mesh and create identifier functions for the top (Displacement condition)
-    # and the bottom (contact condition)
+    # Load mesh and create identifier functions for the top
+    # (Displacement condition) and the bottom (contact condition)
     if threed:
         if cube:
             mesh = create_unit_cube(MPI.COMM_WORLD, 10, 10, 20)
@@ -68,7 +68,6 @@ def run_solver(
 
         def bottom(x):
             return x[2] < 0.15
-
     else:
         if cube:
             mesh = create_unit_square(MPI.COMM_WORLD, 30, 30)

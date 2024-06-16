@@ -12,19 +12,9 @@ import numpy as np
 import pytest
 import ufl
 from dolfinx.fem import Function, IntegralType, form, functionspace
-from dolfinx.fem.petsc import (
-    assemble_matrix,
-    assemble_vector,
-    create_matrix,
-    create_vector,
-)
+from dolfinx.fem.petsc import assemble_matrix, assemble_vector, create_matrix, create_vector
 from dolfinx.graph import adjacencylist
-from dolfinx.mesh import (
-    create_unit_cube,
-    create_unit_square,
-    locate_entities_boundary,
-    meshtags,
-)
+from dolfinx.mesh import create_unit_cube, create_unit_square, locate_entities_boundary, meshtags
 
 kt = dolfinx_contact.cpp.Kernel
 compare_matrices = dolfinx_contact.helpers.compare_matrices
@@ -96,7 +86,8 @@ def test_vector_surface_kernel(dim, kernel_type, P, Q):
 
     n_vec = np.zeros(mesh.geometry.dim)
     n_vec[mesh.geometry.dim - 1] = 1
-    # FIXME: more general definition of n_2 needed for surface that is not a horizontal rectangular box.
+    # FIXME: more general definition of n_2 needed for surface that is
+    # not a horizontal rectangular box.
     n_2 = ufl.as_vector(n_vec)  # Normal of plane (projection onto other body)
     n = ufl.FacetNormal(mesh)
 
@@ -124,12 +115,9 @@ def test_vector_surface_kernel(dim, kernel_type, P, Q):
         * (theta * sigma_n(v) - (gamma / h) * ufl.dot(v, (-n_2)))
         * ds(1)
     )
+
     # Compile UFL form
-    cffi_options = ["-Ofast", "-march=native"]
-    L = form(
-        L,
-        jit_options={"cffi_extra_compile_args": cffi_options, "cffi_libraries": ["m"]},
-    )
+    L = form(L, jit_options={"cffi_extra_compile_args": [], "cffi_libraries": ["m"]})
     b = create_vector(L)
 
     # Normal assembly
@@ -155,21 +143,13 @@ def test_vector_surface_kernel(dim, kernel_type, P, Q):
     surfaces = adjacencylist(data, offsets)
     search_mode = [dolfinx_contact.cpp.ContactMode.ClosestPoint]
     contact = dolfinx_contact.cpp.Contact(
-        [ft._cpp_object],
-        surfaces,
-        [(0, 0)],
-        mesh._cpp_object,
-        search_mode,
-        quadrature_degree=2 * P + Q + 1,
+        [ft._cpp_object], surfaces, [(0, 0)], mesh._cpp_object, search_mode, quadrature_degree=2 * P + Q + 1
     )
     contact.create_distance_map(0)
     g_vec = contact.pack_gap_plane(0, -g)
     # FIXME: assuming all facets are the same type
     q_rule = dolfinx_contact.QuadratureRule(
-        mesh.topology.cell_type,
-        2 * P + Q + 1,
-        mesh.topology.dim - 1,
-        basix.QuadratureType.default,
+        mesh.topology.cell_type, 2 * P + Q + 1, mesh.topology.dim - 1, basix.QuadratureType.default
     )
     coeffs = np.hstack([mu_packed, lmbda_packed, h_facets, g_vec, u_packed, grad_u_packed])
 
@@ -195,9 +175,7 @@ def test_matrix_surface_kernel(dim, kernel_type, P, Q):
 
     # Find facets on boundary to integrate over
     facets = dolfinx.mesh.locate_entities_boundary(
-        mesh,
-        mesh.topology.dim - 1,
-        lambda x: np.logical_or(np.isclose(x[0], 0.0), np.isclose(x[0], 1.0)),
+        mesh, mesh.topology.dim - 1, lambda x: np.logical_or(np.isclose(x[0], 0.0), np.isclose(x[0], 1.0))
     )
     facets = np.sort(facets)
     values = np.ones(len(facets), dtype=np.int32)
@@ -245,7 +223,8 @@ def test_matrix_surface_kernel(dim, kernel_type, P, Q):
 
     n_vec = np.zeros(mesh.geometry.dim)
     n_vec[mesh.geometry.dim - 1] = 1
-    # FIXME: more general definition of n_2 needed for surface that is not a horizontal rectangular box.
+    # FIXME: more general definition of n_2 needed for surface that is
+    # not a horizontal rectangular box.
     n_2 = ufl.as_vector(n_vec)  # Normal of plane (projection onto other body)
     n = ufl.FacetNormal(mesh)
 
@@ -278,11 +257,7 @@ def test_matrix_surface_kernel(dim, kernel_type, P, Q):
         * ds(1)
     )
     # Compile UFL form
-    cffi_options = ["-Ofast", "-march=native"]
-    a = form(
-        a,
-        jit_options={"cffi_extra_compile_args": cffi_options, "cffi_libraries": ["m"]},
-    )
+    a = form(a, jit_options={"cffi_extra_compile_args": [], "cffi_libraries": ["m"]})
     A = create_matrix(a)
 
     # Normal assembly
@@ -292,10 +267,7 @@ def test_matrix_surface_kernel(dim, kernel_type, P, Q):
 
     # Custom assembly
     q_rule = dolfinx_contact.QuadratureRule(
-        mesh.topology.cell_type,
-        2 * P + Q + 1,
-        mesh.topology.dim - 1,
-        basix.QuadratureType.default,
+        mesh.topology.cell_type, 2 * P + Q + 1, mesh.topology.dim - 1, basix.QuadratureType.default
     )
     consts = np.array([gamma, theta])
     consts = np.hstack((consts, n_vec))
@@ -313,12 +285,7 @@ def test_matrix_surface_kernel(dim, kernel_type, P, Q):
     surfaces = adjacencylist(data, offsets)
     search_mode = [dolfinx_contact.cpp.ContactMode.ClosestPoint]
     contact = dolfinx_contact.cpp.Contact(
-        [ft._cpp_object],
-        surfaces,
-        [(0, 0)],
-        mesh._cpp_object,
-        search_mode,
-        quadrature_degree=2 * P + Q + 1,
+        [ft._cpp_object], surfaces, [(0, 0)], mesh._cpp_object, search_mode, quadrature_degree=2 * P + Q + 1
     )
     contact.create_distance_map(0)
     g_vec = contact.pack_gap_plane(0, -g)

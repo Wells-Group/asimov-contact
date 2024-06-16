@@ -230,12 +230,7 @@ def test_contact_kernel(tmp_path, theta, gamma, dim, gap):
         kernel = dolfinx_contact.cpp.generate_rigid_surface_kernel(V._cpp_object, kt.Rhs, q_rule)
         b2.zeroEntries()
         contact_assembler = dolfinx_contact.cpp.Contact(
-            [facet_marker._cpp_object],
-            surfaces,
-            [(0, 1)],
-            mesh._cpp_object,
-            search_mode,
-            quadrature_degree=q_deg,
+            [facet_marker._cpp_object], surfaces, [(0, 1)], mesh._cpp_object, search_mode, quadrature_degree=q_deg
         )
         contact_assembler.create_distance_map(0)
 

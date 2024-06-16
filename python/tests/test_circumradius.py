@@ -26,20 +26,9 @@ def test_circumradius(dim):
     V = functionspace(mesh, ("Lagrange", 1, (mesh.geometry.dim,)))
     u = Function(V)
     if dim == 3:
-        u.interpolate(
-            lambda x: (
-                0.1 * (x[1] > 0.5),
-                0.1 * np.sin(2 * np.pi * x[2]),
-                np.zeros(x.shape[1]),
-            )
-        )
+        u.interpolate(lambda x: (0.1 * (x[1] > 0.5), 0.1 * np.sin(2 * np.pi * x[2]), np.zeros(x.shape[1])))
     else:
-        u.interpolate(
-            lambda x: (
-                0.1 * np.cos(x[1]) * (x[0] > 0.2),
-                0.1 * x[1] + 0.1 * np.sin(2 * np.pi * x[0]),
-            )
-        )
+        u.interpolate(lambda x: (0.1 * np.cos(x[1]) * (x[0] > 0.2), 0.1 * x[1] + 0.1 * np.sin(2 * np.pi * x[0])))
     dolfinx_contact.update_geometry(u._cpp_object, mesh._cpp_object)
 
     mesh.topology.create_connectivity(dim - 1, dim)

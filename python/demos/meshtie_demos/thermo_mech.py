@@ -245,8 +245,7 @@ if mesh.comm.size > 1:
     mesh, facet_marker, domain_marker = create_contact_mesh(mesh, facet_marker, domain_marker, [3, 4, 7, 8])
 
 # compiler options to improve performance
-cffi_options = ["-Ofast", "-march=native"]
-jit_options = {"cffi_extra_compile_args": cffi_options, "cffi_libraries": ["m"]}
+jit_options = {"cffi_extra_compile_args": [], "cffi_libraries": ["m"]}
 
 # Linear solver options
 ksp_tol = 1e-10
@@ -298,11 +297,7 @@ surfaces = adjacencylist(data, offsets)
 # initialise meshties
 meshties = MeshTie([facet_marker._cpp_object], surfaces, contact, mesh._cpp_object, quadrature_degree=3)
 meshties.generate_kernel_data(
-    Problem.Poisson,
-    Q._cpp_object,
-    {"T": T0._cpp_object, "kdt": kdt_custom._cpp_object},
-    gamma,
-    theta,
+    Problem.Poisson, Q._cpp_object, {"T": T0._cpp_object, "kdt": kdt_custom._cpp_object}, gamma, theta
 )
 
 # Create matrix and vector
@@ -393,18 +388,7 @@ F = form(F, jit_options=jit_options)
 J = form(J, jit_options=jit_options)
 
 elastic_problem = ThermoElasticProblem(
-    F,
-    J,
-    bcs,
-    meshties,
-    domain_marker,
-    u,
-    T0,
-    lmbda,
-    mu,
-    alpha_c,
-    np.float64(gamma * E),
-    np.float64(theta),
+    F, J, bcs, meshties, domain_marker, u, T0, lmbda, mu, alpha_c, np.float64(gamma * E), np.float64(theta)
 )
 
 # Set up Newton sovler

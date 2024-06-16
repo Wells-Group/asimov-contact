@@ -95,17 +95,9 @@ def test_projection(tmp_path, q_deg, surf, dim):
     data = np.array([surface_0_val, surface_1_val], dtype=np.int32)
     offsets = np.array([0, 2], dtype=np.int32)
     surfaces = adjacencylist(data, offsets)
-    search_mode = [
-        dolfinx_contact.cpp.ContactMode.ClosestPoint,
-        dolfinx_contact.cpp.ContactMode.ClosestPoint,
-    ]
+    search_mode = [dolfinx_contact.cpp.ContactMode.ClosestPoint, dolfinx_contact.cpp.ContactMode.ClosestPoint]
     contact = dolfinx_contact.cpp.Contact(
-        [facet_marker._cpp_object],
-        surfaces,
-        [(0, 1), (1, 0)],
-        mesh._cpp_object,
-        search_mode,
-        quadrature_degree=q_deg,
+        [facet_marker._cpp_object], surfaces, [(0, 1), (1, 0)], mesh._cpp_object, search_mode, quadrature_degree=q_deg
     )
     contact.create_distance_map(surf)
     gap = contact.pack_gap(surf)

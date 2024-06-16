@@ -207,7 +207,8 @@ def DG_jac_minus(u0, v0, w0, h, n, gamma, theta, sigma, gap, dS):
 
 
 def DG_rhs_tresca(u0, v0, h, n, gamma, theta, sigma, fric, dS, gdim):
-    """UFL version of the Tresca friction term for the unbiased Nitsche formulation."""
+    """UFL version of the Tresca friction term for the unbiased Nitsche
+    formulation."""
 
     def pt_g(u, a, b, c):
         return tangential_proj(u(a) - u(b) - h(a) * c * sigma(u(a)) * n(a), -n(b))
@@ -238,7 +239,8 @@ def DG_rhs_tresca(u0, v0, h, n, gamma, theta, sigma, fric, dS, gdim):
 
 
 def DG_jac_tresca(u0, v0, w0, h, n, gamma, theta, sigma, fric, dS, gdim):
-    """UFL version of the Jacobian for the Tresca friction term for the unbiased Nitsche formulation."""
+    """UFL version of the Jacobian for the Tresca friction term for the
+    unbiased Nitsche formulation."""
 
     def pt_g(u, a, b, c):
         return tangential_proj(u(a) - u(b) - h(a) * c * sigma(u(a)) * n(a), -n(b))
@@ -381,14 +383,16 @@ def DG_jac_coulomb(u0, v0, w0, h, n, gamma, theta, sigma, gap, fric, dS, gdim):
         * ufl.dot(d_alpha_minus, pt_g(v0, "-", "+", theta / gamma))
         * dS
     )
+
     return J
 
 
 def compute_dof_permutations_all(V_dg, V_cg, gap):
     """The meshes used for the two different formulations are
-    created independently of each other. Therefore we need to
-    determine how to map the dofs from one mesh to the other in
-    order to compare the results.
+    created independently of each other.
+
+    Therefore we need to determine how to map the dofs from one mesh to
+    the other in order to compare the results.
     """
     mesh_dg = V_dg.mesh
     mesh_cg = V_cg.mesh
@@ -435,15 +439,17 @@ def create_meshes(ct: str, gap: float, xdtype: npt.DTypeLike = np.float64) -> tu
         xdtype: Data type for mesh coordinates
 
     Note:
-        The triangular grid is a flat manifold with geometrical dimension 3.
+        The triangular grid is a flat manifold with geometrical
+        dimension 3.
 
     Note:
         The gap between two elements can be negative
 
     Returns:
-        Two meshes, (standard, custom) where the standard mesh is two elements
-        glued together at the contact surface. The custom mesh consists of two elements separate
-        by a distance `gap` in the `topological dimension - 1` direction.
+        Two meshes, (standard, custom) where the standard mesh is two
+        elements glued together at the contact surface. The custom mesh
+        consists of two elements separate by a distance `gap` in the
+        `topological dimension - 1` direction.
     """
     cell_type = to_type(ct)
     if MPI.COMM_WORLD.rank == 0:
@@ -543,10 +549,8 @@ def create_meshes(ct: str, gap: float, xdtype: npt.DTypeLike = np.float64) -> tu
     else:
         gdim = MPI.COMM_WORLD.bcast(None, root=0)
         num_nodes = MPI.COMM_WORLD.bcast(None, root=0)
-
         x_ufl = np.zeros((0, gdim), dtype=xdtype)
         x_custom = np.zeros((0, gdim), dtype=xdtype)
-
         cells_ufl = np.zeros((0, num_nodes), dtype=np.int64)
         cells_custom = np.zeros((0, num_nodes), dtype=np.int64)
 
@@ -575,7 +579,8 @@ def create_meshes(ct: str, gap: float, xdtype: npt.DTypeLike = np.float64) -> tu
 
 def locate_contact_facets_custom(V, gap):
     """This function locates the contact facets for custom assembly and ensures
-    that the correct facet is chosen if the gap is zero"""
+    that the correct facet is chosen if the gap is zero.
+    """
     # Retrieve mesh
     mesh = V.mesh
 
@@ -825,24 +830,14 @@ class TestUnbiased:
         offsets = np.array([0, 2], dtype=np.int32)
         surfaces = adjacencylist(data, offsets)
         contact_problem = ContactProblem(
-            [facet_marker],
-            surfaces,
-            [(0, 1), (1, 0)],
-            mesh_custom,
-            quadrature_degree,
-            [search, search],
+            [facet_marker], surfaces, [(0, 1), (1, 0)], mesh_custom, quadrature_degree, [search, search]
         )
         contact_problem.generate_contact_data(
-            frictionlaw,
-            V_custom,
-            {"u": u, "du": u1, "mu": mu0, "lambda": lmbda0, "fric": fric},
-            E * gamma,
-            theta,
+            frictionlaw, V_custom, {"u": u, "du": u1, "mu": mu0, "lambda": lmbda0, "fric": fric}, E * gamma, theta
         )
 
         # compiler options to improve performance
-        cffi_options = ["-Ofast", "-march=native"]
-        jit_options = {"cffi_extra_compile_args": cffi_options, "cffi_libraries": ["m"]}
+        jit_options = {"cffi_extra_compile_args": [], "cffi_libraries": ["m"]}
         # Generate residual data structures
         F_custom = _fem.form(F_custom, jit_options=jit_options)
         b1 = _fem.Function(V_custom)
@@ -1055,11 +1050,7 @@ class TestUnbiased:
         if problem == Problem.Poisson:
             coeffs = {"T": u1._cpp_object, "kdt": kdt_custom._cpp_object}
         elif problem == Problem.Elasticity:
-            coeffs = {
-                "u": u1._cpp_object,
-                "mu": mu_custom._cpp_object,
-                "lambda": lmbda_custom._cpp_object,
-            }
+            coeffs = {"u": u1._cpp_object, "mu": mu_custom._cpp_object, "lambda": lmbda_custom._cpp_object}
             gamma = gamma * E
         else:
             coeffs = {

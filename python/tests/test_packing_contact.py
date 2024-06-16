@@ -138,7 +138,8 @@ def compare_test_fn(fn_space, test_fn, grad_test_fn, q_indices, link, x_ref, cel
             expr = _fem.Expression(v, x_ref)
             expr_vals = expr.eval(mesh, cell_arr)
 
-            # Create expression vor evaluating derivative of test function and evaluate
+            # Create expression vor evaluating derivative of test
+            # function and evaluate
             if bs == 1:
                 expr2 = _fem.Expression(ufl.grad(v), x_ref)
             else:

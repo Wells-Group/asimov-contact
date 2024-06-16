@@ -102,9 +102,7 @@ def test_pack_coeff_on_facet(quadrature_degree, space, degree):
 
     # Find facets on boundary to integrate over
     facets = locate_entities_boundary(
-        mesh,
-        mesh.topology.dim - 1,
-        lambda x: np.logical_or(np.isclose(x[0], 0.0), np.isclose(x[0], 1.0)),
+        mesh, mesh.topology.dim - 1, lambda x: np.logical_or(np.isclose(x[0], 0.0), np.isclose(x[0], 1.0))
     )
     # Compuate integration entitites
     integration_entities, num_local = dolfinx_contact.compute_active_entities(
@@ -139,11 +137,7 @@ def test_pack_coeff_on_facet(quadrature_degree, space, degree):
             for i, entity in enumerate(integration_entities):
                 local_index = entity[1]
                 assert np.allclose(
-                    coeffs[i],
-                    expr_vals[
-                        i,
-                        gdim * cstride * local_index : gdim * cstride * (local_index + 1),
-                    ],
+                    coeffs[i], expr_vals[i, gdim * cstride * local_index : gdim * cstride * (local_index + 1)]
                 )
 
 

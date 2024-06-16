@@ -194,8 +194,7 @@ F = ufl.replace(F, {u: u + du})
 J = ufl.derivative(F, du, w)
 
 # compiler options to improve performance
-cffi_options = ["-Ofast", "-march=native"]
-jit_options = {"cffi_extra_compile_args": cffi_options, "cffi_libraries": ["m"]}
+jit_options = {"cffi_extra_compile_args": [], "cffi_libraries": ["m"]}
 # compiled forms for rhs and tangen system
 F_compiled = form(F, jit_options=jit_options)
 J_compiled = form(J, jit_options=jit_options)
@@ -211,11 +210,7 @@ T0.name = "temperature"
 search_mode = [ContactMode.ClosestPoint for _ in range(len(contact_pairs))]
 contact_problem = ContactProblem([facet_marker], surfaces, contact_pairs, mesh, 5, search_mode)
 contact_problem.generate_contact_data(
-    FrictionLaw.Frictionless,
-    V,
-    {"u": u, "du": du, "mu": mu_dg, "lambda": lmbda_dg},
-    E * gamma,
-    theta,
+    FrictionLaw.Frictionless, V, {"u": u, "du": du, "mu": mu_dg, "lambda": lmbda_dg}, E * gamma, theta
 )
 # define functions for newton solver
 

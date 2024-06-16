@@ -190,11 +190,11 @@ if __name__ == "__main__":
     J = ufl.derivative(F, du, w)
 
     # compiler options to improve performance
-    cffi_options = ["-Ofast", "-march=native"]
-    jit_options = {"cffi_extra_compile_args": cffi_options, "cffi_libraries": ["m"]}
+    jit_options = {"cffi_extra_compile_args": [], "cffi_libraries": ["m"]}
     # compiled forms for rhs and tangen system
     F_compiled = _fem.form(F, jit_options=jit_options)
     J_compiled = _fem.form(J, jit_options=jit_options)
+
     # create initial guess
     tree_cells = domain_marker.find(1)
 
@@ -250,11 +250,7 @@ if __name__ == "__main__":
     search_mode = [ContactMode.ClosestPoint for _ in range(len(contact_pairs))]
     contact_problem = ContactProblem([facet_marker], surfaces, contact_pairs, mesh, args.q_degree, search_mode)
     contact_problem.generate_contact_data(
-        FrictionLaw.Frictionless,
-        V,
-        {"u": u, "du": du, "mu": mu0, "lambda": lmbda0},
-        E * gamma,
-        theta,
+        FrictionLaw.Frictionless, V, {"u": u, "du": du, "mu": mu0, "lambda": lmbda0}, E * gamma, theta
     )
     solver_outfile = None
     log.set_log_level(log.LogLevel.WARNING)

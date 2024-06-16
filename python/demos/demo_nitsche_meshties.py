@@ -137,8 +137,7 @@ def run_demo(simplex, E, nu, gamma, theta, lifting, outfile, ksp_view, timing_vi
         )
 
     # compile forms
-    cffi_options = []
-    jit_options = {"cffi_extra_compile_args": cffi_options, "cffi_libraries": ["m"]}
+    jit_options = {"cffi_extra_compile_args": [], "cffi_libraries": ["m"]}
     F = form(F, jit_options=jit_options)
     J = form(J, jit_options=jit_options)
 
@@ -171,19 +170,9 @@ def run_demo(simplex, E, nu, gamma, theta, lifting, outfile, ksp_view, timing_vi
     # solver_outfile = outfile if ksp_view else None
 
     # initialise meshties
-    meshties = MeshTie(
-        [facet_marker._cpp_object],
-        surfaces,
-        contact,
-        mesh._cpp_object,
-        quadrature_degree=5,
-    )
+    meshties = MeshTie([facet_marker._cpp_object], surfaces, contact, mesh._cpp_object, quadrature_degree=5)
     meshties.generate_kernel_data(
-        Problem.Elasticity,
-        V._cpp_object,
-        {"lambda": lmbda._cpp_object, "mu": mu._cpp_object},
-        E * gamma,
-        theta,
+        Problem.Elasticity, V._cpp_object, {"lambda": lmbda._cpp_object, "mu": mu._cpp_object}, E * gamma, theta
     )
 
     # create matrix, vector

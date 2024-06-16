@@ -154,8 +154,7 @@ if __name__ == "__main__":
     J = ufl.derivative(F, du, w)
 
     # compiler options to improve performance
-    cffi_options = ["-Ofast", "-march=native"]
-    jit_options = {"cffi_extra_compile_args": cffi_options, "cffi_libraries": ["m"]}
+    jit_options = {"cffi_extra_compile_args": [], "cffi_libraries": ["m"]}
     # compiled forms for rhs and tangen system
     F_compiled = form(F, jit_options=jit_options)
     J_compiled = form(J, jit_options=jit_options)
@@ -201,11 +200,7 @@ if __name__ == "__main__":
     # Solve contact problem using Nitsche's method
     contact_problem = ContactProblem([facet_marker], surfaces, contact, mesh, args.q_degree, search_mode)
     contact_problem.generate_contact_data(
-        FrictionLaw.Coulomb,
-        V,
-        {"u": u, "du": du, "mu": mu_dg, "lambda": lmbda_dg, "fric": fric_dg},
-        E * 10,
-        -1,
+        FrictionLaw.Coulomb, V, {"u": u, "du": du, "mu": mu_dg, "lambda": lmbda_dg, "fric": fric_dg}, E * 10, -1
     )
 
     # define functions for newton solver

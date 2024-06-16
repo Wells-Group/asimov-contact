@@ -64,8 +64,8 @@ def solver(
     }
     # Cannot use GAMG with SNES, see: https://gitlab.com/petsc/petsc/-/issues/829
     petsc_snes = {"ksp_type": "cg", "ksp_rtol": 1e-5, "pc_type": "jacobi"}
-    # Load mesh and create identifier functions for the top (Displacement condition)
-    # and the bottom (contact condition)
+    # Load mesh and create identifier functions for the top
+    # (Displacement condition) and the bottom (contact condition)
     outdir = "meshes"
     os.system(f"mkdir -p {outdir}")
     if threed:

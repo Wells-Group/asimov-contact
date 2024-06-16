@@ -130,7 +130,6 @@ def test_raytracing_2D_corner(cell_type):
     mesh = dolfinx.mesh.create_unit_square(MPI.COMM_WORLD, 13, 11, cell_type)
     tdim = mesh.topology.dim
     facets = dolfinx.mesh.locate_entities_boundary(mesh, tdim - 1, lambda x: np.isclose(x[1], 1))
-
     integral_pairs, num_local = dolfinx_contact.cpp.compute_active_entities(
         mesh._cpp_object, facets, dolfinx.fem.IntegralType.exterior_facet
     )
