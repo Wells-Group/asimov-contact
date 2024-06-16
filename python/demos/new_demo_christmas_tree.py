@@ -4,13 +4,13 @@
 
 import argparse
 import sys
-import tempfile
-from pathlib import Path
 
 from mpi4py import MPI
 from petsc4py.PETSc import InsertMode, ScatterMode  # type: ignore
 
 import dolfinx.fem as _fem
+import dolfinx.io.gmshio
+import gmsh
 import numpy as np
 import ufl
 from dolfinx import default_scalar_type, log
@@ -24,7 +24,7 @@ from dolfinx.fem.petsc import (
 )
 from dolfinx.graph import adjacencylist
 from dolfinx.io import VTXWriter, XDMFFile
-from dolfinx.mesh import GhostMode, locate_entities_boundary, meshtags
+from dolfinx.mesh import locate_entities_boundary, meshtags
 from dolfinx_contact.cpp import ContactMode, find_candidate_surface_segment
 from dolfinx_contact.general_contact.contact_problem import ContactProblem, FrictionLaw
 from dolfinx_contact.helpers import (
@@ -35,7 +35,6 @@ from dolfinx_contact.helpers import (
     weak_dirichlet,
 )
 from dolfinx_contact.meshing import (
-    convert_mesh_new,
     create_christmas_tree_mesh,
     create_christmas_tree_mesh_3D,
 )
@@ -60,20 +59,17 @@ def run_solver(
     raytracing=False,
     threed=False,
 ):
-    # mesh_dir = Path("meshes")
-    # mesh_dir.mkdir(exist_ok=True)
-    # fname = mesh_dir / "xmas_tree"
+    gmsh.initialize()
+
     if threed:
-        with tempfile.TemporaryDirectory() as tmpdirname:
-            fname = Path(tmpdirname, "xmas_tree.msh")
-            create_christmas_tree_mesh_3D(filename=fname, res=res, split=split, n1=81, n2=41)
-            convert_mesh_new(fname, fname.with_suffix(".xdmf"), gdim=3)
-            with XDMFFile(MPI.COMM_WORLD, fname.with_suffix(".xdmf"), "r") as xdmf:
-                mesh = xdmf.read_mesh(ghost_mode=GhostMode.none)
-                domain_marker = xdmf.read_meshtags(mesh, "cell_marker")
-                tdim = mesh.topology.dim
-                mesh.topology.create_connectivity(tdim - 1, tdim)
-                facet_marker = xdmf.read_meshtags(mesh, "facet_marker")
+        name = "xmas_3D"
+        model = gmsh.model()
+        model.add(name)
+        model.setCurrent(name)
+        model = create_christmas_tree_mesh_3D(model, res=res, split=split, n1=81, n2=41)
+        mesh, domain_marker, facet_marker = dolfinx.io.gmshio.model_to_mesh(model, MPI.COMM_WORLD, 0, gdim=3)
+
+        tdim = mesh.topology.dim
 
         marker_offset = 6
         if mesh.comm.size > 1:
@@ -120,16 +116,14 @@ def run_solver(
         f = _fem.Constant(mesh, default_scalar_type(f_val))  # body force
 
     else:
-        with tempfile.TemporaryDirectory() as tmpdirname:
-            fname = Path(tmpdirname, "xmas_tree.msh")
-            create_christmas_tree_mesh(filename=fname, res=res, split=split)
-            convert_mesh_new(fname, fname.with_suffix(".xdmf"), gdim=2)
-            with XDMFFile(MPI.COMM_WORLD, fname.with_suffix(".xdmf"), "r") as xdmf:
-                mesh = xdmf.read_mesh()
-                tdim = mesh.topology.dim
-                domain_marker = xdmf.read_meshtags(mesh, name="cell_marker")
-                mesh.topology.create_connectivity(tdim - 1, tdim)
-                facet_marker = xdmf.read_meshtags(mesh, name="facet_marker")
+        name = "xmas_2D"
+        model = gmsh.model()
+        model.add(name)
+        model.setCurrent(name)
+        model = create_christmas_tree_mesh(model, res=res, split=split)
+        mesh, domain_marker, facet_marker = dolfinx.io.gmshio.model_to_mesh(model, MPI.COMM_WORLD, 0, gdim=2)
+
+        tdim = mesh.topology.dim
 
         marker_offset = 5
         if mesh.comm.size > 1:
@@ -148,6 +142,8 @@ def run_solver(
         f_val = [1.0, 0.5]
         t = _fem.Constant(mesh, default_scalar_type(t_val))  # traction
         f = _fem.Constant(mesh, default_scalar_type(f_val))  # body force
+
+    gmsh.finalize()
 
     ncells = mesh.topology.index_map(tdim).size_local
     indices = np.array(range(ncells), dtype=np.int32)

@@ -40,7 +40,7 @@ def create_circle_plane_mesh(
     and a box [-length/2, length/2]x[-height-gap-r,-gap-r]
     """
     center = [0, 0, 0]
-    if comm.rank == 0:
+    if comm.rank == rank:
         # Create circular mesh (divided into 4 segments)
         c = model.occ.addPoint(center[0], center[1], center[2])
         contact_pt = model.occ.addPoint(center[0], center[1] - r, center[2])

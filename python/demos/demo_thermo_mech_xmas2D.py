@@ -2,13 +2,12 @@
 #
 # SPDX-License-Identifier:    MIT
 
-import tempfile
-from pathlib import Path
-
 from mpi4py import MPI
 from petsc4py.PETSc import InsertMode, ScatterMode  # type: ignore
 
 import dolfinx.fem as _fem
+import dolfinx.io.gmshio
+import gmsh
 import numpy as np
 import ufl
 from dolfinx import default_scalar_type, io, log
@@ -21,7 +20,6 @@ from dolfinx.fem.petsc import (
     create_vector,
 )
 from dolfinx.graph import adjacencylist
-from dolfinx.io import XDMFFile
 from dolfinx_contact.cpp import ContactMode
 from dolfinx_contact.general_contact.contact_problem import ContactProblem, FrictionLaw
 from dolfinx_contact.helpers import (
@@ -31,20 +29,20 @@ from dolfinx_contact.helpers import (
     sigma_func,
     weak_dirichlet,
 )
-from dolfinx_contact.meshing import convert_mesh_new, create_christmas_tree_mesh
+from dolfinx_contact.meshing import create_christmas_tree_mesh
 from dolfinx_contact.newton_solver import NewtonSolver
 from dolfinx_contact.parallel_mesh_ghosting import create_contact_mesh
 
-with tempfile.TemporaryDirectory() as tmpdirname:
-    fname = Path(tmpdirname, "xmas_2D.msh")
-    create_christmas_tree_mesh(filename=fname, res=0.2)
-    convert_mesh_new(fname, fname.with_suffix(".xdmf"), gdim=2)
-    with XDMFFile(MPI.COMM_WORLD, fname.with_suffix(".xdmf"), "r") as xdmf:
-        mesh = xdmf.read_mesh()
-        domain_marker = xdmf.read_meshtags(mesh, name="cell_marker")
-        facet_marker = xdmf.read_meshtags(mesh, name="facet_marker")
-    tdim = mesh.topology.dim
-    mesh.topology.create_connectivity(tdim - 1, tdim)
+name = "xmas_2D"
+model = gmsh.model()
+model.add(name)
+model.setCurrent(name)
+model = create_christmas_tree_mesh(model, res=0.2)
+mesh, domain_marker, facet_marker = dolfinx.io.gmshio.model_to_mesh(model, MPI.COMM_WORLD, 0, gdim=2)
+
+
+tdim = mesh.topology.dim
+mesh.topology.create_connectivity(tdim - 1, tdim)
 
 contact_bdy_1 = 5
 contact_bdy_2 = 6
