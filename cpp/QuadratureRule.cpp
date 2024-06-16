@@ -24,7 +24,7 @@ QuadratureRule::QuadratureRule(dolfinx::mesh::CellType cell, int degree,
   basix::cell::type b_ct = dolfinx::mesh::cell_type_to_basix_type(cell);
   _num_sub_entities = basix::cell::num_sub_entities(b_ct, dim);
   int tdim = basix::cell::topological_dimension(b_ct);
-  int _tdim = basix::cell::topological_dimension(b_ct);
+  // int _tdim = basix::cell::topological_dimension(b_ct);
 
   assert(dim <= 3);
 
@@ -84,7 +84,7 @@ QuadratureRule::QuadratureRule(dolfinx::mesh::CellType cell, int degree,
           e_tab_shape.cbegin(), e_tab_shape.cend(), 1, std::multiplies{}));
 
       entity_element.tabulate(
-          0, q_points, {q_weights.size(), q_weights.size() / q_weights.size()},
+          0, q_points, {q_weights.size(), q_points.size() / q_weights.size()},
           reference_entity_b);
 
       mdspan_t<const double, 4> basis_full(reference_entity_b.data(),
@@ -97,14 +97,14 @@ QuadratureRule::QuadratureRule(dolfinx::mesh::CellType cell, int degree,
           = basix::cell::sub_entity_geometry<double>(b_ct, dim, i);
       mdspan_t<const double, 2> coords(sub_geomb.data(), sub_geom_shape);
 
-      // Push forward quadrature point from reference entity to reference
-      // entity on cell
+      // Push forward quadrature point from reference entity to
+      // reference entity on cell
       const std::size_t offset = _points.size();
       _points.resize(_points.size() + q_weights.size() * coords.extent(1));
       mdspan_t<double, 2> entity_qp(_points.data() + offset, q_weights.size(),
                                     coords.extent(1));
 
-      assert(coords.extent(1) == (std::size_t)_tdim);
+      assert(coords.extent(1) == (std::size_t)tdim);
       dolfinx::math::dot(phi, coords, entity_qp);
       const std::size_t weights_offset = _weights.size();
       _weights.resize(_weights.size() + q_weights.size());
