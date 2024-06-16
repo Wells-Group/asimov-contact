@@ -18,17 +18,16 @@ using namespace dolfinx_contact;
 //----------------------------------------------------------------------------
 QuadratureRule::QuadratureRule(dolfinx::mesh::CellType cell, int degree,
                                int dim, basix::quadrature::type type)
-    : _cell_type(cell), _degree(degree), _type(type), _dim(dim)
+    : _cell_type(cell), _degree(degree), _type(type), _dim(dim),
+      _num_sub_entities(basix::cell::num_sub_entities(
+          dolfinx::mesh::cell_type_to_basix_type(cell), dim))
 {
-
   basix::cell::type b_ct = dolfinx::mesh::cell_type_to_basix_type(cell);
-  _num_sub_entities = basix::cell::num_sub_entities(b_ct, dim);
   int tdim = basix::cell::topological_dimension(b_ct);
-  // int _tdim = basix::cell::topological_dimension(b_ct);
 
   assert(dim <= 3);
 
-  // If cell dimension no pushing forward
+  // If cell dimension no push-forward
   if (tdim == dim)
   {
     std::array<std::vector<double>, 2> quadrature
@@ -78,7 +77,7 @@ QuadratureRule::QuadratureRule(dolfinx::mesh::CellType cell, int degree,
 
       num_points_per_entity[i] = q_weights.size();
 
-      const std::array<std::size_t, 4> e_tab_shape
+      std::array<std::size_t, 4> e_tab_shape
           = entity_element.tabulate_shape(0, q_weights.size());
       std::vector<double> reference_entity_b(std::reduce(
           e_tab_shape.cbegin(), e_tab_shape.cend(), 1, std::multiplies{}));
@@ -99,23 +98,30 @@ QuadratureRule::QuadratureRule(dolfinx::mesh::CellType cell, int degree,
 
       // Push forward quadrature point from reference entity to
       // reference entity on cell
-      const std::size_t offset = _points.size();
+      std::size_t offset = _points.size();
       _points.resize(_points.size() + q_weights.size() * coords.extent(1));
       mdspan_t<double, 2> entity_qp(_points.data() + offset, q_weights.size(),
                                     coords.extent(1));
 
       assert(coords.extent(1) == (std::size_t)tdim);
       dolfinx::math::dot(phi, coords, entity_qp);
-      const std::size_t weights_offset = _weights.size();
+      std::size_t weights_offset = _weights.size();
       _weights.resize(_weights.size() + q_weights.size());
       std::copy(q_weights.cbegin(), q_weights.cend(),
                 std::next(_weights.begin(), weights_offset));
     }
+
     _entity_offset = std::vector<std::size_t>(_num_sub_entities + 1, 0);
     std::partial_sum(num_points_per_entity.begin(), num_points_per_entity.end(),
                      std::next(_entity_offset.begin()));
   }
 }
+//----------------------------------------------------------------------------
+const std::vector<double>& QuadratureRule::points() const { return _points; }
+//----------------------------------------------------------------------------
+const std::vector<double>& QuadratureRule::weights() const { return _weights; }
+//----------------------------------------------------------------------------
+int QuadratureRule::dim() const { return _dim; }
 //----------------------------------------------------------------------------
 dolfinx::mesh::CellType QuadratureRule::cell_type(int i) const
 {
@@ -155,5 +161,10 @@ std::span<const double> QuadratureRule::weights(int i) const
   assert(i < _num_sub_entities);
   return std::span(_weights.data() + _entity_offset[i],
                    _entity_offset[i + 1] - _entity_offset[i]);
+}
+//----------------------------------------------------------------------------
+const std::vector<std::size_t>& QuadratureRule::offset() const
+{
+  return _entity_offset;
 }
 //----------------------------------------------------------------------------

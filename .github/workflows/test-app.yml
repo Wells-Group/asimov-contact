@@ -52,15 +52,16 @@ jobs:
     needs: lint
     runs-on: ubuntu-latest
     container: ghcr.io/fenics/test-env:current-mpich
-    strategy:
-      matrix:
-        # Complex mode not working
-        # run_mode: ["Release", "Debug"]
-        petsc_mode: ["real"]
-        petsc_precision: ["64"]
-        petsc_int: ["32"]
+    # strategy:
+    #   matrix:
+    #     # Complex mode not working
+    #     # run_mode: ["Release", "Debug"]
+    #     petsc_mode: ["real"]
+    #     petsc_precision: ["64"]
+    #     petsc_int: ["32"]
     env:
-      PETSC_ARCH: linux-gnu-${{ matrix.petsc_mode }}${{ matrix.petsc_precision}}-${{ matrix.petsc_int }}
+      # PETSC_ARCH: linux-gnu-${{ matrix.petsc_mode }}${{ matrix.petsc_precision}}-${{ matrix.petsc_int }}
+      PETSC_ARCH: linux-gnu-real64-32
       # OMPI_ALLOW_RUN_AS_ROOT: 1
       # OMPI_ALLOW_RUN_AS_ROOT_CONFIRM: 1
       # OMPI_MCA_rmaps_base_oversubscribe: 1

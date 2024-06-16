@@ -18,7 +18,6 @@ template <typename T, std::size_t d,
 using mdspan_t = MDSPAN_IMPL_STANDARD_NAMESPACE::mdspan<
     T, MDSPAN_IMPL_STANDARD_NAMESPACE::dextents<std::size_t, d>, S>;
 
-
 /// @brief Quadrature schemes for each entity of given dimension dim of
 /// a reference cell.
 class QuadratureRule
@@ -40,14 +39,14 @@ public:
   ///
   /// The shape is (entity index, num_quad_points, dim). Storage is
   /// row-major.
-  const std::vector<double>& points() const { return _points; }
+  const std::vector<double>& points() const;
 
   /// Return a list of quadrature weights for each entity in the cell
   /// (using local entity index as in DOLFINx/Basix)
-  const std::vector<double>& weights() const { return _weights; }
+  const std::vector<double>& weights() const;
 
   /// Return dimension of entity in the quadrature rule
-  int dim() const { return _dim; }
+  int dim() const;
 
   /// @brief Cell type for the ith quadrature rule
   /// @param[in] i Local entity number
@@ -79,7 +78,7 @@ public:
   std::span<const double> weights(int i) const;
 
   /// Return offset for quadrature rule of the ith entity
-  const std::vector<std::size_t>& offset() const { return _entity_offset; }
+  const std::vector<std::size_t>& offset() const;
 
 private:
   // What is this?
