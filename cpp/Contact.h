@@ -138,7 +138,7 @@ public:
   /// available types
   /// @returns Mat The PETSc matrix
   Mat create_petsc_matrix(const dolfinx::fem::Form<PetscScalar>& a,
-                          const std::string& type) const;
+                          std::string type) const;
 
   /// Assemble matrix over exterior facets (for contact facets)
   ///
