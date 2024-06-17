@@ -124,9 +124,9 @@ dolfinx_contact::Contact::Contact(
       _reference_contact_shape(contact_pairs.size()),
       _qp_phys(surfaces.array().size()), _max_links(contact_pairs.size()),
       _cell_facet_pairs(create_cell_facet_pairs(*mesh, markers, surfaces)),
+      _submesh(*mesh, _cell_facet_pairs.array()),
       _local_facets(surfaces.array().size()), _mode(mode)
 {
-  // std::size_t num_surfaces = surfaces.array().size();
   assert(_mesh);
   for (std::size_t s = 0; s < markers.size(); ++s)
   {
@@ -138,17 +138,11 @@ dolfinx_contact::Contact::Contact(
       int index = surfaces.offsets()[s] + int(i);
       auto [cell_facet_pairs, num_local] = compute_active_entities(
           *mesh, facets, dolfinx::fem::IntegralType::exterior_facet);
-      // all_facet_pairs.insert(all_facet_pairs.end(),
-      //                        std::begin(cell_facet_pairs),
-      //                        std::end(cell_facet_pairs));
-      // offsets.push_back(offsets.back() + cell_facet_pairs.size());
 
       // store how many facets are owned by the process
       _local_facets[index] = num_local;
     }
   }
-
-  _submesh = SubMesh(*mesh, _cell_facet_pairs.array());
 }
 //----------------------------------------------------------------------------
 std::pair<std::vector<double>, std::array<std::size_t, 3>>

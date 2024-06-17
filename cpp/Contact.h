@@ -213,8 +213,8 @@ public:
   /// _qp_phys, _phi_ref_facets
   void create_distance_map(int pair);
 
-  /// Compute and pack the gap function for each quadrature point the set of
-  /// facets.
+  /// Compute and pack the gap function for each quadrature point the
+  /// set of facets.
   ///
   /// For a set of facets; go through the quadrature points on each
   /// facet find the closest facet on the other surface and compute the
@@ -246,9 +246,9 @@ public:
   pack_grad_test_functions(int pair,
                            const dolfinx::fem::FunctionSpace<double>& V) const;
 
-  /// Remove points from facet map with a distance larger than tol
-  /// in the surface or if the angle of distance vector and opposite surface is
-  /// too large
+  /// Remove points from facet map with a distance larger than tol in
+  /// the surface or if the angle of distance vector and opposite
+  /// surface is too large
   /// @param[in] pair index of the contact pair
   /// @param[in] gap for computing distance
   /// @param[in] n_y normals for checking angle
@@ -260,6 +260,7 @@ public:
   ///
   /// Compute function on opposite surface at quadrature points of
   /// facets
+  ///
   /// @param[in] pair TODO
   /// @param[in] u TODO
   /// @return TODO
@@ -340,13 +341,13 @@ private:
   // maximum number of cells linked to a cell on ith surface
   std::vector<std::size_t> _max_links;
 
-  // submesh containing all cells linked to facets on any of the contact
-  // surfaces
-  SubMesh _submesh;
-
   // Adjacency list linking facets as (cell, facet) pairs to the index of the
   // surface. The pairs are flattened row-major
   dolfinx::graph::AdjacencyList<std::int32_t> _cell_facet_pairs;
+
+  // submesh containing all cells linked to facets on any of the contact
+  // surfaces
+  SubMesh _submesh;
 
   // number of facets owned by process for each surface
   std::vector<std::size_t> _local_facets;

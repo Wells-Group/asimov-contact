@@ -22,10 +22,9 @@ QuadratureRule::QuadratureRule(dolfinx::mesh::CellType cell, int degree,
       _num_sub_entities(basix::cell::num_sub_entities(
           dolfinx::mesh::cell_type_to_basix_type(cell), dim))
 {
+  assert(dim <= 3);
   basix::cell::type b_ct = dolfinx::mesh::cell_type_to_basix_type(cell);
   int tdim = basix::cell::topological_dimension(b_ct);
-
-  assert(dim <= 3);
 
   // If cell dimension no push-forward
   if (tdim == dim)
