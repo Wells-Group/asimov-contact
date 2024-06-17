@@ -654,17 +654,7 @@ dolfinx_contact::get_update_normal(
     };
   }
 }
-//-------------------------------------------------------------------------------------
-
-/// Compute the active entities in DOLFINx format for a given integral type over
-/// a set of entities If the integral type is cell, return the input, if it is
-/// exterior facets, return a list of pairs (cell, local_facet_index), and if it
-/// is interior facets, return a list of tuples (cell_0, local_facet_index_0,
-/// cell_1, local_facet_index_1) for each entity.
-/// @param[in] mesh The mesh
-/// @param[in] entities List of mesh entities
-/// @param[in] integral The type of integral
-/// @return list of active entities sorted by cell and size_local
+//----------------------------------------------------------------------------
 std::pair<std::vector<std::int32_t>, std::size_t>
 dolfinx_contact::compute_active_entities(
     const dolfinx::mesh::Mesh<double>& mesh,
