@@ -384,7 +384,7 @@ void dolfinx_contact::evaluate_basis_functions(
 
   // Get topology data
   std::shared_ptr<const dolfinx::common::IndexMap> map
-      = topology->index_map((int)tdim);
+      = topology->index_map(tdim);
 
   // Get geometry data
   std::span<const double> x_g = geometry.x();
@@ -450,7 +450,7 @@ void dolfinx_contact::evaluate_basis_functions(
 
   // Compute basis on reference element
   element->tabulate(basis_reference_valuesb, x, {num_cells, tdim},
-                    (int)num_derivatives);
+                    num_derivatives);
   mdspan_t<const double, 4> basis_reference_values(
       basis_reference_valuesb.data(), reference_shape);
 
@@ -518,7 +518,7 @@ void dolfinx_contact::evaluate_basis_functions(
                         + j * cells.size() * num_basis_values
                         + p * num_basis_values,
                     num_basis_values),
-          cell_info, cell_index, (int)reference_value_size);
+          cell_info, cell_index, reference_value_size);
 
       // Push basis forward to physical element
       auto _U = MDSPAN_IMPL_STANDARD_NAMESPACE::submdspan(
@@ -779,6 +779,7 @@ dolfinx_contact::entities_to_geometry_dofs(
     // Skip if negative cell index
     if (idx < 0)
       continue;
+
     const std::int32_t cell = e_to_c->links(idx).front();
     std::span<const int> cell_entities = c_to_e->links(cell);
     auto it = std::find(cell_entities.begin(), cell_entities.end(), idx);
@@ -827,10 +828,11 @@ std::vector<int32_t> dolfinx_contact::facet_indices_from_pair(
 std::vector<std::size_t> dolfinx_contact::find_candidate_facets(
     const dolfinx::mesh::Mesh<double>& quadrature_mesh,
     const dolfinx::mesh::Mesh<double>& candidate_mesh,
-    const std::int32_t quadrature_facet,
-    std::span<const std::int32_t> candidate_facets, const double radius = -1.)
+    std::int32_t quadrature_facet,
+    std::span<const std::int32_t> candidate_facets, double radius)
 {
   std::array<std::int32_t, 1> q_facet = {quadrature_facet};
+
   // Find midpoints of quadrature and candidate facets
   std::vector<double> quadrature_midpoints = dolfinx::mesh::compute_midpoints(
       quadrature_mesh, quadrature_mesh.topology()->dim() - 1,
@@ -845,16 +847,16 @@ std::vector<std::size_t> dolfinx_contact::find_candidate_facets(
   std::vector<double> dists;
   for (std::size_t i = 0; i < candidate_facets.size(); ++i)
   {
-
-    // compute distance betweeen midpoints of ith candidate facet
-    // and jth quadrature facet
+    // compute distance betweeen midpoints of ith candidate facet and
+    // jth quadrature facet
     dist = 0;
     for (std::size_t k = 0; k < 3; ++k)
     {
       diff = std::abs(quadrature_midpoints[k] - candidate_midpoints[i * 3 + k]);
       dist += diff * diff;
     }
-    if (radius < 0 || dist < r2)
+
+    if (radius < 0 or dist < r2)
     {
       cand_patch.push_back(i); // save index of facet within facet array
       dists.push_back(dist);   // save distance for sorting
@@ -864,7 +866,7 @@ std::vector<std::size_t> dolfinx_contact::find_candidate_facets(
   std::vector<int> perm(cand_patch.size());
   std::iota(perm.begin(), perm.end(), 0); // Initializing
   std::sort(perm.begin(), perm.end(),
-            [&](int i, int j) { return dists[i] < dists[j]; });
+            [&dists](int i, int j) { return dists[i] < dists[j]; });
   std::vector<size_t> sorted_patch(cand_patch.size());
   for (std::size_t i = 0; i < cand_patch.size(); ++i)
     sorted_patch[i] = cand_patch[perm[i]];
@@ -881,6 +883,7 @@ std::vector<std::int32_t> dolfinx_contact::find_candidate_surface_segment(
     // return all facets for negative radius / no radius
     return std::vector<std::int32_t>(candidate_facets);
   }
+
   // Find midpoints of quadrature and candidate facets
   std::vector<double> quadrature_midpoints = dolfinx::mesh::compute_midpoints(
       mesh, mesh.topology()->dim() - 1, quadrature_facets);
@@ -892,7 +895,6 @@ std::vector<std::int32_t> dolfinx_contact::find_candidate_surface_segment(
   double diff; // used for squared difference between two coordinates
 
   std::vector<std::int32_t> cand_patch;
-
   for (std::size_t i = 0; i < candidate_facets.size(); ++i)
   {
     for (std::size_t j = 0; j < quadrature_facets.size(); ++j)
@@ -906,10 +908,12 @@ std::vector<std::int32_t> dolfinx_contact::find_candidate_surface_segment(
                         - candidate_midpoints[i * 3 + k]);
         dist += diff * diff;
       }
+
       if (dist < r2)
       {
         // if distance < radius add candidate_facet to output
         cand_patch.push_back(candidate_facets[i]);
+
         // break to avoid adding the same facet more than once
         break;
       }
@@ -959,6 +963,7 @@ void dolfinx_contact::compute_physical_points(
       std::copy_n(std::next(mesh_geometry.begin(), 3 * x_dofs[j]), gdim,
                   std::next(coordinate_dofsb.begin(), j * gdim));
     }
+
     // push forward points on reference element
     const std::array<std::size_t, 2> range
         = {offsets[facets[i + 1]], offsets[facets[i + 1] + 1]};
@@ -972,8 +977,7 @@ void dolfinx_contact::compute_physical_points(
                                                           phi_f);
   }
 }
-
-//-------------------------------------------------------------------------------------
+//----------------------------------------------------------------------------
 std::tuple<dolfinx::graph::AdjacencyList<std::int32_t>, std::vector<double>,
            std::array<std::size_t, 2>>
 dolfinx_contact::compute_distance_map(
@@ -987,12 +991,12 @@ dolfinx_contact::compute_distance_map(
   const dolfinx::mesh::Geometry<double>& geometry = quadrature_mesh.geometry();
   const dolfinx::fem::CoordinateElement<double>& cmap = geometry.cmap();
 
-  const std::size_t gdim = geometry.dim();
+  std::size_t gdim = geometry.dim();
   auto topology = quadrature_mesh.topology();
   const dolfinx::mesh::CellType cell_type = topology->cell_type();
   error::check_cell_type(cell_type);
 
-  const int tdim = topology->dim();
+  int tdim = topology->dim();
   assert(q_rule.dim() == tdim - 1);
   assert(q_rule.cell_type(0)
          == dolfinx::mesh::cell_entity_type(cell_type, tdim - 1, 0));

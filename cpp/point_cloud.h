@@ -7,7 +7,7 @@
 #pragma once
 
 #include <dolfinx/graph/AdjacencyList.h>
-#include <vector>
+#include <span>
 
 namespace dolfinx_contact
 {

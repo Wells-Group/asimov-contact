@@ -242,7 +242,7 @@ Mat Contact::create_petsc_matrix(const dolfinx::fem::Form<PetscScalar>& a,
     std::span<const std::int32_t> parent_cells = _submesh.parent_cells();
 
     auto cell_facet_pairs = _cell_facet_pairs.links(contact_pair.front());
-    for (int i = 0; i < (int)(2 * _local_facets[contact_pair.front()]); i += 2)
+    for (std::size_t i = 0; i < 2 * _local_facets[contact_pair.front()]; i += 2)
     {
       std::int32_t cell = cell_facet_pairs[i];
       std::span<const int> cell_dofs = dofmap->cell_dofs(cell);
@@ -346,7 +346,7 @@ std::pair<std::vector<PetscScalar>, int> Contact::pack_nx(int pair) const
   error::check_cell_type(quadrature_mesh->topology()->cell_type());
   const std::size_t num_q_points = _quadrature_rule.num_points(0);
   std::vector<PetscScalar> normals(num_facets * num_q_points * gdim, 0.0);
-  const int cstride = (int)num_q_points * gdim;
+  const int cstride = num_q_points * gdim;
 
   // return if no facets on process
   if (num_facets == 0)
@@ -467,7 +467,7 @@ void dolfinx_contact::Contact::max_links(int pair)
   for (std::size_t i = 0; i < active_facets.size(); i += 2)
   {
     std::vector<std::int32_t> linked_cells;
-    for (auto link : map->links((int)i / 2))
+    for (auto link : map->links(i / 2))
     {
       if (link >= 0)
       {
@@ -512,7 +512,7 @@ std::pair<std::vector<PetscScalar>, int> Contact::pack_gap(int pair) const
 
   // Pack gap function for each quadrature point on each facet
   std::vector<PetscScalar> c(num_facets * num_q_point * gdim, 0.0);
-  int cstride = (int)num_q_point * gdim;
+  int cstride = num_q_point * gdim;
 
   // return if no facets on process
   if (num_facets == 0)
@@ -566,8 +566,8 @@ std::pair<std::vector<PetscScalar>, int> Contact::pack_gap(int pair) const
   mdspan_t<const double, 4> full_basis(cmap_basis.data(), basis_shape);
   for (std::size_t i = 0; i < num_facets; ++i)
   {
-    int offset = (int)i * cstride;
-    auto facets = candidate_map->links((int)i);
+    int offset = i * cstride;
+    auto facets = candidate_map->links(i);
     assert(facets.size() == num_q_point);
     for (std::size_t q = 0; q < num_q_point; ++q)
     {
@@ -1051,7 +1051,7 @@ dolfinx_contact::Contact::pack_ny(int pair) const
   mdspan_t<double, 2> J(Jb.data(), gdim, tdim);
   mdspan_t<double, 2> K(Kb.data(), tdim, gdim);
   mdspan_t<double, 4> full_basis(cmap_basisb.data(), basis_shape);
-  for (int i = 0; i < (int)num_facets; ++i)
+  for (std::size_t i = 0; i < num_facets; ++i)
   {
     auto facets = candidate_map->links(i);
     assert(facets.size() == num_q_points);
@@ -1179,7 +1179,7 @@ void Contact::assemble_matrix(mat_set_fn& mat_set, int pair,
     if (max_links > 0)
     {
       assert(map);
-      auto connected_facets = map->links((int)i / 2);
+      auto connected_facets = map->links(i / 2);
       q_indices.reserve(connected_facets.size());
 
       // NOTE: Should probably be pre-computed
@@ -1305,7 +1305,7 @@ void Contact::assemble_vector(std::span<PetscScalar> b, int pair,
     if (max_links > 0)
     {
       assert(map);
-      auto connected_facets = map->links((int)i / 2);
+      auto connected_facets = map->links(i / 2);
       q_indices.reserve(connected_facets.size());
 
       // NOTE: Should probably be pre-computed
@@ -1393,7 +1393,7 @@ std::pair<std::vector<PetscScalar>, int> Contact::pack_grad_test_functions(
   const std::vector<double>& reference_x = _reference_contact_points[pair];
   for (std::size_t i = 0; i < num_facets; i++)
   {
-    std::span<const int> links = map->links((int)i);
+    std::span<const int> links = map->links(i);
     assert(links.size() == num_q_points);
     for (std::size_t j = 0; j < num_q_points; j++)
     {
@@ -1517,7 +1517,7 @@ Contact::pack_grad_u_contact(int pair,
   std::vector<std::int32_t> cells(num_facets * num_q_points, -1);
   for (std::size_t i = 0; i < num_facets; ++i)
   {
-    auto links = map->links((int)i);
+    auto links = map->links(i);
     assert(links.size() == num_q_points);
     for (std::size_t q = 0; q < num_q_points; ++q)
     {
@@ -1550,7 +1550,7 @@ Contact::pack_grad_u_contact(int pair,
   std::vector<PetscScalar> coefficients(num_basis_functions * bs_element);
   for (std::size_t i = 0; i < num_facets; ++i)
   {
-    auto links = map->links((int)i);
+    auto links = map->links(i);
     for (std::size_t q = 0; q < num_q_points; ++q)
     {
       if (links[q] < 0)

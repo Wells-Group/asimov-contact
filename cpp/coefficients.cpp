@@ -41,7 +41,7 @@ void dolfinx_contact::transformed_push_forward(
 
   // Permute the reference values to account for the cell's
   // orientation
-  transformation(element_basisb, cell_info, cell, (int)basis_values.extent(2));
+  transformation(element_basisb, cell_info, cell, basis_values.extent(2));
 
   // Push basis forward to physical element
   auto _u = MDSPAN_IMPL_STANDARD_NAMESPACE::submdspan(
@@ -81,7 +81,7 @@ dolfinx_contact::pack_coefficient_quadrature(
   }
 
   // Create quadrature rule
-  QuadratureRule q_rule(cell_type, q_degree, (int)entity_dim,
+  QuadratureRule q_rule(cell_type, q_degree, entity_dim,
                         basix::quadrature::type::Default);
 
   // Get element information
@@ -259,7 +259,7 @@ dolfinx_contact::pack_coefficient_quadrature(
       auto dofs = dofmap->cell_dofs(cell);
       for (std::size_t d = 0; d < dofs.size(); ++d)
       {
-        const int pos_v = (int)dofmap_bs * dofs[d];
+        const int pos_v = dofmap_bs * dofs[d];
 
         for (std::size_t q = 0; q < num_points_per_entity; ++q)
           for (std::size_t k = 0; k < dofmap_bs; ++k)
@@ -297,7 +297,7 @@ dolfinx_contact::pack_coefficient_quadrature(
       // Loop over all dofs in cell
       for (std::size_t d = 0; d < dofs.size(); ++d)
       {
-        const int pos_v = (int)dofmap_bs * dofs[d];
+        const int pos_v = dofmap_bs * dofs[d];
         // Unroll dofmap
         for (std::size_t b = 0; b < dofmap_bs; ++b)
         {
@@ -353,7 +353,7 @@ dolfinx_contact::pack_gradient_quadrature(
   }
 
   // Create quadrature rule
-  QuadratureRule q_rule(cell_type, q_degree, (int)entity_dim,
+  QuadratureRule q_rule(cell_type, q_degree, entity_dim,
                         basix::quadrature::type::Default);
 
   // Get element information
@@ -477,7 +477,8 @@ dolfinx_contact::pack_gradient_quadrature(
     // Loop over all dofs in cell
     for (std::size_t d = 0; d < dofs.size(); ++d)
     {
-      const int pos_v = (int)dofmap_bs * dofs[d];
+      const int pos_v = dofmap_bs * dofs[d];
+
       // Unroll dofmap
       for (std::size_t b = 0; b < dofmap_bs; ++b)
       {

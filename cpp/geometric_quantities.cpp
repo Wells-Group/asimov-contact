@@ -12,8 +12,8 @@ using namespace dolfinx_contact;
 std::vector<double> dolfinx_contact::allocate_pull_back_nonaffine(
     const dolfinx::fem::CoordinateElement<double>& cmap, int gdim, int tdim)
 {
-  const std::array<std::size_t, 4> c_shape = cmap.tabulate_shape(1, 1);
-  const std::size_t basis_size
+  std::array<std::size_t, 4> c_shape = cmap.tabulate_shape(1, 1);
+  std::size_t basis_size
       = std::reduce(c_shape.cbegin(), c_shape.cend(), 1, std::multiplies{});
   return std::vector<double>(2 * gdim * tdim + basis_size + 9);
 }
@@ -25,11 +25,12 @@ void dolfinx_contact::pull_back_nonaffine(
     mdspan_t<const double, 2> cell_geometry, double tol, const int max_it)
 {
   assert((std::size_t)cmap.dim() == cell_geometry.extent(0));
+
   // Temporary data structures for Newton iteration
-  const std::size_t gdim = x.size();
-  const std::size_t tdim = X.size();
-  const std::array<std::size_t, 4> c_shape = cmap.tabulate_shape(1, 1);
-  const std::size_t basis_size
+  std::size_t gdim = x.size();
+  std::size_t tdim = X.size();
+  std::array<std::size_t, 4> c_shape = cmap.tabulate_shape(1, 1);
+  std::size_t basis_size
       = std::reduce(c_shape.cbegin(), c_shape.cend(), 1, std::multiplies{});
   assert(work_array.size() >= basis_size + 2 * gdim * tdim);
 
@@ -82,7 +83,8 @@ void dolfinx_contact::pull_back_nonaffine(
     // Compute dot(dX, dX)
     auto dX_squared = std::transform_reduce(
         dX.begin(), std::next(dX.begin(), tdim), 0.0, std::plus<double>(),
-        [](const auto v) { return v * v; });
+        [](auto v) { return v * v; });
+
     if (std::sqrt(dX_squared) < tol)
       break;
   }
@@ -98,12 +100,12 @@ void dolfinx_contact::pull_back_nonaffine(
 std::array<double, 3> dolfinx_contact::push_forward_facet_normal(
     std::span<double> work_array, std::span<const double> x, std::size_t gdim,
     std::size_t tdim, mdspan_t<const double, 2> coordinate_dofs,
-    const std::size_t facet_index,
+    std::size_t facet_index,
     const dolfinx::fem::CoordinateElement<double>& cmap,
     mdspan_t<const double, 2> reference_normals)
 {
-  const std::array<std::size_t, 4> c_shape = cmap.tabulate_shape(1, 1);
-  const std::size_t basis_size
+  std::array<std::size_t, 4> c_shape = cmap.tabulate_shape(1, 1);
+  std::size_t basis_size
       = std::reduce(c_shape.cbegin(), c_shape.cend(), 1, std::multiplies{});
   assert(work_array.size() >= 3 + basis_size + 2 * gdim * tdim);
 
@@ -119,8 +121,8 @@ std::array<double, 3> dolfinx_contact::push_forward_facet_normal(
                                basis_size);
   if (cmap.is_affine())
   {
-    // Affine Jacobian can be computed at any point in the cell (0,0,0) in
-    // the reference cell
+    // Affine Jacobian can be computed at any point in the cell (0,0,0)
+    // in the reference cell
     std::fill(X.begin(), X.end(), 0);
     cmap.tabulate(1, X.subspan(0, tdim), {1, tdim}, basis_span);
 
@@ -133,8 +135,8 @@ std::array<double, 3> dolfinx_contact::push_forward_facet_normal(
   }
   else
   {
-    // For non-affine geometries we have to compute the point in the reference
-    // cell, which is a nonlinear operation.
+    // For non-affine geometries we have to compute the point in the
+    // reference cell, which is a nonlinear operation.
     pull_back_nonaffine(X.subspan(0, tdim), work_array, x.subspan(0, gdim),
                         cmap, coordinate_dofs);
 
@@ -170,15 +172,15 @@ dolfinx_contact::compute_circumradius(const dolfinx::mesh::Mesh<double>& mesh,
   {
   case dolfinx::mesh::CellType::triangle:
   {
-    // Formula for circumradius of a triangle with sides with length a, b, c
-    // is R = a b c / (4 A) where A is the area of the triangle
-    const double ref_area
-        = basix::cell::volume<double>(basix::cell::type::triangle);
+    // Formula for circumradius of a triangle with sides with length a,
+    // b, c is R = a b c / (4 A) where A is the area of the triangle
+    double ref_area = basix::cell::volume<double>(basix::cell::type::triangle);
     double area = ref_area * std::abs(detJ);
 
+    // Array to hold lenghts of sides of triangle
+    std::array<double, 3> sides = {0, 0, 0};
+
     // Compute the lenghts of each side of the cell
-    std::array<double, 3> sides
-        = {0, 0, 0}; // Array to hold lenghts of sides of triangle
     for (int i = 0; i < gdim; i++)
     {
       sides[0] += std::pow(coordinate_dofs(0, i) - coordinate_dofs(1, i), 2);
@@ -197,7 +199,7 @@ dolfinx_contact::compute_circumradius(const dolfinx::mesh::Mesh<double>& mesh,
     // and opposite edges with corresponding length A, B, C we have that the
     // circumradius
     // R = sqrt((aA + bB + cC)(aA+bB-cC)(aA-bB+cC)(-aA +bB+cC))/24V
-    const double ref_volume
+    double ref_volume
         = basix::cell::volume<double>(basix::cell::type::tetrahedron);
     double cellvolume = std::abs(detJ) * ref_volume;
 
