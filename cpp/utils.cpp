@@ -677,9 +677,7 @@ dolfinx_contact::compute_active_entities(
   {
   case dolfinx::fem::IntegralType::cell:
   {
-    std::vector<std::int32_t> active_entities(entities.size());
-    std::transform(entities.begin(), entities.end(), active_entities.begin(),
-                   [](std::int32_t cell) { return cell; });
+    std::vector<std::int32_t> active_entities(entities.begin(), entities.end());
     dolfinx::radix_sort(std::span<std::int32_t>(active_entities));
     auto cell_it = std::upper_bound(active_entities.begin(),
                                     active_entities.end(), size_local);
@@ -688,24 +686,24 @@ dolfinx_contact::compute_active_entities(
   }
   case dolfinx::fem::IntegralType::exterior_facet:
   {
-    std::vector<std::int32_t> active_entities(2 * entities.size());
-    std::vector<std::int32_t> cells(entities.size());
-    std::vector<std::int32_t> facets(entities.size());
     auto topology = mesh.topology();
     auto f_to_c = topology->connectivity(tdim - 1, tdim);
     assert(f_to_c);
     auto c_to_f = topology->connectivity(tdim, tdim - 1);
     assert(c_to_f);
-    for (std::size_t f = 0; f < entities.size(); f++)
+
+    std::vector<std::int32_t> cells, facets;
+    cells.reserve(entities.size());
+    facets.reserve(entities.size());
+    for (auto facet : entities)
     {
-      assert(f_to_c->num_links(entities[f]) == 1);
-      std::int32_t cell = f_to_c->links(entities[f])[0];
+      assert(f_to_c->num_links(facet) == 1);
+      std::int32_t cell = f_to_c->links(facet).front();
       auto cell_facets = c_to_f->links(cell);
-      auto facet_it
-          = std::find(cell_facets.begin(), cell_facets.end(), entities[f]);
+      auto facet_it = std::find(cell_facets.begin(), cell_facets.end(), facet);
       assert(facet_it != cell_facets.end());
-      cells[f] = cell;
-      facets[f] = std::distance(cell_facets.begin(), facet_it);
+      cells.push_back(cell);
+      facets.push_back(std::distance(cell_facets.begin(), facet_it));
     }
 
     std::vector<std::int32_t> perm(entities.size());
@@ -714,15 +712,17 @@ dolfinx_contact::compute_active_entities(
 
     // Sort cells in ascending order
     std::size_t num_local = 0;
-    for (std::size_t f = 0; f < entities.size(); f++)
+    std::vector<std::int32_t> active_entities;
+    active_entities.reserve(2 * entities.size());
+    for (auto p : perm)
     {
-      active_entities[2 * f] = cells[perm[f]];
-      active_entities[2 * f + 1] = facets[perm[f]];
-      if (cells[perm[f]] < size_local)
+      active_entities.push_back(cells[p]);
+      active_entities.push_back(facets[p]);
+      if (cells[p] < size_local)
         num_local += 1;
     }
 
-    return std::make_pair(active_entities, num_local);
+    return {std::move(active_entities), num_local};
   }
   default:
     throw std::invalid_argument(
