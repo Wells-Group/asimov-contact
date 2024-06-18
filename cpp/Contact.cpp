@@ -181,7 +181,7 @@ Contact::Contact(
     {
       if (*it < num_cells)
       {
-        _num_local_facets.push_back(std::distance(facets.rend(), it) / 2);
+        _num_local_facets.push_back(std::distance(it, facets.rend()) / 2);
         break;
       }
     }
