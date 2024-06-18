@@ -177,11 +177,19 @@ Contact::Contact(
   for (int s = 0; s < _cell_facet_pairs.num_nodes(); ++s)
   {
     auto facets = _cell_facet_pairs.links(s);
+
+    _num_local_facets.push_back(0);
+    // for (std::size_t i = 0; i < facets.size(); i += 2)
+    // {
+    //   if (facets[i] < num_cells)
+    //     ++_num_local_facets.back();
+    // }
+
     for (std::int32_t i = (std::int32_t)facets.size() - 2; i >= 0; i -= 2)
     {
       if (facets[i] < num_cells)
       {
-        _num_local_facets.push_back(i / 2 + 1);
+        _num_local_facets.back() = i / 2 + 1;
         break;
       }
     }
