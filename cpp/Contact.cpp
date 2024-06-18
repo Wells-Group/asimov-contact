@@ -132,12 +132,12 @@ Contact::Contact(
   if (markers.size() != (std::size_t)surfaces.num_nodes())
     throw std::runtime_error("maker and surfaces have different sizes.");
 
-  for (int i = 0; i < surfaces.num_nodes(); ++i)
-  {
-    if (surfaces.num_links(i) != 1)
-      throw std::runtime_error("Num surfces links !=0 : "
-                               + std::to_string(surfaces.num_links(i)));
-  }
+  // for (int i = 0; i < surfaces.num_nodes(); ++i)
+  // {
+  //   if (surfaces.num_links(i) != 1)
+  //     throw std::runtime_error("Num surfces links !=0 : "
+  //                              + std::to_string(surfaces.num_links(i)));
+  // }
 
   // TODO: remove the below code, compute num_local directly from
   // _cell_facet_pairs
