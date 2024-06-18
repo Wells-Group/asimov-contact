@@ -177,18 +177,26 @@ Contact::Contact(
   for (int s = 0; s < _cell_facet_pairs.num_nodes(); ++s)
   {
     auto facets = _cell_facet_pairs.links(s);
-    for (auto it = facets.rbegin() + 1; it != facets.rend(); it += 2)
+    for (std::size_t i = facets.size() - 2; i >= 0; i -= 2)
     {
-      if (*it < num_cells)
+      if (facets[i] < num_cells)
       {
-        _num_local_facets.push_back(std::distance(it, facets.rend()) / 2);
+        _num_local_facets.push_back(i / 2 + 1);
         break;
       }
     }
   }
 
   if (_local_facets != _num_local_facets)
+  {
+    std::cout << "Sizes: " << _local_facets.size() << ", "
+              << _num_local_facets.size() << std::endl;
+    std::cout << "vals:  " << _local_facets[0] << ", " << _num_local_facets[0]
+              << std::endl;
+    std::cout << "vals:  " << _local_facets[1] << ", " << _num_local_facets[1]
+              << std::endl;
     throw std::runtime_error("data mis-match");
+  }
 }
 //----------------------------------------------------------------------------
 std::pair<std::vector<double>, std::array<std::size_t, 3>>
