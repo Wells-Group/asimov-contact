@@ -178,13 +178,10 @@ Contact::Contact(
   {
     auto facets = _cell_facet_pairs.links(s);
 
+    // Count the number of owned (cells, local facet index pairs). List
+    // is sorted by cell index, so we could backwards from the end of
+    // the list for efficiency.
     _num_local_facets.push_back(0);
-    // for (std::size_t i = 0; i < facets.size(); i += 2)
-    // {
-    //   if (facets[i] < num_cells)
-    //     ++_num_local_facets.back();
-    // }
-
     for (std::int32_t i = (std::int32_t)facets.size() - 2; i >= 0; i -= 2)
     {
       if (facets[i] < num_cells)
@@ -196,15 +193,7 @@ Contact::Contact(
   }
 
   if (_local_facets != _num_local_facets)
-  {
-    std::cout << "Sizes: " << _local_facets.size() << ", "
-              << _num_local_facets.size() << std::endl;
-    std::cout << "vals:  " << _local_facets[0] << ", " << _num_local_facets[0]
-              << std::endl;
-    std::cout << "vals:  " << _local_facets[1] << ", " << _num_local_facets[1]
-              << std::endl;
     throw std::runtime_error("data mis-match");
-  }
 }
 //----------------------------------------------------------------------------
 std::pair<std::vector<double>, std::array<std::size_t, 3>>
