@@ -54,10 +54,6 @@ public:
           std::shared_ptr<const dolfinx::mesh::Mesh<double>> mesh,
           const std::vector<ContactMode>& mode, int q_deg = 3);
 
-  /// Return meshtag value for surface with index surface
-  /// @param[in] surface - the index of the surface
-  int surface_mt(int surface) const { return _surfaces[surface]; }
-
   /// Return contact pair
   /// @param[in] pair - the index of the contact pair
   std::array<int, 2> contact_pair(int pair) const
@@ -309,10 +305,7 @@ private:
   // quadrature rule
   QuadratureRule _quadrature_rule;
 
- // meshtag values for surfaces
-  std::vector<int> _surfaces;
-
-  // store index of candidate_surface for each quadrature_surface
+   // store index of candidate_surface for each quadrature_surface
   std::vector<std::array<int, 2>> _contact_pairs;
 
   std::shared_ptr<const dolfinx::mesh::Mesh<double>> _mesh;

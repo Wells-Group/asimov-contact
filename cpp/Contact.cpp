@@ -118,7 +118,7 @@ Contact::Contact(
     : _quadrature_rule(mesh->topology()->cell_type(), q_deg,
                        mesh->topology()->dim() - 1,
                        basix::quadrature::type::Default),
-      _surfaces(surfaces.array()), _contact_pairs(contact_pairs), _mesh(mesh),
+      _contact_pairs(contact_pairs), _mesh(mesh),
       _facet_maps(contact_pairs.size()),
       _reference_contact_points(contact_pairs.size()),
       _reference_contact_shape(contact_pairs.size()),
