@@ -270,7 +270,7 @@ get_update_normal(const dolfinx::fem::CoordinateElement<double>& cmap);
 /// each facet in `entities`, the corresponding (cell, local facet) pair
 /// is computed, where "local facet" is the index if the facet relative
 /// to the cell. Returned list if sorted by cell index.
-std::pair<std::vector<std::int32_t>, std::size_t>
+std::vector<std::int32_t>
 compute_active_entities(const dolfinx::mesh::Mesh<double>& mesh,
                         std::span<const std::int32_t> entities,
                         dolfinx::fem::IntegralType integral);

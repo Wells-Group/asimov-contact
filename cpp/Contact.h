@@ -37,7 +37,23 @@ class Contact
 public:
   /// Constructor
   ///
-  /// @todo Simplify the constructor arguments
+  /// @param[in] surfaces The facets for each surfaces, stored as
+  /// flattened (cell index, local facet index) pairs for each surface.
+  /// The facet pairs for surface `i` are returned by
+  /// `surface.links(i)`.
+  /// @param[in] contact_pairs list of pairs `(i, j)` marking the `i`th
+  /// and `j`th surface in surfaces->array() as a contact pair
+  /// @param[in] mesh TODO
+  /// @param[in] mode Contact detection algorithm for each pair
+  /// @param[in] q_deg The quadrature degree.
+  Contact(const dolfinx::graph::AdjacencyList<std::int32_t>& surfaces,
+          const std::vector<std::array<int, 2>>& contact_pairs,
+          std::shared_ptr<const dolfinx::mesh::Mesh<double>> mesh,
+          const std::vector<ContactMode>& mode, int q_deg = 3);
+
+  /// Constructor
+  ///
+  /// @todo Remove this constructor
   ///
   /// @param[in] markers Tags `markers[i]` for surface `i`.
   /// @param[in] surfaces For surface `i`, `surfaces.links(i)` gives the
@@ -305,7 +321,7 @@ private:
   // quadrature rule
   QuadratureRule _quadrature_rule;
 
-   // store index of candidate_surface for each quadrature_surface
+  // store index of candidate_surface for each quadrature_surface
   std::vector<std::array<int, 2>> _contact_pairs;
 
   std::shared_ptr<const dolfinx::mesh::Mesh<double>> _mesh;

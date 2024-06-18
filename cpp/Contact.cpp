@@ -36,11 +36,8 @@ dolfinx::graph::AdjacencyList<std::int32_t> create_cell_facet_pairs(
       // Get the facets ids with tag links[i]
       std::vector<std::int32_t> facets = marker->find(tag);
 
-      // Surface index
-      // int index = surfaces.offsets()[s] + i;
-
       // Compute the (cell, local index) pairs for each facet
-      auto [cell_facet_pairs, num_local] = compute_active_entities(
+      std::vector<std::int32_t> cell_facet_pairs = compute_active_entities(
           mesh, facets, dolfinx::fem::IntegralType::exterior_facet);
 
       // Add to list of  (cell, local index) pairs
@@ -50,9 +47,6 @@ dolfinx::graph::AdjacencyList<std::int32_t> create_cell_facet_pairs(
 
       // Add to offset
       offsets.push_back(offsets.back() + cell_facet_pairs.size());
-
-      // Store number of owned facets in this surface
-      // _local_facets[index] = num_local;
     }
   }
 
@@ -122,13 +116,10 @@ void compute_linked_cells(
 } // namespace
 
 //----------------------------------------------------------------------------
-Contact::Contact(
-    const std::vector<
-        std::shared_ptr<const dolfinx::mesh::MeshTags<std::int32_t>>>& markers,
-    const dolfinx::graph::AdjacencyList<std::int32_t>& surfaces,
-    const std::vector<std::array<int, 2>>& contact_pairs,
-    std::shared_ptr<const dolfinx::mesh::Mesh<double>> mesh,
-    const std::vector<ContactMode>& mode, int q_deg)
+Contact::Contact(const dolfinx::graph::AdjacencyList<std::int32_t>& surfaces,
+                 const std::vector<std::array<int, 2>>& contact_pairs,
+                 std::shared_ptr<const dolfinx::mesh::Mesh<double>> mesh,
+                 const std::vector<ContactMode>& mode, int q_deg)
     : _quadrature_rule(mesh->topology()->cell_type(), q_deg,
                        mesh->topology()->dim() - 1,
                        basix::quadrature::type::Default),
@@ -137,40 +128,10 @@ Contact::Contact(
       _reference_contact_points(contact_pairs.size()),
       _reference_contact_shape(contact_pairs.size()),
       _qp_phys(surfaces.array().size()), _max_links(contact_pairs.size()),
-      _cell_facet_pairs(create_cell_facet_pairs(*mesh, markers, surfaces)),
-      _submesh(*mesh, _cell_facet_pairs.array()),
-      _local_facets(surfaces.array().size()), _mode(mode)
+      _cell_facet_pairs(surfaces), _submesh(*mesh, surfaces.array()),
+      _mode(mode)
 {
   assert(_mesh);
-
-  if (markers.size() != (std::size_t)surfaces.num_nodes())
-    throw std::runtime_error("maker and surfaces have different sizes.");
-
-  // for (int i = 0; i < surfaces.num_nodes(); ++i)
-  // {
-  //   if (surfaces.num_links(i) != 1)
-  //     throw std::runtime_error("Num surfces links !=0 : "
-  //                              + std::to_string(surfaces.num_links(i)));
-  // }
-
-  // TODO: remove the below code, compute num_local directly from
-  // _cell_facet_pairs
-  for (std::size_t s = 0; s < markers.size(); ++s)
-  {
-    std::shared_ptr<const dolfinx::mesh::MeshTags<int>> marker = markers[s];
-    std::span<const int> links = surfaces.links(int(s));
-    for (std::size_t i = 0; i < links.size(); ++i)
-    {
-      std::vector<std::int32_t> facets = marker->find(links[i]);
-      auto [cell_facet_pairs, num_local] = compute_active_entities(
-          *mesh, facets, dolfinx::fem::IntegralType::exterior_facet);
-
-      // store how many facets are owned by the process
-      int index = surfaces.offsets()[s] + i;
-      _local_facets[index] = num_local;
-    }
-  }
-
   auto topology = mesh->topology();
   std::int32_t num_cells = topology->index_map(topology->dim())->size_local();
   std::vector<std::size_t> _num_local_facets;
@@ -181,19 +142,41 @@ Contact::Contact(
     // Count the number of owned (cells, local facet index pairs). List
     // is sorted by cell index, so we could backwards from the end of
     // the list for efficiency.
-    _num_local_facets.push_back(0);
+    _local_facets.push_back(0);
     for (std::int32_t i = (std::int32_t)facets.size() - 2; i >= 0; i -= 2)
     {
       if (facets[i] < num_cells)
       {
-        _num_local_facets.back() = i / 2 + 1;
+        _local_facets.back() = i / 2 + 1;
         break;
       }
     }
   }
-
-  if (_local_facets != _num_local_facets)
-    throw std::runtime_error("data mis-match");
+}
+//----------------------------------------------------------------------------
+Contact::Contact(
+    const std::vector<
+        std::shared_ptr<const dolfinx::mesh::MeshTags<std::int32_t>>>& markers,
+    const dolfinx::graph::AdjacencyList<std::int32_t>& surfaces,
+    const std::vector<std::array<int, 2>>& contact_pairs,
+    std::shared_ptr<const dolfinx::mesh::Mesh<double>> mesh,
+    const std::vector<ContactMode>& mode, int q_deg)
+    : Contact(create_cell_facet_pairs(*mesh, markers, surfaces), contact_pairs,
+              mesh, mode, q_deg)
+//     _quadrature_rule(mesh->topology()->cell_type(), q_deg,
+//                        mesh->topology()->dim() - 1,
+//                        basix::quadrature::type::Default),
+//       _contact_pairs(contact_pairs), _mesh(mesh),
+//       _facet_maps(contact_pairs.size()),
+//       _reference_contact_points(contact_pairs.size()),
+//       _reference_contact_shape(contact_pairs.size()),
+//       _qp_phys(surfaces.array().size()), _max_links(contact_pairs.size()),
+//       _cell_facet_pairs(create_cell_facet_pairs(*mesh, markers, surfaces)),
+//       _submesh(*mesh, _cell_facet_pairs.array()),
+//       _local_facets(surfaces.array().size()), _mode(mode)
+{
+  if (markers.size() != (std::size_t)surfaces.num_nodes())
+    throw std::runtime_error("maker and surfaces have different sizes.");
 }
 //----------------------------------------------------------------------------
 std::pair<std::vector<double>, std::array<std::size_t, 3>>

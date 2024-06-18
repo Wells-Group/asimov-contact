@@ -655,28 +655,24 @@ dolfinx_contact::get_update_normal(
   }
 }
 //----------------------------------------------------------------------------
-std::pair<std::vector<std::int32_t>, std::size_t>
-dolfinx_contact::compute_active_entities(
+std::vector<std::int32_t> dolfinx_contact::compute_active_entities(
     const dolfinx::mesh::Mesh<double>& mesh,
     std::span<const std::int32_t> entities, dolfinx::fem::IntegralType integral)
 {
-
-  int tdim = mesh.topology()->dim();
-  const int size_local = mesh.topology()->index_map(tdim)->size_local();
   switch (integral)
   {
   case dolfinx::fem::IntegralType::cell:
   {
     std::vector<std::int32_t> active_entities(entities.begin(), entities.end());
     dolfinx::radix_sort(std::span<std::int32_t>(active_entities));
-    auto cell_it = std::upper_bound(active_entities.begin(),
-                                    active_entities.end(), size_local);
-    std::size_t num_local = std::distance(active_entities.begin(), cell_it);
-    return std::make_pair(active_entities, num_local);
+    return active_entities;
   }
   case dolfinx::fem::IntegralType::exterior_facet:
   {
     auto topology = mesh.topology();
+    assert(topology);
+    int tdim = mesh.topology()->dim();
+
     auto f_to_c = topology->connectivity(tdim - 1, tdim);
     assert(f_to_c);
     auto c_to_f = topology->connectivity(tdim, tdim - 1);
@@ -701,18 +697,15 @@ dolfinx_contact::compute_active_entities(
     dolfinx::argsort_radix<std::int32_t>(cells, perm);
 
     // Sort cells in ascending order
-    std::size_t num_local = 0;
     std::vector<std::int32_t> active_entities;
     active_entities.reserve(2 * entities.size());
     for (auto p : perm)
     {
       active_entities.push_back(cells[p]);
       active_entities.push_back(facets[p]);
-      if (cells[p] < size_local)
-        num_local += 1;
     }
 
-    return {std::move(active_entities), num_local};
+    return active_entities;
   }
   default:
     throw std::invalid_argument(
@@ -720,9 +713,8 @@ dolfinx_contact::compute_active_entities(
         "has not been implemented for interior facets.");
   }
 
-  return {};
+  // return {};
 }
-
 //-------------------------------------------------------------------------------------
 dolfinx::graph::AdjacencyList<std::int32_t>
 dolfinx_contact::entities_to_geometry_dofs(
