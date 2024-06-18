@@ -341,7 +341,7 @@ void Contact::create_distance_map(int pair)
       = tabulate(cmap, _quadrature_rule);
 
   // NOTE: This function should be moved somwhere else, or return the
-  // actual points such that we compuld send them in to
+  // actual points such that we could send them in to
   // compute_distance_map. Compute quadrature points on physical facet
   // _qp_phys_"origin_meshtag"
   create_q_phys(quadrature_mt);
