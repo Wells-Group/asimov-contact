@@ -39,11 +39,11 @@ public:
   ///
   /// @todo Simplify the constructor arguments
   ///
-  /// @param[in] markers List of meshtags defining the contact surfaces
+  /// @param[in] markers Tags `markers[i]` for surface `i`.
   /// @param[in] surfaces For surface `i`, `surfaces.links(i)` gives the
   /// tag values of the facets in `markers[i]` that make up surface `i`.
-  /// @param[in] contact_pairs list of pairs (i, j) marking the ith and jth
-  /// surface in surfaces->array() as a contact pair
+  /// @param[in] contact_pairs list of pairs `(i, j)` marking the `i`th
+  /// and `j`th surface in surfaces->array() as a contact pair
   /// @param[in] mesh TODO
   /// @param[in] mode Contact detection algorithm for each pair
   /// @param[in] q_deg The quadrature degree.
