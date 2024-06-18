@@ -22,22 +22,36 @@ dolfinx::graph::AdjacencyList<std::int32_t> create_cell_facet_pairs(
   std::vector<std::int32_t> all_facet_pairs;
   std::vector<std::int32_t> offsets;
   offsets.push_back(0);
+
+  // Loop over surfaces
   for (std::size_t s = 0; s < markers.size(); ++s)
   {
     std::shared_ptr<const dolfinx::mesh::MeshTags<int>> marker = markers[s];
-    std::span<const int> links = surfaces.links(int(s));
-    for (std::size_t i = 0; i < links.size(); ++i)
+
+    // For each surface, loop of the tag values to be extracted from
+    // marker
+    std::span<const int> links = surfaces.links(s);
+    for (auto tag : links)
     {
-      std::vector<std::int32_t> facets = marker->find(links[i]);
-      // int index = surfaces.offsets()[s] + int(i);
+      // Get the facets ids with tag links[i]
+      std::vector<std::int32_t> facets = marker->find(tag);
+
+      // Surface index
+      // int index = surfaces.offsets()[s] + i;
+
+      // Compute the (cell, local index) pairs for each facet
       auto [cell_facet_pairs, num_local] = compute_active_entities(
           mesh, facets, dolfinx::fem::IntegralType::exterior_facet);
+
+      // Add to list of  (cell, local index) pairs
       all_facet_pairs.insert(all_facet_pairs.end(),
                              std::begin(cell_facet_pairs),
                              std::end(cell_facet_pairs));
+
+      // Add to offset
       offsets.push_back(offsets.back() + cell_facet_pairs.size());
 
-      // // store how many facets are owned by the process
+      // Store number of owned facets in this surface
       // _local_facets[index] = num_local;
     }
   }
@@ -156,6 +170,25 @@ Contact::Contact(
       _local_facets[index] = num_local;
     }
   }
+
+  auto topology = mesh->topology();
+  std::int32_t num_cells = topology->index_map(topology->dim())->size_local();
+  std::vector<std::size_t> _num_local_facets;
+  for (int s = 0; s < _cell_facet_pairs.num_nodes(); ++s)
+  {
+    auto facets = _cell_facet_pairs.links(s);
+    for (auto it = facets.rbegin() + 1; it != facets.rend(); it += 2)
+    {
+      if (*it < num_cells)
+      {
+        _num_local_facets.push_back(std::distance(facets.rend(), it));
+        break;
+      }
+    }
+  }
+
+  if (_local_facets != _num_local_facets)
+    throw std::runtime_error("data mis-match");
 }
 //----------------------------------------------------------------------------
 std::pair<std::vector<double>, std::array<std::size_t, 3>>
