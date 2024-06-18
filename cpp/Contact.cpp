@@ -177,7 +177,7 @@ Contact::Contact(
   for (int s = 0; s < _cell_facet_pairs.num_nodes(); ++s)
   {
     auto facets = _cell_facet_pairs.links(s);
-    for (std::size_t i = facets.size() - 2; i >= 0; i -= 2)
+    for (std::int32_t i = (std::int32_t)facets.size() - 2; i >= 0; i -= 2)
     {
       if (facets[i] < num_cells)
       {
