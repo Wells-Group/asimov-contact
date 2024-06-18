@@ -36,9 +36,12 @@ class Contact
 {
 public:
   /// Constructor
+  ///
+  /// @todo Simplify the constructor arguments
+  ///
   /// @param[in] markers List of meshtags defining the contact surfaces
-  /// @param[in] surfaces Adjacency list. Links of i contains meshtag values
-  /// associated with ith meshtag in markers
+  /// @param[in] surfaces For surface `i`, `surfaces.links(i)` gives the
+  /// tag values of the facets in `markers[i]` that make up surface `i`.
   /// @param[in] contact_pairs list of pairs (i, j) marking the ith and jth
   /// surface in surfaces->array() as a contact pair
   /// @param[in] mesh TODO
@@ -306,7 +309,8 @@ private:
   // quadrature rule
   QuadratureRule _quadrature_rule;
 
-  std::vector<int> _surfaces; // meshtag values for surfaces
+ // meshtag values for surfaces
+  std::vector<int> _surfaces;
 
   // store index of candidate_surface for each quadrature_surface
   std::vector<std::array<int, 2>> _contact_pairs;
