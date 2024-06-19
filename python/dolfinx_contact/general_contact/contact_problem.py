@@ -55,22 +55,28 @@ class ContactProblem(dolfinx_contact.cpp.Contact):
         search_method: list[dolfinx_contact.cpp.ContactMode],
         search_radius: np.float64 = np.float64(-1.0),
     ):
-        """
-        This class initialises the contact class and provides convenience functions
-        for generating the integration kernels and integration data for frictional contact
-        problems
-        TODO: This should probably be translated into C++ in order to simplify creating C++ contact demos
-        Args:
-            markers:           A list of meshtags containing the facet markers of the contacting surfaces
-            surfaces:          Adjacency list linking each meshtag in markers to the tags marking contacting surfaces
-            contact_pairs:     Pairs of tag indices in the data array of surfaces describing which surfaces are
-                               potential contact pairs
-            mesh:              The underlying mesh
-            quadrature_degree: The quadrature degree
-            search_method:     List containing for each contact pair whether Raytracing or CPP (Closest Point
-                               Projection) is used for contact search
-            search_radius:     Restricts the search radius for contact detection. Only used in raytracing
+        """This class initialises the contact class and provides
+        convenience functions for generating the integration kernels and
+        integration data for frictional contact problems
 
+        TODO: This should probably be translated into C++ in order to
+        simplify creating C++ contact demos
+
+        Args:
+            markers: A list of meshtags containing the facet markers of
+                the contacting surfaces
+            surfaces: Adjacency list linking each meshtag in markers to
+                the tags marking contacting surfaces
+            contact_pairs: Pairs of tag indices in the data array of
+                surfaces describing which surfaces are potential contact
+                pairs
+            mesh: The underlying mesh
+            quadrature_degree: The quadrature degree search_method: List
+                containing for each contact pair whether Raytracing or
+                CPP (Closest Point Projection) is used for contact
+                search
+            search_radius: Restricts the search radius for contact
+                detection. Only used in raytracing
         """
         # create contact class
         markers_cpp = [marker._cpp_object for marker in markers]
@@ -103,9 +109,9 @@ class ContactProblem(dolfinx_contact.cpp.Contact):
 
     @common.timed("~Contact: Update coefficients")
     def update_contact_data(self, du: fem.Function):
-        """
-        This function updates the packed input data for the integration kernels
-        based on the current displacement increment
+        """This function updates the packed input data for the
+        integration kernels based on the current displacement increment
+
         Args:
             du : FE function storing the current displacement increment
         """
@@ -118,25 +124,32 @@ class ContactProblem(dolfinx_contact.cpp.Contact):
                 offset0 = 4 + self._num_q_points[i] * gdim * (2 + ndofs_cell * max_links)
                 offset1 = offset0 + self._num_q_points[i] * gdim
                 # Pack du on integration surface
-                self.coeffs[i][:, offset0:offset1] = dolfinx_contact.cpp.pack_coefficient_quadrature(
-                    du._cpp_object, self.q_deg, self.entities[i]
-                )[:, :]
+                self.coeffs[i][:, offset0:offset1] = (
+                    dolfinx_contact.cpp.pack_coefficient_quadrature(
+                        du._cpp_object, self.q_deg, self.entities[i]
+                    )[:, :]
+                )
                 offset0 = offset1
                 offset1 = offset0 + self._num_q_points[i] * gdim * gdim
                 # Pack grad(u + du) on integration surface
                 self.coeffs[i][:, offset0:offset1] = (
-                    dolfinx_contact.cpp.pack_gradient_quadrature(du._cpp_object, self.q_deg, self.entities[i])[:, :]
+                    dolfinx_contact.cpp.pack_gradient_quadrature(
+                        du._cpp_object, self.q_deg, self.entities[i]
+                    )[:, :]
                     + self._grad_u[i][:, :]
                 )
                 offset0 = offset1
                 offset1 = offset0 + self._num_q_points[i] * gdim
                 # Pack du on contacting surface (local facet only)
                 num_local_facets = self.local_facets(self.contact_pair(i)[0])
-                self.coeffs[i][:num_local_facets, offset0:offset1] = self.pack_u_contact(i, du._cpp_object)[:, :]
+                self.coeffs[i][:num_local_facets, offset0:offset1] = self.pack_u_contact(
+                    i, du._cpp_object
+                )[:, :]
 
     def pack_normals(self, i: int):
-        """
-        This functions computes the contact normals based on the search method for pair i
+        """This functions computes the contact normals based on the search
+        method for pair i
+
         Args:
             i : index of contact pair
         """
@@ -147,18 +160,21 @@ class ContactProblem(dolfinx_contact.cpp.Contact):
         return normals
 
     def retrieve_material_parameters(self, coefficients: dict[str, fem.Function]) -> list[str]:
-        """
-        This Function is used to check which parameters are provided for the contact kernel and
-        throws an error if any essential parameter is missing
+        """This Function is used to check which parameters are provided for
+        the contact kernel and throws an error if any essential
+        parameter is missing
+
         Args:
-            coefficients: a dictionary linking a Function/Constant to an input parameter where the keys
-                          are expected to be a subset of ["mu", "lambda", "fric"]
-                          mu, lambda are the lame paremeters, fric the friction coefficient
-                          fric is optional and assumed zero if not provided
-                          mu and lambda are required
+            coefficients: a dictionary linking a Function/Constant to an
+                input parameter where the keys are expected to be a
+                subset of ["mu", "lambda", "fric"] mu, lambda are the
+                lame paremeters, fric the friction coefficient fric is
+                optional and assumed zero if not provided mu and lambda
+                are required
+
         Return:
-            A list of keys containing all parameters that have been found. Used to iterate over in the
-            data generation.
+            A list of keys containing all parameters that have been
+            found. Used to iterate over in the data generation.
         """
         keys = []
         if coefficients.get("mu") is None:
@@ -182,18 +198,21 @@ class ContactProblem(dolfinx_contact.cpp.Contact):
         gamma: float,
         theta: float,
     ) -> None:
-        """
-        This function generates the integration kernels and initialises the input data for the
-        integration kernels.
+        """This function generates the integration kernels and initialises
+        the input data for the integration kernels.
+
         Args:
-            friction_law: determines the integration kernels to be generated
-            function_space: the functionspace of the displacement variable
-            coefficients: a dictionary linking FEM functions to one of the following keys:
-                          mu, lambda: lame parameters
-                          fric: a friction coefficient
-                          u: previous displacement (assumed to be zero if not provided)
-                          du: the displacement update function
-            gamma, theta: Nitsche parameters
+            friction_law: determines the integration kernels to be
+                generated
+            function_space: the functionspace of the displacement
+                variable
+            coefficients: a dictionary linking FEM functions to one of
+                the following keys: mu, lambda: lame parameters fric: a
+                friction coefficient u: previous displacement (assumed
+                to be zero if not provided) du: the displacement update
+                function
+            gamma: Nitsche parameter
+            theta: Nitsche parameter
         """
         # generate kernels
         self._matrix_kernels = []
@@ -202,11 +221,19 @@ class ContactProblem(dolfinx_contact.cpp.Contact):
             self._matrix_kernels.append(self.generate_kernel(kt.Jac, function_space._cpp_object))
             self._vector_kernels.append(self.generate_kernel(kt.Rhs, function_space._cpp_object))
             if friction_law == FrictionLaw.Coulomb:
-                self._matrix_kernels.append(self.generate_kernel(kt.CoulombJac, function_space._cpp_object))
-                self._vector_kernels.append(self.generate_kernel(kt.CoulombRhs, function_space._cpp_object))
+                self._matrix_kernels.append(
+                    self.generate_kernel(kt.CoulombJac, function_space._cpp_object)
+                )
+                self._vector_kernels.append(
+                    self.generate_kernel(kt.CoulombRhs, function_space._cpp_object)
+                )
             elif friction_law == FrictionLaw.Tresca:
-                self._matrix_kernels.append(self.generate_kernel(kt.TrescaJac, function_space._cpp_object))
-                self._vector_kernels.append(self.generate_kernel(kt.TrescaRhs, function_space._cpp_object))
+                self._matrix_kernels.append(
+                    self.generate_kernel(kt.TrescaJac, function_space._cpp_object)
+                )
+                self._vector_kernels.append(
+                    self.generate_kernel(kt.TrescaRhs, function_space._cpp_object)
+                )
 
         # pack constants
         self._consts = np.array([gamma, theta], dtype=np.float64)
@@ -224,14 +251,18 @@ class ContactProblem(dolfinx_contact.cpp.Contact):
 
         h = fem.Function(V2)
         ncells = mesh.topology.index_map(tdim).size_local
-        h_vals = cpp.mesh.h(mesh._cpp_object, mesh.topology.dim, np.arange(0, ncells, dtype=np.int32))
+        h_vals = cpp.mesh.h(
+            mesh._cpp_object, mesh.topology.dim, np.arange(0, ncells, dtype=np.int32)
+        )
         h.x.array[:ncells] = h_vals[:]
         h.x.scatter_forward()
 
         new_model = False
         if len(self.coeffs) == 0:
             new_model = True
-            self.coeffs = [np.zeros((len(self.entities[i]), numcoeffs)) for i in range(self._num_pairs)]
+            self.coeffs = [
+                np.zeros((len(self.entities[i]), numcoeffs)) for i in range(self._num_pairs)
+            ]
 
         with common.Timer("~Contact: Pack coeffs (mu, lmbda, fric, h)"):
             for i in range(self._num_pairs):
@@ -274,7 +305,8 @@ class ContactProblem(dolfinx_contact.cpp.Contact):
         # where u is the displacement to date and du the displacement update
         # if u is not provided, this is set to zero
         self._grad_u = [
-            np.zeros((len(self.entities[i]), self._num_q_points[i] * gdim * gdim)) for i in range(self._num_pairs)
+            np.zeros((len(self.entities[i]), self._num_q_points[i] * gdim * gdim))
+            for i in range(self._num_pairs)
         ]
 
         if coefficients.get("u") is not None:
@@ -288,10 +320,12 @@ class ContactProblem(dolfinx_contact.cpp.Contact):
             self.update_contact_data(coefficients["du"])
 
     def update_contact_detection(self, u: fem.Function) -> None:
-        """
-        This function recomputes the contact detection based on the deformed configuration described
-        by a displacement u and regenerates data that then needs to be updated
-        Args: u - The displacement
+        """This function recomputes the contact detection based on the
+        deformed configuration described by a displacement u and
+        regenerates data that then needs to be updated
+
+        Args:
+            u: The displacement
         """
         self.update_submesh_geometry(u._cpp_object)
         for j in range(self._num_pairs):
@@ -332,14 +366,17 @@ class ContactProblem(dolfinx_contact.cpp.Contact):
         with common.Timer("~~Contact: Pack grad(u)"):
             for i in range(num_pairs):
                 self._grad_u.append(
-                    dolfinx_contact.cpp.pack_gradient_quadrature(u._cpp_object, self.q_deg, self.entities[i])
+                    dolfinx_contact.cpp.pack_gradient_quadrature(
+                        u._cpp_object, self.q_deg, self.entities[i]
+                    )
                 )
 
     def update_nitsche_parameters(self, gamma: float, theta: float) -> None:
-        """
-        This function can be used to update the Nitsche parameters
+        """This function can be used to update the Nitsche parameters.
+
         Args:
-            theta: determines type of method (1 - symmetric, -1 - antisymmetric, 0 - penalty like)
+            theta: determines type of method (1 - symmetric, -1 -
+                antisymmetric, 0 - penalty like)
             gamma: Nitsche parameter
         """
         self._consts[0] = gamma
@@ -355,10 +392,11 @@ class ContactProblem(dolfinx_contact.cpp.Contact):
         return h
 
     def create_matrix(self, j_form: fem.Form):
-        """
-        This function creates a PETSc matrix with the correct sparsity pattern
+        """This function creates a PETSc matrix with the correct sparsity pattern
         for the current contact detection
-        Args: j_form - The jacobian form
+
+        Args:
+            j_form: The jacobian form
         """
         return super().create_matrix(j_form._cpp_object)
 
@@ -367,10 +405,12 @@ class ContactProblem(dolfinx_contact.cpp.Contact):
         b: PETSc.Vec,  # type: ignore
         function_space: fem.FunctionSpace,
     ) -> None:
-        """
-        This function can be used to assemble the rhs vector for the contact contribution
-        Args: b - the vector to be assembled into
-              function_space - the underlying displacement function space
+        """This function can be used to assemble the rhs vector for the
+        contact contribution.
+
+        Args:
+            b: Vector to be assembled into
+            function_space: Underlying displacement function space
         """
         for i in range(self._num_pairs):
             for kernel in self._vector_kernels:
@@ -389,10 +429,12 @@ class ContactProblem(dolfinx_contact.cpp.Contact):
         a_mat: PETSc.Mat,  # type: ignore
         function_space: fem.FunctionSpace,
     ) -> None:
-        """
-        This function can be used to assemble the lhs matrix for the contact contribution
-        Args: a_mat - the matrix to be assembled into
-              function_space - the underlying displacement function space
+        """This function can be used to assemble the lhs matrix for the
+        contact contribution
+
+        Args:
+            a_mat:Matrix to be assembled into
+            function_space: Underlying displacement function space
         """
         for i in range(self._num_pairs):
             for kernel in self._matrix_kernels:
@@ -406,9 +448,11 @@ class ContactProblem(dolfinx_contact.cpp.Contact):
                 )
 
     def crop_invalid_points(self, tol: float) -> None:
-        """
-        Remove potential contact points that furthe apart than a given tolerance
-        Args: tol - The tolerance
+        """Remove potential contact points that furthe apart than a given
+        tolerance
+
+        Args:
+            tol: The tolerance
         """
         gdim = super().mesh().geometry.dim
         for i in range(self._num_pairs):

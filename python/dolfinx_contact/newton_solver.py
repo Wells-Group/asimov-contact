@@ -196,7 +196,9 @@ class NewtonSolver:
         self._compute_preconditioner = func
         self._P = P
 
-    def set_coefficients(self, func: Callable[[PETSc.Vec, List[npt.NDArray[default_scalar_type]]], None]):  # type: ignore
+    def set_coefficients(
+        self, func: Callable[[PETSc.Vec, List[npt.NDArray[default_scalar_type]]], None]
+    ):  # type: ignore
         """
         Set the function for computing the coefficients needed for assembly
         Args:

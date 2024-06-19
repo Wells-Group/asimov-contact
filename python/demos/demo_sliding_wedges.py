@@ -43,7 +43,9 @@ from dolfinx_contact.newton_solver import NewtonSolver
 
 if __name__ == "__main__":
     desc = "Friction example with two elastic cylinders for verifying correctness of code"
-    parser = argparse.ArgumentParser(description=desc, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser = argparse.ArgumentParser(
+        description=desc, formatter_class=argparse.ArgumentDefaultsHelpFormatter
+    )
     parser.add_argument(
         "--quadrature",
         default=5,
@@ -154,8 +156,7 @@ if __name__ == "__main__":
     J = ufl.derivative(F, du, w)
 
     # compiler options to improve performance
-    cffi_options = ["-Ofast", "-march=native"]
-    jit_options = {"cffi_extra_compile_args": cffi_options, "cffi_libraries": ["m"]}
+    jit_options = {"cffi_extra_compile_args": [], "cffi_libraries": ["m"]}
     # compiled forms for rhs and tangen system
     F_compiled = form(F, jit_options=jit_options)
     J_compiled = form(J, jit_options=jit_options)
@@ -199,7 +200,9 @@ if __name__ == "__main__":
         return vals
 
     # Solve contact problem using Nitsche's method
-    contact_problem = ContactProblem([facet_marker], surfaces, contact, mesh, args.q_degree, search_mode)
+    contact_problem = ContactProblem(
+        [facet_marker], surfaces, contact, mesh, args.q_degree, search_mode
+    )
     contact_problem.generate_contact_data(
         FrictionLaw.Coulomb,
         V,
@@ -244,7 +247,9 @@ if __name__ == "__main__":
     newton_solver.set_coefficients(compute_coefficients)
 
     # Set rigid motion nullspace
-    null_space = rigid_motions_nullspace_subdomains(V, domain_marker, np.unique(domain_marker.values), num_domains=2)
+    null_space = rigid_motions_nullspace_subdomains(
+        V, domain_marker, np.unique(domain_marker.values), num_domains=2
+    )
     newton_solver.A.setNearNullSpace(null_space)
 
     # Set Newton solver options

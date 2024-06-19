@@ -48,7 +48,9 @@ def create_contact_mesh_old(mesh, fmarker, dmarker, tags, R=0.2):
     cv = mesh.topology.connectivity(tdim, 0)
 
     # Extract facet markers with given tags
-    marker_subset_i = [i for i, (idx, k) in enumerate(zip(fmarker.indices, fmarker.values)) if k in tags]
+    marker_subset_i = [
+        i for i, (idx, k) in enumerate(zip(fmarker.indices, fmarker.values)) if k in tags
+    ]
     marker_subset = fmarker.indices[marker_subset_i]
     # marker_subset_val = fmarker.values[marker_subset_i]
     # facets = np.hstack([fmarker.find(tag) for tag in tags])
@@ -67,8 +69,12 @@ def create_contact_mesh_old(mesh, fmarker, dmarker, tags, R=0.2):
     ncells = mesh.topology.index_map(tdim).size_local
 
     # Convert marked facets to list of (global) vertices for each facet
-    fv_indices = [sorted(mesh.topology.index_map(0).local_to_global(fv.links(f))) for f in fmarker.indices]
-    cv_indices = [sorted(mesh.topology.index_map(0).local_to_global(cv.links(c))) for c in dmarker.indices]
+    fv_indices = [
+        sorted(mesh.topology.index_map(0).local_to_global(fv.links(f))) for f in fmarker.indices
+    ]
+    cv_indices = [
+        sorted(mesh.topology.index_map(0).local_to_global(cv.links(c))) for c in dmarker.indices
+    ]
 
     timer.stop()
     log.log(log.LogLevel.WARNING, "Copy markers to other processes")
@@ -102,7 +108,9 @@ def create_contact_mesh_old(mesh, fmarker, dmarker, tags, R=0.2):
 
     # Convert topology to global indexing, and restrict to non-ghost cells
     topo = mesh.topology.connectivity(tdim, 0).array
-    topo = np.asarray(mesh.topology.index_map(0).local_to_global(topo), dtype=np.int64).reshape((-1, num_cell_vertices))
+    topo = np.asarray(mesh.topology.index_map(0).local_to_global(topo), dtype=np.int64).reshape(
+        (-1, num_cell_vertices)
+    )
     topo = topo[:ncells, :]
 
     # Cut off any ghost vertices
@@ -122,7 +130,9 @@ def create_contact_mesh_old(mesh, fmarker, dmarker, tags, R=0.2):
     # then back to original index
     global_remap = np.array(new_mesh.geometry.input_global_indices, dtype=np.int32)
     nv = new_mesh.topology.index_map(0).size_local + new_mesh.topology.index_map(0).num_ghosts
-    vert_to_geom = entities_to_geometry(new_mesh._cpp_object, 0, np.arange(nv, dtype=np.int32), False).flatten()
+    vert_to_geom = entities_to_geometry(
+        new_mesh._cpp_object, 0, np.arange(nv, dtype=np.int32), False
+    ).flatten()
     rmap = np.vectorize(lambda idx: global_remap[vert_to_geom[idx]])
 
     # Recreate facets

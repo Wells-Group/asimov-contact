@@ -33,7 +33,9 @@ if __name__ == "__main__":
     print("Demo needs updating. Exiting.")
     exit(0)
     desc = "Nitsche's method for two elastic bodies using custom assemblers"
-    parser = argparse.ArgumentParser(description=desc, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser = argparse.ArgumentParser(
+        description=desc, formatter_class=argparse.ArgumentDefaultsHelpFormatter
+    )
 
     parser.add_argument(
         "--quadrature",
@@ -96,7 +98,9 @@ if __name__ == "__main__":
     # Call function that repartitions mesh for parallel computation
     if mesh.comm.size > 1:
         with Timer("~Contact: Add ghosts"):
-            mesh, facet_marker, domain_marker = create_contact_mesh(mesh, facet_marker, domain_marker, [6, 7])
+            mesh, facet_marker, domain_marker = create_contact_mesh(
+                mesh, facet_marker, domain_marker, [6, 7]
+            )
 
     V = _fem.functionspace(mesh, ("Lagrange", 1, (mesh.geometry.dim,)))
 
@@ -162,8 +166,7 @@ if __name__ == "__main__":
     J = ufl.derivative(F, du, w)
 
     # compiler options to improve performance
-    cffi_options = ["-Ofast", "-march=native"]
-    jit_options = {"cffi_extra_compile_args": cffi_options, "cffi_libraries": ["m"]}
+    jit_options = {"cffi_extra_compile_args": [], "cffi_libraries": ["m"]}
     # compiled forms for rhs and tangen system
     F_compiled = _fem.form(F, jit_options=jit_options)
     J_compiled = _fem.form(J, jit_options=jit_options)
@@ -225,7 +228,9 @@ if __name__ == "__main__":
 
     # create contact solver
     search_mode = [ContactMode.ClosestPoint for _ in range(len(contact_pairs))]
-    contact_problem = ContactProblem([facet_marker], surfaces, contact_pairs, mesh, args.q_degree, search_mode)
+    contact_problem = ContactProblem(
+        [facet_marker], surfaces, contact_pairs, mesh, args.q_degree, search_mode
+    )
     contact_problem.generate_contact_data(
         FrictionLaw.Frictionless,
         V,
@@ -273,7 +278,9 @@ if __name__ == "__main__":
     newton_solver.set_coefficients(compute_coefficients)
 
     # Set rigid motion nullspace
-    null_space = rigid_motions_nullspace_subdomains(V, domain_marker, np.unique(domain_marker.values), num_domains=2)
+    null_space = rigid_motions_nullspace_subdomains(
+        V, domain_marker, np.unique(domain_marker.values), num_domains=2
+    )
     newton_solver.A.setNearNullSpace(null_space)
 
     # Set Newton solver options
@@ -319,8 +326,9 @@ if __name__ == "__main__":
     if mesh.comm.rank == 0:
         print("-" * 25, file=outfile)
         print(f"Newton options {newton_options}", file=outfile)
+        Vs = u.function_space
         print(
-            f"num_dofs: {u.function_space.dofmap.index_map_bs*u.function_space.dofmap.index_map.size_global}"
+            f"num_dofs: {Vs.dofmap.index_map_bs * Vs.dofmap.index_map.size_global}"
             + f", {mesh.topology.cell_types[0]}",
             file=outfile,
         )

@@ -249,19 +249,28 @@ std::function<void(std::span<double>, mdspan_t<const double, 2>,
                    mdspan_t<const double, 2>, const std::size_t)>
 get_update_normal(const dolfinx::fem::CoordinateElement<double>& cmap);
 
-/// @brief Convert local entity indices to integration entities
+/// @brief Given a list of mesh entities, compute the corresponding
+/// (cell index, entity cell-local index).
 ///
-/// Compute the active entities in DOLFINx format for a given integral
-/// type over a set of entities If the integral type is cell, return the
-/// input, if it is exterior facets, return a list of pairs (cell,
-/// local_facet_index), and if it is interior facets, return a list of
-/// tuples (cell_0, local_facet_index_0, cell_1, local_facet_index_1)
-/// for each entity.
+/// For cells, the cell indices are returned. For a list of exterior
+/// facets, a list of (cell index, facet index relative to cell) pairs
+/// are returned. In both cases, the returned data is sorted by cell
+/// index.
 ///
-/// @param[in] mesh The mesh
-/// @param[in] entities List of mesh entities
-/// @param[in] integral The type of integral
-std::pair<std::vector<std::int32_t>, std::size_t>
+/// If `integral == dolfinx::fem::IntegralType::interior_facet` and
+/// exception is thrown.
+///
+/// @param[in] mesh Mesh that the entities are drawn from.
+/// @param[in] entities Mesh entity indices.
+/// @param[in] integral Type of integral
+/// @return
+/// - If `integral==dolfinx::fem::IntegralType::cell`, `entities` is
+/// sorted and returned.
+/// - If `integral==dolfinx::fem::IntegralType::exterior_facet`, for the
+/// each facet in `entities`, the corresponding (cell, local facet) pair
+/// is computed, where "local facet" is the index if the facet relative
+/// to the cell. Returned list if sorted by cell index.
+std::vector<std::int32_t>
 compute_active_entities(const dolfinx::mesh::Mesh<double>& mesh,
                         std::span<const std::int32_t> entities,
                         dolfinx::fem::IntegralType integral);

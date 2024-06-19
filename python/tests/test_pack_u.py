@@ -21,8 +21,7 @@ def test_pack_u():
     # Create mesh consisting of 4 triangles, where they are grouped in two
     # disconnected regions (with two cells in each region)
     points = np.array(
-        [[0, -1], [0.5, -1], [0, -2], [1, -1], [0, 1], [0.3, 1], [2, 2], [1, 1]],
-        dtype=np.float64,
+        [[0, -1], [0.5, -1], [0, -2], [1, -1], [0, 1], [0.3, 1], [2, 2], [1, 1]], dtype=np.float64
     )
     cells = np.array([[0, 1, 2], [4, 5, 6], [1, 3, 2], [5, 6, 7]], dtype=np.int64)
 
@@ -77,9 +76,7 @@ def test_pack_u():
     for i in range(2):
         gap = contact.pack_gap(i)
         u_opposite = contact.pack_u_contact(i, u._cpp_object)
-
         gap_reshape = gap.reshape(len(ss[i]), -2, 2)
-
         q_points = np.zeros_like(gap_reshape)
         for j in range(len(s0)):
             q_points[j] = contact.qp_phys(i, j)

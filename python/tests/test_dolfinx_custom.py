@@ -89,7 +89,9 @@ def test_contact_kernel(tmp_path, theta, gamma, dim, gap):
         indices = np.concatenate([top_facets, bottom_facets])
         values = np.hstack([top_values, bottom_values])
         sorted_facets = np.argsort(indices)
-        facet_marker = dolfinx.mesh.meshtags(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
+        facet_marker = dolfinx.mesh.meshtags(
+            mesh, tdim - 1, indices[sorted_facets], values[sorted_facets]
+        )
         bottom_facets = np.sort(bottom_facets)
 
         V = dolfinx.fem.functionspace(mesh, ("Lagrange", 1, (mesh.geometry.dim,)))
@@ -150,7 +152,9 @@ def test_contact_kernel(tmp_path, theta, gamma, dim, gap):
         b.assemble()
 
         q = sigma_n(u) + gammah * (gap - ufl.dot(u, (-n_2)))
-        J = ufl.inner(sigma(du), epsilon(v)) * ufl.dx - theta / gammah * sigma_n(du) * sigma_n(v) * ds(bottom_value)
+        J = ufl.inner(sigma(du), epsilon(v)) * ufl.dx - theta / gammah * sigma_n(du) * sigma_n(
+            v
+        ) * ds(bottom_value)
         J += (
             1
             / gammah
@@ -204,10 +208,18 @@ def test_contact_kernel(tmp_path, theta, gamma, dim, gap):
         )
         integral_entities = integral_entities[:num_local]
 
-        mu_packed = dolfinx_contact.cpp.pack_coefficient_quadrature(mu2._cpp_object, 0, integral_entities)
-        lmbda_packed = dolfinx_contact.cpp.pack_coefficient_quadrature(lmbda2._cpp_object, 0, integral_entities)
-        u_packed = dolfinx_contact.cpp.pack_coefficient_quadrature(u._cpp_object, q_deg, integral_entities)
-        grad_u_packed = dolfinx_contact.cpp.pack_gradient_quadrature(u._cpp_object, q_deg, integral_entities)
+        mu_packed = dolfinx_contact.cpp.pack_coefficient_quadrature(
+            mu2._cpp_object, 0, integral_entities
+        )
+        lmbda_packed = dolfinx_contact.cpp.pack_coefficient_quadrature(
+            lmbda2._cpp_object, 0, integral_entities
+        )
+        u_packed = dolfinx_contact.cpp.pack_coefficient_quadrature(
+            u._cpp_object, q_deg, integral_entities
+        )
+        grad_u_packed = dolfinx_contact.cpp.pack_gradient_quadrature(
+            u._cpp_object, q_deg, integral_entities
+        )
         h_facets = dolfinx_contact.pack_circumradius(mesh._cpp_object, integral_entities)
         data = np.array([bottom_value, top_value], dtype=np.int32)
         offsets = np.array([0, 2], dtype=np.int32)

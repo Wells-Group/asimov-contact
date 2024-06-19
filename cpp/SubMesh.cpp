@@ -10,28 +10,26 @@
 using namespace dolfinx_contact;
 
 //----------------------------------------------------------------------------
-dolfinx_contact::SubMesh::SubMesh(
-    const dolfinx::mesh::Mesh<double>& mesh,
-    std::span<const std::int32_t> cell_facet_pairs)
+SubMesh::SubMesh(const dolfinx::mesh::Mesh<double>& mesh,
+                 std::span<const std::int32_t> cell_facet_pairs)
 {
   const int tdim = mesh.topology()->dim();
 
-  // create sorted vector of unique cells adjacent to the input facets
+  // Copy cell indices
   std::vector<std::int32_t> cells(cell_facet_pairs.size() / 2);
-  for (std::size_t f = 0; f < cell_facet_pairs.size(); f += 2)
-    cells[f / 2] = cell_facet_pairs[f]; // retrieve cells
-  dolfinx::radix_sort<std::int32_t>(
-      std::span(cells.data(), cells.size())); // sort cells
-  cells.erase(std::unique(cells.begin(), cells.end()),
-              cells.end()); // remove duplicates
+  for (std::size_t f = 0; f < cell_facet_pairs.size() / 2; ++f)
+    cells[f] = cell_facet_pairs[2 * f];
+
+  // sort cells and remove duplicates
+  dolfinx::radix_sort<std::int32_t>(std::span(cells.data(), cells.size()));
+  cells.erase(std::unique(cells.begin(), cells.end()), cells.end());
 
   // save sorted cell vector as _parent_cells
 
   // call dolfinx::mesh::create_submesh and save ouput to member
   // variables
   auto [submesh, cell_map, vertex_map, x_dof_map]
-      = dolfinx::mesh::create_submesh(mesh, tdim,
-                                      std::span(cells.data(), cells.size()));
+      = dolfinx::mesh::create_submesh(mesh, tdim, cells);
   _parent_cells = cell_map;
 
   _mesh = std::make_shared<dolfinx::mesh::Mesh<double>>(submesh);
@@ -56,7 +54,7 @@ dolfinx_contact::SubMesh::SubMesh(
   // get number of cells on process
   std::shared_ptr<const dolfinx::common::IndexMap> map_c
       = mesh.topology()->index_map(tdim);
-  const int num_cells = map_c->size_local() + map_c->num_ghosts();
+  const std::int32_t num_cells = map_c->size_local() + map_c->num_ghosts();
 
   // mark which cells are in cells, i.e. which cells are in the submesh
   std::vector<std::int32_t> marked_cells(num_cells, 0);
@@ -96,8 +94,8 @@ dolfinx_contact::SubMesh::SubMesh(
       auto sub_cells = _mesh_to_submesh_cell_map->links(cell_facet_pairs[i]);
       assert(!sub_cells.empty());
 
-      // cell facet index the same for both meshes: use c_to_f to
-      // get submesh facet index
+      // cell facet index the same for both meshes: use c_to_f to get
+      // submesh facet index
       auto facets = c_to_f->links(sub_cells.front());
       assert((std::size_t)cell_facet_pairs[i + 1] < facets.size());
       std::int32_t submesh_facet = facets[cell_facet_pairs[i + 1]];
@@ -116,8 +114,8 @@ dolfinx_contact::SubMesh::SubMesh(
       auto sub_cells = _mesh_to_submesh_cell_map->links(cell_facet_pairs[i]);
       assert(!sub_cells.empty());
 
-      // cell facet index the same for both meshes: use c_to_f to
-      // get submesh facet index
+      // cell facet index the same for both meshes: use c_to_f to get
+      // submesh facet index
       auto facets = c_to_f->links(sub_cells.front());
       assert((std::size_t)cell_facet_pairs[i + 1] < facets.size());
       std::int32_t submesh_facet = facets[cell_facet_pairs[i + 1]];
@@ -132,8 +130,7 @@ dolfinx_contact::SubMesh::SubMesh(
   }
 }
 //----------------------------------------------------------------------------
-dolfinx::fem::FunctionSpace<double>
-dolfinx_contact::SubMesh::create_functionspace(
+dolfinx::fem::FunctionSpace<double> SubMesh::create_functionspace(
     const dolfinx::fem::FunctionSpace<double>& V_parent) const
 {
   // get element and element_dof_layout from parent mesh
@@ -143,22 +140,23 @@ dolfinx_contact::SubMesh::create_functionspace(
       = V_parent.dofmap()->element_dof_layout();
 
   // use parent mesh data and submesh comm/topology to create new dofmap
-  std::function<void(std::span<std::int32_t>, std::uint32_t)> unpermute_dofs
-      = nullptr;
+  std::function<void(std::span<std::int32_t>, std::uint32_t)> unpermute_dofs;
   if (element->needs_dof_permutations())
     unpermute_dofs = element->dof_permutation_fn(true, true);
+
   auto dofmap = std::make_shared<dolfinx::fem::DofMap>(
       dolfinx::fem::create_dofmap(_mesh->comm(), element_dof_layout,
                                   *_mesh->topology(), unpermute_dofs, nullptr));
+
   // create and return function space
-  const auto& vs = V_parent.value_shape();
+  std::span<const std::size_t> vs = V_parent.value_shape();
   std::vector _value_shape(vs.data(), vs.data() + vs.size());
+
   return dolfinx::fem::FunctionSpace(_mesh, element, dofmap, _value_shape);
 }
 //----------------------------------------------------------------------------
-void dolfinx_contact::SubMesh::copy_function(
-    const dolfinx::fem::Function<PetscScalar>& u_parent,
-    dolfinx::fem::Function<PetscScalar>& u_sub) const
+void SubMesh::copy_function(const dolfinx::fem::Function<PetscScalar>& u_parent,
+                            dolfinx::fem::Function<PetscScalar>& u_sub) const
 {
   // retrieve function space on submesh
   std::shared_ptr<const dolfinx::fem::FunctionSpace<double>> V_sub
@@ -199,8 +197,7 @@ void dolfinx_contact::SubMesh::copy_function(
   }
 }
 //----------------------------------------------------------------------------
-void dolfinx_contact::SubMesh::update_geometry(
-    const dolfinx::fem::Function<PetscScalar>& u)
+void SubMesh::update_geometry(const dolfinx::fem::Function<PetscScalar>& u)
 {
   // Recover original geometry from parent mesh
   std::shared_ptr<const dolfinx::mesh::Mesh<double>> parent_mesh
@@ -225,15 +222,15 @@ void dolfinx_contact::SubMesh::update_geometry(
   dolfinx_contact::update_geometry(u_sub, *_mesh);
 }
 //----------------------------------------------------------------------------
-std::vector<std::int32_t> dolfinx_contact::SubMesh::get_submesh_tuples(
-    std::span<const std::int32_t> facets) const
+std::vector<std::int32_t>
+SubMesh::get_submesh_tuples(std::span<const std::int32_t> facets) const
 {
   assert(_mesh);
 
   // Map (cell, facet) tuples from parent to sub mesh
   std::vector<std::int32_t> submesh_facets(facets.size());
 
-  const int tdim = _mesh->topology()->dim();
+  int tdim = _mesh->topology()->dim();
   std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> c_to_f
       = _mesh->topology()->connectivity(tdim, tdim - 1);
   assert(c_to_f);

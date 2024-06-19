@@ -177,12 +177,9 @@ petsc_options = {
 # create contact solver
 contact_problem = ContactProblem([facet_marker], surfaces, contact_pairs, mesh, 5, search_mode)
 contact_problem.generate_contact_data(
-    FrictionLaw.Frictionless,
-    V,
-    {"u": u, "du": du, "mu": mu_dg, "lambda": lmbda_dg},
-    gamma,
-    theta,
+    FrictionLaw.Frictionless, V, {"u": u, "du": du, "mu": mu_dg, "lambda": lmbda_dg}, gamma, theta
 )
+
 # create vector and matrix
 a_mat = contact_problem.create_matrix(J_compiled)
 b = create_vector(F_compiled)

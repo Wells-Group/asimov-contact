@@ -55,7 +55,9 @@ def test_pack_coeff_at_quadrature(ct, quadrature_degree, space, degree):
         mesh._cpp_object, cells, IntegralType.cell
     )
     integration_entities = integration_entities[:num_local]
-    coeffs = dolfinx_contact.cpp.pack_coefficient_quadrature(v._cpp_object, quadrature_degree, integration_entities)
+    coeffs = dolfinx_contact.cpp.pack_coefficient_quadrature(
+        v._cpp_object, quadrature_degree, integration_entities
+    )
 
     # Use prepare quadrature points and geometry for eval
     quadrature_points, _ = basix.make_quadrature(
@@ -70,7 +72,9 @@ def test_pack_coeff_at_quadrature(ct, quadrature_degree, space, degree):
     assert np.allclose(coeffs, expr_vals)
 
     if space not in ["N1curl", "RTCE"]:
-        coeffs = dolfinx_contact.cpp.pack_gradient_quadrature(v._cpp_object, quadrature_degree, integration_entities)
+        coeffs = dolfinx_contact.cpp.pack_gradient_quadrature(
+            v._cpp_object, quadrature_degree, integration_entities
+        )
         if space == "DG" and degree == 1:
             assert np.allclose(0.0, coeffs)
         else:
@@ -111,14 +115,18 @@ def test_pack_coeff_on_facet(quadrature_degree, space, degree):
         mesh._cpp_object, facets, IntegralType.exterior_facet
     )
     integration_entities = integration_entities[:num_local]
-    coeffs = dolfinx_contact.cpp.pack_coefficient_quadrature(v._cpp_object, quadrature_degree, integration_entities)
+    coeffs = dolfinx_contact.cpp.pack_coefficient_quadrature(
+        v._cpp_object, quadrature_degree, integration_entities
+    )
     cstride = coeffs.shape[1]
     tdim = mesh.topology.dim
     fdim = tdim - 1
 
     # Create quadrature points for integration on facets
     ct = mesh.topology.cell_type
-    q_rule = dolfinx_contact.QuadratureRule(ct, quadrature_degree, fdim, basix.QuadratureType.default)
+    q_rule = dolfinx_contact.QuadratureRule(
+        ct, quadrature_degree, fdim, basix.QuadratureType.default
+    )
 
     # Compute coefficients at quadrature points using Expression
     q_points = q_rule.points()
@@ -127,9 +135,13 @@ def test_pack_coeff_on_facet(quadrature_degree, space, degree):
 
     for i, entity in enumerate(integration_entities):
         local_index = entity[1]
-        assert np.allclose(coeffs[i], expr_vals[i, cstride * local_index : cstride * (local_index + 1)])
+        assert np.allclose(
+            coeffs[i], expr_vals[i, cstride * local_index : cstride * (local_index + 1)]
+        )
     if space not in ["N1curl", "RTCE"]:
-        coeffs = dolfinx_contact.cpp.pack_gradient_quadrature(v._cpp_object, quadrature_degree, integration_entities)
+        coeffs = dolfinx_contact.cpp.pack_gradient_quadrature(
+            v._cpp_object, quadrature_degree, integration_entities
+        )
         if space == "DG" and degree == 1:
             assert np.allclose(0.0, coeffs)
         else:
@@ -140,10 +152,7 @@ def test_pack_coeff_on_facet(quadrature_degree, space, degree):
                 local_index = entity[1]
                 assert np.allclose(
                     coeffs[i],
-                    expr_vals[
-                        i,
-                        gdim * cstride * local_index : gdim * cstride * (local_index + 1),
-                    ],
+                    expr_vals[i, gdim * cstride * local_index : gdim * cstride * (local_index + 1)],
                 )
 
 
@@ -216,7 +225,9 @@ def test_sub_coeff_grad(quadrature_degree, degree):
     num_sub_spaces = V.num_sub_spaces
     for i in range(num_sub_spaces):
         vi = v.sub(i)
-        coeffs = dolfinx_contact.cpp.pack_gradient_quadrature(vi._cpp_object, quadrature_degree, integration_entities)
+        coeffs = dolfinx_contact.cpp.pack_gradient_quadrature(
+            vi._cpp_object, quadrature_degree, integration_entities
+        )
 
         # Use Expression to verify packing
         expr = Expression(grad(vi), quadrature_points)

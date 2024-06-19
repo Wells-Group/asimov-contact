@@ -24,8 +24,8 @@ public:
   ///
   /// @param[in] markers List of meshtags defining the connected
   /// surfaces
-  /// @param[in] surfaces Adjacency list. Links of i contains meshtag
-  /// values associated with ith meshtag in markers
+  /// @param[in] surfaces Links of i contains meshtag values associated
+  /// with ith meshtag in markers
   /// @param[in] connected_pairs list of pairs (i, j) marking the ith
   /// and jth surface in surfaces->array() as a pair of connected
   /// surfaces

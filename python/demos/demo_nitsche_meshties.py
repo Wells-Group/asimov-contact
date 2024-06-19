@@ -57,8 +57,8 @@ def run_demo(simplex, E, nu, gamma, theta, lifting, outfile, ksp_view, timing_vi
 
     gmsh.initialize()
 
-    # Load mesh and create identifier functions for the top (Displacement condition)
-    # and the bottom (contact condition)
+    # Load mesh and create identifier functions for the top
+    # (Displacement condition) and the bottom (contact condition)
     # displacement = [[0, 0, 0]]
     gap = 1e-5
     H = 1.5
@@ -67,7 +67,9 @@ def run_demo(simplex, E, nu, gamma, theta, lifting, outfile, ksp_view, timing_vi
     model.add(name)
     model.setCurrent(name)
     model = create_box_mesh_3D(model, simplex, gap=gap, width=H, offset=0.0)
-    mesh, domain_marker, facet_marker = dolfinx.io.gmshio.model_to_mesh(model, MPI.COMM_WORLD, 0, gdim=3)
+    mesh, domain_marker, facet_marker = dolfinx.io.gmshio.model_to_mesh(
+        model, MPI.COMM_WORLD, 0, gdim=3
+    )
 
     gmsh.finalize()
 
@@ -132,13 +134,12 @@ def run_demo(simplex, E, nu, gamma, theta, lifting, outfile, ksp_view, timing_vi
             - theta * ufl.inner(sigma(v) * n, w) * ds(dirichlet_bdy)
             + E * gamma / h * ufl.inner(w, v) * ds(dirichlet_bdy)
         )
-        F += -theta * ufl.inner(sigma(v) * n, g) * ds(dirichlet_bdy) + E * gamma / h * ufl.inner(g, v) * ds(
-            dirichlet_bdy
-        )
+        F += -theta * ufl.inner(sigma(v) * n, g) * ds(dirichlet_bdy) + E * gamma / h * ufl.inner(
+            g, v
+        ) * ds(dirichlet_bdy)
 
     # compile forms
-    cffi_options = []
-    jit_options = {"cffi_extra_compile_args": cffi_options, "cffi_libraries": ["m"]}
+    jit_options = {"cffi_extra_compile_args": [], "cffi_libraries": ["m"]}
     F = form(F, jit_options=jit_options)
     J = form(J, jit_options=jit_options)
 
@@ -172,11 +173,7 @@ def run_demo(simplex, E, nu, gamma, theta, lifting, outfile, ksp_view, timing_vi
 
     # initialise meshties
     meshties = MeshTie(
-        [facet_marker._cpp_object],
-        surfaces,
-        contact,
-        mesh._cpp_object,
-        quadrature_degree=5,
+        [facet_marker._cpp_object], surfaces, contact, mesh._cpp_object, quadrature_degree=5
     )
     meshties.generate_kernel_data(
         Problem.Elasticity,
@@ -215,7 +212,9 @@ def run_demo(simplex, E, nu, gamma, theta, lifting, outfile, ksp_view, timing_vi
     A.assemble()
 
     # Set rigid motion nullspace
-    null_space = rigid_motions_nullspace_subdomains(V, domain_marker, np.unique(domain_marker.values), num_domains=2)
+    null_space = rigid_motions_nullspace_subdomains(
+        V, domain_marker, np.unique(domain_marker.values), num_domains=2
+    )
     A.setNearNullSpace(null_space)
 
     # Create PETSc Krylov solver and turn convergence monitoring on
@@ -264,7 +263,8 @@ def run_demo(simplex, E, nu, gamma, theta, lifting, outfile, ksp_view, timing_vi
         ofile = open(outfile, "a")
     print("-" * 25, file=ofile)
     print(
-        f"num_dofs: {uh.function_space.dofmap.index_map_bs*uh.function_space.dofmap.index_map.size_global}"
+        f"num_dofs: {uh.function_space.dofmap.index_map_bs
+                     * uh.function_space.dofmap.index_map.size_global}"
         + f", {mesh.topology.cell_type}",
         file=ofile,
     )
@@ -278,7 +278,9 @@ def run_demo(simplex, E, nu, gamma, theta, lifting, outfile, ksp_view, timing_vi
 
 if __name__ == "__main__":
     desc = "Nitsche's method for two elastic bodies using custom assemblers"
-    parser = argparse.ArgumentParser(description=desc, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser = argparse.ArgumentParser(
+        description=desc, formatter_class=argparse.ArgumentDefaultsHelpFormatter
+    )
     parser.add_argument(
         "--theta",
         default=1.0,
@@ -325,7 +327,9 @@ if __name__ == "__main__":
         help="Use triangle/tet mesh",
         default=False,
     )
-    parser.add_argument("--E", default=1e3, type=np.float64, dest="E", help="Youngs modulus of material")
+    parser.add_argument(
+        "--E", default=1e3, type=np.float64, dest="E", help="Youngs modulus of material"
+    )
     parser.add_argument("--nu", default=0.1, type=np.float64, dest="nu", help="Poisson's ratio")
     parser.add_argument(
         "--outfile",

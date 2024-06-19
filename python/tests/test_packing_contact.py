@@ -138,7 +138,8 @@ def compare_test_fn(fn_space, test_fn, grad_test_fn, q_indices, link, x_ref, cel
             expr = _fem.Expression(v, x_ref)
             expr_vals = expr.eval(mesh, cell_arr)
 
-            # Create expression vor evaluating derivative of test function and evaluate
+            # Create expression vor evaluating derivative of test
+            # function and evaluate
             if bs == 1:
                 expr2 = _fem.Expression(ufl.grad(v), x_ref)
             else:
@@ -146,7 +147,9 @@ def compare_test_fn(fn_space, test_fn, grad_test_fn, q_indices, link, x_ref, cel
             expr_vals2 = expr2.eval(mesh, cell)
             # compare values of test functions
             offset = link * num_q_points * len(dofs) * bs + i * num_q_points * bs
-            assert np.allclose(expr_vals[0][q_indices * bs + k], test_fn[offset + q_indices * bs + k])
+            assert np.allclose(
+                expr_vals[0][q_indices * bs + k], test_fn[offset + q_indices * bs + k]
+            )
             # retrieve dv from expression values and packed test fn
             dv1 = np.zeros((len(q_indices), gdim))
             dv2 = np.zeros((len(q_indices), gdim))

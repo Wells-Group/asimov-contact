@@ -21,9 +21,6 @@ namespace dolfinx_contact
 class SubMesh
 {
 public:
-  /// Default empty constructor
-  SubMesh() = default;
-
   /// @brief constructs a submesh consisting of the cells adjacent to a
   /// given set of exterior facets
   /// @param[in] mesh the parent mesh

@@ -35,15 +35,31 @@ namespace dolfinx_contact
 class Contact
 {
 public:
-  /// empty constructor
-  Contact() = default;
+  /// Constructor
+  ///
+  /// @param[in] surfaces The facets for each surfaces, stored as
+  /// flattened (cell index, local facet index) pairs for each surface.
+  /// The facet pairs for surface `i` are returned by
+  /// `surface.links(i)`.
+  /// @param[in] contact_pairs list of pairs `(i, j)` marking the `i`th
+  /// and `j`th surface in surfaces->array() as a contact pair
+  /// @param[in] mesh TODO
+  /// @param[in] mode Contact detection algorithm for each pair
+  /// @param[in] q_deg The quadrature degree.
+  Contact(const dolfinx::graph::AdjacencyList<std::int32_t>& surfaces,
+          const std::vector<std::array<int, 2>>& contact_pairs,
+          std::shared_ptr<const dolfinx::mesh::Mesh<double>> mesh,
+          const std::vector<ContactMode>& mode, int q_deg = 3);
 
   /// Constructor
-  /// @param[in] markers List of meshtags defining the contact surfaces
-  /// @param[in] surfaces Adjacency list. Links of i contains meshtag values
-  /// associated with ith meshtag in markers
-  /// @param[in] contact_pairs list of pairs (i, j) marking the ith and jth
-  /// surface in surfaces->array() as a contact pair
+  ///
+  /// @todo Remove this constructor
+  ///
+  /// @param[in] markers Tags `markers[i]` for surface `i`.
+  /// @param[in] surfaces For surface `i`, `surfaces.links(i)` gives the
+  /// tag values of the facets in `markers[i]` that make up surface `i`.
+  /// @param[in] contact_pairs list of pairs `(i, j)` marking the `i`th
+  /// and `j`th surface in surfaces->array() as a contact pair
   /// @param[in] mesh TODO
   /// @param[in] mode Contact detection algorithm for each pair
   /// @param[in] q_deg The quadrature degree.
@@ -52,15 +68,11 @@ public:
           const dolfinx::graph::AdjacencyList<std::int32_t>& surfaces,
           const std::vector<std::array<int, 2>>& contact_pairs,
           std::shared_ptr<const dolfinx::mesh::Mesh<double>> mesh,
-          const std::vector<ContactMode>& mode, const int q_deg = 3);
-
-  /// Return meshtag value for surface with index surface
-  /// @param[in] surface - the index of the surface
-  int surface_mt(int surface) const { return _surfaces[surface]; }
+          const std::vector<ContactMode>& mode, int q_deg = 3);
 
   /// Return contact pair
   /// @param[in] pair - the index of the contact pair
-  const std::array<int, 2>& contact_pair(int pair) const
+  std::array<int, 2> contact_pair(int pair) const
   {
     return _contact_pairs[pair];
   }
@@ -70,7 +82,7 @@ public:
   /// @return TODO
   std::span<const std::int32_t> active_entities(int s) const
   {
-    return _cell_facet_pairs->links(s);
+    return _cell_facet_pairs.links(s);
   }
 
   /// Return number of facets in surface s owned by the process
@@ -78,14 +90,8 @@ public:
   /// @return TODO
   std::size_t local_facets(int s) const { return _local_facets[s]; }
 
-  /// set quadrature rule
-  void set_quadrature_rule(QuadratureRule q_rule)
-  {
-    _quadrature_rule = std::make_shared<QuadratureRule>(q_rule);
-  }
-
   /// return quadrature rule
-  const QuadratureRule& quadrature_rule() const { return *_quadrature_rule; }
+  const QuadratureRule& quadrature_rule() const { return _quadrature_rule; }
 
   /// @brief TODO
   /// @return TODO
@@ -144,7 +150,7 @@ public:
   /// available types
   /// @returns Mat The PETSc matrix
   Mat create_petsc_matrix(const dolfinx::fem::Form<PetscScalar>& a,
-                          const std::string& type) const;
+                          std::string type) const;
 
   /// Assemble matrix over exterior facets (for contact facets)
   ///
@@ -219,8 +225,8 @@ public:
   /// _qp_phys, _phi_ref_facets
   void create_distance_map(int pair);
 
-  /// Compute and pack the gap function for each quadrature point the set of
-  /// facets.
+  /// Compute and pack the gap function for each quadrature point the
+  /// set of facets.
   ///
   /// For a set of facets; go through the quadrature points on each
   /// facet find the closest facet on the other surface and compute the
@@ -252,9 +258,9 @@ public:
   pack_grad_test_functions(int pair,
                            const dolfinx::fem::FunctionSpace<double>& V) const;
 
-  /// Remove points from facet map with a distance larger than tol
-  /// in the surface or if the angle of distance vector and opposite surface is
-  /// too large
+  /// Remove points from facet map with a distance larger than tol in
+  /// the surface or if the angle of distance vector and opposite
+  /// surface is too large
   /// @param[in] pair index of the contact pair
   /// @param[in] gap for computing distance
   /// @param[in] n_y normals for checking angle
@@ -266,6 +272,7 @@ public:
   ///
   /// Compute function on opposite surface at quadrature points of
   /// facets
+  ///
   /// @param[in] pair TODO
   /// @param[in] u TODO
   /// @return TODO
@@ -311,8 +318,8 @@ public:
   std::size_t num_q_points() const;
 
 private:
-  std::shared_ptr<QuadratureRule> _quadrature_rule; // quadrature rule
-  std::vector<int> _surfaces; // meshtag values for surfaces
+  // quadrature rule
+  QuadratureRule _quadrature_rule;
 
   // store index of candidate_surface for each quadrature_surface
   std::vector<std::array<int, 2>> _contact_pairs;
@@ -330,7 +337,7 @@ private:
   // surface output of compute_distance_map
   std::vector<std::vector<double>> _reference_contact_points;
 
-  // shape  associated with _reference_contact_points
+  // shape associated with _reference_contact_points
   std::vector<std::array<std::size_t, 2>> _reference_contact_shape;
 
   // _qp_phys[i] contains the quadrature points on the physical facets
@@ -344,14 +351,13 @@ private:
   // maximum number of cells linked to a cell on ith surface
   std::vector<std::size_t> _max_links;
 
+  // Adjacency list linking facets as (cell, facet) pairs to the index of the
+  // surface. The pairs are flattened row-major
+  dolfinx::graph::AdjacencyList<std::int32_t> _cell_facet_pairs;
+
   // submesh containing all cells linked to facets on any of the contact
   // surfaces
   SubMesh _submesh;
-
-  // Adjacency list linking facets as (cell, facet) pairs to the index of the
-  // surface. The pairs are flattened row-major
-  std::shared_ptr<const dolfinx::graph::AdjacencyList<std::int32_t>>
-      _cell_facet_pairs;
 
   // number of facets owned by process for each surface
   std::vector<std::size_t> _local_facets;

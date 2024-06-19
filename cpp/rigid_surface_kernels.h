@@ -8,7 +8,6 @@
 
 #include "QuadratureRule.h"
 #include "utils.h"
-#include <petsc.h>
 
 namespace dolfinx_contact
 {

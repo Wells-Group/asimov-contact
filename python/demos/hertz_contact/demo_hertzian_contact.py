@@ -2,62 +2,68 @@
 #
 # SPDX-License-Identifier:    MIT
 
-# import argparse
+import argparse
 
-# from mpi4py import MPI
-# from petsc4py.PETSc import InsertMode, ScatterMode  # type: ignore
+from mpi4py import MPI
+from petsc4py.PETSc import InsertMode, ScatterMode  # type: ignore
 
-# import numpy as np
-# import numpy.typing as npt
-# import ufl
-# from dolfinx import default_scalar_type
-# from dolfinx.common import Timer, timed
-# from dolfinx.fem import (
-#     Constant,
-#     Function,
-#     dirichletbc,
-#     form,
-#     functionspace,
-#     locate_dofs_topological,
-# )
-# from dolfinx.fem.petsc import (
-#     apply_lifting,
-#     assemble_matrix,
-#     assemble_vector,
-#     create_vector,
-#     set_bc,
-# )
-# from dolfinx.geometry import bb_tree, compute_closest_entity
-# from dolfinx.graph import adjacencylist
-# from dolfinx.io import VTXWriter, XDMFFile
-# from dolfinx.mesh import Mesh
-# from dolfinx_contact.cpp import ContactMode
-# from dolfinx_contact.general_contact.contact_problem import ContactProblem, FrictionLaw
-# from dolfinx_contact.helpers import epsilon, lame_parameters, rigid_motions_nullspace_subdomains, sigma_func
-# from dolfinx_contact.meshing import (
-#     convert_mesh,
-#     create_circle_plane_mesh,
-#     create_halfdisk_plane_mesh,
-#     create_halfsphere_box_mesh,
-# )
-# from dolfinx_contact.newton_solver import NewtonSolver
-# from dolfinx_contact.output import ContactWriter
+import numpy as np
+import numpy.typing as npt
+import ufl
+from dolfinx import default_scalar_type
+from dolfinx.common import Timer, timed
+from dolfinx.fem import (
+    Constant,
+    Function,
+    dirichletbc,
+    form,
+    functionspace,
+    locate_dofs_topological,
+)
+from dolfinx.fem.petsc import (
+    apply_lifting,
+    assemble_matrix,
+    assemble_vector,
+    create_vector,
+    set_bc,
+)
+from dolfinx.geometry import bb_tree, compute_closest_entity
+from dolfinx.graph import adjacencylist
+from dolfinx.io import VTXWriter, XDMFFile
+from dolfinx.mesh import Mesh
+from dolfinx_contact.cpp import ContactMode
+from dolfinx_contact.general_contact.contact_problem import ContactProblem, FrictionLaw
+from dolfinx_contact.helpers import (
+    epsilon,
+    lame_parameters,
+    rigid_motions_nullspace_subdomains,
+    sigma_func,
+)
+from dolfinx_contact.meshing import (
+    convert_mesh,
+    create_circle_plane_mesh,
+    create_halfdisk_plane_mesh,
+    create_halfsphere_box_mesh,
+)
+from dolfinx_contact.newton_solver import NewtonSolver
+from dolfinx_contact.output import ContactWriter
 
 
-# def closest_node_in_mesh(mesh: Mesh, point: npt.NDArray[np.float64]) -> npt.NDArray[np.int32]:
-#     points = np.reshape(point, (1, 3))
-#     bounding_box = bb_tree(mesh, 0)
-#     node = compute_closest_entity(bounding_box, bounding_box, mesh, points[0])
-#     return node
+def closest_node_in_mesh(mesh: Mesh, point: npt.NDArray[np.float64]) -> npt.NDArray[np.int32]:
+    points = np.reshape(point, (1, 3))
+    bounding_box = bb_tree(mesh, 0)
+    node = compute_closest_entity(bounding_box, bounding_box, mesh, points[0])
+    return node
 
 
 if __name__ == "__main__":
-    print("Demo needs updating. Exiting.")
-    exit(0)
+    # print("Demo needs updating. Exiting.")
+    # exit(0)
 
-    """
     desc = "Example for verifying correctness of code"
-    parser = argparse.ArgumentParser(description=desc, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser = argparse.ArgumentParser(
+        description=desc, formatter_class=argparse.ArgumentDefaultsHelpFormatter
+    )
     parser.add_argument(
         "--quadrature",
         default=5,
@@ -194,7 +200,9 @@ if __name__ == "__main__":
         dirichlet_nodes = np.array([node1, node2, node3], dtype=np.int32)
         dirichlet_dofs1 = locate_dofs_topological(V.sub(0), 0, dirichlet_nodes)
         dirichlet_dofs2 = locate_dofs_topological(V.sub(1), 0, dirichlet_nodes)
-        dirichlet_dofs3 = locate_dofs_topological(V, mesh.topology.dim - 1, facet_marker.find(dirichlet_bdy))
+        dirichlet_dofs3 = locate_dofs_topological(
+            V, mesh.topology.dim - 1, facet_marker.find(dirichlet_bdy)
+        )
 
         g0 = Constant(mesh, default_scalar_type(0.0))
         g = Constant(mesh, default_scalar_type((0.0, 0.0, 0.0)))
@@ -227,15 +235,21 @@ if __name__ == "__main__":
             return vals
     else:
         if problem == 1:
-            outname = "../../results/hertz1_2D_simplex_RR" if simplex else "../results/hertz1_2D_quads_RR"
+            outname = (
+                "../../results/hertz1_2D_simplex_RR" if simplex else "../results/hertz1_2D_quads_RR"
+            )
             fname = f"{mesh_dir}/hertz1_2D_simplex" if simplex else f"{mesh_dir}/hertz1_2D_quads"
-            create_circle_plane_mesh(f"{fname}.msh", not simplex, args.res, args.order, R, H, L, gap)
+            create_circle_plane_mesh(
+                f"{fname}.msh", not simplex, args.res, args.order, R, H, L, gap
+            )
             contact_bdy_1 = 10
             contact_bdy_2 = 6
             dirichlet_bdy = 4
             neumann_bdy = 8
         else:
-            outname = "../results/hertz2_2D_simplex_RR" if simplex else "../results/hertz2_2D_quads_RR"
+            outname = (
+                "../results/hertz2_2D_simplex_RR" if simplex else "../results/hertz2_2D_quads_RR"
+            )
             fname = f"{mesh_dir}/hertz2_2D_simplex" if simplex else f"{mesh_dir}/hertz2_2D_quads"
             create_halfdisk_plane_mesh(
                 filename=f"{fname}.msh",
@@ -266,7 +280,9 @@ if __name__ == "__main__":
         node2 = closest_node_in_mesh(mesh, np.array([0.0, -R / 5.0, 0.0], dtype=np.float64))
         dirichlet_nodes = np.hstack([node1, node2])
         dirichlet_dofs1 = locate_dofs_topological(V.sub(0), 0, dirichlet_nodes)
-        dirichlet_dofs2 = locate_dofs_topological(V, mesh.topology.dim - 1, facet_marker.find(dirichlet_bdy))
+        dirichlet_dofs2 = locate_dofs_topological(
+            V, mesh.topology.dim - 1, facet_marker.find(dirichlet_bdy)
+        )
 
         g0 = Constant(mesh, default_scalar_type(0.0))
         g = Constant(mesh, default_scalar_type((0, 0)))
@@ -385,7 +401,9 @@ if __name__ == "__main__":
     search_mode = [ContactMode.ClosestPoint, ContactMode.ClosestPoint]
 
     # create contact solver
-    contact_problem = ContactProblem([facet_marker], surfaces, contact, mesh, args.q_degree, search_mode)
+    contact_problem = ContactProblem(
+        [facet_marker], surfaces, contact, mesh, args.q_degree, search_mode
+    )
     contact_problem.generate_contact_data(
         FrictionLaw.Frictionless,
         V,
@@ -492,4 +510,3 @@ if __name__ == "__main__":
         vtx.write(i + 1)
 
     vtx.close()
-    """

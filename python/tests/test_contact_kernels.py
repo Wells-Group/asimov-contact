@@ -12,19 +12,9 @@ import numpy as np
 import pytest
 import ufl
 from dolfinx.fem import Function, IntegralType, form, functionspace
-from dolfinx.fem.petsc import (
-    assemble_matrix,
-    assemble_vector,
-    create_matrix,
-    create_vector,
-)
+from dolfinx.fem.petsc import assemble_matrix, assemble_vector, create_matrix, create_vector
 from dolfinx.graph import adjacencylist
-from dolfinx.mesh import (
-    create_unit_cube,
-    create_unit_square,
-    locate_entities_boundary,
-    meshtags,
-)
+from dolfinx.mesh import create_unit_cube, create_unit_square, locate_entities_boundary, meshtags
 
 kt = dolfinx_contact.cpp.Kernel
 compare_matrices = dolfinx_contact.helpers.compare_matrices
@@ -42,7 +32,11 @@ def R_minus(x):
 @pytest.mark.parametrize("Q", [0, 1, 2])
 def test_vector_surface_kernel(dim, kernel_type, P, Q):
     N = 20 if dim == 2 else 5
-    mesh = create_unit_square(MPI.COMM_WORLD, N, N) if dim == 2 else create_unit_cube(MPI.COMM_WORLD, N, N, N)
+    mesh = (
+        create_unit_square(MPI.COMM_WORLD, N, N)
+        if dim == 2
+        else create_unit_cube(MPI.COMM_WORLD, N, N, N)
+    )
 
     # Find facets on boundary to integrate over
     facets = locate_entities_boundary(
@@ -96,7 +90,8 @@ def test_vector_surface_kernel(dim, kernel_type, P, Q):
 
     n_vec = np.zeros(mesh.geometry.dim)
     n_vec[mesh.geometry.dim - 1] = 1
-    # FIXME: more general definition of n_2 needed for surface that is not a horizontal rectangular box.
+    # FIXME: more general definition of n_2 needed for surface that is
+    # not a horizontal rectangular box.
     n_2 = ufl.as_vector(n_vec)  # Normal of plane (projection onto other body)
     n = ufl.FacetNormal(mesh)
 
@@ -124,12 +119,9 @@ def test_vector_surface_kernel(dim, kernel_type, P, Q):
         * (theta * sigma_n(v) - (gamma / h) * ufl.dot(v, (-n_2)))
         * ds(1)
     )
+
     # Compile UFL form
-    cffi_options = ["-Ofast", "-march=native"]
-    L = form(
-        L,
-        jit_options={"cffi_extra_compile_args": cffi_options, "cffi_libraries": ["m"]},
-    )
+    L = form(L, jit_options={"cffi_extra_compile_args": [], "cffi_libraries": ["m"]})
     b = create_vector(L)
 
     # Normal assembly
@@ -145,10 +137,18 @@ def test_vector_surface_kernel(dim, kernel_type, P, Q):
         mesh._cpp_object, ft.indices, IntegralType.exterior_facet
     )
     integral_entities = integral_entities[:num_local]
-    mu_packed = dolfinx_contact.cpp.pack_coefficient_quadrature(mu._cpp_object, 0, integral_entities)
-    lmbda_packed = dolfinx_contact.cpp.pack_coefficient_quadrature(lmbda._cpp_object, 0, integral_entities)
-    u_packed = dolfinx_contact.cpp.pack_coefficient_quadrature(u._cpp_object, 2 * P + Q + 1, integral_entities)
-    grad_u_packed = dolfinx_contact.cpp.pack_gradient_quadrature(u._cpp_object, 2 * P + Q + 1, integral_entities)
+    mu_packed = dolfinx_contact.cpp.pack_coefficient_quadrature(
+        mu._cpp_object, 0, integral_entities
+    )
+    lmbda_packed = dolfinx_contact.cpp.pack_coefficient_quadrature(
+        lmbda._cpp_object, 0, integral_entities
+    )
+    u_packed = dolfinx_contact.cpp.pack_coefficient_quadrature(
+        u._cpp_object, 2 * P + Q + 1, integral_entities
+    )
+    grad_u_packed = dolfinx_contact.cpp.pack_gradient_quadrature(
+        u._cpp_object, 2 * P + Q + 1, integral_entities
+    )
     h_facets = dolfinx_contact.pack_circumradius(mesh._cpp_object, integral_entities)
     data = np.array([1], dtype=np.int32)
     offsets = np.array([0, 1], dtype=np.int32)
@@ -166,10 +166,7 @@ def test_vector_surface_kernel(dim, kernel_type, P, Q):
     g_vec = contact.pack_gap_plane(0, -g)
     # FIXME: assuming all facets are the same type
     q_rule = dolfinx_contact.QuadratureRule(
-        mesh.topology.cell_type,
-        2 * P + Q + 1,
-        mesh.topology.dim - 1,
-        basix.QuadratureType.default,
+        mesh.topology.cell_type, 2 * P + Q + 1, mesh.topology.dim - 1, basix.QuadratureType.default
     )
     coeffs = np.hstack([mu_packed, lmbda_packed, h_facets, g_vec, u_packed, grad_u_packed])
 
@@ -191,7 +188,11 @@ def test_vector_surface_kernel(dim, kernel_type, P, Q):
 @pytest.mark.parametrize("Q", [0, 1, 2])
 def test_matrix_surface_kernel(dim, kernel_type, P, Q):
     N = 20 if dim == 2 else 5
-    mesh = create_unit_square(MPI.COMM_WORLD, N, N) if dim == 2 else create_unit_cube(MPI.COMM_WORLD, N, N, N)
+    mesh = (
+        create_unit_square(MPI.COMM_WORLD, N, N)
+        if dim == 2
+        else create_unit_cube(MPI.COMM_WORLD, N, N, N)
+    )
 
     # Find facets on boundary to integrate over
     facets = dolfinx.mesh.locate_entities_boundary(
@@ -245,7 +246,8 @@ def test_matrix_surface_kernel(dim, kernel_type, P, Q):
 
     n_vec = np.zeros(mesh.geometry.dim)
     n_vec[mesh.geometry.dim - 1] = 1
-    # FIXME: more general definition of n_2 needed for surface that is not a horizontal rectangular box.
+    # FIXME: more general definition of n_2 needed for surface that is
+    # not a horizontal rectangular box.
     n_2 = ufl.as_vector(n_vec)  # Normal of plane (projection onto other body)
     n = ufl.FacetNormal(mesh)
 
@@ -278,11 +280,7 @@ def test_matrix_surface_kernel(dim, kernel_type, P, Q):
         * ds(1)
     )
     # Compile UFL form
-    cffi_options = ["-Ofast", "-march=native"]
-    a = form(
-        a,
-        jit_options={"cffi_extra_compile_args": cffi_options, "cffi_libraries": ["m"]},
-    )
+    a = form(a, jit_options={"cffi_extra_compile_args": [], "cffi_libraries": ["m"]})
     A = create_matrix(a)
 
     # Normal assembly
@@ -292,10 +290,7 @@ def test_matrix_surface_kernel(dim, kernel_type, P, Q):
 
     # Custom assembly
     q_rule = dolfinx_contact.QuadratureRule(
-        mesh.topology.cell_type,
-        2 * P + Q + 1,
-        mesh.topology.dim - 1,
-        basix.QuadratureType.default,
+        mesh.topology.cell_type, 2 * P + Q + 1, mesh.topology.dim - 1, basix.QuadratureType.default
     )
     consts = np.array([gamma, theta])
     consts = np.hstack((consts, n_vec))
@@ -303,10 +298,18 @@ def test_matrix_surface_kernel(dim, kernel_type, P, Q):
         mesh._cpp_object, facets, IntegralType.exterior_facet
     )
     integral_entities = integral_entities[:num_local]
-    mu_packed = dolfinx_contact.cpp.pack_coefficient_quadrature(mu._cpp_object, 0, integral_entities)
-    lmbda_packed = dolfinx_contact.cpp.pack_coefficient_quadrature(lmbda._cpp_object, 0, integral_entities)
-    u_packed = dolfinx_contact.cpp.pack_coefficient_quadrature(u._cpp_object, 2 * P + Q + 1, integral_entities)
-    grad_u_packed = dolfinx_contact.cpp.pack_gradient_quadrature(u._cpp_object, 2 * P + Q + 1, integral_entities)
+    mu_packed = dolfinx_contact.cpp.pack_coefficient_quadrature(
+        mu._cpp_object, 0, integral_entities
+    )
+    lmbda_packed = dolfinx_contact.cpp.pack_coefficient_quadrature(
+        lmbda._cpp_object, 0, integral_entities
+    )
+    u_packed = dolfinx_contact.cpp.pack_coefficient_quadrature(
+        u._cpp_object, 2 * P + Q + 1, integral_entities
+    )
+    grad_u_packed = dolfinx_contact.cpp.pack_gradient_quadrature(
+        u._cpp_object, 2 * P + Q + 1, integral_entities
+    )
     h_facets = dolfinx_contact.pack_circumradius(mesh._cpp_object, integral_entities)
     data = np.array([1], dtype=np.int32)
     offsets = np.array([0, 1], dtype=np.int32)

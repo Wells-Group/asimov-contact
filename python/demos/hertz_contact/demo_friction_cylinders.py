@@ -43,11 +43,13 @@ from dolfinx_contact.newton_solver import NewtonSolver
 from dolfinx_contact.output import ContactWriter
 
 if __name__ == "__main__":
-    print("Demo needs updating. Exiting.")
-    exit(0)
+    # print("Demo needs updating. Exiting.")
+    # exit(0)
 
     desc = "Friction example with two elastic cylinders for verifying correctness of code"
-    parser = argparse.ArgumentParser(description=desc, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser = argparse.ArgumentParser(
+        description=desc, formatter_class=argparse.ArgumentDefaultsHelpFormatter
+    )
     parser.add_argument(
         "--quadrature",
         default=5,
@@ -90,8 +92,12 @@ if __name__ == "__main__":
     lmbda = lambda_func(E, nu)
 
     # Create mesh
-    outname = "../results/friction_cyl_2D_simplex" if simplex else "../results/friction_cyl_2D_quads"
-    fname = f"{mesh_dir}/friction_cyl_2D_simplex" if simplex else f"{mesh_dir}/friction_cyl_2D_quads"
+    outname = (
+        "../results/friction_cyl_2D_simplex" if simplex else "../results/friction_cyl_2D_quads"
+    )
+    fname = (
+        f"{mesh_dir}/friction_cyl_2D_simplex" if simplex else f"{mesh_dir}/friction_cyl_2D_quads"
+    )
     create_quarter_disks_mesh(f"{fname}.msh", args.res, args.order, not simplex, R, gap)
 
     convert_mesh(fname, f"{fname}.xdmf", gdim=2)
@@ -152,7 +158,9 @@ if __name__ == "__main__":
     t = Constant(mesh, default_scalar_type((0.0, -p)))
     g = Constant(mesh, default_scalar_type((0.0)))
 
-    symmetry_nodes = locate_entities(mesh, 0, lambda x: np.logical_and(np.isclose(x[0], 0), x[1] >= -8))
+    symmetry_nodes = locate_entities(
+        mesh, 0, lambda x: np.logical_and(np.isclose(x[0], 0), x[1] >= -8)
+    )
     dofs_symmetry = locate_dofs_topological(V.sub(0), 0, symmetry_nodes)
     dofs_bottom = locate_dofs_topological(V, 1, facet_marker.find(bottom))
     dofs_top = locate_dofs_topological(V, 1, facet_marker.find(top))
@@ -197,8 +205,7 @@ if __name__ == "__main__":
     J = ufl.derivative(F, du, w)
 
     # compiler options to improve performance
-    cffi_options = ["-Ofast", "-march=native"]
-    jit_options = {"cffi_extra_compile_args": cffi_options, "cffi_libraries": ["m"]}
+    jit_options = {"cffi_extra_compile_args": [], "cffi_libraries": ["m"]}
     # compiled forms for rhs and tangen system
     F_compiled = form(F, jit_options=jit_options)
     J_compiled = form(J, jit_options=jit_options)
@@ -215,7 +222,12 @@ if __name__ == "__main__":
         for i in range(x.shape[1]):
             if abs(x[0][i]) <= c:
                 vals[i] = (
-                    fric * 4 * R * p / (np.pi * a**2) * (np.sqrt(a**2 - x[0][i] ** 2) - np.sqrt(c**2 - x[0][i] ** 2))
+                    fric
+                    * 4
+                    * R
+                    * p
+                    / (np.pi * a**2)
+                    * (np.sqrt(a**2 - x[0][i] ** 2) - np.sqrt(c**2 - x[0][i] ** 2))
                 )
             elif abs(x[0][i] < a):
                 vals[i] = fric * 4 * R * p / (np.pi * a**2) * (np.sqrt(a**2 - x[0][i] ** 2))
@@ -235,7 +247,9 @@ if __name__ == "__main__":
 
     # Solve contact problem using Nitsche's method
     steps1 = 4
-    contact_problem = ContactProblem([facet_marker], surfaces, contact_pairs, mesh, args.q_degree, search_mode)
+    contact_problem = ContactProblem(
+        [facet_marker], surfaces, contact_pairs, mesh, args.q_degree, search_mode
+    )
     contact_problem.generate_contact_data(
         FrictionLaw.Frictionless,
         V,
@@ -311,7 +325,9 @@ if __name__ == "__main__":
     newton_solver.set_coefficients(compute_coefficients)
 
     # Set rigid motion nullspace
-    null_space = rigid_motions_nullspace_subdomains(V, domain_marker, np.unique(domain_marker.values), num_domains=2)
+    null_space = rigid_motions_nullspace_subdomains(
+        V, domain_marker, np.unique(domain_marker.values), num_domains=2
+    )
     newton_solver.A.setNearNullSpace(null_space)
 
     # Set Newton solver options
@@ -324,7 +340,7 @@ if __name__ == "__main__":
     for i in range(steps1):
         g_top.value[1] = -0.2 / steps1
         t.value[1] = 0  # val
-        print(f"Fricitionless part: Step {i+1} of {steps1}----------------------------------------------")
+        print(f"Fricitionless part: Step {i+1} of {steps1}----------------------------------------")
         set_bc(du.x.petsc_vec, bcs)
         n, converged = newton_solver.solve(du, write_solution=True)
         newton_steps1.append(n)
@@ -414,7 +430,7 @@ if __name__ == "__main__":
 
     newton_steps2 = []
     for i in range(steps2):
-        print(f"Fricitional part: Step {i+1} of {steps2}----------------------------------------------")
+        print(f"Fricitional part: Step {i+1} of {steps2}------------------------------------------")
         set_bc(du.x.petsc_vec, bcs)
         g_top.value[0] = 6 * 0.05 / steps2
         n, converged = newton_solver.solve(du, write_solution=True)

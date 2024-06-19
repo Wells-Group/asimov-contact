@@ -85,7 +85,11 @@ def solve_euler_bernoulli(
     v = ufl.TestFunction(V)
     dx = ufl.Measure("dx", domain=mesh)
     ds = ufl.Measure("ds", domain=mesh, subdomain_data=facet_marker)
-    F = ufl.inner(sigma(u), epsilon(v)) * dx - ufl.inner(f, v) * dx - ufl.inner(g, v) * ds(top_marker)
+    F = (
+        ufl.inner(sigma(u), epsilon(v)) * dx
+        - ufl.inner(f, v) * dx
+        - ufl.inner(g, v) * ds(top_marker)
+    )
     if nitsche:
         # Nitsche for Dirichlet, theta-scheme.
         # https://doi.org/10.1016/j.cma.2018.05.024
@@ -168,7 +172,9 @@ def solve_euler_bernoulli(
 if __name__ == "__main__":
     desc = "Verification of Nitsche-Dirichlet boundary conditions for linear elasticity solving "
     desc += "the Euler-Bernoulli equiation"
-    parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter, description=desc)
+    parser = argparse.ArgumentParser(
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter, description=desc
+    )
     parser.add_argument(
         "--theta",
         default=1.0,

@@ -27,11 +27,7 @@ def test_circumradius(dim):
     u = Function(V)
     if dim == 3:
         u.interpolate(
-            lambda x: (
-                0.1 * (x[1] > 0.5),
-                0.1 * np.sin(2 * np.pi * x[2]),
-                np.zeros(x.shape[1]),
-            )
+            lambda x: (0.1 * (x[1] > 0.5), 0.1 * np.sin(2 * np.pi * x[2]), np.zeros(x.shape[1]))
         )
     else:
         u.interpolate(
@@ -47,7 +43,9 @@ def test_circumradius(dim):
 
     # Find facets on boundary to integrate over
 
-    facets = locate_entities_boundary(mesh, mesh.topology.dim - 1, lambda x: np.full(x.shape[1], True, dtype=bool))
+    facets = locate_entities_boundary(
+        mesh, mesh.topology.dim - 1, lambda x: np.full(x.shape[1], True, dtype=bool)
+    )
 
     sorted = np.argsort(facets)
     facets = facets[sorted]

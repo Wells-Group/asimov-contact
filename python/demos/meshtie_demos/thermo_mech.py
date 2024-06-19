@@ -184,7 +184,9 @@ class ThermoElasticProblem:
         """
         log.set_log_level(log.LogLevel.OFF)
         self._mat_a.zeroEntries()
-        self._meshties.assemble_matrix(self._mat_a, self._j.function_spaces[0], Problem.ThermoElasticity)
+        self._meshties.assemble_matrix(
+            self._mat_a, self._j.function_spaces[0], Problem.ThermoElasticity
+        )
         assemble_matrix(self._mat_a, self._j, self._bcs)
         self._mat_a.assemble()
         log.set_log_level(log.LogLevel.INFO)
@@ -242,11 +244,12 @@ with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
     facet_marker = xdmf.read_meshtags(mesh, name="contact_facets")
 
 if mesh.comm.size > 1:
-    mesh, facet_marker, domain_marker = create_contact_mesh(mesh, facet_marker, domain_marker, [3, 4, 7, 8])
+    mesh, facet_marker, domain_marker = create_contact_mesh(
+        mesh, facet_marker, domain_marker, [3, 4, 7, 8]
+    )
 
 # compiler options to improve performance
-cffi_options = ["-Ofast", "-march=native"]
-jit_options = {"cffi_extra_compile_args": cffi_options, "cffi_libraries": ["m"]}
+jit_options = {"cffi_extra_compile_args": [], "cffi_libraries": ["m"]}
 
 # Linear solver options
 ksp_tol = 1e-10
@@ -296,7 +299,9 @@ offsets = np.array([0, 4], dtype=np.int32)
 surfaces = adjacencylist(data, offsets)
 
 # initialise meshties
-meshties = MeshTie([facet_marker._cpp_object], surfaces, contact, mesh._cpp_object, quadrature_degree=3)
+meshties = MeshTie(
+    [facet_marker._cpp_object], surfaces, contact, mesh._cpp_object, quadrature_degree=3
+)
 meshties.generate_kernel_data(
     Problem.Poisson,
     Q._cpp_object,
@@ -375,7 +380,9 @@ def eps(w):
 
 
 def sigma(w, T):
-    return (lmbda * tr(eps(w)) - alpha * (3 * lmbda + 2 * mu) * T) * Identity(tdim) + 2.0 * mu * eps(w)
+    return (lmbda * tr(eps(w)) - alpha * (3 * lmbda + 2 * mu) * T) * Identity(
+        tdim
+    ) + 2.0 * mu * eps(w)
 
 
 # Elasticity problem: ufl

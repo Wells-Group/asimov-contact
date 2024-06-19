@@ -5,6 +5,7 @@
 // SPDX-License-Identifier:    MIT
 
 #include "kernelwrapper.h"
+#include <algorithm>
 #include <array.h>
 #include <caster_petsc.h>
 #include <dolfinx/la/petsc.h>
@@ -240,8 +241,6 @@ NB_MODULE(cpp, m)
            })
       .def("coefficients_size", &dolfinx_contact::Contact::coefficients_size,
            nb::arg("meshtie"), nb::arg("V"))
-      .def("set_quadrature_rule",
-           &dolfinx_contact::Contact::set_quadrature_rule)
       .def("set_search_radius", &dolfinx_contact::Contact::set_search_radius)
       .def("generate_kernel",
            [](dolfinx_contact::Contact& self, dolfinx_contact::Kernel type,
@@ -499,21 +498,36 @@ NB_MODULE(cpp, m)
            nb::ndarray<const std::int32_t, nb::ndim<1>, nb::c_contig> entities,
            dolfinx::fem::IntegralType integral)
         {
-          std::span<const std::int32_t> entity_span(entities.data(),
-                                                    entities.size());
-          auto [active_entities, num_local]
-              = dolfinx_contact::compute_active_entities(mesh, entity_span,
-                                                         integral);
+          std::vector<std::int32_t> active_entities
+              = dolfinx_contact::compute_active_entities(
+                  mesh, std::span(entities.data(), entities.size()), integral);
+          auto topology = mesh.topology();
+          std::int32_t size_local
+              = topology->index_map(topology->dim())->size_local();
           switch (integral)
           {
           case dolfinx::fem::IntegralType::cell:
           {
+            auto cell_it = std::upper_bound(active_entities.begin(),
+                                            active_entities.end(), size_local);
+            std::int32_t num_local
+                = std::distance(active_entities.begin(), cell_it);
             return nb::make_tuple(
                 dolfinx_wrappers::as_nbarray(std::move(active_entities)),
                 num_local);
           }
           case dolfinx::fem::IntegralType::exterior_facet:
           {
+            std::size_t num_local = 0;
+            for (std::int32_t i = (std::int32_t)active_entities.size() - 2;
+                 i >= 0; i -= 2)
+            {
+              if (active_entities[i] < size_local)
+              {
+                num_local = i / 2 + 1;
+                break;
+              }
+            }
             std::array<std::size_t, 2> shape
                 = {std::size_t(active_entities.size() / 2), 2};
             return nb::make_tuple(

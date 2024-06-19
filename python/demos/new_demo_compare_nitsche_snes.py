@@ -50,8 +50,8 @@ def run_solver(
     top_value = 1
     bottom_value = 2
 
-    # Load mesh and create identifier functions for the top (Displacement condition)
-    # and the bottom (contact condition)
+    # Load mesh and create identifier functions for the top
+    # (Displacement condition) and the bottom (contact condition)
     if threed:
         if cube:
             mesh = create_unit_cube(MPI.COMM_WORLD, 10, 10, 20)
@@ -68,7 +68,6 @@ def run_solver(
 
         def bottom(x):
             return x[2] < 0.15
-
     else:
         if cube:
             mesh = create_unit_square(MPI.COMM_WORLD, 30, 30)
@@ -193,7 +192,10 @@ def run_solver(
         nitsche_timings = timing(f"{dofs_global[i]} Solve Nitsche")
         snes_timings = timing(f"{dofs_global[i]} Solve SNES")
         if rank == 0:
-            print(f"{dofs_global[i]}, Nitsche: {nitsche_timings[1]: 0.2e}" + f" SNES: {snes_timings[1]:0.2e}")
+            print(
+                f"{dofs_global[i]}, Nitsche: {nitsche_timings[1]: 0.2e}"
+                + f" SNES: {snes_timings[1]:0.2e}"
+            )
 
     assert e_rel[-1] < 1e-3
     assert e_abs[-1] < 1e-4
@@ -201,7 +203,9 @@ def run_solver(
 
 if __name__ == "__main__":
     description = "Compare Nitsche's method for contact against a straight plane with PETSc SNES"
-    parser = argparse.ArgumentParser(description=description, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser = argparse.ArgumentParser(
+        description=description, formatter_class=argparse.ArgumentDefaultsHelpFormatter
+    )
     parser.add_argument(
         "--theta",
         default=1,
@@ -250,8 +254,12 @@ if __name__ == "__main__":
         help="Use strong Dirichlet formulation",
         default=False,
     )
-    _E = parser.add_argument("--E", default=1e3, type=np.float64, dest="E", help="Youngs modulus of material")
-    _nu = parser.add_argument("--nu", default=0.1, type=np.float64, dest="nu", help="Poisson's ratio")
+    _E = parser.add_argument(
+        "--E", default=1e3, type=np.float64, dest="E", help="Youngs modulus of material"
+    )
+    _nu = parser.add_argument(
+        "--nu", default=0.1, type=np.float64, dest="nu", help="Poisson's ratio"
+    )
     _disp = parser.add_argument(
         "--disp",
         default=0.08,

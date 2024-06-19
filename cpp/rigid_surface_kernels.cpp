@@ -13,6 +13,7 @@
 #include <basix/cell.h>
 #include <dolfinx/fem/FiniteElement.h>
 #include <dolfinx/fem/FunctionSpace.h>
+#include <petsc.h>
 
 //----------------------------------------------------------------------------
 dolfinx_contact::kernel_fn<PetscScalar>
@@ -24,13 +25,13 @@ dolfinx_contact::generate_rigid_surface_kernel(
   assert(mesh);
 
   // Get mesh info
-  const std::size_t gdim = mesh->geometry().dim();
-  const std::size_t tdim = mesh->topology()->dim();
+  std::size_t gdim = mesh->geometry().dim();
+  std::size_t tdim = mesh->topology()->dim();
 
   // Structures for coefficient data
   // FIXME: This will not work for prism meshes
   const std::vector<std::size_t>& qp_offsets = quadrature_rule.offset();
-  const std::size_t num_qp_per_entity = qp_offsets[1] - qp_offsets[0];
+  std::size_t num_qp_per_entity = qp_offsets[1] - qp_offsets[0];
 
   // Coefficient sizes
   // Expecting coefficients in following order:
@@ -65,12 +66,12 @@ dolfinx_contact::generate_rigid_surface_kernel(
   /// @param[in] q_indices Unused indices. In two sided contact this
   /// yields what quadrature points to add contributions from
   dolfinx_contact::kernel_fn<PetscScalar> nitsche_rigid_rhs
-      = [kd, gdim, tdim, constant_normal](
-            std::vector<std::vector<PetscScalar>>& b,
-            std::span<const PetscScalar> c, const PetscScalar* w,
-            const double* coordinate_dofs, const std::size_t facet_index,
-            [[maybe_unused]] std::size_t num_links,
-            [[maybe_unused]] std::span<const std::int32_t> q_indices)
+      = [kd, gdim, tdim,
+         constant_normal](std::vector<std::vector<PetscScalar>>& b,
+                          std::span<const PetscScalar> c, const PetscScalar* w,
+                          const double* coordinate_dofs,
+                          std::size_t facet_index, std::size_t /*num_links*/,
+                          std::span<const std::int32_t> /*q_indices*/)
   {
     // Retrieve some data from kd
     const std::size_t bs = kd.bs();
@@ -113,8 +114,8 @@ dolfinx_contact::generate_rigid_surface_kernel(
       for (std::size_t i = 0; i < gdim; i++)
       {
         // For closest point projection the gap function is given by
-        // (-n_y)* (Pi(x) - x), where n_y is the outward unit normal
-        // in y = Pi(x)
+        // (-n_y)* (Pi(x) - x), where n_y is the outward unit normal in
+        // y = Pi(x)
         n_surf[i] = -w[i + 2];
         n_dot += n_phys[i] * n_surf[i];
       }
@@ -140,12 +141,12 @@ dolfinx_contact::generate_rigid_surface_kernel(
     mdspan_t<const double, 3, stdex::layout_stride> dphi = kd.dphi();
 
     // Loop over quadrature points
-    const std::array<std::size_t, 2> q_offset
+    std::array<std::size_t, 2> q_offset
         = {kd.qp_offsets(facet_index), kd.qp_offsets(facet_index + 1)};
-    const std::size_t num_points = q_offset.back() - q_offset.front();
+    std::size_t num_points = q_offset.back() - q_offset.front();
     for (std::size_t q = 0; q < num_points; q++)
     {
-      const std::size_t q_pos = q_offset.front() + q;
+      std::size_t q_pos = q_offset.front() + q;
 
       // Update Jacobian and physical normal
       detJ = std::fabs(kd.update_jacobian(q, facet_index, detJ, J, K, J_tot,
@@ -166,6 +167,7 @@ dolfinx_contact::generate_rigid_surface_kernel(
           n_dot += n_phys[i] * n_surf[i];
         }
       }
+
       std::size_t gap_offset = kd.offsets(3);
       double gap = 0;
       for (std::size_t i = 0; i < gdim; i++)
@@ -229,12 +231,12 @@ dolfinx_contact::generate_rigid_surface_kernel(
       = [kd, gdim, tdim, constant_normal](
             std::vector<std::vector<double>>& A, std::span<const PetscScalar> c,
             const PetscScalar* w, const double* coordinate_dofs,
-            std::size_t facet_index, [[maybe_unused]] std::size_t num_links,
-            [[maybe_unused]] std::span<const std::int32_t> q_indices)
+            std::size_t facet_index, std::size_t /*num_links*/,
+            std::span<const std::int32_t> /*q_indices*/)
   {
     // Retrieve some data from kd
-    const std::size_t bs = kd.bs();
-    const std::uint32_t ndofs_cell = kd.ndofs_cell();
+    std::size_t bs = kd.bs();
+    std::uint32_t ndofs_cell = kd.ndofs_cell();
 
     // Reshape coordinate dofs to two-dimensional array
     mdspan_t<const double, 2> coord(coordinate_dofs, kd.num_coordinate_dofs(),
@@ -300,19 +302,20 @@ dolfinx_contact::generate_rigid_surface_kernel(
     mdspan_t<const double, 3, stdex::layout_stride> dphi = kd.dphi();
 
     // Loop over quadrature points
-    const std::array<std::size_t, 2> q_offset
+    std::array<std::size_t, 2> q_offset
         = {kd.qp_offsets(facet_index), kd.qp_offsets(facet_index + 1)};
-    const std::size_t num_points = q_offset.back() - q_offset.front();
+    std::size_t num_points = q_offset.back() - q_offset.front();
     for (std::size_t q = 0; q < num_points; q++)
     {
-      const std::size_t q_pos = q_offset.front() + q;
+      std::size_t q_pos = q_offset.front() + q;
 
       // Update Jacobian and physical normal
       detJ = std::fabs(kd.update_jacobian(q, facet_index, detJ, J, K, J_tot,
                                           detJ_scratch, coord));
       kd.update_normal(std::span(n_phys.data(), gdim), K, facet_index);
 
-      // if normal not constant, get surface normal at current quadrature point
+      // if normal not constant, get surface normal at current
+      // quadrature point
       std::size_t normal_offset = kd.offsets(6);
       if (!constant_normal)
       {

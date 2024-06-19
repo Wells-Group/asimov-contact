@@ -34,8 +34,12 @@ def test_copy_to_submesh(tmp_path, order, res, simplex, dim):
             model = gmsh.model()
             model.add(name)
             model.setCurrent(name)
-            model = create_sphere_plane_mesh(model, res=res, order=order, r=0.25, height=0.25, length=1.0, width=1.0)
-            mesh, _, facet_marker = dolfinx.io.gmshio.model_to_mesh(model, MPI.COMM_WORLD, 0, gdim=3)
+            model = create_sphere_plane_mesh(
+                model, res=res, order=order, r=0.25, height=0.25, length=1.0, width=1.0
+            )
+            mesh, _, facet_marker = dolfinx.io.gmshio.model_to_mesh(
+                model, MPI.COMM_WORLD, 0, gdim=3
+            )
             contact_bdy_1 = 1
             contact_bdy_2 = 8
         else:

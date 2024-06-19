@@ -50,9 +50,18 @@ def solver(
     bottom_value = 2
 
     petsc_options = {"ksp_type": "preonly", "pc_type": "lu"}
-    # petsc_options = {"ksp_type": "cg", "pc_type": "gamg", "rtol": 1e-6, "pc_gamg_coarse_eq_limit": 1000,
-    #                  "mg_levels_ksp_type": "chebyshev", "mg_levels_pc_type": "jacobi",
-    #                  "mg_levels_esteig_ksp_type": "cg", "matptap_via": "scalable", "ksp_view": None}
+    # petsc_options = {
+    #     "ksp_type": "cg",
+    #     "pc_type": "gamg",
+    #     "rtol": 1e-6,
+    #     "pc_gamg_coarse_eq_limit": 1000,
+    #     "mg_levels_ksp_type": "chebyshev",
+    #     "mg_levels_pc_type": "jacobi",
+    #     "mg_levels_esteig_ksp_type": "cg",
+    #     "matptap_via": "scalable",
+    #     "ksp_view": None,
+    # }
+
     snes_options = {
         "snes_monitor": None,
         "snes_max_it": 50,
@@ -64,8 +73,8 @@ def solver(
     }
     # Cannot use GAMG with SNES, see: https://gitlab.com/petsc/petsc/-/issues/829
     petsc_snes = {"ksp_type": "cg", "ksp_rtol": 1e-5, "pc_type": "jacobi"}
-    # Load mesh and create identifier functions for the top (Displacement condition)
-    # and the bottom (contact condition)
+    # Load mesh and create identifier functions for the top
+    # (Displacement condition) and the bottom (contact condition)
     outdir = "meshes"
     os.system(f"mkdir -p {outdir}")
     if threed:
@@ -179,14 +188,19 @@ def solver(
         nitsche_timings = timing(f"{dofs_global[i]} Solve Nitsche")
         snes_timings = timing(f"{dofs_global[i]} Solve SNES")
         if rank == 0:
-            print(f"{dofs_global[i]}, Nitsche: {nitsche_timings[1]: 0.2e}" + f" SNES: {snes_timings[1]:0.2e}")
+            print(
+                f"{dofs_global[i]}, Nitsche: {nitsche_timings[1]: 0.2e}"
+                + f" SNES: {snes_timings[1]:0.2e}"
+            )
     assert e_rel[-1] < 1e-3
     assert e_abs[-1] < 1e-4
 
 
 if __name__ == "__main__":
     description = "Compare Nitsche's method for contact against a straight plane with PETSc SNES"
-    parser = argparse.ArgumentParser(description=description, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser = argparse.ArgumentParser(
+        description=description, formatter_class=argparse.ArgumentDefaultsHelpFormatter
+    )
     parser.add_argument(
         "--theta",
         default=1.0,
@@ -236,8 +250,12 @@ if __name__ == "__main__":
         help="Use strong Dirichlet formulation",
         default=False,
     )
-    _E = parser.add_argument("--E", default=1e3, type=np.float64, dest="E", help="Youngs modulus of material")
-    _nu = parser.add_argument("--nu", default=0.1, type=np.float64, dest="nu", help="Poisson's ratio")
+    _E = parser.add_argument(
+        "--E", default=1e3, type=np.float64, dest="E", help="Youngs modulus of material"
+    )
+    _nu = parser.add_argument(
+        "--nu", default=0.1, type=np.float64, dest="nu", help="Poisson's ratio"
+    )
     _disp = parser.add_argument(
         "--disp",
         default=0.08,

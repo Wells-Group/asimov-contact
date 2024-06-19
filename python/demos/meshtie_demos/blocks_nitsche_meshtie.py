@@ -76,7 +76,8 @@ class MeshTieProblem:
             j: Form describing the jacobian
             bcs: Boundary conditions
             meshties: MeshTie class describing the tied surfaces
-            subdomains: Domain marker labelling the individual components
+            subdomains: Domain marker labelling the individual
+                components
             u: Displacement function
             lmbda: Lame parameter lambda
             mu: Lame parameter mu
@@ -112,7 +113,8 @@ class MeshTieProblem:
             theta,
         )
 
-        # Build near null space preventing rigid body motion of individual components
+        # Build near null space preventing rigid body motion of
+        # individual components
         tags = np.unique(subdomains.values)
         ns = rigid_motions_nullspace_subdomains(u.function_space, subdomains, tags, len(tags))
         self._mat_a.setNearNullSpace(ns)
@@ -134,7 +136,9 @@ class MeshTieProblem:
         # Assemble residual vector
         self._b_petsc.zeroEntries()
         self._b_petsc.ghostUpdate(addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD)
-        self._meshties.assemble_vector(self._b_petsc, self._l.function_spaces[0], Problem.Elasticity)  # custom kernel
+        self._meshties.assemble_vector(
+            self._b_petsc, self._l.function_spaces[0], Problem.Elasticity
+        )  # custom kernel
         assemble_vector(self._b_petsc, self._l)  # standard kernels
 
         # Apply boundary condition
@@ -151,7 +155,6 @@ class MeshTieProblem:
         Args:
            x: The vector containing the latest solution.
            A: The matrix to assemble into.
-
         """
         log.set_log_level(log.LogLevel.OFF)
         self._mat_a.zeroEntries()
@@ -169,12 +172,8 @@ class MeshTieProblem:
 
         Args:
            x: The vector containing the latest solution
-
         """
-        x.ghostUpdate(
-            addv=PETSc.InsertMode.INSERT,  # type: ignore
-            mode=PETSc.ScatterMode.FORWARD,  # type: ignore
-        )
+        x.ghostUpdate(addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD)
 
 
 # read mesh from file
@@ -254,18 +253,20 @@ bcs = [dirichletbc(d, dofs_d, V), dirichletbc(g, dofs_g, V)]
 
 # contact surface data
 # stored in adjacency list to allow for using multiple meshtags to mark
-# contact surfaces. In this case only one meshtag is used, hence offsets has length 2 and
-# the second value in offsets is 2 (=2 tags in first and only meshtag).
-# The surface with tags [contact_bdry_1, contact_bdry_2] both can be found in this meshtag
+# contact surfaces. In this case only one meshtag is used, hence offsets
+# has length 2 and the second value in offsets is 2 (=2 tags in first
+# and only meshtag). The surface with tags [contact_bdry_1,
+# contact_bdry_2] both can be found in this meshtag
 data = np.array([contact_bdry_1, contact_bdry_2], dtype=np.int32)
 offsets = np.array([0, 2], dtype=np.int32)
 surfaces = adjacencylist(data, offsets)
-# For unbiased computation the contact detection is performed in both directions
+
+# For unbiased computation the contact detection is performed in both
+# directions
 contact_pairs = [(0, 1), (1, 0)]
 
 # compiler options to improve performance
-cffi_options = ["-Ofast", "-march=native"]
-jit_options = {"cffi_extra_compile_args": cffi_options, "cffi_libraries": ["m"]}
+jit_options = {"cffi_extra_compile_args": [], "cffi_libraries": ["m"]}
 
 # Derive form for ufl part of Jacobian
 j = derivative(a, u, w)
@@ -278,11 +279,7 @@ search_mode = [ContactMode.ClosestPoint, ContactMode.ClosestPoint]
 
 # Initialise MeshTie class and generate MeshTie problem
 meshties = MeshTie(
-    [facet_marker._cpp_object],
-    surfaces,
-    contact_pairs,
-    mesh._cpp_object,
-    quadrature_degree=5,
+    [facet_marker._cpp_object], surfaces, contact_pairs, mesh._cpp_object, quadrature_degree=5
 )
 problem = MeshTieProblem(
     l_compiled,
@@ -308,7 +305,6 @@ newton_solver.set_form(problem.form)
 # Set Newton options
 newton_solver.rtol = 1e-7
 newton_solver.atol = 1e-7
-
 
 # Linear solver options
 ksp_tol = 1e-10

@@ -67,7 +67,9 @@ def run_solver(
         model.add(name)
         model.setCurrent(name)
         model = create_christmas_tree_mesh_3D(model, res=res, split=split, n1=81, n2=41)
-        mesh, domain_marker, facet_marker = dolfinx.io.gmshio.model_to_mesh(model, MPI.COMM_WORLD, 0, gdim=3)
+        mesh, domain_marker, facet_marker = dolfinx.io.gmshio.model_to_mesh(
+            model, MPI.COMM_WORLD, 0, gdim=3
+        )
 
         tdim = mesh.topology.dim
 
@@ -99,13 +101,16 @@ def run_solver(
         values = np.hstack(
             [
                 facet_marker.values,
-                z_Dirichlet * np.ones(len(dirichlet_facets1) + len(dirichlet_facets2), dtype=np.int32),
+                z_Dirichlet
+                * np.ones(len(dirichlet_facets1) + len(dirichlet_facets2), dtype=np.int32),
             ]
         )
         sorted_facets = np.argsort(indices)
         facet_marker = meshtags(mesh, tdim - 1, indices[sorted_facets], values[sorted_facets])
         # Create Dirichlet bdy conditions
-        dofs = _fem.locate_dofs_topological(V.sub(2), mesh.topology.dim - 1, facet_marker.find(z_Dirichlet))
+        dofs = _fem.locate_dofs_topological(
+            V.sub(2), mesh.topology.dim - 1, facet_marker.find(z_Dirichlet)
+        )
         gz = _fem.Constant(mesh, default_scalar_type(0))
         bcs = [_fem.dirichletbc(gz, dofs, V.sub(2))]
         # bc_fns: list[typing.Union[_fem.Constant, _fem.Function]] = [gz]
@@ -121,7 +126,9 @@ def run_solver(
         model.add(name)
         model.setCurrent(name)
         model = create_christmas_tree_mesh(model, res=res, split=split)
-        mesh, domain_marker, facet_marker = dolfinx.io.gmshio.model_to_mesh(model, MPI.COMM_WORLD, 0, gdim=2)
+        mesh, domain_marker, facet_marker = dolfinx.io.gmshio.model_to_mesh(
+            model, MPI.COMM_WORLD, 0, gdim=2
+        )
 
         tdim = mesh.topology.dim
 
@@ -154,7 +161,9 @@ def run_solver(
     # create meshtags for candidate segments
     mts = [domain_marker, facet_marker]
     cand_facets_0 = np.sort(np.hstack([facet_marker.find(marker_offset + i) for i in range(split)]))
-    cand_facets_1 = np.sort(np.hstack([facet_marker.find(marker_offset + split + i) for i in range(split)]))
+    cand_facets_1 = np.sort(
+        np.hstack([facet_marker.find(marker_offset + split + i) for i in range(split)])
+    )
 
     for i in range(split):
         fcts = np.array(
@@ -223,8 +232,7 @@ def run_solver(
     J = ufl.derivative(F, du, w)
 
     # compiler options to improve performance
-    cffi_options = ["-O3"]
-    jit_options = {"cffi_extra_compile_args": cffi_options, "cffi_libraries": ["m"]}
+    jit_options = {"cffi_extra_compile_args": [], "cffi_libraries": ["m"]}
     # compiled forms for rhs and tangen system
     F_compiled = _fem.form(F, jit_options=jit_options)
     J_compiled = _fem.form(J, jit_options=jit_options)
@@ -257,8 +265,9 @@ def run_solver(
         "error_on_nonconvergence": False,
     }
 
-    # In order to use an LU solver for debugging purposes on small scale problems
-    # use the following PETSc options: {"ksp_type": "preonly", "pc_type": "lu"}
+    # In order to use an LU solver for debugging purposes on small scale
+    # problems use the following PETSc options: {"ksp_type": "preonly",
+    # "pc_type": "lu"}
     petsc_options = {
         "matptap_via": "scalable",
         "ksp_type": "cg",
@@ -296,7 +305,9 @@ def run_solver(
     else:
         search_mode = [ContactMode.ClosestPoint for _ in range(len(contact_pairs))]
 
-    contact_problem = ContactProblem(mts[1:], surfaces, contact_pairs, mesh, q_degree, search_mode, radius)
+    contact_problem = ContactProblem(
+        mts[1:], surfaces, contact_pairs, mesh, q_degree, search_mode, radius
+    )
     contact_problem.generate_contact_data(
         FrictionLaw.Frictionless,
         V,
@@ -352,7 +363,9 @@ def run_solver(
     newton_solver.set_coefficients(compute_coefficients)
 
     # Set rigid motion nullspace
-    null_space = rigid_motions_nullspace_subdomains(V, domain_marker, np.unique(domain_marker.values), 2)
+    null_space = rigid_motions_nullspace_subdomains(
+        V, domain_marker, np.unique(domain_marker.values), 2
+    )
     newton_solver.A.setNearNullSpace(null_space)
 
     # Set Newton solver options
@@ -418,7 +431,8 @@ def run_solver(
         print("-" * 25, file=outfile)
         print(f"Newton options {newton_options}", file=outfile)
         print(
-            f"num_dofs: {u1.function_space.dofmap.index_map_bs*u1.function_space.dofmap.index_map.size_global}"
+            f"num_dofs: {u1.function_space.dofmap.index_map_bs
+                         * u1.function_space.dofmap.index_map.size_global}"
             + f", {mesh.topology.cell_type}",
             file=outfile,
         )
@@ -438,7 +452,9 @@ def run_solver(
 
 if __name__ == "__main__":
     desc = "Nitsche's method for two elastic bodies using custom assemblers"
-    parser = argparse.ArgumentParser(description=desc, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser = argparse.ArgumentParser(
+        description=desc, formatter_class=argparse.ArgumentDefaultsHelpFormatter
+    )
     parser.add_argument(
         "--theta",
         default=1.0,
@@ -479,7 +495,9 @@ if __name__ == "__main__":
         help="List ksp options",
         default=False,
     )
-    parser.add_argument("--E", default=1e3, type=np.float64, dest="E", help="Youngs modulus of material")
+    parser.add_argument(
+        "--E", default=1e3, type=np.float64, dest="E", help="Youngs modulus of material"
+    )
     parser.add_argument("--nu", default=0.1, type=np.float64, dest="nu", help="Poisson's ratio")
     parser.add_argument("--res", default=0.2, type=np.float64, dest="res", help="Mesh resolution")
     parser.add_argument(
