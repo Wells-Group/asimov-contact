@@ -152,6 +152,12 @@ Contact::Contact(const dolfinx::graph::AdjacencyList<std::int32_t>& surfaces,
       }
     }
   }
+
+  // Tabulate basis function on reference cell (_phi_ref_facets)
+  const dolfinx::fem::CoordinateElement<double>& cmap
+      = _mesh->geometry().cmap();
+  std::tie(_reference_basis, _reference_shape)
+      = tabulate(cmap, _quadrature_rule);
 }
 //----------------------------------------------------------------------------
 Contact::Contact(
@@ -943,12 +949,6 @@ std::pair<std::vector<PetscScalar>, int> Contact::pack_gap_plane(int pair,
 {
   int quadrature_mt = _contact_pairs[pair][0];
   int gdim = _mesh->geometry().dim(); // geometrical dimension
-
-  // Tabulate basis function on reference cell (_phi_ref_facets)
-  const dolfinx::fem::CoordinateElement<double>& cmap
-      = _mesh->geometry().cmap();
-  std::tie(_reference_basis, _reference_shape)
-      = tabulate(cmap, _quadrature_rule);
 
   // Compute quadrature points on physical facet
   // _qp_phys_"quadrature_mt"
