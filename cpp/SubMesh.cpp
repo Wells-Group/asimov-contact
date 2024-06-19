@@ -226,19 +226,16 @@ std::vector<std::int32_t>
 SubMesh::get_submesh_tuples(std::span<const std::int32_t> facets) const
 {
   assert(_mesh);
-
-  // Map (cell, facet) tuples from parent to sub mesh
-  std::vector<std::int32_t> submesh_facets(facets.size());
-
   int tdim = _mesh->topology()->dim();
   std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> c_to_f
       = _mesh->topology()->connectivity(tdim, tdim - 1);
   assert(c_to_f);
 
+  // Map (cell, facet) tuples from parent to sub mesh
+  std::vector<std::int32_t> submesh_facets(facets.size());
   for (std::size_t i = 0; i < facets.size(); i += 2)
   {
     auto submesh_cells = _mesh_to_submesh_cell_map->links(facets[i]);
-    assert(!submesh_cells.empty());
     assert(submesh_cells.size() == 1);
     submesh_facets[i] = submesh_cells.front();
     submesh_facets[i + 1] = facets[i + 1];
