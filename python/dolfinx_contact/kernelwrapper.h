@@ -28,7 +28,7 @@ public:
     return *this;
   }
 
-  /// Get the C++ kernel
+  /// Get the kernel
   dolfinx_contact::kernel_fn<T> get() { return _kernel; }
 
 private:

@@ -314,7 +314,7 @@ void Contact::create_distance_map(int pair)
   // Compute facet map
   [[maybe_unused]] auto [adj, reference_x, shape] = compute_distance_map(
       *quadrature_mesh, quadrature_facets, *candidate_mesh, submesh_facets,
-      _quadrature_rule, _mode[pair], _radius);
+      _quadrature_rule, _mode[pair], -1);
 
   _facet_maps[pair]
       = std::make_shared<dolfinx::graph::AdjacencyList<std::int32_t>>(adj);
@@ -1117,11 +1117,11 @@ dolfinx_contact::Contact::pack_ny(int pair) const
   return {std::move(normals), cstride};
 }
 //----------------------------------------------------------------------------
-void Contact::assemble_matrix(mat_set_fn& mat_set, int pair,
-                              const kernel_fn<PetscScalar>& kernel,
-                              std::span<const PetscScalar> coeffs, int cstride,
-                              std::span<const PetscScalar> constants,
-                              const dolfinx::fem::FunctionSpace<double>& V)
+void Contact::assemble_matrix(
+    mat_set_fn& mat_set, int pair, const kernel_fn<PetscScalar>& kernel,
+    std::span<const PetscScalar> coeffs, int cstride,
+    std::span<const PetscScalar> constants,
+    const dolfinx::fem::FunctionSpace<double>& V) const
 {
   std::shared_ptr<const dolfinx::mesh::Mesh<double>> mesh = V.mesh();
   assert(mesh);
@@ -1235,11 +1235,11 @@ void Contact::assemble_matrix(mat_set_fn& mat_set, int pair,
   }
 }
 //----------------------------------------------------------------------------
-void Contact::assemble_vector(std::span<PetscScalar> b, int pair,
-                              const kernel_fn<PetscScalar>& kernel,
-                              std::span<const PetscScalar> coeffs, int cstride,
-                              std::span<const PetscScalar> constants,
-                              const dolfinx::fem::FunctionSpace<double>& V)
+void Contact::assemble_vector(
+    std::span<PetscScalar> b, int pair, const kernel_fn<PetscScalar>& kernel,
+    std::span<const PetscScalar> coeffs, int cstride,
+    std::span<const PetscScalar> constants,
+    const dolfinx::fem::FunctionSpace<double>& V) const
 {
   /// Check that we support the function space
   if (V.element()->needs_dof_transformations())

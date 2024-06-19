@@ -53,7 +53,6 @@ class ContactProblem(dolfinx_contact.cpp.Contact):
         mesh: _mesh.Mesh,
         quadrature_degree: int,
         search_method: list[dolfinx_contact.cpp.ContactMode],
-        search_radius: np.float64 = np.float64(-1.0),
     ):
         """This class initialises the contact class and provides
         convenience functions for generating the integration kernels and
@@ -75,8 +74,6 @@ class ContactProblem(dolfinx_contact.cpp.Contact):
                 containing for each contact pair whether Raytracing or
                 CPP (Closest Point Projection) is used for contact
                 search
-            search_radius: Restricts the search radius for contact
-                detection. Only used in raytracing
         """
         # create contact class
         markers_cpp = [marker._cpp_object for marker in markers]
@@ -90,7 +87,6 @@ class ContactProblem(dolfinx_contact.cpp.Contact):
                 search_method=search_method,
             )
 
-        self.set_search_radius(search_radius)
         # Perform contact detection
         for j in range(len(contact_pairs)):
             self.create_distance_map(j)

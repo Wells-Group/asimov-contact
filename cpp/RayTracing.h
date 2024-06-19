@@ -221,7 +221,7 @@ private:
 /// @tparam gdim The geometrical dimension of the cell
 ///
 /// @param[in,out] storage Structure holding all memory required for the
-/// newton iteration.
+/// Newton iteration.
 /// @note It is expected that the variables tangents, point, xi is
 /// filled with appropriate input values
 /// @note All other variables of the class is updated.

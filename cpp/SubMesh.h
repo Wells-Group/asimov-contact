@@ -23,6 +23,7 @@ class SubMesh
 public:
   /// @brief constructs a submesh consisting of the cells adjacent to a
   /// given set of exterior facets
+  ///
   /// @param[in] mesh the parent mesh
   /// @param[in] facets vector of pairs (cell, facet) of exterior
   /// facets, where cell is the index of the cell local to the process
@@ -36,6 +37,12 @@ public:
   {
     return _mesh;
   }
+
+  /// @brief Adds perturbation u to mesh
+  /// @param[in] u Function to perturb the mesh with. The function must
+  /// be based on the same finite element as the mesh coordinate
+  /// element.
+  void update_geometry(const dolfinx::fem::Function<PetscScalar>& u);
 
   /// Return adjacency list mapping from parent mesh cell to submesh cell
   std::shared_ptr<const dolfinx::graph::AdjacencyList<std::int32_t>>
@@ -52,8 +59,8 @@ public:
     return _facets_to_cells;
   }
 
-  /// Return parent cells: parent_cells()[i] is the cell in the parent mesh for
-  /// ith cell in submesh
+  /// Return parent cells: parent_cells()[i] is the cell in the parent
+  /// mesh for ith cell in submesh
   std::span<const std::int32_t> parent_cells() const
   {
     return std::span<const std::int32_t>(_parent_cells.data(),
@@ -62,27 +69,22 @@ public:
 
   /// Create FunctionSpace on submesh that is identical with a given
   /// FunctionSpace on the parent mesh but restricted to submesh
-  /// @param[in] V_parent - the function space on the the parent mesh
+  /// @param[in] V_parent the function space on the the parent mesh
   /// @return the function space on the submesh
   dolfinx::fem::FunctionSpace<double> create_functionspace(
       const dolfinx::fem::FunctionSpace<double>& V_parent) const;
 
-  /// Copy of a function on the parent mesh/ in the parent function space
-  /// to submesh/ function space on submesh
-  ///@param[in] u_parent - function to be copied
-  ///@param[in, out] u_sub - function into which the function values are to be
-  /// copied
+  /// Copy of a function on the parent mesh/ in the parent function
+  /// space to submesh/ function space on submesh
+  ///@param[in] u_parent function to be copied
+  /// @param[in, out] u_sub function into which the function values are
+  /// to be copied
   void copy_function(const dolfinx::fem::Function<PetscScalar>& u_parent,
                      dolfinx::fem::Function<PetscScalar>& u_sub) const;
 
-  /// @brief Adds perturbation u to mesh
-  /// @param[in] u: The function to perturb the mesh with. The function must be
-  /// based on the same finite element as the mesh coordinate element.
-  void update_geometry(const dolfinx::fem::Function<PetscScalar>& u);
-
-  /// Map parent facets (parent_cell, local_facet_index) to submesh (cell,
-  /// local_facet_index) tuples
-  /// @param[in] facets: The facets. Flattened row-major
+  /// Map parent facets (parent_cell, local_facet_index) to submesh
+  /// (cell, local_facet_index) tuples
+  /// @param[in] facets The facets. Flattened row-major
   /// @returns The submesh facets pairs. Flattened row-major
   std::vector<std::int32_t>
   get_submesh_tuples(std::span<const std::int32_t> facets) const;
@@ -91,7 +93,8 @@ private:
   // the submesh mesh
   std::shared_ptr<dolfinx::mesh::Mesh<double>> _mesh;
 
-  // submesh to mesh vertex map returned by dolfinx::mesh::create_submesh
+  // submesh to mesh vertex map returned by
+  // dolfinx::mesh::create_submesh
   std::vector<std::int32_t> _submesh_to_mesh_vertex_map;
 
   // submesh to mesh x_dof map returned by dolfinx::mesh::create_submesh

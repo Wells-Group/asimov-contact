@@ -241,7 +241,6 @@ NB_MODULE(cpp, m)
            })
       .def("coefficients_size", &dolfinx_contact::Contact::coefficients_size,
            nb::arg("meshtie"), nb::arg("V"))
-      .def("set_search_radius", &dolfinx_contact::Contact::set_search_radius)
       .def("generate_kernel",
            [](dolfinx_contact::Contact& self, dolfinx_contact::Kernel type,
               const dolfinx::fem::FunctionSpace<double>& V) {
