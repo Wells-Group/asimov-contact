@@ -61,18 +61,14 @@ public:
 
   /// Return parent cells: parent_cells()[i] is the cell in the parent
   /// mesh for ith cell in submesh
-  std::span<const std::int32_t> parent_cells() const
-  {
-    return std::span<const std::int32_t>(_parent_cells.data(),
-                                         _parent_cells.size());
-  }
+  std::span<const std::int32_t> parent_cells() const { return _parent_cells; }
 
   /// Create FunctionSpace on submesh that is identical with a given
   /// FunctionSpace on the parent mesh but restricted to submesh
-  /// @param[in] V_parent the function space on the the parent mesh
+  /// @param[in] V the function space on the the parent mesh
   /// @return the function space on the submesh
-  dolfinx::fem::FunctionSpace<double> create_functionspace(
-      const dolfinx::fem::FunctionSpace<double>& V_parent) const;
+  dolfinx::fem::FunctionSpace<double>
+  create_functionspace(const dolfinx::fem::FunctionSpace<double>& V) const;
 
   /// Copy of a function on the parent mesh/ in the parent function
   /// space to submesh/ function space on submesh

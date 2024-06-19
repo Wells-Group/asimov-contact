@@ -459,17 +459,16 @@ Contact::generate_kernel(Kernel type,
 //----------------------------------------------------------------------------
 void Contact::create_q_phys(int origin_meshtag)
 {
-  // Get information depending on surface
-
-  std::vector<std::int32_t> submesh_facets
+  std::vector<std::int32_t> facets
       = _submesh.get_submesh_tuples(_cell_facet_pairs.links(origin_meshtag));
-  auto mesh_sub = _submesh.mesh();
-  std::size_t gdim = mesh_sub->geometry().dim();
+
+  auto mesh = _submesh.mesh();
+  std::size_t gdim = mesh->geometry().dim();
   const std::vector<size_t>& qp_offsets = _quadrature_rule.offset();
   _qp_phys[origin_meshtag].resize((qp_offsets[1] - qp_offsets[0])
-                                  * (submesh_facets.size() / 2) * gdim);
+                                  * (facets.size() / 2) * gdim);
   compute_physical_points(
-      *mesh_sub, submesh_facets, qp_offsets,
+      *mesh, facets, qp_offsets,
       mdspan_t<const double, 4>(_reference_basis.data(), _reference_shape),
       _qp_phys[origin_meshtag]);
 }
