@@ -13,30 +13,24 @@ using namespace dolfinx_contact;
 SubMesh::SubMesh(const dolfinx::mesh::Mesh<double>& mesh,
                  std::span<const std::int32_t> cell_facet_pairs)
 {
-  const int tdim = mesh.topology()->dim();
+  int tdim = mesh.topology()->dim();
 
-  // Copy cell indices
+  // Build list in unique cell indices
   std::vector<std::int32_t> cells(cell_facet_pairs.size() / 2);
   for (std::size_t f = 0; f < cell_facet_pairs.size() / 2; ++f)
     cells[f] = cell_facet_pairs[2 * f];
-
-  // sort cells and remove duplicates
   dolfinx::radix_sort<std::int32_t>(std::span(cells.data(), cells.size()));
   cells.erase(std::unique(cells.begin(), cells.end()), cells.end());
 
-  // save sorted cell vector as _parent_cells
-
-  // call dolfinx::mesh::create_submesh and save ouput to member
-  // variables
+  // Create sub-mesh of cells
   auto [submesh, cell_map, vertex_map, x_dof_map]
       = dolfinx::mesh::create_submesh(mesh, tdim, cells);
-  _parent_cells = cell_map;
-
   _mesh = std::make_shared<dolfinx::mesh::Mesh<double>>(submesh);
+  _parent_cells = cell_map;
   _submesh_to_mesh_vertex_map = vertex_map;
   _submesh_to_mesh_x_dof_map = x_dof_map;
 
-  // create/retrieve connectivities on submesh
+  // Create/retrieve connectivities on submesh
   _mesh->topology_mutable()->create_connectivity(tdim - 1, tdim);
   std::shared_ptr<const dolfinx::graph::AdjacencyList<int>> f_to_c
       = _mesh->topology()->connectivity(tdim - 1, tdim);
@@ -51,12 +45,12 @@ SubMesh::SubMesh(const dolfinx::mesh::Mesh<double>& mesh,
   // in adjacency list if it is contained, it has exactly one link, the
   // submesh cell index
 
-  // get number of cells on process
+  // Get number of cells on this rank in parent mesh
   std::shared_ptr<const dolfinx::common::IndexMap> map_c
       = mesh.topology()->index_map(tdim);
   const std::int32_t num_cells = map_c->size_local() + map_c->num_ghosts();
 
-  // mark which cells are in cells, i.e. which cells are in the submesh
+  // Mark cells in parent mesh that are in the submesh
   std::vector<std::int32_t> marked_cells(num_cells, 0);
   for (auto cell : cells)
     marked_cells[cell] = 1;
@@ -69,7 +63,7 @@ SubMesh::SubMesh(const dolfinx::mesh::Mesh<double>& mesh,
     // fill data array
     std::vector<std::int32_t> data(offsets.back());
     for (std::size_t c = 0; c < cells.size(); ++c)
-      data[offsets[cells[c]]] = (std::int32_t)c;
+      data[offsets[cells[c]]] = c;
 
     // create adjacency list
     _mesh_to_submesh_cell_map
@@ -80,10 +74,10 @@ SubMesh::SubMesh(const dolfinx::mesh::Mesh<double>& mesh,
   // Create facet to (cell, local_facet) map for exterior facet from the
   // original input
   {
-    // Retrieve number of facets on process
+    // Get number of facets on this rank
     std::shared_ptr<const dolfinx::common::IndexMap> map_f
         = _mesh->topology()->index_map(tdim - 1);
-    int num_facets = map_f->size_local() + map_f->num_ghosts();
+    std::int32_t num_facets = map_f->size_local() + map_f->num_ghosts();
 
     // mark which facets are in any of the facet lists
 
@@ -131,15 +125,15 @@ SubMesh::SubMesh(const dolfinx::mesh::Mesh<double>& mesh,
 }
 //----------------------------------------------------------------------------
 dolfinx::fem::FunctionSpace<double> SubMesh::create_functionspace(
-    const dolfinx::fem::FunctionSpace<double>& V_parent) const
+    const dolfinx::fem::FunctionSpace<double>& V) const
 {
   // get element and element_dof_layout from parent mesh
   std::shared_ptr<const dolfinx::fem::FiniteElement<double>> element
-      = V_parent.element();
+      = V.element();
   const dolfinx::fem::ElementDofLayout& element_dof_layout
-      = V_parent.dofmap()->element_dof_layout();
+      = V.dofmap()->element_dof_layout();
 
-  // use parent mesh data and submesh comm/topology to create new dofmap
+  // Use parent mesh data and submesh comm/topology to create new dofmap
   std::function<void(std::span<std::int32_t>, std::uint32_t)> unpermute_dofs;
   if (element->needs_dof_permutations())
     unpermute_dofs = element->dof_permutation_fn(true, true);
@@ -148,8 +142,8 @@ dolfinx::fem::FunctionSpace<double> SubMesh::create_functionspace(
       dolfinx::fem::create_dofmap(_mesh->comm(), element_dof_layout,
                                   *_mesh->topology(), unpermute_dofs, nullptr));
 
-  // create and return function space
-  std::span<const std::size_t> vs = V_parent.value_shape();
+  // Create and return function space
+  std::span<const std::size_t> vs = V.value_shape();
   std::vector _value_shape(vs.data(), vs.data() + vs.size());
 
   return dolfinx::fem::FunctionSpace(_mesh, element, dofmap, _value_shape);

@@ -300,14 +300,13 @@ def run_solver(
     outname = f"results/xmas_{tdim}D_{size}"
 
     # create contact solver
-    if raytracing:
-        search_mode = [ContactMode.Raytracing for _ in range(len(contact_pairs))]
-    else:
-        search_mode = [ContactMode.ClosestPoint for _ in range(len(contact_pairs))]
+    # if raytracing:
+    #     search_mode = [ContactMode.Raytracing for _ in range(len(contact_pairs))]
+    # else:
+    #     search_mode = [ContactMode.ClosestPoint for _ in range(len(contact_pairs))]
+    search_mode = [ContactMode.ClosestPoint for _ in range(len(contact_pairs))]
 
-    contact_problem = ContactProblem(
-        mts[1:], surfaces, contact_pairs, mesh, q_degree, search_mode, radius
-    )
+    contact_problem = ContactProblem(mts[1:], surfaces, contact_pairs, mesh, q_degree, search_mode)
     contact_problem.generate_contact_data(
         FrictionLaw.Frictionless,
         V,
