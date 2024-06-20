@@ -393,9 +393,9 @@ std::pair<std::vector<PetscScalar>, int> Contact::pack_nx(int pair) const
   // Get facet normals on reference cell
   basix::cell::type cell_type
       = dolfinx::mesh::cell_type_to_basix_type(topology->cell_type());
-  auto [facet_normalsb, n_shape]
+  auto [facet_normals, n_shape]
       = basix::cell::facet_outward_normals<double>(cell_type);
-  mdspan_t<const double, 2> facet_normals(facet_normalsb.data(), n_shape);
+  // mdspan_t<const double, 2> facet_normals(facet_normalsb.data(), n_shape);
 
   // Working memory for loop
   std::vector<double> coordinate_dofsb(num_dofs_g * gdim);
@@ -437,11 +437,17 @@ std::pair<std::vector<PetscScalar>, int> Contact::pack_nx(int pair) const
       dolfinx::fem::CoordinateElement<double>::compute_jacobian_inverse(J, K);
 
       // Push forward normal using covariant Piola
+      std::span<const double> facet_normal(
+          facet_normals.data() + n_shape[1] * quadrature_facets[i + 1],
+          n_shape[1]);
+      // physical_facet_normal(
+      //     std::span(normals.data() + i / 2 * cstride + q * gdim, gdim), K,
+      //     MDSPAN_IMPL_STANDARD_NAMESPACE::submdspan(
+      //         facet_normals, quadrature_facets[i + 1],
+      //         MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent));
       physical_facet_normal(
           std::span(normals.data() + i / 2 * cstride + q * gdim, gdim), K,
-          MDSPAN_IMPL_STANDARD_NAMESPACE::submdspan(
-              facet_normals, quadrature_facets[i + 1],
-              MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent));
+          facet_normal);
     }
   }
 
@@ -1049,9 +1055,8 @@ dolfinx_contact::Contact::pack_ny(int pair) const
   // Get facet normals on reference cell
   basix::cell::type cell_type = dolfinx::mesh::cell_type_to_basix_type(
       candidate_mesh->topology()->cell_type());
-  auto [facet_normalsb, n_shape]
+  auto [facet_normals, n_shape]
       = basix::cell::facet_outward_normals<double>(cell_type);
-  mdspan_t<const double, 2> facet_normals(facet_normalsb.data(), n_shape);
 
   // Working memory for loop
   std::vector<double> coordinate_dofsb(num_dofs_g * gdim);
@@ -1106,11 +1111,17 @@ dolfinx_contact::Contact::pack_ny(int pair) const
       dolfinx::fem::CoordinateElement<double>::compute_jacobian_inverse(J, K);
 
       // Push forward normal using covariant Piola
+      std::span<const double> facet_normal(
+          facet_normals.data() + n_shape[1] * local_idx, n_shape[1]);
       physical_facet_normal(
           std::span(normals.data() + i * cstride + q * gdim, gdim), K,
-          MDSPAN_IMPL_STANDARD_NAMESPACE::submdspan(
-              facet_normals, local_idx,
-              MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent));
+          facet_normal);
+
+      // physical_facet_normal(
+      //     std::span(normals.data() + i * cstride + q * gdim, gdim), K,
+      //     MDSPAN_IMPL_STANDARD_NAMESPACE::submdspan(
+      //         facet_normals, local_idx,
+      //         MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent));
     }
   }
 

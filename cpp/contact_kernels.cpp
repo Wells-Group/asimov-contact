@@ -94,10 +94,16 @@ dolfinx_contact::generate_contact_kernel(
     {
       detJ = kd.compute_first_facet_jacobian(facet_index, J, K, J_tot,
                                              detJ_scratch, coord);
+      auto n_ref = kd.facet_normals();
+      std::array<double, 3> n_f;
+      for (std::size_t i = 0; i < n_ref.extent(1); ++i)
+        n_f[i] = n_ref(facet_index, i);
       physical_facet_normal(std::span(n_phys.data(), gdim), K,
-                            MDSPAN_IMPL_STANDARD_NAMESPACE::submdspan(
-                                kd.facet_normals(), facet_index,
-                                MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent));
+                            std::span(n_f.data(), n_ref.extent(1)));
+      // physical_facet_normal(std::span(n_phys.data(), gdim), K,
+      //                       MDSPAN_IMPL_STANDARD_NAMESPACE::submdspan(
+      //                           kd.facet_normals(), facet_index,
+      //                           MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent));
     }
 
     // Extract constants used inside quadrature loop
@@ -245,10 +251,17 @@ dolfinx_contact::generate_contact_kernel(
     {
       detJ = kd.compute_first_facet_jacobian(facet_index, J, K, J_tot,
                                              detJ_scratch, coord);
+
+      auto n_ref = kd.facet_normals();
+      std::array<double, 3> n_f;
+      for (std::size_t i = 0; i < n_ref.extent(1); ++i)
+        n_f[i] = n_ref(facet_index, i);
       physical_facet_normal(std::span(n_phys.data(), gdim), K,
-                            MDSPAN_IMPL_STANDARD_NAMESPACE::submdspan(
-                                kd.facet_normals(), facet_index,
-                                MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent));
+                            std::span(n_f.data(), n_ref.extent(1)));
+      // physical_facet_normal(std::span(n_phys.data(), gdim), K,
+      //                       MDSPAN_IMPL_STANDARD_NAMESPACE::submdspan(
+      //                           kd.facet_normals(), facet_index,
+      //                           MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent));
     }
 
     // Extract scaled gamma (h/gamma) and its inverse
@@ -412,10 +425,16 @@ dolfinx_contact::generate_contact_kernel(
     {
       detJ = kd.compute_first_facet_jacobian(facet_index, J, K, J_tot,
                                              detJ_scratch, coord);
+      auto n_ref = kd.facet_normals();
+      std::array<double, 3> n_f;
+      for (std::size_t i = 0; i < n_ref.extent(1); ++i)
+        n_f[i] = n_ref(facet_index, i);
       physical_facet_normal(std::span(n_phys.data(), gdim), K,
-                            MDSPAN_IMPL_STANDARD_NAMESPACE::submdspan(
-                                kd.facet_normals(), facet_index,
-                                MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent));
+                            std::span(n_f.data(), n_ref.extent(1)));
+      // physical_facet_normal(std::span(n_phys.data(), gdim), K,
+      //                       MDSPAN_IMPL_STANDARD_NAMESPACE::submdspan(
+      //                           kd.facet_normals(), facet_index,
+      //                           MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent));
     }
 
     // Extract constants used inside quadrature loop
@@ -598,10 +617,17 @@ dolfinx_contact::generate_contact_kernel(
     {
       detJ = kd.compute_first_facet_jacobian(facet_index, J, K, J_tot,
                                              detJ_scratch, coord);
+
+      auto n_ref = kd.facet_normals();
+      std::array<double, 3> n_f;
+      for (std::size_t i = 0; i < n_ref.extent(1); ++i)
+        n_f[i] = n_ref(facet_index, i);
       physical_facet_normal(std::span(n_phys.data(), gdim), K,
-                            MDSPAN_IMPL_STANDARD_NAMESPACE::submdspan(
-                                kd.facet_normals(), facet_index,
-                                MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent));
+                            std::span(n_f.data(), n_ref.extent(1)));
+      // physical_facet_normal(std::span(n_phys.data(), gdim), K,
+      //                       MDSPAN_IMPL_STANDARD_NAMESPACE::submdspan(
+      //                           kd.facet_normals(), facet_index,
+      //                           MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent));
     }
 
     // Extract scaled gamma (h/gamma) and its inverse
@@ -830,10 +856,16 @@ dolfinx_contact::generate_contact_kernel(
     {
       detJ = kd.compute_first_facet_jacobian(facet_index, J, K, J_tot,
                                              detJ_scratch, coord);
+      auto n_ref = kd.facet_normals();
+      std::array<double, 3> n_f;
+      for (std::size_t i = 0; i < n_ref.extent(1); ++i)
+        n_f[i] = n_ref(facet_index, i);
       physical_facet_normal(std::span(n_phys.data(), gdim), K,
-                            MDSPAN_IMPL_STANDARD_NAMESPACE::submdspan(
-                                kd.facet_normals(), facet_index,
-                                MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent));
+                            std::span(n_f.data(), n_ref.extent(1)));
+      // physical_facet_normal(std::span(n_phys.data(), gdim), K,
+      //                       MDSPAN_IMPL_STANDARD_NAMESPACE::submdspan(
+      //                           kd.facet_normals(), facet_index,
+      //                           MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent));
     }
 
     // Extract constants used inside quadrature loop
@@ -1028,10 +1060,16 @@ dolfinx_contact::generate_contact_kernel(
     {
       detJ = kd.compute_first_facet_jacobian(facet_index, J, K, J_tot,
                                              detJ_scratch, coord);
+      auto n_ref = kd.facet_normals();
+      std::array<double, 3> n_f;
+      for (std::size_t i = 0; i < n_ref.extent(1); ++i)
+        n_f[i] = n_ref(facet_index, i);
       physical_facet_normal(std::span(n_phys.data(), gdim), K,
-                            MDSPAN_IMPL_STANDARD_NAMESPACE::submdspan(
-                                kd.facet_normals(), facet_index,
-                                MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent));
+                            std::span(n_f.data(), n_ref.extent(1)));
+      // physical_facet_normal(std::span(n_phys.data(), gdim), K,
+      //                       MDSPAN_IMPL_STANDARD_NAMESPACE::submdspan(
+      //                           kd.facet_normals(), facet_index,
+      //                           MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent));
     }
 
     // Extract scaled gamma (h/gamma) and its inverse

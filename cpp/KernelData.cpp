@@ -15,7 +15,6 @@ dolfinx_contact::KernelData::KernelData(
   // Extract mesh
   std::shared_ptr<const dolfinx::mesh::Mesh<double>> mesh = V.mesh();
   assert(mesh);
-  // Get mesh info
   const dolfinx::mesh::Geometry<double>& geometry = mesh->geometry();
   const dolfinx::fem::CoordinateElement<double>& cmap = geometry.cmap();
 

@@ -109,7 +109,7 @@ dolfinx_contact::create_contact_mesh(
                                         cell_dests.links(i).end());
   }
 
-  int ncells = mesh.topology()->index_map(tdim)->size_local();
+  std::int32_t ncells = mesh.topology()->index_map(tdim)->size_local();
 
   // Convert marked facets to list of (global) vertices for each facet
   std::vector<int> local_indices;
@@ -118,6 +118,7 @@ dolfinx_contact::create_contact_mesh(
     auto fl = fv->links(f);
     local_indices.insert(local_indices.end(), fl.begin(), fl.end());
   }
+
   std::vector<std::int64_t> fv_indices(local_indices.size());
   mesh.topology()->index_map(0)->local_to_global(local_indices, fv_indices);
   for (std::size_t i = 0; i < fv_indices.size(); i += num_facet_vertices)
@@ -133,6 +134,7 @@ dolfinx_contact::create_contact_mesh(
     auto cl = cv->links(c);
     local_indices.insert(local_indices.end(), cl.begin(), cl.end());
   }
+
   std::vector<std::int64_t> cv_indices(local_indices.size());
   mesh.topology()->index_map(0)->local_to_global(local_indices, cv_indices);
   for (std::size_t i = 0; i < cv_indices.size(); i += num_cell_vertices)
@@ -146,12 +148,14 @@ dolfinx_contact::create_contact_mesh(
   // Copy facets and markers to all processes
   auto [all_facet_indices, all_facet_values] = copy_to_all(
       mesh.comm(), fv_indices, fmarker.values(), num_facet_vertices);
+
   // Repeat for cell data
   auto [all_cell_indices, all_cell_values] = copy_to_all(
       mesh.comm(), cv_indices, cmarker.values(), num_cell_vertices);
 
   // Convert topology to global indexing, and restrict to non-ghost cells
   std::vector<int> topo = mesh.topology()->connectivity(tdim, 0)->array();
+
   // Cut off any ghost vertices
   topo.resize(ncells * num_cell_vertices);
   std::vector<std::int64_t> topo_global(topo.size());
@@ -159,7 +163,6 @@ dolfinx_contact::create_contact_mesh(
 
   std::size_t num_vertices = mesh.topology()->index_map(0)->size_local();
   std::size_t gdim = mesh.geometry().dim();
-
   std::array<std::size_t, 2> xshape = {num_vertices, gdim};
   std::vector<double> x;
   x.reserve(num_vertices * gdim);
@@ -209,6 +212,7 @@ dolfinx_contact::create_contact_mesh(
 
   dolfinx::common::Timer tremap(
       "~Contact: Add ghosts: Remap markers on new mesh");
+
   // Remap vertices back to input indexing
   // This is rather messy, we need to map vertices to geometric nodes
   // then back to original index

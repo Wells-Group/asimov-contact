@@ -89,9 +89,23 @@ double compute_circumradius(const dolfinx::mesh::Mesh<double>& mesh,
 /// @param[in, out] physical_normal The physical normal
 /// @param[in] K The inverse of the Jacobian
 /// @param[in] reference_normal The reference normal
-template <class E, class F, class G>
-void physical_facet_normal(E&& physical_normal, F&& K, G&& reference_normal)
+// template <class F, class G>
+// void physical_facet_normal(std::span<double> physical_normal, F&& K,
+//                            G&& reference_normal)
+inline void physical_facet_normal(
+    std::span<double> physical_normal,
+    MDSPAN_IMPL_STANDARD_NAMESPACE::mdspan<
+        const double, MDSPAN_IMPL_STANDARD_NAMESPACE::dextents<std::size_t, 2>,
+        std::experimental::layout_right>
+        K,
+    std::span<const double> reference_normal)
 {
+
+  // template <typename T, std::size_t d,
+  //           typename S = std::experimental::layout_right>
+  // using mdspan_t = MDSPAN_IMPL_STANDARD_NAMESPACE::mdspan<
+  //     T, MDSPAN_IMPL_STANDARD_NAMESPACE::dextents<std::size_t, d>, S>;
+
   assert(physical_normal.size() == K.extent(1));
   std::size_t tdim = K.extent(0);
   std::size_t gdim = K.extent(1);
@@ -101,11 +115,17 @@ void physical_facet_normal(E&& physical_normal, F&& K, G&& reference_normal)
       physical_normal[i] += K(j, i) * reference_normal[j];
 
   // Normalize vector
-  double norm = 0;
-  std::for_each(physical_normal.begin(), physical_normal.end(),
-                [&norm](auto ni) { norm += std::pow(ni, 2); });
+  double norm = std::reduce(physical_normal.begin(), physical_normal.end(), 0.0,
+                            [](auto norm, auto n) { return norm + n * n; });
   norm = std::sqrt(norm);
-  std::for_each(physical_normal.begin(), physical_normal.end(),
-                [norm](auto& ni) { ni = ni / norm; });
+  std::transform(physical_normal.begin(), physical_normal.end(),
+                 physical_normal.begin(), [norm](auto x) { return x / norm; });
+
+  // double norm = 0;
+  // std::for_each(physical_normal.begin(), physical_normal.end(),
+  //               [&norm](auto ni) { norm += std::pow(ni, 2); });
+  // norm = std::sqrt(norm);
+  // std::for_each(physical_normal.begin(), physical_normal.end(),
+  //               [norm](auto& ni) { ni = ni / norm; });
 }
 } // namespace dolfinx_contact

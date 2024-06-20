@@ -152,10 +152,18 @@ std::array<double, 3> dolfinx_contact::push_forward_facet_normal(
   }
   // Push forward reference facet normal
   std::array<double, 3> normal = {0, 0, 0};
-  auto facet_normal = MDSPAN_IMPL_STANDARD_NAMESPACE::submdspan(
-      reference_normals, facet_index,
-      MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent);
-  physical_facet_normal(std::span(normal.data(), gdim), K, facet_normal);
+  // auto facet_normal = MDSPAN_IMPL_STANDARD_NAMESPACE::submdspan(
+  //     reference_normals, facet_index,
+  //     MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent);
+  std::array<double, 3> reference_normal;
+  for (std::size_t i = 0; i < reference_normals.extent(1); ++i)
+    reference_normal[i] = reference_normals(facet_index, i);
+  physical_facet_normal(
+      std::span(normal.data(), gdim), K,
+      std::span(reference_normal.data(), reference_normals.extent(1)));
+
+  // physical_facet_normal(std::span(normal.data(), gdim), K, facet_normal);
+
   return normal;
 }
 
@@ -187,9 +195,8 @@ dolfinx_contact::compute_circumradius(const dolfinx::mesh::Mesh<double>& mesh,
       sides[1] += std::pow(coordinate_dofs(1, i) - coordinate_dofs(2, i), 2);
       sides[2] += std::pow(coordinate_dofs(2, i) - coordinate_dofs(0, i), 2);
     }
-    std::for_each(sides.begin(), sides.end(),
-                  [](double& side) { side = std::sqrt(side); });
-
+    std::transform(sides.begin(), sides.end(), sides.begin(),
+                   [](auto side) { return std::sqrt(side); });
     return sides[0] * sides[1] * sides[2] / (4 * area);
   }
   case dolfinx::mesh::CellType::tetrahedron:
@@ -218,8 +225,8 @@ dolfinx_contact::compute_circumradius(const dolfinx::mesh::Mesh<double>& mesh,
       edges[5] += std::pow(coordinate_dofs(1, i) - coordinate_dofs(2, i), 2);
     }
     // Compute length of each edge
-    std::for_each(edges.begin(), edges.end(),
-                  [](double& edge) { edge = std::sqrt(edge); });
+    std::transform(edges.begin(), edges.end(), edges.begin(),
+                   [](double edge) { return std::sqrt(edge); });
 
     // Compute temporary variables
     const double aA = edges[0] * edges[3];

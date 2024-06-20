@@ -19,7 +19,7 @@ namespace dolfinx_contact
 /// @brief compute dot(eps(dphi(q_pos))*n_2, n_1) and tr(eps)
 ///
 /// Given the gradient of the basis functions, compute dot(eps*n_1, n_2)
-/// and tr(eps) for the basis function
+/// and tr(eps) for the basis function.
 ///
 /// @param[in,out] epsn dot(eps*n_1, n_2)
 /// @param[in,out] tr tr(eps)

@@ -16,10 +16,11 @@ void dolfinx_contact::compute_normal_strain_basis(
     std::array<double, 3> n_surf, std::span<const double> n_phys,
     std::size_t q_pos)
 {
-  const std::size_t ndofs_cell = epsn.extent(0);
-  const std::size_t bs = K.extent(1);
-  const std::size_t tdim = K.extent(0);
+  std::size_t ndofs_cell = epsn.extent(0);
+  std::size_t bs = K.extent(1);
+  std::size_t tdim = K.extent(0);
   assert(K.extent(0) == dphi.extent(0));
+
   // precompute tr(eps(phi_j e_l)), eps(phi^j e_l)n*n2
   // Note could merge these loops
   for (std::size_t i = 0; i < tr.extent(0); ++i)
@@ -51,9 +52,9 @@ void dolfinx_contact::compute_sigma_n_basis(
     mdspan_t<const double, 3, std::experimental::layout_stride> dphi,
     std::span<const double> n, double mu, double lmbda, std::size_t q_pos)
 {
-  const std::size_t ndofs_cell = sig_n.extent(0);
-  const std::size_t bs = K.extent(1);
-  const std::size_t tdim = K.extent(0);
+  std::size_t ndofs_cell = sig_n.extent(0);
+  std::size_t bs = K.extent(1);
+  std::size_t tdim = K.extent(0);
   assert(K.extent(0) == dphi.extent(0));
 
   // temp variable for grad(v)
@@ -95,9 +96,13 @@ void dolfinx_contact::compute_sigma_n_u(std::span<double> sig_n_u,
 {
   std::size_t gdim = sig_n_u.size();
   for (std::size_t i = 0; i < gdim; ++i)
+  {
     for (std::size_t j = 0; j < gdim; ++j)
+    {
       sig_n_u[i] += mu * (grad_u[j * gdim + i] + grad_u[i * gdim + j]) * n[j]
                     + lmbda * grad_u[j * gdim + j] * n[i];
+    }
+  }
 }
 //-----------------------------------------------------------------------------
 void dolfinx_contact::compute_sigma_n_opp(mdspan_t<double, 4> sig_n_opp,
@@ -106,9 +111,9 @@ void dolfinx_contact::compute_sigma_n_opp(mdspan_t<double, 4> sig_n_opp,
                                           double lmbda, std::size_t q,
                                           std::size_t num_q_points)
 {
-  const std::size_t num_links = sig_n_opp.extent(0);
-  const std::size_t ndofs_cell = sig_n_opp.extent(1);
-  const std::size_t gdim = sig_n_opp.extent(2);
+  std::size_t num_links = sig_n_opp.extent(0);
+  std::size_t ndofs_cell = sig_n_opp.extent(1);
+  std::size_t gdim = sig_n_opp.extent(2);
 
   // Compute sig(v)n
   for (std::size_t i = 0; i < sig_n_opp.extent(0); ++i)
@@ -118,6 +123,7 @@ void dolfinx_contact::compute_sigma_n_opp(mdspan_t<double, 4> sig_n_opp,
           sig_n_opp(i, j, k, l) = 0;
 
   for (std::size_t i = 0; i < num_links; ++i)
+  {
     for (std::size_t j = 0; j < ndofs_cell; ++j)
     {
       std::size_t offset = i * num_q_points * ndofs_cell * gdim
@@ -136,6 +142,7 @@ void dolfinx_contact::compute_sigma_n_opp(mdspan_t<double, 4> sig_n_opp,
                                    + mu * n[k] * grad_v[offset + l];
       }
     }
+  }
 }
 //-----------------------------------------------------------------------------
 std::vector<double> dolfinx_contact::compute_contact_forces(
@@ -161,6 +168,7 @@ std::vector<double> dolfinx_contact::compute_contact_forces(
         sign[f * num_q_points * gdim + q * gdim + j] = sig_n_u[j];
     }
   }
+
   return sign;
 }
 //-----------------------------------------------------------------------------

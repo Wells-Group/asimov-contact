@@ -10,7 +10,6 @@
 #include <dolfinx/graph/AdjacencyList.h>
 #include <vector>
 
-/// Find all neighbors of each point which are within a radius r.
 dolfinx::graph::AdjacencyList<std::int32_t>
 dolfinx_contact::point_cloud_pairs(std::span<const double> x, double r)
 {
@@ -38,9 +37,9 @@ dolfinx_contact::point_cloud_pairs(std::span<const double> x, double r)
       double dx = xj[0] - xi[0];
       if (dx > r)
         break;
-      const double dy = (xj[1] - xi[1]);
-      const double dz = (xj[2] - xi[2]);
-      const double dr = dx * dx + dy * dy + dz * dz;
+      double dy = (xj[1] - xi[1]);
+      double dz = (xj[2] - xi[2]);
+      double dr = dx * dx + dy * dy + dz * dz;
       if (dr < r * r)
         x_near.push_back(x_fwd[idx]);
       ++idx;
@@ -53,9 +52,9 @@ dolfinx_contact::point_cloud_pairs(std::span<const double> x, double r)
       double dx = xi[0] - xj[0];
       if (dx > r)
         break;
-      const double dy = (xj[1] - xi[1]);
-      const double dz = (xj[2] - xi[2]);
-      const double dr = dx * dx + dy * dy + dz * dz;
+      double dy = (xj[1] - xi[1]);
+      double dz = (xj[2] - xi[2]);
+      double dr = dx * dx + dy * dy + dz * dz;
       if (dr < r * r)
         x_near.push_back(x_fwd[idx]);
       --idx;

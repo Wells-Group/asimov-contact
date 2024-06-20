@@ -579,7 +579,7 @@ double dolfinx_contact::compute_facet_jacobian(
     for (std::size_t j = 0; j < J_tot.extent(1); ++j)
       J_tot(i, j) = 0;
   dolfinx::math::dot(J, J_f, J_tot);
-  return std::fabs(
+  return std::abs(
       dolfinx::fem::CoordinateElement<double>::compute_jacobian_determinant(
           J_tot, detJ_scratch));
 }
@@ -648,9 +648,12 @@ dolfinx_contact::get_update_normal(
               mdspan_t<const double, 2> n_ref, const std::size_t local_index)
     {
       std::fill(n.begin(), n.end(), 0);
-      auto n_f = MDSPAN_IMPL_STANDARD_NAMESPACE::submdspan(
-          n_ref, local_index, MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent);
-      physical_facet_normal(n, K, n_f);
+      // auto n_f = MDSPAN_IMPL_STANDARD_NAMESPACE::submdspan(
+      //     n_ref, local_index, MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent);
+      std::array<double, 3> n_f;
+      for (std::size_t i = 0; i < n_ref.extent(1); ++i)
+        n_f[i] = n_ref(local_index, i);
+      physical_facet_normal(n, K, std::span(n_f.data(), n_ref.extent(1)));
     };
   }
 }

@@ -99,10 +99,16 @@ dolfinx_contact::generate_rigid_surface_kernel(
     {
       detJ = kd.compute_first_facet_jacobian(facet_index, J, K, J_tot,
                                              detJ_scratch, coord);
+      auto n_ref = kd.facet_normals();
+      std::array<double, 3> n_f;
+      for (std::size_t i = 0; i < n_ref.extent(1); ++i)
+        n_f[i] = n_ref(facet_index, i);
       physical_facet_normal(std::span(n_phys.data(), gdim), K,
-                            MDSPAN_IMPL_STANDARD_NAMESPACE::submdspan(
-                                kd.facet_normals(), facet_index,
-                                MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent));
+                            std::span(n_f.data(), n_ref.extent(1)));
+      // physical_facet_normal(std::span(n_phys.data(), gdim), K,
+      //                       MDSPAN_IMPL_STANDARD_NAMESPACE::submdspan(
+      //                           kd.facet_normals(), facet_index,
+      //                           MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent));
     }
 
     // Retrieve normal of rigid surface if constant
@@ -149,8 +155,8 @@ dolfinx_contact::generate_rigid_surface_kernel(
       std::size_t q_pos = q_offset.front() + q;
 
       // Update Jacobian and physical normal
-      detJ = std::fabs(kd.update_jacobian(q, facet_index, detJ, J, K, J_tot,
-                                          detJ_scratch, coord));
+      detJ = std::abs(kd.update_jacobian(q, facet_index, detJ, J, K, J_tot,
+                                         detJ_scratch, coord));
       kd.update_normal(std::span(n_phys.data(), gdim), K, facet_index);
 
       // if normal not constant, get surface normal at current quadrature point
@@ -260,10 +266,16 @@ dolfinx_contact::generate_rigid_surface_kernel(
     {
       detJ = kd.compute_first_facet_jacobian(facet_index, J, K, J_tot,
                                              detJ_scratch, coord);
+      auto n_ref = kd.facet_normals();
+      std::array<double, 3> n_f;
+      for (std::size_t i = 0; i < n_ref.extent(1); ++i)
+        n_f[i] = n_ref(facet_index, i);
       physical_facet_normal(std::span(n_phys.data(), gdim), K,
-                            MDSPAN_IMPL_STANDARD_NAMESPACE::submdspan(
-                                kd.facet_normals(), facet_index,
-                                MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent));
+                            std::span(n_f.data(), n_ref.extent(1)));
+      // physical_facet_normal(std::span(n_phys.data(), gdim), K,
+      //                       MDSPAN_IMPL_STANDARD_NAMESPACE::submdspan(
+      //                           kd.facet_normals(), facet_index,
+      //                           MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent));
     }
 
     // Retrieve normal of rigid surface if constant
@@ -310,8 +322,8 @@ dolfinx_contact::generate_rigid_surface_kernel(
       std::size_t q_pos = q_offset.front() + q;
 
       // Update Jacobian and physical normal
-      detJ = std::fabs(kd.update_jacobian(q, facet_index, detJ, J, K, J_tot,
-                                          detJ_scratch, coord));
+      detJ = std::abs(kd.update_jacobian(q, facet_index, detJ, J, K, J_tot,
+                                         detJ_scratch, coord));
       kd.update_normal(std::span(n_phys.data(), gdim), K, facet_index);
 
       // if normal not constant, get surface normal at current

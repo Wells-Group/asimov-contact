@@ -12,6 +12,9 @@
 namespace dolfinx_contact
 {
 /// @brief Compute near neighbours in list of points
+///
+/// Find all neighbors of each point which are within a radius r.
+///
 /// @param x List of points in 3D flattened row major
 /// @param r Search distance
 /// @return For each point, the list of other points within radius r.
