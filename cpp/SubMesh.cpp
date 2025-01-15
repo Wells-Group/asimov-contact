@@ -4,6 +4,7 @@
 //
 // SPDX-License-Identifier:    MIT
 
+#include<dolfinx/common/sort.h>
 #include "SubMesh.h"
 #include "utils.h"
 
@@ -21,7 +22,7 @@ SubMesh::SubMesh(const dolfinx::mesh::Mesh<double>& mesh,
     cells[f] = cell_facet_pairs[2 * f];
 
   // sort cells and remove duplicates
-  dolfinx::radix_sort<std::int32_t>(std::span(cells.data(), cells.size()));
+  dolfinx::radix_sort(std::span(cells.data(), cells.size()));
   cells.erase(std::unique(cells.begin(), cells.end()), cells.end());
 
   // save sorted cell vector as _parent_cells

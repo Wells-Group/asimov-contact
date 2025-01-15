@@ -194,7 +194,7 @@ dolfinx_contact::sort_cells(std::span<const std::int32_t> cells,
   std::vector<std::int32_t> unique_cells(num_cells);
   std::vector<std::int32_t> offsets(num_cells + 1, 0);
   std::iota(perm.begin(), perm.end(), 0);
-  dolfinx::argsort_radix<std::int32_t>(cells, perm);
+  dolfinx::radix_sort(perm, [&cells](auto i) { return cells[i]; });
 
   // Sort cells in accending order
   for (std::int32_t i = 0; i < num_cells; ++i)
@@ -694,8 +694,8 @@ std::vector<std::int32_t> dolfinx_contact::compute_active_entities(
 
     std::vector<std::int32_t> perm(entities.size());
     std::iota(perm.begin(), perm.end(), 0);
-    dolfinx::argsort_radix<std::int32_t>(cells, perm);
-
+    dolfinx::radix_sort(perm, [&cells](auto i) { return cells[i]; });
+ 
     // Sort cells in ascending order
     std::vector<std::int32_t> active_entities;
     active_entities.reserve(2 * entities.size());
