@@ -263,8 +263,9 @@ def run_demo(simplex, E, nu, gamma, theta, lifting, outfile, ksp_view, timing_vi
         ofile = open(outfile, "a")
     print("-" * 25, file=ofile)
     print(
-        f"num_dofs: {uh.function_space.dofmap.index_map_bs
-                     * uh.function_space.dofmap.index_map.size_global}"
+        f"num_dofs: {
+            uh.function_space.dofmap.index_map_bs * uh.function_space.dofmap.index_map.size_global
+        }"
         + f", {mesh.topology.cell_type}",
         file=ofile,
     )

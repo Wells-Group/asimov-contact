@@ -177,7 +177,7 @@ def run_solver(
         u2_L2 = np.sqrt(mesh.comm.allreduce(assemble_scalar(u2_norm), op=MPI.SUM))
         if rank == 0:
             print(f"abs. L2-error={E_L2:.2e}")
-            print(f"rel. L2-error={E_L2/u2_L2:.2e}")
+            print(f"rel. L2-error={E_L2 / u2_L2:.2e}")
 
         e_abs.append(E_L2)
         e_rel.append(E_L2 / u2_L2)

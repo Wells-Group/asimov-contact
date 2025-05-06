@@ -162,9 +162,9 @@ def solve_euler_bernoulli(
         uz = (rho_g * L**4) / (8 * E * In)
         print(
             f"-----{nx}x{ny}--Nitsche:{nitsche} (gamma: {gamma})----\n",
-            f"Maximal deflection: {u_at_point[mesh.geometry.dim-1]}\n",
+            f"Maximal deflection: {u_at_point[mesh.geometry.dim - 1]}\n",
             f"Theoretical deflection: {-uz}\n",
-            f"Error: {100*abs((u_at_point[mesh.geometry.dim-1]+uz)/uz)} %",
+            f"Error: {100 * abs((u_at_point[mesh.geometry.dim - 1] + uz) / uz)} %",
             flush=True,
         )
 

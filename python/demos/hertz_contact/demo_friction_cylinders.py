@@ -340,7 +340,9 @@ if __name__ == "__main__":
     for i in range(steps1):
         g_top.value[1] = -0.2 / steps1
         t.value[1] = 0  # val
-        print(f"Fricitionless part: Step {i+1} of {steps1}----------------------------------------")
+        print(
+            f"Fricitionless part: Step {i + 1} of {steps1}----------------------------------------"
+        )
         set_bc(du.x.petsc_vec, bcs)
         n, converged = newton_solver.solve(du, write_solution=True)
         newton_steps1.append(n)
@@ -430,7 +432,9 @@ if __name__ == "__main__":
 
     newton_steps2 = []
     for i in range(steps2):
-        print(f"Fricitional part: Step {i+1} of {steps2}------------------------------------------")
+        print(
+            f"Fricitional part: Step {i + 1} of {steps2}------------------------------------------"
+        )
         set_bc(du.x.petsc_vec, bcs)
         g_top.value[0] = 6 * 0.05 / steps2
         n, converged = newton_solver.solve(du, write_solution=True)

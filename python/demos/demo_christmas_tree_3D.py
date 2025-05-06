@@ -334,7 +334,7 @@ if __name__ == "__main__":
     for i in range(nload_steps):
         t.value[:] = (i + 1) * np.array(t_val) / nload_steps
         f.value[:] = (i + 1) * np.array(f_val) / nload_steps
-        timing_str = f"~Contact: {i+1} Newton Solver"
+        timing_str = f"~Contact: {i + 1} Newton Solver"
         with Timer(timing_str):
             n, converged = newton_solver.solve(du, write_solution=True)
         num_newton_its[i] = n

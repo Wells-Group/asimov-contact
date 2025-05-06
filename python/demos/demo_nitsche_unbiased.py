@@ -494,7 +494,7 @@ def run_soler(args):
                 g.value[:] = displacement[k, :] / nload_steps
             else:
                 g.value[:] = (i + 1) * displacement[k, :] / nload_steps
-        timing_str = f"~Contact: {i+1} Newton Solver"
+        timing_str = f"~Contact: {i + 1} Newton Solver"
         with Timer(timing_str):
             n, converged = newton_solver.solve(du, write_solution=True)
         num_newton_its[i] = n
@@ -541,8 +541,9 @@ def run_soler(args):
         print("-" * 25, file=outfile)
         print(f"Newton options {newton_options}", file=outfile)
         print(
-            f"num_dofs: {u.function_space.dofmap.index_map_bs
-                         * u.function_space.dofmap.index_map.size_global}"
+            f"num_dofs: {
+                u.function_space.dofmap.index_map_bs * u.function_space.dofmap.index_map.size_global
+            }"
             + f", {mesh.topology.cell_type}",
             file=outfile,
         )
