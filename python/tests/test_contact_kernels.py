@@ -179,7 +179,7 @@ def test_vector_surface_kernel(dim, kernel_type, P, Q):
     contact.assemble_vector(b2, 0, kernel, coeffs, consts, V._cpp_object)
     assemble_vector(b2, L_custom)
     b2.assemble()
-    assert np.allclose(b.array, b2.array)
+    np.testing.assert_allclose(b.array, b2.array)
 
 
 @pytest.mark.parametrize("kernel_type", [kt.Jac])

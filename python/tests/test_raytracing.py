@@ -57,7 +57,7 @@ def test_raytracing_3D(cell_type):
             cell_geometry[i, :] = mesh.geometry.x[dof, :]
 
         distance = dolfinx.geometry.compute_distance_gjk(cell_geometry, origin)
-        assert np.allclose(x, origin + distance)
+        np.testing.assert_allclose(x, origin + distance)
 
 
 @pytest.mark.parametrize(
@@ -97,7 +97,7 @@ def test_raytracing_3D_corner(cell_type):
         for i, dof in enumerate(cell_dofs):
             cell_geometry[i, :] = mesh.geometry.x[dof, :]
         distance = dolfinx.geometry.compute_distance_gjk(cell_geometry, origin)
-        assert np.allclose(x, origin + distance)
+        np.testing.assert_allclose(x, origin + distance)
 
 
 @pytest.mark.parametrize(
@@ -138,7 +138,7 @@ def test_raytracing_2D(cell_type):
         for i, dof in enumerate(cell_dofs):
             cell_geometry[i, :] = mesh.geometry.x[dof, :]
         distance = dolfinx.geometry.compute_distance_gjk(cell_geometry, origin)
-        assert np.allclose(x, origin + distance[:2])
+        np.testing.assert_allclose(x, origin + distance[:2])
 
 
 @pytest.mark.parametrize(
@@ -178,7 +178,7 @@ def test_raytracing_2D_corner(cell_type):
         for i, dof in enumerate(cell_dofs):
             cell_geometry[i, :] = mesh.geometry.x[dof, :]
         distance = dolfinx.geometry.compute_distance_gjk(cell_geometry, origin)
-        assert np.allclose(x, origin + distance[:2])
+        np.testing.assert_allclose(x, origin + distance[:2])
 
 
 @pytest.mark.parametrize(
@@ -210,4 +210,4 @@ def test_raytracing_manifold(cell_type):
     status, cell_idx, x, X = dolfinx_contact.cpp.raytracing(
         mesh._cpp_object, origin, normal, integral_pairs, 10, 1e-6
     )
-    assert np.allclose(x, exact_point)
+    np.testing.assert_allclose(x, exact_point)

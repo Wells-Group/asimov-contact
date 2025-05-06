@@ -134,4 +134,4 @@ def test_copy_to_submesh(tmp_path, order, res, simplex, dim):
     contact.copy_to_submesh(u._cpp_object, u_sub._cpp_object)
     u_exact = Function(V_sub)
     u_exact.interpolate(_test_fun)
-    assert np.allclose(u_sub.x.array[:], u_exact.x.array[:])
+    np.testing.assert_allclose(u_sub.x.array[:], u_exact.x.array[:])

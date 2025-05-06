@@ -69,18 +69,18 @@ def test_pack_coeff_at_quadrature(ct, quadrature_degree, space, degree):
     # Use Expression to verify packing
     expr = Expression(v, quadrature_points)
     expr_vals = expr.eval(mesh, cells)
-    assert np.allclose(coeffs, expr_vals)
+    np.testing.assert_allclose(coeffs, expr_vals)
 
     if space not in ["N1curl", "RTCE"]:
         coeffs = dolfinx_contact.cpp.pack_gradient_quadrature(
             v._cpp_object, quadrature_degree, integration_entities
         )
         if space == "DG" and degree == 1:
-            assert np.allclose(0.0, coeffs)
+            np.testing.assert_allclose(0.0, coeffs)
         else:
             expr = Expression(grad(v), quadrature_points, comm=mesh.comm)
             expr_vals = expr.eval(mesh, cells)
-            assert np.allclose(coeffs, expr_vals)
+            np.testing.assert_allclose(coeffs, expr_vals)
 
 
 @pytest.mark.parametrize("quadrature_degree", range(1, 6))
@@ -135,7 +135,7 @@ def test_pack_coeff_on_facet(quadrature_degree, space, degree):
 
     for i, entity in enumerate(integration_entities):
         local_index = entity[1]
-        assert np.allclose(
+        np.testing.assert_allclose(
             coeffs[i], expr_vals[i, cstride * local_index : cstride * (local_index + 1)]
         )
     if space not in ["N1curl", "RTCE"]:
@@ -143,14 +143,14 @@ def test_pack_coeff_on_facet(quadrature_degree, space, degree):
             v._cpp_object, quadrature_degree, integration_entities
         )
         if space == "DG" and degree == 1:
-            assert np.allclose(0.0, coeffs)
+            np.testing.assert_allclose(0.0, coeffs)
         else:
             gdim = mesh.geometry.dim
             expr = Expression(grad(v), q_points, comm=mesh.comm)
             expr_vals = expr.eval(mesh, integration_entities[:, 0])
             for i, entity in enumerate(integration_entities):
                 local_index = entity[1]
-                assert np.allclose(
+                np.testing.assert_allclose(
                     coeffs[i],
                     expr_vals[i, gdim * cstride * local_index : gdim * cstride * (local_index + 1)],
                 )
@@ -193,7 +193,7 @@ def test_sub_coeff(quadrature_degree, degree):
         expr = Expression(vi, quadrature_points)
         expr_vals = expr.eval(mesh, cells)
 
-        assert np.allclose(coeffs, expr_vals)
+        np.testing.assert_allclose(coeffs, expr_vals)
 
 
 @pytest.mark.parametrize("quadrature_degree", range(1, 5))
@@ -233,4 +233,4 @@ def test_sub_coeff_grad(quadrature_degree, degree):
         expr = Expression(grad(vi), quadrature_points)
         expr_vals = expr.eval(mesh, cells)
 
-        assert np.allclose(coeffs, expr_vals)
+        np.testing.assert_allclose(coeffs, expr_vals)

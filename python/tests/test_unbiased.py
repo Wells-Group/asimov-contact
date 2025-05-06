@@ -898,7 +898,7 @@ class TestUnbiased:
         contact_problem.assemble_vector(b1.x.petsc_vec, V_custom)
         b1.x.scatter_reverse(la.InsertMode.add)
         b1.x.scatter_forward()
-        assert np.allclose(b0.x.array[ind_dg], b1.x.array)
+        np.testing.assert_allclose(b0.x.array[ind_dg], b1.x.array)
 
         # Assemble  jacobian
         A1.zeroEntries()
@@ -917,7 +917,7 @@ class TestUnbiased:
             bi, bj, bv = A1.getValuesCSR()
             B_sp = scipy.sparse.csr_matrix((bv, bj, bi), shape=A1.getSize()).todense()
 
-            assert np.allclose(A_sp[ind_dg, :][:, ind_dg], B_sp)
+            np.testing.assert_allclose(A_sp[ind_dg, :][:, ind_dg], B_sp)
 
         # Sanity check different formulations
         if frictionlaw == FrictionLaw.Frictionless:
@@ -930,7 +930,7 @@ class TestUnbiased:
             _fem.petsc.assemble_vector(b2.x.petsc_vec, F2)
             b2.x.scatter_reverse(la.InsertMode.add)
             b2.x.scatter_forward()
-            assert np.allclose(b1.x.array, b2.x.array[ind_dg])
+            np.testing.assert_allclose(b1.x.array, b2.x.array[ind_dg])
 
             # Contact terms formulated using ufl consistent with nitsche_ufl.py
             # FIXME: Add parallel matrix comparison
@@ -944,7 +944,7 @@ class TestUnbiased:
 
                 ci, cj, cv = A2.getValuesCSR()
                 C_sp = scipy.sparse.csr_matrix((cv, cj, ci), shape=A2.getSize()).todense()
-                assert np.allclose(C_sp[ind_dg, :][:, ind_dg], B_sp)
+                np.testing.assert_allclose(C_sp[ind_dg, :][:, ind_dg], B_sp)
 
     @pytest.mark.xdist_group(name="group1")
     @pytest.mark.skipif(
@@ -1158,7 +1158,7 @@ class TestUnbiased:
         ind_dg = compute_dof_permutations_all(V_ufl, V_custom, gap)
 
         # Compare rhs
-        assert np.allclose(b0.x.array[ind_dg], b1.x.array)
+        np.testing.assert_allclose(b0.x.array[ind_dg], b1.x.array)
 
         # create scipy matrix
         # FIXME: Add parallel matrix comparison
@@ -1167,4 +1167,4 @@ class TestUnbiased:
             A_sp = scipy.sparse.csr_matrix((av, aj, ai), shape=A0.getSize()).todense()
             bi, bj, bv = A1.getValuesCSR()
             B_sp = scipy.sparse.csr_matrix((bv, bj, bi), shape=A1.getSize()).todense()
-            assert np.allclose(A_sp[:, ind_dg][ind_dg, :], B_sp)
+            np.testing.assert_allclose(A_sp[:, ind_dg][ind_dg, :], B_sp)

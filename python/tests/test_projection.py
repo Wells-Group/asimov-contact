@@ -129,4 +129,4 @@ def test_projection(tmp_path, q_deg, surf, dim):
 
     # Test if angle between -normal and gap function is less than 6.5 degrees
     # Is better accuracy needed?
-    assert np.allclose(n_dot, np.ones(n_dot.shape))
+    np.testing.assert_allclose(n_dot, np.ones(n_dot.shape))
