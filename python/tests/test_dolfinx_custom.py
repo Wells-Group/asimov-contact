@@ -78,7 +78,7 @@ def test_contact_kernel(tmp_path, theta, gamma, dim, gap):
         if i > 0:
             # Refine mesh
             mesh.topology.create_entities(mesh.topology.dim - 2)
-            mesh = dolfinx.mesh.refine(mesh)
+            mesh, _, _ = refine(mesh)
 
         # Create meshtag for top and bottom markers
         tdim = mesh.topology.dim

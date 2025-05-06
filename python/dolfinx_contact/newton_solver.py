@@ -105,7 +105,8 @@ class NewtonSolver:
         self.krylov_solver.setFromOptions()
         pc = self.krylov_solver.getPC()
         if pc_opts.get("pc_mg_levels") is not None:
-            pc.setMGLevels(pc_opts.get("pc_mg_levels"))
+            if pc.getType() != "gamg":
+                pc.setMGLevels(pc_opts.get("pc_mg_levels"))
             if pc_opts.get("pc_mg_cycles") is not None:
                 pc.setMGCycleType(pc_opts.get("pc_mg_cycles"))
         self._A.setOptionsPrefix(self.krylov_solver.getOptionsPrefix())
