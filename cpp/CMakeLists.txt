@@ -2,7 +2,7 @@
 cmake_minimum_required(VERSION 3.21)
 
 # Set project name and version number
-project(DOLFINX_CONTACT VERSION 0.8.0.0)
+project(DOLFINX_CONTACT VERSION 0.9.0.0)
 
 # -----------------------------------------------------------------------------
 # Set CMake options, see `cmake --help-policy CMP00xx`
@@ -60,8 +60,8 @@ add_feature_info(
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_CURRENT_SOURCE_DIR})
 
 # Find packages
-find_package(DOLFINX 0.8.0.0 REQUIRED)
-find_package(Basix 0.8.0.0 REQUIRED)
+find_package(DOLFINX 0.9.0.0 REQUIRED)
+find_package(Basix 0.9.0.0 REQUIRED)
 
 feature_summary(WHAT ALL)
 
