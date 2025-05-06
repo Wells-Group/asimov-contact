@@ -194,7 +194,7 @@ dolfinx_contact::sort_cells(std::span<const std::int32_t> cells,
   std::vector<std::int32_t> unique_cells(num_cells);
   std::vector<std::int32_t> offsets(num_cells + 1, 0);
   std::iota(perm.begin(), perm.end(), 0);
-  dolfinx::argsort_radix<std::int32_t>(cells, perm);
+  dolfinx::radix_sort(perm, [&cells](auto index) { return cells[index]; });
 
   // Sort cells in accending order
   for (std::int32_t i = 0; i < num_cells; ++i)
@@ -664,7 +664,7 @@ std::vector<std::int32_t> dolfinx_contact::compute_active_entities(
   case dolfinx::fem::IntegralType::cell:
   {
     std::vector<std::int32_t> active_entities(entities.begin(), entities.end());
-    dolfinx::radix_sort(std::span<std::int32_t>(active_entities));
+    dolfinx::radix_sort(active_entities);
     return active_entities;
   }
   case dolfinx::fem::IntegralType::exterior_facet:
@@ -694,7 +694,7 @@ std::vector<std::int32_t> dolfinx_contact::compute_active_entities(
 
     std::vector<std::int32_t> perm(entities.size());
     std::iota(perm.begin(), perm.end(), 0);
-    dolfinx::argsort_radix<std::int32_t>(cells, perm);
+    dolfinx::radix_sort(perm, [&cells](auto index) { return cells[index]; });
 
     // Sort cells in ascending order
     std::vector<std::int32_t> active_entities;
@@ -1135,7 +1135,7 @@ MatNullSpace dolfinx_contact::build_nullspace_multibody(
       std::copy_n(cell_dofs.begin(), ndofs_cell, dofs.begin() + c * ndofs_cell);
     }
     // Remove duplicates
-    dolfinx::radix_sort(std::span<std::int32_t>(dofs));
+    dolfinx::radix_sort(dofs);
     dofs.erase(std::unique(dofs.begin(), dofs.end()), dofs.end());
 
     // Translations

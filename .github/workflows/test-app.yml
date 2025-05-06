@@ -51,51 +51,14 @@ jobs:
     name: Build and test
     needs: lint
     runs-on: ubuntu-latest
-    container: ghcr.io/fenics/test-env:current-mpich
-    # strategy:
-    #   matrix:
-    #     # Complex mode not working
-    #     # run_mode: ["Release", "Debug"]
-    #     petsc_mode: ["real"]
-    #     petsc_precision: ["64"]
-    #     petsc_int: ["32"]
-    env:
-      # PETSC_ARCH: linux-gnu-${{ matrix.petsc_mode }}${{ matrix.petsc_precision}}-${{ matrix.petsc_int }}
-      PETSC_ARCH: linux-gnu-real64-32
-      # OMPI_ALLOW_RUN_AS_ROOT: 1
-      # OMPI_ALLOW_RUN_AS_ROOT_CONFIRM: 1
-      # OMPI_MCA_rmaps_base_oversubscribe: 1
-      # OMPI_MCA_plm: isolated
-      # OMPI_MCA_btl_vader_single_copy_mechanism: none
-      # OMPI_MCA_mpi_yield_when_idle: 1
-      # OMPI_MCA_hwloc_base_binding_policy: none
+    container: ghcr.io/fenics/dolfinx/dolfinx:stable
     steps:
       - uses: actions/checkout@v4
-
-      - name: Get DOLFINx
-        if: github.event_name != 'workflow_dispatch'
-        uses: actions/checkout@v4
-        with:
-          path: ./dolfinx
-          repository: FEniCS/dolfinx
-          ref: main
 
       - name: Build C++ docs
         run: |
           cd cpp/doc
           doxygen
-
-      - name: Install DOLFINx
-        run: |
-          pip install git+https://github.com/FEniCS/ufl.git
-          pip install git+https://github.com/FEniCS/basix.git
-          pip install git+https://github.com/FEniCS/ffcx.git
-
-          cmake -G Ninja -DCMAKE_BUILD_TYPE=Developer -B build -S dolfinx/cpp/
-          cmake --build build
-          cmake --install build
-          pip install -r dolfinx/python/build-requirements.txt # TO REMOVE
-          pip -v install --check-build-dependencies --no-build-isolation dolfinx/python/
 
       - name: Install contact library (C++)
         id: cpp-contact

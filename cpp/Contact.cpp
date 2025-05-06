@@ -108,7 +108,7 @@ void compute_linked_cells(
                 });
 
   // Remove duplicates
-  dolfinx::radix_sort(std::span<std::int32_t>(linked_cells));
+  dolfinx::radix_sort(linked_cells);
   linked_cells.erase(std::unique(linked_cells.begin(), linked_cells.end()),
                      linked_cells.end());
 }
