@@ -87,9 +87,9 @@ int main(int argc, char* argv[])
     // Define variational forms
     auto a_therm = std::make_shared<fem::Form<T>>(
         fem::create_form<T>(*form_heat_equation_a_therm, {Q, Q},
-                            {{"T0", T0}, {"kdt", kdt}}, {}, {}));
+                            {{"T0", T0}, {"kdt", kdt}}, {}, {}, {}));
     auto L_therm = std::make_shared<fem::Form<T>>(fem::create_form<T>(
-        *form_heat_equation_L_therm, {Q}, {{"T0", T0}}, {}, {}));
+        *form_heat_equation_L_therm, {Q}, {{"T0", T0}}, {}, {}, {}));
 
     // Define boundary conditions
     const std::int32_t dirichlet_bdy = 2; // bottom face
@@ -165,7 +165,7 @@ int main(int argc, char* argv[])
       dolfinx::fem::apply_lifting<T, U>(b_therm.mutable_array(), {a_therm},
                                         {{bc}}, {}, double(1.0));
       b_therm.scatter_rev(std::plus<T>());
-      dolfinx::fem::set_bc<T, U>(b_therm.mutable_array(), {bc});
+      bc->set(b_therm.mutable_array(), std::nullopt);
 
       // Assemble matrix
       MatZeroEntries(A_therm.mat());

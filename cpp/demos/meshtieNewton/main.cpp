@@ -137,7 +137,7 @@ public:
       VecGhostUpdateEnd(_b_petsc, ADD_VALUES, SCATTER_REVERSE);
 
       // Set bc
-      fem::set_bc<T, U>(b, _bcs, std::span<const T>(array, n), -1.0);
+      fem::petsc::set_bc<T>(_b_petsc, _bcs, x, -1.0);
       VecRestoreArrayRead(x, &array);
 
       // log level INFO ensures Newton steps are logged
@@ -300,13 +300,14 @@ int main(int argc, char* argv[])
     // Define variational forms
     auto J = std::make_shared<fem::Form<T>>(
         fem::create_form<T>(*form_linear_elasticity_J, {V, V},
-                            {{"mu", mu}, {"lmbda", lmbda}}, {}, {}));
+                            {{"mu", mu}, {"lmbda", lmbda}}, {}, {}, {}));
 
     auto u = std::make_shared<fem::Function<T>>(V);
     auto F = std::make_shared<fem::Form<T>>(fem::create_form<T>(
         *form_linear_elasticity_F, {V},
         {{"u", u}, {"mu", mu}, {"lmbda", lmbda}}, {},
-        {{dolfinx::fem::IntegralType::exterior_facet, integration_domain}}));
+        {{dolfinx::fem::IntegralType::exterior_facet, integration_domain}},
+        {}));
 
     // Define boundary conditions
     // bottom fixed, top displaced in y-diretion by -0.2
