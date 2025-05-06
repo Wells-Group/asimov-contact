@@ -336,7 +336,6 @@ int main(int argc, char* argv[])
     dolfinx::la::petsc::KrylovSolver ksp_therm(MPI_COMM_WORLD);
     dolfinx::la::petsc::options::set("ksp_type", "cg");
     dolfinx::la::petsc::options::set("pc_type", "gamg");
-    dolfinx::la::petsc::options::set("pc_mg_levels", 2);
     dolfinx::la::petsc::options::set("mg_levels_ksp_type", "chebyshev");
     dolfinx::la::petsc::options::set("mg_levels_pc_type", "jacobi");
     dolfinx::la::petsc::options::set("pc_gamg_type", "agg");
