@@ -119,7 +119,7 @@ def run_solver(
         if i > 0:
             # Refine mesh
             mesh.topology.create_entities(mesh.topology.dim - 2)
-            mesh = refine(mesh)
+            mesh, _, _ = refine(mesh)
 
         # Create meshtag for top and bottom markers
         tdim = mesh.topology.dim
