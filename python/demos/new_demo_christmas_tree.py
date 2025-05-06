@@ -337,7 +337,7 @@ def run_solver(
 
         # Apply boundary condition
         if len(bcs) > 0:
-            apply_lifting(b, [J_compiled], bcs=[bcs], x0=[x], scale=-1.0)
+            apply_lifting(b, [J_compiled], bcs=[bcs], x0=[x], alpha=-1.0)
         b.ghostUpdate(addv=InsertMode.ADD, mode=ScatterMode.REVERSE)
         if len(bcs) > 0:
             set_bc(b, bcs, x, -1.0)

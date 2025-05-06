@@ -196,7 +196,7 @@ def compute_residual(x, b, coeffs):
     b.ghostUpdate(addv=InsertMode.INSERT, mode=ScatterMode.FORWARD)
     contact_problem.assemble_vector(b, V)
     assemble_vector(b, F_compiled)
-    apply_lifting(b, [J_compiled], bcs=[bcs], x0=[x], scale=-1.0)
+    apply_lifting(b, [J_compiled], bcs=[bcs], x0=[x], alpha=-1.0)
     b.ghostUpdate(addv=InsertMode.ADD, mode=ScatterMode.REVERSE)
     set_bc(b, bcs, x, -1.0)
 

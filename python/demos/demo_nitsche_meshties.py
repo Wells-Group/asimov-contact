@@ -197,7 +197,7 @@ def run_demo(simplex, E, nu, gamma, theta, lifting, outfile, ksp_view, timing_vi
 
     # Apply boundary condition and scatter reverse
     if len(bcs) > 0:
-        apply_lifting(b, [J], bcs=[bcs], scale=-1.0)
+        apply_lifting(b, [J], bcs=[bcs], alpha=-1.0)
     b.ghostUpdate(
         addv=PETSc.InsertMode.ADD,  # type: ignore
         mode=PETSc.ScatterMode.REVERSE,  # type: ignore

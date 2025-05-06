@@ -244,7 +244,7 @@ if __name__ == "__main__":
 
     # Apply boundary condition and scatter reverse
     if len(bcs) > 0:
-        apply_lifting(b, [J], bcs=[bcs], scale=-1.0)
+        apply_lifting(b, [J], bcs=[bcs], alpha=-1.0)
     b.ghostUpdate(addv=PETSc.InsertMode.ADD, mode=PETSc.ScatterMode.REVERSE)  # type: ignore
     if len(bcs) > 0:
         set_bc(b, bcs)

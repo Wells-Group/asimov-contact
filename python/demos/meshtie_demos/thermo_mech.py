@@ -167,7 +167,7 @@ class ThermoElasticProblem:
         assemble_vector(self._b_petsc, self._l)  # standard kernels
 
         # Apply boundary condition
-        apply_lifting(self._b_petsc, [self._j], bcs=[self._bcs], x0=[x], scale=-1.0)
+        apply_lifting(self._b_petsc, [self._j], bcs=[self._bcs], x0=[x], alpha=-1.0)
         self._b_petsc.ghostUpdate(addv=PETSc.InsertMode.ADD, mode=PETSc.ScatterMode.REVERSE)
         set_bc(self._b_petsc, self._bcs, x, -1.0)
 
@@ -334,7 +334,7 @@ def assemble_vec_therm(b):
     assemble_vector(b, L_therm)
 
     # Apply boundary condition and scatter reverse
-    apply_lifting(b, [a_therm], bcs=[[Tbc]], scale=1.0)
+    apply_lifting(b, [a_therm], bcs=[[Tbc]], alpha=1.0)
     b.ghostUpdate(
         addv=PETSc.InsertMode.ADD,  # type: ignore
         mode=PETSc.ScatterMode.REVERSE,

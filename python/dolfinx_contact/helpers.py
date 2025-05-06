@@ -173,7 +173,7 @@ class NonlinearPDE_SNESProblem:
         with F.localForm() as f_local:
             f_local.set(0.0)
         assemble_vector(F, self.L)
-        apply_lifting(F, [self.a], bcs=[[self.bc]], x0=[x], scale=-1.0)
+        apply_lifting(F, [self.a], bcs=[[self.bc]], x0=[x], alpha=-1.0)
         F.ghostUpdate(addv=PETSc.InsertMode.ADD, mode=PETSc.ScatterMode.REVERSE)
         set_bc(F, [self.bc], x, -1.0)
 
