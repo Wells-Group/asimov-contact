@@ -473,7 +473,7 @@ void dolfinx_contact::evaluate_basis_functions(
   std::array<std::size_t, 4> shape
       = {1, num_cells, space_dimension, reference_value_size};
   if (num_derivatives == 1)
-    shape[0] = tdim + 1;
+    shape[0] = gdim + 1;
   std::vector<double> tempb(
       std::reduce(shape.cbegin(), shape.cend(), 1, std::multiplies{}));
   mdspan_t<double, 4> temp(tempb.data(), shape);
