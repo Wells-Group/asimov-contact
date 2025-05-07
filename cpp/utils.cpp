@@ -4,6 +4,7 @@
 //
 // SPDX-License-Identifier:    MIT
 
+#include<algorithm>
 #include "utils.h"
 #include "RayTracing.h"
 #include "error_handling.h"
