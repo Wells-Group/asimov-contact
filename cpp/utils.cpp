@@ -190,12 +190,23 @@ dolfinx_contact::sort_cells(std::span<const std::int32_t> cells,
 {
   assert(perm.size() == cells.size());
 
+  // FIXME: Workaround for the case when all cells are -1
+  std::vector<std::int32_t> tmp_cells(cells.begin(), cells.end());
+  tmp_cells.erase(std::unique(tmp_cells.begin(), tmp_cells.end()),
+  tmp_cells.end());
+
+  if (tmp_cells.size() == 1 && tmp_cells[0] == -1)
+  {
+    std::vector<std::int32_t> unique_cells(1, -1);
+    std::vector<std::int32_t> offsets = {0, (std::int32_t)cells.size()};
+    return std::make_pair(unique_cells, offsets);
+  }
+
   const auto num_cells = (std::int32_t)cells.size();
   std::vector<std::int32_t> unique_cells(num_cells);
   std::vector<std::int32_t> offsets(num_cells + 1, 0);
   std::iota(perm.begin(), perm.end(), 0);
   dolfinx::radix_sort(perm, [&cells](auto index) { return cells[index]; });
-
   // Sort cells in accending order
   for (std::int32_t i = 0; i < num_cells; ++i)
     unique_cells[i] = cells[perm[i]];
