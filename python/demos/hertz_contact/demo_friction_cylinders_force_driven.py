@@ -134,7 +134,6 @@ if __name__ == "__main__":
         "ksp_rtol": ksp_tol,
         "ksp_atol": ksp_tol,
         "pc_type": "gamg",
-        "pc_mg_levels": 3,
         "pc_mg_cycles": 1,  # 1 is v, 2 is w
         "mg_levels_ksp_type": "chebyshev",
         "mg_levels_pc_type": "jacobi",
@@ -276,7 +275,7 @@ if __name__ == "__main__":
 
         # Apply boundary condition
         if len(bcs) > 0:
-            apply_lifting(b, [J_compiled], bcs=[bcs], x0=[x], scale=-1.0)
+            apply_lifting(b, [J_compiled], bcs=[bcs], x0=[x], alpha=-1.0)
         b.ghostUpdate(addv=InsertMode.ADD, mode=ScatterMode.REVERSE)
         if len(bcs) > 0:
             set_bc(b, bcs, x, -1.0)
@@ -329,7 +328,7 @@ if __name__ == "__main__":
         val = -p * (i + 1) / steps1  # -0.2 / steps1  #
         t.value[1] = val
         print(
-            f"Fricitionless part: Step {i+1} of {steps1}------------------------------------------"
+            f"Fricitionless part: Step {i + 1} of {steps1}-----------------------------------------"
         )
         set_bc(du.x.petsc_vec, bcs)
         n, converged = newton_solver.solve(du, write_solution=True)
@@ -367,7 +366,6 @@ if __name__ == "__main__":
         "ksp_rtol": ksp_tol,
         "ksp_atol": ksp_tol,
         "pc_type": "gamg",
-        "pc_mg_levels": 3,
         "pc_mg_cycles": 1,  # 1 is v, 2 is w
         "mg_levels_ksp_type": "chebyshev",
         "mg_levels_pc_type": "jacobi",
@@ -402,7 +400,9 @@ if __name__ == "__main__":
 
     newton_steps2 = []
     for i in range(steps2):
-        print(f"Fricitional part: Step {i+1} of {steps2}------------------------------------------")
+        print(
+            f"Fricitional part: Step {i + 1} of {steps2}------------------------------------------"
+        )
         # print(problem1.du.x.array[:])
         set_bc(du.x.petsc_vec, bcs)
         val = q_tan * (i + 1) / steps2

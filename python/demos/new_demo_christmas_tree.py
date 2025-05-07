@@ -274,7 +274,6 @@ def run_solver(
         "ksp_rtol": ksp_tol,
         "ksp_atol": ksp_tol,
         "pc_type": "gamg",
-        "pc_mg_levels": 3,
         "pc_mg_cycles": 1,  # 1 is v, 2 is w
         "mg_levels_ksp_type": "chebyshev",
         "mg_levels_pc_type": "jacobi",
@@ -337,7 +336,7 @@ def run_solver(
 
         # Apply boundary condition
         if len(bcs) > 0:
-            apply_lifting(b, [J_compiled], bcs=[bcs], x0=[x], scale=-1.0)
+            apply_lifting(b, [J_compiled], bcs=[bcs], x0=[x], alpha=-1.0)
         b.ghostUpdate(addv=InsertMode.ADD, mode=ScatterMode.REVERSE)
         if len(bcs) > 0:
             set_bc(b, bcs, x, -1.0)
@@ -383,7 +382,7 @@ def run_solver(
     for i in range(nload_steps):
         t.value[:] = (i + 1) * np.array(t_val) / nload_steps
         f.value[:] = (i + 1) * np.array(f_val) / nload_steps
-        timing_str = f"~Contact: {i+1} Newton Solver"
+        timing_str = f"~Contact: {i + 1} Newton Solver"
         with Timer(timing_str):
             n, converged = newton_solver.solve(du, write_solution=True)
         num_newton_its[i] = n
@@ -431,8 +430,10 @@ def run_solver(
         print("-" * 25, file=outfile)
         print(f"Newton options {newton_options}", file=outfile)
         print(
-            f"num_dofs: {u1.function_space.dofmap.index_map_bs
-                         * u1.function_space.dofmap.index_map.size_global}"
+            f"num_dofs: {
+                u1.function_space.dofmap.index_map_bs
+                * u1.function_space.dofmap.index_map.size_global
+            }"
             + f", {mesh.topology.cell_type}",
             file=outfile,
         )

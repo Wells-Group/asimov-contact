@@ -146,7 +146,7 @@ public:
       VecGhostUpdateEnd(_b_petsc, ADD_VALUES, SCATTER_REVERSE);
 
       // Set bc
-      fem::set_bc<T, U>(b, _bcs, std::span<const T>(array, n), -1.0);
+      dolfinx::fem::petsc::set_bc<T>(_b_petsc, _bcs, x, -1.0);
       VecRestoreArrayRead(x, &array);
 
       // log level INFO ensures Newton steps are logged
@@ -308,10 +308,10 @@ int main(int argc, char* argv[])
     // Define variational forms
     auto a_therm = std::make_shared<fem::Form<T>>(
         fem::create_form<T>(*form_thermo_elasticity_a_therm, {Q, Q},
-                            {{"kdt", kdt}, {"T0", T0}}, {}, {}));
+                            {{"kdt", kdt}, {"T0", T0}}, {}, {}, {}));
     auto L_therm = std::make_shared<fem::Form<T>>(
         fem::create_form<T>(*form_thermo_elasticity_L_therm, {Q},
-                            {{"kdt", kdt}, {"T0", T0}}, {}, {}));
+                            {{"kdt", kdt}, {"T0", T0}}, {}, {}, {}));
 
     // Define boundary conditions
     // temperature at bottom
@@ -336,7 +336,6 @@ int main(int argc, char* argv[])
     dolfinx::la::petsc::KrylovSolver ksp_therm(MPI_COMM_WORLD);
     dolfinx::la::petsc::options::set("ksp_type", "cg");
     dolfinx::la::petsc::options::set("pc_type", "gamg");
-    dolfinx::la::petsc::options::set("pc_mg_levels", 2);
     dolfinx::la::petsc::options::set("mg_levels_ksp_type", "chebyshev");
     dolfinx::la::petsc::options::set("mg_levels_pc_type", "jacobi");
     dolfinx::la::petsc::options::set("pc_gamg_type", "agg");
@@ -412,7 +411,7 @@ int main(int argc, char* argv[])
     // Define variational forms
     auto J = std::make_shared<fem::Form<T>>(fem::create_form<T>(
         *form_thermo_elasticity_J, {V, V},
-        {{"mu", mu}, {"lmbda", lmbda}, {"alpha", alpha_c}}, {}, {}));
+        {{"mu", mu}, {"lmbda", lmbda}, {"alpha", alpha_c}}, {}, {}, {}));
     auto F = std::make_shared<fem::Form<T>>(
         fem::create_form<T>(*form_thermo_elasticity_F, {V},
                             {{"u", u},
@@ -420,7 +419,7 @@ int main(int argc, char* argv[])
                              {"mu", mu},
                              {"lmbda", lmbda},
                              {"alpha", alpha_c}},
-                            {}, {}));
+                            {}, {}, {}));
 
     // Define boundary conditions
     // bottom fixed, top displaced in y-diretion by -0.2
@@ -503,7 +502,7 @@ int main(int argc, char* argv[])
       dolfinx::fem::apply_lifting<T, U>(b_therm.mutable_array(), {a_therm},
                                         {{bcs_therm}}, {}, double(1.0));
       b_therm.scatter_rev(std::plus<T>());
-      dolfinx::fem::set_bc<T, U>(b_therm.mutable_array(), {bcs_therm});
+      bcs_therm->set(b_therm.mutable_array(), std::nullopt);
 
       // Assemble matrix
       MatZeroEntries(A_therm.mat());

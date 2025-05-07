@@ -127,6 +127,7 @@ def compare_test_fn(fn_space, test_fn, grad_test_fn, q_indices, link, x_ref, cel
 
     num_q_points = x_ref.shape[0]
     cell_arr = np.array(cell, dtype=np.int32)
+    eps = 2e2 * np.finfo(x_ref.dtype).eps
     for i, dof in enumerate(dofs):
         for k in range(bs):
             # Create fem function that is identical with desired test function
@@ -134,11 +135,11 @@ def compare_test_fn(fn_space, test_fn, grad_test_fn, q_indices, link, x_ref, cel
             v.x.array[:] = 0
             v.x.array[dof * bs + k] = 1
 
-            # Create expression vor evaluating test function and evaluate
+            # Create expression for evaluating test function and evaluate
             expr = _fem.Expression(v, x_ref)
             expr_vals = expr.eval(mesh, cell_arr)
 
-            # Create expression vor evaluating derivative of test
+            # Create expression for evaluating derivative of test
             # function and evaluate
             if bs == 1:
                 expr2 = _fem.Expression(ufl.grad(v), x_ref)
@@ -147,8 +148,8 @@ def compare_test_fn(fn_space, test_fn, grad_test_fn, q_indices, link, x_ref, cel
             expr_vals2 = expr2.eval(mesh, cell)
             # compare values of test functions
             offset = link * num_q_points * len(dofs) * bs + i * num_q_points * bs
-            assert np.allclose(
-                expr_vals[0][q_indices * bs + k], test_fn[offset + q_indices * bs + k]
+            np.testing.assert_allclose(
+                expr_vals[0][q_indices * bs + k], test_fn[offset + q_indices * bs + k], atol=eps
             )
             # retrieve dv from expression values and packed test fn
             dv1 = np.zeros((len(q_indices), gdim))
@@ -157,7 +158,7 @@ def compare_test_fn(fn_space, test_fn, grad_test_fn, q_indices, link, x_ref, cel
             for m in range(gdim):
                 dv1[:, m] = expr_vals2[0][q_indices * gdim + m]
                 dv2[:, m] = grad_test_fn[offset + q_indices * gdim + m]
-            assert np.allclose(dv1, dv2)
+            np.testing.assert_allclose(dv1, dv2, atol=eps)
 
 
 def assert_zero_test_fn(fn_space, test_fn, grad_test_fn, num_q_points, zero_ind, link, cell):
@@ -170,14 +171,14 @@ def assert_zero_test_fn(fn_space, test_fn, grad_test_fn, num_q_points, zero_ind,
         for k in range(bs):
             # ensure values are zero if q not connected to quadrature point
             offset = link * num_q_points * len(dofs) * bs + i * num_q_points * bs
-            assert np.allclose(0, test_fn[offset + zero_ind * bs + k])
+            np.testing.assert_allclose(0, test_fn[offset + zero_ind * bs + k])
             # retrieve dv from expression values and packed test fn
             if len(zero_ind) > 0:
                 dv2 = np.zeros((len(zero_ind), gdim))
                 offset = link * num_q_points * len(dofs) * gdim + i * gdim * num_q_points
                 for m in range(gdim):
                     dv2[:, m] = grad_test_fn[offset + zero_ind * gdim + m]
-                assert np.allclose(np.zeros((len(zero_ind), gdim)), dv2)
+                np.testing.assert_allclose(np.zeros((len(zero_ind), gdim)), dv2)
 
 
 def compare_u(fn_space, u, u_opposite, grad_u_opposite, q_indices, x_ref, cell):
@@ -195,7 +196,8 @@ def compare_u(fn_space, u, u_opposite, grad_u_opposite, q_indices, x_ref, cell):
         vals[i * bs : (i + 1) * bs] = u_opposite[q * bs : (q + 1) * bs]
 
     # compare expression and packed u
-    assert np.allclose(expr_vals, vals)
+    eps = np.finfo(mesh.geometry.x.dtype).eps
+    np.testing.assert_allclose(expr_vals.flatten(), vals, atol=eps)
     # cell_arr = np.array(cell, dtype=np.int32).reshape(-1)
     # loop over block
     for k in range(bs):
@@ -219,10 +221,10 @@ def compare_u(fn_space, u, u_opposite, grad_u_opposite, q_indices, x_ref, cell):
                 vals2[j] = grad_u_opposite[index]
 
         # compare gradient from expression and u_opposite
-        assert np.allclose(vals1, vals2)
+        np.testing.assert_allclose(vals1, vals2, atol=eps)
 
 
-@pytest.mark.parametrize("ct", ["quadrilateral", "triangle", "tetrahedron", "hexahedron"])
+@pytest.mark.parametrize("ct", ["quadrilateral", "tetrahedron", "hexahedron", "triangle"])
 @pytest.mark.parametrize("gap", [0.5, -0.5])
 @pytest.mark.parametrize("q_deg", [1, 2, 3])
 @pytest.mark.parametrize("delta", [0.0, -0.5])

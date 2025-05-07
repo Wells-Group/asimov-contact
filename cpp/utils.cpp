@@ -1,9 +1,10 @@
-// Copyright (C) 2021-2022 Jørgen S. Dokken and Sarah Roggendorf
+// Copyright (C) 2021-2025 Jørgen S. Dokken and Sarah Roggendorf
 //
 // This file is part of DOLFINx_CONTACT
 //
 // SPDX-License-Identifier:    MIT
 
+#include<algorithm>
 #include "utils.h"
 #include "RayTracing.h"
 #include "error_handling.h"
@@ -188,14 +189,35 @@ std::pair<std::vector<std::int32_t>, std::vector<std::int32_t>>
 dolfinx_contact::sort_cells(std::span<const std::int32_t> cells,
                             std::span<std::int32_t> perm)
 {
+  if (cells.size() == 0)
+  {
+    std::vector<std::int32_t> unique_cells(0);
+    std::vector<std::int32_t> offsets = {0,0};
+    return std::make_pair(unique_cells, offsets);
+  }
   assert(perm.size() == cells.size());
+
+  // FIXME: Workaround for the case when all cells are -1
+  std::vector<std::int32_t> tmp_cells(cells.begin(), cells.end());
+  tmp_cells.erase(std::unique(tmp_cells.begin(), tmp_cells.end()),
+  tmp_cells.end());
+
+  if (tmp_cells.size() == 1 && tmp_cells[0] == -1)
+  {
+    std::vector<std::int32_t> unique_cells(1, -1);
+    std::vector<std::int32_t> offsets = {0, (std::int32_t)cells.size()};
+    return std::make_pair(unique_cells, offsets);
+  }
+  // FIXME: Remove when https://github.com/FEniCS/dolfinx/pull/3724 is merged and released
+  if (*std::min_element(tmp_cells.cbegin(), tmp_cells.cend())<0)
+    throw std::runtime_error("Cell indices are negative, cannot sort with current algortihm.");
 
   const auto num_cells = (std::int32_t)cells.size();
   std::vector<std::int32_t> unique_cells(num_cells);
   std::vector<std::int32_t> offsets(num_cells + 1, 0);
   std::iota(perm.begin(), perm.end(), 0);
-  dolfinx::argsort_radix<std::int32_t>(cells, perm);
 
+  dolfinx::radix_sort(perm, [&cells](auto index) { return cells[index]; });
   // Sort cells in accending order
   for (std::int32_t i = 0; i < num_cells; ++i)
     unique_cells[i] = cells[perm[i]];
@@ -458,7 +480,7 @@ void dolfinx_contact::evaluate_basis_functions(
   std::array<std::size_t, 4> shape
       = {1, num_cells, space_dimension, reference_value_size};
   if (num_derivatives == 1)
-    shape[0] = tdim + 1;
+    shape[0] = gdim + 1;
   std::vector<double> tempb(
       std::reduce(shape.cbegin(), shape.cend(), 1, std::multiplies{}));
   mdspan_t<double, 4> temp(tempb.data(), shape);
@@ -664,7 +686,7 @@ std::vector<std::int32_t> dolfinx_contact::compute_active_entities(
   case dolfinx::fem::IntegralType::cell:
   {
     std::vector<std::int32_t> active_entities(entities.begin(), entities.end());
-    dolfinx::radix_sort(std::span<std::int32_t>(active_entities));
+    dolfinx::radix_sort(active_entities);
     return active_entities;
   }
   case dolfinx::fem::IntegralType::exterior_facet:
@@ -694,7 +716,7 @@ std::vector<std::int32_t> dolfinx_contact::compute_active_entities(
 
     std::vector<std::int32_t> perm(entities.size());
     std::iota(perm.begin(), perm.end(), 0);
-    dolfinx::argsort_radix<std::int32_t>(cells, perm);
+    dolfinx::radix_sort(perm, [&cells](auto index) { return cells[index]; });
 
     // Sort cells in ascending order
     std::vector<std::int32_t> active_entities;
@@ -1135,7 +1157,7 @@ MatNullSpace dolfinx_contact::build_nullspace_multibody(
       std::copy_n(cell_dofs.begin(), ndofs_cell, dofs.begin() + c * ndofs_cell);
     }
     // Remove duplicates
-    dolfinx::radix_sort(std::span<std::int32_t>(dofs));
+    dolfinx::radix_sort(dofs);
     dofs.erase(std::unique(dofs.begin(), dofs.end()), dofs.end());
 
     // Translations

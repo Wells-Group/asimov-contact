@@ -154,10 +154,11 @@ int main(int argc, char* argv[])
     // Define variational forms
     auto J = std::make_shared<fem::Form<T>>(
         fem::create_form<T>(*form_linear_elasticity_J, {V, V},
-                            {{"mu", mu}, {"lmbda", lmbda}}, {}, {}));
+                            {{"mu", mu}, {"lmbda", lmbda}}, {}, {}, {}));
     auto F = std::make_shared<fem::Form<T>>(fem::create_form<T>(
         *form_linear_elasticity_F, {V}, {{"f", f}, {"t", t}}, {},
-        {{dolfinx::fem::IntegralType::exterior_facet, integration_domain}}));
+        {{dolfinx::fem::IntegralType::exterior_facet, integration_domain}},
+        {}));
 
     // Define boundary conditions
     const std::int32_t dirichlet_bdy = 12; // bottom face
@@ -198,7 +199,7 @@ int main(int argc, char* argv[])
     dolfinx::fem::apply_lifting<T, U>(b.mutable_array(), {J}, {{bc}}, {},
                                       double(1.0));
     b.scatter_rev(std::plus<T>());
-    dolfinx::fem::set_bc<T, U>(b.mutable_array(), {bc});
+    bc->set(b.mutable_array(), std::nullopt);
 
     // Assemble matrix
     MatZeroEntries(A.mat());
@@ -229,7 +230,6 @@ int main(int argc, char* argv[])
     dolfinx::la::petsc::KrylovSolver ksp(MPI_COMM_WORLD);
     dolfinx::la::petsc::options::set("ksp_type", "cg");
     dolfinx::la::petsc::options::set("pc_type", "gamg");
-    dolfinx::la::petsc::options::set("pc_mg_levels", 3);
     dolfinx::la::petsc::options::set("mg_levels_ksp_type", "chebyshev");
     dolfinx::la::petsc::options::set("mg_levels_pc_type", "jacobi");
     dolfinx::la::petsc::options::set("pc_gamg_type", "agg");

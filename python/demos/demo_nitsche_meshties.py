@@ -153,7 +153,6 @@ def run_demo(simplex, E, nu, gamma, theta, lifting, outfile, ksp_view, timing_vi
         "ksp_rtol": ksp_tol,
         "ksp_atol": ksp_tol,
         "pc_type": "gamg",
-        "pc_mg_levels": 3,
         "mg_levels_ksp_type": "chebyshev",
         "mg_levels_pc_type": "jacobi",
         "pc_gamg_type": "agg",
@@ -197,7 +196,7 @@ def run_demo(simplex, E, nu, gamma, theta, lifting, outfile, ksp_view, timing_vi
 
     # Apply boundary condition and scatter reverse
     if len(bcs) > 0:
-        apply_lifting(b, [J], bcs=[bcs], scale=-1.0)
+        apply_lifting(b, [J], bcs=[bcs], alpha=-1.0)
     b.ghostUpdate(
         addv=PETSc.InsertMode.ADD,  # type: ignore
         mode=PETSc.ScatterMode.REVERSE,  # type: ignore
@@ -263,8 +262,9 @@ def run_demo(simplex, E, nu, gamma, theta, lifting, outfile, ksp_view, timing_vi
         ofile = open(outfile, "a")
     print("-" * 25, file=ofile)
     print(
-        f"num_dofs: {uh.function_space.dofmap.index_map_bs
-                     * uh.function_space.dofmap.index_map.size_global}"
+        f"num_dofs: {
+            uh.function_space.dofmap.index_map_bs * uh.function_space.dofmap.index_map.size_global
+        }"
         + f", {mesh.topology.cell_type}",
         file=ofile,
     )

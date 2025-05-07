@@ -200,7 +200,6 @@ if __name__ == "__main__":
         "ksp_rtol": ksp_tol,
         "ksp_atol": ksp_tol,
         "pc_type": "gamg",
-        "pc_mg_levels": 3,
         "pc_mg_cycles": 1,  # 1 is v, 2 is w
         "mg_levels_ksp_type": "chebyshev",
         "mg_levels_pc_type": "jacobi",
@@ -244,7 +243,7 @@ if __name__ == "__main__":
 
     # Apply boundary condition and scatter reverse
     if len(bcs) > 0:
-        apply_lifting(b, [J], bcs=[bcs], scale=-1.0)
+        apply_lifting(b, [J], bcs=[bcs], alpha=-1.0)
     b.ghostUpdate(addv=PETSc.InsertMode.ADD, mode=PETSc.ScatterMode.REVERSE)  # type: ignore
     if len(bcs) > 0:
         set_bc(b, bcs)
@@ -307,8 +306,9 @@ if __name__ == "__main__":
         outfile = open(args.outfile, "a")
     print("-" * 25, file=outfile)
     print(
-        f"num_dofs: {uh.function_space.dofmap.index_map_bs
-                     * uh.function_space.dofmap.index_map.size_global}"
+        f"num_dofs: {
+            uh.function_space.dofmap.index_map_bs * uh.function_space.dofmap.index_map.size_global
+        }"
         + f", {mesh.topology.cell_types[0]}",
         file=outfile,
     )

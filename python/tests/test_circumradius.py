@@ -74,4 +74,5 @@ def test_circumradius(dim):
 
     # sort h2, compute_active_entities sorts by cells
     indices = np.argsort(cells)
-    np.testing.assert_allclose(h, h2[indices])
+    eps = np.finfo(mesh.geometry.x.dtype).eps
+    np.testing.assert_allclose(h, h2[indices], atol=eps)

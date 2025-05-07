@@ -161,7 +161,6 @@ petsc_options = {
     "ksp_rtol": ksp_tol,
     "ksp_atol": ksp_tol,
     "pc_type": "gamg",
-    "pc_mg_levels": 3,
     "pc_mg_cycles": 1,  # 1 is v, 2 is w
     "mg_levels_ksp_type": "chebyshev",
     "mg_levels_pc_type": "jacobi",
@@ -196,7 +195,7 @@ def compute_residual(x, b, coeffs):
     b.ghostUpdate(addv=InsertMode.INSERT, mode=ScatterMode.FORWARD)
     contact_problem.assemble_vector(b, V)
     assemble_vector(b, F_compiled)
-    apply_lifting(b, [J_compiled], bcs=[bcs], x0=[x], scale=-1.0)
+    apply_lifting(b, [J_compiled], bcs=[bcs], x0=[x], alpha=-1.0)
     b.ghostUpdate(addv=InsertMode.ADD, mode=ScatterMode.REVERSE)
     set_bc(b, bcs, x, -1.0)
 

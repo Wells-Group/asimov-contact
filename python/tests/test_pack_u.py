@@ -84,4 +84,4 @@ def test_pack_u():
 
         for j in range(len(s0)):
             f_exact = f(new_points[j].T).T.reshape(-1)
-            assert np.allclose(f_exact, u_opposite[j])
+            np.testing.assert_allclose(f_exact, u_opposite[j])

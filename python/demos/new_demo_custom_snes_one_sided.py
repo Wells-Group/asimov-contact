@@ -118,7 +118,7 @@ def solver(
         if i > 0:
             # Refine mesh
             mesh.topology.create_entities(mesh.topology.dim - 2)
-            mesh = refine(mesh)
+            mesh, _, _ = refine(mesh)
 
         # Create meshtag for top and bottom markers
         tdim = mesh.topology.dim
@@ -169,7 +169,7 @@ def solver(
         u2_L2 = np.sqrt(mesh.comm.allreduce(assemble_scalar(u2_norm), op=MPI.SUM))
         if rank == 0:
             print(f"abs. L2-error={E_L2:.2e}")
-            print(f"rel. L2-error={E_L2/u2_L2:.2e}")
+            print(f"rel. L2-error={E_L2 / u2_L2:.2e}")
         e_abs.append(E_L2)
         e_rel.append(E_L2 / u2_L2)
         dofs_global.append(V.dofmap.index_map.size_global * V.dofmap.index_map_bs)
