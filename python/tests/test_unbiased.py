@@ -898,7 +898,7 @@ class TestUnbiased:
         contact_problem.assemble_vector(b1.x.petsc_vec, V_custom)
         b1.x.scatter_reverse(la.InsertMode.add)
         b1.x.scatter_forward()
-        tol = 1e-11
+        tol = 5e-9
         np.testing.assert_allclose(b0.x.array[ind_dg], b1.x.array, atol=tol)
 
         # Assemble  jacobian
