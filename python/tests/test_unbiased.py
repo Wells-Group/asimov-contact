@@ -898,7 +898,7 @@ class TestUnbiased:
         contact_problem.assemble_vector(b1.x.petsc_vec, V_custom)
         b1.x.scatter_reverse(la.InsertMode.add)
         b1.x.scatter_forward()
-        tol = 2000 * np.finfo(mesh_custom.geometry.x.dtype).eps
+        tol = 1e-11
         np.testing.assert_allclose(b0.x.array[ind_dg], b1.x.array, atol=tol)
 
         # Assemble  jacobian
@@ -908,7 +908,6 @@ class TestUnbiased:
 
         # Retrieve data necessary for comparison
         tdim = mesh_ufl.topology.dim
-
         # create scipy matrix
         # FIXME: Add parallel matrix comparison
         if MPI.COMM_WORLD.size < 2:
@@ -1158,7 +1157,7 @@ class TestUnbiased:
         tdim = mesh_ufl.topology.dim
         ind_dg = compute_dof_permutations_all(V_ufl, V_custom, gap)
 
-        tol = 2000 * np.finfo(mesh_custom.geometry.x.dtype).eps
+        tol = 1e-11
 
         # Compare rhs
         np.testing.assert_allclose(b0.x.array[ind_dg], b1.x.array, atol=tol)

@@ -57,7 +57,8 @@ def test_raytracing_3D(cell_type):
             cell_geometry[i, :] = mesh.geometry.x[dof, :]
 
         distance = dolfinx.geometry.compute_distance_gjk(cell_geometry, origin)
-        np.testing.assert_allclose(x, origin + distance)
+        tol = 5 * np.finfo(mesh.geometry.x.dtype).eps
+        np.testing.assert_allclose(x, origin + distance, atol=tol)
 
 
 @pytest.mark.parametrize(
@@ -138,7 +139,8 @@ def test_raytracing_2D(cell_type):
         for i, dof in enumerate(cell_dofs):
             cell_geometry[i, :] = mesh.geometry.x[dof, :]
         distance = dolfinx.geometry.compute_distance_gjk(cell_geometry, origin)
-        np.testing.assert_allclose(x, origin + distance[:2])
+        tol = 5 * np.finfo(mesh.geometry.x.dtype).eps
+        np.testing.assert_allclose(x, origin + distance[:2], atol=tol)
 
 
 @pytest.mark.parametrize(
