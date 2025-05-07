@@ -1,4 +1,4 @@
-// Copyright (C) 2021-2022 Jørgen S. Dokken and Sarah Roggendorf
+// Copyright (C) 2021-2025 Jørgen S. Dokken and Sarah Roggendorf
 //
 // This file is part of DOLFINx_CONTACT
 //
@@ -201,11 +201,15 @@ dolfinx_contact::sort_cells(std::span<const std::int32_t> cells,
     std::vector<std::int32_t> offsets = {0, (std::int32_t)cells.size()};
     return std::make_pair(unique_cells, offsets);
   }
+  // FIXME: Remove when https://github.com/FEniCS/dolfinx/pull/3724 is merged and released
+  if (*std::min_element(tmp_cells.cbegin(), tmp_cells.cend())<0)
+    throw std::runtime_error("Cell indices are negative, cannot sort with current algortihm.");
 
   const auto num_cells = (std::int32_t)cells.size();
   std::vector<std::int32_t> unique_cells(num_cells);
   std::vector<std::int32_t> offsets(num_cells + 1, 0);
   std::iota(perm.begin(), perm.end(), 0);
+
   dolfinx::radix_sort(perm, [&cells](auto index) { return cells[index]; });
   // Sort cells in accending order
   for (std::int32_t i = 0; i < num_cells; ++i)
