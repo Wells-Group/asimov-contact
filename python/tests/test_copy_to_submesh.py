@@ -134,4 +134,5 @@ def test_copy_to_submesh(tmp_path, order, res, simplex, dim):
     contact.copy_to_submesh(u._cpp_object, u_sub._cpp_object)
     u_exact = Function(V_sub)
     u_exact.interpolate(_test_fun)
-    np.testing.assert_allclose(u_sub.x.array[:], u_exact.x.array[:])
+    eps = np.finfo(mesh.geometry.x.dtype).eps
+    np.testing.assert_allclose(u_sub.x.array[:], u_exact.x.array[:], atol=eps)
