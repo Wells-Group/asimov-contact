@@ -736,15 +736,15 @@ Contact::pack_test_functions(int pair,
                                           num_q_points);
     // As radix sort is broken for negative numbers, we need to filter them out                                          
     std::vector<std::int32_t> positive_cells;
-    std::vector<std::int32_t> postive_to_old;
+    std::vector<std::int32_t> positive_to_old;
     positive_cells.reserve(f_cells.size());
-    postive_to_old.reserve(f_cells.size());
+    positive_to_old.reserve(f_cells.size());
     for (std::size_t j = 0; j< f_cells.size(); ++j)
     {
       if (f_cells[j] >= 0)
       {
         positive_cells.push_back(f_cells[j]);
-        postive_to_old.push_back(j);
+        positive_to_old.push_back(j);
       }
     } 
     auto [unique_cells, offsets] = sort_cells(positive_cells, std::span(perm.data(), positive_cells.size()));
@@ -761,7 +761,7 @@ Contact::pack_test_functions(int pair,
         {
           for (std::size_t l = 0; l < c.extent(4); ++l)
           {
-            c(i, link, k, postive_to_old[indices[q]], l)
+            c(i, link, k, positive_to_old[indices[q]], l)
                 = basis_values(0, i * num_q_points + indices[q], k, 0);
           }
         }
@@ -1430,9 +1430,22 @@ std::pair<std::vector<PetscScalar>, int> Contact::pack_grad_test_functions(
     }
 
     // Sort linked cells
+    // As radix sort is broken for negative numbers, we need to filter them out                                          
+    std::vector<std::int32_t> positive_cells;
+    std::vector<std::int32_t> positive_to_old;
+    positive_cells.reserve(linked_cells.size());
+    positive_to_old.reserve(linked_cells.size());
+    for (std::size_t j = 0; j< linked_cells.size(); ++j)
+    {
+      if (linked_cells[j] >= 0)
+      {
+        positive_cells.push_back(linked_cells[j]);
+        positive_to_old.push_back(j);
+      }
+    } 
     auto [unique_cells, offsets]
-        = sort_cells(std::span(linked_cells.data(), linked_cells.size()),
-                     std::span(perm.data(), perm.size()));
+        = sort_cells(positive_cells,
+                     std::span(perm.data(), positive_cells.size()));
 
     // Loop over sorted array of unique cells
     std::int32_t link = 0;
@@ -1453,7 +1466,7 @@ std::pair<std::vector<PetscScalar>, int> Contact::pack_grad_test_functions(
       std::vector<double> x_c(indices.size() * tdim);
       for (std::size_t l = 0; l < indices.size(); l++)
       {
-        std::int32_t ind = indices[l];
+        std::int32_t ind = positive_to_old[indices[l]];
         std::copy_n(std::next(reference_x.begin(),
                               num_q_points * tdim * i + ind * tdim),
                     tdim, std::next(x_c.begin(), l * tdim));

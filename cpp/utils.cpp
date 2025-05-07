@@ -189,6 +189,12 @@ std::pair<std::vector<std::int32_t>, std::vector<std::int32_t>>
 dolfinx_contact::sort_cells(std::span<const std::int32_t> cells,
                             std::span<std::int32_t> perm)
 {
+  if (cells.size() == 0)
+  {
+    std::vector<std::int32_t> unique_cells(0);
+    std::vector<std::int32_t> offsets = {0,0};
+    return std::make_pair(unique_cells, offsets);
+  }
   assert(perm.size() == cells.size());
 
   // FIXME: Workaround for the case when all cells are -1
