@@ -734,23 +734,34 @@ Contact::pack_test_functions(int pair,
   {
     std::span<const std::int32_t> f_cells(cells.data() + i * num_q_points,
                                           num_q_points);
-    auto [unique_cells, offsets] = sort_cells(f_cells, perm);
+    // As radix sort is broken for negative numbers, we need to filter them out                                          
+    std::vector<std::int32_t> positive_cells;
+    std::vector<std::int32_t> postive_to_old;
+    positive_cells.reserve(f_cells.size());
+    postive_to_old.reserve(f_cells.size());
+    for (std::size_t j = 0; j< f_cells.size(); ++j)
+    {
+      if (f_cells[j] >= 0)
+      {
+        positive_cells.push_back(f_cells[j]);
+        postive_to_old.push_back(j);
+      }
+    } 
+    auto [unique_cells, offsets] = sort_cells(positive_cells, std::span(perm.data(), positive_cells.size()));
     std::int32_t link = 0;
     for (std::size_t j = 0; j < unique_cells.size(); ++j)
     {
-      if (unique_cells[j] < 0)
-        continue;
-
+      assert(unique_cells[j] >= 0);
       auto indices
           = std::span(perm.data() + offsets[j], offsets[j + 1] - offsets[j]);
-      assert(perm.size() >= (std::size_t)offsets[j + 1]);
+      assert(positive_cells.size() >= (std::size_t)offsets[j + 1]);
       for (std::size_t k = 0; k < c.extent(2); ++k)
       {
         for (std::size_t q = 0; q < indices.size(); ++q)
         {
           for (std::size_t l = 0; l < c.extent(4); ++l)
           {
-            c(i, link, k, indices[q], l)
+            c(i, link, k, postive_to_old[indices[q]], l)
                 = basis_values(0, i * num_q_points + indices[q], k, 0);
           }
         }
