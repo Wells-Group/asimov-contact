@@ -502,8 +502,7 @@ int main(int argc, char* argv[])
       dolfinx::fem::apply_lifting<T, U>(b_therm.mutable_array(), {a_therm},
                                         {{bcs_therm}}, {}, double(1.0));
       b_therm.scatter_rev(std::plus<T>());
-      for (auto& bc : bcs)
-        bc->set(b_therm.mutable_array(), std::nullopt);
+      bcs_therm->set(b_therm.mutable_array(), std::nullopt);
 
       // Assemble matrix
       MatZeroEntries(A_therm.mat());
