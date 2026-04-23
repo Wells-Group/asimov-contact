@@ -286,7 +286,7 @@ def nitsche_rigid_surface(
     )
 
     # Setup non-linear problem and Newton-solver
-    problem = _fem.petsc.NonlinearProblem(F, u, bcs, J=J)
+    problem = _fem.petsc.NewtonSolverNonlinearProblem(F, u, bcs, J=J)
     solver = _nls.petsc.NewtonSolver(mesh.comm, problem)
 
     # Create rigid motion null-space
