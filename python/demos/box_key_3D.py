@@ -326,9 +326,10 @@ if __name__ == "__main__":
         print("-" * 25, file=outfile)
         print(f"Newton options {newton_options}", file=outfile)
         Vs = u.function_space
+        dm = Vs.dofmap
+        im = dm.index_map
         print(
-            f"num_dofs: {Vs.dofmap.index_map_bs * Vs.dofmap.index_map.size_global}"
-            + f", {mesh.topology.cell_types[0]}",
+            f"num_dofs: {dm.index_map_bs * im.size_global}" + f", {mesh.topology.cell_types[0]}",
             file=outfile,
         )
         print(

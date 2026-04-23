@@ -262,11 +262,10 @@ def run_demo(simplex, E, nu, gamma, theta, lifting, outfile, ksp_view, timing_vi
     else:
         ofile = open(outfile, "a")
     print("-" * 25, file=ofile)
+    dm = uh.function_space.dofmap
+    im = dm.index_map
     print(
-        f"num_dofs: {
-            uh.function_space.dofmap.index_map_bs * uh.function_space.dofmap.index_map.size_global
-        }"
-        + f", {mesh.topology.cell_type}",
+        f"num_dofs: {dm.index_map_bs * im.size_global}" + f", {mesh.topology.cell_type}",
         file=ofile,
     )
     print(f"Krylov solver {solver_time}", file=ofile)

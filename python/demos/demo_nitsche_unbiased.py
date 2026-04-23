@@ -545,11 +545,10 @@ def run_soler(args):
     if mesh.comm.rank == 0:
         print("-" * 25, file=outfile)
         print(f"Newton options {newton_options}", file=outfile)
+        dm = u.function_space.dofmap
+        im = dm.index_map
         print(
-            f"num_dofs: {
-                u.function_space.dofmap.index_map_bs * u.function_space.dofmap.index_map.size_global
-            }"
-            + f", {mesh.topology.cell_type}",
+            f"num_dofs: {dm.index_map_bs * im.size_global}" + f", {mesh.topology.cell_type}",
             file=outfile,
         )
         print(

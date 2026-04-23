@@ -305,11 +305,10 @@ if __name__ == "__main__":
     else:
         outfile = open(args.outfile, "a")
     print("-" * 25, file=outfile)
+    dm = uh.function_space.dofmap
+    im = dm.index_map
     print(
-        f"num_dofs: {
-            uh.function_space.dofmap.index_map_bs * uh.function_space.dofmap.index_map.size_global
-        }"
-        + f", {mesh.topology.cell_types[0]}",
+        f"num_dofs: {dm.index_map_bs * im.size_global}" + f", {mesh.topology.cell_types[0]}",
         file=outfile,
     )
     print(f"Krylov solver {solver_time}", file=outfile)

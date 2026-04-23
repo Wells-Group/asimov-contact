@@ -431,12 +431,10 @@ def run_solver(
     if mesh.comm.rank == 0:
         print("-" * 25, file=outfile)
         print(f"Newton options {newton_options}", file=outfile)
+        dm = u1.function_space.dofmap
+        im = dm.index_map
         print(
-            f"num_dofs: {
-                u1.function_space.dofmap.index_map_bs
-                * u1.function_space.dofmap.index_map.size_global
-            }"
-            + f", {mesh.topology.cell_type}",
+            f"num_dofs: {dm.index_map_bs * im.size_global}" + f", {mesh.topology.cell_type}",
             file=outfile,
         )
         print(
