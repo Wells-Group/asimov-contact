@@ -12,7 +12,6 @@
 
 from mpi4py import MPI
 
-import dolfinx.io.gmsh as gmshio
 import dolfinx_contact
 import dolfinx_contact.cpp
 import gmsh

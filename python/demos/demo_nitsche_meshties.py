@@ -8,7 +8,6 @@ import sys
 from mpi4py import MPI
 from petsc4py import PETSc
 
-import dolfinx.io.gmsh as gmshio
 import gmsh
 import numpy as np
 import ufl

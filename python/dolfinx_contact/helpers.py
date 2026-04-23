@@ -79,7 +79,7 @@ def epsilon(v):
 
 
 def sigma_func(mu, lmbda):
-    return lambda v: (2.0 * mu * epsilon(v) + lmbda * ufl.tr(epsilon(v)) * ufl.Identity(len(v)))
+    return lambda v: 2.0 * mu * epsilon(v) + lmbda * ufl.tr(epsilon(v)) * ufl.Identity(len(v))
 
 
 def R_minus(x):

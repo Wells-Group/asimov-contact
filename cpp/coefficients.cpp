@@ -87,7 +87,8 @@ dolfinx_contact::pack_coefficient_quadrature(
   // Get element information
   const dolfinx::fem::FiniteElement<double>* element
       = coeff.function_space()->element().get();
-  const std::size_t bs = element->block_size();
+  auto vs = element->value_shape();
+  std::size_t bs = std::accumulate(vs.begin(), vs.end(), 1, std::multiplies{});
   const std::size_t value_size = coeff.function_space()->element()->reference_value_size();;
 
   // Tabulate function at quadrature points (assuming no derivatives)

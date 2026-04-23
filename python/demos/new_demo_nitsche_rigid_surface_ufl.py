@@ -6,7 +6,6 @@ import argparse
 
 from mpi4py import MPI
 
-import dolfinx.io.gmsh as gmshio
 import gmsh
 import numpy as np
 from dolfinx.io import XDMFFile

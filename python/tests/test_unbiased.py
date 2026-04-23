@@ -599,12 +599,14 @@ def create_meshes(ct: str, gap: float, xdtype: npt.DTypeLike = np.float64) -> tu
         else:
             dest = np.zeros(0, dtype=np.int32)
             offsets = np.zeros(1, dtype=np.int32)
-        return adjacencylist(dest, offsets)
+        return adjacencylist(dest, offsets)._cpp_object
 
     coord_el = element("Lagrange", cell_type.name, 1, shape=(x_ufl.shape[1],))
-    mesh_ufl = create_mesh(MPI.COMM_WORLD, cells_ufl, x_ufl, e=coord_el, partitioner=partitioner)
+    mesh_ufl = create_mesh(
+        MPI.COMM_WORLD, cells=cells_ufl, x=x_ufl, e=coord_el, partitioner=partitioner
+    )
     mesh_custom = create_mesh(
-        MPI.COMM_WORLD, cells_custom, x_custom, e=coord_el, partitioner=partitioner
+        MPI.COMM_WORLD, cells=cells_custom, x=x_custom, e=coord_el, partitioner=partitioner
     )
     return mesh_ufl, mesh_custom
 
