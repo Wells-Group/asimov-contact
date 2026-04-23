@@ -22,7 +22,7 @@
 #include <dolfinx_contact/utils.h>
 
 using T = PetscScalar;
-using U = typename dolfinx::scalar_value_type_t<T>;
+using U = typename dolfinx::scalar_value_t<T>;
 
 //------------------------------------------------------------------------------
 /// Problem class to define a mesh tying problem as a non-linear problem

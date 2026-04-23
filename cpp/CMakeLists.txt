@@ -2,7 +2,7 @@
 cmake_minimum_required(VERSION 3.21)
 
 # Set project name and version number
-project(DOLFINX_CONTACT VERSION 0.9.0.0)
+project(DOLFINX_CONTACT VERSION 0.10.0.0)
 
 # -----------------------------------------------------------------------------
 # Set CMake options, see `cmake --help-policy CMP00xx`

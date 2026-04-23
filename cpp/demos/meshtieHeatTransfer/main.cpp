@@ -22,7 +22,7 @@
 #include <dolfinx_contact/utils.h>
 
 using T = PetscScalar;
-using U = typename dolfinx::scalar_value_type_t<T>;
+using U = typename dolfinx::scalar_value_t<T>;
 
 //------------------------------------------------------------------------------
 /// Problem class to define the elastic part of the system as a non-linear

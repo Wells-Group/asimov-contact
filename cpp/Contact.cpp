@@ -1376,7 +1376,7 @@ std::pair<std::vector<PetscScalar>, int> Contact::pack_grad_test_functions(
   std::size_t gdim = mesh->geometry().dim();
   std::size_t tdim = mesh->topology()->dim();
   std::span<const std::int32_t> parent_cells = _submesh.parent_cells();
-  std::shared_ptr<const fem::FiniteElement<double>> element = V.element();
+  std::shared_ptr<const dolfinx::fem::FiniteElement<double>> element = V.element();
   assert(element);
   int bs_element = element->block_size();
   std::size_t ndofs = element->space_dimension() / bs_element;

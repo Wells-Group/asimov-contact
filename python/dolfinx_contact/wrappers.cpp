@@ -6,8 +6,8 @@
 
 #include "kernelwrapper.h"
 #include <algorithm>
-#include <array.h>
-#include <caster_petsc.h>
+#include <dolfinx_wrappers/array.h>
+#include <dolfinx_wrappers/caster_petsc.h>
 #include <dolfinx/la/petsc.h>
 #include <dolfinx/mesh/MeshTags.h>
 #include <dolfinx_contact/Contact.h>
@@ -100,7 +100,9 @@ NB_MODULE(cpp, m)
                                                  {shape[0], shape[1]});
            })
       .def("weights", [](dolfinx_contact::QuadratureRule& self)
-           { return dolfinx_wrappers::as_nbarray(self.weights()); })
+           { 
+            const std::vector<double>& _weights = self.weights();
+            return dolfinx_wrappers::as_nbarray(std::move(std::vector(_weights.begin(), _weights.end()))); })
       .def("weights",
            [](dolfinx_contact::QuadratureRule& self, int i)
            {

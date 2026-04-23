@@ -13,7 +13,7 @@ import ufl
 from dolfinx.cpp.mesh import cell_entity_type, to_type
 from dolfinx.graph import adjacencylist
 from dolfinx.io import XDMFFile, distribute_entity_data
-from dolfinx.io.gmshio import (
+from dolfinx.io.gmsh import (
     cell_perm_array,
     extract_geometry,
     extract_topology_and_markers,

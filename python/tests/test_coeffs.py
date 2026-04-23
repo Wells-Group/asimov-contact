@@ -69,7 +69,7 @@ def test_pack_coeff_at_quadrature(ct, quadrature_degree, space, degree):
 
     # Use Expression to verify packing
     expr = Expression(v, quadrature_points)
-    expr_vals = expr.eval(mesh, cells)
+    expr_vals = expr.eval(mesh, cells).reshape(coeffs.shape)
     eps = 1e4 * np.finfo(default_real_type).eps
     np.testing.assert_allclose(coeffs, expr_vals, atol=eps)
     if space not in ["N1curl", "RTCE"]:
@@ -80,7 +80,7 @@ def test_pack_coeff_at_quadrature(ct, quadrature_degree, space, degree):
             np.testing.assert_allclose(0.0, coeffs, atol=eps)
         else:
             expr = Expression(grad(v), quadrature_points, comm=mesh.comm)
-            expr_vals = expr.eval(mesh, cells)
+            expr_vals = expr.eval(mesh, cells).reshape(coeffs.shape)
             np.testing.assert_allclose(coeffs, expr_vals, atol=eps)
 
 

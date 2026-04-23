@@ -30,10 +30,21 @@ SubMesh::SubMesh(const dolfinx::mesh::Mesh<double>& mesh,
   // variables
   auto [submesh, cell_map, vertex_map, x_dof_map]
       = dolfinx::mesh::create_submesh(mesh, tdim, cells);
-  _parent_cells = cell_map;
+  std::size_t num_submesh_cells = submesh.topology()->index_map(tdim)->size_local()
+                             + submesh.topology()->index_map(tdim)->num_ghosts();
+  std::vector<std::int32_t> submesh_cells(num_submesh_cells);
+  std::iota(submesh_cells.begin(), submesh_cells.end(), 0);
+  _parent_cells = cell_map.sub_topology_to_topology(submesh_cells, false);
 
   _mesh = std::make_shared<dolfinx::mesh::Mesh<double>>(submesh);
-  _submesh_to_mesh_vertex_map = vertex_map;
+
+    std::size_t num_submesh_vertices = submesh.topology()->index_map(0)->size_local()
+                             + submesh.topology()->index_map(0)->num_ghosts();
+  std::vector<std::int32_t> submesh_vertices(num_submesh_vertices);
+  std::iota(submesh_vertices.begin(), submesh_vertices.end(), 0);
+  _submesh_to_mesh_vertex_map = vertex_map.sub_topology_to_topology(submesh_vertices, false);
+
+  _submesh_to_mesh_vertex_map = submesh_vertices;
   _submesh_to_mesh_x_dof_map = x_dof_map;
 
   // create/retrieve connectivities on submesh
@@ -149,10 +160,7 @@ dolfinx::fem::FunctionSpace<double> SubMesh::create_functionspace(
                                   *_mesh->topology(), unpermute_dofs, nullptr));
 
   // create and return function space
-  std::span<const std::size_t> vs = V_parent.value_shape();
-  std::vector _value_shape(vs.data(), vs.data() + vs.size());
-
-  return dolfinx::fem::FunctionSpace(_mesh, element, dofmap, _value_shape);
+  return dolfinx::fem::FunctionSpace(_mesh, element, dofmap);
 }
 //----------------------------------------------------------------------------
 void SubMesh::copy_function(const dolfinx::fem::Function<PetscScalar>& u_parent,
@@ -181,7 +189,7 @@ void SubMesh::copy_function(const dolfinx::fem::Function<PetscScalar>& u_parent,
   assert(bs == dofmap_parent->bs());
 
   // retrieve value array
-  std::span<PetscScalar> u_sub_data = u_sub.x()->mutable_array();
+  std::span<PetscScalar> u_sub_data = u_sub.x()->array();
   std::span<const PetscScalar> u_data = u_parent.x()->array();
 
   // copy data from u into u_sub

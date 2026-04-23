@@ -217,7 +217,7 @@ dolfinx_contact::create_contact_mesh(
                     + new_mesh.topology()->index_map(0)->num_ghosts();
   std::vector<std::int32_t> nvrange(nv);
   std::iota(nvrange.begin(), nvrange.end(), 0);
-  std::vector<std::int32_t> vert_to_geom
+  auto [vert_to_geom, vert_shape]
       = dolfinx::mesh::entities_to_geometry(new_mesh, 0, nvrange, false);
 
   // Create a list of all facet - vertices(original global index)
@@ -299,7 +299,7 @@ dolfinx_contact::compute_ghost_cell_destinations(
   const int tdim = mesh.topology()->dim();
 
   auto x = mesh.geometry().x();
-  std::vector<std::int32_t> facet_to_geom
+ auto [facet_to_geom, facet_shape]
       = entities_to_geometry(mesh, tdim - 1, marker_subset, false);
   const int num_facets = marker_subset.size();
   std::vector<double> facet_midpoint;

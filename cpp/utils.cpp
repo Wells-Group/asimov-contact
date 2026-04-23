@@ -51,13 +51,13 @@ dolfinx_contact::read_mesh(std::string filename, std::string topo_name,
   if (dolfinx::MPI::rank(mesh->comm()) == 0)
     std::cout << "Reading domain MeshTags ..." << std::endl;
   dolfinx::mesh::MeshTags<std::int32_t> domain1
-      = file.read_meshtags(*mesh, volume_markers);
+      = file.read_meshtags(*mesh, volume_markers, std::nullopt);
 
   // Read facet meshtags
   if (dolfinx::MPI::rank(mesh->comm()) == 0)
     std::cout << "Reading facet MeshTags ..." << std::endl;
   dolfinx::mesh::MeshTags<std::int32_t> facet1
-      = file.read_meshtags(*mesh, facet_markers);
+      = file.read_meshtags(*mesh, facet_markers, std::nullopt);
 
   file.close();
 
@@ -374,7 +374,7 @@ std::array<std::size_t, 4> dolfinx_contact::evaluate_basis_shape(
       = V.element();
   assert(element);
   int bs_element = element->block_size();
-  std::size_t value_size = V.value_size() / bs_element;
+  std::size_t value_size = V.element()->reference_value_size() / bs_element;
   std::size_t space_dimension = element->space_dimension() / bs_element;
   return {num_derivatives * gdim + 1, num_points, space_dimension, value_size};
 }
@@ -1143,7 +1143,7 @@ MatNullSpace dolfinx_contact::build_nullspace_multibody(
   auto map = V.dofmap()->index_map;
   int bs = V.dofmap()->index_map_bs();
   std::vector<dolfinx::la::Vector<PetscScalar>> basis(
-      dim * tags.size(), la::Vector<PetscScalar>(map, bs));
+      dim * tags.size(), dolfinx::la::Vector<PetscScalar>(map, bs));
 
   // loop over components
   for (std::size_t j = 0; j < tags.size(); ++j)
@@ -1163,13 +1163,13 @@ MatNullSpace dolfinx_contact::build_nullspace_multibody(
     // Translations
     for (std::size_t k = 0; k < gdim; ++k)
     {
-      std::span<PetscScalar> x = basis[j * dim + k].mutable_array();
+      std::span<PetscScalar> x = basis[j * dim + k].array();
       for (auto dof : dofs)
         x[gdim * dof + k] = 1.0;
     }
 
     // Rotations
-    auto x1 = basis[j * dim + gdim].mutable_array();
+    auto x1 = basis[j * dim + gdim].array();
 
     const std::vector<double> x = V.tabulate_dof_coordinates(false);
     if (gdim == 2)
@@ -1183,8 +1183,8 @@ MatNullSpace dolfinx_contact::build_nullspace_multibody(
     }
     else
     {
-      auto x2 = basis[j * dim + 4].mutable_array();
-      auto x3 = basis[j * dim + 5].mutable_array();
+      auto x2 = basis[j * dim + 4].array();
+      auto x3 = basis[j * dim + 5].array();
       for (auto dof : dofs)
       {
         std::span<const double, 3> xd(x.data() + 3 * dof, 3);
@@ -1219,8 +1219,8 @@ MatNullSpace dolfinx_contact::build_nullspace_multibody(
                  [length](auto& x)
                  { return std::span(x.array().data(), length); });
   MPI_Comm comm = V.mesh()->comm();
-  std::vector<Vec> v = la::petsc::create_vectors(comm, basis_local);
-  MatNullSpace ns = la::petsc::create_nullspace(comm, v);
+  std::vector<Vec> v = dolfinx::la::petsc::create_vectors(comm, basis_local);
+  MatNullSpace ns = dolfinx::la::petsc::create_nullspace(comm, v);
   std::for_each(v.begin(), v.end(), [](auto v0) { VecDestroy(&v0); });
   return ns;
 }

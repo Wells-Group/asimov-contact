@@ -4,7 +4,7 @@
 
 from mpi4py import MPI
 
-import dolfinx.io.gmshio
+import dolfinx.io.gmsh as gmshio
 import gmsh
 import numpy as np
 import pytest
