@@ -122,7 +122,6 @@ dolfinx_contact::pack_coefficient_quadrature(
   default:
     throw std::invalid_argument("Unsupported integral type.");
   }
-
   // Create output array
   const std::vector<std::size_t>& q_offsets = q_rule.offset();
   const auto cstride = int(bs * num_points_per_entity);

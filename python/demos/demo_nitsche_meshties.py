@@ -8,6 +8,7 @@ import sys
 from mpi4py import MPI
 from petsc4py import PETSc
 
+import dolfinx.io.gmsh as gmshio
 import gmsh
 import numpy as np
 import ufl
@@ -66,9 +67,10 @@ def run_demo(simplex, E, nu, gamma, theta, lifting, outfile, ksp_view, timing_vi
     model.add(name)
     model.setCurrent(name)
     model = create_box_mesh_3D(model, simplex, gap=gap, width=H, offset=0.0)
-    mesh, domain_marker, facet_marker = dolfinx.io.gmshio.model_to_mesh(
-        model, MPI.COMM_WORLD, 0, gdim=3
-    )
+    mesh_data = gmshio.model_to_mesh(model, MPI.COMM_WORLD, 0, gdim=3)
+    mesh = mesh_data.mesh
+    domain_marker = mesh_data.cell_tags
+    facet_marker = mesh_data.facet_tags
 
     gmsh.finalize()
 

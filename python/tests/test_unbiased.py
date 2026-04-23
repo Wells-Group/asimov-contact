@@ -869,7 +869,7 @@ class TestUnbiased:
         surfaces = adjacencylist(data, offsets)
         contact_problem = ContactProblem(
             [facet_marker],
-            surfaces,
+            surfaces._cpp_object,
             [(0, 1), (1, 0)],
             mesh_custom,
             quadrature_degree,
@@ -1129,7 +1129,7 @@ class TestUnbiased:
         # initialise meshties
         meshties = MeshTie(
             [facet_marker._cpp_object],
-            surfaces,
+            surfaces._cpp_object,
             [(0, 1), (1, 0)],
             mesh_custom._cpp_object,
             quadrature_degree=quadrature_degree,

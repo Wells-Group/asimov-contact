@@ -8,6 +8,7 @@ from pathlib import Path
 
 from mpi4py import MPI
 
+import dolfinx.io.gmsh
 import gmsh
 import numpy as np
 from dolfinx.io import XDMFFile
@@ -54,7 +55,9 @@ def run_solver(
         model.add(name)
         model.setCurrent(name)
         model = create_sphere_plane_mesh(model)
-        mesh, _, facet_marker = dolfinx.io.gmshio.model_to_mesh(model, MPI.COMM_WORLD, 0, gdim=3)
+        mesh_data = dolfinx.io.gmsh.model_to_mesh(model, MPI.COMM_WORLD, 0, gdim=3)
+        mesh = mesh_data.mesh
+        facet_marker = mesh_data.facet_tags
         tdim = mesh.topology.dim
 
         top_value = 2
@@ -112,9 +115,9 @@ def run_solver(
             model = create_circle_plane_mesh(
                 model, quads=(not simplex), res=0.05, r=0.3, gap=0.1, height=0.1, length=1.0
             )
-            mesh, _, facet_marker = dolfinx.io.gmshio.model_to_mesh(
-                model, MPI.COMM_WORLD, 0, gdim=2
-            )
+            mesh_data = dolfinx.io.gmsh.model_to_mesh(model, MPI.COMM_WORLD, 0, gdim=2)
+            mesh = mesh_data.mesh
+            facet_marker = mesh_data.facet_tags
             tdim = mesh.topology.dim
 
             def top(x):

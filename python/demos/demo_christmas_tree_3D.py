@@ -23,6 +23,7 @@ from dolfinx.fem.petsc import (
 )
 from dolfinx.graph import adjacencylist
 from dolfinx.io import VTXWriter, XDMFFile
+from dolfinx.io import gmsh as gmshio
 from dolfinx.mesh import locate_entities_boundary, meshtags
 from dolfinx_contact.cpp import ContactMode
 from dolfinx_contact.general_contact.contact_problem import ContactProblem, FrictionLaw
@@ -68,9 +69,10 @@ if __name__ == "__main__":
     model.add(name)
     model.setCurrent(name)
     model = create_christmas_tree_mesh_3D(model, res=args.res, n1=81, n2=41)
-    mesh, domain_marker, facet_marker = dolfinx.io.gmshio.model_to_mesh(
-        model, MPI.COMM_WORLD, 0, gdim=3
-    )
+    mesh_data = gmshio.model_to_mesh(model, MPI.COMM_WORLD, 0, gdim=3)
+    mesh = mesh_data.mesh
+    domain_marker = mesh_data.domain_tags
+    facet_marker = mesh_data.facet_tags
 
     tdim = mesh.topology.dim
 

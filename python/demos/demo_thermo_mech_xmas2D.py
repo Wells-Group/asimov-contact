@@ -6,6 +6,7 @@ from mpi4py import MPI
 from petsc4py.PETSc import InsertMode, ScatterMode  # type: ignore
 
 import dolfinx.fem as _fem
+import dolfinx.io.gmsh
 import gmsh
 import numpy as np
 import ufl
@@ -37,10 +38,10 @@ model = gmsh.model()
 model.add(name)
 model.setCurrent(name)
 model = create_christmas_tree_mesh(model, res=0.2)
-mesh, domain_marker, facet_marker = dolfinx.io.gmshio.model_to_mesh(
-    model, MPI.COMM_WORLD, 0, gdim=2
-)
-
+mesh_data = dolfinx.io.gmsh.model_to_mesh(model, MPI.COMM_WORLD, 0, gdim=2)
+mesh = mesh_data.mesh
+domain_marker = mesh_data.cell_tags
+facet_marker = mesh_data.facet_tags
 
 tdim = mesh.topology.dim
 mesh.topology.create_connectivity(tdim - 1, tdim)

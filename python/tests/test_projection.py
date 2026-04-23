@@ -12,6 +12,7 @@
 
 from mpi4py import MPI
 
+import dolfinx.io.gmsh as gmshio
 import dolfinx_contact
 import dolfinx_contact.cpp
 import gmsh
@@ -35,14 +36,14 @@ def test_projection(tmp_path, q_deg, surf, dim):
         model.add(name)
         model.setCurrent(name)
         model = create_gmsh_box_mesh_2D(model, res=1.0)
-        mesh, _, _ = dolfinx.io.gmshio.model_to_mesh(model, MPI.COMM_WORLD, 0, gdim=2)
+        mesh, _, _ = gmshio.model_to_mesh(model, MPI.COMM_WORLD, 0, gdim=2)
     else:
         name = "test_proj_box_3D"
         model = gmsh.model()
         model.add(name)
         model.setCurrent(name)
         model = create_box_mesh_3D(model, res=1.0, offset=0.0)
-        mesh, _, _ = dolfinx.io.gmshio.model_to_mesh(model, MPI.COMM_WORLD, 0, gdim=dim)
+        mesh, _, _ = gmshio.model_to_mesh(model, MPI.COMM_WORLD, 0, gdim=dim)
 
     gmsh.finalize()
 

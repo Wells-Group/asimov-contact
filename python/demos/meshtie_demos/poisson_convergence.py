@@ -362,7 +362,7 @@ def test_meshtie(threed: bool = False, simplex: bool = True, runs: int = 5, orde
         # initialise meshties
         meshties = MeshTie(
             [facet_marker._cpp_object],
-            surfaces,
+            surfaces._cpp_object,
             contact,
             mesh._cpp_object,
             quadrature_degree=5,

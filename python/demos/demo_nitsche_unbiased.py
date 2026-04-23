@@ -9,6 +9,7 @@ from pathlib import Path
 from mpi4py import MPI
 from petsc4py.PETSc import InsertMode, ScatterMode  # type: ignore
 
+import dolfinx.io.gmsh
 import gmsh
 import numpy as np
 import ufl
@@ -102,9 +103,10 @@ def run_soler(args):
             model.add(name)
             model.setCurrent(name)
             model = create_box_mesh_3D(model, simplex, order=order)
-            mesh, domain_marker, _ = dolfinx.io.gmshio.model_to_mesh(
-                model, MPI.COMM_WORLD, 0, gdim=3
-            )
+            mesh_data = dolfinx.io.gmsh.model_to_mesh(model, MPI.COMM_WORLD, 0, gdim=3)
+            mesh = mesh_data.mesh
+            domain_marker = mesh_data.cell_tags
+            facet_marker = mesh_data.facet_tags
             tdim = mesh.topology.dim
             mesh.topology.create_connectivity(tdim - 1, 0)
             mesh.topology.create_connectivity(tdim - 1, tdim)
@@ -139,9 +141,10 @@ def run_soler(args):
             model.add(name)
             model.setCurrent(name)
             model = create_sphere_plane_mesh(model, order=order, res=res)
-            mesh, domain_marker, facet_marker = dolfinx.io.gmshio.model_to_mesh(
-                model, MPI.COMM_WORLD, 0, gdim=3
-            )
+            mesh_data = dolfinx.io.gmsh.model_to_mesh(model, MPI.COMM_WORLD, 0, gdim=3)
+            mesh = mesh_data.mesh
+            domain_marker = mesh_data.cell_tags
+            facet_marker = mesh_data.facet_tags
             dirichlet_bdy_1 = 2
             contact_bdy_1 = 1
             contact_bdy_2 = 8
@@ -156,9 +159,10 @@ def run_soler(args):
             model.add(name)
             model.setCurrent(name)
             model = create_cylinder_cylinder_mesh(model, res=res, simplex=simplex)
-            mesh, domain_marker, _ = dolfinx.io.gmshio.model_to_mesh(
-                model, MPI.COMM_WORLD, 0, gdim=3
-            )
+            mesh_data = dolfinx.io.gmsh.model_to_mesh(model, MPI.COMM_WORLD, 0, gdim=3)
+            mesh = mesh_data.mesh
+            domain_marker = mesh_data.cell_tags
+            facet_marker = mesh_data.facet_tags
             mesh.name = "cylinder_cylinder"
             domain_marker.name = "domain_marker"
             tdim = mesh.topology.dim
@@ -211,9 +215,10 @@ def run_soler(args):
             model.add(name)
             model.setCurrent(name)
             model = create_gmsh_box_mesh_2D(model, quads=not simplex, res=res, order=order)
-            mesh, domain_marker, facet_marker = dolfinx.io.gmshio.model_to_mesh(
-                model, MPI.COMM_WORLD, 0, gdim=2
-            )
+            mesh_data = dolfinx.io.gmsh.model_to_mesh(model, MPI.COMM_WORLD, 0, gdim=2)
+            mesh = mesh_data.mesh
+            domain_marker = mesh_data.cell_tags
+            facet_marker = mesh_data.facet_tags
 
             dirichlet_bdy_1 = 5
             contact_bdy_1 = 3
@@ -236,9 +241,10 @@ def run_soler(args):
                 height=0.1,
                 length=1.0,
             )
-            mesh, domain_marker, facet_marker = dolfinx.io.gmshio.model_to_mesh(
-                model, MPI.COMM_WORLD, 0, gdim=2
-            )
+            mesh_data = dolfinx.io.gmsh.model_to_mesh(model, MPI.COMM_WORLD, 0, gdim=2)
+            mesh = mesh_data.mesh
+            domain_marker = mesh_data.cell_tags
+            facet_marker = mesh_data.facet_tags
             dirichlet_bdy_1 = 8
             contact_bdy_1 = 10
             contact_bdy_2 = 6
@@ -250,9 +256,10 @@ def run_soler(args):
             model.add(name)
             model.setCurrent(name)
             model = create_circle_circle_mesh(model, quads=(not simplex), res=res, order=order)
-            mesh, domain_marker, _ = dolfinx.io.gmshio.model_to_mesh(
-                model, MPI.COMM_WORLD, 0, gdim=2
-            )
+            mesh_data = dolfinx.io.gmsh.model_to_mesh(model, MPI.COMM_WORLD, 0, gdim=2)
+            mesh = mesh_data.mesh
+            domain_marker = mesh_data.cell_tags
+            facet_marker = mesh_data.facet_tags
             tdim = mesh.topology.dim
             mesh.topology.create_connectivity(tdim - 1, 0)
             mesh.topology.create_connectivity(tdim - 1, tdim)

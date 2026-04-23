@@ -223,7 +223,7 @@ if __name__ == "__main__":
     # initialise meshties
     meshties = MeshTie(
         [facet_marker._cpp_object],
-        surfaces,
+        surfaces._cpp_object,
         contact,
         mesh._cpp_object,
         quadrature_degree=5,
