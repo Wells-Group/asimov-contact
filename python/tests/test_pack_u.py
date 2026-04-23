@@ -27,7 +27,7 @@ def test_pack_u():
 
     domain = ufl.Mesh(basix.ufl.element("Lagrange", "triangle", 1, shape=(points.shape[1],)))
     part = msh.create_cell_partitioner(msh.GhostMode.none)
-    mesh = msh.create_mesh(MPI.COMM_WORLD, cells, points, domain, part)
+    mesh = msh.create_mesh(MPI.COMM_WORLD, cells=cells, x=points, e=domain, partitioner=part)
 
     def f(x):
         vals = np.zeros((2, x.shape[1]))
@@ -64,7 +64,7 @@ def test_pack_u():
     ]
     contact = dolfinx_contact.cpp.Contact(
         [facet_marker._cpp_object],
-        surfaces,
+        surfaces._cpp_object,
         [(0, 1), (1, 0)],
         mesh._cpp_object,
         search_method=search_mode,
