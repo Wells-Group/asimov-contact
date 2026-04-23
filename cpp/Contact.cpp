@@ -1474,7 +1474,7 @@ std::pair<std::vector<PetscScalar>, int> Contact::pack_grad_test_functions(
 
       // Compute values of basis functions for all y = Pi(x) in qp
       std::array<std::size_t, 4> b_shape
-          = evaluate_basis_shape(V, indices.size(), 1);
+          = V.element()->basix_element().tabulate_shape(1, indices.size());
       if (b_shape[3] != 1)
       {
         throw std::invalid_argument(
@@ -1568,7 +1568,7 @@ Contact::pack_grad_u_contact(int pair,
   const std::vector<double>& reference_x = _reference_contact_points[pair];
 
   std::array<std::size_t, 4> b_shape
-      = evaluate_basis_shape(*V, num_facets * num_q_points, 1);
+      = V->element()->basix_element().tabulate_shape(1, num_facets * num_q_points);
   std::vector<double> basis_values(
       std::reduce(b_shape.begin(), b_shape.end(), 1, std::multiplies{}));
   std::fill(basis_values.begin(), basis_values.end(), 0);

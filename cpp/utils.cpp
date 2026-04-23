@@ -374,7 +374,7 @@ std::array<std::size_t, 4> dolfinx_contact::evaluate_basis_shape(
       = V.element();
   assert(element);
   int bs_element = element->block_size();
-  std::size_t value_size = V.element()->reference_value_size() / bs_element;
+  std::size_t value_size = V.element()->reference_value_size();
   std::size_t space_dimension = element->space_dimension() / bs_element;
   return {num_derivatives * gdim + 1, num_points, space_dimension, value_size};
 }
@@ -424,7 +424,7 @@ void dolfinx_contact::evaluate_basis_functions(
   assert(element);
   const int bs_element = element->block_size();
   const std::size_t reference_value_size
-      = element->reference_value_size() / bs_element;
+      = element->reference_value_size();
   const std::size_t space_dimension = element->space_dimension() / bs_element;
 
   // If the space has sub elements, concatenate the evaluations on the sub
