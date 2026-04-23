@@ -116,6 +116,7 @@ def solve_manufactured(
             ufl.rhs(F),
             bcs=bcs,
             petsc_options={"ksp_type": "preonly", "pc_type": "lu"},
+            petsc_options_prefix="lin_",
         )
         u = linear_problem.solve()
         u.name = "uh"
