@@ -4,11 +4,11 @@
 //
 // SPDX-License-Identifier:    MIT
 
-#include<algorithm>
 #include "utils.h"
 #include "RayTracing.h"
 #include "error_handling.h"
 #include "geometric_quantities.h"
+#include <algorithm>
 #include <dolfinx/geometry/BoundingBoxTree.h>
 #include <dolfinx/geometry/utils.h>
 #include <dolfinx/io/XDMFFile.h>
@@ -192,7 +192,7 @@ dolfinx_contact::sort_cells(std::span<const std::int32_t> cells,
   if (cells.size() == 0)
   {
     std::vector<std::int32_t> unique_cells(0);
-    std::vector<std::int32_t> offsets = {0,0};
+    std::vector<std::int32_t> offsets = {0, 0};
     return std::make_pair(unique_cells, offsets);
   }
   assert(perm.size() == cells.size());
@@ -200,7 +200,7 @@ dolfinx_contact::sort_cells(std::span<const std::int32_t> cells,
   // FIXME: Workaround for the case when all cells are -1
   std::vector<std::int32_t> tmp_cells(cells.begin(), cells.end());
   tmp_cells.erase(std::unique(tmp_cells.begin(), tmp_cells.end()),
-  tmp_cells.end());
+                  tmp_cells.end());
 
   if (tmp_cells.size() == 1 && tmp_cells[0] == -1)
   {
@@ -208,9 +208,11 @@ dolfinx_contact::sort_cells(std::span<const std::int32_t> cells,
     std::vector<std::int32_t> offsets = {0, (std::int32_t)cells.size()};
     return std::make_pair(unique_cells, offsets);
   }
-  // FIXME: Remove when https://github.com/FEniCS/dolfinx/pull/3724 is merged and released
-  if (*std::min_element(tmp_cells.cbegin(), tmp_cells.cend())<0)
-    throw std::runtime_error("Cell indices are negative, cannot sort with current algortihm.");
+  // FIXME: Remove when https://github.com/FEniCS/dolfinx/pull/3724 is merged
+  // and released
+  if (*std::min_element(tmp_cells.cbegin(), tmp_cells.cend()) < 0)
+    throw std::runtime_error(
+        "Cell indices are negative, cannot sort with current algortihm.");
 
   const auto num_cells = (std::int32_t)cells.size();
   std::vector<std::int32_t> unique_cells(num_cells);
@@ -423,8 +425,7 @@ void dolfinx_contact::evaluate_basis_functions(
       = V.element();
   assert(element);
   const int bs_element = element->block_size();
-  const std::size_t reference_value_size
-      = element->reference_value_size();
+  const std::size_t reference_value_size = element->reference_value_size();
   const std::size_t space_dimension = element->space_dimension() / bs_element;
 
   // If the space has sub elements, concatenate the evaluations on the sub
