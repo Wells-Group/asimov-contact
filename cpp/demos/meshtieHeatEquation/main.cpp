@@ -124,7 +124,7 @@ int main(int argc, char* argv[])
 
     // Create matrix and vector
     auto A_therm = dolfinx::la::petsc::Matrix(
-        meshties.create_petsc_matrix(*a_therm, std::string()), false);
+        meshties.create_petsc_matrix(*a_therm, "mpiaij"), false);
     dolfinx::la::Vector<T> b_therm(
         L_therm->function_spaces()[0]->dofmap()->index_map,
         L_therm->function_spaces()[0]->dofmap()->index_map_bs());

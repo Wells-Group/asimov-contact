@@ -11,7 +11,7 @@ import numpy as np
 import numpy.typing as npt
 import ufl
 from dolfinx import default_scalar_type, log
-from dolfinx.common import Timer, TimingType, list_timings, timing
+from dolfinx.common import Timer, list_timings, timing
 from dolfinx.fem import (
     Constant,
     Function,
@@ -475,7 +475,7 @@ def test_meshtie(threed: bool = False, simplex: bool = True, runs: int = 5):
     with XDMFFile(mesh.comm, "results/partitioning_split.xdmf", "w") as xdmf:
         xdmf.write_mesh(mesh)
         xdmf.write_meshtags(process_marker, mesh.geometry)
-    list_timings(mesh.comm, [TimingType.wall])
+    list_timings(mesh.comm)
     print("L2 errors; ", errors)
     print("Solver time: ", times)
     print("Krylov iterations: ", iterations)

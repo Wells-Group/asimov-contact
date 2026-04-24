@@ -14,7 +14,7 @@ import gmsh
 import numpy as np
 import ufl
 from dolfinx import default_scalar_type, log
-from dolfinx.common import Timer, TimingType, list_timings, timed, timing
+from dolfinx.common import Timer, list_timings, timed, timing
 from dolfinx.fem.petsc import (
     apply_lifting,
     assemble_matrix,
@@ -421,7 +421,7 @@ def run_solver(
         xdmf.write_meshtags(process_marker, mesh.geometry)
 
     if set_timing:
-        list_timings(mesh.comm, [TimingType.wall])
+        list_timings(mesh.comm)
 
     if outfile is None:
         outfile = sys.stdout

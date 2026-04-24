@@ -64,7 +64,7 @@ public:
         _b(L->function_spaces()[0]->dofmap()->index_map,
            L->function_spaces()[0]->dofmap()->index_map_bs()),
         _matA(dolfinx::la::petsc::Matrix(
-            meshties->create_petsc_matrix(*J, std::string()), false)),
+            meshties->create_petsc_matrix(*J, "mpiaij"), false)),
         _u(u), _T(T0)
   {
     // create PETSc rhs vector
@@ -353,7 +353,7 @@ int main(int argc, char* argv[])
 
     // Create matrix and vector
     auto A_therm = dolfinx::la::petsc::Matrix(
-        meshties->create_petsc_matrix(*a_therm, std::string()), false);
+        meshties->create_petsc_matrix(*a_therm, "mpiaij"), false);
     dolfinx::la::Vector<T> b_therm(
         L_therm->function_spaces()[0]->dofmap()->index_map,
         L_therm->function_spaces()[0]->dofmap()->index_map_bs());

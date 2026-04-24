@@ -11,7 +11,7 @@ from petsc4py import PETSc
 import numpy as np
 import ufl
 from dolfinx import default_scalar_type, log
-from dolfinx.common import Timer, TimingType, list_timings, timing
+from dolfinx.common import Timer, list_timings, timing
 from dolfinx.fem import (
     Constant,
     Function,
@@ -298,7 +298,7 @@ if __name__ == "__main__":
         uh.name = "u"
         xdmf.write_function(uh)
     if args.timing:
-        list_timings(mesh.comm, [TimingType.wall])
+        list_timings(mesh.comm)
 
     if args.outfile is None:
         outfile = sys.stdout

@@ -12,7 +12,7 @@ import dolfinx.fem as _fem
 import numpy as np
 import ufl
 from dolfinx import default_scalar_type, log
-from dolfinx.common import Timer, TimingType, list_timings, timed, timing
+from dolfinx.common import Timer, list_timings, timed, timing
 from dolfinx.fem.petsc import assemble_matrix, assemble_vector, create_vector
 from dolfinx.graph import adjacencylist
 from dolfinx.io import VTXWriter, XDMFFile
@@ -345,4 +345,4 @@ if __name__ == "__main__":
         print(f"Krylov iterations {num_krylov_its},", file=outfile)
         print("-" * 25, file=outfile)
 
-    list_timings(MPI.COMM_WORLD, [TimingType.wall])
+    list_timings(MPI.COMM_WORLD)

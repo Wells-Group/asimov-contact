@@ -11,7 +11,7 @@ import dolfinx.fem as _fem
 import numpy as np
 import ufl
 from dolfinx import default_scalar_type, io, log
-from dolfinx.common import Timer, TimingType, list_timings, timed
+from dolfinx.common import Timer, list_timings, timed
 from dolfinx.fem import (
     Function,
     dirichletbc,
@@ -292,4 +292,4 @@ for i in range(steps):
     vtx.write(i + 1)
 vtx.close()
 timer.stop()
-list_timings(MPI.COMM_WORLD, [TimingType.wall])
+list_timings(MPI.COMM_WORLD)
