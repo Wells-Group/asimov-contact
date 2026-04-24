@@ -298,8 +298,15 @@ int main(int argc, char* argv[])
             basix::element::family::P,
             dolfinx::mesh::cell_type_to_basix_type(ct), 1,
             basix::element::lagrange_variant::unset,
-            basix::element::dpc_variant::unset, false),
-        std::vector<std::size_t>{(std::size_t)mesh->geometry().dim()});
+            basix::element::dpc_variant::unset, false));
+    auto element_vec
+        = std::make_shared<const dolfinx::fem::FiniteElement<double>>(
+            basix::create_element<double>(
+                basix::element::family::P,
+                dolfinx::mesh::cell_type_to_basix_type(ct), 1,
+                basix::element::lagrange_variant::unset,
+                basix::element::dpc_variant::unset, false),
+            std::vector<std::size_t>{(std::size_t)mesh->geometry().dim()});
 
     auto V0 = std::make_shared<dolfinx::fem::FunctionSpace<U>>(
         dolfinx::fem::create_functionspace(mesh, element_mu));
@@ -378,7 +385,7 @@ int main(int argc, char* argv[])
     // Thermo-elastic problem
     // Create function space
     auto V = std::make_shared<dolfinx::fem::FunctionSpace<U>>(
-        dolfinx::fem::create_functionspace(mesh, element));
+        dolfinx::fem::create_functionspace(mesh, element_vec));
 
     // Problem parameters
     double E = 1E4;
