@@ -15,6 +15,7 @@ from dolfinx.fem import (
     form,
     functionspace,
     locate_dofs_topological,
+    extract_function_spaces,
 )
 from dolfinx.fem.petsc import (
     apply_lifting,
@@ -181,7 +182,7 @@ contact_problem.generate_contact_data(
 
 # create vector and matrix
 a_mat = contact_problem.create_matrix(J_compiled)
-b = create_vector(F_compiled)
+b = create_vector(extract_function_spaces(F_compiled))
 
 
 # define functions for newton solver

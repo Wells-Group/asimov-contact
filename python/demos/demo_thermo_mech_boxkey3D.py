@@ -250,7 +250,7 @@ def compute_jacobian_matrix(x, a_mat, coeffs):
 
 # create vector and matrix
 a_mat = contact_problem.create_matrix(J_compiled)
-b = create_vector(F_compiled)
+b = create_vector(_fem.extract_function_spaces(F_compiled))
 
 
 # Set up snes solver for nonlinear solver
