@@ -577,7 +577,9 @@ void dolfinx_contact::evaluate_basis_functions(
             MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent);
         for (std::size_t m = 0; m < du.extent(0); ++m)
           for (std::size_t n = 0; n < du.extent(1); ++n)
+          {
             du(m, n) += K(j, k) * du_temp(m, n);
+          }
       }
     }
   }
@@ -1160,7 +1162,6 @@ MatNullSpace dolfinx_contact::build_nullspace_multibody(
     // Remove duplicates
     dolfinx::radix_sort(dofs);
     dofs.erase(std::unique(dofs.begin(), dofs.end()), dofs.end());
-
     // Translations
     for (std::size_t k = 0; k < gdim; ++k)
     {
@@ -1170,7 +1171,7 @@ MatNullSpace dolfinx_contact::build_nullspace_multibody(
     }
 
     // Rotations
-    auto x1 = basis[j * dim + gdim].array();
+    auto& x1 = basis[j * dim + gdim].array();
 
     const std::vector<double> x = V.tabulate_dof_coordinates(false);
     if (gdim == 2)
@@ -1184,8 +1185,8 @@ MatNullSpace dolfinx_contact::build_nullspace_multibody(
     }
     else
     {
-      auto x2 = basis[j * dim + 4].array();
-      auto x3 = basis[j * dim + 5].array();
+      auto& x2 = basis[j * dim + 4].array();
+      auto& x3 = basis[j * dim + 5].array();
       for (auto dof : dofs)
       {
         std::span<const double, 3> xd(x.data() + 3 * dof, 3);
