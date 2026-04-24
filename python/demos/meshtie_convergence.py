@@ -396,7 +396,11 @@ def test_meshtie(threed: bool = False, simplex: bool = True, runs: int = 5):
 
         # initialise meshties
         meshties = MeshTie(
-            [facet_marker._cpp_object], surfaces, contact, mesh._cpp_object, quadrature_degree=5
+            [facet_marker._cpp_object],
+            surfaces._cpp_object,
+            contact,
+            mesh._cpp_object,
+            quadrature_degree=5,
         )
         meshties.generate_kernel_data(
             Problem.Elasticity,

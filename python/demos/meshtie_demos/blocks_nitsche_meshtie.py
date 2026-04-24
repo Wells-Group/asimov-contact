@@ -279,7 +279,11 @@ search_mode = [ContactMode.ClosestPoint, ContactMode.ClosestPoint]
 
 # Initialise MeshTie class and generate MeshTie problem
 meshties = MeshTie(
-    [facet_marker._cpp_object], surfaces, contact_pairs, mesh._cpp_object, quadrature_degree=5
+    [facet_marker._cpp_object],
+    surfaces._cpp_object,
+    contact_pairs,
+    mesh._cpp_object,
+    quadrature_degree=5,
 )
 problem = MeshTieProblem(
     l_compiled,

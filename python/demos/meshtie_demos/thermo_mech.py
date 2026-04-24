@@ -300,7 +300,7 @@ surfaces = adjacencylist(data, offsets)
 
 # initialise meshties
 meshties = MeshTie(
-    [facet_marker._cpp_object], surfaces, contact, mesh._cpp_object, quadrature_degree=3
+    [facet_marker._cpp_object], surfaces._cpp_object, contact, mesh._cpp_object, quadrature_degree=3
 )
 meshties.generate_kernel_data(
     Problem.Poisson,
