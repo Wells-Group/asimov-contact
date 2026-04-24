@@ -365,7 +365,7 @@ if __name__ == "__main__":
     sigma_dev = sigma(u1) - (1 / 3) * ufl.tr(sigma(u1)) * ufl.Identity(len(u1))
     sigma_vm = ufl.sqrt((3 / 2) * ufl.inner(sigma_dev, sigma_dev))
     sigma_vm_h.name = "vonMises"
-    sigma_vm_expr = _fem.Expression(sigma_vm, W.element.interpolation_points())
+    sigma_vm_expr = _fem.Expression(sigma_vm, W.element.interpolation_points)
     sigma_vm_h.interpolate(sigma_vm_expr)
     vtx = VTXWriter(mesh.comm, f"results/xmas_{size}.bp", [u1, sigma_vm_h], "bp4")
     vtx.write(0)

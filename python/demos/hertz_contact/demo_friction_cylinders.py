@@ -367,7 +367,7 @@ if __name__ == "__main__":
             lambda x, pi=p0, ai=a: _pressure(x, pi, ai),
             lambda x, pi=pr, ai=a, ci=c: _tangent(x, pi, ai, ci),
         )
-        sigma_vm_expr = Expression(sigma_vm, W.element.interpolation_points())
+        sigma_vm_expr = Expression(sigma_vm, W.element.interpolation_points)
         sigma_vm_h.interpolate(sigma_vm_expr)
         u_dg.interpolate(u)
         vtx.write(i + 1)
@@ -455,7 +455,7 @@ if __name__ == "__main__":
             lambda x, pi=p0, ai=a: _pressure(x, pi, ai),
             lambda x, pi=abs(pr), ai=a, ci=c: _tangent(x, pi, ai, ci),
         )
-        sigma_vm_expr = Expression(sigma_vm, W.element.interpolation_points())
+        sigma_vm_expr = Expression(sigma_vm, W.element.interpolation_points)
         sigma_vm_h.interpolate(sigma_vm_expr)
         u_dg.interpolate(u)
         vtx.write(steps1 + 1 + i)

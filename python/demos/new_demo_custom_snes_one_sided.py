@@ -189,8 +189,8 @@ def solver(
         snes_timings = timing(f"{dofs_global[i]} Solve SNES")
         if rank == 0:
             print(
-                f"{dofs_global[i]}, Nitsche: {nitsche_timings[1]: 0.2e}"
-                + f" SNES: {snes_timings[1]:0.2e}"
+                f"{dofs_global[i]}, Nitsche: {nitsche_timings[1].total_seconds(): 0.2e}"
+                + f" SNES: {snes_timings[1].total_seconds():0.2e}"
             )
     assert e_rel[-1] < 1e-3
     assert e_abs[-1] < 1e-4

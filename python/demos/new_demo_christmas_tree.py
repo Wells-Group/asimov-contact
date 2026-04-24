@@ -354,7 +354,7 @@ def run_solver(
 
     # create vector and matrix
     A = contact_problem.create_matrix(J_compiled)
-    b = create_vector(F_compiled)
+    b = create_vector(_fem.extract_function_spaces(F_compiled))
 
     # Set up snes solver for nonlinear solver
     newton_solver = NewtonSolver(mesh.comm, A, b, contact_problem.coeffs)
@@ -388,7 +388,7 @@ def run_solver(
         with Timer(timing_str):
             n, converged = newton_solver.solve(du, write_solution=True)
         num_newton_its[i] = n
-        newton_time[i] = timing(timing_str)[1]
+        newton_time[i] = timing(timing_str)[1].total_seconds()
         num_krylov_its[i] = newton_solver.krylov_iterations
         du.x.scatter_forward()
         u.x.array[:] += du.x.array[:]
@@ -411,7 +411,7 @@ def run_solver(
     sigma_dev = sigma(u1) - (1 / 3) * ufl.tr(sigma(u1)) * ufl.Identity(len(u1))
     sigma_vm = ufl.sqrt((3 / 2) * ufl.inner(sigma_dev, sigma_dev))
     sigma_vm_h.name = "vonMises"
-    sigma_vm_expr = _fem.Expression(sigma_vm, W.element.interpolation_points())
+    sigma_vm_expr = _fem.Expression(sigma_vm, W.element.interpolation_points)
     sigma_vm_h.interpolate(sigma_vm_expr)
     vtx = VTXWriter(mesh.comm, f"results/xmas_{size}.bp", [u1, sigma_vm_h], "bp4")
     vtx.write(0)

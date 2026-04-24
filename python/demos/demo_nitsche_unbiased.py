@@ -518,7 +518,7 @@ def run_soler(args):
     sigma_dev = sigma(u) - (1 / 3) * ufl.tr(sigma(u)) * ufl.Identity(len(u))
     sigma_vm = ufl.sqrt((3 / 2) * ufl.inner(sigma_dev, sigma_dev))
     W = functionspace(mesh, ("Discontinuous Lagrange", order - 1))
-    sigma_vm_expr = Expression(sigma_vm, W.element.interpolation_points())
+    sigma_vm_expr = Expression(sigma_vm, W.element.interpolation_points)
     sigma_vm_h = Function(W)
     sigma_vm_h.interpolate(sigma_vm_expr)
     sigma_vm_h.name = "vonMises"

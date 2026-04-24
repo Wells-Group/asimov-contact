@@ -287,7 +287,7 @@ for i in range(50):
     # this is to ensure non-singular matrices in the case of no Dirichlet boundary
     du.x.array[:] = 0.1 * du.x.array[:]
     contact_problem.update_contact_data(du)
-    sigma_vm_expr = _fem.Expression(sigma_vm, W.element.interpolation_points())
+    sigma_vm_expr = _fem.Expression(sigma_vm, W.element.interpolation_points)
     sigma_vm_h.interpolate(sigma_vm_expr)
     u_dg.interpolate(u)
     T_dg.interpolate(T0)
