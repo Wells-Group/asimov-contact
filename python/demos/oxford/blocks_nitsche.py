@@ -12,10 +12,10 @@ from dolfinx.fem import (
     Constant,
     Function,
     dirichletbc,
+    extract_function_spaces,
     form,
     functionspace,
     locate_dofs_topological,
-    extract_function_spaces,
 )
 from dolfinx.fem.petsc import (
     apply_lifting,

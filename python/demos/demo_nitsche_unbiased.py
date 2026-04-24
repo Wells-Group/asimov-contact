@@ -20,6 +20,7 @@ from dolfinx.fem import (
     Expression,
     Function,
     dirichletbc,
+    extract_function_spaces,
     form,
     functionspace,
     locate_dofs_topological,
@@ -465,7 +466,7 @@ def run_soler(args):
 
     # create vector and matrix
     a_mat = contact_problem.create_matrix(J_compiled)
-    b = create_vector(_fem.extract_function_spaces(F_compiled))
+    b = create_vector(extract_function_spaces(F_compiled))
 
     # Set up snes solver for nonlinear solver
     newton_solver = NewtonSolver(mesh.comm, a_mat, b, contact_problem.coeffs)
