@@ -21,11 +21,11 @@ dolfinx_contact::MeshTie::MeshTie(
   // Find closest points
   for (std::size_t i = 0; i < connected_pairs.size(); ++i)
   {
-    Contact::create_distance_map(i);
     std::array<int, 2> pair = Contact::contact_pair(i);
     std::size_t num_facets = Contact::local_facets(pair[0]);
     if (num_facets > 0)
     {
+      Contact::create_distance_map(i);
       auto [ny, cstride1] = Contact::pack_ny(i);
       auto [gap, cstride] = Contact::pack_gap(i);
 
