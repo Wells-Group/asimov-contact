@@ -65,7 +65,8 @@ int main(int argc, char* argv[])
             basix::element::family::P,
             dolfinx::mesh::cell_type_to_basix_type(ct), 1,
             basix::element::lagrange_variant::unset,
-            basix::element::dpc_variant::unset, false));
+            basix::element::dpc_variant::unset, false),
+        std::vector<std::size_t>{(std::size_t)mesh->geometry().dim()});
 
     auto V = std::make_shared<dolfinx::fem::FunctionSpace<double>>(
         dolfinx::fem::create_functionspace(mesh, element));
@@ -171,8 +172,9 @@ int main(int argc, char* argv[])
     auto facets = facet1.find(dirichlet_bdy);
     auto bdofs = dolfinx::fem::locate_dofs_topological(
         *V->mesh()->topology_mutable(), *V->dofmap(), 2, facets);
-    auto bc = std::make_shared<const dolfinx::fem::DirichletBC<T>>(
-        std::vector<T>({0.0, 0.0, 0.0}), bdofs, V);
+    std::vector<T> val = {0.0, 0.0, 0.0};
+    auto bc
+        = std::make_shared<const dolfinx::fem::DirichletBC<T>>(val, bdofs, V);
 
     // Create meshties
     std::vector<std::int32_t> data = {contact_bdry_1, contact_bdry_2};
@@ -193,7 +195,7 @@ int main(int argc, char* argv[])
 
     // Create matrix and vector
     auto A = dolfinx::la::petsc::Matrix(
-        meshties.create_petsc_matrix(*J, std::string()), false);
+        meshties.create_petsc_matrix(*J, "mpiaij"), false);
     dolfinx::la::Vector<T> b(F->function_spaces()[0]->dofmap()->index_map,
                              F->function_spaces()[0]->dofmap()->index_map_bs());
 

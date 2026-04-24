@@ -253,7 +253,8 @@ int main(int argc, char* argv[])
             basix::element::family::P,
             dolfinx::mesh::cell_type_to_basix_type(ct), 1,
             basix::element::lagrange_variant::unset,
-            basix::element::dpc_variant::unset, false));
+            basix::element::dpc_variant::unset, false),
+        std::vector<std::size_t>{(std::size_t)mesh->geometry().dim()});
 
     auto V = std::make_shared<dolfinx::fem::FunctionSpace<double>>(
         dolfinx::fem::create_functionspace(mesh, element));
