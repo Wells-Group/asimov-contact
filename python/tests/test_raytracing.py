@@ -126,7 +126,7 @@ def test_raytracing_2D(cell_type):
         boundary_cells = dolfinx.mesh.compute_incident_entities(
             mesh.topology, facets, tdim - 1, tdim
         )
-        bbtree = dolfinx.geometry.bb_tree(mesh, tdim, entities=boundary_cells)
+        bbtree = dolfinx.geometry.bb_tree(mesh, tdim, padding=1e-10, entities=boundary_cells)
         midpoint_tree = dolfinx.geometry.create_midpoint_tree(mesh, tdim, boundary_cells)
         op = np.array([origin[0], origin[1], 0])
         # Find closest cell using closest point projection
