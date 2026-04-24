@@ -121,15 +121,20 @@ public:
       // Generate input data for custom kernel
       _meshties->update_kernel_data({{"u", _u}, {"T", _T}},
                                     dolfinx_contact::Problem::ThermoElasticity);
-
+      std::vector<std::reference_wrapper<const dolfinx::fem::DirichletBC<T, U>>>
+          bcs_wrapped;
+      for (const auto& bc : _bcs)
+      {
+        bcs_wrapped.emplace_back(*bc);
+      }
       // Assemble b
-      std::span<T> b(_b.mutable_array());
+      std::span<T> b(_b.array());
       std::fill(b.begin(), b.end(), 0.0);
       _meshties->assemble_vector(
           b, *_l->function_spaces()[0],
           dolfinx_contact::Problem::ThermoElasticity); // custom kernel for mesh
                                                        // tying
-      fem::assemble_vector<T>(b, *_l);                 // standard assembly
+      dolfinx::fem::assemble_vector(b, *_l);           // standard assembly
 
       // Apply lifting
       Vec x_local;
@@ -138,15 +143,16 @@ public:
       VecGetSize(x_local, &n);
       const T* array = nullptr;
       VecGetArrayRead(x_local, &array);
-      dolfinx::fem::apply_lifting<T, U>(
-          b, {_j}, {_bcs}, {std::span<const T>(array, n)}, T(-1.0));
+      dolfinx::fem::apply_lifting(b, {std::cref(*_j)}, {bcs_wrapped},
+                                  {std::span<const T>(array, n)}, T(-1.0));
 
       // scatter reverse
       VecGhostUpdateBegin(_b_petsc, ADD_VALUES, SCATTER_REVERSE);
       VecGhostUpdateEnd(_b_petsc, ADD_VALUES, SCATTER_REVERSE);
 
       // Set bc
-      dolfinx::fem::petsc::set_bc<T>(_b_petsc, _bcs, x, -1.0);
+      for (const auto& bc : _bcs)
+        bc->set(b, std::span<const T>(array, n), -1.0);
       VecRestoreArrayRead(x, &array);
 
       // log level INFO ensures Newton steps are logged
@@ -166,22 +172,29 @@ public:
       MatZeroEntries(A);
 
       // custom assembly for mesh tying
-      _meshties->assemble_matrix(la::petsc::Matrix::set_block_fn(A, ADD_VALUES),
-                                 *_j->function_spaces()[0],
-                                 dolfinx_contact::Problem::ThermoElasticity);
+      _meshties->assemble_matrix(
+          dolfinx::la::petsc::Matrix::set_block_fn(A, ADD_VALUES),
+          *_j->function_spaces()[0],
+          dolfinx_contact::Problem::ThermoElasticity);
       MatAssemblyBegin(A, MAT_FLUSH_ASSEMBLY);
       MatAssemblyEnd(A, MAT_FLUSH_ASSEMBLY);
 
-      // standard assembly
+      auto bcs_wrapped = std::vector<
+          std::reference_wrapper<const dolfinx::fem::DirichletBC<T, U>>>{};
+      for (const auto& bc : _bcs)
+      {
+        bcs_wrapped.emplace_back(*bc);
+      }
       dolfinx::fem::assemble_matrix(
-          dolfinx::la::petsc::Matrix::set_block_fn(A, ADD_VALUES), *_j, _bcs);
+          dolfinx::la::petsc::Matrix::set_block_fn(A, ADD_VALUES), *_j,
+          bcs_wrapped); // standard assembly
       MatAssemblyBegin(A, MAT_FLUSH_ASSEMBLY);
       MatAssemblyEnd(A, MAT_FLUSH_ASSEMBLY);
 
       // set diagonal for bcs
       dolfinx::fem::set_diagonal<T>(
           dolfinx::la::petsc::Matrix::set_fn(A, INSERT_VALUES),
-          *_u->function_space(), _bcs);
+          *_u->function_space(), bcs_wrapped);
       MatAssemblyBegin(A, MAT_FINAL_ASSEMBLY);
       MatAssemblyEnd(A, MAT_FINAL_ASSEMBLY);
 
@@ -207,7 +220,7 @@ private:
   dolfinx::la::Vector<T> _b;
   Vec _b_petsc = nullptr;
   // system matrix
-  la::petsc::Matrix _matA;
+  dolfinx::la::petsc::Matrix _matA;
   // displacement function
   std::shared_ptr<dolfinx::fem::Function<T>> _u;
   // temperature function
@@ -218,7 +231,7 @@ int main(int argc, char* argv[])
 {
 
   // const std::size_t time_steps = 40;
-  init_logging(argc, argv);
+  dolfinx::init_logging(argc, argv);
   PetscInitialize(&argc, &argv, nullptr, nullptr);
 
   // Set the logging thread name to show the process rank
@@ -273,24 +286,29 @@ int main(int argc, char* argv[])
 
     // DG function space used for parameters
     auto ct = mesh->topology()->cell_type();
-    auto element_mu = basix::create_element<double>(
-        basix::element::family::P, dolfinx::mesh::cell_type_to_basix_type(ct),
-        0, basix::element::lagrange_variant::unset,
-        basix::element::dpc_variant::unset, true);
-    auto element = basix::create_element<double>(
-        basix::element::family::P, dolfinx::mesh::cell_type_to_basix_type(ct),
-        1, basix::element::lagrange_variant::unset,
-        basix::element::dpc_variant::unset, false);
+    auto element_mu
+        = std::make_shared<const dolfinx::fem::FiniteElement<double>>(
+            basix::create_element<double>(
+                basix::element::family::P,
+                dolfinx::mesh::cell_type_to_basix_type(ct), 0,
+                basix::element::lagrange_variant::unset,
+                basix::element::dpc_variant::unset, true));
+    auto element = std::make_shared<const dolfinx::fem::FiniteElement<double>>(
+        basix::create_element<double>(
+            basix::element::family::P,
+            dolfinx::mesh::cell_type_to_basix_type(ct), 1,
+            basix::element::lagrange_variant::unset,
+            basix::element::dpc_variant::unset, false));
 
-    auto V0 = std::make_shared<fem::FunctionSpace<U>>(
-        fem::create_functionspace(mesh, element_mu));
+    auto V0 = std::make_shared<dolfinx::fem::FunctionSpace<U>>(
+        dolfinx::fem::create_functionspace(mesh, element_mu));
 
     // Thermal Problem
-    auto Q = std::make_shared<fem::FunctionSpace<U>>(
-        fem::create_functionspace(mesh, element));
+    auto Q = std::make_shared<dolfinx::fem::FunctionSpace<U>>(
+        dolfinx::fem::create_functionspace(mesh, element));
 
     double kdt_val = 0.1;
-    auto kdt = std::make_shared<fem::Function<T>>(V0);
+    auto kdt = std::make_shared<dolfinx::fem::Function<T>>(V0);
     kdt->interpolate(
         [kdt_val](auto x) -> std::pair<std::vector<T>, std::vector<std::size_t>>
         {
@@ -303,15 +321,15 @@ int main(int argc, char* argv[])
         });
 
     // temperature function
-    auto T0 = std::make_shared<fem::Function<T>>(Q);
+    auto T0 = std::make_shared<dolfinx::fem::Function<T>>(Q);
 
     // Define variational forms
-    auto a_therm = std::make_shared<fem::Form<T>>(
-        fem::create_form<T>(*form_thermo_elasticity_a_therm, {Q, Q},
-                            {{"kdt", kdt}, {"T0", T0}}, {}, {}, {}));
-    auto L_therm = std::make_shared<fem::Form<T>>(
-        fem::create_form<T>(*form_thermo_elasticity_L_therm, {Q},
-                            {{"kdt", kdt}, {"T0", T0}}, {}, {}, {}));
+    auto a_therm = std::make_shared<dolfinx::fem::Form<T>>(
+        dolfinx::fem::create_form<T>(*form_thermo_elasticity_a_therm, {Q, Q},
+                                     {{"kdt", kdt}, {"T0", T0}}, {}, {}, {}));
+    auto L_therm = std::make_shared<dolfinx::fem::Form<T>>(
+        dolfinx::fem::create_form<T>(*form_thermo_elasticity_L_therm, {Q},
+                                     {{"kdt", kdt}, {"T0", T0}}, {}, {}, {}));
 
     // Define boundary conditions
     // temperature at bottom
@@ -358,8 +376,8 @@ int main(int argc, char* argv[])
 
     // Thermo-elastic problem
     // Create function space
-    auto V = std::make_shared<fem::FunctionSpace<U>>(fem::create_functionspace(
-        mesh, element, {(std::size_t)mesh->geometry().dim()}));
+    auto V = std::make_shared<dolfinx::fem::FunctionSpace<U>>(
+        dolfinx::fem::create_functionspace(mesh, element));
 
     // Problem parameters
     double E = 1E4;
@@ -368,7 +386,7 @@ int main(int argc, char* argv[])
     double mu_val = E / (2 * (1 + nu));
     double alpha = 0.3;
     // Create DG0 function for lame parameter lambda
-    auto lmbda = std::make_shared<fem::Function<T>>(V0);
+    auto lmbda = std::make_shared<dolfinx::fem::Function<T>>(V0);
     lmbda->interpolate(
         [lmbda_val](
             auto x) -> std::pair<std::vector<T>, std::vector<std::size_t>>
@@ -382,7 +400,7 @@ int main(int argc, char* argv[])
         });
 
     // create DG0 function for lame parameter mu
-    auto mu = std::make_shared<fem::Function<T>>(V0);
+    auto mu = std::make_shared<dolfinx::fem::Function<T>>(V0);
     mu->interpolate(
         [mu_val](auto x) -> std::pair<std::vector<T>, std::vector<std::size_t>>
         {
@@ -394,7 +412,7 @@ int main(int argc, char* argv[])
           return {_f, {_f.size()}};
         });
 
-    auto alpha_c = std::make_shared<fem::Function<T>>(V0);
+    auto alpha_c = std::make_shared<dolfinx::fem::Function<T>>(V0);
     alpha_c->interpolate(
         [alpha](auto x) -> std::pair<std::vector<T>, std::vector<std::size_t>>
         {
@@ -407,19 +425,20 @@ int main(int argc, char* argv[])
         });
 
     // diplacement function
-    auto u = std::make_shared<fem::Function<T>>(V);
+    auto u = std::make_shared<dolfinx::fem::Function<T>>(V);
     // Define variational forms
-    auto J = std::make_shared<fem::Form<T>>(fem::create_form<T>(
-        *form_thermo_elasticity_J, {V, V},
-        {{"mu", mu}, {"lmbda", lmbda}, {"alpha", alpha_c}}, {}, {}, {}));
-    auto F = std::make_shared<fem::Form<T>>(
-        fem::create_form<T>(*form_thermo_elasticity_F, {V},
-                            {{"u", u},
-                             {"T0", T0},
-                             {"mu", mu},
-                             {"lmbda", lmbda},
-                             {"alpha", alpha_c}},
-                            {}, {}, {}));
+    auto J
+        = std::make_shared<dolfinx::fem::Form<T>>(dolfinx::fem::create_form<T>(
+            *form_thermo_elasticity_J, {V, V},
+            {{"mu", mu}, {"lmbda", lmbda}, {"alpha", alpha_c}}, {}, {}, {}));
+    auto F = std::make_shared<dolfinx::fem::Form<T>>(
+        dolfinx::fem::create_form<T>(*form_thermo_elasticity_F, {V},
+                                     {{"u", u},
+                                      {"T0", T0},
+                                      {"mu", mu},
+                                      {"lmbda", lmbda},
+                                      {"alpha", alpha_c}},
+                                     {}, {}, {}));
 
     // Define boundary conditions
     // bottom fixed, top displaced in y-diretion by -0.2
@@ -435,8 +454,8 @@ int main(int argc, char* argv[])
                 std::make_shared<const dolfinx::fem::DirichletBC<T>>(
                     std::vector<T>({0.0, 0.0, 0.0}), bdofs_2, V)};
 
-    // create "non-linear" meshtie problem (linear problem written as non-linear
-    // problem)
+    // create "non-linear" meshtie problem (linear problem written as
+    // non-linear problem)
     auto problem
         = ThermoElasticProblem(F, J, bcs, meshties, domain1, {1, 2}, u, T0,
                                lmbda, mu, alpha_c, E * gamma, theta);
@@ -495,31 +514,31 @@ int main(int argc, char* argv[])
       //  Assemble linear thermal problem
 
       // Assemble vector
-      b_therm.set(0.0);
-      meshties->assemble_vector(b_therm.mutable_array(), *Q,
+      std::ranges::fill(b_therm.array(), 0.0);
+      meshties->assemble_vector(b_therm.array(), *Q,
                                 dolfinx_contact::Problem::Poisson);
-      dolfinx::fem::assemble_vector(b_therm.mutable_array(), *L_therm);
-      dolfinx::fem::apply_lifting<T, U>(b_therm.mutable_array(), {a_therm},
-                                        {{bcs_therm}}, {}, double(1.0));
+      dolfinx::fem::assemble_vector(b_therm.array(), *L_therm);
+      dolfinx::fem::apply_lifting(b_therm.array(), {std::cref(*a_therm)},
+                                  {{std::cref(*bcs_therm)}}, {}, double(1.0));
       b_therm.scatter_rev(std::plus<T>());
-      bcs_therm->set(b_therm.mutable_array(), std::nullopt);
+      bcs_therm->set(b_therm.array(), std::nullopt);
 
       // Assemble matrix
       MatZeroEntries(A_therm.mat());
       meshties->assemble_matrix(
-          la::petsc::Matrix::set_block_fn(A_therm.mat(), ADD_VALUES),
+          dolfinx::la::petsc::Matrix::set_block_fn(A_therm.mat(), ADD_VALUES),
           *a_therm->function_spaces()[0], dolfinx_contact::Problem::Poisson);
       MatAssemblyBegin(A_therm.mat(), MAT_FLUSH_ASSEMBLY);
       MatAssemblyEnd(A_therm.mat(), MAT_FLUSH_ASSEMBLY);
       dolfinx::fem::assemble_matrix(
           dolfinx::la::petsc::Matrix::set_block_fn(A_therm.mat(), ADD_VALUES),
-          *a_therm, {bcs_therm});
+          *a_therm, {std::cref(*bcs_therm)});
       MatAssemblyBegin(A_therm.mat(), MAT_FLUSH_ASSEMBLY);
       MatAssemblyEnd(A_therm.mat(), MAT_FLUSH_ASSEMBLY);
 
       dolfinx::fem::set_diagonal<T>(
           dolfinx::la::petsc::Matrix::set_fn(A_therm.mat(), INSERT_VALUES), *Q,
-          {bcs_therm});
+          {std::cref(*bcs_therm)});
       MatAssemblyBegin(A_therm.mat(), MAT_FINAL_ASSEMBLY);
       MatAssemblyEnd(A_therm.mat(), MAT_FINAL_ASSEMBLY);
 
