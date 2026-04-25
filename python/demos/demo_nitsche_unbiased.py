@@ -476,12 +476,13 @@ def run_soler(args):
     newton_solver.set_coefficients(compute_coefficients)
 
     # Set rigid motion nullspace
+
     null_space = rigid_motions_nullspace_subdomains(
         V,
         domain_marker,
         np.unique(domain_marker.values),
-        num_domains=len(np.unique(domain_marker.values)),
     )
+
     newton_solver.A.setNearNullSpace(null_space)
 
     # Set Newton solver options
