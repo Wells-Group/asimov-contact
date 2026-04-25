@@ -18,6 +18,7 @@ from dolfinx.fem import (
     Constant,
     Function,
     dirichletbc,
+    extract_function_spaces,
     form,
     functionspace,
     locate_dofs_topological,
@@ -189,7 +190,7 @@ def run_demo(simplex, E, nu, gamma, theta, lifting, outfile, ksp_view, timing_vi
 
     # create matrix, vector
     A = meshties.create_matrix(J._cpp_object)
-    b = create_vector(F)
+    b = create_vector(extract_function_spaces(F))
 
     # Assemble right hand side
     b.zeroEntries()

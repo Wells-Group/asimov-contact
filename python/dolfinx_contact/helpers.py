@@ -259,13 +259,11 @@ def near_nullspace_subdomains(
     tags
         The values of the meshtags for the objects
     """
-    _x = Function(V)
-
     # Create list of vectors for null space
-    nullspace_basis = [_x.petsc_vec.copy() for i in range(num_domains)]
+    nullspace_basis = [Function(V) for i in range(num_domains)]
 
     with ExitStack() as stack:
-        vec_local = [stack.enter_context(x.localForm()) for x in nullspace_basis]
+        vec_local = [stack.enter_context(x.x.petsc_vec.localForm()) for x in nullspace_basis]
         basis = [numpy.asarray(x) for x in vec_local]
         for j, tag in enumerate(tags):
             cells = mt.find(tag)
@@ -273,10 +271,10 @@ def near_nullspace_subdomains(
 
             # Build translational null space basis
             basis[j][dofs] = 1.0
-
-        _la.orthonormalize(nullspace_basis)
-        assert _la.is_orthonormal(nullspace_basis)
-    return PETSc.NullSpace().create(vectors=nullspace_basis)  # type: ignore
+        nb = [x.x for x in nullspace_basis]
+        _la.orthonormalize(nb)
+        assert _la.is_orthonormal(nb)
+    return PETSc.NullSpace().create(vectors=[x.x.petsc_vec for x in nullspace_basis])  # type: ignore
 
 
 def rigid_motions_nullspace_subdomains(

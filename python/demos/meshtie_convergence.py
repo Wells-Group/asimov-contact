@@ -17,6 +17,7 @@ from dolfinx.fem import (
     Function,
     assemble_scalar,
     dirichletbc,
+    extract_function_spaces,
     form,
     functionspace,
     locate_dofs_topological,
@@ -412,7 +413,7 @@ def test_meshtie(threed: bool = False, simplex: bool = True, runs: int = 5):
 
         # create matrix, vector
         A = meshties.create_matrix(J._cpp_object)
-        b = create_vector(F)
+        b = create_vector(extract_function_spaces(F))
 
         # Assemble right hand side
         b.zeroEntries()

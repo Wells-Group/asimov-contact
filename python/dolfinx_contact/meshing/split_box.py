@@ -99,7 +99,7 @@ def retrieve_mesh_data(
     assert model is not None, "Gmsh model is None on rank responsible for mesh creation."
     # Get mesh geometry and mesh topology for each element
     x = extract_geometry(model, name=name)
-    topologies = extract_topology_and_markers(model, name=name)
+    topologies, marker_lookup = extract_topology_and_markers(model, name=name)
 
     # Extract Gmsh cell id, dimension of cell and number of nodes to
     # cell for each
@@ -156,9 +156,9 @@ def create_dolfinx_mesh(
 ) -> None:
     msh = create_mesh(
         MPI.COMM_WORLD,
-        np.ascontiguousarray(cells, dtype=np.int64),
-        x,
-        ufl_domain,
+        cells=np.ascontiguousarray(cells, dtype=np.int64),
+        x=x,
+        e=ufl_domain,
     )
     msh.name = "Grid"
     msh.topology.create_entities(tdim - 1)

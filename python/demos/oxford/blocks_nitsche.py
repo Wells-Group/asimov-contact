@@ -52,7 +52,7 @@ with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
     topo = xdmf.read_topology_data(name="volume markers")
     x = xdmf.read_geometry_data(name="geometry")
     domain = Mesh(element("Lagrange", cell_type.name, cell_degree, shape=(x.shape[1],)))
-    mesh = create_mesh(MPI.COMM_WORLD, topo, x, domain)
+    mesh = create_mesh(MPI.COMM_WORLD, cells=topo, x=x, e=domain)
     tdim = mesh.topology.dim
     domain_marker = xdmf.read_meshtags(mesh, name="volume markers")
     mesh.topology.create_connectivity(tdim - 1, tdim)
