@@ -869,7 +869,7 @@ class TestUnbiased:
         surfaces = adjacencylist(data, offsets)
         contact_problem = ContactProblem(
             [facet_marker],
-            surfaces._cpp_object,
+            surfaces,
             [(0, 1), (1, 0)],
             mesh_custom,
             quadrature_degree,
