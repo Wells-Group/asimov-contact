@@ -460,7 +460,6 @@ if __name__ == "__main__":
         V,
         domain_marker,
         np.unique(domain_marker.values),
-        num_domains=len(np.unique(domain_marker.values)),
     )
     newton_solver.A.setNearNullSpace(null_space)
 

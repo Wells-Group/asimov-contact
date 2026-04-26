@@ -246,9 +246,7 @@ newton_solver.set_jacobian(compute_jacobian_matrix)
 newton_solver.set_coefficients(compute_coefficients)
 
 # Set rigid motion nullspace
-null_space = rigid_motions_nullspace_subdomains(
-    V, domain_marker, np.unique(domain_marker.values), num_domains=2
-)
+null_space = rigid_motions_nullspace_subdomains(V, domain_marker, np.unique(domain_marker.values))
 newton_solver.A.setNearNullSpace(null_space)
 
 # Set Newton solver options

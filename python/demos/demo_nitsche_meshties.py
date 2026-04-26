@@ -218,7 +218,7 @@ def run_demo(simplex, E, nu, gamma, theta, lifting, outfile, ksp_view, timing_vi
 
     # Set rigid motion nullspace
     null_space = rigid_motions_nullspace_subdomains(
-        V, domain_marker, np.unique(domain_marker.values), num_domains=2
+        V, domain_marker, np.unique(domain_marker.values)
     )
     A.setNearNullSpace(null_space)
 

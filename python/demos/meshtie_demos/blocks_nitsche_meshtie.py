@@ -116,7 +116,7 @@ class MeshTieProblem:
         # Build near null space preventing rigid body motion of
         # individual components
         tags = np.unique(subdomains.values)
-        ns = rigid_motions_nullspace_subdomains(u.function_space, subdomains, tags, len(tags))
+        ns = rigid_motions_nullspace_subdomains(u.function_space, subdomains, tags)
         self._mat_a.setNearNullSpace(ns)
 
     def f(self, x, _b):
