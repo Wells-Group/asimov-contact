@@ -4,7 +4,7 @@
 
 from mpi4py import MPI
 
-import dolfinx.io.gmshio
+import dolfinx.io.gmsh as gmshio
 import gmsh
 import numpy as np
 import pytest
@@ -37,9 +37,9 @@ def test_copy_to_submesh(tmp_path, order, res, simplex, dim):
             model = create_sphere_plane_mesh(
                 model, res=res, order=order, r=0.25, height=0.25, length=1.0, width=1.0
             )
-            mesh, _, facet_marker = dolfinx.io.gmshio.model_to_mesh(
-                model, MPI.COMM_WORLD, 0, gdim=3
-            )
+            mesh_data = gmshio.model_to_mesh(model, MPI.COMM_WORLD, 0, gdim=3)
+            mesh = mesh_data.mesh
+            facet_marker = mesh_data.facet_tags
             contact_bdy_1 = 1
             contact_bdy_2 = 8
         else:
@@ -48,8 +48,11 @@ def test_copy_to_submesh(tmp_path, order, res, simplex, dim):
             model.add(name)
             model.setCurrent(name)
             model = create_cylinder_cylinder_mesh(model, order=order, res=10 * res, simplex=simplex)
-            mesh, _, _ = dolfinx.io.gmshio.model_to_mesh(model, MPI.COMM_WORLD, 0, gdim=3)
-
+            mesh_data = gmshio.model_to_mesh(model, MPI.COMM_WORLD, 0, gdim=3)
+            mesh = mesh_data.mesh
+            facet_marker = mesh_data.facet_tags
+            contact_bdy_1 = 2
+            contact_bdy_2 = 3
             tdim = mesh.topology.dim
             mesh.topology.create_connectivity(tdim - 1, tdim)
 
@@ -98,7 +101,10 @@ def test_copy_to_submesh(tmp_path, order, res, simplex, dim):
         model = create_circle_plane_mesh(
             model, res=res, order=order, quads=not simplex, r=0.25, height=0.25, length=1.0
         )
-        mesh, _, facet_marker = dolfinx.io.gmshio.model_to_mesh(model, MPI.COMM_WORLD, 0, gdim=2)
+        mesh_data = gmshio.model_to_mesh(model, MPI.COMM_WORLD, 0, gdim=2)
+
+        mesh = mesh_data.mesh
+        facet_marker = mesh_data.facet_tags
         contact_bdy_1 = 4
         contact_bdy_2 = 9
 
@@ -117,7 +123,7 @@ def test_copy_to_submesh(tmp_path, order, res, simplex, dim):
     search_method = [ContactMode.ClosestPoint, ContactMode.Raytracing]
     contact = Contact(
         [facet_marker._cpp_object],
-        contact_surfaces,
+        contact_surfaces._cpp_object,
         contact_pairs,
         mesh._cpp_object,
         quadrature_degree=3,

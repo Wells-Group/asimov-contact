@@ -204,7 +204,7 @@ def nitsche_rigid_surface(
     search_mode = [dolfinx_contact.cpp.ContactMode.ClosestPoint]
     contact = dolfinx_contact.cpp.Contact(
         [facet_marker._cpp_object],
-        surfaces,
+        surfaces._cpp_object,
         [(0, 1)],
         mesh._cpp_object,
         search_mode,
@@ -217,7 +217,7 @@ def nitsche_rigid_surface(
     mesh_geometry = mesh.geometry.x
     contact.create_distance_map(0)
     lookup = contact.facet_map(0)
-    master_bbox = _geometry.bb_tree(mesh, fdim, contact_facets)
+    master_bbox = _geometry.bb_tree(mesh, fdim, entities=contact_facets)
     midpoint_tree = _geometry.create_midpoint_tree(mesh, fdim, contact_facets)
 
     # This function returns Pi(x) - x, where Pi(x) is the closest point projection
@@ -234,7 +234,7 @@ def nitsche_rigid_surface(
                 mesh._cpp_object, fdim, np.asarray([facet], dtype=np.int32), False
             )
             coords0 = mesh_geometry[facet_geometry][0]
-            R = np.linalg.norm(_cpp.geometry.compute_distance_gjk(coords0, xi))
+            R = np.linalg.norm(_geometry.compute_distance_gjk(coords0, xi))
             # If point on a facet in contact surface (i.e., if distance between point and closest
             # facet is 0), use contact.facet_map(0) to find closest facet on rigid surface and
             # compute distance vector
@@ -244,7 +244,7 @@ def nitsche_rigid_surface(
                     mesh._cpp_object, fdim, np.asarray([facet_2], dtype=np.int32), False
                 )
                 coords = mesh_geometry[facet2_geometry][0]
-                dist_vec = _cpp.geometry.compute_distance_gjk(coords, xi)
+                dist_vec = _geometry.compute_distance_gjk(coords, xi)
                 dist_vec_array[:gdim, i] = dist_vec[:gdim]
         return dist_vec_array
 
@@ -286,7 +286,7 @@ def nitsche_rigid_surface(
     )
 
     # Setup non-linear problem and Newton-solver
-    problem = _fem.petsc.NonlinearProblem(F, u, bcs, J=J)
+    problem = _fem.petsc.NewtonSolverNonlinearProblem(F, u, bcs, J=J)
     solver = _nls.petsc.NewtonSolver(mesh.comm, problem)
 
     # Create rigid motion null-space

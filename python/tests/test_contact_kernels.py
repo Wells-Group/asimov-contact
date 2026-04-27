@@ -122,7 +122,7 @@ def test_vector_surface_kernel(dim, kernel_type, P, Q):
 
     # Compile UFL form
     L = form(L, jit_options={"cffi_extra_compile_args": [], "cffi_libraries": ["m"]})
-    b = create_vector(L)
+    b = create_vector(dolfinx.fem.extract_function_spaces(L))
 
     # Normal assembly
     b.zeroEntries()
@@ -156,7 +156,7 @@ def test_vector_surface_kernel(dim, kernel_type, P, Q):
     search_mode = [dolfinx_contact.cpp.ContactMode.ClosestPoint]
     contact = dolfinx_contact.cpp.Contact(
         [ft._cpp_object],
-        surfaces,
+        surfaces._cpp_object,
         [(0, 0)],
         mesh._cpp_object,
         search_mode,
@@ -172,7 +172,7 @@ def test_vector_surface_kernel(dim, kernel_type, P, Q):
 
     L_custom = ufl.inner(sigma(u), epsilon(v)) * dx
     L_custom = form(L_custom)
-    b2 = create_vector(L_custom)
+    b2 = create_vector(dolfinx.fem.extract_function_spaces(L_custom))
     kernel = dolfinx_contact.cpp.generate_rigid_surface_kernel(V._cpp_object, kernel_type, q_rule)
 
     b2.zeroEntries()
@@ -318,7 +318,7 @@ def test_matrix_surface_kernel(dim, kernel_type, P, Q):
     search_mode = [dolfinx_contact.cpp.ContactMode.ClosestPoint]
     contact = dolfinx_contact.cpp.Contact(
         [ft._cpp_object],
-        surfaces,
+        surfaces._cpp_object,
         [(0, 0)],
         mesh._cpp_object,
         search_mode,

@@ -222,9 +222,9 @@ def nitsche_ufl(
     #     self.i += 1
     #     xdmf.write_function(u, self.i)
 
-    # setattr(_fem.petsc.NonlinearProblem, "form", form)
+    # setattr(_fem.petsc.NewtonSolverNonlinearProblem, "form", form)
 
-    problem = _fem.petsc.NonlinearProblem(
+    problem = _fem.petsc.NewtonSolverNonlinearProblem(
         F,
         u,
         bcs,

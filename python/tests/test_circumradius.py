@@ -56,7 +56,13 @@ def test_circumradius(dim):
     dx = Measure("dx", domain=mesh)
     a = u * v * dx
     L = h1 * v * dx
-    problem = LinearProblem(a, L, bcs=[], petsc_options={"ksp_type": "preonly", "pc_type": "lu"})
+    problem = LinearProblem(
+        a,
+        L,
+        bcs=[],
+        petsc_options={"ksp_type": "preonly", "pc_type": "lu"},
+        petsc_options_prefix="test_",
+    )
     uh = problem.solve()
 
     h2 = np.zeros(facets.size)

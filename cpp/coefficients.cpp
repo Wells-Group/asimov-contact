@@ -87,8 +87,9 @@ dolfinx_contact::pack_coefficient_quadrature(
   // Get element information
   const dolfinx::fem::FiniteElement<double>* element
       = coeff.function_space()->element().get();
-  const std::size_t bs = element->block_size();
-  const std::size_t value_size = coeff.function_space()->value_size();
+  auto vs = element->value_shape();
+  std::size_t bs = std::accumulate(vs.begin(), vs.end(), 1, std::multiplies{});
+  const std::size_t value_size = coeff.function_space()->element()->reference_value_size();;
 
   // Tabulate function at quadrature points (assuming no derivatives)
   error::check_cell_type(cell_type);
@@ -106,8 +107,7 @@ dolfinx_contact::pack_coefficient_quadrature(
       std::reduce(tab_shape.cbegin(), tab_shape.cend(), 1, std::multiplies{}));
   element->tabulate(reference_basisb, q_points, p_shape, 0);
   mdspan_t<const double, 4> reference_basis(reference_basisb.data(), tab_shape);
-
-  assert(value_size / bs == tab_shape[3]);
+  assert(value_size == tab_shape[3]);
 
   std::function<std::array<std::int32_t, 2>(std::size_t)> get_cell_info;
   std::size_t num_active_entities;
@@ -122,10 +122,9 @@ dolfinx_contact::pack_coefficient_quadrature(
   default:
     throw std::invalid_argument("Unsupported integral type.");
   }
-
   // Create output array
   const std::vector<std::size_t>& q_offsets = q_rule.offset();
-  const auto cstride = int(value_size * num_points_per_entity);
+  const auto cstride = int(bs * num_points_per_entity);
   std::vector<PetscScalar> coefficients(num_active_entities * cstride, 0.0);
 
   // Get the coeffs to pack
@@ -360,7 +359,7 @@ dolfinx_contact::pack_gradient_quadrature(
   const dolfinx::fem::FiniteElement<double>* element
       = coeff.function_space()->element().get();
   const std::size_t bs = element->block_size();
-  const std::size_t value_size = coeff.function_space()->value_size();
+  const std::size_t value_size = coeff.function_space()->element()->reference_value_size();
 
   // Tabulate function at quadrature points (assuming one derivatives)
   error::check_cell_type(cell_type);
@@ -378,7 +377,7 @@ dolfinx_contact::pack_gradient_quadrature(
       std::reduce(tab_shape.cbegin(), tab_shape.cend(), 1, std::multiplies{}));
   element->tabulate(reference_basisb, q_points, p_shape, 1);
   mdspan_t<const double, 4> reference_basis(reference_basisb.data(), tab_shape);
-  assert(value_size / bs == tab_shape[3]);
+  assert(value_size == tab_shape[3]);
 
   // Get geometry data
   const dolfinx::mesh::Geometry<double>& geometry = mesh->geometry();
@@ -423,7 +422,7 @@ dolfinx_contact::pack_gradient_quadrature(
   }
 
   // Create output array
-  const auto cstride = int(value_size * num_points_per_entity * gdim);
+  const auto cstride = int(bs*value_size * num_points_per_entity * gdim);
   std::vector<PetscScalar> coefficients(num_active_entities * cstride, 0.0);
 
   // Get the coeffs to pack

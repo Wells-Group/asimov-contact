@@ -11,13 +11,14 @@ import numpy as np
 import numpy.typing as npt
 import ufl
 from dolfinx import default_scalar_type, log
-from dolfinx.common import Timer, TimingType, list_timings, timing
+from dolfinx.common import Timer, list_timings, timing
 from dolfinx.cpp.mesh import h as cell_diameter
 from dolfinx.fem import (
     Constant,
     Function,
     assemble_scalar,
     dirichletbc,
+    extract_function_spaces,
     form,
     functionspace,
     locate_dofs_topological,
@@ -362,7 +363,7 @@ def test_meshtie(threed: bool = False, simplex: bool = True, runs: int = 5, orde
         # initialise meshties
         meshties = MeshTie(
             [facet_marker._cpp_object],
-            surfaces,
+            surfaces._cpp_object,
             contact,
             mesh._cpp_object,
             quadrature_degree=5,
@@ -373,7 +374,7 @@ def test_meshtie(threed: bool = False, simplex: bool = True, runs: int = 5, orde
 
         # create matrix, vector
         A = meshties.create_matrix(J._cpp_object)
-        b = create_vector(F)
+        b = create_vector(extract_function_spaces(F))
 
         # Assemble right hand side
         b.zeroEntries()
@@ -445,7 +446,7 @@ def test_meshtie(threed: bool = False, simplex: bool = True, runs: int = 5, orde
     with XDMFFile(mesh.comm, "results/partitioning_split.xdmf", "w") as xdmf:
         xdmf.write_mesh(mesh)
         xdmf.write_meshtags(process_marker, mesh.geometry)
-    list_timings(mesh.comm, [TimingType.wall])
+    list_timings(mesh.comm)
     print("L2 errors; ", errors)
     h = 1.0 / (np.array(dofs) ** (1 / tdim))
     h_diff = [(np.log(h[i - 1]) - np.log(h[i])) for i in range(1, runs)]

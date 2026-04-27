@@ -10,7 +10,7 @@ import numpy as np
 import pytest
 import ufl
 from dolfinx.fem import DirichletBC, Function, assemble_scalar, form, functionspace
-from dolfinx.fem.petsc import LinearProblem, NonlinearProblem
+from dolfinx.fem.petsc import LinearProblem, NewtonSolverNonlinearProblem
 from dolfinx.io import XDMFFile
 from dolfinx.mesh import (
     CellType,
@@ -116,12 +116,13 @@ def solve_manufactured(
             ufl.rhs(F),
             bcs=bcs,
             petsc_options={"ksp_type": "preonly", "pc_type": "lu"},
+            petsc_options_prefix="lin_",
         )
         u = linear_problem.solve()
         u.name = "uh"
     else:
         # Create nonlinear problem and Newton solver
-        nonlinear_problem = NonlinearProblem(F, u, bcs)
+        nonlinear_problem = NewtonSolverNonlinearProblem(F, u, bcs)
         solver = NewtonSolver(MPI.COMM_WORLD, nonlinear_problem)
 
         # Set Newton solver options

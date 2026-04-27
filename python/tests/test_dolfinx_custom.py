@@ -144,7 +144,7 @@ def test_contact_kernel(tmp_path, theta, gamma, dim, gap):
         )
 
         L = dolfinx.fem.form(F)
-        b = dolfinx.fem.petsc.create_vector(L)
+        b = dolfinx.fem.petsc.create_vector(dolfinx.fem.extract_function_spaces(L))
 
         # Normal assembly
         b.zeroEntries()
@@ -227,7 +227,7 @@ def test_contact_kernel(tmp_path, theta, gamma, dim, gap):
         search_mode = [dolfinx_contact.cpp.ContactMode.ClosestPoint]
         contact = dolfinx_contact.cpp.Contact(
             [facet_marker._cpp_object],
-            surfaces,
+            surfaces._cpp_object,
             [(0, 1)],
             mesh._cpp_object,
             search_mode,
@@ -238,12 +238,12 @@ def test_contact_kernel(tmp_path, theta, gamma, dim, gap):
         # RHS
         L_custom = ufl.inner(sigma(u), epsilon(v)) * dx
         L_custom = dolfinx.fem.form(L_custom)
-        b2 = dolfinx.fem.petsc.create_vector(L_custom)
+        b2 = dolfinx.fem.petsc.create_vector(dolfinx.fem.extract_function_spaces(L_custom))
         kernel = dolfinx_contact.cpp.generate_rigid_surface_kernel(V._cpp_object, kt.Rhs, q_rule)
         b2.zeroEntries()
         contact_assembler = dolfinx_contact.cpp.Contact(
             [facet_marker._cpp_object],
-            surfaces,
+            surfaces._cpp_object,
             [(0, 1)],
             mesh._cpp_object,
             search_mode,

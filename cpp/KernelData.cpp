@@ -44,7 +44,9 @@ dolfinx_contact::KernelData::KernelData(
                                 "elements requiring dof transformations.");
   }
 
-  if (V.value_size() / _bs != 1)
+  auto vs = element->value_shape();
+  std::size_t value_size = std::accumulate(vs.begin(), vs.end(), 1, std::multiplies{});
+  if (value_size / _bs != 1)
   {
     throw std::invalid_argument(
         "Contact kernel not supported for spaces with value size!=1");

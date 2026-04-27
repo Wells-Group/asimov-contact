@@ -127,7 +127,7 @@ Contact::Contact(const dolfinx::graph::AdjacencyList<std::int32_t>& surfaces,
       _facet_maps(contact_pairs.size()),
       _reference_contact_points(contact_pairs.size()),
       _reference_contact_shape(contact_pairs.size()),
-      _qp_phys(surfaces.array().size()), _max_links(contact_pairs.size()),
+      _qp_phys(surfaces.num_nodes()), _max_links(contact_pairs.size()),
       _cell_facet_pairs(surfaces), _submesh(*mesh, surfaces.array()),
       _mode(mode)
 {
@@ -734,20 +734,21 @@ Contact::pack_test_functions(int pair,
   {
     std::span<const std::int32_t> f_cells(cells.data() + i * num_q_points,
                                           num_q_points);
-    // As radix sort is broken for negative numbers, we need to filter them out                                          
+    // As radix sort is broken for negative numbers, we need to filter them out
     std::vector<std::int32_t> positive_cells;
     std::vector<std::int32_t> positive_to_old;
     positive_cells.reserve(f_cells.size());
     positive_to_old.reserve(f_cells.size());
-    for (std::size_t j = 0; j< f_cells.size(); ++j)
+    for (std::size_t j = 0; j < f_cells.size(); ++j)
     {
       if (f_cells[j] >= 0)
       {
         positive_cells.push_back(f_cells[j]);
         positive_to_old.push_back(j);
       }
-    } 
-    auto [unique_cells, offsets] = sort_cells(positive_cells, std::span(perm.data(), positive_cells.size()));
+    }
+    auto [unique_cells, offsets] = sort_cells(
+        positive_cells, std::span(perm.data(), positive_cells.size()));
     std::int32_t link = 0;
     for (std::size_t j = 0; j < unique_cells.size(); ++j)
     {
@@ -1376,7 +1377,8 @@ std::pair<std::vector<PetscScalar>, int> Contact::pack_grad_test_functions(
   std::size_t gdim = mesh->geometry().dim();
   std::size_t tdim = mesh->topology()->dim();
   std::span<const std::int32_t> parent_cells = _submesh.parent_cells();
-  std::shared_ptr<const fem::FiniteElement<double>> element = V.element();
+  std::shared_ptr<const dolfinx::fem::FiniteElement<double>> element
+      = V.element();
   assert(element);
   int bs_element = element->block_size();
   std::size_t ndofs = element->space_dimension() / bs_element;
@@ -1430,22 +1432,21 @@ std::pair<std::vector<PetscScalar>, int> Contact::pack_grad_test_functions(
     }
 
     // Sort linked cells
-    // As radix sort is broken for negative numbers, we need to filter them out                                          
+    // As radix sort is broken for negative numbers, we need to filter them out
     std::vector<std::int32_t> positive_cells;
     std::vector<std::int32_t> positive_to_old;
     positive_cells.reserve(linked_cells.size());
     positive_to_old.reserve(linked_cells.size());
-    for (std::size_t j = 0; j< linked_cells.size(); ++j)
+    for (std::size_t j = 0; j < linked_cells.size(); ++j)
     {
       if (linked_cells[j] >= 0)
       {
         positive_cells.push_back(linked_cells[j]);
         positive_to_old.push_back(j);
       }
-    } 
-    auto [unique_cells, offsets]
-        = sort_cells(positive_cells,
-                     std::span(perm.data(), positive_cells.size()));
+    }
+    auto [unique_cells, offsets] = sort_cells(
+        positive_cells, std::span(perm.data(), positive_cells.size()));
 
     // Loop over sorted array of unique cells
     std::int32_t link = 0;
@@ -1575,7 +1576,6 @@ Contact::pack_grad_u_contact(int pair,
   evaluate_basis_functions(*V, reference_x, cells, basis_values, 1);
 
   std::span<const PetscScalar> u_coeffs = u.x()->array();
-
   // Create work vector for expansion coefficients
 
   std::size_t num_basis_functions = b_shape[2];

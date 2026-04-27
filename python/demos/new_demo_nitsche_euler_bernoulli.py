@@ -9,7 +9,7 @@ from mpi4py import MPI
 import numpy as np
 import ufl
 from dolfinx.fem import Function, dirichletbc, functionspace, locate_dofs_topological
-from dolfinx.fem.petsc import LinearProblem, NonlinearProblem
+from dolfinx.fem.petsc import LinearProblem, NewtonSolverNonlinearProblem
 from dolfinx.geometry import bb_tree, compute_colliding_cells, compute_collisions_points
 from dolfinx.io import XDMFFile
 from dolfinx.mesh import (
@@ -120,7 +120,7 @@ def solve_euler_bernoulli(
         u = linear_problem.solve()
     else:
         # Create nonlinear problem and Newton solver
-        problem = NonlinearProblem(F, u, bcs)
+        problem = NewtonSolverNonlinearProblem(F, u, bcs)
         solver = NewtonSolver(mesh.comm, problem)
 
         # Set Newton solver options

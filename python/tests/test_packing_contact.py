@@ -107,7 +107,7 @@ def create_functionspaces(tempdir, ct, gap, delta, disp):
         raise ValueError(f"Unsupported mesh type {ct}")
     el = basix.ufl.element("Lagrange", ct, 1, shape=(x.shape[1],))
     domain = ufl.Mesh(el)
-    mesh = create_mesh(MPI.COMM_WORLD, cells, x, domain)
+    mesh = create_mesh(MPI.COMM_WORLD, cells=cells, x=x, e=domain)
     if disp:
         el = basix.ufl.element("Lagrange", mesh.topology.cell_name(), 1, shape=(mesh.geometry.dim,))
     else:
@@ -137,7 +137,7 @@ def compare_test_fn(fn_space, test_fn, grad_test_fn, q_indices, link, x_ref, cel
 
             # Create expression for evaluating test function and evaluate
             expr = _fem.Expression(v, x_ref)
-            expr_vals = expr.eval(mesh, cell_arr)
+            expr_vals = expr.eval(mesh, cell_arr).reshape(cell_arr.shape[0], -1)
 
             # Create expression for evaluating derivative of test
             # function and evaluate
@@ -145,7 +145,7 @@ def compare_test_fn(fn_space, test_fn, grad_test_fn, q_indices, link, x_ref, cel
                 expr2 = _fem.Expression(ufl.grad(v), x_ref)
             else:
                 expr2 = _fem.Expression(ufl.grad(v.sub(k)), x_ref)
-            expr_vals2 = expr2.eval(mesh, cell)
+            expr_vals2 = expr2.eval(mesh, cell).reshape(cell.shape[0], -1)
             # compare values of test functions
             offset = link * num_q_points * len(dofs) * bs + i * num_q_points * bs
             np.testing.assert_allclose(
@@ -282,7 +282,7 @@ def test_packing(tmp_path, ct, gap, q_deg, delta, surface, disp):
     search_mode = [dolfinx_contact.cpp.ContactMode.ClosestPoint]
     contact = dolfinx_contact.cpp.Contact(
         [facet_marker._cpp_object],
-        surfaces,
+        surfaces._cpp_object,
         [(s, o)],
         mesh._cpp_object,
         search_mode,
@@ -296,6 +296,7 @@ def test_packing(tmp_path, ct, gap, q_deg, delta, surface, disp):
     gap = contact.pack_gap(0)
     test_fn = contact.pack_test_functions(0, V._cpp_object)
     u_packed = contact.pack_u_contact(0, u._cpp_object)
+
     grad_test_fn = contact.pack_grad_test_functions(0, V._cpp_object)
     grad_u = contact.pack_grad_u_contact(0, u._cpp_object)
 

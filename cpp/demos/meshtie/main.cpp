@@ -21,12 +21,12 @@
 #include <dolfinx_contact/utils.h>
 
 using T = PetscScalar;
-using U = typename dolfinx::scalar_value_type_t<T>;
+using U = typename dolfinx::scalar_value_t<T>;
 
 int main(int argc, char* argv[])
 {
 
-  init_logging(argc, argv);
+  dolfinx::init_logging(argc, argv);
   PetscInitialize(&argc, &argv, nullptr, nullptr);
 
   // Set the logging thread name to show the process rank
@@ -53,20 +53,25 @@ int main(int argc, char* argv[])
     // Create function spaces
     auto ct = mesh->topology()->cell_type();
 
-    auto element_mu = basix::create_element<double>(
-        basix::element::family::P, dolfinx::mesh::cell_type_to_basix_type(ct),
-        0, basix::element::lagrange_variant::unset,
-        basix::element::dpc_variant::unset, true);
-    auto element = basix::create_element<double>(
-        basix::element::family::P, dolfinx::mesh::cell_type_to_basix_type(ct),
-        1, basix::element::lagrange_variant::unset,
-        basix::element::dpc_variant::unset, false);
+    auto element_mu
+        = std::make_shared<const dolfinx::fem::FiniteElement<double>>(
+            basix::create_element<double>(
+                basix::element::family::P,
+                dolfinx::mesh::cell_type_to_basix_type(ct), 0,
+                basix::element::lagrange_variant::unset,
+                basix::element::dpc_variant::unset, true));
+    auto element = std::make_shared<const dolfinx::fem::FiniteElement<double>>(
+        basix::create_element<double>(
+            basix::element::family::P,
+            dolfinx::mesh::cell_type_to_basix_type(ct), 1,
+            basix::element::lagrange_variant::unset,
+            basix::element::dpc_variant::unset, false),
+        std::vector<std::size_t>{(std::size_t)mesh->geometry().dim()});
 
-    auto V = std::make_shared<fem::FunctionSpace<double>>(
-        fem::create_functionspace(mesh, element,
-                                  {(std::size_t)mesh->geometry().dim()}));
-    auto V0 = std::make_shared<fem::FunctionSpace<double>>(
-        fem::create_functionspace(mesh, element_mu));
+    auto V = std::make_shared<dolfinx::fem::FunctionSpace<double>>(
+        dolfinx::fem::create_functionspace(mesh, element));
+    auto V0 = std::make_shared<dolfinx::fem::FunctionSpace<double>>(
+        dolfinx::fem::create_functionspace(mesh, element_mu));
 
     double E = 1000;
     double nu = 0.1;
@@ -77,7 +82,7 @@ int main(int argc, char* argv[])
     double mu_val = E / (2 * (1 + nu));
 
     // Create DG0 function for lame parameter lambda
-    auto lmbda = std::make_shared<fem::Function<T>>(V0);
+    auto lmbda = std::make_shared<dolfinx::fem::Function<T>>(V0);
     lmbda->interpolate(
         [lmbda_val](
             auto x) -> std::pair<std::vector<T>, std::vector<std::size_t>>
@@ -89,7 +94,7 @@ int main(int argc, char* argv[])
         });
 
     // create DG0 function for lame parameter mu
-    auto mu = std::make_shared<fem::Function<T>>(V0);
+    auto mu = std::make_shared<dolfinx::fem::Function<T>>(V0);
     mu->interpolate(
         [mu_val](auto x) -> std::pair<std::vector<T>, std::vector<std::size_t>>
         {
@@ -100,7 +105,7 @@ int main(int argc, char* argv[])
         });
 
     // Function for body force
-    auto f = std::make_shared<fem::Function<T>>(V);
+    auto f = std::make_shared<dolfinx::fem::Function<T>>(V);
     std::size_t bs = V->dofmap()->bs();
     f->interpolate(
         [bs](auto x) -> std::pair<std::vector<T>, std::vector<std::size_t>>
@@ -116,7 +121,7 @@ int main(int argc, char* argv[])
         });
 
     // Function for surface traction
-    auto t = std::make_shared<fem::Function<T>>(V);
+    auto t = std::make_shared<dolfinx::fem::Function<T>>(V);
 
     t->interpolate(
         [bs](auto x) -> std::pair<std::vector<T>, std::vector<std::size_t>>
@@ -144,29 +149,32 @@ int main(int argc, char* argv[])
       // Pack (domain id, indices) pairs
       for (auto id : ids)
       {
-        facet_domains.push_back(fem::compute_integration_domains(
-            fem::IntegralType::exterior_facet, *facet1.topology(),
-            facet1.find(id), facet1.dim()));
+        facet_domains.push_back(dolfinx::fem::compute_integration_domains(
+            dolfinx::fem::IntegralType::exterior_facet, *facet1.topology(),
+            facet1.find(id)));
         integration_domain.emplace_back(id, facet_domains.back());
       }
     }
 
     // Define variational forms
-    auto J = std::make_shared<fem::Form<T>>(
-        fem::create_form<T>(*form_linear_elasticity_J, {V, V},
-                            {{"mu", mu}, {"lmbda", lmbda}}, {}, {}, {}));
-    auto F = std::make_shared<fem::Form<T>>(fem::create_form<T>(
-        *form_linear_elasticity_F, {V}, {{"f", f}, {"t", t}}, {},
-        {{dolfinx::fem::IntegralType::exterior_facet, integration_domain}},
-        {}));
+    auto J
+        = std::make_shared<dolfinx::fem::Form<T>>(dolfinx::fem::create_form<T>(
+            *form_linear_elasticity_J, {V, V}, {{"mu", mu}, {"lmbda", lmbda}},
+            {}, {}, {}));
+    auto F
+        = std::make_shared<dolfinx::fem::Form<T>>(dolfinx::fem::create_form<T>(
+            *form_linear_elasticity_F, {V}, {{"f", f}, {"t", t}}, {},
+            {{dolfinx::fem::IntegralType::exterior_facet, integration_domain}},
+            {}));
 
     // Define boundary conditions
     const std::int32_t dirichlet_bdy = 12; // bottom face
     auto facets = facet1.find(dirichlet_bdy);
     auto bdofs = dolfinx::fem::locate_dofs_topological(
         *V->mesh()->topology_mutable(), *V->dofmap(), 2, facets);
-    auto bc = std::make_shared<const dolfinx::fem::DirichletBC<T>>(
-        std::vector<T>({0.0, 0.0, 0.0}), bdofs, V);
+    std::vector<T> val = {0.0, 0.0, 0.0};
+    auto bc
+        = std::make_shared<const dolfinx::fem::DirichletBC<T>>(val, bdofs, V);
 
     // Create meshties
     std::vector<std::int32_t> data = {contact_bdry_1, contact_bdry_2};
@@ -187,35 +195,39 @@ int main(int argc, char* argv[])
 
     // Create matrix and vector
     auto A = dolfinx::la::petsc::Matrix(
-        meshties.create_petsc_matrix(*J, std::string()), false);
+        meshties.create_petsc_matrix(*J, "mpiaij"), false);
     dolfinx::la::Vector<T> b(F->function_spaces()[0]->dofmap()->index_map,
                              F->function_spaces()[0]->dofmap()->index_map_bs());
 
     // Assemble vector
-    b.set(0.0);
-    meshties.assemble_vector(b.mutable_array(), *V,
+    std::ranges::fill(b.array(), 0.0);
+    meshties.assemble_vector(b.array(), *V,
                              dolfinx_contact::Problem::Elasticity);
-    dolfinx::fem::assemble_vector(b.mutable_array(), *F);
-    dolfinx::fem::apply_lifting<T, U>(b.mutable_array(), {J}, {{bc}}, {},
-                                      double(1.0));
+    dolfinx::fem::assemble_vector(b.array(), *F);
+
+    auto bcs_wrapped = std::vector<
+        std::reference_wrapper<const dolfinx::fem::DirichletBC<T>>>{*bc};
+    dolfinx::fem::apply_lifting(b.array(), {std::cref(*J)}, {bcs_wrapped}, {},
+                                double(1.0));
     b.scatter_rev(std::plus<T>());
-    bc->set(b.mutable_array(), std::nullopt);
+    bc->set(b.array(), std::nullopt);
 
     // Assemble matrix
     MatZeroEntries(A.mat());
     meshties.assemble_matrix(
-        la::petsc::Matrix::set_block_fn(A.mat(), ADD_VALUES),
+        dolfinx::la::petsc::Matrix::set_block_fn(A.mat(), ADD_VALUES),
         *J->function_spaces()[0], dolfinx_contact::Problem::Elasticity);
     MatAssemblyBegin(A.mat(), MAT_FLUSH_ASSEMBLY);
     MatAssemblyEnd(A.mat(), MAT_FLUSH_ASSEMBLY);
     dolfinx::fem::assemble_matrix(
         dolfinx::la::petsc::Matrix::set_block_fn(A.mat(), ADD_VALUES), *J,
-        {bc});
+        bcs_wrapped);
     MatAssemblyBegin(A.mat(), MAT_FLUSH_ASSEMBLY);
     MatAssemblyEnd(A.mat(), MAT_FLUSH_ASSEMBLY);
 
     dolfinx::fem::set_diagonal<T>(
-        dolfinx::la::petsc::Matrix::set_fn(A.mat(), INSERT_VALUES), *V, {bc});
+        dolfinx::la::petsc::Matrix::set_fn(A.mat(), INSERT_VALUES), *V,
+        bcs_wrapped);
     MatAssemblyBegin(A.mat(), MAT_FINAL_ASSEMBLY);
     MatAssemblyEnd(A.mat(), MAT_FINAL_ASSEMBLY);
 
@@ -246,7 +258,7 @@ int main(int argc, char* argv[])
     ksp.set_operator(A.mat());
 
     // displacement function
-    auto u = std::make_shared<fem::Function<T>>(V);
+    auto u = std::make_shared<dolfinx::fem::Function<T>>(V);
     dolfinx::la::petsc::Vector _u(
         dolfinx::la::petsc::create_vector_wrap(*u->x()), false);
     dolfinx::la::petsc::Vector _b(dolfinx::la::petsc::create_vector_wrap(b),

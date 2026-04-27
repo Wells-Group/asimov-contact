@@ -138,7 +138,7 @@ class ThermoElasticProblem:
 
         # Build near null space preventing rigid body motion of individual components
         tags = np.unique(subdomains.values)
-        ns = rigid_motions_nullspace_subdomains(u.function_space, subdomains, tags, num_domains)
+        ns = rigid_motions_nullspace_subdomains(u.function_space, subdomains, tags)
         self._mat_a.setNearNullSpace(ns)
 
     def f(self, x, _b):
@@ -300,7 +300,7 @@ surfaces = adjacencylist(data, offsets)
 
 # initialise meshties
 meshties = MeshTie(
-    [facet_marker._cpp_object], surfaces, contact, mesh._cpp_object, quadrature_degree=3
+    [facet_marker._cpp_object], surfaces._cpp_object, contact, mesh._cpp_object, quadrature_degree=3
 )
 meshties.generate_kernel_data(
     Problem.Poisson,

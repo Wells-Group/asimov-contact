@@ -22,7 +22,7 @@ from dolfinx.fem.forms import Form
 from dolfinx.fem.petsc import apply_lifting, assemble_matrix, assemble_vector, set_bc
 from dolfinx.graph import adjacencylist
 from dolfinx.io import XDMFFile
-from dolfinx.la import create_petsc_vector_wrap, vector
+from dolfinx.la import vector
 from dolfinx.mesh import create_mesh
 from dolfinx_contact.cpp import ContactMode, MeshTie, Problem
 from dolfinx_contact.helpers import rigid_motions_nullspace_subdomains
@@ -102,7 +102,7 @@ class MeshTieProblem:
             a.function_spaces[0].dofmap.index_map,
             a.function_spaces[0].dofmap.index_map_bs,
         )
-        self._b_petsc = create_petsc_vector_wrap(self._b)
+        self._b_petsc = self._b.petsc_vec
 
         # Initialise the input data for integration kernels
         self._meshties.generate_kernel_data(
@@ -116,7 +116,7 @@ class MeshTieProblem:
         # Build near null space preventing rigid body motion of
         # individual components
         tags = np.unique(subdomains.values)
-        ns = rigid_motions_nullspace_subdomains(u.function_space, subdomains, tags, len(tags))
+        ns = rigid_motions_nullspace_subdomains(u.function_space, subdomains, tags)
         self._mat_a.setNearNullSpace(ns)
 
     def f(self, x, _b):
@@ -184,7 +184,7 @@ with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
     topo = xdmf.read_topology_data(name=topo_name)
     x = xdmf.read_geometry_data(name="geometry")
     domain = Mesh(element("Lagrange", cell_type.name, cell_degree, shape=(x.shape[1],)))
-    mesh = create_mesh(MPI.COMM_WORLD, topo, x, domain)
+    mesh = create_mesh(MPI.COMM_WORLD, cells=topo, x=x, e=domain)
     tdim = mesh.topology.dim
     domain_marker = xdmf.read_meshtags(mesh, name=topo_name)
     mesh.topology.create_connectivity(tdim - 1, tdim)
@@ -279,7 +279,11 @@ search_mode = [ContactMode.ClosestPoint, ContactMode.ClosestPoint]
 
 # Initialise MeshTie class and generate MeshTie problem
 meshties = MeshTie(
-    [facet_marker._cpp_object], surfaces, contact_pairs, mesh._cpp_object, quadrature_degree=5
+    [facet_marker._cpp_object],
+    surfaces._cpp_object,
+    contact_pairs,
+    mesh._cpp_object,
+    quadrature_degree=5,
 )
 problem = MeshTieProblem(
     l_compiled,

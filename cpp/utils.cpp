@@ -4,11 +4,11 @@
 //
 // SPDX-License-Identifier:    MIT
 
-#include<algorithm>
 #include "utils.h"
 #include "RayTracing.h"
 #include "error_handling.h"
 #include "geometric_quantities.h"
+#include <algorithm>
 #include <dolfinx/geometry/BoundingBoxTree.h>
 #include <dolfinx/geometry/utils.h>
 #include <dolfinx/io/XDMFFile.h>
@@ -51,13 +51,13 @@ dolfinx_contact::read_mesh(std::string filename, std::string topo_name,
   if (dolfinx::MPI::rank(mesh->comm()) == 0)
     std::cout << "Reading domain MeshTags ..." << std::endl;
   dolfinx::mesh::MeshTags<std::int32_t> domain1
-      = file.read_meshtags(*mesh, volume_markers);
+      = file.read_meshtags(*mesh, volume_markers, std::nullopt);
 
   // Read facet meshtags
   if (dolfinx::MPI::rank(mesh->comm()) == 0)
     std::cout << "Reading facet MeshTags ..." << std::endl;
   dolfinx::mesh::MeshTags<std::int32_t> facet1
-      = file.read_meshtags(*mesh, facet_markers);
+      = file.read_meshtags(*mesh, facet_markers, std::nullopt);
 
   file.close();
 
@@ -192,7 +192,7 @@ dolfinx_contact::sort_cells(std::span<const std::int32_t> cells,
   if (cells.size() == 0)
   {
     std::vector<std::int32_t> unique_cells(0);
-    std::vector<std::int32_t> offsets = {0,0};
+    std::vector<std::int32_t> offsets = {0, 0};
     return std::make_pair(unique_cells, offsets);
   }
   assert(perm.size() == cells.size());
@@ -200,7 +200,7 @@ dolfinx_contact::sort_cells(std::span<const std::int32_t> cells,
   // FIXME: Workaround for the case when all cells are -1
   std::vector<std::int32_t> tmp_cells(cells.begin(), cells.end());
   tmp_cells.erase(std::unique(tmp_cells.begin(), tmp_cells.end()),
-  tmp_cells.end());
+                  tmp_cells.end());
 
   if (tmp_cells.size() == 1 && tmp_cells[0] == -1)
   {
@@ -208,9 +208,11 @@ dolfinx_contact::sort_cells(std::span<const std::int32_t> cells,
     std::vector<std::int32_t> offsets = {0, (std::int32_t)cells.size()};
     return std::make_pair(unique_cells, offsets);
   }
-  // FIXME: Remove when https://github.com/FEniCS/dolfinx/pull/3724 is merged and released
-  if (*std::min_element(tmp_cells.cbegin(), tmp_cells.cend())<0)
-    throw std::runtime_error("Cell indices are negative, cannot sort with current algortihm.");
+  // FIXME: Remove when https://github.com/FEniCS/dolfinx/pull/3724 is merged
+  // and released
+  if (*std::min_element(tmp_cells.cbegin(), tmp_cells.cend()) < 0)
+    throw std::runtime_error(
+        "Cell indices are negative, cannot sort with current algortihm.");
 
   const auto num_cells = (std::int32_t)cells.size();
   std::vector<std::int32_t> unique_cells(num_cells);
@@ -374,7 +376,7 @@ std::array<std::size_t, 4> dolfinx_contact::evaluate_basis_shape(
       = V.element();
   assert(element);
   int bs_element = element->block_size();
-  std::size_t value_size = V.value_size() / bs_element;
+  std::size_t value_size = V.element()->reference_value_size();
   std::size_t space_dimension = element->space_dimension() / bs_element;
   return {num_derivatives * gdim + 1, num_points, space_dimension, value_size};
 }
@@ -423,8 +425,7 @@ void dolfinx_contact::evaluate_basis_functions(
       = V.element();
   assert(element);
   const int bs_element = element->block_size();
-  const std::size_t reference_value_size
-      = element->reference_value_size() / bs_element;
+  const std::size_t reference_value_size = element->reference_value_size();
   const std::size_t space_dimension = element->space_dimension() / bs_element;
 
   // If the space has sub elements, concatenate the evaluations on the sub
@@ -576,7 +577,9 @@ void dolfinx_contact::evaluate_basis_functions(
             MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent);
         for (std::size_t m = 0; m < du.extent(0); ++m)
           for (std::size_t n = 0; n < du.extent(1); ++n)
+          {
             du(m, n) += K(j, k) * du_temp(m, n);
+          }
       }
     }
   }
@@ -1143,7 +1146,7 @@ MatNullSpace dolfinx_contact::build_nullspace_multibody(
   auto map = V.dofmap()->index_map;
   int bs = V.dofmap()->index_map_bs();
   std::vector<dolfinx::la::Vector<PetscScalar>> basis(
-      dim * tags.size(), la::Vector<PetscScalar>(map, bs));
+      dim * tags.size(), dolfinx::la::Vector<PetscScalar>(map, bs));
 
   // loop over components
   for (std::size_t j = 0; j < tags.size(); ++j)
@@ -1159,17 +1162,16 @@ MatNullSpace dolfinx_contact::build_nullspace_multibody(
     // Remove duplicates
     dolfinx::radix_sort(dofs);
     dofs.erase(std::unique(dofs.begin(), dofs.end()), dofs.end());
-
     // Translations
     for (std::size_t k = 0; k < gdim; ++k)
     {
-      std::span<PetscScalar> x = basis[j * dim + k].mutable_array();
+      std::span<PetscScalar> x = basis[j * dim + k].array();
       for (auto dof : dofs)
         x[gdim * dof + k] = 1.0;
     }
 
     // Rotations
-    auto x1 = basis[j * dim + gdim].mutable_array();
+    auto& x1 = basis[j * dim + gdim].array();
 
     const std::vector<double> x = V.tabulate_dof_coordinates(false);
     if (gdim == 2)
@@ -1183,8 +1185,8 @@ MatNullSpace dolfinx_contact::build_nullspace_multibody(
     }
     else
     {
-      auto x2 = basis[j * dim + 4].mutable_array();
-      auto x3 = basis[j * dim + 5].mutable_array();
+      auto& x2 = basis[j * dim + 4].array();
+      auto& x3 = basis[j * dim + 5].array();
       for (auto dof : dofs)
       {
         std::span<const double, 3> xd(x.data() + 3 * dof, 3);
@@ -1219,8 +1221,8 @@ MatNullSpace dolfinx_contact::build_nullspace_multibody(
                  [length](auto& x)
                  { return std::span(x.array().data(), length); });
   MPI_Comm comm = V.mesh()->comm();
-  std::vector<Vec> v = la::petsc::create_vectors(comm, basis_local);
-  MatNullSpace ns = la::petsc::create_nullspace(comm, v);
+  std::vector<Vec> v = dolfinx::la::petsc::create_vectors(comm, basis_local);
+  MatNullSpace ns = dolfinx::la::petsc::create_nullspace(comm, v);
   std::for_each(v.begin(), v.end(), [](auto v0) { VecDestroy(&v0); });
   return ns;
 }

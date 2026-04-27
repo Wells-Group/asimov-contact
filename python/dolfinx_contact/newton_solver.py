@@ -452,6 +452,7 @@ class NewtonSolver:
             else:
                 print("Newton Solver did non converge", flush=True)
         t.stop()
+        t.flush()
         return self.iteration, newton_converged
 
     def __del__(self):

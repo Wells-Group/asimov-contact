@@ -6,7 +6,7 @@ from pathlib import Path
 
 from mpi4py import MPI
 
-import dolfinx.io
+import dolfinx.io.gmsh
 
 
 def convert_mesh_new(filename: Path, outname: Path, gdim: int = 3):
@@ -22,14 +22,21 @@ def convert_mesh_new(filename: Path, outname: Path, gdim: int = 3):
             The geometrical dimension of the mesh
     """
     if MPI.COMM_WORLD.rank == 0:
-        mesh, ct, ft = dolfinx.io.gmshio.read_from_msh(filename, MPI.COMM_SELF, 0, gdim=gdim)
-        ct.name = "cell_marker"
-        ft.name = "facet_marker"
+        mesh_data = dolfinx.io.gmsh.read_from_msh(filename, MPI.COMM_SELF, 0, gdim=gdim)
+        mesh = mesh_data.mesh
+
         with dolfinx.io.XDMFFile(mesh.comm, outname, "w") as xdmf:
             xdmf.write_mesh(mesh)
-            xdmf.write_meshtags(ct, mesh.geometry)
-            mesh.topology.create_connectivity(mesh.topology.dim - 1, mesh.topology.dim)
-            xdmf.write_meshtags(ft, mesh.geometry)
+            if mesh_data.cell_tags is not None:
+                ct = mesh_data.cell_tags
+                ct.name = "cell_marker"
+                xdmf.write_meshtags(ct, mesh.geometry)
+            if mesh_data.facet_tags is not None:
+                mesh.topology.create_connectivity(mesh.topology.dim - 1, mesh.topology.dim)
+                ft = mesh_data.facet_tags
+                if ft is not None:
+                    ft.name = "facet_marker"
+                    xdmf.write_meshtags(ft, mesh.geometry)
     MPI.COMM_WORLD.Barrier()
 
 
@@ -51,12 +58,16 @@ def convert_mesh(filename: str, outname: str, gdim: int = 3):
     oname = outname.split(".xdmf")[0]
 
     if MPI.COMM_WORLD.rank == 0:
-        mesh, ct, ft = dolfinx.io.gmshio.read_from_msh(f"{fname}.msh", MPI.COMM_SELF, 0, gdim=gdim)
+        mesh_data = dolfinx.io.gmsh.read_from_msh(f"{fname}.msh", MPI.COMM_SELF, 0, gdim=gdim)
+        mesh = mesh_data.mesh
+        ct = mesh_data.cell_tags
         ct.name = "cell_marker"
-        ft.name = "facet_marker"
+        ft = mesh_data.facet_tags
         with dolfinx.io.XDMFFile(mesh.comm, f"{oname}.xdmf", "w") as xdmf:
             xdmf.write_mesh(mesh)
             xdmf.write_meshtags(ct, mesh.geometry)
-            mesh.topology.create_connectivity(mesh.topology.dim - 1, mesh.topology.dim)
-            xdmf.write_meshtags(ft, mesh.geometry)
+            if ft is not None:
+                ft.name = "facet_marker"
+                mesh.topology.create_connectivity(mesh.topology.dim - 1, mesh.topology.dim)
+                xdmf.write_meshtags(ft, mesh.geometry)
     MPI.COMM_WORLD.Barrier()

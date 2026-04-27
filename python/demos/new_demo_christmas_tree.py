@@ -9,12 +9,12 @@ from mpi4py import MPI
 from petsc4py.PETSc import InsertMode, ScatterMode  # type: ignore
 
 import dolfinx.fem as _fem
-import dolfinx.io.gmshio
+import dolfinx.io.gmsh
 import gmsh
 import numpy as np
 import ufl
 from dolfinx import default_scalar_type, log
-from dolfinx.common import Timer, TimingType, list_timings, timed, timing
+from dolfinx.common import Timer, list_timings, timed, timing
 from dolfinx.fem.petsc import (
     apply_lifting,
     assemble_matrix,
@@ -67,9 +67,10 @@ def run_solver(
         model.add(name)
         model.setCurrent(name)
         model = create_christmas_tree_mesh_3D(model, res=res, split=split, n1=81, n2=41)
-        mesh, domain_marker, facet_marker = dolfinx.io.gmshio.model_to_mesh(
-            model, MPI.COMM_WORLD, 0, gdim=3
-        )
+        mesh_data = dolfinx.io.gmsh.model_to_mesh(model, MPI.COMM_WORLD, 0, gdim=3)
+        mesh = mesh_data.mesh
+        domain_marker = mesh_data.cell_tags
+        facet_marker = mesh_data.facet_tags
 
         tdim = mesh.topology.dim
 
@@ -126,9 +127,10 @@ def run_solver(
         model.add(name)
         model.setCurrent(name)
         model = create_christmas_tree_mesh(model, res=res, split=split)
-        mesh, domain_marker, facet_marker = dolfinx.io.gmshio.model_to_mesh(
-            model, MPI.COMM_WORLD, 0, gdim=2
-        )
+        mesh_data = dolfinx.io.gmsh.model_to_mesh(model, MPI.COMM_WORLD, 0, gdim=2)
+        mesh = mesh_data.mesh
+        domain_marker = mesh_data.cell_tags
+        facet_marker = mesh_data.facet_tags
 
         tdim = mesh.topology.dim
 
@@ -352,7 +354,7 @@ def run_solver(
 
     # create vector and matrix
     A = contact_problem.create_matrix(J_compiled)
-    b = create_vector(F_compiled)
+    b = create_vector(_fem.extract_function_spaces(F_compiled))
 
     # Set up snes solver for nonlinear solver
     newton_solver = NewtonSolver(mesh.comm, A, b, contact_problem.coeffs)
@@ -363,7 +365,7 @@ def run_solver(
 
     # Set rigid motion nullspace
     null_space = rigid_motions_nullspace_subdomains(
-        V, domain_marker, np.unique(domain_marker.values), 2
+        V, domain_marker, np.unique(domain_marker.values)
     )
     newton_solver.A.setNearNullSpace(null_space)
 
@@ -386,7 +388,7 @@ def run_solver(
         with Timer(timing_str):
             n, converged = newton_solver.solve(du, write_solution=True)
         num_newton_its[i] = n
-        newton_time[i] = timing(timing_str)[1]
+        newton_time[i] = timing(timing_str)[1].total_seconds()
         num_krylov_its[i] = newton_solver.krylov_iterations
         du.x.scatter_forward()
         u.x.array[:] += du.x.array[:]
@@ -409,7 +411,7 @@ def run_solver(
     sigma_dev = sigma(u1) - (1 / 3) * ufl.tr(sigma(u1)) * ufl.Identity(len(u1))
     sigma_vm = ufl.sqrt((3 / 2) * ufl.inner(sigma_dev, sigma_dev))
     sigma_vm_h.name = "vonMises"
-    sigma_vm_expr = _fem.Expression(sigma_vm, W.element.interpolation_points())
+    sigma_vm_expr = _fem.Expression(sigma_vm, W.element.interpolation_points)
     sigma_vm_h.interpolate(sigma_vm_expr)
     vtx = VTXWriter(mesh.comm, f"results/xmas_{size}.bp", [u1, sigma_vm_h], "bp4")
     vtx.write(0)
@@ -419,7 +421,7 @@ def run_solver(
         xdmf.write_meshtags(process_marker, mesh.geometry)
 
     if set_timing:
-        list_timings(mesh.comm, [TimingType.wall])
+        list_timings(mesh.comm)
 
     if outfile is None:
         outfile = sys.stdout
@@ -429,12 +431,10 @@ def run_solver(
     if mesh.comm.rank == 0:
         print("-" * 25, file=outfile)
         print(f"Newton options {newton_options}", file=outfile)
+        dm = u1.function_space.dofmap
+        im = dm.index_map
         print(
-            f"num_dofs: {
-                u1.function_space.dofmap.index_map_bs
-                * u1.function_space.dofmap.index_map.size_global
-            }"
-            + f", {mesh.topology.cell_type}",
+            f"num_dofs: {dm.index_map_bs * im.size_global}" + f", {mesh.topology.cell_type}",
             file=outfile,
         )
         print(

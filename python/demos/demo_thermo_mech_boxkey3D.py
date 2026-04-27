@@ -11,7 +11,7 @@ import dolfinx.fem as _fem
 import numpy as np
 import ufl
 from dolfinx import default_scalar_type, io, log
-from dolfinx.common import Timer, TimingType, list_timings, timed
+from dolfinx.common import Timer, list_timings, timed
 from dolfinx.fem import (
     Function,
     dirichletbc,
@@ -250,7 +250,7 @@ def compute_jacobian_matrix(x, a_mat, coeffs):
 
 # create vector and matrix
 a_mat = contact_problem.create_matrix(J_compiled)
-b = create_vector(F_compiled)
+b = create_vector(_fem.extract_function_spaces(F_compiled))
 
 
 # Set up snes solver for nonlinear solver
@@ -261,9 +261,7 @@ newton_solver.set_jacobian(compute_jacobian_matrix)
 newton_solver.set_coefficients(compute_coefficients)
 
 # Set rigid motion nullspace
-null_space = rigid_motions_nullspace_subdomains(
-    V, domain_marker, np.unique(domain_marker.values), num_domains=2
-)
+null_space = rigid_motions_nullspace_subdomains(V, domain_marker, np.unique(domain_marker.values))
 newton_solver.A.setNearNullSpace(null_space)
 
 # Set Newton solver options
@@ -292,4 +290,4 @@ for i in range(steps):
     vtx.write(i + 1)
 vtx.close()
 timer.stop()
-list_timings(MPI.COMM_WORLD, [TimingType.wall])
+list_timings(MPI.COMM_WORLD)

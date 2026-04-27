@@ -41,7 +41,7 @@ def test_raytracing_3D(cell_type):
         boundary_cells = dolfinx.mesh.compute_incident_entities(
             mesh.topology, facets, tdim - 1, tdim
         )
-        bb_tree = dolfinx.geometry.bb_tree(mesh, tdim, boundary_cells)
+        bb_tree = dolfinx.geometry.bb_tree(mesh, tdim, padding=1e-10, entities=boundary_cells)
         midpoint_tree = dolfinx.geometry.create_midpoint_tree(mesh, tdim, boundary_cells)
 
         # Find closest cell using closest point projection
@@ -84,7 +84,7 @@ def test_raytracing_3D_corner(cell_type):
         boundary_cells = dolfinx.mesh.compute_incident_entities(
             mesh.topology, facets, tdim - 1, tdim
         )
-        bbtree = dolfinx.geometry.bb_tree(mesh, tdim, boundary_cells)
+        bbtree = dolfinx.geometry.bb_tree(mesh, tdim, padding=1e-10, entities=boundary_cells)
         midpoint_tree = dolfinx.geometry.create_midpoint_tree(mesh, tdim, boundary_cells)
 
         # Find closest cell using closest point projection
@@ -126,7 +126,7 @@ def test_raytracing_2D(cell_type):
         boundary_cells = dolfinx.mesh.compute_incident_entities(
             mesh.topology, facets, tdim - 1, tdim
         )
-        bbtree = dolfinx.geometry.bb_tree(mesh, tdim, boundary_cells)
+        bbtree = dolfinx.geometry.bb_tree(mesh, tdim, padding=1e-10, entities=boundary_cells)
         midpoint_tree = dolfinx.geometry.create_midpoint_tree(mesh, tdim, boundary_cells)
         op = np.array([origin[0], origin[1], 0])
         # Find closest cell using closest point projection
@@ -165,7 +165,7 @@ def test_raytracing_2D_corner(cell_type):
         boundary_cells = dolfinx.mesh.compute_incident_entities(
             mesh.topology, facets, tdim - 1, tdim
         )
-        bbtree = dolfinx.geometry.bb_tree(mesh, tdim, boundary_cells)
+        bbtree = dolfinx.geometry.bb_tree(mesh, tdim, entities=boundary_cells)
         midpoint_tree = dolfinx.cpp.geometry.create_midpoint_tree(
             mesh._cpp_object, tdim, boundary_cells
         )
@@ -195,7 +195,7 @@ def test_raytracing_manifold(cell_type):
         topology = np.array([[1, 3, 2], [0, 3, 1]], dtype=np.int32)
 
     domain = ufl.Mesh(basix.ufl.element("Lagrange", cell_type.name, 1, shape=(3,)))
-    mesh = dolfinx.mesh.create_mesh(MPI.COMM_WORLD, topology, geometry, domain)
+    mesh = dolfinx.mesh.create_mesh(MPI.COMM_WORLD, cells=topology, x=geometry, e=domain)
 
     exact_point = np.array([0.23, 1, 0.5])
     normal = np.array([0, 1 / np.sqrt(5), 2 / np.sqrt(5)])

@@ -8,16 +8,17 @@ import sys
 from mpi4py import MPI
 from petsc4py import PETSc
 
-import dolfinx.io.gmshio
+import dolfinx.io.gmsh as gmshio
 import gmsh
 import numpy as np
 import ufl
 from dolfinx import default_scalar_type, log
-from dolfinx.common import Timer, TimingType, list_timings, timing
+from dolfinx.common import Timer, list_timings, timing
 from dolfinx.fem import (
     Constant,
     Function,
     dirichletbc,
+    extract_function_spaces,
     form,
     functionspace,
     locate_dofs_topological,
@@ -67,9 +68,10 @@ def run_demo(simplex, E, nu, gamma, theta, lifting, outfile, ksp_view, timing_vi
     model.add(name)
     model.setCurrent(name)
     model = create_box_mesh_3D(model, simplex, gap=gap, width=H, offset=0.0)
-    mesh, domain_marker, facet_marker = dolfinx.io.gmshio.model_to_mesh(
-        model, MPI.COMM_WORLD, 0, gdim=3
-    )
+    mesh_data = gmshio.model_to_mesh(model, MPI.COMM_WORLD, 0, gdim=3)
+    mesh = mesh_data.mesh
+    domain_marker = mesh_data.cell_tags
+    facet_marker = mesh_data.facet_tags
 
     gmsh.finalize()
 
@@ -172,7 +174,11 @@ def run_demo(simplex, E, nu, gamma, theta, lifting, outfile, ksp_view, timing_vi
 
     # initialise meshties
     meshties = MeshTie(
-        [facet_marker._cpp_object], surfaces, contact, mesh._cpp_object, quadrature_degree=5
+        [facet_marker._cpp_object],
+        surfaces._cpp_object,
+        contact,
+        mesh._cpp_object,
+        quadrature_degree=5,
     )
     meshties.generate_kernel_data(
         Problem.Elasticity,
@@ -184,7 +190,7 @@ def run_demo(simplex, E, nu, gamma, theta, lifting, outfile, ksp_view, timing_vi
 
     # create matrix, vector
     A = meshties.create_matrix(J._cpp_object)
-    b = create_vector(F)
+    b = create_vector(extract_function_spaces(F))
 
     # Assemble right hand side
     b.zeroEntries()
@@ -212,7 +218,7 @@ def run_demo(simplex, E, nu, gamma, theta, lifting, outfile, ksp_view, timing_vi
 
     # Set rigid motion nullspace
     null_space = rigid_motions_nullspace_subdomains(
-        V, domain_marker, np.unique(domain_marker.values), num_domains=2
+        V, domain_marker, np.unique(domain_marker.values)
     )
     A.setNearNullSpace(null_space)
 
@@ -254,18 +260,17 @@ def run_demo(simplex, E, nu, gamma, theta, lifting, outfile, ksp_view, timing_vi
         uh.name = "u"
         xdmf.write_function(uh)
     if timing_view:
-        list_timings(mesh.comm, [TimingType.wall])
+        list_timings(mesh.comm)
 
     if outfile is None:
         ofile = sys.stdout
     else:
         ofile = open(outfile, "a")
     print("-" * 25, file=ofile)
+    dm = uh.function_space.dofmap
+    im = dm.index_map
     print(
-        f"num_dofs: {
-            uh.function_space.dofmap.index_map_bs * uh.function_space.dofmap.index_map.size_global
-        }"
-        + f", {mesh.topology.cell_type}",
+        f"num_dofs: {dm.index_map_bs * im.size_global}" + f", {mesh.topology.cell_type}",
         file=ofile,
     )
     print(f"Krylov solver {solver_time}", file=ofile)

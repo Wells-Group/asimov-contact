@@ -30,7 +30,7 @@
 #include <dolfinx/mesh/MeshTags.h>
 
 using T = PetscScalar;
-using U = typename dolfinx::scalar_value_type_t<T>;
+using U = typename dolfinx::scalar_value_t<T>;
 
 namespace dolfinx_contact
 {
@@ -431,7 +431,7 @@ compute_projection_map(const dolfinx::mesh::Mesh<double>& mesh,
   }
 
   // Compute closest entity for each point
-  dolfinx::geometry::BoundingBoxTree bbox(mesh, tdim - 1, facets);
+  dolfinx::geometry::BoundingBoxTree bbox(mesh, tdim - 1, 1e-10,facets);
   dolfinx::geometry::BoundingBoxTree midpoint_tree
       = dolfinx::geometry::create_midpoint_tree(mesh, tdim - 1, facets);
   std::vector<std::int32_t> closest_facets

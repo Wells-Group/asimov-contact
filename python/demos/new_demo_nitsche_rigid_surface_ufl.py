@@ -6,7 +6,7 @@ import argparse
 
 from mpi4py import MPI
 
-import dolfinx.io.gmshio
+import dolfinx.io.gmsh
 import gmsh
 import numpy as np
 from dolfinx.io import XDMFFile
@@ -48,7 +48,9 @@ def run_solver(
         model.add(name)
         model.setCurrent(name)
         model = create_sphere_plane_mesh(model)
-        mesh, _, facet_marker = dolfinx.io.gmshio.model_to_mesh(model, MPI.COMM_WORLD, 0, gdim=3)
+        mesh_data = dolfinx.io.gmsh.model_to_mesh(model, MPI.COMM_WORLD, 0, gdim=3)
+        mesh = mesh_data.mesh
+        facet_marker = mesh_data.facet_tags
 
         top_value = 2
         bottom_value = 1
@@ -60,7 +62,9 @@ def run_solver(
         model.add(name)
         model.setCurrent(name)
         model = create_circle_plane_mesh(model)
-        mesh, _, facet_marker = dolfinx.io.gmshio.model_to_mesh(model, MPI.COMM_WORLD, 0, gdim=2)
+        mesh_data = dolfinx.io.gmsh.model_to_mesh(model, MPI.COMM_WORLD, 0, gdim=2)
+        mesh = mesh_data.mesh
+        facet_marker = mesh_data.facet_tags
 
         top_value = 2
         bottom_value = 4

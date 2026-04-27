@@ -12,7 +12,7 @@ import dolfinx.fem as _fem
 import numpy as np
 import ufl
 from dolfinx import default_scalar_type, log
-from dolfinx.common import Timer, TimingType, list_timings, timed, timing
+from dolfinx.common import Timer, list_timings, timed, timing
 from dolfinx.fem.petsc import assemble_matrix, assemble_vector, create_vector
 from dolfinx.graph import adjacencylist
 from dolfinx.io import VTXWriter, XDMFFile
@@ -267,7 +267,7 @@ if __name__ == "__main__":
         # create vector and matrix
 
     A = contact_problem.create_matrix(J_compiled)
-    b = create_vector(F_compiled)
+    b = create_vector(_fem.extract_function_spaces(F_compiled))
 
     # Set up snes solver for nonlinear solver
     newton_solver = NewtonSolver(mesh.comm, A, b, contact_problem.coeffs)
@@ -278,7 +278,7 @@ if __name__ == "__main__":
 
     # Set rigid motion nullspace
     null_space = rigid_motions_nullspace_subdomains(
-        V, domain_marker, np.unique(domain_marker.values), num_domains=2
+        V, domain_marker, np.unique(domain_marker.values)
     )
     newton_solver.A.setNearNullSpace(null_space)
 
@@ -326,9 +326,10 @@ if __name__ == "__main__":
         print("-" * 25, file=outfile)
         print(f"Newton options {newton_options}", file=outfile)
         Vs = u.function_space
+        dm = Vs.dofmap
+        im = dm.index_map
         print(
-            f"num_dofs: {Vs.dofmap.index_map_bs * Vs.dofmap.index_map.size_global}"
-            + f", {mesh.topology.cell_types[0]}",
+            f"num_dofs: {dm.index_map_bs * im.size_global}" + f", {mesh.topology.cell_types[0]}",
             file=outfile,
         )
         print(
@@ -344,4 +345,4 @@ if __name__ == "__main__":
         print(f"Krylov iterations {num_krylov_its},", file=outfile)
         print("-" * 25, file=outfile)
 
-    list_timings(MPI.COMM_WORLD, [TimingType.wall])
+    list_timings(MPI.COMM_WORLD)

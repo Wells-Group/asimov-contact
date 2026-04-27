@@ -9,17 +9,18 @@ from pathlib import Path
 from mpi4py import MPI
 from petsc4py.PETSc import InsertMode, ScatterMode  # type: ignore
 
-import dolfinx.io.gmshio
+import dolfinx.io.gmsh
 import gmsh
 import numpy as np
 import ufl
 from dolfinx import default_scalar_type, log
-from dolfinx.common import Timer, TimingType, list_timings, timed, timing
+from dolfinx.common import Timer, list_timings, timed, timing
 from dolfinx.fem import (
     Constant,
     Expression,
     Function,
     dirichletbc,
+    extract_function_spaces,
     form,
     functionspace,
     locate_dofs_topological,
@@ -103,9 +104,10 @@ def run_soler(args):
             model.add(name)
             model.setCurrent(name)
             model = create_box_mesh_3D(model, simplex, order=order)
-            mesh, domain_marker, _ = dolfinx.io.gmshio.model_to_mesh(
-                model, MPI.COMM_WORLD, 0, gdim=3
-            )
+            mesh_data = dolfinx.io.gmsh.model_to_mesh(model, MPI.COMM_WORLD, 0, gdim=3)
+            mesh = mesh_data.mesh
+            domain_marker = mesh_data.cell_tags
+            facet_marker = mesh_data.facet_tags
             tdim = mesh.topology.dim
             mesh.topology.create_connectivity(tdim - 1, 0)
             mesh.topology.create_connectivity(tdim - 1, tdim)
@@ -140,9 +142,10 @@ def run_soler(args):
             model.add(name)
             model.setCurrent(name)
             model = create_sphere_plane_mesh(model, order=order, res=res)
-            mesh, domain_marker, facet_marker = dolfinx.io.gmshio.model_to_mesh(
-                model, MPI.COMM_WORLD, 0, gdim=3
-            )
+            mesh_data = dolfinx.io.gmsh.model_to_mesh(model, MPI.COMM_WORLD, 0, gdim=3)
+            mesh = mesh_data.mesh
+            domain_marker = mesh_data.cell_tags
+            facet_marker = mesh_data.facet_tags
             dirichlet_bdy_1 = 2
             contact_bdy_1 = 1
             contact_bdy_2 = 8
@@ -157,9 +160,10 @@ def run_soler(args):
             model.add(name)
             model.setCurrent(name)
             model = create_cylinder_cylinder_mesh(model, res=res, simplex=simplex)
-            mesh, domain_marker, _ = dolfinx.io.gmshio.model_to_mesh(
-                model, MPI.COMM_WORLD, 0, gdim=3
-            )
+            mesh_data = dolfinx.io.gmsh.model_to_mesh(model, MPI.COMM_WORLD, 0, gdim=3)
+            mesh = mesh_data.mesh
+            domain_marker = mesh_data.cell_tags
+            facet_marker = mesh_data.facet_tags
             mesh.name = "cylinder_cylinder"
             domain_marker.name = "domain_marker"
             tdim = mesh.topology.dim
@@ -212,9 +216,10 @@ def run_soler(args):
             model.add(name)
             model.setCurrent(name)
             model = create_gmsh_box_mesh_2D(model, quads=not simplex, res=res, order=order)
-            mesh, domain_marker, facet_marker = dolfinx.io.gmshio.model_to_mesh(
-                model, MPI.COMM_WORLD, 0, gdim=2
-            )
+            mesh_data = dolfinx.io.gmsh.model_to_mesh(model, MPI.COMM_WORLD, 0, gdim=2)
+            mesh = mesh_data.mesh
+            domain_marker = mesh_data.cell_tags
+            facet_marker = mesh_data.facet_tags
 
             dirichlet_bdy_1 = 5
             contact_bdy_1 = 3
@@ -237,9 +242,10 @@ def run_soler(args):
                 height=0.1,
                 length=1.0,
             )
-            mesh, domain_marker, facet_marker = dolfinx.io.gmshio.model_to_mesh(
-                model, MPI.COMM_WORLD, 0, gdim=2
-            )
+            mesh_data = dolfinx.io.gmsh.model_to_mesh(model, MPI.COMM_WORLD, 0, gdim=2)
+            mesh = mesh_data.mesh
+            domain_marker = mesh_data.cell_tags
+            facet_marker = mesh_data.facet_tags
             dirichlet_bdy_1 = 8
             contact_bdy_1 = 10
             contact_bdy_2 = 6
@@ -251,9 +257,10 @@ def run_soler(args):
             model.add(name)
             model.setCurrent(name)
             model = create_circle_circle_mesh(model, quads=(not simplex), res=res, order=order)
-            mesh, domain_marker, _ = dolfinx.io.gmshio.model_to_mesh(
-                model, MPI.COMM_WORLD, 0, gdim=2
-            )
+            mesh_data = dolfinx.io.gmsh.model_to_mesh(model, MPI.COMM_WORLD, 0, gdim=2)
+            mesh = mesh_data.mesh
+            domain_marker = mesh_data.cell_tags
+            facet_marker = mesh_data.facet_tags
             tdim = mesh.topology.dim
             mesh.topology.create_connectivity(tdim - 1, 0)
             mesh.topology.create_connectivity(tdim - 1, tdim)
@@ -459,7 +466,7 @@ def run_soler(args):
 
     # create vector and matrix
     a_mat = contact_problem.create_matrix(J_compiled)
-    b = create_vector(F_compiled)
+    b = create_vector(extract_function_spaces(F_compiled))
 
     # Set up snes solver for nonlinear solver
     newton_solver = NewtonSolver(mesh.comm, a_mat, b, contact_problem.coeffs)
@@ -469,12 +476,13 @@ def run_soler(args):
     newton_solver.set_coefficients(compute_coefficients)
 
     # Set rigid motion nullspace
+
     null_space = rigid_motions_nullspace_subdomains(
         V,
         domain_marker,
         np.unique(domain_marker.values),
-        num_domains=len(np.unique(domain_marker.values)),
     )
+
     newton_solver.A.setNearNullSpace(null_space)
 
     # Set Newton solver options
@@ -512,7 +520,7 @@ def run_soler(args):
     sigma_dev = sigma(u) - (1 / 3) * ufl.tr(sigma(u)) * ufl.Identity(len(u))
     sigma_vm = ufl.sqrt((3 / 2) * ufl.inner(sigma_dev, sigma_dev))
     W = functionspace(mesh, ("Discontinuous Lagrange", order - 1))
-    sigma_vm_expr = Expression(sigma_vm, W.element.interpolation_points())
+    sigma_vm_expr = Expression(sigma_vm, W.element.interpolation_points)
     sigma_vm_h = Function(W)
     sigma_vm_h.interpolate(sigma_vm_expr)
     sigma_vm_h.name = "vonMises"
@@ -529,7 +537,7 @@ def run_soler(args):
         xdmf.write_mesh(mesh)
         xdmf.write_meshtags(process_marker, mesh.geometry)
     if timing_disp:
-        list_timings(mesh.comm, [TimingType.wall])
+        list_timings(mesh.comm)
 
     if outfile is None:
         outfile = sys.stdout
@@ -539,11 +547,10 @@ def run_soler(args):
     if mesh.comm.rank == 0:
         print("-" * 25, file=outfile)
         print(f"Newton options {newton_options}", file=outfile)
+        dm = u.function_space.dofmap
+        im = dm.index_map
         print(
-            f"num_dofs: {
-                u.function_space.dofmap.index_map_bs * u.function_space.dofmap.index_map.size_global
-            }"
-            + f", {mesh.topology.cell_type}",
+            f"num_dofs: {dm.index_map_bs * im.size_global}" + f", {mesh.topology.cell_type}",
             file=outfile,
         )
         print(
