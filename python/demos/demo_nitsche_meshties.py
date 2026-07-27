@@ -13,11 +13,12 @@ import gmsh
 import numpy as np
 import ufl
 from dolfinx import default_scalar_type, log
-from dolfinx.common import Timer, TimingType, list_timings, timing
+from dolfinx.common import Timer, list_timings, timing
 from dolfinx.fem import (
     Constant,
     Function,
     dirichletbc,
+    extract_function_spaces,
     form,
     functionspace,
     locate_dofs_topological,
@@ -173,7 +174,11 @@ def run_demo(simplex, E, nu, gamma, theta, lifting, outfile, ksp_view, timing_vi
 
     # initialise meshties
     meshties = MeshTie(
-        [facet_marker._cpp_object], surfaces, contact, mesh._cpp_object, quadrature_degree=5
+        [facet_marker._cpp_object],
+        surfaces._cpp_object,
+        contact,
+        mesh._cpp_object,
+        quadrature_degree=5,
     )
     meshties.generate_kernel_data(
         Problem.Elasticity,
@@ -185,7 +190,7 @@ def run_demo(simplex, E, nu, gamma, theta, lifting, outfile, ksp_view, timing_vi
 
     # create matrix, vector
     A = meshties.create_matrix(J._cpp_object)
-    b = create_vector(F)
+    b = create_vector(extract_function_spaces(F))
 
     # Assemble right hand side
     b.zeroEntries()
@@ -213,7 +218,7 @@ def run_demo(simplex, E, nu, gamma, theta, lifting, outfile, ksp_view, timing_vi
 
     # Set rigid motion nullspace
     null_space = rigid_motions_nullspace_subdomains(
-        V, domain_marker, np.unique(domain_marker.values), num_domains=2
+        V, domain_marker, np.unique(domain_marker.values)
     )
     A.setNearNullSpace(null_space)
 
@@ -255,7 +260,7 @@ def run_demo(simplex, E, nu, gamma, theta, lifting, outfile, ksp_view, timing_vi
         uh.name = "u"
         xdmf.write_function(uh)
     if timing_view:
-        list_timings(mesh.comm, [TimingType.wall])
+        list_timings(mesh.comm)
 
     if outfile is None:
         ofile = sys.stdout

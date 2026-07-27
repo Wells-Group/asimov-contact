@@ -16,6 +16,7 @@ from dolfinx.fem import (
     Constant,
     Function,
     dirichletbc,
+    extract_function_spaces,
     form,
     functionspace,
     locate_dofs_topological,
@@ -415,7 +416,7 @@ if __name__ == "__main__":
 
     # create vector and matrix
     A = contact_problem.create_matrix(J_compiled)
-    b = create_vector(F_compiled)
+    b = create_vector(extract_function_spaces(F_compiled))
 
     # define functions for newton solver
     def compute_coefficients(x, coeffs):
@@ -459,7 +460,6 @@ if __name__ == "__main__":
         V,
         domain_marker,
         np.unique(domain_marker.values),
-        num_domains=len(np.unique(domain_marker.values)),
     )
     newton_solver.A.setNearNullSpace(null_space)
 

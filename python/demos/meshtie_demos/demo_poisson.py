@@ -8,14 +8,16 @@ import sys
 from mpi4py import MPI
 from petsc4py import PETSc
 
+import gmsh
 import numpy as np
 import ufl
 from dolfinx import default_scalar_type, log
-from dolfinx.common import Timer, TimingType, list_timings, timing
+from dolfinx.common import Timer, list_timings, timing
 from dolfinx.fem import (
     Constant,
     Function,
     dirichletbc,
+    extract_function_spaces,
     form,
     functionspace,
     locate_dofs_topological,
@@ -119,7 +121,10 @@ if __name__ == "__main__":
     gap = 1e-5
     H = 1.5
     fname = "meshes/box_3D"
-    create_box_mesh_3D(f"{fname}.msh", simplex, gap=gap, width=H, offset=0.0)
+    gmsh.initialize()
+    create_box_mesh_3D(gmsh.model, simplex, gap=gap, width=H, offset=0.0)
+    gmsh.write(f"{fname}.msh")
+    gmsh.finalize()
     convert_mesh(fname, fname, gdim=3)
 
     with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
@@ -234,7 +239,7 @@ if __name__ == "__main__":
 
     # create matrix, vector
     A = meshties.create_matrix(J._cpp_object)
-    b = create_vector(F)
+    b = create_vector(extract_function_spaces(F))
 
     # Assemble right hand side
     b.zeroEntries()
@@ -298,7 +303,7 @@ if __name__ == "__main__":
         uh.name = "u"
         xdmf.write_function(uh)
     if args.timing:
-        list_timings(mesh.comm, [TimingType.wall])
+        list_timings(mesh.comm)
 
     if args.outfile is None:
         outfile = sys.stdout
@@ -308,7 +313,7 @@ if __name__ == "__main__":
     dm = uh.function_space.dofmap
     im = dm.index_map
     print(
-        f"num_dofs: {dm.index_map_bs * im.size_global}" + f", {mesh.topology.cell_types[0]}",
+        f"num_dofs: {dm.index_map_bs * im.size_global}" + f", {mesh.topology.cell_type}",
         file=outfile,
     )
     print(f"Krylov solver {solver_time}", file=outfile)

@@ -224,7 +224,7 @@ def nitsche_rigid_surface_custom(
     # Pack celldiameter on facets
     surface_cells = np.unique(integral_entities[:, 0])
     h_int = _fem.Function(V2)
-    expr = _fem.Expression(h, V2.element.interpolation_points())
+    expr = _fem.Expression(h, V2.element.interpolation_points)
     h_int.interpolate(expr, surface_cells)
     h_facets = pack_coefficient_quadrature(h_int._cpp_object, 0, integral_entities)
 
@@ -235,7 +235,7 @@ def nitsche_rigid_surface_custom(
     search_mode = [ContactMode.ClosestPoint]
     contact = Contact(
         [facet_marker._cpp_object],
-        surfaces,
+        surfaces._cpp_object,
         [(0, 1)],
         mesh._cpp_object,
         search_mode,
@@ -258,7 +258,7 @@ def nitsche_rigid_surface_custom(
     # NOTE: HACK to make "one-sided" contact work with assemble_matrix/assemble_vector
     contact_assembler = Contact(
         [facet_marker._cpp_object],
-        surfaces,
+        surfaces._cpp_object,
         [(0, 1)],
         mesh._cpp_object,
         search_mode,
@@ -307,7 +307,7 @@ def nitsche_rigid_surface_custom(
 
     # Setup non-linear problem and Newton-solver
     A = create_matrix(J_custom)
-    b = create_vector(F_custom)
+    b = create_vector(_fem.extract_function_spaces(F_custom))
 
     coefficients = [np.hstack([coeffs, h_facets, g_vec, u_packed, grad_u_packed, n_surf])]
     solver = dolfinx_contact.NewtonSolver(mesh.comm, A, b, coefficients)

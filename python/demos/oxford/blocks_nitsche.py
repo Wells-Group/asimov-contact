@@ -12,6 +12,7 @@ from dolfinx.fem import (
     Constant,
     Function,
     dirichletbc,
+    extract_function_spaces,
     form,
     functionspace,
     locate_dofs_topological,
@@ -51,7 +52,7 @@ with XDMFFile(MPI.COMM_WORLD, f"{fname}.xdmf", "r") as xdmf:
     topo = xdmf.read_topology_data(name="volume markers")
     x = xdmf.read_geometry_data(name="geometry")
     domain = Mesh(element("Lagrange", cell_type.name, cell_degree, shape=(x.shape[1],)))
-    mesh = create_mesh(MPI.COMM_WORLD, topo, x, domain)
+    mesh = create_mesh(MPI.COMM_WORLD, cells=topo, x=x, e=domain)
     tdim = mesh.topology.dim
     domain_marker = xdmf.read_meshtags(mesh, name="volume markers")
     mesh.topology.create_connectivity(tdim - 1, tdim)
@@ -181,7 +182,7 @@ contact_problem.generate_contact_data(
 
 # create vector and matrix
 a_mat = contact_problem.create_matrix(J_compiled)
-b = create_vector(F_compiled)
+b = create_vector(extract_function_spaces(F_compiled))
 
 
 # define functions for newton solver
@@ -215,12 +216,8 @@ newton_solver.set_jacobian(compute_jacobian_matrix)
 newton_solver.set_coefficients(compute_coefficients)
 
 # Set rigid motion nullspace
-null_space = rigid_motions_nullspace_subdomains(
-    V,
-    domain_marker,
-    np.unique(domain_marker.values),
-    num_domains=len(np.unique(domain_marker.values)),
-)
+null_space = rigid_motions_nullspace_subdomains(V, domain_marker, np.unique(domain_marker.values))
+
 newton_solver.A.setNearNullSpace(null_space)
 
 # Set Newton solver options

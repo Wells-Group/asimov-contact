@@ -198,7 +198,7 @@ def nitsche_custom(
     search_mode = [ContactMode.ClosestPoint]
     contact = Contact(
         [facet_marker._cpp_object],
-        surfaces,
+        surfaces._cpp_object,
         [(0, 1)],
         mesh._cpp_object,
         search_mode,
@@ -219,7 +219,7 @@ def nitsche_custom(
     search_mode = [ContactMode.ClosestPoint]
     contact_assembler = Contact(
         [facet_marker._cpp_object],
-        surfaces,
+        surfaces._cpp_object,
         [(0, 1)],
         mesh._cpp_object,
         search_mode,
@@ -263,7 +263,7 @@ def nitsche_custom(
         pass
 
     a_mat = create_matrix(a_custom)
-    b = create_vector(L_custom)
+    b = create_vector(_fem.extract_function_spaces(L_custom))
     solver = dolfinx_contact.NewtonSolver(mesh.comm, a_mat, b, [np.empty((0, 0))])
     solver.set_jacobian(assemble_jacobian)
     solver.set_residual(assemble_residual)

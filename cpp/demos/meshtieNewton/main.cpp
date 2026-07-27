@@ -56,7 +56,7 @@ public:
         _b(L->function_spaces()[0]->dofmap()->index_map,
            L->function_spaces()[0]->dofmap()->index_map_bs()),
         _matA(dolfinx::la::petsc::Matrix(
-            meshties->create_petsc_matrix(*J, std::string()), false)),
+            meshties->create_petsc_matrix(*J, "mpiaij"), false)),
         _u(u)
   {
     // create PETSc rhs vector

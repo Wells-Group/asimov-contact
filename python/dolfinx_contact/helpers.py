@@ -259,13 +259,11 @@ def near_nullspace_subdomains(
     tags
         The values of the meshtags for the objects
     """
-    _x = Function(V)
-
     # Create list of vectors for null space
-    nullspace_basis = [_x.petsc_vec.copy() for i in range(num_domains)]
+    nullspace_basis = [Function(V) for i in range(num_domains)]
 
     with ExitStack() as stack:
-        vec_local = [stack.enter_context(x.localForm()) for x in nullspace_basis]
+        vec_local = [stack.enter_context(x.x.petsc_vec.localForm()) for x in nullspace_basis]
         basis = [numpy.asarray(x) for x in vec_local]
         for j, tag in enumerate(tags):
             cells = mt.find(tag)
@@ -273,17 +271,16 @@ def near_nullspace_subdomains(
 
             # Build translational null space basis
             basis[j][dofs] = 1.0
-
-        _la.orthonormalize(nullspace_basis)
-        assert _la.is_orthonormal(nullspace_basis)
-    return PETSc.NullSpace().create(vectors=nullspace_basis)  # type: ignore
+        nb = [x.x for x in nullspace_basis]
+        _la.orthonormalize(nb)
+        assert _la.is_orthonormal(nb)
+    return PETSc.NullSpace().create(vectors=[x.x.petsc_vec for x in nullspace_basis])  # type: ignore
 
 
 def rigid_motions_nullspace_subdomains(
     V: FunctionSpace,
     mt: MeshTags,
     tags: numpy.typing.NDArray[numpy.int32],
-    num_domains=2,
 ):
     """
     Function to build nullspace for 2D/3D elasticity.
@@ -306,6 +303,17 @@ def rigid_motions_nullspace_subdomains(
     # Set dimension of nullspace
     dim = 3 if gdim == 2 else 6
 
+    # Build a globally consistent set of subdomain tags. If ranks construct a
+    # different number/order of basis vectors, PETSc collectives may deadlock.
+    comm = V.mesh.comm
+    local_tags = numpy.asarray(tags, dtype=numpy.int32)
+    gathered_tags = comm.allgather(local_tags)
+    if len(gathered_tags) > 0:
+        global_tags = numpy.unique(numpy.concatenate(gathered_tags))
+    else:
+        global_tags = numpy.asarray([], dtype=numpy.int32)
+    num_domains = int(global_tags.size)
+
     # Create list of vectors for null space
     nullspace_basis = [
         _la.vector(V.dofmap.index_map, bs=V.dofmap.index_map_bs, dtype=PETSc.ScalarType)  # type: ignore
@@ -313,9 +321,12 @@ def rigid_motions_nullspace_subdomains(
     ]
     basis = [b.array for b in nullspace_basis]
 
-    for j, tag in enumerate(tags):
+    for j, tag in enumerate(global_tags):
         cells = mt.find(tag)
-        dofs_block = numpy.unique(numpy.hstack([V.dofmap.cell_dofs(cell) for cell in cells]))
+        if len(cells) == 0:
+            dofs_block = numpy.asarray([], dtype=numpy.int32)
+        else:
+            dofs_block = numpy.unique(numpy.hstack([V.dofmap.cell_dofs(cell) for cell in cells]))
         dofs = [gdim * dofs_block + i for i in range(gdim)]
 
         # Build translational null space basis
@@ -324,11 +335,13 @@ def rigid_motions_nullspace_subdomains(
 
         # Build rotational null space basis
         x = V.tabulate_dof_coordinates()
-        x0, x1, x2 = x[dofs_block, 0], x[dofs_block, 1], x[dofs_block, 2]
+        x0 = x[dofs_block, 0]
+        x1 = x[dofs_block, 1]
         if gdim == 2:
             basis[j * dim + 2][dofs[0]] = -x1
             basis[j * dim + 2][dofs[1]] = x0
         elif gdim == 3:
+            x2 = x[dofs_block, 2]
             basis[j * dim + 3][dofs[0]] = -x1
             basis[j * dim + 3][dofs[1]] = x0
 

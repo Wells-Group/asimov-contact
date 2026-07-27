@@ -127,7 +127,7 @@ Contact::Contact(const dolfinx::graph::AdjacencyList<std::int32_t>& surfaces,
       _facet_maps(contact_pairs.size()),
       _reference_contact_points(contact_pairs.size()),
       _reference_contact_shape(contact_pairs.size()),
-      _qp_phys(surfaces.array().size()), _max_links(contact_pairs.size()),
+      _qp_phys(surfaces.num_nodes()), _max_links(contact_pairs.size()),
       _cell_facet_pairs(surfaces), _submesh(*mesh, surfaces.array()),
       _mode(mode)
 {

@@ -14,6 +14,7 @@ from dolfinx.fem import (
     Constant,
     Function,
     dirichletbc,
+    extract_function_spaces,
     form,
     functionspace,
     locate_dofs_topological,
@@ -302,7 +303,7 @@ if __name__ == "__main__":
     vtx.write(0)
     # create vector and matrix
     A = contact_problem.create_matrix(J_compiled)
-    b = create_vector(F_compiled)
+    b = create_vector(extract_function_spaces(F_compiled))
 
     # Set up newton solver for nonlinear solver
     newton_solver = NewtonSolver(mesh.comm, A, b, contact_problem.coeffs)
@@ -313,7 +314,7 @@ if __name__ == "__main__":
 
     # Set rigid motion nullspace
     null_space = rigid_motions_nullspace_subdomains(
-        V, domain_marker, np.unique(domain_marker.values), num_domains=2
+        V, domain_marker, np.unique(domain_marker.values)
     )
     newton_solver.A.setNearNullSpace(null_space)
 

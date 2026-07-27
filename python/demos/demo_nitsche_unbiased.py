@@ -14,12 +14,13 @@ import gmsh
 import numpy as np
 import ufl
 from dolfinx import default_scalar_type, log
-from dolfinx.common import Timer, TimingType, list_timings, timed, timing
+from dolfinx.common import Timer, list_timings, timed, timing
 from dolfinx.fem import (
     Constant,
     Expression,
     Function,
     dirichletbc,
+    extract_function_spaces,
     form,
     functionspace,
     locate_dofs_topological,
@@ -465,7 +466,7 @@ def run_soler(args):
 
     # create vector and matrix
     a_mat = contact_problem.create_matrix(J_compiled)
-    b = create_vector(F_compiled)
+    b = create_vector(extract_function_spaces(F_compiled))
 
     # Set up snes solver for nonlinear solver
     newton_solver = NewtonSolver(mesh.comm, a_mat, b, contact_problem.coeffs)
@@ -475,12 +476,13 @@ def run_soler(args):
     newton_solver.set_coefficients(compute_coefficients)
 
     # Set rigid motion nullspace
+
     null_space = rigid_motions_nullspace_subdomains(
         V,
         domain_marker,
         np.unique(domain_marker.values),
-        num_domains=len(np.unique(domain_marker.values)),
     )
+
     newton_solver.A.setNearNullSpace(null_space)
 
     # Set Newton solver options
@@ -518,7 +520,7 @@ def run_soler(args):
     sigma_dev = sigma(u) - (1 / 3) * ufl.tr(sigma(u)) * ufl.Identity(len(u))
     sigma_vm = ufl.sqrt((3 / 2) * ufl.inner(sigma_dev, sigma_dev))
     W = functionspace(mesh, ("Discontinuous Lagrange", order - 1))
-    sigma_vm_expr = Expression(sigma_vm, W.element.interpolation_points())
+    sigma_vm_expr = Expression(sigma_vm, W.element.interpolation_points)
     sigma_vm_h = Function(W)
     sigma_vm_h.interpolate(sigma_vm_expr)
     sigma_vm_h.name = "vonMises"
@@ -535,7 +537,7 @@ def run_soler(args):
         xdmf.write_mesh(mesh)
         xdmf.write_meshtags(process_marker, mesh.geometry)
     if timing_disp:
-        list_timings(mesh.comm, [TimingType.wall])
+        list_timings(mesh.comm)
 
     if outfile is None:
         outfile = sys.stdout

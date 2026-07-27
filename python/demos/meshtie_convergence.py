@@ -11,12 +11,13 @@ import numpy as np
 import numpy.typing as npt
 import ufl
 from dolfinx import default_scalar_type, log
-from dolfinx.common import Timer, TimingType, list_timings, timing
+from dolfinx.common import Timer, list_timings, timing
 from dolfinx.fem import (
     Constant,
     Function,
     assemble_scalar,
     dirichletbc,
+    extract_function_spaces,
     form,
     functionspace,
     locate_dofs_topological,
@@ -396,7 +397,11 @@ def test_meshtie(threed: bool = False, simplex: bool = True, runs: int = 5):
 
         # initialise meshties
         meshties = MeshTie(
-            [facet_marker._cpp_object], surfaces, contact, mesh._cpp_object, quadrature_degree=5
+            [facet_marker._cpp_object],
+            surfaces._cpp_object,
+            contact,
+            mesh._cpp_object,
+            quadrature_degree=5,
         )
         meshties.generate_kernel_data(
             Problem.Elasticity,
@@ -408,7 +413,7 @@ def test_meshtie(threed: bool = False, simplex: bool = True, runs: int = 5):
 
         # create matrix, vector
         A = meshties.create_matrix(J._cpp_object)
-        b = create_vector(F)
+        b = create_vector(extract_function_spaces(F))
 
         # Assemble right hand side
         b.zeroEntries()
@@ -424,7 +429,7 @@ def test_meshtie(threed: bool = False, simplex: bool = True, runs: int = 5):
 
         # Set rigid motion nullspace
         null_space = rigid_motions_nullspace_subdomains(
-            V, domain_marker, np.unique(domain_marker.values), num_domains=2
+            V, domain_marker, np.unique(domain_marker.values)
         )
         A.setNearNullSpace(null_space)
 
@@ -475,7 +480,7 @@ def test_meshtie(threed: bool = False, simplex: bool = True, runs: int = 5):
     with XDMFFile(mesh.comm, "results/partitioning_split.xdmf", "w") as xdmf:
         xdmf.write_mesh(mesh)
         xdmf.write_meshtags(process_marker, mesh.geometry)
-    list_timings(mesh.comm, [TimingType.wall])
+    list_timings(mesh.comm)
     print("L2 errors; ", errors)
     print("Solver time: ", times)
     print("Krylov iterations: ", iterations)

@@ -83,7 +83,7 @@ class ContactProblem(dolfinx_contact.cpp.Contact):
         with common.Timer("~Contact: Init"):
             super().__init__(
                 markers_cpp,
-                surfaces,
+                surfaces._cpp_object,
                 contact_pairs,
                 mesh._cpp_object,
                 quadrature_degree=quadrature_degree,

@@ -30,21 +30,22 @@ SubMesh::SubMesh(const dolfinx::mesh::Mesh<double>& mesh,
   // variables
   auto [submesh, cell_map, vertex_map, x_dof_map]
       = dolfinx::mesh::create_submesh(mesh, tdim, cells);
-  std::size_t num_submesh_cells = submesh.topology()->index_map(tdim)->size_local()
-                             + submesh.topology()->index_map(tdim)->num_ghosts();
+  std::size_t num_submesh_cells
+      = submesh.topology()->index_map(tdim)->size_local()
+        + submesh.topology()->index_map(tdim)->num_ghosts();
   std::vector<std::int32_t> submesh_cells(num_submesh_cells);
   std::iota(submesh_cells.begin(), submesh_cells.end(), 0);
   _parent_cells = cell_map.sub_topology_to_topology(submesh_cells, false);
 
   _mesh = std::make_shared<dolfinx::mesh::Mesh<double>>(submesh);
 
-    std::size_t num_submesh_vertices = submesh.topology()->index_map(0)->size_local()
-                             + submesh.topology()->index_map(0)->num_ghosts();
+  std::size_t num_submesh_vertices
+      = submesh.topology()->index_map(0)->size_local()
+        + submesh.topology()->index_map(0)->num_ghosts();
   std::vector<std::int32_t> submesh_vertices(num_submesh_vertices);
   std::iota(submesh_vertices.begin(), submesh_vertices.end(), 0);
-  _submesh_to_mesh_vertex_map = vertex_map.sub_topology_to_topology(submesh_vertices, false);
-
-  _submesh_to_mesh_vertex_map = submesh_vertices;
+  _submesh_to_mesh_vertex_map
+      = vertex_map.sub_topology_to_topology(submesh_vertices, false);
   _submesh_to_mesh_x_dof_map = x_dof_map;
 
   // create/retrieve connectivities on submesh
@@ -69,7 +70,7 @@ SubMesh::SubMesh(const dolfinx::mesh::Mesh<double>& mesh,
 
   // mark which cells are in cells, i.e. which cells are in the submesh
   std::vector<std::int32_t> marked_cells(num_cells, 0);
-  for (auto cell : cells)
+  for (auto cell : _parent_cells)
     marked_cells[cell] = 1;
 
   {
@@ -79,8 +80,8 @@ SubMesh::SubMesh(const dolfinx::mesh::Mesh<double>& mesh,
                      offsets.begin() + 1);
     // fill data array
     std::vector<std::int32_t> data(offsets.back());
-    for (std::size_t c = 0; c < cells.size(); ++c)
-      data[offsets[cells[c]]] = (std::int32_t)c;
+    for (std::size_t c = 0; c < _parent_cells.size(); ++c)
+      data[offsets[_parent_cells[c]]] = (std::int32_t)c;
 
     // create adjacency list
     _mesh_to_submesh_cell_map

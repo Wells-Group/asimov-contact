@@ -235,7 +235,7 @@ def compute_jacobian_matrix(x, a_mat, coeffs):
 
 # create vector and matrix
 a_mat = contact_problem.create_matrix(J_compiled)
-b = create_vector(F_compiled)
+b = create_vector(_fem.extract_function_spaces(F_compiled))
 
 
 # Set up snes solver for nonlinear solver
@@ -246,9 +246,7 @@ newton_solver.set_jacobian(compute_jacobian_matrix)
 newton_solver.set_coefficients(compute_coefficients)
 
 # Set rigid motion nullspace
-null_space = rigid_motions_nullspace_subdomains(
-    V, domain_marker, np.unique(domain_marker.values), num_domains=2
-)
+null_space = rigid_motions_nullspace_subdomains(V, domain_marker, np.unique(domain_marker.values))
 newton_solver.A.setNearNullSpace(null_space)
 
 # Set Newton solver options
@@ -287,7 +285,7 @@ for i in range(50):
     # this is to ensure non-singular matrices in the case of no Dirichlet boundary
     du.x.array[:] = 0.1 * du.x.array[:]
     contact_problem.update_contact_data(du)
-    sigma_vm_expr = _fem.Expression(sigma_vm, W.element.interpolation_points())
+    sigma_vm_expr = _fem.Expression(sigma_vm, W.element.interpolation_points)
     sigma_vm_h.interpolate(sigma_vm_expr)
     u_dg.interpolate(u)
     T_dg.interpolate(T0)

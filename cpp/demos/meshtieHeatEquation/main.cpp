@@ -62,8 +62,7 @@ int main(int argc, char* argv[])
             basix::element::family::P,
             dolfinx::mesh::cell_type_to_basix_type(ct), 1,
             basix::element::lagrange_variant::unset,
-            basix::element::dpc_variant::unset, false),
-        std::vector<std::size_t>{(std::size_t)mesh->geometry().dim()});
+            basix::element::dpc_variant::unset, false));
 
     auto Q = std::make_shared<dolfinx::fem::FunctionSpace<U>>(
         dolfinx::fem::create_functionspace(mesh, element));
@@ -125,7 +124,7 @@ int main(int argc, char* argv[])
 
     // Create matrix and vector
     auto A_therm = dolfinx::la::petsc::Matrix(
-        meshties.create_petsc_matrix(*a_therm, std::string()), false);
+        meshties.create_petsc_matrix(*a_therm, "mpiaij"), false);
     dolfinx::la::Vector<T> b_therm(
         L_therm->function_spaces()[0]->dofmap()->index_map,
         L_therm->function_spaces()[0]->dofmap()->index_map_bs());
