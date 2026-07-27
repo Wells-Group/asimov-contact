@@ -9,19 +9,19 @@
 from basix.ufl import element
 from ufl import (
     Coefficient,
+    FunctionSpace,
+    Identity,
+    Mesh,
+    TestFunction,
+    TrialFunction,
     derivative,
     dx,
-    FunctionSpace,
     grad,
-    Identity,
     inner,
-    rhs,
     lhs,
-    Mesh,
+    rhs,
     sym,
-    TestFunction,
     tr,
-    TrialFunction,
 )
 
 # Mesh

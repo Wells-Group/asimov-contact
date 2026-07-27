@@ -9,19 +9,18 @@
 from basix.ufl import element
 from ufl import (
     Coefficient,
+    FunctionSpace,
+    Identity,
+    Mesh,
+    TestFunction,
+    TrialFunction,
     derivative,
     dx,
-    FunctionSpace,
     grad,
-    Identity,
     inner,
-    Mesh,
     sym,
-    TestFunction,
     tr,
-    TrialFunction,
 )
-
 
 e = element("Lagrange", "tetrahedron", 1, shape=(3,))
 e0 = element("DG", "tetrahedron", 0)

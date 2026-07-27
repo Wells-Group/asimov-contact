@@ -9,19 +9,18 @@
 from basix.ufl import element
 from ufl import (
     Coefficient,
+    FunctionSpace,
+    Identity,
+    Mesh,
+    TestFunction,
+    TrialFunction,
     ds,
     dx,
-    FunctionSpace,
     grad,
-    Identity,
     inner,
-    Mesh,
     sym,
-    TestFunction,
     tr,
-    TrialFunction,
 )
-
 
 # tags for boundaries (see mesh file)
 neumann_bdy = 7
