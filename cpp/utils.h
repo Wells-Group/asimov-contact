@@ -97,11 +97,15 @@ using kernel_fn
 /// @param[in] x points on physical element
 /// @param[in] coordinate_dofs: geometry coordinates of cell
 /// @param[in] cmap: the coordinate element
+/// @param[in] max_iter: maximum number of iterations for Newton's method
+/// @param[in] tol: tolerance for convergence in Newton's method
 void pull_back(mdspan_t<double, 3> J, mdspan_t<double, 3> K,
                std::span<double> detJ, std::span<double> X,
                mdspan_t<const double, 2> x,
                mdspan_t<const double, 2> coordinate_dofs,
-               const dolfinx::fem::CoordinateElement<double>& cmap);
+               const dolfinx::fem::CoordinateElement<double>& cmap,
+               std::size_t max_iter = 100,
+               double tol = 1e-12);
 
 /// @param[in] cells: the cells to be sorted
 /// @param[in, out] perm the permutation for the sorted cells
@@ -393,6 +397,8 @@ facet_indices_from_pair(std::span<const std::int32_t> facet_pairs,
 /// local_facet_index) for the `quadrature_mesh`. Flattened row major.
 /// @param[in] points The points to compute the closest entity from.
 /// Shape (num_quadrature_points, 3). Flattened row-major
+/// @param[in] max_iter Maximum number of iterations for Newton's method
+/// @param[in] tol Tolerance for convergence in Newton's method
 /// @returns A tuple (closest_facets, reference_points), where
 /// `closest_entities[i]` is the closest entity in `facet_tuples` for
 /// the ith input point
@@ -401,7 +407,9 @@ std::tuple<std::vector<std::int32_t>, std::vector<double>,
            std::array<std::size_t, 2>>
 compute_projection_map(const dolfinx::mesh::Mesh<double>& mesh,
                        std::span<const std::int32_t> facet_tuples,
-                       std::span<const double> points)
+                       std::span<const double> points,
+                       std::size_t max_iter = 100,
+                       double tol = 1e-12)
 {
   assert(tdim == mesh.topology()->dim());
   assert(mesh.geometry().dim() == gdim);
@@ -439,7 +447,13 @@ compute_projection_map(const dolfinx::mesh::Mesh<double>& mesh,
                                                   points);
   std::vector<double> candidate_x(num_points * 3);
   std::span<const double> mesh_geometry = mesh.geometry().x();
-  const dolfinx::fem::CoordinateElement<double>& cmap = mesh.geometry().cmap();
+  const dolfinx::fem::CoordinateElement<double>& cmap = mesh.geometry().cmaps().front();
+  if (mesh.geometry().cmaps().size() > 1)
+  {
+    throw std::invalid_argument(
+        "Packing of gap function at quadrature points not implemented for "
+        "meshes with multiple coordinate maps.");
+  }
   {
     // Find displacement vector from each point to closest entity. As a
     // point on the surface might have penetrated the cell in question,
@@ -505,7 +519,13 @@ compute_projection_map(const dolfinx::mesh::Mesh<double>& mesh,
     MDSPAN_IMPL_STANDARD_NAMESPACE::mdspan<
         const std::int32_t,
         MDSPAN_IMPL_STANDARD_NAMESPACE::dextents<std::size_t, 2>>
-        x_dofmap = mesh.geometry().dofmap();
+        x_dofmap = mesh.geometry().dofmaps().front();
+    if (mesh.geometry().dofmaps().size() > 1)
+    {
+      throw std::invalid_argument(
+          "Packing of gap function at quadrature points not implemented for "
+          "meshes with multiple coordinate maps.");
+    }
     std::vector<double> coordinate_dofsb(num_dofs_g * gdim);
     mdspan_t<const double, 2> coordinate_dofs(coordinate_dofsb.data(),
                                               num_dofs_g, gdim);
@@ -537,7 +557,7 @@ compute_projection_map(const dolfinx::mesh::Mesh<double>& mesh,
       // Pull back coordinates
       std::fill(Jb.begin(), Jb.end(), 0);
       pull_back(J, K, detJ, X, mdspan_t<const double, 2>(x.data(), 1, gdim),
-                coordinate_dofs, cmap);
+                coordinate_dofs, cmap, max_iter, tol);
       // Copy into output
       std::copy_n(X.begin(), tdim, std::next(candidate_X.begin(), i * tdim));
     }
@@ -614,13 +634,25 @@ compute_raytracing_map(const dolfinx::mesh::Mesh<double>& quadrature_mesh,
   // Get relevant information from quadrature mesh
   const dolfinx::mesh::Geometry<double>& geom_q = quadrature_mesh.geometry();
   const dolfinx::fem::CoordinateElement<double>& cmap_q
-      = quadrature_mesh.geometry().cmap();
+      = quadrature_mesh.geometry().cmaps().front();
+  if (quadrature_mesh.geometry().cmaps().size() > 1)
+  {
+    throw std::invalid_argument(
+        "Packing of gap function at quadrature points not implemented for "
+        "meshes with multiple coordinate maps.");
+  }
   auto top_q = quadrature_mesh.topology();
   std::span<const double> q_x = geom_q.x();
   MDSPAN_IMPL_STANDARD_NAMESPACE::mdspan<
       const std::int32_t,
       MDSPAN_IMPL_STANDARD_NAMESPACE::dextents<std::size_t, 2>>
-      q_dofmap = geom_q.dofmap();
+      q_dofmap = geom_q.dofmaps().front();
+  if (geom_q.dofmaps().size() > 1)
+  {
+    throw std::invalid_argument(
+        "Packing of gap function at quadrature points not implemented for "
+        "meshes with multiple coordinate maps.");
+  }
   const std::size_t num_nodes_q = cmap_q.dim();
   std::vector<double> coordinate_dofs_qb(num_nodes_q * gdim);
   mdspan_t<const double, 2> coordinate_dofs_q(coordinate_dofs_qb.data(),
@@ -646,11 +678,17 @@ compute_raytracing_map(const dolfinx::mesh::Mesh<double>& quadrature_mesh,
   // Structures used for raytracing
   dolfinx::mesh::CellType cell_type = candidate_mesh.topology()->cell_type();
   const dolfinx::mesh::Geometry<double>& c_geometry = candidate_mesh.geometry();
-  const dolfinx::fem::CoordinateElement<double>& cmap_c = c_geometry.cmap();
+  const dolfinx::fem::CoordinateElement<double>& cmap_c = c_geometry.cmaps().front();
+  if (c_geometry.cmaps().size() > 1)
+  {
+    throw std::invalid_argument(
+        "Packing of gap function at quadrature points not implemented for "
+        "meshes with multiple coordinate maps.");
+  }
   MDSPAN_IMPL_STANDARD_NAMESPACE::mdspan<
       const std::int32_t,
       MDSPAN_IMPL_STANDARD_NAMESPACE::dextents<std::size_t, 2>>
-      c_dofmap = c_geometry.dofmap();
+      c_dofmap = c_geometry.dofmaps().front();
   std::span<const double> c_x = c_geometry.x();
 
   const std::array<std::size_t, 4> basis_shape_c = cmap_c.tabulate_shape(1, 1);

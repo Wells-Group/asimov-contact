@@ -437,14 +437,18 @@ compute_ray(const dolfinx::mesh::Mesh<double>& mesh,
   if (mesh.topology()->dim() != tdim or mesh.geometry().dim() != gdim)
     throw std::invalid_argument("Invalid topological or geometrical dimension");
 
-  const dolfinx::fem::CoordinateElement<double>& cmap = mesh.geometry().cmap();
-
+  const dolfinx::fem::CoordinateElement<double>& cmap = mesh.geometry().cmaps().front();
+  if (mesh.geometry().cmaps().size() > 1)
+  {
+    throw std::invalid_argument(
+        "Ray tracing not implemented for meshes with multiple coordinate maps.");
+  }
   // Get cell coordinates/geometry
   const dolfinx::mesh::Geometry<double>& geometry = mesh.geometry();
   MDSPAN_IMPL_STANDARD_NAMESPACE::mdspan<
       const std::int32_t,
       MDSPAN_IMPL_STANDARD_NAMESPACE::dextents<std::size_t, 2>>
-      x_dofmap = geometry.dofmap();
+      x_dofmap = geometry.dofmaps().front();
   std::span<const double> x_g = geometry.x();
   const std::size_t num_dofs_g = cmap.dim();
   std::vector<double> coordinate_dofs(num_dofs_g * gdim);
