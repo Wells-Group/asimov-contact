@@ -76,7 +76,7 @@ def test_pack_coeff_at_quadrature(ct, quadrature_degree, space, degree):
         coeffs = dolfinx_contact.cpp.pack_gradient_quadrature(
             v._cpp_object, quadrature_degree, integration_entities
         )
-        if space == "DG" and degree == 1:
+        if space in ("DG", "Discontinuous Lagrange") and degree == 1:
             np.testing.assert_allclose(0.0, coeffs, atol=eps)
         else:
             expr = Expression(grad(v), quadrature_points, comm=mesh.comm)
@@ -144,7 +144,7 @@ def test_pack_coeff_on_facet(quadrature_degree, space, degree):
         coeffs = dolfinx_contact.cpp.pack_gradient_quadrature(
             v._cpp_object, quadrature_degree, integration_entities
         )
-        if space == "DG" and degree == 1:
+        if space in ("DG", "Discontinuous Lagrange") and degree == 1:
             np.testing.assert_allclose(0.0, coeffs, atol=eps)
         else:
             gdim = mesh.geometry.dim
