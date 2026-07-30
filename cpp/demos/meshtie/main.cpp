@@ -87,9 +87,8 @@ int main(int argc, char* argv[])
         [lmbda_val](
             auto x) -> std::pair<std::vector<T>, std::vector<std::size_t>>
         {
-          std::vector<T> _f;
-          for (std::size_t p = 0; p < x.extent(1); ++p)
-            _f.push_back(lmbda_val);
+          std::vector<T> _f(x.extent(1));
+          std::fill(_f.begin(), _f.end(), lmbda_val);
           return {_f, {_f.size()}};
         });
 
@@ -98,11 +97,11 @@ int main(int argc, char* argv[])
     mu->interpolate(
         [mu_val](auto x) -> std::pair<std::vector<T>, std::vector<std::size_t>>
         {
-          std::vector<T> _f;
-          for (std::size_t p = 0; p < x.extent(1); ++p)
-            _f.push_back(mu_val);
+          std::vector<T> _f(x.extent(1));
+          std::fill(_f.begin(), _f.end(), mu_val);
           return {_f, {_f.size()}};
         });
+  spdlog::warn("f interpolate");
 
     // Function for body force
     auto f = std::make_shared<dolfinx::fem::Function<T>>(V);
@@ -119,6 +118,7 @@ int main(int argc, char* argv[])
             _f(1, p) = 0.5;
           return {std::move(fdata), {bs, x.extent(1)}};
         });
+  spdlog::warn("f interpolate end");
 
     // Function for surface traction
     auto t = std::make_shared<dolfinx::fem::Function<T>>(V);
@@ -135,6 +135,9 @@ int main(int argc, char* argv[])
             _f(1, p) = 0.5;
           return {std::move(fdata), {bs, x.extent(1)}};
         });
+
+  spdlog::warn("Interpolated functions");
+
 
     // Create integration domains for integrating over specific surfaces
     std::vector<std::pair<std::int32_t, std::span<const std::int32_t>>>
