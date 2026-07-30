@@ -409,7 +409,7 @@ compute_projection_map(const dolfinx::mesh::Mesh<double>& mesh,
                        std::span<const std::int32_t> facet_tuples,
                        std::span<const double> points,
                        std::size_t max_iter = 100,
-                       double tol = 1e-6)
+                       double tol = 1.0e-6)
 {
   assert(tdim == mesh.topology()->dim());
   assert(mesh.geometry().dim() == gdim);

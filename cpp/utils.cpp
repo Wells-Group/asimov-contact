@@ -150,7 +150,7 @@ void dolfinx_contact::pull_back(
           J(i, j, k) = 0;
 
     mdspan_t<double, 2> Xs(X.data(), num_points, tdim);
-    cmap.pull_back_nonaffine(Xs, x, coordinate_dofs, max_iter, tol);
+    cmap.pull_back_nonaffine(Xs, x, coordinate_dofs, tol, max_iter);
 
     /// Tabulate coordinate basis at pull back points to compute the Jacobian,
     /// inverse and determinant
