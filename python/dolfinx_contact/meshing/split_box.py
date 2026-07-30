@@ -498,7 +498,7 @@ def create_hex_mesh(
     surface = gmsh.model.occ.addPlaneSurface([curve])
 
     num_layers = int(np.ceil(5 * z / res))
-    num_layers += 1 if num_layers % 2 == 1 else 0 
+    num_layers += 1 if num_layers % 2 == 1 else 0
 
     model.occ.extrude([(2, surface)], 0, 0, z, numElements=[num_layers], recombine=True)
     model.occ.synchronize()
@@ -533,6 +533,7 @@ def create_hex_mesh(
     model.mesh.generate(3)
     model.mesh.setOrder(order)
     gmsh.model.mesh.optimize("Netgen")
+
 
 def create_split_box_2D(
     filename: str,
