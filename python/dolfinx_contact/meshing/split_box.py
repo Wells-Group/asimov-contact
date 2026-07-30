@@ -476,12 +476,38 @@ def create_hex_mesh(
     for point in pts:
         ps.append(gmsh.model.occ.addPoint(point[0], point[1], 0))
 
-    lines = [gmsh.model.occ.addLine(ps[i - 1], ps[i]) for i in range(len(ps))]
+    lines = []
+    line_elements = []
+    for i in range(len(ps)):
+        # Create the line
+        line_tag = gmsh.model.occ.addLine(ps[i - 1], ps[i])
+        lines.append(line_tag)
+
+        # Calculate the geometric length of the line
+        p1 = np.array(pts[i - 1][:2])
+        p2 = np.array(pts[i][:2])
+        length = np.linalg.norm(p2 - p1)
+
+        # Force an even number of elements based on 'res'
+        n_ele = max(2, int(np.ceil(length / res)))
+        if n_ele % 2 != 0:
+            n_ele += 1
+        line_elements.append(n_ele)
+
     curve = gmsh.model.occ.addCurveLoop(lines)
     surface = gmsh.model.occ.addPlaneSurface([curve])
 
-    model.occ.extrude([(2, surface)], 0, 0, z, numElements=[np.ceil(5 * z / res)], recombine=True)
+    num_layers = int(np.ceil(5 * z / res))
+    num_layers += 1 if num_layers % 2 == 1 else 0 
+
+    model.occ.extrude([(2, surface)], 0, 0, z, numElements=[num_layers], recombine=True)
     model.occ.synchronize()
+
+    # Explicitly apply the even element constraint to the base curves
+    for line_tag, n_ele in zip(lines, line_elements):
+        # Gmsh takes the number of NODES, which is elements + 1
+        gmsh.model.mesh.setTransfiniteCurve(line_tag, n_ele + 1)
+
     volumes = model.getEntities(3)
     surfaces = model.getEntities(2)
 
@@ -503,10 +529,10 @@ def create_hex_mesh(
     gmsh.option.setNumber("Mesh.RecombinationAlgorithm", 2)
     gmsh.option.setNumber("Mesh.RecombineAll", 2)
     gmsh.option.setNumber("Mesh.SubdivisionAlgorithm", 1)
+
     model.mesh.generate(3)
     model.mesh.setOrder(order)
     gmsh.model.mesh.optimize("Netgen")
-
 
 def create_split_box_2D(
     filename: str,
