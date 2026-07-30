@@ -105,7 +105,7 @@ void pull_back(mdspan_t<double, 3> J, mdspan_t<double, 3> K,
                mdspan_t<const double, 2> coordinate_dofs,
                const dolfinx::fem::CoordinateElement<double>& cmap,
                std::size_t max_iter = 100,
-               double tol = 1e-12);
+               double tol = 1e-6);
 
 /// @param[in] cells: the cells to be sorted
 /// @param[in, out] perm the permutation for the sorted cells
@@ -409,7 +409,7 @@ compute_projection_map(const dolfinx::mesh::Mesh<double>& mesh,
                        std::span<const std::int32_t> facet_tuples,
                        std::span<const double> points,
                        std::size_t max_iter = 100,
-                       double tol = 1e-12)
+                       double tol = 1e-6)
 {
   assert(tdim == mesh.topology()->dim());
   assert(mesh.geometry().dim() == gdim);
