@@ -196,7 +196,7 @@ dolfinx_contact::create_contact_mesh(
   dolfinx::common::Timer trepart("~Contact: Add ghosts: Repartition");
   auto new_mesh = dolfinx::mesh::create_mesh(
       mesh.comm(), mesh.comm(), topo_global, mesh.geometry().cmaps().front(),
-      mesh.comm(), x, xshape, partitioner, 1);
+      mesh.comm(), x, xshape, partitioner, 2);
   trepart.stop();
   if (mesh.geometry().cmaps().size() > 1)
   {
