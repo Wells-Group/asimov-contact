@@ -20,7 +20,7 @@ endif()
 # Create compilation command (added the .h file to OUTPUT)
 add_custom_command(
   OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${ufl_file}.c ${CMAKE_CURRENT_BINARY_DIR}/${ufl_file}.h
-  COMMAND ffcx ${SCALAR_TYPE} ${CMAKE_CURRENT_SOURCE_DIR}/${ufl_file}.py -o ${CMAKE_CURRENT_BINARY_DIR}
+  COMMAND ffcx ${SCALAR_TYPE} ${CMAKE_CURRENT_SOURCE_DIR}/${ufl_file}.py -o ${CMAKE_CURRENT_BINARY_DIR}/${ufl_file}
   DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/${ufl_file}.py
   COMMENT "Compiling ${ufl_file}.py"
 )
