@@ -324,7 +324,13 @@ void Contact::create_distance_map(int pair)
 
   // NOTE: More data that should be updated inside this code
   const dolfinx::fem::CoordinateElement<double>& cmap
-      = candidate_mesh->geometry().cmap();
+      = candidate_mesh->geometry().cmaps().front();
+  if (candidate_mesh->geometry().cmaps().size() > 1)
+  {
+    throw std::invalid_argument(
+        "Packing of contact points at quadrature points not implemented for "
+        "meshes with multiple coordinate maps.");
+  }
   std::tie(_reference_basis, _reference_shape)
       = tabulate(cmap, _quadrature_rule);
 
@@ -355,8 +361,14 @@ std::pair<std::vector<PetscScalar>, int> Contact::pack_nx(int pair) const
   const dolfinx::mesh::Geometry<double>& geometry = quadrature_mesh->geometry();
   int gdim = geometry.dim();
   std::span<const double> x_g = geometry.x();
-  auto x_dofmap = geometry.dofmap();
-  const dolfinx::fem::CoordinateElement<double>& cmap = geometry.cmap();
+  auto x_dofmap = geometry.dofmaps().front();
+  const dolfinx::fem::CoordinateElement<double>& cmap = geometry.cmaps().front();
+  if (geometry.cmaps().size() > 1)
+  {
+    throw std::invalid_argument(
+        "Packing of normals at quadrature points not implemented for "
+        "meshes with multiple coordinate maps.");
+  }
   std::size_t num_dofs_g = cmap.dim();
   auto topology = quadrature_mesh->topology();
   int tdim = topology->dim();
@@ -557,8 +569,14 @@ std::pair<std::vector<PetscScalar>, int> Contact::pack_gap(int pair) const
 
   // Get information about submesh geometry and topology
   std::span<const double> x_g = geometry.x();
-  auto x_dofmap = geometry.dofmap();
-  const dolfinx::fem::CoordinateElement<double>& cmap = geometry.cmap();
+  auto x_dofmap = geometry.dofmaps().front();
+  const dolfinx::fem::CoordinateElement<double>& cmap = geometry.cmaps().front();
+  if (geometry.cmaps().size() > 1)
+  {
+    throw std::invalid_argument(
+        "Packing of gap function at quadrature points not implemented for "
+        "meshes with multiple coordinate maps.");
+  }
   std::size_t num_dofs_g = cmap.dim();
   auto topology = candidate_mesh->topology();
   int tdim = topology->dim();
@@ -958,7 +976,13 @@ std::pair<std::vector<PetscScalar>, int> Contact::pack_gap_plane(int pair,
 
   // Tabulate basis function on reference cell (_phi_ref_facets)
   const dolfinx::fem::CoordinateElement<double>& cmap
-      = _mesh->geometry().cmap();
+      = _mesh->geometry().cmaps().front();
+  if (_mesh->geometry().cmaps().size() > 1)
+  {
+    throw std::invalid_argument(
+        "Packing of gap function at quadrature points not implemented for "
+        "meshes with multiple coordinate maps.");
+  }
   std::tie(_reference_basis, _reference_shape)
       = tabulate(cmap, _quadrature_rule);
 
@@ -1028,8 +1052,14 @@ dolfinx_contact::Contact::pack_ny(int pair) const
 
   // Get information about submesh geometry and topology
   std::span<const double> x_g = geometry.x();
-  auto x_dofmap = geometry.dofmap();
-  const dolfinx::fem::CoordinateElement<double>& cmap = geometry.cmap();
+  auto x_dofmap = geometry.dofmaps().front();
+  const dolfinx::fem::CoordinateElement<double>& cmap = geometry.cmaps().front();
+  if (geometry.cmaps().size() > 1)
+  {
+    throw std::invalid_argument(
+        "Packing of gap function at quadrature points not implemented for "
+        "meshes with multiple coordinate maps.");
+  }
   std::size_t num_dofs_g = cmap.dim();
   auto topology = candidate_mesh->topology();
   int tdim = topology->dim();
@@ -1144,9 +1174,15 @@ void Contact::assemble_matrix(mat_set_fn& mat_set, int pair,
   MDSPAN_IMPL_STANDARD_NAMESPACE::mdspan<
       const std::int32_t,
       MDSPAN_IMPL_STANDARD_NAMESPACE::dextents<std::size_t, 2>>
-      x_dofmap = geometry.dofmap();
+      x_dofmap = geometry.dofmaps().front();
   std::span<const double> x_g = geometry.x();
-  const dolfinx::fem::CoordinateElement<double>& cmap = geometry.cmap();
+  const dolfinx::fem::CoordinateElement<double>& cmap = geometry.cmaps().front();
+  if (geometry.cmaps().size() > 1)
+  {
+    throw std::invalid_argument(
+        "Packing of gap function at quadrature points not implemented for "
+        "meshes with multiple coordinate maps.");
+  }
   std::size_t num_dofs_g = cmap.dim();
   if (V.element()->needs_dof_transformations())
   {
@@ -1270,10 +1306,16 @@ void Contact::assemble_vector(std::span<PetscScalar> b, int pair,
   MDSPAN_IMPL_STANDARD_NAMESPACE::mdspan<
       const std::int32_t,
       MDSPAN_IMPL_STANDARD_NAMESPACE::dextents<std::size_t, 2>>
-      x_dofmap = geometry.dofmap();
+      x_dofmap = geometry.dofmaps().front();
   std::span<const double> x_g = geometry.x();
 
-  const dolfinx::fem::CoordinateElement<double>& cmap = geometry.cmap();
+  const dolfinx::fem::CoordinateElement<double>& cmap = geometry.cmaps().front();
+  if (geometry.cmaps().size() > 1)
+  {
+    throw std::invalid_argument(
+        "Packing of gap function at quadrature points not implemented for "
+        "meshes with multiple coordinate maps.");
+  }
   std::size_t num_dofs_g = cmap.dim();
 
   // Extract function space data (assuming same test and trial space)
@@ -1463,7 +1505,7 @@ std::pair<std::vector<PetscScalar>, int> Contact::pack_grad_test_functions(
           = std::span(perm.data() + offsets[j], offsets[j + 1] - offsets[j]);
 
       // Extract local dofs
-      assert(std::size_t(linked_cell) < mesh->geometry().dofmap().extent(0));
+      assert(std::size_t(linked_cell) < mesh->geometry().dofmaps().front().extent(0));
       std::vector<double> x_c(indices.size() * tdim);
       for (std::size_t l = 0; l < indices.size(); l++)
       {

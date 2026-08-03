@@ -17,7 +17,13 @@ dolfinx_contact::KernelData::KernelData(
   assert(mesh);
   // Get mesh info
   const dolfinx::mesh::Geometry<double>& geometry = mesh->geometry();
-  const dolfinx::fem::CoordinateElement<double>& cmap = geometry.cmap();
+  const dolfinx::fem::CoordinateElement<double>& cmap = geometry.cmaps().front();
+  if (geometry.cmaps().size() > 1)
+  {
+    throw std::invalid_argument(
+        "Packing of gap function at quadrature points not implemented for "
+        "meshes with multiple coordinate maps.");
+  }
 
   _affine = cmap.is_affine();
   _num_coordinate_dofs = cmap.dim();

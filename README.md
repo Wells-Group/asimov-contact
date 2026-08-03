@@ -8,7 +8,7 @@ simulations. It builds on the
 dolfinx-contact is under heavy development and is highly experimental.
 
 ## Installation
-DOLFINx contact requires DOLFINx (v0.10.0) installed on your system.
+DOLFINx contact requires DOLFINx (v0.11.0) installed on your system.
 To build the library, you can call:
 ```bash
 

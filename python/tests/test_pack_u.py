@@ -26,7 +26,7 @@ def test_pack_u():
     cells = np.array([[0, 1, 2], [4, 5, 6], [1, 3, 2], [5, 6, 7]], dtype=np.int64)
 
     domain = ufl.Mesh(basix.ufl.element("Lagrange", "triangle", 1, shape=(points.shape[1],)))
-    part = msh.create_cell_partitioner(msh.GhostMode.none)
+    part = msh.create_cell_partitioner(msh.GhostMode.none, 2)
     mesh = msh.create_mesh(MPI.COMM_WORLD, cells=cells, x=points, e=domain, partitioner=part)
 
     def f(x):

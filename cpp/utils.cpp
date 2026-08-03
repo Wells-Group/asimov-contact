@@ -68,7 +68,8 @@ void dolfinx_contact::pull_back(
     mdspan_t<double, 3> J, mdspan_t<double, 3> K, std::span<double> detJ,
     std::span<double> X, mdspan_t<const double, 2> x,
     mdspan_t<const double, 2> coordinate_dofs,
-    const dolfinx::fem::CoordinateElement<double>& cmap)
+    const dolfinx::fem::CoordinateElement<double>& cmap,
+    std::size_t max_iter, double tol)
 {
   const std::size_t num_points = x.extent(0);
   assert(J.extent(0) >= num_points);
@@ -149,7 +150,7 @@ void dolfinx_contact::pull_back(
           J(i, j, k) = 0;
 
     mdspan_t<double, 2> Xs(X.data(), num_points, tdim);
-    cmap.pull_back_nonaffine(Xs, x, coordinate_dofs);
+    cmap.pull_back_nonaffine(Xs, x, coordinate_dofs, tol, max_iter);
 
     /// Tabulate coordinate basis at pull back points to compute the Jacobian,
     /// inverse and determinant
@@ -254,8 +255,13 @@ void dolfinx_contact::update_geometry(
   // The Function and the mesh must have identical element_dof_layouts
   // (up to the block size)
   assert(dofmap->element_dof_layout()
-         == mesh.geometry().cmap().create_dof_layout());
-
+         == mesh.geometry().cmaps().front().create_dof_layout());
+  if (mesh.geometry().cmaps().size() > 1)
+  {
+    throw std::invalid_argument(
+        "Packing of gap function at quadrature points not implemented for "
+        "meshes with multiple coordinate maps.");
+  }
   const int tdim = mesh.topology()->dim();
   std::shared_ptr<const dolfinx::common::IndexMap> cell_map
       = mesh.topology()->index_map(tdim);
@@ -267,7 +273,13 @@ void dolfinx_contact::update_geometry(
   MDSPAN_IMPL_STANDARD_NAMESPACE::mdspan<
       const std::int32_t,
       MDSPAN_IMPL_STANDARD_NAMESPACE::dextents<std::size_t, 2>>
-      dofmap_x = mesh.geometry().dofmap();
+      dofmap_x = mesh.geometry().dofmaps().front();
+  if (mesh.geometry().dofmaps().size() > 1)
+  {
+    throw std::invalid_argument(
+        "Packing of gap function at quadrature points not implemented for "
+        "meshes with multiple coordinate maps.");
+  }
   const int bs = dofmap->bs();
   const auto& u_data = u.x()->array();
   std::span<double> coords = mesh.geometry().x();
@@ -415,8 +427,14 @@ void dolfinx_contact::evaluate_basis_functions(
   MDSPAN_IMPL_STANDARD_NAMESPACE::mdspan<
       const std::int32_t,
       MDSPAN_IMPL_STANDARD_NAMESPACE::dextents<std::size_t, 2>>
-      x_dofmap = geometry.dofmap();
-  const dolfinx::fem::CoordinateElement<double>& cmap = geometry.cmap();
+      x_dofmap = geometry.dofmaps().front();
+  const dolfinx::fem::CoordinateElement<double>& cmap = geometry.cmaps().front();
+  if (geometry.cmaps().size() > 1)
+  {
+    throw std::invalid_argument(
+        "Packing of gap function at quadrature points not implemented for "
+        "meshes with multiple coordinate maps.");
+  }
   const std::size_t num_dofs_g = cmap.dim();
 
   // Get element
@@ -750,13 +768,19 @@ dolfinx_contact::entities_to_geometry_dofs(
   // Get mesh geometry and topology data
   const dolfinx::mesh::Geometry<double>& geometry = mesh.geometry();
   const dolfinx::fem::ElementDofLayout layout
-      = geometry.cmap().create_dof_layout();
-  // FIXME: What does this return for prisms?
-  const std::size_t num_entity_dofs = layout.num_entity_closure_dofs(dim);
+      = geometry.cmaps().front().create_dof_layout();
+  if (geometry.cmaps().size() > 1)
+  {
+    throw std::invalid_argument(
+        "Packing of gap function at quadrature points not implemented for "
+        "meshes with multiple coordinate maps.");
+  }
+
+  const std::size_t num_entity_dofs = layout.entity_closure_dofs(dim, 0).size();
   MDSPAN_IMPL_STANDARD_NAMESPACE::mdspan<
       const std::int32_t,
       MDSPAN_IMPL_STANDARD_NAMESPACE::dextents<std::size_t, 2>>
-      xdofs = geometry.dofmap();
+      xdofs = geometry.dofmaps().front();
 
   auto topology = mesh.topology();
   const int tdim = topology->dim();
@@ -940,12 +964,18 @@ void dolfinx_contact::compute_physical_points(
   // Geometrical info
   const dolfinx::mesh::Geometry<double>& geometry = mesh.geometry();
   std::span<const double> mesh_geometry = geometry.x();
-  const dolfinx::fem::CoordinateElement<double>& cmap = geometry.cmap();
+  const dolfinx::fem::CoordinateElement<double>& cmap = geometry.cmaps().front();
+  if (geometry.cmaps().size() > 1)
+  {
+    throw std::invalid_argument(
+        "Packing of gap function at quadrature points not implemented for "
+        "meshes with multiple coordinate maps.");
+  }
   const std::size_t num_dofs_g = cmap.dim();
   MDSPAN_IMPL_STANDARD_NAMESPACE::mdspan<
       const std::int32_t,
       MDSPAN_IMPL_STANDARD_NAMESPACE::dextents<std::size_t, 2>>
-      x_dofmap = geometry.dofmap();
+      x_dofmap = geometry.dofmaps().front();
   const int gdim = geometry.dim();
 
   // Create storage for output quadrature points
@@ -996,8 +1026,13 @@ dolfinx_contact::compute_distance_map(
 {
   dolfinx::common::Timer t("~Contact: compute distance map");
   const dolfinx::mesh::Geometry<double>& geometry = quadrature_mesh.geometry();
-  const dolfinx::fem::CoordinateElement<double>& cmap = geometry.cmap();
-
+  const dolfinx::fem::CoordinateElement<double>& cmap = geometry.cmaps().front();
+  if (geometry.cmaps().size() > 1)
+  {
+    throw std::invalid_argument(
+        "Packing of gap function at quadrature points not implemented for "
+        "meshes with multiple coordinate maps.");
+  }
   std::size_t gdim = geometry.dim();
   auto topology = quadrature_mesh.topology();
   const dolfinx::mesh::CellType cell_type = topology->cell_type();

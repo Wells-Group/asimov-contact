@@ -195,9 +195,15 @@ dolfinx_contact::create_contact_mesh(
   spdlog::warn("Repartition");
   dolfinx::common::Timer trepart("~Contact: Add ghosts: Repartition");
   auto new_mesh = dolfinx::mesh::create_mesh(
-      mesh.comm(), mesh.comm(), topo_global, mesh.geometry().cmap(),
-      mesh.comm(), x, xshape, partitioner);
+      mesh.comm(), mesh.comm(), topo_global, mesh.geometry().cmaps().front(),
+      mesh.comm(), x, xshape, partitioner, 2);
   trepart.stop();
+  if (mesh.geometry().cmaps().size() > 1)
+  {
+    throw std::invalid_argument(
+        "Packing of gap function at quadrature points not implemented for "
+        "meshes with multiple coordinate maps.");
+  }
 
   // Recreate facets
   new_mesh.topology()->create_entities(tdim - 1);

@@ -153,8 +153,14 @@ dolfinx_contact::pack_coefficient_quadrature(
     MDSPAN_IMPL_STANDARD_NAMESPACE::mdspan<
         const std::int32_t,
         MDSPAN_IMPL_STANDARD_NAMESPACE::dextents<std::size_t, 2>>
-        x_dofmap = mesh->geometry().dofmap();
-    const dolfinx::fem::CoordinateElement<double>& cmap = geometry.cmap();
+        x_dofmap = mesh->geometry().dofmaps().front();
+    const dolfinx::fem::CoordinateElement<double>& cmap = geometry.cmaps().front();
+    if (geometry.cmaps().size() > 1)
+    {
+      throw std::invalid_argument(
+          "Packing of coefficients at quadrature points not implemented for "
+          "meshes with multiple coordinate maps.");
+    }
     const std::size_t num_dofs_g = cmap.dim();
     std::span<const double> x_g = geometry.x();
 
@@ -385,9 +391,14 @@ dolfinx_contact::pack_gradient_quadrature(
   MDSPAN_IMPL_STANDARD_NAMESPACE::mdspan<
       const std::int32_t,
       MDSPAN_IMPL_STANDARD_NAMESPACE::dextents<std::size_t, 2>>
-      x_dofmap = geometry.dofmap();
-  const dolfinx::fem::CoordinateElement<double>& cmap = geometry.cmap();
-
+      x_dofmap = geometry.dofmaps().front();
+  const dolfinx::fem::CoordinateElement<double>& cmap = geometry.cmaps().front();
+  if (geometry.cmaps().size() > 1)
+  {
+    throw std::invalid_argument(
+        "Packing of gradients at quadrature points not implemented for "
+        "meshes with multiple coordinate maps.");
+  }
   const std::size_t num_dofs_g = cmap.dim();
   std::span<const double> x_g = geometry.x();
 
@@ -560,9 +571,12 @@ dolfinx_contact::pack_circumradius(const dolfinx::mesh::Mesh<double>& mesh,
   const dolfinx::mesh::Geometry<double>& geometry = mesh.geometry();
 
   auto topology = mesh.topology();
-  if (!geometry.cmap().is_affine())
+  if (!geometry.cmaps().front().is_affine())
     throw std::invalid_argument("Non-affine circumradius is not implemented");
-
+  if (geometry.cmaps().size() > 1)
+    throw std::invalid_argument(
+        "Packing of circumradius at quadrature points not implemented for "
+        "meshes with multiple coordinate maps.");
   // Tabulate element at quadrature points
   const dolfinx::mesh::CellType cell_type = topology->cell_type();
   error::check_cell_type(cell_type);
@@ -579,7 +593,7 @@ dolfinx_contact::pack_circumradius(const dolfinx::mesh::Mesh<double>& mesh,
   assert(q_rule.tdim() == (std::size_t)tdim);
 
   // Tabulate coordinate basis for Jacobian computation
-  const dolfinx::fem::CoordinateElement<double>& cmap = geometry.cmap();
+  const dolfinx::fem::CoordinateElement<double>& cmap = geometry.cmaps().front();
   const std::array<std::size_t, 4> tab_shape
       = cmap.tabulate_shape(1, sum_q_points);
   std::vector<double> coordinate_basisb(
@@ -597,7 +611,13 @@ dolfinx_contact::pack_circumradius(const dolfinx::mesh::Mesh<double>& mesh,
   MDSPAN_IMPL_STANDARD_NAMESPACE::mdspan<
       const std::int32_t,
       MDSPAN_IMPL_STANDARD_NAMESPACE::dextents<std::size_t, 2>>
-      x_dofmap = geometry.dofmap();
+      x_dofmap = geometry.dofmaps().front();
+  if (geometry.cmaps().size() > 1)
+  {
+    throw std::invalid_argument(
+        "Packing of circumradius at quadrature points not implemented for "
+        "meshes with multiple coordinate maps.");
+  }
   std::span<const double> x_g = geometry.x();
 
   // Prepare temporary data structures data structures

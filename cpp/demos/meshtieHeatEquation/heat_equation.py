@@ -9,15 +9,15 @@
 from basix.ufl import element
 from ufl import (
     Coefficient,
-    dx,
     FunctionSpace,
-    grad,
-    lhs,
-    rhs,
-    inner,
     Mesh,
     TestFunction,
     TrialFunction,
+    dx,
+    grad,
+    inner,
+    lhs,
+    rhs,
 )
 
 # Mesh and elements

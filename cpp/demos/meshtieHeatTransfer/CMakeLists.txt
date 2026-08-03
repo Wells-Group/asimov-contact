@@ -17,15 +17,19 @@ set(ufl_file thermo_elasticity)
 if (PETSC_SCALAR_COMPLEX EQUAL 1)
   set(SCALAR_TYPE "--scalar_type=double _Complex")
 endif()
-# Create compilation command
+# Create compilation command (added the .h file to OUTPUT)
 add_custom_command(
-  OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${ufl_file}.c
-  COMMAND ffcx ${SCALAR_TYPE} ${CMAKE_CURRENT_SOURCE_DIR}/${ufl_file}.py -o ${CMAKE_CURRENT_BINARY_DIR}
+  OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${ufl_file}.c ${CMAKE_CURRENT_BINARY_DIR}/${ufl_file}.h
+  COMMAND ffcx ${SCALAR_TYPE} ${CMAKE_CURRENT_SOURCE_DIR}/${ufl_file}.py -o ${CMAKE_CURRENT_BINARY_DIR}/${ufl_file}
   DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/${ufl_file}.py
   COMMENT "Compiling ${ufl_file}.py"
 )
 
-add_executable(${PROJECT_NAME} main.cpp ${ufl_file}.c)
+# Reference the generated .c file using its absolute path in the binary directory
+add_executable(${PROJECT_NAME} main.cpp ${CMAKE_CURRENT_BINARY_DIR}/${ufl_file}.c)
+
+# Explicitly tell the target where to find the generated heat_equation.h
+target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
 
 # Copy mesh files into binary directory
 function(copy_meshes_to_target_dir target)
